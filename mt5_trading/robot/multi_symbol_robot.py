@@ -1,5 +1,5 @@
 import MetaTrader5 as mt5
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Tuple
 from loguru import logger
 
 from mt5_trading.adapters import Trader, TradingStrategy

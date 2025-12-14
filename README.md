@@ -61,7 +61,7 @@ This project aims to simplify algorithmic trading on MetaTrader 5 by leveraging 
 ## Usage
 1. Run the Python scripts to execute your trading strategies.
    ```bash
-   python simple_trading.py
+   python demo_trading.py
    ```
 2. Customize the provided scripts or create your own based on the requirements.
 3. Refer to the documentation for detailed information on each module.
@@ -74,7 +74,7 @@ MT5-Python-Trading/
 │   ├── domain/
 │   ├── robot/
 │   └── logging_config.py
-├── simple_trading.py
+├── demo_trading.py
 ├── live_trading.py
 ├── .env
 ├── pyproject.toml
