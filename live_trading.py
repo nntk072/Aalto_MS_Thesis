@@ -33,9 +33,9 @@ configure_logging()
 
 # MT5 Configuration
 TERMINAL_PATH = r"C:\Program Files\MetaTrader 5\terminal64.exe"
-LOGIN = os.getenv("LOGIN", "279260115")
-PASSWORD = os.getenv("PASSWORD", "Leng3A69V@Una?")
-SERVER = os.getenv("SERVER", "Exness-MT5Trial8")
+LOGIN = os.getenv("LOGIN")
+PASSWORD = os.getenv("PASSWORD")
+SERVER = os.getenv("SERVER")
 
 # Trading Configuration
 TRADING_INTERVAL_MINUTES = int(os.getenv("TRADING_INTERVAL_MINUTES", "60"))
@@ -227,80 +227,84 @@ def initialize_trading_system() -> MultiSymbolRobot:
 
 # Scheduler setup
 scheduler = sched.scheduler(time.time, time.sleep)
-robot_instance = None
 
 
-def run_trading_cycle():
-    """Run a single trading cycle."""
-    global robot_instance
+class TradingSystem:
+    """Manages the trading system lifecycle."""
     
-    try:
-        logger.info("=" * 80)
-        logger.info(f"Starting trading cycle at {time.strftime('%Y-%m-%d %H:%M:%S')}")
-        logger.info("=" * 80)
-        
-        if robot_instance is None:
-            logger.error("Robot not initialized")
-            return
-        
-        # Execute trading
-        robot_instance.trade()
-        
-        # Log status
-        status = robot_instance.get_status()
-        logger.info(f"Status: {status['total_positions']} positions, "
-                   f"Total P/L: ${status['total_profit']:.2f}")
-        
-        logger.info("Trading cycle completed")
-        logger.info("=" * 80)
-        
-    except Exception as e:
-        logger.exception(f"Error in trading cycle: {e}")
-
-
-def schedule_trading():
-    """Schedule the next trading cycle."""
-    run_trading_cycle()
-    scheduler.enter(TRADING_INTERVAL_MINUTES * 60, 1, schedule_trading)
-
-
-def start_scheduler():
-    """Start the trading scheduler."""
-    scheduler.enter(0, 1, schedule_trading)
-    t = threading.Thread(target=scheduler.run, daemon=True)
-    t.start()
-    return t
+    def __init__(self):
+        self.robot_instance = None
+        self.scheduler = sched.scheduler(time.time, time.sleep)
+    
+    def run_trading_cycle(self):
+        """Run a single trading cycle."""
+        try:
+            logger.info("=" * 80)
+            logger.info(f"Starting trading cycle at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info("=" * 80)
+            
+            if self.robot_instance is None:
+                logger.error("Robot not initialized")
+                return
+            
+            # Execute trading
+            self.robot_instance.trade()
+            
+            # Log status
+            status = self.robot_instance.get_status()
+            logger.info(f"Status: {status['total_positions']} positions, "
+                       f"Total P/L: ${status['total_profit']:.2f}")
+            
+            logger.info("Trading cycle completed")
+            logger.info("=" * 80)
+            
+        except Exception as e:
+            logger.exception(f"Error in trading cycle: {e}")
+    
+    def schedule_trading(self):
+        """Schedule the next trading cycle."""
+        self.run_trading_cycle()
+        self.scheduler.enter(TRADING_INTERVAL_MINUTES * 60, 1, self.schedule_trading)
+    
+    def start_scheduler(self):
+        """Start the trading scheduler."""
+        self.scheduler.enter(0, 1, self.schedule_trading)
+        t = threading.Thread(target=self.scheduler.run, daemon=True)
+        t.start()
+        return t
+    
+    def start(self):
+        """Start the trading system."""
+        try:
+            # Initialize trading system
+            self.robot_instance = initialize_trading_system()
+            
+            # Run initial trading cycle
+            logger.info("Running initial trading cycle...")
+            self.run_trading_cycle()
+            
+            # Start scheduler
+            logger.info(f"Starting scheduler (every {TRADING_INTERVAL_MINUTES} minutes)...")
+            self.start_scheduler()
+            
+            # Keep main thread alive
+            logger.info("Trading system is running. Press Ctrl+C to stop.")
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                logger.info("Shutting down trading system...")
+                
+        except Exception as e:
+            logger.exception(f"Fatal error: {e}")
+            raise
 
 
 def main():
     """Main function."""
-    global robot_instance
-    
-    try:
-        # Initialize trading system
-        robot_instance = initialize_trading_system()
-        
-        # Run initial trading cycle
-        logger.info("Running initial trading cycle...")
-        run_trading_cycle()
-        
-        # Start scheduler
-        logger.info(f"Starting scheduler (every {TRADING_INTERVAL_MINUTES} minutes)...")
-        start_scheduler()
-        
-        # Keep main thread alive
-        logger.info("Trading system is running. Press Ctrl+C to stop.")
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            logger.info("Shutting down trading system...")
-            
-    except Exception as e:
-        logger.exception(f"Fatal error: {e}")
-        raise
+    trading_system = TradingSystem()
+    trading_system.start()
 
 
 if __name__ == "__main__":
     main()
-
