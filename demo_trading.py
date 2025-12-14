@@ -11,7 +11,7 @@ from mt5_trading.robot.cross_over_robot import CrossOverRobot
 from mt5_trading.logging_config import configure_logging
 
 load_dotenv()
-configure_logging()  # added
+configure_logging()
 
 terminal_path = r"C:\Program Files\MetaTrader 5\terminal64.exe"
 login = os.getenv("LOGIN")
