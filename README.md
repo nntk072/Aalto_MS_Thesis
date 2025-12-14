@@ -39,17 +39,11 @@ This project aims to simplify algorithmic trading on MetaTrader 5 by leveraging 
 2. **Create virtual environment and install dependencies:**
    ```bash
    # Install uv if you haven't already
-   curl -LsSf https://astral.sh/uv/install.sh | sh
+   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
    
-   # After installation, add this to your ~/.bashrc (or ~/.zshrc if you use zsh):
-   export PATH="$HOME/.cargo/bin:$PATH"
-   
-   # Then reload
-   source ~/.bashrc
-   
-   # Create and activate virtual environment with Python 3.12 and Install dependencies
+   # Create and activate virtual environment with Python 3.12 and install dependencies
    uv sync
-   source .venv/bin/activate
+   .venv\Scripts\activate
    ```
 
 ## Getting Started
@@ -67,7 +61,29 @@ This project aims to simplify algorithmic trading on MetaTrader 5 by leveraging 
 ## Usage
 1. Run the Python scripts to execute your trading strategies.
    ```bash
-   python main.py
+   python simple_trading.py
+   ```
 2. Customize the provided scripts or create your own based on the requirements.
 3. Refer to the documentation for detailed information on each module.
+
+## Project Structure
+
+```
+MT5-Python-Trading/
+├── mt5_trading/
+│   ├── domain/
+│   ├── robot/
+│   └── logging_config.py
+├── simple_trading.py
+├── live_trading.py
+├── .env
+├── pyproject.toml
+└── README.md
+```
+
+## Notes
+
+- Ensure MetaTrader 5 terminal is running before executing the scripts.
+- Configure your trading parameters in the entry point files before running.
+- All trades are executed based on the defined strategy logic.
    
