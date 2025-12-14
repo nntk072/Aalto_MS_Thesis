@@ -65,7 +65,7 @@ def get_symbol_candidates(config: Dict) -> List[str]:
         categories = config['symbol_categories']
         
         # Add symbols from all categories
-        for category, symbols in categories.items():
+        for _, symbols in categories.items():
             if isinstance(symbols, list):
                 candidates.extend(symbols)
     
