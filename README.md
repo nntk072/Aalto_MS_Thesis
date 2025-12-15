@@ -84,6 +84,7 @@ MT5-Python-Trading/
 ## Notes
 
 - Ensure MetaTrader 5 terminal is running before executing the scripts.
+- Ensure that Algo Trading is enabled in your MetaTrader 5 account.
 - Configure your trading parameters in the entry point files before running.
 - All trades are executed based on the defined strategy logic.
    

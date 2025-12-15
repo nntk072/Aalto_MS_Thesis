@@ -7,6 +7,7 @@ import threading
 from loguru import logger
 
 from mt5_trading.domain import MT5Data, CrossOverStrategy, MT5Trader
+from mt5_trading.domain.mt5_connection import ensure_mt5_logged_in
 from mt5_trading.robot.cross_over_robot import CrossOverRobot
 from mt5_trading.logging_config import configure_logging
 
@@ -19,7 +20,15 @@ password = os.getenv("PASSWORD")
 server = os.getenv("SERVER")
 symbol = "EURUSD"
 lot_size = 0.1
-eurusd_h1_data = MT5Data(login, server, password, terminal_path, symbol, mt5.TIMEFRAME_H1)
+
+ensure_mt5_logged_in(
+    login=login,
+    password=password,
+    server=server,
+    terminal_path=terminal_path,
+)
+
+eurusd_h1_data = MT5Data(symbol, mt5.TIMEFRAME_H1)
 cross_over_strategy = CrossOverStrategy(eurusd_h1_data)
 mt5_trader = MT5Trader()
 cross_over_robot = CrossOverRobot(lot_size, mt5_trader, cross_over_strategy)
