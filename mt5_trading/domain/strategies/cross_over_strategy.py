@@ -1,5 +1,6 @@
 import talib
 import pandas as pd
+from loguru import logger
 
 from mt5_trading.adapters import TradingStrategy, TradingData
 from mt5_trading.domain.signal import Signal
@@ -11,6 +12,10 @@ class CrossOverStrategy(TradingStrategy):
 
     def signal(self) -> tuple[str, Signal]:
         df: pd.DataFrame = self.data.get_data()
+        symbol = self.data.get_symbol()
+        if df.empty:
+            logger.warning(f"No data available for symbol {symbol}")
+            return self.data.get_symbol(), Signal.NONE
         df["MA20"] = df["close"].rolling(window=20).mean()
         df["MA50"] = df["close"].rolling(window=50).mean()
 
@@ -22,7 +27,7 @@ class CrossOverStrategy(TradingStrategy):
         last_buy = bool(buy_condition.iloc[-1])
         last_sell = bool(sell_condition.iloc[-1])
 
-        symbol = self.data.get_symbol()
+
         if last_buy and not last_sell:
             return symbol, Signal.BUY
         if last_sell and not last_buy:
