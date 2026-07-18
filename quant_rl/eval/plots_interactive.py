@@ -463,6 +463,7 @@ def plot_per_trade_orders(
     _check()
     from .plots import _pair_trades, _extract_window, _trade_filename
     from .trade_metrics import compute_trade_metrics
+    from .chart_indicators import compute_chart_overlays
 
     orders_dir = Path(orders_dir)
     orders_dir.mkdir(parents=True, exist_ok=True)
@@ -498,8 +499,20 @@ def plot_per_trade_orders(
             lots=lots,
             contract_size=contract_size,
         )
-
-        fig = go.Figure()
+        
+        # Compute chart overlays (EMA50, MACD)
+        overlays = compute_chart_overlays(window)
+        
+        # Use Plotly subplots (2 rows: price on top, MACD on bottom)
+        from plotly.subplots import make_subplots
+        fig = make_subplots(
+            rows=2, cols=1,
+            row_heights=[0.7, 0.3],
+            shared_xaxes=True,
+            vertical_spacing=0.08,
+        )
+        
+        # Top panel: candlestick
         fig.add_trace(go.Candlestick(
             x=window.index,
             open=window["open"], high=window["high"],
@@ -507,7 +520,13 @@ def plot_per_trade_orders(
             name="Price",
             increasing_line_color=_LONG_COLOR,
             decreasing_line_color=_SHORT_COLOR,
-        ))
+        ), row=1, col=1)
+
+        # Top panel: EMA50 overlay
+        fig.add_trace(go.Scatter(
+            x=window.index, y=overlays["ema50"],
+            name="EMA50", line=dict(color="#0066cc", width=2),
+        ), row=1, col=1)
 
         # Entry marker: green arrow (triangle-up for long, triangle-down for short)
         i_o = window.index.get_indexer([t_open], method="nearest")[0]
@@ -515,13 +534,13 @@ def plot_per_trade_orders(
             ep = float(open_row["price"]) if pd.notna(open_row.get("price")) else float(window["close"].iloc[i_o])
             fig.add_trace(go.Scatter(
                 x=[window.index[i_o]], y=[ep],
-                mode="markers", name="Entry",
+                mode="markers", name="Entry", showlegend=True,
                 marker=dict(
                     symbol="triangle-up" if direction == 1 else "triangle-down",
                     size=14,
                     color="#00cc00",  # bright green
                 ),
-            ))
+            ), row=1, col=1)
 
         # Exit marker: red arrow (triangle-down for long, triangle-up for short)
         i_c = window.index.get_indexer([t_close], method="nearest")[0]
@@ -529,31 +548,53 @@ def plot_per_trade_orders(
             ep2 = float(window["close"].iloc[i_c])
             fig.add_trace(go.Scatter(
                 x=[window.index[i_c]], y=[ep2],
-                mode="markers", name="Exit",
+                mode="markers", name="Exit", showlegend=True,
                 marker=dict(
                     symbol="triangle-down" if direction == 1 else "triangle-up",
                     size=14,
                     color="#ff0000",  # bright red
                 ),
-            ))
+            ), row=1, col=1)
 
         # Add MAE/MFE horizontal lines
         if show_mae_mfe:
             # MAE line (red dashed)
             fig.add_hline(y=metrics.mae_price, line_color="#ff6666", line_dash="dash",
-                         annotation_text="MAE", annotation_position="right")
+                         annotation_text="MAE", annotation_position="right", row=1, col=1)
             # MFE line (green dashed)
             fig.add_hline(y=metrics.mfe_price, line_color="#66ff66", line_dash="dash",
-                         annotation_text="MFE", annotation_position="right")
+                         annotation_text="MFE", annotation_position="right", row=1, col=1)
 
         # Add SL/TP horizontal lines (if configured)
         if show_sl_tp:
             if metrics.sl_price is not None:
                 fig.add_hline(y=metrics.sl_price, line_color="#ff0000", line_dash="dot",
-                             annotation_text="SL", annotation_position="right")
+                             annotation_text="SL", annotation_position="right", row=1, col=1)
             if metrics.tp_price is not None:
                 fig.add_hline(y=metrics.tp_price, line_color="#00cc00", line_dash="dot",
-                             annotation_text="TP", annotation_position="right")
+                             annotation_text="TP", annotation_position="right", row=1, col=1)
+        
+        # Bottom panel: MACD
+        fig.add_trace(go.Scatter(
+            x=window.index, y=overlays["macd"],
+            name="MACD", line=dict(color="#0066cc", width=2),
+        ), row=2, col=1)
+        
+        fig.add_trace(go.Scatter(
+            x=window.index, y=overlays["signal"],
+            name="Signal", line=dict(color="#ff6600", width=2),
+        ), row=2, col=1)
+        
+        # Histogram (colored bars: green if positive, red if negative)
+        colors = ["#00cc00" if h > 0 else "#ff0000" for h in overlays["histogram"]]
+        fig.add_trace(go.Bar(
+            x=window.index, y=overlays["histogram"],
+            name="Histogram", marker=dict(color=colors), opacity=0.3,
+            showlegend=True,
+        ), row=2, col=1)
+        
+        # Add MACD=0 line
+        fig.add_hline(y=0, line_color="#000000", line_width=1, line_dash="solid", row=2, col=1)
 
         close_reason = close_type if close_type != "close" else "normal"
         dir_label = "Long" if direction == 1 else "Short"
@@ -577,11 +618,12 @@ def plot_per_trade_orders(
         fig.update_layout(
             template=_TEMPLATE,
             title=title,
-            xaxis_title="Time (M1)",
+            xaxis2_title="Time (M1)",
             yaxis_title="Price",
+            yaxis2_title="MACD",
             xaxis_rangeslider_visible=False,
             hovermode="x unified",
-            height=550,
+            height=650,
         )
 
         fname = _trade_filename(seq_i + 1, open_row, close_row, "html")
