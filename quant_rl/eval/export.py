@@ -11,8 +11,10 @@ New layout (v2)
             equity.csv, trades.csv, metrics.json
             breach_events.csv, session_activity.json
             equity.png/html, drawdown.png/html
-            orders.png/html, pnl_hist.png/html
-            returns_dist.png, monthly_heatmap.png/html
+            pnl_hist.png/html, returns_dist.png, monthly_heatmap.png/html
+            orders/          — one M1 candlestick per trade
+                trade_NNNN_YYYYMMDD_HHMMopen_HHMMclose_{L|S}_{p|m}PnL.png
+                trade_NNNN_…  .html
         testing/             — out-of-sample (≥ test_start)
             (same set)
         model/               — RL runs only (populated by train_rl.py)
@@ -81,8 +83,7 @@ def _write_split(
     save_html: bool,
     save_csv: bool,
     dpi: int,
-    candle_tf: str,
-    price_plot_max_points: int,
+    max_order_charts: int,
 ) -> None:
     """Write all data + charts for one split into *split_dir*."""
     split_dir.mkdir(parents=True, exist_ok=True)
@@ -140,11 +141,11 @@ def _write_split(
         )
 
         if bars is not None and not trades.empty:
-            _plt.plot_price_with_orders(
+            _plt.plot_per_trade_orders(
                 bars, trades,
-                max_points=price_plot_max_points,
-                candle_tf=candle_tf,
-                out_path=split_dir / "orders.png", dpi=dpi,
+                orders_dir=split_dir / "orders",
+                max_charts=max_order_charts,
+                dpi=dpi,
             )
 
     # ------------------------------------------------------------------
@@ -170,11 +171,10 @@ def _write_split(
             _pi.plot_monthly_returns_heatmap(equity, out_path=split_dir / "monthly_heatmap.html")
 
             if bars is not None and not trades.empty:
-                _pi.plot_price_with_orders(
+                _pi.plot_per_trade_orders(
                     bars, trades,
-                    max_points=price_plot_max_points,
-                    candle_tf=candle_tf,
-                    out_path=split_dir / "orders.html",
+                    orders_dir=split_dir / "orders",
+                    max_charts=max_order_charts,
                 )
         except ImportError:
             log.warning("plotly not available — skipping interactive HTML charts")
@@ -199,8 +199,7 @@ def save_run(
     save_html: bool = True,
     save_csv: bool = True,
     dpi: int = 150,
-    candle_tf: str = "15min",
-    price_plot_max_points: int = 3000,
+    max_order_charts: int = 200,
 ) -> Path:
     """Persist a complete train + test run.
 
@@ -243,8 +242,7 @@ def save_run(
         save_html=save_html,
         save_csv=save_csv,
         dpi=dpi,
-        candle_tf=candle_tf,
-        price_plot_max_points=price_plot_max_points,
+        max_order_charts=max_order_charts,
     )
 
     if train_result is not None and train_metrics is not None:
