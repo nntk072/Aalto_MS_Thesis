@@ -71,6 +71,8 @@ def run_backtest(
     min_lot: float = 0.01,
     max_lot: float = 100.0,
     contract_size: float = 1.0,
+    hold_on_zero: bool = False,
+    exit_action: int | None = None,
 ) -> dict[str, Any]:
     """Run a full backtest over aligned bars + features.
     
@@ -88,6 +90,10 @@ def run_backtest(
         Lot size bounds.
     contract_size : float
         Contract multiplier.
+    hold_on_zero : bool
+        If True, action=0 means hold current position (don't close).
+    exit_action : int | None
+        If set, policy returning this value closes position (e.g., 2 for MACD exit).
     """
     broker = Broker(cost_model=cost_model, **(broker_kwargs or {}))
     guardrails = FTMOGuardrails(**(guardrail_kwargs or {}))
@@ -236,7 +242,20 @@ def run_backtest(
         obs = feat_array[i - obs_window : i].copy()
         action = policy(obs)
 
-        if action != 0:
+        if action == exit_action and position is not None:
+            # Explicit exit action (e.g., 2 for MACD)
+            pnl = broker.close_position(acc, position, fq)
+            trade_log.append({
+                "type": "close",
+                "pnl": pnl,
+                "bar": i,
+                "time": bar_time,
+                "equity": acc.equity,
+            })
+            sessions_with_trades.add(session)
+            position = None
+
+        elif action != 0:
             if position is not None and position.direction != action:
                 pnl = broker.close_position(acc, position, fq)
                 trade_log.append({
@@ -332,7 +351,8 @@ def run_backtest(
                     })
                     sessions_with_trades.add(session)
 
-        elif action == 0 and position is not None:
+        elif action == 0 and position is not None and not hold_on_zero:
+            # Close position on action=0 (unless hold_on_zero is True)
             pnl = broker.close_position(acc, position, fq)
             trade_log.append({
                 "type": "close",
