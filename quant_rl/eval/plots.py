@@ -5,6 +5,7 @@ Uses the non-interactive Agg backend so it works headless in CI.
 """
 from __future__ import annotations
 
+import logging
 import matplotlib
 matplotlib.use("Agg")
 
@@ -15,6 +16,8 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -468,3 +471,172 @@ def plot_baseline_comparison(
     if out_path:
         _save(fig, out_path, dpi)
     return fig
+
+
+# ---------------------------------------------------------------------------
+# Trade-pairing helpers (also imported by plots_interactive.py)
+# ---------------------------------------------------------------------------
+
+def _pair_trades(trades: pd.DataFrame) -> list[tuple]:
+    """Return a list of (open_row, close_row) Series pairs for each completed trade."""
+    opens  = trades[trades["type"] == "open"].reset_index(drop=True)
+    closes = trades[trades["type"].isin(
+        ["close", "forced_close", "eod_close", "stop_close"]
+    )].reset_index(drop=True)
+    n = min(len(opens), len(closes))
+    return [(opens.iloc[i], closes.iloc[i]) for i in range(n)]
+
+
+def _extract_window(
+    bars: pd.DataFrame,
+    t_open: pd.Timestamp,
+    t_close: pd.Timestamp,
+    context: int,
+) -> pd.DataFrame:
+    """Return bars[t_open − context : t_close + context] by integer position."""
+    idx = bars.index
+    i_o = idx.get_indexer([t_open],  method="nearest")[0]
+    i_c = idx.get_indexer([t_close], method="nearest")[0]
+    if i_o < 0 or i_c < 0:
+        return pd.DataFrame(columns=bars.columns)
+    i_s = max(0, i_o - context)
+    i_e = min(len(bars) - 1, i_c + context)
+    return bars.iloc[i_s : i_e + 1]
+
+
+def _trade_filename(idx: int, open_row: pd.Series, close_row: pd.Series, ext: str) -> str:
+    """Build a descriptive filename for a per-trade chart.
+
+    Format: ``trade_NNNN_YYYYMMDD_HHMMopen_HHMMclose_{L|S}_{p|m}PnL.{ext}``
+    """
+    t_open  = pd.Timestamp(open_row["time"])
+    t_close = pd.Timestamp(close_row["time"])
+    date    = t_open.strftime("%Y%m%d")
+    t_o     = t_open.strftime("%H%M")
+    t_c     = t_close.strftime("%H%M")
+    side    = "L" if open_row.get("direction", 0) == 1 else "S"
+    pnl     = float(close_row["pnl"]) if pd.notna(close_row.get("pnl")) else 0.0
+    sign    = "p" if pnl >= 0 else "m"
+    return f"trade_{idx:04d}_{date}_{t_o}_{t_c}_{side}_{sign}{abs(pnl):.1f}.{ext}"
+
+
+# ---------------------------------------------------------------------------
+# 8. Per-trade M1 candlestick charts (one PNG per trade)
+# ---------------------------------------------------------------------------
+
+def plot_per_trade_orders(
+    bars: pd.DataFrame,
+    trades: pd.DataFrame,
+    orders_dir: Path | str,
+    context_bars: int = 60,
+    max_charts: int = 200,
+    dpi: int = 150,
+) -> None:
+    """Generate one M1 candlestick PNG per trade in *orders_dir*.
+
+    Filenames encode the key trade metadata::
+
+        trade_NNNN_YYYYMMDD_HHMMopen_HHMMclose_{L|S}_{p|m}PnL.png
+
+    Parameters
+    ----------
+    bars : M1 price bars (DatetimeIndex, open/high/low/close columns).
+    trades : Trade log with type/direction/price/time/pnl columns.
+    orders_dir : Destination folder; created if absent.
+    context_bars : M1 bars to show before entry and after exit (~1 min each).
+    max_charts : Cap on number of charts; trades are sampled evenly when
+        the total exceeds this limit.
+    dpi : PNG resolution.
+    """
+    try:
+        import mplfinance as mpf
+    except ImportError:
+        log.warning("mplfinance not available — skipping per-trade PNG charts")
+        return
+
+    orders_dir = Path(orders_dir)
+    orders_dir.mkdir(parents=True, exist_ok=True)
+
+    pairs = _pair_trades(trades)
+    if not pairs:
+        return
+
+    total = len(pairs)
+    if total > max_charts:
+        indices = np.linspace(0, total - 1, max_charts, dtype=int).tolist()
+        pairs = [pairs[i] for i in indices]
+        log.info("Per-trade PNG: sampling %d/%d trades → %s", max_charts, total, orders_dir)
+    else:
+        log.info("Per-trade PNG: %d charts → %s", total, orders_dir)
+
+    mc = mpf.make_marketcolors(up=LONG_COLOR, down=SHORT_COLOR,
+                                edge="inherit", wick="inherit", volume="in")
+    mpf_style = mpf.make_mpf_style(
+        base_mpf_style="yahoo", marketcolors=mc,
+        facecolor="#ffffff", figcolor="#ffffff",
+        gridcolor="#e6e6e6", gridstyle="--",
+    )
+
+    for seq_i, (open_row, close_row) in enumerate(pairs):
+        t_open  = pd.Timestamp(open_row["time"])
+        t_close = pd.Timestamp(close_row["time"])
+        window  = _extract_window(bars, t_open, t_close, context_bars)
+        if len(window) < 3:
+            continue
+
+        direction  = int(open_row["direction"]) if pd.notna(open_row.get("direction")) else 0
+        pnl        = float(close_row["pnl"])    if pd.notna(close_row.get("pnl"))       else 0.0
+        close_type = str(close_row["type"])
+
+        # Entry marker (placed just below long entry, above short entry)
+        entry_s = pd.Series(np.nan, index=window.index)
+        i_o = window.index.get_indexer([t_open], method="nearest")[0]
+        if 0 <= i_o < len(window):
+            ep = float(open_row["price"]) if pd.notna(open_row.get("price")) else float(window["low"].iloc[i_o])
+            entry_s.iloc[i_o] = ep * 0.9995 if direction == 1 else ep * 1.0005
+
+        # Exit marker (placed at the close of the exit bar)
+        exit_s = pd.Series(np.nan, index=window.index)
+        i_c = window.index.get_indexer([t_close], method="nearest")[0]
+        if 0 <= i_c < len(window):
+            exit_s.iloc[i_c] = float(window["close"].iloc[i_c])
+
+        addplots = []
+        if entry_s.notna().any():
+            addplots.append(mpf.make_addplot(
+                entry_s, type="scatter", markersize=120,
+                marker="^" if direction == 1 else "v",
+                color=LONG_COLOR if direction == 1 else SHORT_COLOR,
+            ))
+        if exit_s.notna().any():
+            is_stop = close_type in ("forced_close", "stop_close")
+            addplots.append(mpf.make_addplot(
+                exit_s, type="scatter", markersize=100,
+                marker="X" if is_stop else "x",
+                color=BREACH_COLOR if is_stop else CLOSE_COLOR,
+            ))
+
+        dir_label = "Long" if direction == 1 else "Short"
+        title = (
+            f"{dir_label}  |  Open {t_open.strftime('%Y-%m-%d %H:%M')} "
+            f"→ Close {t_close.strftime('%H:%M')}  |  "
+            f"PnL: {pnl:+.2f}  |  {close_type}"
+        )
+
+        fname = _trade_filename(seq_i + 1, open_row, close_row, "png")
+        pk: dict[str, Any] = dict(
+            type="candle", style=mpf_style,
+            title=title,
+            warn_too_much_data=len(window) + 1,
+            returnfig=True,
+            savefig=dict(fname=str(orders_dir / fname), dpi=dpi, bbox_inches="tight"),
+        )
+        if addplots:
+            pk["addplot"] = addplots
+
+        try:
+            fig, _ = mpf.plot(window, **pk)
+            plt.close(fig)
+        except Exception as exc:
+            log.debug("Skipping per-trade PNG %d: %s", seq_i + 1, exc)
+
