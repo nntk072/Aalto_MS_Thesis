@@ -1,154 +1,109 @@
-"""Tests for risk sizing and SL/TP computation."""
-import numpy as np
+"""Tests for risk calculations (SL/TP/lots)."""
 import pytest
 
-from quant_rl.backtest.risk import (
-    compute_sl_price,
-    compute_tp_price,
-    compute_lots,
-)
+from quant_rl.backtest.risk import compute_lots, compute_sl_tp_long, compute_sl_tp_short
 
 
-class TestComputeSLPrice:
-    """Test SL price computation from swings."""
-
-    def test_long_sl_from_swing_low(self):
-        """Long SL should be swing low minus buffer."""
-        sl = compute_sl_price(
-            entry_price=100.0,
-            direction=1,
-            last_swing_low=95.0,
-            last_swing_high=105.0,
-            buffer_pts=1.0,
-        )
-        assert sl == pytest.approx(94.0)
-
-    def test_short_sl_from_swing_high(self):
-        """Short SL should be swing high plus buffer."""
-        sl = compute_sl_price(
-            entry_price=100.0,
-            direction=-1,
-            last_swing_low=95.0,
-            last_swing_high=105.0,
-            buffer_pts=1.0,
-        )
-        assert sl == pytest.approx(106.0)
-
-    def test_long_sl_fallback_no_swing(self):
-        """Long SL fallback when no swing available."""
-        sl = compute_sl_price(
-            entry_price=100.0,
-            direction=1,
-            last_swing_low=None,
-            last_swing_high=None,
-            buffer_pts=1.0,
-        )
-        assert sl == pytest.approx(98.0)
-
-    def test_short_sl_fallback_no_swing(self):
-        """Short SL fallback when no swing available."""
-        sl = compute_sl_price(
-            entry_price=100.0,
-            direction=-1,
-            last_swing_low=None,
-            last_swing_high=None,
-            buffer_pts=1.0,
-        )
-        assert sl == pytest.approx(102.0)
+def test_compute_sl_tp_long() -> None:
+    """Test SL/TP computation for long trades."""
+    sl, tp = compute_sl_tp_long(
+        entry_price=100.0,
+        last_swing_low=95.0,
+        buffer_pts=1.0,
+        rr_ratio=2.0,
+    )
+    assert sl == 94.0  # 95.0 - 1.0
+    # R = entry - SL = 100 - 94 = 6
+    # TP = entry + rr * R = 100 + 2*6 = 112
+    assert tp == 112.0
 
 
-class TestComputeTPPrice:
-    """Test TP price computation from R:R ratio."""
-
-    def test_long_tp_price(self):
-        """Long TP = entry + rr_ratio * R."""
-        tp = compute_tp_price(
-            entry_price=100.0,
-            sl_price=95.0,
-            direction=1,
-            rr_ratio=2.0,
-        )
-        # R = 100 - 95 = 5
-        # TP = 100 + 2.0 * 5 = 110
-        assert tp == pytest.approx(110.0)
-
-    def test_short_tp_price(self):
-        """Short TP = entry - rr_ratio * R."""
-        tp = compute_tp_price(
-            entry_price=100.0,
-            sl_price=105.0,
-            direction=-1,
-            rr_ratio=2.0,
-        )
-        # R = 105 - 100 = 5
-        # TP = 100 - 2.0 * 5 = 90
-        assert tp == pytest.approx(90.0)
+def test_compute_sl_tp_short() -> None:
+    """Test SL/TP computation for short trades."""
+    sl, tp = compute_sl_tp_short(
+        entry_price=100.0,
+        last_swing_high=105.0,
+        buffer_pts=1.0,
+        rr_ratio=2.0,
+    )
+    assert sl == 106.0  # 105.0 + 1.0
+    assert tp == 88.0  # 100 - 2*(106-100)
 
 
-class TestComputeLots:
-    """Test lot sizing from equity and risk."""
-
-    def test_basic_lot_calculation(self):
-        """lots = risk_usd / (sl_distance * contract_size)."""
-        lots = compute_lots(
-            equity=100_000.0,
-            risk_frac=0.01,  # 1% = $1000
-            sl_distance=40.0,
-            contract_size=1.0,
-            max_loss_usd=None,
-        )
-        # risk_usd = 100,000 * 0.01 = 1000
-        # lots = 1000 / (40 * 1.0) = 25
-        assert lots == pytest.approx(25.0)
-
-    def test_lot_capped_by_max_loss(self):
-        """Lots should be capped by max_loss_usd."""
-        lots = compute_lots(
-            equity=100_000.0,
-            risk_frac=0.01,  # Would give 25 lots normally
-            sl_distance=40.0,
-            contract_size=1.0,
-            max_loss_usd=100.0,
-        )
-        # max_loss_usd cap: lots = 100 / (40 * 1.0) = 2.5
-        # Result should be min of 25 and 2.5 = 2.5
-        assert lots == pytest.approx(2.5)
-
-    def test_lot_clipping_min_max(self):
-        """Lots should be clipped to [min_lot, max_lot]."""
-        lots_small = compute_lots(
-            equity=100.0,
-            risk_frac=0.001,  # Very small risk
-            sl_distance=100.0,
-            contract_size=1.0,
-            min_lot=0.1,
-            max_lot=100.0,
-        )
-        # Would calculate to < 0.1, should be clipped to 0.1
-        assert lots_small >= 0.1
-
-        lots_large = compute_lots(
-            equity=10_000_000.0,
-            risk_frac=1.0,  # Huge risk
-            sl_distance=0.1,
-            contract_size=1.0,
-            min_lot=0.01,
-            max_lot=100.0,
-        )
-        # Would be huge, should be clipped to 100.0
-        assert lots_large <= 100.0
-
-    def test_zero_sl_distance(self):
-        """Zero SL distance should return min_lot."""
-        lots = compute_lots(
-            equity=100_000.0,
-            risk_frac=0.01,
-            sl_distance=0.0,
-            contract_size=1.0,
-            min_lot=0.01,
-        )
-        assert lots == pytest.approx(0.01)
+def test_compute_lots_basic() -> None:
+    """Test basic lot sizing."""
+    lots = compute_lots(
+        equity=100_000.0,
+        risk_frac=0.01,  # 1%
+        entry_price=100.0,
+        sl_price=95.0,  # 5-point risk
+        contract_size=1.0,
+        min_lot=0.01,
+        max_lot=100.0,
+    )
+    # risk_usd = 100_000 * 0.01 = 1_000
+    # lots = 1_000 / (5 * 1.0) = 200, clamped to max_lot=100
+    assert lots == 100.0
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+def test_compute_lots_with_cap() -> None:
+    """Test lot sizing with max_loss_cap."""
+    lots = compute_lots(
+        equity=100_000.0,
+        risk_frac=0.01,
+        entry_price=100.0,
+        sl_price=95.0,  # 5-point risk
+        contract_size=1.0,
+        min_lot=0.01,
+        max_lot=100.0,
+        max_loss_cap=50.0,  # Cap at $50
+    )
+    # max_lots_from_cap = 50 / (5 * 1.0) = 10
+    # risk would be 100 but cap limits to 10
+    assert lots == 10.0
+
+
+def test_compute_lots_respects_min_max() -> None:
+    """Test that min/max lot bounds are respected."""
+    # Very wide SL → natural lots within bounds
+    lots = compute_lots(
+        equity=100_000.0,
+        risk_frac=0.01,
+        entry_price=100.0,
+        sl_price=10.0,  # huge risk (90 pts)
+        contract_size=1.0,
+        min_lot=0.01,
+        max_lot=100.0,
+    )
+    # Natural: 1_000 / (90 * 1.0) ≈ 11.11, within bounds
+    assert 0.01 <= lots <= 100.0
+    assert abs(lots - 11.11) < 0.1
+
+    # Very tight SL → natural lots would exceed max_lot
+    lots = compute_lots(
+        equity=100_000.0,
+        risk_frac=0.01,
+        entry_price=100.0,
+        sl_price=99.99,  # tiny risk (0.01 pts)
+        contract_size=1.0,
+        min_lot=0.01,
+        max_lot=100.0,
+    )
+    # Natural: 1_000 / (0.01 * 1.0) = 100_000, clamped to max_lot=100
+    assert lots == 100.0
+
+
+def test_compute_lots_with_contract_size() -> None:
+    """Test lot sizing with contract multiplier."""
+    lots = compute_lots(
+        equity=100_000.0,
+        risk_frac=0.01,
+        entry_price=100.0,
+        sl_price=95.0,  # 5-point risk
+        contract_size=100.0,  # US100 multiplier
+        min_lot=0.01,
+        max_lot=100.0,
+    )
+    # risk_usd = 100_000 * 0.01 = 1_000
+    # lots = 1_000 / (5 * 100.0) = 2.0
+    assert lots == 2.0

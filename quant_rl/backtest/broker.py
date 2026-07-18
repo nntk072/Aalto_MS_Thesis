@@ -31,8 +31,10 @@ class Position:
     size: float             # lots
     entry_price: float
     margin_used: float
-    sl_price: float | None = None       # Stop Loss price level
-    tp_price: float | None = None       # Take Profit price level
+    sl_price: float | None = None       # stop loss price level
+    tp_price: float | None = None       # take profit price level
+    risk_frac: float | None = None      # risk fraction used for sizing
+    rr_ratio: float | None = None       # reward/risk ratio
 
 
 @dataclass
