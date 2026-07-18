@@ -1,4 +1,5 @@
 """Tests: TickBook quote lookup + chunked builder."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,15 +8,18 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.data.ticks import TickBook, build_tick_book, _ffill_inplace
+from quant_rl.data.ticks import TickBook, _ffill_inplace, build_tick_book
 
 
 def _make_book() -> TickBook:
-    times = pd.to_datetime([
-        "2025-01-06 16:30:00",
-        "2025-01-06 16:30:05",
-        "2025-01-06 16:30:10",
-    ], utc=True)
+    times = pd.to_datetime(
+        [
+            "2025-01-06 16:30:00",
+            "2025-01-06 16:30:05",
+            "2025-01-06 16:30:10",
+        ],
+        utc=True,
+    )
     ts_ns = times.values.astype("int64")
     bid = np.array([100.0, 100.5, 101.0])
     ask = np.array([100.6, 101.1, 101.6])
@@ -62,18 +66,24 @@ def test_build_tick_book_chunked_matches_expected(tmp_path: Path):
     """Small synthetic CSV, forced to a 2-row chunksize to exercise the
     cross-chunk forward-fill / session-filter boundary logic."""
     csv_path = tmp_path / "ticks.csv"
-    _write_tick_csv(csv_path, [
-        ("2025.01.06", "10:00:00.000", 1.0, 1.1),   # outside session -> dropped
-        ("2025.01.06", "16:30:00.618", 100.0, 100.6),
-        ("2025.01.06", "16:30:05.020", np.nan, 101.1),  # bid missing -> ffill from prev row
-        ("2025.01.06", "16:30:10.500", 101.0, 101.6),
-        ("2025.01.06", "23:30:00.000", 200.0, 200.6),  # outside session -> dropped
-    ])
+    _write_tick_csv(
+        csv_path,
+        [
+            ("2025.01.06", "10:00:00.000", 1.0, 1.1),  # outside session -> dropped
+            ("2025.01.06", "16:30:00.618", 100.0, 100.6),
+            ("2025.01.06", "16:30:05.020", np.nan, 101.1),  # bid missing -> ffill from prev row
+            ("2025.01.06", "16:30:10.500", 101.0, 101.6),
+            ("2025.01.06", "23:30:00.000", 200.0, 200.6),  # outside session -> dropped
+        ],
+    )
 
     book = build_tick_book(
-        csv_path, tz="Etc/GMT-3",
-        session_start="16:30", session_end="23:00",
-        cache_path=None, chunksize=2,  # forces multiple small chunks
+        csv_path,
+        tz="Etc/GMT-3",
+        session_start="16:30",
+        session_end="23:00",
+        cache_path=None,
+        chunksize=2,  # forces multiple small chunks
     )
 
     assert len(book) == 3
@@ -85,10 +95,13 @@ def test_build_tick_book_chunked_matches_expected(tmp_path: Path):
 
 def test_build_tick_book_uses_and_writes_cache(tmp_path: Path):
     csv_path = tmp_path / "ticks.csv"
-    _write_tick_csv(csv_path, [
-        ("2025.01.06", "16:30:00.000", 100.0, 100.6),
-        ("2025.01.06", "16:30:05.000", 100.5, 101.1),
-    ])
+    _write_tick_csv(
+        csv_path,
+        [
+            ("2025.01.06", "16:30:00.000", 100.0, 100.6),
+            ("2025.01.06", "16:30:05.000", 100.5, 101.1),
+        ],
+    )
     cache_path = tmp_path / "ticks.parquet"
 
     book1 = build_tick_book(csv_path, cache_path=cache_path, chunksize=1)

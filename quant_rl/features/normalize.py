@@ -2,6 +2,7 @@
 
 The scaler is fit only on training bars (mask=True) and applied to all bars.
 """
+
 from __future__ import annotations
 
 import numpy as np

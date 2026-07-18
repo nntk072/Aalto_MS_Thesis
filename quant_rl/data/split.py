@@ -5,9 +5,10 @@ causal (past-only) look-back windows.  The full history is used for computing
 rolling statistics so there is no look-ahead bias when slicing at inference
 time.
 """
+
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -39,7 +40,7 @@ def split_train_test(
     f = features.loc[common]
 
     # Build timezone-aware boundary timestamps matching the index tz
-    tz = b.index.tz
+    tz = cast(pd.DatetimeIndex, b.index).tz
 
     train_end_ts = pd.Timestamp(train_end)
     test_start_ts = pd.Timestamp(test_start)
@@ -58,7 +59,7 @@ def split_train_test(
     train_end_ts = train_end_ts + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
 
     train_mask = b.index <= train_end_ts
-    test_mask  = b.index >= test_start_ts
+    test_mask = b.index >= test_start_ts
 
     return b[train_mask], b[test_mask], f[train_mask], f[test_mask]
 
@@ -66,9 +67,9 @@ def split_train_test(
 def get_split_config(cfg: Any) -> tuple[str, str]:
     """Extract *train_end* / *test_start* from config with fallback defaults."""
     try:
-        train_end  = str(cfg.data.split.train_end)
+        train_end = str(cfg.data.split.train_end)
         test_start = str(cfg.data.split.test_start)
     except Exception:
-        train_end  = "2025-12-31"
+        train_end = "2025-12-31"
         test_start = "2026-01-01"
     return train_end, test_start

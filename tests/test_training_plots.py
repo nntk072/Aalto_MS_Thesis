@@ -1,19 +1,20 @@
 """Smoke tests for training-progress plots."""
+
 from __future__ import annotations
 
-import pandas as pd
+import matplotlib
 import numpy as np
+import pandas as pd
 import pytest
 
-import matplotlib
 matplotlib.use("Agg")
 
 from quant_rl.eval.training_plots import (
-    plot_learning_curve,
-    plot_losses,
     plot_entropy_explvar,
     plot_kl_clip,
+    plot_learning_curve,
     plot_learning_rate,
+    plot_losses,
     save_training_plots,
 )
 
@@ -23,45 +24,47 @@ def training_log(tmp_path) -> pd.DataFrame:
     """Synthetic training log with all expected SB3 columns."""
     n = 20
     rng = np.random.default_rng(0)
-    df = pd.DataFrame({
-        "timestep":                       np.arange(1, n + 1) * 2048,
-        "rollout/ep_rew_mean":            rng.normal(0, 1, n).cumsum(),
-        "rollout/ep_len_mean":            rng.uniform(200, 1000, n),
-        "train/policy_gradient_loss":     rng.uniform(-0.05, 0.05, n),
-        "train/value_loss":               rng.uniform(0, 10, n),
-        "train/entropy_loss":             rng.uniform(-2, -0.5, n),
-        "train/approx_kl":                rng.uniform(0, 0.02, n),
-        "train/clip_fraction":            rng.uniform(0, 0.5, n),
-        "train/explained_variance":       rng.uniform(-0.1, 1.0, n),
-        "train/learning_rate":            np.full(n, 3e-4),
-    })
+    df = pd.DataFrame(
+        {
+            "timestep": np.arange(1, n + 1) * 2048,
+            "rollout/ep_rew_mean": rng.normal(0, 1, n).cumsum(),
+            "rollout/ep_len_mean": rng.uniform(200, 1000, n),
+            "train/policy_gradient_loss": rng.uniform(-0.05, 0.05, n),
+            "train/value_loss": rng.uniform(0, 10, n),
+            "train/entropy_loss": rng.uniform(-2, -0.5, n),
+            "train/approx_kl": rng.uniform(0, 0.02, n),
+            "train/clip_fraction": rng.uniform(0, 0.5, n),
+            "train/explained_variance": rng.uniform(-0.1, 1.0, n),
+            "train/learning_rate": np.full(n, 3e-4),
+        }
+    )
     path = tmp_path / "training_log.csv"
     df.to_csv(path, index=False)
     return df
 
 
 def test_plot_learning_curve(training_log, tmp_path):
-    fig = plot_learning_curve(training_log, out_path=tmp_path / "lc.png")
+    plot_learning_curve(training_log, out_path=tmp_path / "lc.png")
     assert (tmp_path / "lc.png").stat().st_size > 0
 
 
 def test_plot_losses(training_log, tmp_path):
-    fig = plot_losses(training_log, out_path=tmp_path / "losses.png")
+    plot_losses(training_log, out_path=tmp_path / "losses.png")
     assert (tmp_path / "losses.png").stat().st_size > 0
 
 
 def test_plot_entropy_explvar(training_log, tmp_path):
-    fig = plot_entropy_explvar(training_log, out_path=tmp_path / "entropy.png")
+    plot_entropy_explvar(training_log, out_path=tmp_path / "entropy.png")
     assert (tmp_path / "entropy.png").stat().st_size > 0
 
 
 def test_plot_kl_clip(training_log, tmp_path):
-    fig = plot_kl_clip(training_log, out_path=tmp_path / "kl.png")
+    plot_kl_clip(training_log, out_path=tmp_path / "kl.png")
     assert (tmp_path / "kl.png").stat().st_size > 0
 
 
 def test_plot_learning_rate(training_log, tmp_path):
-    fig = plot_learning_rate(training_log, out_path=tmp_path / "lr.png")
+    plot_learning_rate(training_log, out_path=tmp_path / "lr.png")
     assert (tmp_path / "lr.png").stat().st_size > 0
 
 
@@ -69,17 +72,19 @@ def test_save_training_plots(tmp_path):
     """save_training_plots should generate all 5 PNGs."""
     n = 15
     rng = np.random.default_rng(1)
-    df = pd.DataFrame({
-        "timestep":                   np.arange(1, n + 1) * 2048,
-        "rollout/ep_rew_mean":        rng.normal(0, 1, n),
-        "train/policy_gradient_loss": rng.normal(0, 0.01, n),
-        "train/value_loss":           rng.uniform(0, 5, n),
-        "train/entropy_loss":         rng.uniform(-2, -0.5, n),
-        "train/approx_kl":            rng.uniform(0, 0.01, n),
-        "train/clip_fraction":        rng.uniform(0, 0.3, n),
-        "train/explained_variance":   rng.uniform(0, 1, n),
-        "train/learning_rate":        np.full(n, 3e-4),
-    })
+    df = pd.DataFrame(
+        {
+            "timestep": np.arange(1, n + 1) * 2048,
+            "rollout/ep_rew_mean": rng.normal(0, 1, n),
+            "train/policy_gradient_loss": rng.normal(0, 0.01, n),
+            "train/value_loss": rng.uniform(0, 5, n),
+            "train/entropy_loss": rng.uniform(-2, -0.5, n),
+            "train/approx_kl": rng.uniform(0, 0.01, n),
+            "train/clip_fraction": rng.uniform(0, 0.3, n),
+            "train/explained_variance": rng.uniform(0, 1, n),
+            "train/learning_rate": np.full(n, 3e-4),
+        }
+    )
     log_path = tmp_path / "training_log.csv"
     df.to_csv(log_path, index=False)
 

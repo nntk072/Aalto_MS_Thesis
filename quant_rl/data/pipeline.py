@@ -6,19 +6,19 @@ Usage
     dfs   = run_pipeline(cfg)
     ticks = build_tick_books(cfg)   # {symbol: TickBook | None}
 """
+
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 from omegaconf import DictConfig
 
-from .loader import load_bars
-from .resample import resample, build_all_timeframes
 from .clean import clean
-from .session import filter_session, add_session_id
+from .loader import load_bars
+from .resample import resample
+from .session import add_session_id, filter_session
 from .ticks import TickBook, build_tick_book
 
 log = logging.getLogger(__name__)
@@ -84,7 +84,7 @@ def run_pipeline(cfg: DictConfig, force: bool = False) -> dict[str, dict[str, pd
 def build_tick_books(
     cfg: DictConfig,
     force: bool = False,
-) -> dict[str, "TickBook | None"]:
+) -> dict[str, TickBook | None]:
     """Build (or load from cache) a ``TickBook`` for each symbol.
 
     Returns a dict ``{symbol: TickBook | None}`` where ``None`` means the
@@ -113,11 +113,11 @@ def build_tick_books(
             result[sym] = None
         return result
 
-    raw_dir   = Path(cfg.data.raw_dir)
+    raw_dir = Path(cfg.data.raw_dir)
     cache_dir = Path(cfg.data.cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    tick_files: dict = {}
+    tick_files: dict[str, str] = {}
     try:
         tick_files = dict(cfg.data.tick_files)
     except Exception:
@@ -146,7 +146,9 @@ def build_tick_books(
                 cache_path=cache_p,
                 force=force,
             )
-            log.info("TickBook ready: %s  (%d ticks)", sym, len(result[sym]))
+            tick_book = result[sym]
+            if tick_book is not None:
+                log.info("TickBook ready: %s  (%d ticks)", sym, len(tick_book))
         except Exception as exc:  # noqa: BLE001
             log.warning("Failed to build TickBook for %s: %s — fallback", sym, exc)
             result[sym] = None

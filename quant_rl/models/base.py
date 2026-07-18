@@ -12,6 +12,7 @@ Observation contract
 The encoder maps ``[batch, T, F]`` → ``[batch, D]`` (latent dim D is yours to choose).
 The flattened input to the PPO policy head is ``[batch, D + A]``.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

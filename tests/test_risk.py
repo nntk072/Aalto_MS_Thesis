@@ -1,5 +1,4 @@
 """Tests for risk calculations (SL/TP/lots)."""
-import pytest
 
 from quant_rl.backtest.risk import compute_lots, compute_sl_tp_long, compute_sl_tp_short
 

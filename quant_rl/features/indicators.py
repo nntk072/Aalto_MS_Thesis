@@ -3,15 +3,18 @@
 All indicators are strictly causal: at index t only rows ≤ t are used.
 No pandas-ta / ta-lib dependency – pure pandas/numpy for portability.
 """
+
 from __future__ import annotations
+
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _ema(s: pd.Series, span: int) -> pd.Series:
     return s.ewm(span=span, adjust=False).mean()
@@ -34,6 +37,7 @@ def _true_range(df: pd.DataFrame) -> pd.Series:
 # Individual indicators
 # ---------------------------------------------------------------------------
 
+
 def rsi(close: pd.Series, period: int = 14) -> pd.Series:
     delta = close.diff()
     gain = delta.clip(lower=0).ewm(alpha=1 / period, adjust=False).mean()
@@ -42,9 +46,7 @@ def rsi(close: pd.Series, period: int = 14) -> pd.Series:
     return 100 - (100 / (1 + rs))
 
 
-def macd(
-    close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9
-) -> pd.DataFrame:
+def macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.DataFrame:
     fast_ema = _ema(close, fast)
     slow_ema = _ema(close, slow)
     macd_line = fast_ema - slow_ema
@@ -81,7 +83,7 @@ def adx(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
     atr_s = tr.ewm(alpha=1 / period, adjust=False).mean()
     plus_di = 100 * plus_dm.ewm(alpha=1 / period, adjust=False).mean() / atr_s.replace(0, np.nan)
     minus_di = 100 * minus_dm.ewm(alpha=1 / period, adjust=False).mean() / atr_s.replace(0, np.nan)
-    dx = (100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan))
+    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
     adx_line = dx.ewm(alpha=1 / period, adjust=False).mean()
     return pd.DataFrame(
         {"adx": adx_line, "plus_di": plus_di, "minus_di": minus_di},
@@ -135,7 +137,9 @@ def returns(close: pd.Series, horizons: list[int]) -> pd.DataFrame:
 
 def realized_vol(close: pd.Series, period: int = 20) -> pd.Series:
     lr = np.log(close.replace(0, np.nan)).diff()
-    return lr.rolling(period).std(ddof=0).rename("realized_vol")
+    vol = lr.rolling(period).std(ddof=0)
+    vol.name = "realized_vol"
+    return pd.Series(vol, index=close.index, name="realized_vol")
 
 
 def time_features(index: pd.DatetimeIndex) -> pd.DataFrame:
@@ -161,7 +165,8 @@ def atr_normalized_price(df: pd.DataFrame, period: int = 14) -> pd.Series:
 # Master builder
 # ---------------------------------------------------------------------------
 
-def build_indicators(df: pd.DataFrame, cfg) -> pd.DataFrame:
+
+def build_indicators(df: pd.DataFrame, cfg: Any) -> pd.DataFrame:
     """Compute all indicators and return a wide feature DataFrame.
 
     Parameters
@@ -185,7 +190,7 @@ def build_indicators(df: pd.DataFrame, cfg) -> pd.DataFrame:
         parts.append(vwap_from_session(df))
     parts.append(returns(close, list(cfg.return_horizons)))
     parts.append(realized_vol(close, cfg.realized_vol_period))
-    parts.append(time_features(df.index))
+    parts.append(time_features(pd.DatetimeIndex(df.index)))
     parts.append(atr_normalized_price(df, cfg.atr_period).rename("atr_norm_price"))
 
     feat = pd.concat([p for p in parts], axis=1)

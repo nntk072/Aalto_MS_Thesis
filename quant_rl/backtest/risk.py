@@ -3,6 +3,7 @@
 Computes stop loss, take profit, and lot sizes based on trade structure
 and equity risk parameters, following MT5-style risk management.
 """
+
 from __future__ import annotations
 
 import numpy as np

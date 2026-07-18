@@ -15,14 +15,16 @@ Output : float32  [batch, latent_dim + A]
 
 Switch architecture via ``agent.build_agent(env, cfg, arch="transformer")``.
 """
+
 from __future__ import annotations
 
 import math
+from typing import Any, cast
 
 import torch
 import torch.nn as nn
+from gymnasium import spaces
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
-
 
 ACCOUNT_DIM = 5
 
@@ -30,6 +32,7 @@ ACCOUNT_DIM = 5
 # ---------------------------------------------------------------------------
 # TCN building blocks
 # ---------------------------------------------------------------------------
+
 
 class _Chomp1d(nn.Module):
     """Trim future padding to enforce strict causality."""
@@ -75,12 +78,13 @@ class _TemporalBlock(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out = self.net(x)
         res = x if self.downsample is None else self.downsample(x)
-        return self.relu(out + res)
+        return cast(torch.Tensor, self.relu(out + res))
 
 
 # ---------------------------------------------------------------------------
 # TCNEncoder
 # ---------------------------------------------------------------------------
+
 
 class TCNEncoder(BaseFeaturesExtractor):
     """Dilated causal TCN that maps a sequence window to a latent vector.
@@ -100,7 +104,7 @@ class TCNEncoder(BaseFeaturesExtractor):
 
     def __init__(
         self,
-        observation_space,
+        observation_space: spaces.Space[Any],
         seq_len: int = 60,
         n_features: int = 64,
         latent_dim: int = 128,
@@ -116,21 +120,22 @@ class TCNEncoder(BaseFeaturesExtractor):
         tcn_layers: list[nn.Module] = []
         for i, out_ch in enumerate(channels):
             in_ch = n_features if i == 0 else channels[i - 1]
-            tcn_layers.append(_TemporalBlock(in_ch, out_ch, kernel_size, 2 ** i, dropout))
+            tcn_layers.append(_TemporalBlock(in_ch, out_ch, kernel_size, 2**i, dropout))
         self.tcn = nn.Sequential(*tcn_layers)
         self.proj = nn.Linear(channels[-1], latent_dim)
 
     def forward(self, observations: dict[str, torch.Tensor]) -> torch.Tensor:
-        seq = observations["seq"]          # [B, T, F]
+        seq = observations["seq"]  # [B, T, F]
         account = observations["account"]  # [B, A]
         h = self.tcn(seq.transpose(1, 2))  # [B, F, T] → [B, C, T]
-        latent = self.proj(h[:, :, -1])    # last (causal) step  [B, D]
+        latent = self.proj(h[:, :, -1])  # last (causal) step  [B, D]
         return torch.cat([latent, account], dim=1)  # [B, D+A]
 
 
 # ---------------------------------------------------------------------------
 # TransformerEncoder
 # ---------------------------------------------------------------------------
+
 
 class _PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, max_len: int = 512) -> None:
@@ -145,7 +150,8 @@ class _PositionalEncoding(nn.Module):
         self.register_buffer("pe", pe.unsqueeze(0))  # [1, max_len, d_model]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + self.pe[:, : x.size(1)]  # type: ignore[index]
+        pe = cast(torch.Tensor, self.pe)
+        return x + pe[:, : x.size(1)]
 
 
 class TransformerEncoder(BaseFeaturesExtractor):
@@ -167,7 +173,7 @@ class TransformerEncoder(BaseFeaturesExtractor):
 
     def __init__(
         self,
-        observation_space,
+        observation_space: spaces.Space[Any],
         seq_len: int = 60,
         n_features: int = 64,
         latent_dim: int = 128,
@@ -200,19 +206,20 @@ class TransformerEncoder(BaseFeaturesExtractor):
         self.register_buffer("_causal_mask", mask)
 
     def _get_mask(self, t: int, device: torch.device) -> torch.Tensor:
-        if t <= self._causal_mask.size(0):  # type: ignore[attr-defined]
-            return self._causal_mask[:t, :t]  # type: ignore[attr-defined]
+        causal_mask = cast(torch.Tensor, self._causal_mask)
+        if t <= causal_mask.size(0):
+            return causal_mask[:t, :t]
         mask = torch.triu(torch.ones(t, t, device=device) * float("-inf"), diagonal=1)
         return mask
 
     def forward(self, observations: dict[str, torch.Tensor]) -> torch.Tensor:
-        seq = observations["seq"]          # [B, T, F]
+        seq = observations["seq"]  # [B, T, F]
         account = observations["account"]  # [B, A]
-        x = self.pos_enc(self.input_proj(seq))            # [B, T, d_model]
+        x = self.pos_enc(self.input_proj(seq))  # [B, T, d_model]
         mask = self._get_mask(x.size(1), x.device)
-        h = self.transformer(x, mask=mask)                # [B, T, d_model]
-        latent = self.proj(h[:, -1, :])                   # [B, D]
-        return torch.cat([latent, account], dim=1)        # [B, D+A]
+        h = self.transformer(x, mask=mask)  # [B, T, d_model]
+        latent = self.proj(h[:, -1, :])  # [B, D]
+        return torch.cat([latent, account], dim=1)  # [B, D+A]
 
 
 # Default alias (TCN is faster to train; swap to Transformer for ablation)

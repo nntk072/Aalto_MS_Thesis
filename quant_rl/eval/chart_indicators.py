@@ -1,8 +1,10 @@
 """Compute chart overlays: EMA50, MACD, signal, histogram."""
+
 from __future__ import annotations
 
 import pandas as pd
-from ..features.indicators import _ema, macd as _macd
+
+from ..features.indicators import _ema
 
 
 def _sma(series: pd.Series, period: int) -> pd.Series:
@@ -15,9 +17,11 @@ def compute_ema50(bars: pd.DataFrame) -> pd.Series:
     return _ema(bars["close"], 50)
 
 
-def compute_macd_sma(bars: pd.DataFrame, fast: int = 12, slow: int = 26, signal_period: int = 9) -> pd.DataFrame:
+def compute_macd_sma(
+    bars: pd.DataFrame, fast: int = 12, slow: int = 26, signal_period: int = 9
+) -> pd.DataFrame:
     """Compute MACD with SMA(9) signal line.
-    
+
     Returns
     -------
     pd.DataFrame with columns: macd, signal, histogram
@@ -28,7 +32,7 @@ def compute_macd_sma(bars: pd.DataFrame, fast: int = 12, slow: int = 26, signal_
     macd_line = fast_ema - slow_ema
     signal_line = _sma(macd_line, signal_period)
     histogram = macd_line - signal_line
-    
+
     return pd.DataFrame(
         {
             "macd": macd_line,
@@ -54,14 +58,14 @@ def compute_chart_overlays(window: pd.DataFrame) -> dict[str, pd.Series]:
     ----------
     window : pd.DataFrame
         Price bars (OHLC) for the trade window.
-    
+
     Returns
     -------
     dict with keys: ema50, macd, signal, histogram (all aligned to window.index)
     """
     ema50 = compute_ema50(window)
     macd_df = compute_macd_sma(window)
-    
+
     return {
         "ema50": ema50,
         "macd": macd_df["macd"],
