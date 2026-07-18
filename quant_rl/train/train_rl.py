@@ -3,8 +3,9 @@
 Usage
 -----
     cd Aalto_MS_Thesis
-    python -m quant_rl.train.train_rl          # requires encoder implementation
-    python -m quant_rl.train.train_rl --stub   # uses a trivial MLP policy to verify env wiring
+    python -m quant_rl.train.train_rl                    # TCN encoder
+    python -m quant_rl.train.train_rl arch=transformer   # Transformer encoder
+    python -m quant_rl.train.train_rl --stub             # trivial MLP (env sanity check)
 """
 from __future__ import annotations
 
@@ -14,8 +15,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import argparse
 import logging
-
-import numpy as np
 
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import run_pipeline
@@ -29,33 +28,27 @@ log = logging.getLogger(__name__)
 
 def _build_stub_agent(env, cfg):
     """Trivial MlpPolicy PPO – no custom encoder, used only to verify env wiring."""
-    try:
-        from stable_baselines3 import PPO
-        from stable_baselines3.common.vec_env import DummyVecEnv
-    except ImportError:
-        raise ImportError("stable-baselines3 is required")
+    from stable_baselines3 import PPO
+    from stable_baselines3.common.vec_env import DummyVecEnv
 
     vec_env = DummyVecEnv([lambda: env])
-    model = PPO(
+    return PPO(
         "MultiInputPolicy",
         vec_env,
-        n_steps=cfg.ppo.n_steps,
+        n_steps=min(cfg.ppo.n_steps, 512),
         batch_size=cfg.ppo.batch_size,
         n_epochs=cfg.ppo.n_epochs,
         learning_rate=cfg.ppo.learning_rate,
         gamma=cfg.ppo.gamma,
-        gae_lambda=cfg.ppo.gae_lambda,
-        clip_range=cfg.ppo.clip_range,
-        ent_coef=cfg.ppo.ent_coef,
         verbose=1,
     )
-    return model
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("overrides", nargs="*")
-    parser.add_argument("--stub", action="store_true", help="Use stub MLP policy (no encoder needed)")
+    parser.add_argument("overrides", nargs="*", help="key=value config overrides")
+    parser.add_argument("--stub", action="store_true", help="Use stub MLP (no encoder needed)")
+    parser.add_argument("--arch", default="tcn", choices=["tcn", "transformer"])
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
@@ -82,17 +75,20 @@ def main() -> None:
     )
 
     if args.stub:
-        log.info("Using stub MLP policy (env wiring test) …")
+        log.info("Building stub MLP agent (env wiring test) …")
         model = _build_stub_agent(env, cfg)
+        timesteps = 2048
     else:
+        log.info("Building PPO + %s encoder …", args.arch.upper())
         from quant_rl.models.agent import build_agent
-        model = build_agent(env, cfg)
+        model = build_agent(env, cfg, arch=args.arch)
+        timesteps = cfg.ppo.total_timesteps
 
-    log.info("Starting training for %d timesteps …", cfg.ppo.total_timesteps)
-    model.learn(total_timesteps=cfg.ppo.total_timesteps)
+    log.info("Starting training for %d timesteps …", timesteps)
+    model.learn(total_timesteps=timesteps)
     log.info("Training complete.")
 
-    save_path = Path("models") / "ppo_trading"
+    save_path = Path("models") / f"ppo_{args.arch if not args.stub else 'stub'}"
     save_path.parent.mkdir(exist_ok=True)
     model.save(str(save_path))
     log.info("Model saved to %s", save_path)
