@@ -16,6 +16,10 @@ data:
   m1_files:
     US100.cash: "US100.cash_M1_202412300105_202607031959.csv"
     US500.cash: "US500.cash_M1_202412300105_202607031959.csv"
+  # Real tick (bid/ask) files for accurate fill pricing
+  tick_files:
+    US100.cash: "US100.cash_202512290105_202607031959.csv"
+    US500.cash: "US500.cash_202412300105_202607031959.csv"
 
 session:
   tz: "Etc/GMT-3"                      # session times below are in this tz
@@ -32,11 +36,16 @@ account:
   contract_size: 1.0
 
 costs:
-  # spread in price points (not pips)
+  # spread in price units (same unit as bar close prices)
   spread_us100: 0.6
   spread_us500: 1.53
   slippage_points: 0.0
   commission_per_lot: 0.0
+  # minimum price increment for converting the CSV integer spread column
+  # to price units (e.g. 0.01 for US100 quoted to 2 d.p.)
+  point_size: 0.01
+  # set false to disable tick lookup and always use bar-spread fallback
+  use_tick_execution: true
 
 ftmo:
   daily_loss_limit: 5000.0             # hard kill-switch
@@ -82,19 +91,30 @@ ppo:
   total_timesteps: 500000
 
 output:
-  dir: "outputs"              # base directory for run artifacts
-  save_plots: true            # save static PNG figures
-  save_html: true             # save interactive plotly HTML
-  save_csv: true              # save equity.csv + trades.csv
-  dpi: 150                    # PNG resolution
-  candle_tf: "15min"          # resample TF for candlestick chart
-  price_plot_max_points: 3000 # max candles in price+orders chart
+  dir: "outputs"                    # base directory for run artifacts
+  save_plots: true                  # save static PNG figures
+  save_html: true                   # save interactive plotly HTML
+  save_csv: true                    # save equity.csv + trades.csv
+  dpi: 150                          # PNG resolution
+  candle_tf: "15min"                # resample TF for candlestick chart
+  price_plot_max_points: 3000       # max candles in price+orders chart
+  trade_chart_show_mae_mfe: true    # show MAE/MFE lines on per-trade charts
+  trade_chart_show_sl_tp: true      # show SL/TP lines on per-trade charts
 
 backtest:
   validation:
-    max_loss_per_trade_usd: 10.0  # hard per-trade stop in USD (null = disabled)
+    max_loss_per_trade_usd: 100.0      # hard per-trade stop in USD (null = disabled)
+    take_profit_per_trade_usd: null    # hard per-trade profit limit in USD (null = disabled)
     include_costs_in_trade_risk: true
-    validation_mode: false        # set true to relax global FTMO limits for viz testing
+    validation_mode: false             # set true to relax global FTMO limits for viz testing
+
+risk:
+  min_lot: 0.01
+  max_lot: 100.0
+  default_risk_frac: 0.01              # 1% equity fallback for baselines
+  min_sl_atr_mult: 0.5                 # reject/tighten stops inside noise
+  swing_buffer_pts: 1.0
+  rr_ratio_default: 2.0
 
 training:
   mode: "full"           # "full" = all data / "mvp" = M1-only minimal slice

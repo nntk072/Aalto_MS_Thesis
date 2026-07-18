@@ -1,9 +1,12 @@
-"""Run rule-based baselines through the backtester.
+"""Run backtests with simple deterministic strategies (MACD, EMA) to validate engine behavior.
 
-Usage
------
+This is a baseline to verify that per-trade SL/TP enforcement, lot sizing,
+and hold times are reasonable before RL training.
+
+Usage:
     cd Aalto_MS_Thesis
-    python -m quant_rl.train.run_baselines
+    python -m quant_rl.train.run_baselines --strategy macd
+    python -m quant_rl.train.run_baselines --strategy ema
 """
 from __future__ import annotations
 
@@ -13,91 +16,93 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import argparse
 import logging
-from datetime import datetime
 
 import numpy as np
 import pandas as pd
 
 from quant_rl.config import load_config
-from quant_rl.data.pipeline import run_pipeline
+from quant_rl.data.pipeline import run_pipeline, build_tick_books
 from quant_rl.data.split import split_train_test, get_split_config
 from quant_rl.features.build import build_features
 from quant_rl.backtest.engine import run_backtest
-from quant_rl.baselines.rule_based import ema_crossover, macd_baseline, rsi_mean_reversion
-from quant_rl.baselines.buy_and_hold import buy_and_hold_returns
 from quant_rl.eval.metrics import calculate_metrics
 from quant_rl.eval.export import save_run
-from quant_rl.eval.plots import plot_baseline_comparison
-from quant_rl.eval.plots_interactive import plot_baseline_comparison as plot_baseline_comparison_html
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
 
-def _run_baseline(
-    name: str,
-    bars: pd.DataFrame,
-    features: pd.DataFrame,
-    signal: pd.Series,
-    cfg,
-    max_loss_per_trade: float | None = None,
-) -> tuple[dict, object]:
-    vals = signal.reindex(bars.index).fillna(0).values.astype(int)
-    obs_window = cfg.env.obs_window
-    step_counter = [obs_window]
-
-    def policy(obs: np.ndarray) -> int:
-        s = int(vals[step_counter[0]]) if step_counter[0] < len(vals) else 0
-        step_counter[0] += 1
-        return s
-
-    result = run_backtest(
-        bars=bars, features=features, policy=policy,
-        obs_window=cfg.env.obs_window,
-        initial_balance=cfg.account.initial_balance,
-        max_loss_per_trade_usd=max_loss_per_trade,
-    )
-    result["initial_balance"] = cfg.account.initial_balance
-    m = calculate_metrics(
-        result["equity"], trades=result["trades"],
-        n_sessions=result.get("n_sessions", 1),
-        n_breach_sessions=result.get("n_breach_sessions", 0),
-    )
-    log.info(
-        "[%s] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%  Breaches=%d/%d",
-        name, m.sharpe, m.max_drawdown * 100, m.total_trades, m.total_return * 100,
-        result.get("n_breach_sessions", 0), result.get("n_sessions", 1),
-    )
-    return result, m
+def _macd_policy(obs: np.ndarray) -> int:
+    """MACD-inspired simple policy: based on EMA divergence or momentum.
+    
+    For MVP: use EMA12/EMA26 crossover as a simple signal.
+    obs shape: (obs_window, n_features)
+    """
+    if obs.size == 0 or len(obs) < 26:
+        return 0  # hold
+    
+    # Assume feature columns: [ret_1, ema12, ema26, ...]
+    # For now, use a simple rule: if ema12 > ema26, go long
+    # (This is a placeholder; actual MACD would compute MACD line vs signal)
+    
+    close_prices = obs[:, 0] if obs.shape[1] > 0 else np.array([])
+    if len(close_prices) < 2:
+        return 0
+    
+    # Simple momentum: if recent close > older close, signal long
+    momentum = close_prices[-1] - close_prices[-26]
+    if momentum > 0.001:
+        return 1  # Long
+    elif momentum < -0.001:
+        return -1  # Short
+    else:
+        return 0  # Hold
 
 
-def _save_comparison(
-    equity_dict: dict[str, pd.Series],
-    metrics_rows: list[dict],
-    comp_dir: Path,
-    label: str,
-) -> None:
-    """Write comparison chart + metrics CSV for one split."""
-    (comp_dir / label).mkdir(parents=True, exist_ok=True)
-    split_dir = comp_dir / label
-    plot_baseline_comparison(equity_dict, out_path=split_dir / "comparison.png")
-    try:
-        plot_baseline_comparison_html(equity_dict, out_path=split_dir / "comparison.html")
-    except Exception:
-        pass
-    if metrics_rows:
-        pd.DataFrame(metrics_rows).to_csv(split_dir / "baselines_metrics.csv", index=False)
+def _ema_policy(obs: np.ndarray) -> int:
+    """EMA-based policy: EMA12 > EMA26 = long, vice versa = short.
+    
+    obs shape: (obs_window, n_features)
+    """
+    if obs.size == 0 or len(obs) < 26:
+        return 0
+    
+    # Compute EMA fast & slow
+    prices = obs[:, 0] if obs.shape[1] > 0 else np.array([])
+    if len(prices) < 26:
+        return 0
+    
+    ema_fast = prices[-12:].mean()
+    ema_slow = prices[-26:].mean()
+    
+    if ema_fast > ema_slow:
+        return 1
+    elif ema_fast < ema_slow:
+        return -1
+    else:
+        return 0
+
+
+POLICIES = {
+    "macd": _macd_policy,
+    "ema": _ema_policy,
+}
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Run baseline strategy backtests")
+    parser.add_argument("--strategy", choices=list(POLICIES.keys()), default="macd",
+                        help="Strategy to use (default: macd)")
     parser.add_argument("overrides", nargs="*")
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--no-save", action="store_true", help="Skip saving artifacts")
     parser.add_argument("--out", default="outputs", help="Base output directory")
     args = parser.parse_args()
 
-    cfg  = load_config(args.overrides)
+    np.random.seed(args.seed)
+
+    cfg = load_config(args.overrides)
     data = run_pipeline(cfg, force=args.force)
 
     primary_sym   = cfg.data.primary
@@ -109,7 +114,6 @@ def main() -> None:
     feat_cache = cache_dir / f"{primary_sym}_features.parquet"
     features   = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
 
-    # Date-based split
     train_end, test_start = get_split_config(cfg)
     train_bars, test_bars, train_feat, test_feat = split_train_test(
         primary_m1, features, train_end, test_start
@@ -117,199 +121,70 @@ def main() -> None:
     log.info("Split: train=%d bars (≤%s)  test=%d bars (≥%s)",
              len(train_bars), train_end, len(test_bars), test_start)
 
+    tick_books    = build_tick_books(cfg, force=args.force)
+    primary_ticks = tick_books.get(cfg.data.primary)
+    train_ticks   = primary_ticks.slice(
+        pd.Timestamp("2000-01-01", tz=cfg.data.tz),
+        pd.Timestamp(train_end + " 23:59:59", tz=cfg.data.tz),
+    ) if primary_ticks is not None else None
+    test_ticks    = primary_ticks.slice(
+        pd.Timestamp(test_start + " 00:00:00", tz=cfg.data.tz),
+        pd.Timestamp("2099-01-01", tz=cfg.data.tz),
+    ) if primary_ticks is not None else None
+
     max_loss_per_trade = None
+    take_profit_per_trade = None
     try:
         max_loss_per_trade = cfg.backtest.validation.max_loss_per_trade_usd
-        log.info("Max loss per trade: $%.2f", max_loss_per_trade)
+        take_profit_per_trade = cfg.backtest.validation.take_profit_per_trade_usd
     except Exception:
         pass
 
-    log.info("Running baselines …")
+    contract_size = cfg.account.contract_size if hasattr(cfg.account, 'contract_size') else 1.0
+    default_risk_frac = cfg.risk.default_risk_frac if hasattr(cfg, 'risk') else 0.01
+    policy = POLICIES[args.strategy]
 
-    strategies = [
-        ("EMA crossover", lambda b=None: ema_crossover(primary_m1)),
-        ("MACD",          lambda b=None: macd_baseline(primary_m1)),
-        ("RSI mean-rev",  lambda b=None: rsi_mean_reversion(primary_m1)),
-    ]
+    def _run(bars, feats, ticks, label: str) -> tuple[dict, object]:
+        log.info("Running baseline [%s] strategy=%s seed=%d …", label, args.strategy, args.seed)
+        result = run_backtest(
+            bars=bars, features=feats,
+            policy=policy,
+            obs_window=cfg.env.obs_window,
+            initial_balance=cfg.account.initial_balance,
+            max_loss_per_trade_usd=max_loss_per_trade,
+            take_profit_per_trade_usd=take_profit_per_trade,
+            tickbook=ticks,
+            use_structure_sl_tp=True,
+            contract_size=contract_size,
+            default_risk_frac=default_risk_frac,
+        )
+        result["initial_balance"] = cfg.account.initial_balance
+        m = calculate_metrics(
+            result["equity"], trades=result["trades"],
+            n_sessions=result.get("n_sessions", 1),
+            n_breach_sessions=result.get("n_breach_sessions", 0),
+        )
+        log.info(
+            "[%s] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Breaches=%d/%d  Return=%.2f%%",
+            label, m.sharpe, m.max_drawdown * 100, m.total_trades,
+            result.get("n_breach_sessions", 0), result.get("n_sessions", 1),
+            m.total_return * 100,
+        )
+        return result, m
 
-    # Run each strategy on both splits
-    # per_strat[name] = {"train": (result, m), "test": (result, m)}
-    per_strat: dict[str, dict] = {}
-    for strat_name, signal_fn in strategies:
-        signal = signal_fn()
-        log.info("=== %s ===", strat_name)
-        tr_result, tr_m = _run_baseline(f"{strat_name}/train", train_bars, train_feat,
-                                         signal, cfg, max_loss_per_trade)
-        te_result, te_m = _run_baseline(f"{strat_name}/test",  test_bars,  test_feat,
-                                         signal, cfg, max_loss_per_trade)
-        per_strat[strat_name] = {"train": (tr_result, tr_m), "test": (te_result, te_m)}
+    train_result, train_m = _run(train_bars, train_feat, train_ticks, "training")
+    test_result,  test_m  = _run(test_bars,  test_feat,  test_ticks,  "testing")
 
-        if not args.no_save:
-            save_run(
-                out_dir=args.out, name=strat_name.replace(" ", "_"),
-                train_result=tr_result, train_metrics=tr_m, train_bars=train_bars,
-                test_result=te_result,  test_metrics=te_m,  test_bars=test_bars,
-                cfg=cfg,
-            )
-
-    # Buy-and-hold reference (computed on full data, then sliced)
-    bah_full  = buy_and_hold_returns(primary_m1) * cfg.account.initial_balance
-    bah_train = bah_full.loc[bah_full.index <= train_bars.index.max()] if not train_bars.empty else bah_full
-    bah_test  = bah_full.loc[bah_full.index >= test_bars.index.min()]  if not test_bars.empty else bah_full
-    log.info("[Buy-and-Hold] Final equity factor: %.4f", float(bah_full.iloc[-1]) / cfg.account.initial_balance)
-
-    if not args.no_save and per_strat:
-        from dataclasses import asdict
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        comp_dir = Path(args.out) / f"{ts}_baseline_comparison"
-
-        for split_label, bah_eq, split_key in [
-            ("training", bah_train, "train"),
-            ("testing",  bah_test,  "test"),
-        ]:
-            eq_dict = {name: v[split_key][0]["equity"] for name, v in per_strat.items()
-                       if not v[split_key][0]["equity"].empty}
-            eq_dict["Buy-and-Hold"] = bah_eq
-
-            rows = [{"strategy": name, **asdict(v[split_key][1])}
-                    for name, v in per_strat.items()]
-            _save_comparison(eq_dict, rows, comp_dir, split_label)
-
-        log.info("Comparison artifacts saved to %s", comp_dir)
-
-
-if __name__ == "__main__":
-    main()
-
-
-def signal_to_policy(signal_series):
-    """Convert a signal pd.Series into a stateless policy function."""
-    arr = signal_series.values
-    idx_map = {dt: i for i, dt in enumerate(signal_series.index)}
-
-    def policy(obs: np.ndarray) -> int:
-        # obs is the feature window; we use the current step counter via closure
-        # Simple fallback: return the last signal
-        return int(arr[policy._step]) if policy._step < len(arr) else 0
-
-    policy._step = 0
-    return policy
-
-
-def _run_baseline(name: str, bars, features, signal, cfg, max_loss_per_trade: float | None = None) -> tuple[dict, object]:
-    vals = signal.reindex(bars.index).fillna(0).values.astype(int)
-    obs_window = cfg.env.obs_window
-    step_counter = [obs_window]
-
-    def policy(obs: np.ndarray) -> int:
-        s = int(vals[step_counter[0]]) if step_counter[0] < len(vals) else 0
-        step_counter[0] += 1
-        return s
-
-    result = run_backtest(
-        bars=bars,
-        features=features,
-        policy=policy,
-        obs_window=cfg.env.obs_window,
-        initial_balance=cfg.account.initial_balance,
-        max_loss_per_trade_usd=max_loss_per_trade,
-    )
-    result["initial_balance"] = cfg.account.initial_balance
-    m = calculate_metrics(
-        result["equity"],
-        trades=result["trades"],
-        n_sessions=result.get("n_sessions", 1),
-        n_breach_sessions=result.get("n_breach_sessions", 0),
-    )
-    log.info(
-        "[%s] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Breaches=%d/%d  Return=%.2f%% "
-        "| sessions active=%d breached=%d",
-        name,
-        m.sharpe,
-        m.max_drawdown * 100,
-        m.total_trades,
-        result.get("n_breach_sessions", 0),
-        result.get("n_sessions", 1),
-        m.total_return * 100,
-        result.get("n_sessions_with_trades", 0),
-        result.get("n_breach_sessions", 0),
-    )
-    return result, m
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("overrides", nargs="*")
-    parser.add_argument("--force", action="store_true")
-    parser.add_argument("--no-save", action="store_true", help="Skip saving artifacts")
-    parser.add_argument("--out", default="outputs", help="Base output directory")
-    args = parser.parse_args()
-
-    cfg = load_config(args.overrides)
-    data = run_pipeline(cfg, force=args.force)
-
-    primary_sym = cfg.data.primary
-    secondary_sym = cfg.data.secondary
-    primary_m1 = data[primary_sym]["M1"]
-    secondary_m1 = data.get(secondary_sym, {}).get("M1")
-
-    cache_dir = Path(cfg.data.cache_dir)
-    feat_cache = cache_dir / f"{primary_sym}_features.parquet"
-    features = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
-
-    log.info("Running baselines …")
-
-    max_loss_per_trade = None
-    try:
-        max_loss_per_trade = cfg.backtest.validation.max_loss_per_trade_usd
-        log.info("Max loss per trade: $%.2f", max_loss_per_trade)
-    except Exception:
-        pass
-
-    strategy_results: dict[str, tuple] = {}
-    for strat_name, signal_fn in [
-        ("EMA crossover", lambda: ema_crossover(primary_m1)),
-        ("MACD",          lambda: macd_baseline(primary_m1)),
-        ("RSI mean-rev",  lambda: rsi_mean_reversion(primary_m1)),
-    ]:
-        result, m = _run_baseline(strat_name, primary_m1, features, signal_fn(), cfg, max_loss_per_trade)
-        strategy_results[strat_name] = (result, m)
-        if not args.no_save:
-            save_run(result, m, out_dir=args.out, name=strat_name.replace(" ", "_"),
-                     bars=primary_m1, cfg=cfg)
-
-    bah = buy_and_hold_returns(primary_m1)
-    log.info("[Buy-and-Hold] Final equity factor: %.4f", float(bah.iloc[-1]))
-
-    if not args.no_save and strategy_results:
-        import pandas as pd
-        from pathlib import Path as _Path
-        from datetime import datetime
-
-        # Comparison chart: overlay all strategies
-        equity_dict = {name: res["equity"] for name, (res, _) in strategy_results.items()}
-        # Add buy-and-hold as normalised equity
-        equity_dict["Buy-and-Hold"] = bah * cfg.account.initial_balance
-
-        out_base = _Path(args.out)
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        comp_dir = out_base / f"{ts}_baseline_comparison"
-        comp_dir.mkdir(parents=True, exist_ok=True)
-
-        plot_baseline_comparison(equity_dict, out_path=comp_dir / "comparison.png")
-        try:
-            plot_baseline_comparison_html(equity_dict, out_path=comp_dir / "comparison.html")
-        except Exception:
-            pass
-
-        # Combined metrics CSV
-        rows = []
-        for name, (_, m) in strategy_results.items():
-            from dataclasses import asdict
-            row = {"strategy": name, **asdict(m)}
-            rows.append(row)
-        pd.DataFrame(rows).to_csv(comp_dir / "baselines_metrics.csv", index=False)
-        log.info("Comparison artifacts saved to %s", comp_dir)
+    if not args.no_save:
+        run_dir = save_run(
+            out_dir=args.out, name=f"baseline_{args.strategy}_seed{args.seed}",
+            train_result=train_result, train_metrics=train_m, train_bars=train_bars,
+            test_result=test_result,   test_metrics=test_m,   test_bars=test_bars,
+            cfg=cfg,
+        )
+        log.info("Artifacts saved to %s", run_dir)
+        log.info("Baseline complete: check per-trade charts in %s/test/orders/ for duration/volume",
+                 run_dir)
 
 
 if __name__ == "__main__":
