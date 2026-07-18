@@ -1,13 +1,12 @@
-"""PPO agent wiring stub.
+"""PPO agent wiring: builds an SB3 PPO with the sequence encoder.
 
-Fill in ``build_agent`` with your hyperparameters and features extractor after
-implementing ``quant_rl/models/encoder.py``.
-
-Usage (after implementing encoder)
------------------------------------
+Usage
+-----
     from quant_rl.models.agent import build_agent
-    model = build_agent(env, cfg)
+    model = build_agent(env, cfg)                    # default TCN
+    model = build_agent(env, cfg, arch="transformer")
     model.learn(total_timesteps=cfg.ppo.total_timesteps)
+    model.save("models/ppo_trading")
 """
 from __future__ import annotations
 
@@ -15,17 +14,16 @@ from typing import Any
 
 from omegaconf import DictConfig
 
-# Lazy imports so the stub file doesn't break if SB3/torch are absent
 try:
     from stable_baselines3 import PPO
-    from stable_baselines3.common.env_util import make_vec_env
+    from stable_baselines3.common.vec_env import DummyVecEnv
     _SB3_AVAILABLE = True
 except ImportError:
     _SB3_AVAILABLE = False
 
 
-def build_agent(env: Any, cfg: DictConfig) -> Any:
-    """Build an SB3 PPO agent wired to the user's SequenceEncoder.
+def build_agent(env: Any, cfg: DictConfig, arch: str = "tcn") -> Any:
+    """Build an SB3 PPO agent wired to the sequence encoder.
 
     Parameters
     ----------
@@ -33,31 +31,47 @@ def build_agent(env: Any, cfg: DictConfig) -> Any:
         A :class:`quant_rl.envs.trading_env.TradingEnv` instance.
     cfg:
         Full OmegaConf config.
+    arch:
+        ``"tcn"`` (default) or ``"transformer"``.
 
     Returns
     -------
-    ``stable_baselines3.PPO`` model ready to call ``.learn()``.
-
-    Raises
-    ------
-    NotImplementedError
-        Until you implement ``quant_rl/models/encoder.py``.
+    ``stable_baselines3.PPO`` ready to call ``.learn()``.
     """
     if not _SB3_AVAILABLE:
         raise ImportError("stable-baselines3 is required: pip install stable-baselines3")
 
-    # TODO: replace with your encoder once implemented
-    from .encoder import SequenceEncoder  # noqa: F401
-    raise NotImplementedError(
-        "Implement quant_rl/models/encoder.py first, then wire it here.\n"
-        "Pattern:\n"
-        "  policy_kwargs = dict(\n"
-        "      features_extractor_class=SequenceEncoder,\n"
-        "      features_extractor_kwargs=dict(\n"
-        "          seq_len=cfg.env.obs_window,\n"
-        "          n_features=<F>,\n"
-        "          latent_dim=<D>,\n"
-        "      ),\n"
-        "  )\n"
-        "  return PPO('MultiInputPolicy', env, policy_kwargs=policy_kwargs, ...cfg.ppo...)\n"
+    from .encoder import TCNEncoder, TransformerEncoder
+
+    extractor_cls = TransformerEncoder if arch == "transformer" else TCNEncoder
+
+    # Infer F from the env's observation space
+    n_features: int = env.observation_space["seq"].shape[1]
+
+    policy_kwargs: dict[str, Any] = dict(
+        features_extractor_class=extractor_cls,
+        features_extractor_kwargs=dict(
+            seq_len=cfg.env.obs_window,
+            n_features=n_features,
+            latent_dim=128,
+        ),
+        # Two hidden layers after the encoder
+        net_arch=dict(pi=[256, 128], vf=[256, 128]),
+    )
+
+    vec_env = DummyVecEnv([lambda: env])
+
+    return PPO(
+        "MultiInputPolicy",
+        vec_env,
+        policy_kwargs=policy_kwargs,
+        n_steps=cfg.ppo.n_steps,
+        batch_size=cfg.ppo.batch_size,
+        n_epochs=cfg.ppo.n_epochs,
+        learning_rate=cfg.ppo.learning_rate,
+        gamma=cfg.ppo.gamma,
+        gae_lambda=cfg.ppo.gae_lambda,
+        clip_range=cfg.ppo.clip_range,
+        ent_coef=cfg.ppo.ent_coef,
+        verbose=1,
     )

@@ -4,6 +4,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
+import gymnasium as gym
+from gymnasium import spaces
 
 
 @pytest.fixture
@@ -29,3 +31,12 @@ def m1_bars() -> pd.DataFrame:
     )
     df.index.name = "datetime"
     return df
+
+
+@pytest.fixture
+def dict_obs_space():
+    """Gymnasium Dict observation space matching TradingEnv (T=10, F=8, A=5)."""
+    return spaces.Dict({
+        "seq":     spaces.Box(low=-10.0, high=10.0, shape=(10, 8), dtype=np.float32),
+        "account": spaces.Box(low=-1.0,  high=1.0,  shape=(5,),    dtype=np.float32),
+    })
