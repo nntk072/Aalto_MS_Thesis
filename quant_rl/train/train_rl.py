@@ -115,7 +115,6 @@ def main() -> None:
         save_path=model_dir,
         name_prefix="ppo_ckpt",
         save_replay_buffer=False,
-        save_vecenv_wrapper=False,
     )
 
     # Train PPO
