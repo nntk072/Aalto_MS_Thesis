@@ -531,8 +531,14 @@ def plot_per_trade_orders(
     context_bars: int = 60,
     max_charts: int = 200,
     dpi: int = 150,
+    max_loss_per_trade_usd: float | None = None,
+    take_profit_per_trade_usd: float | None = None,
+    lots: float = 1.0,
+    contract_size: float = 1.0,
+    show_mae_mfe: bool = True,
+    show_sl_tp: bool = True,
 ) -> None:
-    """Generate one M1 candlestick PNG per trade in *orders_dir*.
+    """Generate one M1 candlestick PNG per trade in *orders_dir* with MT5-style overlays.
 
     Filenames encode the key trade metadata::
 
@@ -547,12 +553,20 @@ def plot_per_trade_orders(
     max_charts : Cap on number of charts; trades are sampled evenly when
         the total exceeds this limit.
     dpi : PNG resolution.
+    max_loss_per_trade_usd : Maximum loss limit for SL calculation.
+    take_profit_per_trade_usd : Take profit limit for TP calculation.
+    lots : Position size in lots.
+    contract_size : Contract size.
+    show_mae_mfe : Whether to plot MAE/MFE lines.
+    show_sl_tp : Whether to plot SL/TP lines.
     """
     try:
         import mplfinance as mpf
     except ImportError:
         log.warning("mplfinance not available — skipping per-trade PNG charts")
         return
+
+    from .trade_metrics import compute_trade_metrics
 
     orders_dir = Path(orders_dir)
     orders_dir.mkdir(parents=True, exist_ok=True)
@@ -588,39 +602,52 @@ def plot_per_trade_orders(
         pnl        = float(close_row["pnl"])    if pd.notna(close_row.get("pnl"))       else 0.0
         close_type = str(close_row["type"])
 
-        # Entry marker (placed just below long entry, above short entry)
+        # Compute MAE/MFE/SL/TP metrics
+        metrics = compute_trade_metrics(
+            bars, open_row, close_row,
+            max_loss_per_trade_usd=max_loss_per_trade_usd,
+            take_profit_per_trade_usd=take_profit_per_trade_usd,
+            lots=lots,
+            contract_size=contract_size,
+        )
+
+        # Entry marker (green arrow up for long, green arrow down for short)
         entry_s = pd.Series(np.nan, index=window.index)
         i_o = window.index.get_indexer([t_open], method="nearest")[0]
         if 0 <= i_o < len(window):
             ep = float(open_row["price"]) if pd.notna(open_row.get("price")) else float(window["low"].iloc[i_o])
             entry_s.iloc[i_o] = ep * 0.9995 if direction == 1 else ep * 1.0005
 
-        # Exit marker (placed at the close of the exit bar)
+        # Exit marker (red arrow down for long exit, red arrow up for short exit)
         exit_s = pd.Series(np.nan, index=window.index)
         i_c = window.index.get_indexer([t_close], method="nearest")[0]
         if 0 <= i_c < len(window):
             exit_s.iloc[i_c] = float(window["close"].iloc[i_c])
 
         addplots = []
+        
+        # Green entry arrow
         if entry_s.notna().any():
             addplots.append(mpf.make_addplot(
                 entry_s, type="scatter", markersize=120,
                 marker="^" if direction == 1 else "v",
-                color=LONG_COLOR if direction == 1 else SHORT_COLOR,
+                color="#00cc00",  # bright green
             ))
+        
+        # Red exit arrow
         if exit_s.notna().any():
-            is_stop = close_type in ("forced_close", "stop_close")
             addplots.append(mpf.make_addplot(
                 exit_s, type="scatter", markersize=100,
-                marker="X" if is_stop else "x",
-                color=BREACH_COLOR if is_stop else CLOSE_COLOR,
+                marker="v" if direction == 1 else "^",
+                color="#ff0000",  # bright red
             ))
 
         dir_label = "Long" if direction == 1 else "Short"
+        close_reason = close_type if close_type != "close" else "normal"
         title = (
             f"{dir_label}  |  Open {t_open.strftime('%Y-%m-%d %H:%M')} "
             f"→ Close {t_close.strftime('%H:%M')}  |  "
-            f"PnL: {pnl:+.2f}  |  {close_type}"
+            f"PnL: {pnl:+.2f}  |  {close_reason}"
         )
 
         fname = _trade_filename(seq_i + 1, open_row, close_row, "png")
@@ -635,7 +662,52 @@ def plot_per_trade_orders(
             pk["addplot"] = addplots
 
         try:
-            fig, _ = mpf.plot(window, **pk)
+            fig, axes = mpf.plot(window, **pk)
+            ax = axes[0] if isinstance(axes, (list, tuple)) else axes
+            
+            # Add horizontal lines for MAE/MFE/SL/TP after candlestick plot
+            if show_mae_mfe:
+                # MAE line (red dashed)
+                ax.axhline(metrics.mae_price, color="#ff6666", linewidth=1.0, 
+                          linestyle="--", alpha=0.7, label="MAE")
+                # MFE line (green dashed)
+                ax.axhline(metrics.mfe_price, color="#66ff66", linewidth=1.0,
+                          linestyle="--", alpha=0.7, label="MFE")
+            
+            if show_sl_tp:
+                # SL line (red dotted, if configured)
+                if metrics.sl_price is not None:
+                    ax.axhline(metrics.sl_price, color="#ff0000", linewidth=0.8,
+                              linestyle=":", alpha=0.6, label="SL")
+                # TP line (green dotted, if configured)
+                if metrics.tp_price is not None:
+                    ax.axhline(metrics.tp_price, color="#00cc00", linewidth=0.8,
+                              linestyle=":", alpha=0.6, label="TP")
+            
+            # Add legend to the plot
+            ax.legend(loc="upper left", fontsize=7)
+            
+            # Add trade info box in the lower right
+            duration_mins = int((t_close - t_open).total_seconds() / 60)
+            duration_secs = int((t_close - t_open).total_seconds() % 60)
+            lots_val = float(open_row.get("lots", 1.0)) if pd.notna(open_row.get("lots")) else 1.0
+            volume = lots_val  # Volume in lots
+            
+            trade_info = (
+                f"Direction: {'Buy' if direction == 1 else 'Sell'}\n"
+                f"Open: {metrics.entry_price:.2f}\n"
+                f"Close: {metrics.exit_price:.2f}\n"
+                f"Volume: {volume:.2f}\n"
+                f"Duration: {duration_mins}m{duration_secs}s"
+            )
+            
+            # Create text box with trade info
+            props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+            ax.text(0.98, 0.02, trade_info, transform=ax.transAxes,
+                   fontsize=9, verticalalignment='bottom', horizontalalignment='right',
+                   bbox=props, family='monospace')
+            
+            fig.savefig(str(orders_dir / fname), dpi=dpi, bbox_inches="tight")
             plt.close(fig)
         except Exception as exc:
             log.debug("Skipping per-trade PNG %d: %s", seq_i + 1, exc)

@@ -163,12 +163,13 @@ cython_debug/
 *.ipynb
 
 logs/
-data/
+/data/
 
-# Generated artifacts and local runtime outputs
-cache/
-models/
-outputs/
+# Generated artifacts and local runtime outputs (root-level only —
+# do NOT anchor-less match, or quant_rl/data, quant_rl/models etc. get swallowed)
+/cache/
+/models/
+/outputs/
 
 # VS Code local workspace files
 .vscode/

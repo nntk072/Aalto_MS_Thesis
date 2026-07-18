@@ -1,4 +1,4 @@
-"""Feature build pipeline: indicators + SMT + normalisation → feature matrix."""
+"""Feature build pipeline: indicators + SMT + structure + normalisation → feature matrix."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,6 +8,7 @@ from omegaconf import DictConfig
 
 from .indicators import build_indicators
 from .smt import smt_divergence
+from .structure import compute_structure_features
 from .normalize import rolling_zscore
 
 
@@ -61,6 +62,15 @@ def build_features(
             corr_window=feat_cfg.smt_corr_window,
         )
         feat = pd.concat([feat, smt], axis=1)
+
+    # --- Structure-based SL/TP levels ---
+    if feat_cfg is not None:
+        structure = compute_structure_features(
+            primary,
+            swing_period=feat_cfg.smt_swing_period,
+            buffer_pts=1.0,  # Will be parameterized via cfg later
+        )
+        feat = pd.concat([feat, structure], axis=1)
 
     # --- normalisation ---
     window = feat_cfg.zscore_window if feat_cfg is not None else 252

@@ -1,6 +1,16 @@
 """Order → fill broker model.
 
-Handles margin calculation, leverage, and order execution.
+All execution methods accept a ``(bid, ask)`` quote tuple so that fills
+honour real bid/ask pricing:
+
+* Long open  → fill at ask  (buy order)
+* Long close → fill at bid  (sell order)
+* Short open → fill at bid  (sell order)
+* Short close→ fill at ask  (buy order)
+
+Mark-to-market also uses the close-side price:
+* Long MTM   → valued at bid
+* Short MTM  → valued at ask
 """
 from __future__ import annotations
 
@@ -12,6 +22,7 @@ from .costs import CostModel
 
 
 Direction = Literal[-1, 0, 1]
+Quote = tuple[float, float]   # (bid, ask)
 
 
 @dataclass
@@ -20,6 +31,8 @@ class Position:
     size: float             # lots
     entry_price: float
     margin_used: float
+    sl_price: float | None = None       # Stop Loss price level
+    tp_price: float | None = None       # Take Profit price level
 
 
 @dataclass
@@ -39,21 +52,26 @@ class Broker:
     def open_position(
         self,
         acc: AccountState,
-        price: float,
+        quote: Quote,
         lots: float,
         direction: int,
     ) -> Position | None:
-        """Attempt to open a position; returns Position or None if insufficient margin."""
-        fill_price = self.cost_model.fill_price(price, direction)
-        margin = self.required_margin(fill_price, lots)
+        """Attempt to open a position.
+
+        Long opens fill at ask; short opens fill at bid.
+        Returns the new ``Position`` or ``None`` if margin is insufficient.
+        """
+        bid, ask = quote
+        fill = self.cost_model.fill_price(bid, ask, direction)
+        margin = self.required_margin(fill, lots)
         if acc.equity < margin:
             return None
-        cost = self.cost_model.total_cost(lots, direction)
+        cost = self.cost_model.total_cost(lots)
         acc.balance -= cost
         return Position(
             direction=direction,
             size=lots,
-            entry_price=fill_price,
+            entry_price=fill,
             margin_used=margin,
         )
 
@@ -61,13 +79,19 @@ class Broker:
         self,
         acc: AccountState,
         position: Position,
-        price: float,
+        quote: Quote,
     ) -> float:
-        """Close position at *price*, return realised P&L."""
-        fill_price = self.cost_model.fill_price(price, -position.direction)
-        cost = self.cost_model.total_cost(position.size, -position.direction)
+        """Close an open position and return the realised P&L.
+
+        Long closes fill at bid; short closes fill at ask.
+        Commission is deducted from P&L before booking to the account.
+        """
+        bid, ask = quote
+        # Closing direction is opposite to the position direction
+        fill = self.cost_model.fill_price(bid, ask, -position.direction)
+        cost = self.cost_model.total_cost(position.size)
         pnl = (
-            (fill_price - position.entry_price)
+            (fill - position.entry_price)
             * position.direction
             * position.size
             * self.contract_size
@@ -76,13 +100,25 @@ class Broker:
         acc.close_trade(pnl)
         return pnl
 
-    def mark_to_market(self, acc: AccountState, position: Position, price: float) -> float:
-        """Compute unrealised P&L for an open position."""
+    def mark_to_market(
+        self,
+        acc: AccountState,
+        position: Position,
+        quote: Quote,
+    ) -> float:
+        """Recompute and record unrealised P&L using the close-side price.
+
+        * Long positions are valued at bid (what you'd receive if you sold now).
+        * Short positions are valued at ask (what you'd pay to buy back now).
+        """
+        bid, ask = quote
+        mtm_price = bid if position.direction == 1 else ask
         unrealised = (
-            (price - position.entry_price)
+            (mtm_price - position.entry_price)
             * position.direction
             * position.size
             * self.contract_size
         )
         acc.update_equity(unrealised)
         return unrealised
+

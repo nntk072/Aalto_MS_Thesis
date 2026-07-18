@@ -18,9 +18,10 @@ import logging
 import random
 
 import numpy as np
+import pandas as pd
 
 from quant_rl.config import load_config
-from quant_rl.data.pipeline import run_pipeline
+from quant_rl.data.pipeline import run_pipeline, build_tick_books
 from quant_rl.data.split import split_train_test, get_split_config
 from quant_rl.features.build import build_features
 from quant_rl.backtest.engine import run_backtest
@@ -67,13 +68,30 @@ def main() -> None:
     log.info("Split: train=%d bars (≤%s)  test=%d bars (≥%s)",
              len(train_bars), train_end, len(test_bars), test_start)
 
+    # Tick books for bid/ask fill execution (sliced per split)
+    tick_books    = build_tick_books(cfg, force=args.force)
+    primary_ticks = tick_books.get(cfg.data.primary)
+    train_ticks   = primary_ticks.slice(
+        pd.Timestamp("2000-01-01", tz=cfg.data.tz),
+        pd.Timestamp(train_end + " 23:59:59", tz=cfg.data.tz),
+    ) if primary_ticks is not None else None
+    test_ticks    = primary_ticks.slice(
+        pd.Timestamp(test_start + " 00:00:00", tz=cfg.data.tz),
+        pd.Timestamp("2099-01-01", tz=cfg.data.tz),
+    ) if primary_ticks is not None else None
+
     max_loss_per_trade = None
+    take_profit_per_trade = None
     try:
         max_loss_per_trade = cfg.backtest.validation.max_loss_per_trade_usd
+        take_profit_per_trade = cfg.backtest.validation.take_profit_per_trade_usd
     except Exception:
         pass
+    
+    contract_size = cfg.account.contract_size if hasattr(cfg.account, 'contract_size') else 1.0
+    default_risk_frac = cfg.risk.default_risk_frac if hasattr(cfg, 'risk') else 0.01
 
-    def _run(bars, feats, label: str) -> tuple[dict, object]:
+    def _run(bars, feats, ticks, label: str) -> tuple[dict, object]:
         log.info("Running backtest [%s] seed=%d …", label, args.seed)
         result = run_backtest(
             bars=bars, features=feats,
@@ -81,6 +99,11 @@ def main() -> None:
             obs_window=cfg.env.obs_window,
             initial_balance=cfg.account.initial_balance,
             max_loss_per_trade_usd=max_loss_per_trade,
+            take_profit_per_trade_usd=take_profit_per_trade,
+            tickbook=ticks,
+            use_structure_sl_tp=True,
+            contract_size=contract_size,
+            default_risk_frac=default_risk_frac,
         )
         result["initial_balance"] = cfg.account.initial_balance
         m = calculate_metrics(
@@ -96,8 +119,8 @@ def main() -> None:
         )
         return result, m
 
-    train_result, train_m = _run(train_bars, train_feat, "training")
-    test_result,  test_m  = _run(test_bars,  test_feat,  "testing")
+    train_result, train_m = _run(train_bars, train_feat, train_ticks, "training")
+    test_result,  test_m  = _run(test_bars,  test_feat,  test_ticks,  "testing")
 
     if not args.no_save:
         run_dir = save_run(

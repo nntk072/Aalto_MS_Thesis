@@ -68,6 +68,34 @@ def _extract_ftmo_limits(cfg: Any) -> tuple[float | None, float | None]:
     return daily_loss_limit, max_loss_limit
 
 
+def _extract_trade_chart_config(cfg: Any) -> dict[str, Any]:
+    """Extract trade chart configuration from OmegaConf."""
+    config = {
+        "max_loss_per_trade_usd": None,
+        "take_profit_per_trade_usd": None,
+        "lots": 1.0,
+        "contract_size": 1.0,
+        "show_mae_mfe": True,
+        "show_sl_tp": True,
+    }
+    if cfg is not None:
+        try:
+            config["max_loss_per_trade_usd"] = cfg.backtest.validation.max_loss_per_trade_usd
+            config["take_profit_per_trade_usd"] = cfg.backtest.validation.take_profit_per_trade_usd
+            # Try account.lots first (new RL structure), fallback to leverage (legacy)
+            config["lots"] = (
+                cfg.account.lots 
+                if hasattr(cfg.account, "lots") 
+                else (cfg.account.leverage if hasattr(cfg.account, "leverage") else 1.0)
+            )
+            config["contract_size"] = cfg.account.contract_size if hasattr(cfg.account, "contract_size") else 1.0
+            config["show_mae_mfe"] = cfg.output.trade_chart_show_mae_mfe if hasattr(cfg.output, "trade_chart_show_mae_mfe") else True
+            config["show_sl_tp"] = cfg.output.trade_chart_show_sl_tp if hasattr(cfg.output, "trade_chart_show_sl_tp") else True
+        except Exception:
+            pass
+    return config
+
+
 # ---------------------------------------------------------------------------
 # Per-split writer (all data + charts for one split go into one subfolder)
 # ---------------------------------------------------------------------------
@@ -84,6 +112,12 @@ def _write_split(
     save_csv: bool,
     dpi: int,
     max_order_charts: int,
+    max_loss_per_trade_usd: float | None = None,
+    take_profit_per_trade_usd: float | None = None,
+    lots: float = 1.0,
+    contract_size: float = 1.0,
+    show_mae_mfe: bool = True,
+    show_sl_tp: bool = True,
 ) -> None:
     """Write all data + charts for one split into *split_dir*."""
     split_dir.mkdir(parents=True, exist_ok=True)
@@ -146,6 +180,12 @@ def _write_split(
                 orders_dir=split_dir / "orders",
                 max_charts=max_order_charts,
                 dpi=dpi,
+                max_loss_per_trade_usd=max_loss_per_trade_usd,
+                take_profit_per_trade_usd=take_profit_per_trade_usd,
+                lots=lots,
+                contract_size=contract_size,
+                show_mae_mfe=show_mae_mfe,
+                show_sl_tp=show_sl_tp,
             )
 
     # ------------------------------------------------------------------
@@ -175,6 +215,12 @@ def _write_split(
                     bars, trades,
                     orders_dir=split_dir / "orders",
                     max_charts=max_order_charts,
+                    max_loss_per_trade_usd=max_loss_per_trade_usd,
+                    take_profit_per_trade_usd=take_profit_per_trade_usd,
+                    lots=lots,
+                    contract_size=contract_size,
+                    show_mae_mfe=show_mae_mfe,
+                    show_sl_tp=show_sl_tp,
                 )
         except ImportError:
             log.warning("plotly not available — skipping interactive HTML charts")
@@ -244,6 +290,10 @@ def save_run(
         dpi=dpi,
         max_order_charts=max_order_charts,
     )
+    
+    # Add trade chart configuration from config
+    trade_chart_config = _extract_trade_chart_config(cfg)
+    split_kwargs.update(trade_chart_config)
 
     if train_result is not None and train_metrics is not None:
         _write_split(run_dir / "training", train_result, train_metrics,

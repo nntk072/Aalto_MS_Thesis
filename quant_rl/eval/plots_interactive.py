@@ -433,8 +433,14 @@ def plot_per_trade_orders(
     orders_dir: Path | str,
     context_bars: int = 60,
     max_charts: int = 200,
+    max_loss_per_trade_usd: float | None = None,
+    take_profit_per_trade_usd: float | None = None,
+    lots: float = 1.0,
+    contract_size: float = 1.0,
+    show_mae_mfe: bool = True,
+    show_sl_tp: bool = True,
 ) -> None:
-    """Generate one M1 candlestick HTML per trade in *orders_dir*.
+    """Generate one M1 candlestick HTML per trade in *orders_dir* with MT5-style overlays.
 
     Filenames match the PNG counterpart produced by ``plots.plot_per_trade_orders``::
 
@@ -447,9 +453,16 @@ def plot_per_trade_orders(
     orders_dir : Destination folder; created if absent.
     context_bars : M1 bars to show before entry and after exit.
     max_charts : Cap on number of charts; trades sampled evenly when over limit.
+    max_loss_per_trade_usd : Maximum loss limit for SL calculation.
+    take_profit_per_trade_usd : Take profit limit for TP calculation.
+    lots : Position size in lots.
+    contract_size : Contract size.
+    show_mae_mfe : Whether to plot MAE/MFE lines.
+    show_sl_tp : Whether to plot SL/TP lines.
     """
     _check()
     from .plots import _pair_trades, _extract_window, _trade_filename
+    from .trade_metrics import compute_trade_metrics
 
     orders_dir = Path(orders_dir)
     orders_dir.mkdir(parents=True, exist_ok=True)
@@ -477,6 +490,15 @@ def plot_per_trade_orders(
         pnl        = float(close_row["pnl"])    if pd.notna(close_row.get("pnl"))       else 0.0
         close_type = str(close_row["type"])
 
+        # Compute MAE/MFE/SL/TP metrics
+        metrics = compute_trade_metrics(
+            bars, open_row, close_row,
+            max_loss_per_trade_usd=max_loss_per_trade_usd,
+            take_profit_per_trade_usd=take_profit_per_trade_usd,
+            lots=lots,
+            contract_size=contract_size,
+        )
+
         fig = go.Figure()
         fig.add_trace(go.Candlestick(
             x=window.index,
@@ -487,7 +509,7 @@ def plot_per_trade_orders(
             decreasing_line_color=_SHORT_COLOR,
         ))
 
-        # Entry marker
+        # Entry marker: green arrow (triangle-up for long, triangle-down for short)
         i_o = window.index.get_indexer([t_open], method="nearest")[0]
         if 0 <= i_o < len(window):
             ep = float(open_row["price"]) if pd.notna(open_row.get("price")) else float(window["close"].iloc[i_o])
@@ -497,32 +519,61 @@ def plot_per_trade_orders(
                 marker=dict(
                     symbol="triangle-up" if direction == 1 else "triangle-down",
                     size=14,
-                    color=_LONG_COLOR if direction == 1 else _SHORT_COLOR,
+                    color="#00cc00",  # bright green
                 ),
             ))
 
-        # Exit marker
+        # Exit marker: red arrow (triangle-down for long, triangle-up for short)
         i_c = window.index.get_indexer([t_close], method="nearest")[0]
         if 0 <= i_c < len(window):
             ep2 = float(window["close"].iloc[i_c])
-            is_stop = close_type in ("forced_close", "stop_close")
             fig.add_trace(go.Scatter(
                 x=[window.index[i_c]], y=[ep2],
                 mode="markers", name="Exit",
                 marker=dict(
-                    symbol="x", size=12,
-                    color=_BREACH_COLOR if is_stop else _CLOSE_COLOR,
-                    line=dict(width=2,
-                              color=_BREACH_COLOR if is_stop else _CLOSE_COLOR),
+                    symbol="triangle-down" if direction == 1 else "triangle-up",
+                    size=14,
+                    color="#ff0000",  # bright red
                 ),
             ))
 
+        # Add MAE/MFE horizontal lines
+        if show_mae_mfe:
+            # MAE line (red dashed)
+            fig.add_hline(y=metrics.mae_price, line_color="#ff6666", line_dash="dash",
+                         annotation_text="MAE", annotation_position="right")
+            # MFE line (green dashed)
+            fig.add_hline(y=metrics.mfe_price, line_color="#66ff66", line_dash="dash",
+                         annotation_text="MFE", annotation_position="right")
+
+        # Add SL/TP horizontal lines (if configured)
+        if show_sl_tp:
+            if metrics.sl_price is not None:
+                fig.add_hline(y=metrics.sl_price, line_color="#ff0000", line_dash="dot",
+                             annotation_text="SL", annotation_position="right")
+            if metrics.tp_price is not None:
+                fig.add_hline(y=metrics.tp_price, line_color="#00cc00", line_dash="dot",
+                             annotation_text="TP", annotation_position="right")
+
+        close_reason = close_type if close_type != "close" else "normal"
         dir_label = "Long" if direction == 1 else "Short"
+        
+        # Calculate trade info
+        duration_mins = int((t_close - t_open).total_seconds() / 60)
+        duration_secs = int((t_close - t_open).total_seconds() % 60)
+        lots_val = float(open_row.get("lots", 1.0)) if pd.notna(open_row.get("lots")) else 1.0
+        volume = lots_val  # Volume in lots
+        
+        # Create extended title with trade info
         title = (
             f"{dir_label} | Open {t_open.strftime('%Y-%m-%d %H:%M')} "
             f"→ Close {t_close.strftime('%H:%M')} | "
-            f"PnL: {pnl:+.2f} | {close_type}"
+            f"PnL: {pnl:+.2f} | {close_reason}<br>"
+            f"<sub>Direction: {'Buy' if direction == 1 else 'Sell'} | "
+            f"Open: {metrics.entry_price:.2f} | Close: {metrics.exit_price:.2f} | "
+            f"Volume: {volume:.2f} | Duration: {duration_mins}m{duration_secs}s</sub>"
         )
+        
         fig.update_layout(
             template=_TEMPLATE,
             title=title,
@@ -530,7 +581,7 @@ def plot_per_trade_orders(
             yaxis_title="Price",
             xaxis_rangeslider_visible=False,
             hovermode="x unified",
-            height=500,
+            height=550,
         )
 
         fname = _trade_filename(seq_i + 1, open_row, close_row, "html")
