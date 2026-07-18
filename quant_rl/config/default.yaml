@@ -86,3 +86,16 @@ output:
   dpi: 150                    # PNG resolution
   candle_tf: "15min"          # resample TF for candlestick chart
   price_plot_max_points: 3000 # max candles in price+orders chart
+
+backtest:
+  validation:
+    max_loss_per_trade_usd: 10.0  # hard per-trade stop in USD (null = disabled)
+    include_costs_in_trade_risk: true
+    validation_mode: false        # set true to relax global FTMO limits for viz testing
+
+training:
+  mode: "full"           # "full" = all data / "mvp" = M1-only minimal slice
+  use_m1_only: false     # true = skip SMT/secondary features (M1 primary only)
+  primary_only: false    # true = ignore secondary symbol entirely
+  max_days: null         # null = all data; integer = last N calendar days for training
+  total_timesteps_mvp: 8192   # short timestep count used in mvp mode

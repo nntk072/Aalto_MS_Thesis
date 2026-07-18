@@ -77,6 +77,7 @@ def save_run(
     equity: pd.Series = result.get("equity", pd.Series(dtype=float))
     trades: pd.DataFrame = result.get("trades", pd.DataFrame())
     breaches: list[str] = result.get("breaches", [])
+    breach_events: list[dict] = result.get("breach_events", [])
     initial_balance: float = result.get("initial_balance", 100_000.0)
 
     # ------------------------------------------------------------------
@@ -87,6 +88,16 @@ def save_run(
             equity.to_csv(run_dir / "equity.csv", header=["equity"])
         if not trades.empty:
             trades.to_csv(run_dir / "trades.csv", index=False)
+        # breach events and session activity diagnostics
+        if breach_events:
+            pd.DataFrame(breach_events).to_csv(run_dir / "breach_events.csv", index=False)
+        session_diag = {
+            "n_sessions": result.get("n_sessions", 0),
+            "n_breach_sessions": result.get("n_breach_sessions", 0),
+            "n_sessions_with_trades": result.get("n_sessions_with_trades", 0),
+            "n_sessions_skipped": result.get("n_sessions_skipped", 0),
+        }
+        (run_dir / "session_activity.json").write_text(json.dumps(session_diag, indent=2))
 
     # ------------------------------------------------------------------
     # Metrics
@@ -122,7 +133,7 @@ def save_run(
         from . import plots as _plt
 
         _plt.plot_equity_curve(
-            equity, breaches=breaches,
+            equity, breach_events=breach_events,
             initial_balance=initial_balance,
             daily_loss_limit=daily_loss_limit,
             max_loss_limit=max_loss_limit,
@@ -152,7 +163,7 @@ def save_run(
             from . import plots_interactive as _pi
 
             _pi.plot_equity_curve(
-                equity, breaches=breaches,
+                equity, breach_events=breach_events,
                 initial_balance=initial_balance,
                 daily_loss_limit=daily_loss_limit,
                 max_loss_limit=max_loss_limit,

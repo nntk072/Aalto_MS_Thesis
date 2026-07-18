@@ -45,10 +45,10 @@ def signal_to_policy(signal_series):
     return policy
 
 
-def _run_baseline(name: str, bars, features, signal, cfg) -> tuple[dict, object]:
+def _run_baseline(name: str, bars, features, signal, cfg, max_loss_per_trade: float | None = None) -> tuple[dict, object]:
     vals = signal.reindex(bars.index).fillna(0).values.astype(int)
     obs_window = cfg.env.obs_window
-    step_counter = [obs_window]   # engine starts at obs_window
+    step_counter = [obs_window]
 
     def policy(obs: np.ndarray) -> int:
         s = int(vals[step_counter[0]]) if step_counter[0] < len(vals) else 0
@@ -61,6 +61,7 @@ def _run_baseline(name: str, bars, features, signal, cfg) -> tuple[dict, object]
         policy=policy,
         obs_window=cfg.env.obs_window,
         initial_balance=cfg.account.initial_balance,
+        max_loss_per_trade_usd=max_loss_per_trade,
     )
     result["initial_balance"] = cfg.account.initial_balance
     m = calculate_metrics(
@@ -70,7 +71,8 @@ def _run_baseline(name: str, bars, features, signal, cfg) -> tuple[dict, object]
         n_breach_sessions=result.get("n_breach_sessions", 0),
     )
     log.info(
-        "[%s] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Breaches=%d/%d  Return=%.2f%%",
+        "[%s] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Breaches=%d/%d  Return=%.2f%% "
+        "| sessions active=%d breached=%d",
         name,
         m.sharpe,
         m.max_drawdown * 100,
@@ -78,6 +80,8 @@ def _run_baseline(name: str, bars, features, signal, cfg) -> tuple[dict, object]
         result.get("n_breach_sessions", 0),
         result.get("n_sessions", 1),
         m.total_return * 100,
+        result.get("n_sessions_with_trades", 0),
+        result.get("n_breach_sessions", 0),
     )
     return result, m
 
@@ -104,13 +108,20 @@ def main() -> None:
 
     log.info("Running baselines …")
 
+    max_loss_per_trade = None
+    try:
+        max_loss_per_trade = cfg.backtest.validation.max_loss_per_trade_usd
+        log.info("Max loss per trade: $%.2f", max_loss_per_trade)
+    except Exception:
+        pass
+
     strategy_results: dict[str, tuple] = {}
     for strat_name, signal_fn in [
         ("EMA crossover", lambda: ema_crossover(primary_m1)),
         ("MACD",          lambda: macd_baseline(primary_m1)),
         ("RSI mean-rev",  lambda: rsi_mean_reversion(primary_m1)),
     ]:
-        result, m = _run_baseline(strat_name, primary_m1, features, signal_fn(), cfg)
+        result, m = _run_baseline(strat_name, primary_m1, features, signal_fn(), cfg, max_loss_per_trade)
         strategy_results[strat_name] = (result, m)
         if not args.no_save:
             save_run(result, m, out_dir=args.out, name=strat_name.replace(" ", "_"),

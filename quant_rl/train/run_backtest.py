@@ -60,12 +60,19 @@ def main() -> None:
     features = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
 
     log.info("Running backtest with random policy (seed=%d) …", args.seed)
+    max_loss_per_trade = None
+    try:
+        max_loss_per_trade = cfg.backtest.validation.max_loss_per_trade_usd
+    except Exception:
+        pass
+
     result = run_backtest(
         bars=primary_m1,
         features=features,
         policy=_random_policy,
         obs_window=cfg.env.obs_window,
         initial_balance=cfg.account.initial_balance,
+        max_loss_per_trade_usd=max_loss_per_trade,
     )
     result["initial_balance"] = cfg.account.initial_balance
 
@@ -77,9 +84,18 @@ def main() -> None:
         n_breach_sessions=result.get("n_breach_sessions", 0),
     )
 
-    log.info("Sharpe=%.3f  Sortino=%.3f  MaxDD=%.2f%%  Trades=%d  Breaches=%d/%d sessions",
-             m.sharpe, m.sortino, m.max_drawdown * 100, m.total_trades,
-             result.get("n_breach_sessions", 0), result.get("n_sessions", 1))
+    log.info(
+        "Sharpe=%.3f  Sortino=%.3f  MaxDD=%.2f%%  Trades=%d  Breaches=%d/%d sessions",
+        m.sharpe, m.sortino, m.max_drawdown * 100, m.total_trades,
+        result.get("n_breach_sessions", 0), result.get("n_sessions", 1),
+    )
+    log.info(
+        "Sessions: total=%d  active=%d  breached=%d  skipped=%d",
+        result.get("n_sessions", 0),
+        result.get("n_sessions_with_trades", 0),
+        result.get("n_breach_sessions", 0),
+        result.get("n_sessions_skipped", 0),
+    )
 
     if not args.no_save:
         run_dir = save_run(

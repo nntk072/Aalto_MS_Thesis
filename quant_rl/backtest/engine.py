@@ -30,6 +30,7 @@ def run_backtest(
     guardrail_kwargs: dict | None = None,
     initial_balance: float = 100_000.0,
     lots: float = 1.0,
+    max_loss_per_trade_usd: float | None = None,
 ) -> dict[str, Any]:
     """Run a full backtest.
 
@@ -43,6 +44,8 @@ def run_backtest(
         Function (obs_array) → int action in {-1, 0, +1}.
     obs_window:
         Number of bars in the rolling observation window fed to policy.
+    max_loss_per_trade_usd:
+        Hard per-trade stop in USD (unrealised). None = disabled.
     """
     broker = Broker(cost_model=cost_model, **(broker_kwargs or {}))
     guardrails = FTMOGuardrails(**(guardrail_kwargs or {}))
@@ -51,8 +54,10 @@ def run_backtest(
     equity_curve: list[float] = []
     trade_log: list[dict] = []
     breach_log: list[str] = []
-    breached_sessions: set[int] = set()   # unique sessions that hit a guardrail
+    breach_events: list[dict] = []          # NEW: rich breach event records
+    breached_sessions: set[int] = set()
     session_set: set[int] = set()
+    sessions_with_trades: set[int] = set()  # NEW: diagnostic counter
 
     position: Position | None = None
     prev_session: int | None = None
@@ -80,11 +85,35 @@ def run_backtest(
         if position is not None:
             broker.mark_to_market(acc, position, price)
 
-        # Guardrail check — record each breached session only once
+        # Per-trade hard stop (independent of global guardrails)
+        if position is not None and max_loss_per_trade_usd is not None:
+            unrealised = (
+                (price - position.entry_price)
+                * position.direction
+                * position.size
+                * broker.contract_size
+            )
+            if unrealised <= -abs(max_loss_per_trade_usd):
+                pnl = broker.close_position(acc, position, price)
+                trade_log.append({
+                    "type": "stop_close", "pnl": pnl,
+                    "reason": "max_loss_per_trade", "bar": i, "time": bar_time,
+                    "equity": acc.equity,
+                })
+                sessions_with_trades.add(session)
+                position = None
+
+        # Guardrail check — one breach event per session
         reason = guardrails.breach_reason(acc)
         if reason and session not in breached_sessions:
             breached_sessions.add(session)
             breach_log.append(reason)
+            breach_events.append({          # NEW: real timestamp, not synthetic
+                "time": bar_time,
+                "session_id": session,
+                "reason": reason,
+                "equity": acc.equity,
+            })
             if position is not None:
                 pnl = broker.close_position(acc, position, price)
                 trade_log.append({
@@ -92,6 +121,7 @@ def run_backtest(
                     "reason": reason, "bar": i, "time": bar_time,
                     "equity": acc.equity,
                 })
+                sessions_with_trades.add(session)
                 position = None
 
         equity_curve.append(acc.equity)
@@ -115,6 +145,7 @@ def run_backtest(
                     "type": "close", "pnl": pnl, "bar": i, "time": bar_time,
                     "equity": acc.equity,
                 })
+                sessions_with_trades.add(session)
                 position = None
 
             if position is None:
@@ -125,12 +156,14 @@ def run_backtest(
                         "price": position.entry_price, "bar": i, "time": bar_time,
                         "equity": acc.equity,
                     })
+                    sessions_with_trades.add(session)
         elif action == 0 and position is not None:
             pnl = broker.close_position(acc, position, price)
             trade_log.append({
                 "type": "close", "pnl": pnl, "bar": i, "time": bar_time,
                 "equity": acc.equity,
             })
+            sessions_with_trades.add(session)
             position = None
 
     # Close any remaining position at the last bar
@@ -153,6 +186,9 @@ def run_backtest(
         "trades": trades_df,
         "account": acc,
         "breaches": breach_log,
+        "breach_events": breach_events,          # NEW: one dict per breached session
         "n_sessions": n_sessions,
         "n_breach_sessions": n_breach_sessions,
+        "n_sessions_with_trades": len(sessions_with_trades),   # NEW: diagnostic
+        "n_sessions_skipped": n_breach_sessions,               # NEW: alias
     }

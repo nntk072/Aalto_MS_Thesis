@@ -60,13 +60,18 @@ def _save(fig: plt.Figure, path: Path | str, dpi: int = 150) -> plt.Figure:
 def plot_equity_curve(
     equity: pd.Series,
     breaches: list[str] | None = None,
+    breach_events: list[dict] | None = None,
     initial_balance: float = 100_000.0,
     daily_loss_limit: float | None = None,
     max_loss_limit: float | None = None,
     out_path: Path | str | None = None,
     dpi: int = 150,
 ) -> plt.Figure:
-    """Equity over time with peak line, FTMO threshold lines, and breach markers."""
+    """Equity over time with peak line, FTMO threshold lines, and breach markers.
+
+    Uses ``breach_events`` (list of dicts with 'time' key) for accurate vertical
+    lines.  Falls back to legacy ``breaches`` count only when no events available.
+    """
     _apply_style()
     fig, ax = plt.subplots(figsize=(14, 5))
 
@@ -81,14 +86,16 @@ def plot_equity_curve(
         ax.axhline(initial_balance - max_loss_limit, color=BREACH_COLOR, linewidth=0.9,
                    linestyle=":", label=f"Max loss limit (${max_loss_limit:,.0f})")
 
-    # Breach events: mark as vertical lines (we don't have exact times, so use index)
-    if breaches:
-        # space evenly along the index as approximate markers
-        n = len(equity)
-        step = max(1, n // max(len(breaches), 1))
-        for k in range(len(breaches)):
-            xi = equity.index[min(k * step, n - 1)]
-            ax.axvline(xi, color=BREACH_COLOR, alpha=0.3, linewidth=0.6)
+    # Breach events: one accurate vertical line per event
+    _drawn_breach_label = False
+    if breach_events:
+        for ev in breach_events:
+            ts = ev.get("time")
+            reason = ev.get("reason", "breach")
+            label = "Breach" if not _drawn_breach_label else None
+            ax.axvline(ts, color=BREACH_COLOR, alpha=0.6, linewidth=1.0,
+                       linestyle="--", label=label)
+            _drawn_breach_label = True
 
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"${x:,.0f}"))
     ax.xaxis.set_major_formatter(mdates.AutoDateFormatter(mdates.AutoDateLocator()))
@@ -171,12 +178,22 @@ def plot_price_with_orders(
     if len(ohlcv) > max_points:
         ohlcv = ohlcv.iloc[-max_points:]
 
-    # Build addplots for orders
+    # Build addplots for orders — candle-interval binning via floor to candle_tf
     addplots = []
     if trades is not None and not trades.empty and "time" in trades.columns:
-        # Align trade times to the resampled OHLC index
         opens  = trades[trades["type"] == "open"].copy()
-        closes = trades[trades["type"].isin(["close", "forced_close", "eod_close"])].copy()
+        closes = trades[trades["type"].isin(["close", "forced_close", "eod_close", "stop_close"])].copy()
+        forced = trades[trades["type"].isin(["forced_close", "stop_close"])].copy()
+
+        def _bin_time(ts: pd.Timestamp) -> pd.Timestamp | None:
+            """Floor a timestamp to the nearest candle bin, return None if out of range."""
+            binned = ts.floor(candle_tf)
+            if binned in ohlcv.index:
+                return binned
+            # fallback: searchsorted then clamp
+            loc = ohlcv.index.searchsorted(ts, side="left")
+            loc = min(loc, len(ohlcv) - 1)
+            return ohlcv.index[loc] if loc < len(ohlcv) else None
 
         def _make_series(subset: pd.DataFrame, direction: int) -> pd.Series | None:
             mask = (subset["direction"] == direction) if "direction" in subset.columns else pd.Series(False, index=subset.index)
@@ -185,32 +202,40 @@ def plot_price_with_orders(
                 return None
             s = pd.Series(np.nan, index=ohlcv.index)
             for _, row in rows.iterrows():
-                ts = row["time"]
-                # find nearest candle
-                loc = ohlcv.index.searchsorted(ts)
-                if loc < len(ohlcv):
-                    s.iloc[loc] = ohlcv["low"].iloc[loc] * 0.999 if direction == 1 else ohlcv["high"].iloc[loc] * 1.001
+                candle_ts = _bin_time(row["time"])
+                if candle_ts is None:
+                    continue
+                loc = ohlcv.index.get_loc(candle_ts)
+                s.iloc[loc] = ohlcv["low"].iloc[loc] * 0.9995 if direction == 1 else ohlcv["high"].iloc[loc] * 1.0005
             return s
 
         long_s  = _make_series(opens, 1)
         short_s = _make_series(opens, -1)
 
         close_s = pd.Series(np.nan, index=ohlcv.index)
+        forced_s = pd.Series(np.nan, index=ohlcv.index)
         for _, row in closes.iterrows():
-            ts = row["time"]
-            loc = ohlcv.index.searchsorted(ts)
-            if loc < len(ohlcv):
+            candle_ts = _bin_time(row["time"])
+            if candle_ts is None:
+                continue
+            loc = ohlcv.index.get_loc(candle_ts)
+            if row["type"] in ("forced_close", "stop_close"):
+                forced_s.iloc[loc] = ohlcv["close"].iloc[loc]
+            else:
                 close_s.iloc[loc] = ohlcv["close"].iloc[loc]
 
         if long_s is not None and long_s.notna().any():
-            addplots.append(mpf.make_addplot(long_s, type="scatter", markersize=60,
+            addplots.append(mpf.make_addplot(long_s, type="scatter", markersize=80,
                                               marker="^", color=LONG_COLOR))
         if short_s is not None and short_s.notna().any():
-            addplots.append(mpf.make_addplot(short_s, type="scatter", markersize=60,
+            addplots.append(mpf.make_addplot(short_s, type="scatter", markersize=80,
                                               marker="v", color=SHORT_COLOR))
         if close_s.notna().any():
-            addplots.append(mpf.make_addplot(close_s, type="scatter", markersize=40,
+            addplots.append(mpf.make_addplot(close_s, type="scatter", markersize=50,
                                               marker="x", color=CLOSE_COLOR))
+        if forced_s.notna().any():
+            addplots.append(mpf.make_addplot(forced_s, type="scatter", markersize=80,
+                                              marker="X", color=BREACH_COLOR))
 
     mc = mpf.make_marketcolors(up=LONG_COLOR, down=SHORT_COLOR, edge="inherit",
                                 wick="inherit", volume="in")
