@@ -136,7 +136,7 @@ def main() -> None:
         seed=args.seed,
     )
 
-    model.learn(total_timesteps=timesteps, callback=checkpoint_callback, progress_bar=True)
+    model.learn(total_timesteps=timesteps, callback=checkpoint_callback)
 
     # Save final model
     model_path = model_dir / "ppo_final"

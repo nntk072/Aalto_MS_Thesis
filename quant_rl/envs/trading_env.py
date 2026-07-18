@@ -97,20 +97,10 @@ class TradingEnv(gym.Env):
 
         self.reward_fn = DSRReward(eta=dsr_eta)
 
-        # Action space: hybrid discrete + continuous
-        # discrete: 0=hold, 1=enter_long, 2=enter_short, 3=exit
-        # continuous (when entering): [risk_frac, rr_ratio]
-        self.action_space = spaces.Dict(
-            {
-                "discrete": spaces.Discrete(4),
-                "continuous": spaces.Box(
-                    low=np.array([0.0, 0.0], dtype=np.float32),
-                    high=np.array([1.0, 1.0], dtype=np.float32),
-                    shape=(2,),
-                    dtype=np.float32,
-                ),
-            }
-        )
+        # Action space: simplified discrete
+        # 0=hold, 1-9=enter_long with risk/rr variants, 10-18=enter_short variants, 19=exit
+        # This avoids Dict space which PPO doesn't support natively
+        self.action_space = spaces.Discrete(20)
 
         # Observation space: dict with time-series + account state
         # features: (obs_window, n_features)
@@ -187,17 +177,54 @@ class TradingEnv(gym.Env):
         else:
             fill_bid, fill_ask = bid, ask
 
-        # Parse action
-        discrete_action = int(action["discrete"])
-        risk_frac_norm, rr_ratio_norm = action["continuous"]
-
-        # Denormalize continuous parameters
-        risk_frac = self.risk_frac_range[0] + risk_frac_norm * (
-            self.risk_frac_range[1] - self.risk_frac_range[0]
-        )
-        rr_ratio = self.rr_ratio_range[0] + rr_ratio_norm * (
-            self.rr_ratio_range[1] - self.rr_ratio_range[0]
-        )
+        # Decode discrete action (0-19)
+        # 0: hold
+        # 1-9: enter_long with different risk/rr (3x3 grid)
+        # 10-18: enter_short with different risk/rr (3x3 grid)
+        # 19: exit
+        discrete_action = 0  # default hold
+        risk_frac = self.risk_frac_range[0]  # default
+        rr_ratio = self.rr_ratio_range[0]    # default
+        
+        if action == 0:
+            discrete_action = 0  # hold
+        elif 1 <= action <= 9:
+            discrete_action = 1  # enter_long
+            # Map to risk/rr: low/med/high × low/med/high
+            idx = action - 1
+            risk_variant = idx // 3  # 0, 1, 2
+            rr_variant = idx % 3     # 0, 1, 2
+            risk_levels = [
+                self.risk_frac_range[0],
+                (self.risk_frac_range[0] + self.risk_frac_range[1]) / 2,
+                self.risk_frac_range[1],
+            ]
+            rr_levels = [
+                self.rr_ratio_range[0],
+                (self.rr_ratio_range[0] + self.rr_ratio_range[1]) / 2,
+                self.rr_ratio_range[1],
+            ]
+            risk_frac = risk_levels[risk_variant]
+            rr_ratio = rr_levels[rr_variant]
+        elif 10 <= action <= 18:
+            discrete_action = -1  # enter_short
+            idx = action - 10
+            risk_variant = idx // 3
+            rr_variant = idx % 3
+            risk_levels = [
+                self.risk_frac_range[0],
+                (self.risk_frac_range[0] + self.risk_frac_range[1]) / 2,
+                self.risk_frac_range[1],
+            ]
+            rr_levels = [
+                self.rr_ratio_range[0],
+                (self.rr_ratio_range[0] + self.rr_ratio_range[1]) / 2,
+                self.rr_ratio_range[1],
+            ]
+            risk_frac = risk_levels[risk_variant]
+            rr_ratio = rr_levels[rr_variant]
+        else:  # action == 19
+            discrete_action = 0  # exit action mapped to hold, exit handled below
 
         # Check guardrails
         reason = self.guardrails.breach_reason(self.account)
@@ -250,7 +277,12 @@ class TradingEnv(gym.Env):
 
             # Action handling
             if not done:
-                if discrete_action != 0:
+                if action == 19:  # exit action
+                    if self.position is not None:
+                        pnl = self.broker.close_position(self.account, self.position, (fill_bid, fill_ask))
+                        self.trade_log.append({"type": "close", "pnl": pnl, "time": bar_time})
+                        self.position = None
+                elif discrete_action != 0:  # enter_long or enter_short
                     if self.position is not None and self.position.direction != discrete_action:
                         pnl = self.broker.close_position(self.account, self.position, (fill_bid, fill_ask))
                         self.trade_log.append({"type": "close", "pnl": pnl, "time": bar_time})
@@ -330,12 +362,6 @@ class TradingEnv(gym.Env):
                                     "time": bar_time,
                                 }
                             )
-
-                elif discrete_action == 0 and self.position is not None:
-                    # Exit action
-                    pnl = self.broker.close_position(self.account, self.position, (fill_bid, fill_ask))
-                    self.trade_log.append({"type": "close", "pnl": pnl, "time": bar_time})
-                    self.position = None
 
         self.equity_curve.append(self.account.equity)
         pnl_step = self.account.equity - self.equity_curve[-2]
