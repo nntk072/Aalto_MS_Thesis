@@ -15,5 +15,15 @@ def load_config(overrides: list[str] | None = None) -> DictConfig:
     if overrides:
         for ov in overrides:
             key, _, val = ov.partition("=")
-            OmegaConf.update(cfg, key.strip(), val.strip(), merge=True)
+            # Try to coerce to int/float/bool before storing
+            coerced: object = val
+            try:
+                coerced = int(val)
+            except ValueError:
+                try:
+                    coerced = float(val)
+                except ValueError:
+                    if val.lower() in ("true", "false"):
+                        coerced = val.lower() == "true"
+            OmegaConf.update(cfg, key.strip(), coerced, merge=True)
     return cfg
