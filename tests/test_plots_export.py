@@ -34,6 +34,20 @@ def synthetic_equity() -> pd.Series:
 
 
 @pytest.fixture()
+def synthetic_bars() -> pd.DataFrame:
+    """Create synthetic M1 bars for per-trade chart testing."""
+    idx = pd.date_range("2025-01-02 16:30", periods=500, freq="1min")
+    rng = np.random.default_rng(42)
+    close = 20000.0 + np.cumsum(rng.normal(0, 1, 500))
+    return pd.DataFrame({
+        "open": close - rng.uniform(0, 1, 500),
+        "high": close + rng.uniform(0, 2, 500),
+        "low": close - rng.uniform(0, 2, 500),
+        "close": close,
+    }, index=idx)
+
+
+@pytest.fixture()
 def synthetic_trades(synthetic_equity) -> pd.DataFrame:
     idx = synthetic_equity.index
     rows = []
@@ -164,6 +178,38 @@ def test_plot_monthly_heatmap(synthetic_equity, tmp_path):
     assert (tmp_path / "heatmap.png").stat().st_size > 0
 
 
+def test_plot_per_trade_orders_mt5_style(synthetic_bars, synthetic_trades, tmp_path):
+    """Test MT5-style per-trade order charts with MAE/MFE/SL/TP overlays."""
+    from quant_rl.eval.plots import plot_per_trade_orders
+    
+    # Only test if mplfinance is available
+    try:
+        import mplfinance  # noqa
+    except ImportError:
+        pytest.skip("mplfinance not available")
+    
+    orders_dir = tmp_path / "orders"
+    plot_per_trade_orders(
+        synthetic_bars, synthetic_trades,
+        orders_dir=orders_dir,
+        max_charts=50,
+        dpi=72,
+        max_loss_per_trade_usd=10.0,
+        take_profit_per_trade_usd=50.0,
+        lots=1.0,
+        contract_size=1.0,
+        show_mae_mfe=True,
+        show_sl_tp=True,
+    )
+    
+    # Check that at least one PNG was generated
+    pngs = list(orders_dir.glob("*.png"))
+    assert len(pngs) > 0, "No PNG files generated"
+    # Each PNG should be non-empty
+    for png_path in pngs:
+        assert png_path.stat().st_size > 0, f"{png_path} is empty"
+
+
 def test_plot_baseline_comparison(synthetic_equity, tmp_path):
     from quant_rl.eval.plots import plot_baseline_comparison
     eq2 = synthetic_equity * 1.05
@@ -188,6 +234,32 @@ def test_interactive_drawdown(synthetic_equity, tmp_path):
     from quant_rl.eval.plots_interactive import plot_drawdown
     plot_drawdown(synthetic_equity, out_path=tmp_path / "drawdown.html")
     assert (tmp_path / "drawdown.html").stat().st_size > 0
+
+
+def test_interactive_per_trade_orders_mt5_style(synthetic_bars, synthetic_trades, tmp_path):
+    """Test MT5-style interactive HTML per-trade order charts."""
+    pytest.importorskip("plotly")
+    from quant_rl.eval.plots_interactive import plot_per_trade_orders
+    
+    orders_dir = tmp_path / "orders"
+    plot_per_trade_orders(
+        synthetic_bars, synthetic_trades,
+        orders_dir=orders_dir,
+        max_charts=50,
+        max_loss_per_trade_usd=10.0,
+        take_profit_per_trade_usd=50.0,
+        lots=1.0,
+        contract_size=1.0,
+        show_mae_mfe=True,
+        show_sl_tp=True,
+    )
+    
+    # Check that at least one HTML was generated
+    htmls = list(orders_dir.glob("*.html"))
+    assert len(htmls) > 0, "No HTML files generated"
+    # Each HTML should be non-empty
+    for html_path in htmls:
+        assert html_path.stat().st_size > 0, f"{html_path} is empty"
 
 
 # ---------------------------------------------------------------------------
