@@ -21,14 +21,14 @@ from typing import Any
 # Shared style
 # ---------------------------------------------------------------------------
 STYLE = {
-    "figure.facecolor": "#0d0d0d",
-    "axes.facecolor": "#1a1a1a",
-    "axes.edgecolor": "#444",
-    "axes.labelcolor": "#cccccc",
-    "xtick.color": "#999",
-    "ytick.color": "#999",
-    "text.color": "#cccccc",
-    "grid.color": "#2a2a2a",
+    "figure.facecolor": "#ffffff",
+    "axes.facecolor": "#ffffff",
+    "axes.edgecolor": "#cccccc",
+    "axes.labelcolor": "#222222",
+    "xtick.color": "#444444",
+    "ytick.color": "#444444",
+    "text.color": "#222222",
+    "grid.color": "#e6e6e6",
     "grid.linestyle": "--",
     "grid.linewidth": 0.5,
     "lines.linewidth": 1.4,
@@ -86,16 +86,7 @@ def plot_equity_curve(
         ax.axhline(initial_balance - max_loss_limit, color=BREACH_COLOR, linewidth=0.9,
                    linestyle=":", label=f"Max loss limit (${max_loss_limit:,.0f})")
 
-    # Breach events: one accurate vertical line per event
-    _drawn_breach_label = False
-    if breach_events:
-        for ev in breach_events:
-            ts = ev.get("time")
-            reason = ev.get("reason", "breach")
-            label = "Breach" if not _drawn_breach_label else None
-            ax.axvline(ts, color=BREACH_COLOR, alpha=0.6, linewidth=1.0,
-                       linestyle="--", label=label)
-            _drawn_breach_label = True
+    # User preference: do not draw breach vertical lines on equity chart.
 
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"${x:,.0f}"))
     ax.xaxis.set_major_formatter(mdates.AutoDateFormatter(mdates.AutoDateLocator()))
@@ -185,15 +176,24 @@ def plot_price_with_orders(
         closes = trades[trades["type"].isin(["close", "forced_close", "eod_close", "stop_close"])].copy()
         forced = trades[trades["type"].isin(["forced_close", "stop_close"])].copy()
 
+        min_ts = ohlcv.index.min()
+        max_ts = ohlcv.index.max()
+
         def _bin_time(ts: pd.Timestamp) -> pd.Timestamp | None:
-            """Floor a timestamp to the nearest candle bin, return None if out of range."""
+            """Floor timestamp to candle bin and drop markers outside the plotted window."""
+            if ts < min_ts or ts > max_ts:
+                return None
             binned = ts.floor(candle_tf)
             if binned in ohlcv.index:
                 return binned
-            # fallback: searchsorted then clamp
+            # fallback: nearest right candle within range
             loc = ohlcv.index.searchsorted(ts, side="left")
-            loc = min(loc, len(ohlcv) - 1)
-            return ohlcv.index[loc] if loc < len(ohlcv) else None
+            if loc >= len(ohlcv):
+                return None
+            candidate = ohlcv.index[loc]
+            if candidate < min_ts or candidate > max_ts:
+                return None
+            return candidate
 
         def _make_series(subset: pd.DataFrame, direction: int) -> pd.Series | None:
             mask = (subset["direction"] == direction) if "direction" in subset.columns else pd.Series(False, index=subset.index)
@@ -239,25 +239,27 @@ def plot_price_with_orders(
 
     mc = mpf.make_marketcolors(up=LONG_COLOR, down=SHORT_COLOR, edge="inherit",
                                 wick="inherit", volume="in")
-    s  = mpf.make_mpf_style(base_mpf_style="nightclouds", marketcolors=mc,
-                             facecolor="#1a1a1a", figcolor="#0d0d0d",
-                             gridcolor="#2a2a2a", gridstyle="--")
+    s  = mpf.make_mpf_style(base_mpf_style="yahoo", marketcolors=mc,
+                             facecolor="#ffffff", figcolor="#ffffff",
+                             gridcolor="#e6e6e6", gridstyle="--")
 
     save_kwargs: dict[str, Any] = {}
     if out_path:
         Path(out_path).parent.mkdir(parents=True, exist_ok=True)
         save_kwargs["savefig"] = dict(fname=str(out_path), dpi=dpi, bbox_inches="tight")
 
-    fig, _ = mpf.plot(
-        ohlcv,
-        type="candle",
-        style=s,
-        title="Price + Orders",
-        addplot=addplots if addplots else None,
-        warn_too_much_data=len(ohlcv) + 1,
-        returnfig=True,
+    plot_kwargs: dict[str, Any] = {
+        "type": "candle",
+        "style": s,
+        "title": "Price + Orders",
+        "warn_too_much_data": len(ohlcv) + 1,
+        "returnfig": True,
         **save_kwargs,
-    )
+    }
+    if addplots:
+        plot_kwargs["addplot"] = addplots
+
+    fig, _ = mpf.plot(ohlcv, **plot_kwargs)
     plt.close(fig)
     return fig
 
@@ -331,7 +333,7 @@ def plot_trade_pnl_hist(
         ax.hist(wins.values,   bins=bins, color=LONG_COLOR,  alpha=0.8, label=f"Wins ({len(wins)})")
     if not losses.empty:
         ax.hist(losses.values, bins=bins, color=SHORT_COLOR, alpha=0.8, label=f"Losses ({len(losses)})")
-    ax.axvline(0, color="#fff", linewidth=0.8)
+    ax.axvline(0, color="#777", linewidth=0.8)
     ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"${x:,.0f}"))
     ax.set_title("Trade PnL Distribution", fontweight="bold")
     ax.set_xlabel("PnL (USD)")
@@ -367,7 +369,7 @@ def plot_returns_dist(
         x = np.linspace(mu - 5 * sigma, mu + 5 * sigma, 300)
         try:
             from scipy.stats import norm
-            ax.plot(x, norm.pdf(x, mu, sigma), color="#fff", linewidth=1.0, label="Normal fit")
+            ax.plot(x, norm.pdf(x, mu, sigma), color="#333", linewidth=1.0, label="Normal fit")
         except ImportError:
             pass
     ax.set_xlabel("Return (%)")

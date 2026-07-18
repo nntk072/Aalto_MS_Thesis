@@ -9,6 +9,9 @@ data:
   primary: "US100.cash"
   secondary: "US500.cash"              # used only for SMT divergence
   timeframes: ["M1", "M5", "M15", "M30", "H1", "H4", "D1"]
+  split:
+    train_end: "2025-12-31"            # inclusive: in-sample ≤ this date
+    test_start: "2026-01-01"           # inclusive: out-of-sample ≥ this date
   # True M1 source files (other TF files are known duplicates – see README)
   m1_files:
     US100.cash: "US100.cash_M1_202412300105_202607031959.csv"

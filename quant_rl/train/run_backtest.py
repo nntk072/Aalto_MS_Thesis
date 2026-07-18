@@ -21,10 +21,10 @@ import numpy as np
 
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import run_pipeline
+from quant_rl.data.split import split_train_test, get_split_config
 from quant_rl.features.build import build_features
 from quant_rl.backtest.engine import run_backtest
 from quant_rl.eval.metrics import calculate_metrics
-from quant_rl.eval.report import print_report, aggregate_seeds
 from quant_rl.eval.export import save_run
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -50,57 +50,61 @@ def main() -> None:
     cfg = load_config(args.overrides)
     data = run_pipeline(cfg, force=args.force)
 
-    primary_sym = cfg.data.primary
+    primary_sym   = cfg.data.primary
     secondary_sym = cfg.data.secondary
-    primary_m1 = data[primary_sym]["M1"]
-    secondary_m1 = data.get(secondary_sym, {}).get("M1")
+    primary_m1    = data[primary_sym]["M1"]
+    secondary_m1  = data.get(secondary_sym, {}).get("M1")
 
-    cache_dir = Path(cfg.data.cache_dir)
+    cache_dir  = Path(cfg.data.cache_dir)
     feat_cache = cache_dir / f"{primary_sym}_features.parquet"
-    features = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
+    features   = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
 
-    log.info("Running backtest with random policy (seed=%d) …", args.seed)
+    # Date-based train / test split
+    train_end, test_start = get_split_config(cfg)
+    train_bars, test_bars, train_feat, test_feat = split_train_test(
+        primary_m1, features, train_end, test_start
+    )
+    log.info("Split: train=%d bars (≤%s)  test=%d bars (≥%s)",
+             len(train_bars), train_end, len(test_bars), test_start)
+
     max_loss_per_trade = None
     try:
         max_loss_per_trade = cfg.backtest.validation.max_loss_per_trade_usd
     except Exception:
         pass
 
-    result = run_backtest(
-        bars=primary_m1,
-        features=features,
-        policy=_random_policy,
-        obs_window=cfg.env.obs_window,
-        initial_balance=cfg.account.initial_balance,
-        max_loss_per_trade_usd=max_loss_per_trade,
-    )
-    result["initial_balance"] = cfg.account.initial_balance
+    def _run(bars, feats, label: str) -> tuple[dict, object]:
+        log.info("Running backtest [%s] seed=%d …", label, args.seed)
+        result = run_backtest(
+            bars=bars, features=feats,
+            policy=_random_policy,
+            obs_window=cfg.env.obs_window,
+            initial_balance=cfg.account.initial_balance,
+            max_loss_per_trade_usd=max_loss_per_trade,
+        )
+        result["initial_balance"] = cfg.account.initial_balance
+        m = calculate_metrics(
+            result["equity"], trades=result["trades"],
+            n_sessions=result.get("n_sessions", 1),
+            n_breach_sessions=result.get("n_breach_sessions", 0),
+        )
+        log.info(
+            "[%s] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Breaches=%d/%d  Return=%.2f%%",
+            label, m.sharpe, m.max_drawdown * 100, m.total_trades,
+            result.get("n_breach_sessions", 0), result.get("n_sessions", 1),
+            m.total_return * 100,
+        )
+        return result, m
 
-    equity = result["equity"]
-    trades = result["trades"]
-    m = calculate_metrics(
-        equity, trades=trades,
-        n_sessions=result.get("n_sessions", 1),
-        n_breach_sessions=result.get("n_breach_sessions", 0),
-    )
-
-    log.info(
-        "Sharpe=%.3f  Sortino=%.3f  MaxDD=%.2f%%  Trades=%d  Breaches=%d/%d sessions",
-        m.sharpe, m.sortino, m.max_drawdown * 100, m.total_trades,
-        result.get("n_breach_sessions", 0), result.get("n_sessions", 1),
-    )
-    log.info(
-        "Sessions: total=%d  active=%d  breached=%d  skipped=%d",
-        result.get("n_sessions", 0),
-        result.get("n_sessions_with_trades", 0),
-        result.get("n_breach_sessions", 0),
-        result.get("n_sessions_skipped", 0),
-    )
+    train_result, train_m = _run(train_bars, train_feat, "training")
+    test_result,  test_m  = _run(test_bars,  test_feat,  "testing")
 
     if not args.no_save:
         run_dir = save_run(
-            result, m, out_dir=args.out, name=f"random_seed{args.seed}",
-            bars=primary_m1, cfg=cfg,
+            out_dir=args.out, name=f"random_seed{args.seed}",
+            train_result=train_result, train_metrics=train_m, train_bars=train_bars,
+            test_result=test_result,   test_metrics=test_m,   test_bars=test_bars,
+            cfg=cfg,
         )
         log.info("Artifacts saved to %s", run_dir)
 
