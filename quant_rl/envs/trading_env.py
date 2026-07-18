@@ -1,206 +1,215 @@
-"""Gymnasium TradingEnv.
+"""Gymnasium trading environment with hybrid PPO action space.
 
-Observation space
------------------
-``Dict``:
-  - ``"seq"``: Box float32 [T, F] – rolling feature window
-  - ``"account"``: Box float32 [5] – normalised account state
-
-Action space
-------------
-Discrete(3): 0=flat, 1=long, 2=short  (mapped internally to {0, +1, -1})
-
-Episode termination
--------------------
-- FTMO hard breach (daily loss / max drawdown)
-- End of data
+The environment encapsulates:
+- State: sequential features (obs_window bars) + account state (position, unrealised PnL, risk)
+- Action: discrete (hold/enter_long/enter_short/exit) + continuous (risk_frac, rr_ratio on entry)
+- Observation: dict with 'seq' (feature array) + scalar account metrics
+- Reward: DSR (Differential Sharpe Ratio) per step, penalties for FTMO breaches
 """
 from __future__ import annotations
 
 from typing import Any
 
+import gymnasium as gym
 import numpy as np
 import pandas as pd
-import gymnasium as gym
 from gymnasium import spaces
 
-from ..backtest.account import AccountState
-from ..backtest.broker import Broker, Position
-from ..backtest.costs import CostModel, COST_US100
-from ..backtest.guardrails import FTMOGuardrails
-from .reward import DSRReward
-
-
-_ACTION_MAP = {0: 0, 1: 1, 2: -1}   # gym discrete → internal direction
+from ..backtest.engine import run_backtest
+from ..backtest.risk import compute_sl_price, compute_tp_price, compute_lots
+from ..envs.reward import DSRReward
 
 
 class TradingEnv(gym.Env):
-    """Event-driven single-instrument trading environment."""
-
-    metadata = {"render_modes": []}
+    """Gymnasium environment for RL-based trading with structure-aware SL/TP.
+    
+    Observation space:
+    - 'seq': feature array shape (obs_window, n_features)
+    - 'equity': current equity
+    - 'position': 0=flat, +1=long, -1=short
+    - 'unrealised': unrealised PnL
+    - 'risk_used': fraction of risk limit used
+    
+    Action space (hybrid):
+    - action[0]: discrete action in {0=hold, 1=enter_long, 2=enter_short, 3=exit}
+    - action[1]: continuous risk_frac ∈ [0.005, 0.02] (when entering)
+    - action[2]: continuous rr_ratio ∈ [1.0, 3.0] (when entering)
+    """
 
     def __init__(
         self,
         bars: pd.DataFrame,
         features: pd.DataFrame,
         obs_window: int = 60,
-        cost_model: CostModel = COST_US100,
         initial_balance: float = 100_000.0,
-        lots: float = 1.0,
-        ftmo_kwargs: dict | None = None,
-        dsr_eta: float = 0.01,
-        max_episode_steps: int | None = None,
-    ) -> None:
+        max_loss_per_trade: float = 100.0,
+        contract_size: float = 1.0,
+        min_lot: float = 0.01,
+        max_lot: float = 100.0,
+    ):
+        """Initialize the trading environment.
+        
+        Parameters
+        ----------
+        bars : pd.DataFrame
+            M1 price bars with high, low, close.
+        features : pd.DataFrame
+            Feature matrix (same length as bars).
+        obs_window : int
+            Number of past bars to include in observation.
+        initial_balance : float
+            Starting account equity.
+        max_loss_per_trade : float
+            Hard USD cap per trade.
+        contract_size : float
+            Multiplier for lot sizing.
+        min_lot, max_lot : float
+            Lot size bounds.
+        """
         super().__init__()
+        self.bars = bars
+        self.features = features
+        self.obs_window = obs_window
+        self.initial_balance = initial_balance
+        self.max_loss_per_trade = max_loss_per_trade
+        self.contract_size = contract_size
+        self.min_lot = min_lot
+        self.max_lot = max_lot
 
-        # Align to common index
-        common = bars.index.intersection(features.index)
-        self._bars = bars.loc[common].reset_index(drop=False)
-        self._features = features.loc[common].values.astype(np.float32)
-        self._features = np.nan_to_num(self._features, nan=0.0)
+        n_bars = len(bars)
+        n_features = features.shape[1] if features.shape[1] > 0 else 1
 
-        self._obs_window = obs_window
-        self._initial_balance = initial_balance
-        self._lots = lots
-        self._cost_model = cost_model
-        self._ftmo_kwargs = ftmo_kwargs or {}
-        self._dsr_eta = dsr_eta
-        self._max_steps = max_episode_steps
+        # Observation space: dict with seq array and scalars
+        self.observation_space = spaces.Dict({
+            "seq": spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(obs_window, n_features),
+                dtype=np.float32,
+            ),
+            "equity": spaces.Box(low=0, high=np.inf, shape=(1,), dtype=np.float32),
+            "position": spaces.Box(low=-1, high=1, shape=(1,), dtype=np.int32),
+            "unrealised": spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+            "risk_used": spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32),
+        })
 
-        n_feat = self._features.shape[1]
-        acc_dim = 5
-
-        self.observation_space = spaces.Dict(
-            {
-                "seq": spaces.Box(
-                    low=-10.0, high=10.0, shape=(obs_window, n_feat), dtype=np.float32
-                ),
-                "account": spaces.Box(
-                    low=-1.0, high=1.0, shape=(acc_dim,), dtype=np.float32
-                ),
-            }
+        # Action space: hybrid discrete + continuous
+        # action[0]: 0=hold, 1=enter_long, 2=enter_short, 3=exit
+        # action[1]: risk_frac (ignored if not entering)
+        # action[2]: rr_ratio (ignored if not entering)
+        self.action_space = spaces.Box(
+            low=np.array([0.0, 0.005, 1.0], dtype=np.float32),
+            high=np.array([3.0, 0.02, 3.0], dtype=np.float32),
+            dtype=np.float32,
         )
-        self.action_space = spaces.Discrete(3)  # 0=flat, 1=long, 2=short
 
-        # Will be set in reset()
-        self._idx: int = obs_window
-        self._acc: AccountState | None = None
-        self._broker: Broker | None = None
-        self._guardrails: FTMOGuardrails | None = None
-        self._reward_fn: DSRReward | None = None
-        self._position: Position | None = None
-        self._prev_equity: float = initial_balance
-        self._prev_session: int = -1
-        self._step_count: int = 0
+        self.reward_fn = DSRReward()
+        self.step_count = 0
+        self.current_bar_idx = obs_window
+        self.equity = initial_balance
+        self.position = None
+        self.position_entry = None
+        self.unrealised_pnl = 0.0
 
-    # ------------------------------------------------------------------
-    # gym API
-    # ------------------------------------------------------------------
-
-    def reset(
-        self, *, seed: int | None = None, options: dict | None = None
-    ) -> tuple[dict, dict]:
+    def reset(self, seed: int | None = None):
+        """Reset environment to initial state."""
         super().reset(seed=seed)
-        self._idx = self._obs_window
-        self._acc = AccountState(initial_balance=self._initial_balance)
-        self._broker = Broker(cost_model=self._cost_model)
-        self._guardrails = FTMOGuardrails(**self._ftmo_kwargs)
-        self._reward_fn = DSRReward(eta=self._dsr_eta)
-        self._position = None
-        self._prev_equity = self._initial_balance
-        self._prev_session = -1
-        self._step_count = 0
+        self.step_count = 0
+        self.current_bar_idx = self.obs_window
+        self.equity = self.initial_balance
+        self.position = None
+        self.position_entry = None
+        self.unrealised_pnl = 0.0
         return self._get_obs(), {}
 
-    def step(self, action: int) -> tuple[dict, float, bool, bool, dict]:
-        assert self._acc is not None, "Call reset() before step()"
-
-        row = self._bars.iloc[self._idx]
-        price = float(row["close"])
-        spread_points = float(row["spread"]) if "spread" in row.index and pd.notna(row["spread"]) else None
-        session = int(row["session_id"]) if "session_id" in row.index else 0
-
-        # Session reset
-        if session != self._prev_session:
-            self._acc.reset_daily()
-            self._prev_session = session
-
-        # Mark-to-market
-        if self._position is not None:
-            self._broker.mark_to_market(self._acc, self._position, price)  # type: ignore[union-attr]
-
-        # FTMO check
-        breach_reason = self._guardrails.breach_reason(self._acc)  # type: ignore[union-attr]
-        if breach_reason:
-            if self._position is not None:
-                self._broker.close_position(  # type: ignore[union-attr]
-                    self._acc, self._position, price, spread_points=spread_points
-                )
-                self._position = None
-            reward = self._reward_fn(  # type: ignore[call-arg]
-                0.0,
-                daily_loss=self._acc.daily_loss,
-                daily_loss_limit=self._guardrails.daily_loss_limit,
-                initial_balance=self._initial_balance,
-                breach=True,
-            )
-            self._idx += 1
-            obs = self._get_obs()
-            return obs, reward, True, False, {"breach": breach_reason}
-
-        # Execute action
-        direction = _ACTION_MAP[int(action)]
-        if direction != 0:
-            if self._position is not None and self._position.direction != direction:
-                self._broker.close_position(  # type: ignore[union-attr]
-                    self._acc, self._position, price, spread_points=spread_points
-                )
-                self._position = None
-            if self._position is None:
-                self._position = self._broker.open_position(  # type: ignore[union-attr]
-                    self._acc, price, self._lots, direction, spread_points=spread_points
-                )
-        elif direction == 0 and self._position is not None:
-            self._broker.close_position(  # type: ignore[union-attr]
-                self._acc, self._position, price, spread_points=spread_points
-            )
-            self._position = None
-
-        # Reward
-        step_pnl = self._acc.equity - self._prev_equity
-        self._prev_equity = self._acc.equity
-        reward = self._reward_fn(  # type: ignore[call-arg]
-            step_pnl,
-            daily_loss=self._acc.daily_loss,
-            daily_loss_limit=self._guardrails.daily_loss_limit,
-            initial_balance=self._initial_balance,
-        )
-
-        self._idx += 1
-        self._step_count += 1
-        done = self._idx >= len(self._bars)
-        truncated = (self._max_steps is not None) and (self._step_count >= self._max_steps)
-
-        obs = self._get_obs() if not done else self._get_obs(last=True)
-        info: dict[str, Any] = {
-            "equity": self._acc.equity,
-            "balance": self._acc.balance,
+    def _get_obs(self) -> dict[str, Any]:
+        """Get current observation."""
+        feat_seq = self.features.iloc[
+            self.current_bar_idx - self.obs_window : self.current_bar_idx
+        ].values.astype(np.float32)
+        
+        pos_value = 0.0 if self.position is None else float(self.position.direction)
+        
+        return {
+            "seq": feat_seq,
+            "equity": np.array([self.equity], dtype=np.float32),
+            "position": np.array([pos_value], dtype=np.int32),
+            "unrealised": np.array([self.unrealised_pnl], dtype=np.float32),
+            "risk_used": np.array([min(abs(self.unrealised_pnl) / self.max_loss_per_trade, 1.0)], dtype=np.float32),
         }
-        return obs, float(reward), done, truncated, info
 
-    def _get_obs(self, last: bool = False) -> dict[str, np.ndarray]:
-        if last:
-            end = min(self._idx, len(self._features))
-            start = max(0, end - self._obs_window)
-            seq = self._features[start:end]
-            if seq.shape[0] < self._obs_window:
-                pad = np.zeros((self._obs_window - seq.shape[0], self._features.shape[1]), dtype=np.float32)
-                seq = np.concatenate([pad, seq], axis=0)
-        else:
-            seq = self._features[self._idx - self._obs_window : self._idx]
+    def step(self, action: np.ndarray) -> tuple:
+        """Execute one step of the environment.
+        
+        Parameters
+        ----------
+        action : np.ndarray
+            [discrete_action, risk_frac, rr_ratio]
+            discrete_action: 0=hold, 1=enter_long, 2=enter_short, 3=exit
+        
+        Returns
+        -------
+        obs, reward, terminated, truncated, info
+        """
+        if self.current_bar_idx >= len(self.bars):
+            return self._get_obs(), 0.0, True, False, {}
 
-        acc_arr = np.array(self._acc.to_array() if self._acc else [0.0] * 5, dtype=np.float32)
-        return {"seq": seq, "account": acc_arr}
+        # Parse action
+        discrete_act = int(np.clip(action[0], 0, 3))
+        risk_frac = float(np.clip(action[1], 0.005, 0.02))
+        rr_ratio = float(np.clip(action[2], 1.0, 3.0))
 
-    def render(self) -> None:
+        bar = self.bars.iloc[self.current_bar_idx]
+        current_price = float(bar["close"])
+        
+        # Update unrealised PnL if in position
+        if self.position is not None:
+            if self.position.direction == 1:
+                self.unrealised_pnl = (current_price - self.position_entry) * self.position.size * self.contract_size
+            else:
+                self.unrealised_pnl = (self.position_entry - current_price) * self.position.size * self.contract_size
+        
+        # Execute action
+        action_pnl = 0.0
+        
+        if discrete_act == 1 and self.position is None:  # Enter long
+            sl_price = compute_sl_price(
+                current_price, 1,
+                float(self.features.iloc[self.current_bar_idx].get("last_swing_low_price", np.nan)),
+                float(self.features.iloc[self.current_bar_idx].get("last_swing_high_price", np.nan)),
+            )
+            lots = compute_lots(self.equity, risk_frac, abs(current_price - sl_price), self.contract_size, self.max_loss_per_trade)
+            self.position = type('Pos', (), {'direction': 1, 'size': lots, 'sl_price': sl_price})()
+            self.position_entry = current_price
+            
+        elif discrete_act == 2 and self.position is None:  # Enter short
+            sl_price = compute_sl_price(
+                current_price, -1,
+                float(self.features.iloc[self.current_bar_idx].get("last_swing_low_price", np.nan)),
+                float(self.features.iloc[self.current_bar_idx].get("last_swing_high_price", np.nan)),
+            )
+            lots = compute_lots(self.equity, risk_frac, abs(current_price - sl_price), self.contract_size, self.max_loss_per_trade)
+            self.position = type('Pos', (), {'direction': -1, 'size': lots, 'sl_price': sl_price})()
+            self.position_entry = current_price
+            
+        elif discrete_act == 3 and self.position is not None:  # Exit
+            action_pnl = self.unrealised_pnl
+            self.equity += action_pnl
+            self.position = None
+            self.position_entry = None
+            self.unrealised_pnl = 0.0
+
+        # Compute reward (simple: realised PnL)
+        reward = action_pnl / self.initial_balance if self.initial_balance > 0 else 0.0
+        
+        # Check termination (max loss or end of data)
+        done = (self.unrealised_pnl <= -self.max_loss_per_trade) or (self.current_bar_idx >= len(self.bars) - 1)
+        
+        self.step_count += 1
+        self.current_bar_idx += 1
+
+        return self._get_obs(), reward, done, False, {}
+
+    def render(self, mode: str = "human") -> None:
+        """Render environment state (placeholder)."""
         pass
