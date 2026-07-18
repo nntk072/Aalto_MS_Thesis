@@ -14,7 +14,10 @@ class CostModel:
     point_value: float = 1.0           # $ per point per unit of contract_size
 
     def total_cost(self, lots: float, direction: int) -> float:
-        """Return the cost (deducted from P&L) for opening *or* closing a trade.
+        """Return the explicit transaction cost for one side of a trade.
+
+        Spread/slippage are modeled in :meth:`fill_price` (bid/ask execution),
+        so this method should only include explicit broker fees (commission).
 
         Parameters
         ----------
@@ -23,13 +26,16 @@ class CostModel:
         direction:
             +1 = long, -1 = short (unused here but provided for extensibility).
         """
-        half_spread = (self.spread_points + self.slippage_points) / 2.0
-        cost = half_spread * lots * self.point_value
-        cost += self.commission_per_lot * lots
-        return cost
+        _ = direction  # kept for API compatibility and future direction-dependent fees
+        return self.commission_per_lot * lots
 
     def fill_price(self, mid_price: float, direction: int, spread_points: float | None = None) -> float:
-        """Return the fill price for a market order."""
+        """Return the fill price for a market order.
+
+        Direction mapping:
+        - ``+1``: buy side (ask)
+        - ``-1``: sell side (bid)
+        """
         sp = spread_points if spread_points is not None else self.spread_points
         slip = self.slippage_points
         half = (sp + slip) / 2.0
