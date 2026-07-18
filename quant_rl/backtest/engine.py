@@ -51,6 +51,8 @@ def run_backtest(
     equity_curve: list[float] = []
     trade_log: list[dict] = []
     breach_log: list[str] = []
+    breached_sessions: set[int] = set()   # unique sessions that hit a guardrail
+    session_set: set[int] = set()
 
     position: Position | None = None
     prev_session: int | None = None
@@ -58,13 +60,16 @@ def run_backtest(
     bars = bars.loc[common_idx]
     features = features.loc[common_idx]
 
+    bar_times = bars.index
     feat_array = features.values.astype(np.float32)
     feat_array = np.nan_to_num(feat_array, nan=0.0)
 
     for i in range(obs_window, len(bars)):
         row = bars.iloc[i]
         price = row["close"]
+        bar_time = bar_times[i]
         session = int(row["session_id"]) if "session_id" in row.index else 0
+        session_set.add(session)
 
         # Session reset
         if session != prev_session:
@@ -75,18 +80,24 @@ def run_backtest(
         if position is not None:
             broker.mark_to_market(acc, position, price)
 
-        # Guardrail check
+        # Guardrail check — record each breached session only once
         reason = guardrails.breach_reason(acc)
-        if reason:
+        if reason and session not in breached_sessions:
+            breached_sessions.add(session)
+            breach_log.append(reason)
             if position is not None:
                 pnl = broker.close_position(acc, position, price)
-                trade_log.append({"type": "forced_close", "pnl": pnl, "reason": reason})
+                trade_log.append({
+                    "type": "forced_close", "pnl": pnl,
+                    "reason": reason, "bar": i, "time": bar_time,
+                    "equity": acc.equity,
+                })
                 position = None
-            breach_log.append(reason)
 
         equity_curve.append(acc.equity)
 
-        if reason:
+        # Skip trading for rest of breached session
+        if session in breached_sessions:
             continue
 
         # Build observation
@@ -100,29 +111,48 @@ def run_backtest(
             if position is not None and position.direction != action:
                 # Reverse: close then reopen
                 pnl = broker.close_position(acc, position, price)
-                trade_log.append({"type": "close", "pnl": pnl, "bar": i})
+                trade_log.append({
+                    "type": "close", "pnl": pnl, "bar": i, "time": bar_time,
+                    "equity": acc.equity,
+                })
                 position = None
 
             if position is None:
                 position = broker.open_position(acc, price, lots, action)
                 if position:
-                    trade_log.append({"type": "open", "direction": action, "price": position.entry_price, "bar": i})
+                    trade_log.append({
+                        "type": "open", "direction": action,
+                        "price": position.entry_price, "bar": i, "time": bar_time,
+                        "equity": acc.equity,
+                    })
         elif action == 0 and position is not None:
             pnl = broker.close_position(acc, position, price)
-            trade_log.append({"type": "close", "pnl": pnl, "bar": i})
+            trade_log.append({
+                "type": "close", "pnl": pnl, "bar": i, "time": bar_time,
+                "equity": acc.equity,
+            })
             position = None
 
     # Close any remaining position at the last bar
     if position is not None:
-        pnl = broker.close_position(acc, position, bars.iloc[-1]["close"])
-        trade_log.append({"type": "eod_close", "pnl": pnl})
+        last_price = bars.iloc[-1]["close"]
+        pnl = broker.close_position(acc, position, last_price)
+        trade_log.append({
+            "type": "eod_close", "pnl": pnl,
+            "bar": len(bars) - 1, "time": bar_times[-1],
+            "equity": acc.equity,
+        })
 
     trades_df = pd.DataFrame(trade_log)
     equity_series = pd.Series(equity_curve, index=bars.index[obs_window:])
+    n_sessions = len(session_set)
+    n_breach_sessions = len(breached_sessions)
 
     return {
         "equity": equity_series,
         "trades": trades_df,
         "account": acc,
         "breaches": breach_log,
+        "n_sessions": n_sessions,
+        "n_breach_sessions": n_breach_sessions,
     }
