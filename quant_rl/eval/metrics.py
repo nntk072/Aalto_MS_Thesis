@@ -24,6 +24,9 @@ class Metrics:
     total_trades: int
     turnover: float
     breach_rate: float   # fraction of sessions that hit an FTMO guardrail
+    total_pnl: float = 0.0
+    avg_trade: float = 0.0
+    max_consec_loss: int = 0
 
 
 def _sharpe(returns: pd.Series, periods_per_year: int = 252) -> float:
@@ -90,9 +93,21 @@ def calculate_metrics(
         expectancy = float(pnl.mean())
         total_trades = len(pnl)
         turnover = total_trades / max(len(equity), 1)
+        total_pnl = float(pnl.sum())
+        avg_trade = float(pnl.mean())
+        # max consecutive losses
+        consec = max_c = cur = 0
+        for v in pnl:
+            if v < 0:
+                cur += 1
+                max_c = max(max_c, cur)
+            else:
+                cur = 0
+        max_consec_loss = max_c
     else:
         win_rate = profit_factor = expectancy = 0.0
-        total_trades = 0
+        total_pnl = avg_trade = 0.0
+        total_trades = max_consec_loss = 0
         turnover = 0.0
 
     breach_rate = float(n_breach_sessions / n_sessions) if n_sessions > 0 else 0.0
@@ -109,4 +124,7 @@ def calculate_metrics(
         total_trades=total_trades,
         turnover=turnover,
         breach_rate=breach_rate,
+        total_pnl=total_pnl,
+        avg_trade=avg_trade,
+        max_consec_loss=max_consec_loss,
     )

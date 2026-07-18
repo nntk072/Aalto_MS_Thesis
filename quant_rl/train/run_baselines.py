@@ -23,6 +23,9 @@ from quant_rl.backtest.engine import run_backtest
 from quant_rl.baselines.rule_based import ema_crossover, macd_baseline, rsi_mean_reversion
 from quant_rl.baselines.buy_and_hold import buy_and_hold_returns
 from quant_rl.eval.metrics import calculate_metrics
+from quant_rl.eval.export import save_run
+from quant_rl.eval.plots import plot_baseline_comparison
+from quant_rl.eval.plots_interactive import plot_baseline_comparison as plot_baseline_comparison_html
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -42,7 +45,7 @@ def signal_to_policy(signal_series):
     return policy
 
 
-def _run_baseline(name: str, bars, features, signal, cfg) -> None:
+def _run_baseline(name: str, bars, features, signal, cfg) -> tuple[dict, object]:
     vals = signal.reindex(bars.index).fillna(0).values.astype(int)
     obs_window = cfg.env.obs_window
     step_counter = [obs_window]   # engine starts at obs_window
@@ -59,26 +62,32 @@ def _run_baseline(name: str, bars, features, signal, cfg) -> None:
         obs_window=cfg.env.obs_window,
         initial_balance=cfg.account.initial_balance,
     )
+    result["initial_balance"] = cfg.account.initial_balance
     m = calculate_metrics(
         result["equity"],
         trades=result["trades"],
-        n_breach_sessions=len(result["breaches"]),
+        n_sessions=result.get("n_sessions", 1),
+        n_breach_sessions=result.get("n_breach_sessions", 0),
     )
     log.info(
-        "[%s] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Breaches=%d  Return=%.2f%%",
+        "[%s] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Breaches=%d/%d  Return=%.2f%%",
         name,
         m.sharpe,
         m.max_drawdown * 100,
         m.total_trades,
-        len(result["breaches"]),
+        result.get("n_breach_sessions", 0),
+        result.get("n_sessions", 1),
         m.total_return * 100,
     )
+    return result, m
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("overrides", nargs="*")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--no-save", action="store_true", help="Skip saving artifacts")
+    parser.add_argument("--out", default="outputs", help="Base output directory")
     args = parser.parse_args()
 
     cfg = load_config(args.overrides)
@@ -95,12 +104,50 @@ def main() -> None:
 
     log.info("Running baselines …")
 
-    _run_baseline("EMA crossover", primary_m1, features, ema_crossover(primary_m1), cfg)
-    _run_baseline("MACD", primary_m1, features, macd_baseline(primary_m1), cfg)
-    _run_baseline("RSI mean-rev", primary_m1, features, rsi_mean_reversion(primary_m1), cfg)
+    strategy_results: dict[str, tuple] = {}
+    for strat_name, signal_fn in [
+        ("EMA crossover", lambda: ema_crossover(primary_m1)),
+        ("MACD",          lambda: macd_baseline(primary_m1)),
+        ("RSI mean-rev",  lambda: rsi_mean_reversion(primary_m1)),
+    ]:
+        result, m = _run_baseline(strat_name, primary_m1, features, signal_fn(), cfg)
+        strategy_results[strat_name] = (result, m)
+        if not args.no_save:
+            save_run(result, m, out_dir=args.out, name=strat_name.replace(" ", "_"),
+                     bars=primary_m1, cfg=cfg)
 
     bah = buy_and_hold_returns(primary_m1)
     log.info("[Buy-and-Hold] Final equity factor: %.4f", float(bah.iloc[-1]))
+
+    if not args.no_save and strategy_results:
+        import pandas as pd
+        from pathlib import Path as _Path
+        from datetime import datetime
+
+        # Comparison chart: overlay all strategies
+        equity_dict = {name: res["equity"] for name, (res, _) in strategy_results.items()}
+        # Add buy-and-hold as normalised equity
+        equity_dict["Buy-and-Hold"] = bah * cfg.account.initial_balance
+
+        out_base = _Path(args.out)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        comp_dir = out_base / f"{ts}_baseline_comparison"
+        comp_dir.mkdir(parents=True, exist_ok=True)
+
+        plot_baseline_comparison(equity_dict, out_path=comp_dir / "comparison.png")
+        try:
+            plot_baseline_comparison_html(equity_dict, out_path=comp_dir / "comparison.html")
+        except Exception:
+            pass
+
+        # Combined metrics CSV
+        rows = []
+        for name, (_, m) in strategy_results.items():
+            from dataclasses import asdict
+            row = {"strategy": name, **asdict(m)}
+            rows.append(row)
+        pd.DataFrame(rows).to_csv(comp_dir / "baselines_metrics.csv", index=False)
+        log.info("Comparison artifacts saved to %s", comp_dir)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,9 @@
 """Multi-seed reporting utilities."""
 from __future__ import annotations
 
+import json
+from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 import numpy as np
 import pandas as pd
@@ -47,3 +50,33 @@ def print_report(df: pd.DataFrame) -> None:
     print("\n=== Multi-Seed Report ===")
     print(df.describe().round(4).to_string())
     print()
+
+
+def build_summary_table(m: Metrics) -> str:
+    """Return a human-readable text table of a single Metrics instance."""
+    lines = [
+        "=" * 42,
+        f"  {'Metric':<22} {'Value':>12}",
+        "-" * 42,
+        f"  {'Sharpe':<22} {m.sharpe:>12.4f}",
+        f"  {'Sortino':<22} {m.sortino:>12.4f}",
+        f"  {'Calmar':<22} {m.calmar:>12.4f}",
+        f"  {'Max Drawdown':<22} {m.max_drawdown * 100:>11.2f}%",
+        f"  {'Total Return':<22} {m.total_return * 100:>11.2f}%",
+        f"  {'Profit Factor':<22} {m.profit_factor:>12.4f}",
+        f"  {'Expectancy':<22} {m.expectancy:>12.4f}",
+        f"  {'Win Rate':<22} {m.win_rate * 100:>11.2f}%",
+        f"  {'Total Trades':<22} {m.total_trades:>12d}",
+        f"  {'Total PnL':<22} {m.total_pnl:>12.2f}",
+        f"  {'Avg Trade PnL':<22} {m.avg_trade:>12.4f}",
+        f"  {'Max Consec Losses':<22} {m.max_consec_loss:>12d}",
+        f"  {'Turnover':<22} {m.turnover:>12.6f}",
+        f"  {'Breach Rate':<22} {m.breach_rate * 100:>11.2f}%",
+        "=" * 42,
+    ]
+    return "\n".join(lines)
+
+
+def save_metrics_json(m: Metrics, path: Path | str) -> None:
+    """Persist a Metrics instance to a JSON file."""
+    Path(path).write_text(json.dumps(asdict(m), indent=2))

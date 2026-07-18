@@ -48,6 +48,7 @@ dependencies = [
     "omegaconf>=2.3",
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "mplfinance>=0.12",
 ]
 
 [tool.pytest.ini_options]

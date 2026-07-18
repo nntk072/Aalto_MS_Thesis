@@ -77,3 +77,12 @@ ppo:
   clip_range: 0.2
   ent_coef: 0.01
   total_timesteps: 500000
+
+output:
+  dir: "outputs"              # base directory for run artifacts
+  save_plots: true            # save static PNG figures
+  save_html: true             # save interactive plotly HTML
+  save_csv: true              # save equity.csv + trades.csv
+  dpi: 150                    # PNG resolution
+  candle_tf: "15min"          # resample TF for candlestick chart
+  price_plot_max_points: 3000 # max candles in price+orders chart

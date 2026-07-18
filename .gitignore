@@ -164,3 +164,11 @@ cython_debug/
 
 logs/
 data/
+
+# Generated artifacts and local runtime outputs
+cache/
+models/
+outputs/
+
+# VS Code local workspace files
+.vscode/
