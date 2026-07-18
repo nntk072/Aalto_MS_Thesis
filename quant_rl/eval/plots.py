@@ -561,7 +561,7 @@ def plot_per_trade_orders(
     show_sl_tp : Whether to plot SL/TP lines.
     """
     from .trade_metrics import compute_trade_metrics
-    from .chart_indicators import compute_chart_overlays
+    from .chart_indicators import compute_chart_overlays_full, slice_overlays
     import matplotlib.dates as mdates
 
     orders_dir = Path(orders_dir)
@@ -578,6 +578,10 @@ def plot_per_trade_orders(
         log.info("Per-trade PNG: sampling %d/%d trades → %s", max_charts, total, orders_dir)
     else:
         log.info("Per-trade PNG: %d charts → %s", total, orders_dir)
+
+    # Compute EMA50/MACD once on the full history so indicators are properly
+    # warmed up and match the strategy's real signals, then slice per trade.
+    full_overlays = compute_chart_overlays_full(bars)
 
     for seq_i, (open_row, close_row) in enumerate(pairs):
         t_open = pd.Timestamp(open_row["time"])
@@ -598,7 +602,7 @@ def plot_per_trade_orders(
             lots=lots,
             contract_size=contract_size,
         )
-        overlays = compute_chart_overlays(window)
+        overlays = slice_overlays(full_overlays, window.index)
 
         # Create 2-panel figure with datetime x-axis
         fig, (ax_price, ax_macd) = plt.subplots(
@@ -693,9 +697,12 @@ def plot_per_trade_orders(
         ax_price.legend(loc="upper left", fontsize=8)
         ax_price.grid(True, alpha=0.3)
         
-        # Format x-axis as datetime
-        ax_price.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
-        ax_price.xaxis.set_major_locator(mdates.MinuteLocator(interval=10))
+        # Format x-axis as datetime in the bars' own timezone (matplotlib
+        # otherwise renders tz-aware datetimes in UTC, which would show
+        # tick labels several hours off from the title's local time).
+        axis_tz = window.index.tz
+        ax_price.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M", tz=axis_tz))
+        ax_price.xaxis.set_major_locator(mdates.MinuteLocator(interval=10, tz=axis_tz))
         plt.setp(ax_price.xaxis.get_majorticklabels(), rotation=45, ha="right")
 
         # --- Bottom panel: MACD ---
@@ -719,9 +726,9 @@ def plot_per_trade_orders(
         ax_macd.legend(loc="upper left", fontsize=8)
         ax_macd.grid(True, alpha=0.3)
         
-        # Format x-axis as datetime
-        ax_macd.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
-        ax_macd.xaxis.set_major_locator(mdates.MinuteLocator(interval=10))
+        # Format x-axis as datetime (same tz-aware handling as top panel)
+        ax_macd.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M", tz=axis_tz))
+        ax_macd.xaxis.set_major_locator(mdates.MinuteLocator(interval=10, tz=axis_tz))
         plt.setp(ax_macd.xaxis.get_majorticklabels(), rotation=45, ha="right")
 
         # --- Trade info box ---

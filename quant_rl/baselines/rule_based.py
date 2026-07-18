@@ -67,11 +67,12 @@ def macd_ema50_baseline(
     - Cooldown: wait >= 5 bars after any exit before next entry
     - No auto-flip (exit first, then wait for opposite condition to re-enter)
 
-    Returns:
-    - +1: hold long
-    - -1: hold short
-    - 0: hold current or flat
-    - 2: explicit exit (go flat)
+    Action stream is event-based (not per-bar state), so it can be fed
+    directly to an engine with ``hold_on_zero=True`` without desyncing:
+    - +1: long entry event (bar the position is opened)
+    - -1: short entry event (bar the position is opened)
+    - 0: hold current position, or flat with no signal
+    - 2: explicit exit event (bar the position is closed, go flat)
     """
     close = bars["close"]
 
@@ -118,8 +119,8 @@ def macd_ema50_baseline(
                 position = 0
                 cooldown_counter = cooldown_bars
             else:
-                # Hold long
-                current_action = 1
+                # Hold long (event-based: no repeated entry action)
+                current_action = 0
 
         elif position == -1:
             # In short: check for exit
@@ -129,8 +130,8 @@ def macd_ema50_baseline(
                 position = 0
                 cooldown_counter = cooldown_bars
             else:
-                # Hold short
-                current_action = -1
+                # Hold short (event-based: no repeated entry action)
+                current_action = 0
 
         actions.iloc[i] = current_action
 

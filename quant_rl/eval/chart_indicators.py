@@ -41,7 +41,15 @@ def compute_macd_sma(bars: pd.DataFrame, fast: int = 12, slow: int = 26, signal_
 
 def compute_chart_overlays(window: pd.DataFrame) -> dict[str, pd.Series]:
     """Compute EMA50 and MACD for a trade window.
-    
+
+    .. warning::
+        This computes indicators **from scratch on just the window**, so
+        EMA50 (needs ~50 bars) and MACD/signal (needs ~35 bars) are not
+        warmed up and will disagree with the strategy's real signals
+        computed on full history. Prefer :func:`compute_chart_overlays_full`
+        on the full bars, then slice by ``window.index``, for chart
+        rendering that must match the actual strategy decisions.
+
     Parameters
     ----------
     window : pd.DataFrame
@@ -60,3 +68,37 @@ def compute_chart_overlays(window: pd.DataFrame) -> dict[str, pd.Series]:
         "signal": macd_df["signal"],
         "histogram": macd_df["histogram"],
     }
+
+
+def compute_chart_overlays_full(bars: pd.DataFrame) -> dict[str, pd.Series]:
+    """Compute EMA50 and MACD over the full bar history.
+
+    Use this once per backtest split, then slice the returned series by
+    ``window.index`` for each trade's chart. This ensures the drawn
+    indicators are properly warmed up and match the real signals the
+    strategy acted on, rather than being recomputed from scratch on a
+    short ~60-bar trade window.
+
+    Parameters
+    ----------
+    bars : pd.DataFrame
+        Full M1 price bars (OHLC) for the backtest split.
+
+    Returns
+    -------
+    dict with keys: ema50, macd, signal, histogram (all aligned to bars.index)
+    """
+    ema50 = compute_ema50(bars)
+    macd_df = compute_macd_sma(bars)
+
+    return {
+        "ema50": ema50,
+        "macd": macd_df["macd"],
+        "signal": macd_df["signal"],
+        "histogram": macd_df["histogram"],
+    }
+
+
+def slice_overlays(overlays: dict[str, pd.Series], index: pd.Index) -> dict[str, pd.Series]:
+    """Slice a full-history overlays dict down to a trade window's index."""
+    return {key: series.reindex(index) for key, series in overlays.items()}

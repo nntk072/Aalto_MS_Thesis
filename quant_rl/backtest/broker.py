@@ -61,8 +61,14 @@ class Broker:
         """Attempt to open a position.
 
         Long opens fill at ask; short opens fill at bid.
-        Returns the new ``Position`` or ``None`` if margin is insufficient.
+        Returns the new ``Position`` or ``None`` if margin is insufficient or
+        *direction* is not a valid trade side (must be ``+1`` or ``-1``).
         """
+        if direction not in (1, -1):
+            # Regression guard: engine action codes like exit_action (e.g. 2)
+            # must never reach open_position. Reject rather than open a
+            # bogus position with an undefined side.
+            return None
         bid, ask = quote
         fill = self.cost_model.fill_price(bid, ask, direction)
         margin = self.required_margin(fill, lots)

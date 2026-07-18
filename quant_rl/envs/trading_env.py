@@ -385,8 +385,16 @@ class TradingEnv(gym.Env):
         return obs, float(reward), done, truncated, info
 
     def _bar_quote(self, bar: pd.Series) -> tuple[float, float]:
-        """Get (bid, ask) from a bar using cost model."""
-        bar_spread = float(bar["spread"]) if "spread" in bar.index else None
+        """Get (bid, ask) from a bar using cost model.
+
+        The bar's raw ``spread`` column is in MT5 broker points, not price
+        units, so it must be scaled by ``point_size`` before being used as a
+        price-unit spread (see ``quant_rl.backtest.engine._bar_spread_price_units``).
+        """
+        if "spread" in bar.index and pd.notna(bar["spread"]):
+            bar_spread = float(bar["spread"]) * self.cost_model.point_size
+        else:
+            bar_spread = None
         return self.cost_model.bar_quote(float(bar["close"]), bar_spread=bar_spread)
 
     def _get_observation(self) -> dict[str, np.ndarray]:
