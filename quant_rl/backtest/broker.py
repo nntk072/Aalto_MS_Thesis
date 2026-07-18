@@ -42,9 +42,10 @@ class Broker:
         price: float,
         lots: float,
         direction: int,
+        spread_points: float | None = None,
     ) -> Position | None:
         """Attempt to open a position; returns Position or None if insufficient margin."""
-        fill_price = self.cost_model.fill_price(price, direction)
+        fill_price = self.cost_model.fill_price(price, direction, spread_points=spread_points)
         margin = self.required_margin(fill_price, lots)
         if acc.equity < margin:
             return None
@@ -62,9 +63,10 @@ class Broker:
         acc: AccountState,
         position: Position,
         price: float,
+        spread_points: float | None = None,
     ) -> float:
         """Close position at *price*, return realised P&L."""
-        fill_price = self.cost_model.fill_price(price, -position.direction)
+        fill_price = self.cost_model.fill_price(price, -position.direction, spread_points=spread_points)
         cost = self.cost_model.total_cost(position.size, -position.direction)
         pnl = (
             (fill_price - position.entry_price)

@@ -117,6 +117,7 @@ class TradingEnv(gym.Env):
 
         row = self._bars.iloc[self._idx]
         price = float(row["close"])
+        spread_points = float(row["spread"]) if "spread" in row.index and pd.notna(row["spread"]) else None
         session = int(row["session_id"]) if "session_id" in row.index else 0
 
         # Session reset
@@ -132,7 +133,9 @@ class TradingEnv(gym.Env):
         breach_reason = self._guardrails.breach_reason(self._acc)  # type: ignore[union-attr]
         if breach_reason:
             if self._position is not None:
-                self._broker.close_position(self._acc, self._position, price)  # type: ignore[union-attr]
+                self._broker.close_position(  # type: ignore[union-attr]
+                    self._acc, self._position, price, spread_points=spread_points
+                )
                 self._position = None
             reward = self._reward_fn(  # type: ignore[call-arg]
                 0.0,
@@ -149,14 +152,18 @@ class TradingEnv(gym.Env):
         direction = _ACTION_MAP[int(action)]
         if direction != 0:
             if self._position is not None and self._position.direction != direction:
-                self._broker.close_position(self._acc, self._position, price)  # type: ignore[union-attr]
+                self._broker.close_position(  # type: ignore[union-attr]
+                    self._acc, self._position, price, spread_points=spread_points
+                )
                 self._position = None
             if self._position is None:
                 self._position = self._broker.open_position(  # type: ignore[union-attr]
-                    self._acc, price, self._lots, direction
+                    self._acc, price, self._lots, direction, spread_points=spread_points
                 )
         elif direction == 0 and self._position is not None:
-            self._broker.close_position(self._acc, self._position, price)  # type: ignore[union-attr]
+            self._broker.close_position(  # type: ignore[union-attr]
+                self._acc, self._position, price, spread_points=spread_points
+            )
             self._position = None
 
         # Reward

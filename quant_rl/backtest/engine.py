@@ -72,6 +72,7 @@ def run_backtest(
     for i in range(obs_window, len(bars)):
         row = bars.iloc[i]
         price = row["close"]
+        spread_points = float(row["spread"]) if "spread" in row.index and pd.notna(row["spread"]) else None
         bar_time = bar_times[i]
         session = int(row["session_id"]) if "session_id" in row.index else 0
         session_set.add(session)
@@ -94,7 +95,7 @@ def run_backtest(
                 * broker.contract_size
             )
             if unrealised <= -abs(max_loss_per_trade_usd):
-                pnl = broker.close_position(acc, position, price)
+                pnl = broker.close_position(acc, position, price, spread_points=spread_points)
                 trade_log.append({
                     "type": "stop_close", "pnl": pnl,
                     "reason": "max_loss_per_trade", "bar": i, "time": bar_time,
@@ -115,7 +116,7 @@ def run_backtest(
                 "equity": acc.equity,
             })
             if position is not None:
-                pnl = broker.close_position(acc, position, price)
+                pnl = broker.close_position(acc, position, price, spread_points=spread_points)
                 trade_log.append({
                     "type": "forced_close", "pnl": pnl,
                     "reason": reason, "bar": i, "time": bar_time,
@@ -140,7 +141,7 @@ def run_backtest(
         if action != 0:
             if position is not None and position.direction != action:
                 # Reverse: close then reopen
-                pnl = broker.close_position(acc, position, price)
+                pnl = broker.close_position(acc, position, price, spread_points=spread_points)
                 trade_log.append({
                     "type": "close", "pnl": pnl, "bar": i, "time": bar_time,
                     "equity": acc.equity,
@@ -149,7 +150,7 @@ def run_backtest(
                 position = None
 
             if position is None:
-                position = broker.open_position(acc, price, lots, action)
+                position = broker.open_position(acc, price, lots, action, spread_points=spread_points)
                 if position:
                     trade_log.append({
                         "type": "open", "direction": action,
@@ -158,7 +159,7 @@ def run_backtest(
                     })
                     sessions_with_trades.add(session)
         elif action == 0 and position is not None:
-            pnl = broker.close_position(acc, position, price)
+            pnl = broker.close_position(acc, position, price, spread_points=spread_points)
             trade_log.append({
                 "type": "close", "pnl": pnl, "bar": i, "time": bar_time,
                 "equity": acc.equity,
@@ -169,7 +170,8 @@ def run_backtest(
     # Close any remaining position at the last bar
     if position is not None:
         last_price = bars.iloc[-1]["close"]
-        pnl = broker.close_position(acc, position, last_price)
+        last_spread = float(bars.iloc[-1]["spread"]) if "spread" in bars.columns and pd.notna(bars.iloc[-1]["spread"]) else None
+        pnl = broker.close_position(acc, position, last_price, spread_points=last_spread)
         trade_log.append({
             "type": "eod_close", "pnl": pnl,
             "bar": len(bars) - 1, "time": bar_times[-1],
