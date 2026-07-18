@@ -53,12 +53,17 @@ def synthetic_trades(synthetic_equity) -> pd.DataFrame:
 
 @pytest.fixture()
 def synthetic_result(synthetic_equity, synthetic_trades) -> dict:
+    breach_events = [{"time": synthetic_equity.index[100], "session_id": 0,
+                      "reason": "daily_loss", "equity": 99000.0}]
     return {
         "equity": synthetic_equity,
         "trades": synthetic_trades,
         "breaches": ["daily_loss"],
+        "breach_events": breach_events,
         "n_sessions": 5,
         "n_breach_sessions": 1,
+        "n_sessions_with_trades": 4,
+        "n_sessions_skipped": 1,
         "initial_balance": 100_000.0,
     }
 
@@ -106,8 +111,10 @@ def test_save_metrics_json(metrics, tmp_path):
 
 def test_plot_equity_curve(synthetic_equity, tmp_path):
     from quant_rl.eval.plots import plot_equity_curve
+    breach_events = [{"time": synthetic_equity.index[100], "session_id": 0,
+                      "reason": "daily_loss", "equity": 99000.0}]
     fig = plot_equity_curve(
-        synthetic_equity, breaches=["daily_loss"],
+        synthetic_equity, breach_events=breach_events,
         initial_balance=100_000.0,
         daily_loss_limit=5000.0, max_loss_limit=10000.0,
         out_path=tmp_path / "equity.png",
