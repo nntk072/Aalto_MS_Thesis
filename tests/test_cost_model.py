@@ -1,4 +1,4 @@
-"""Tests: cost model + broker bid/ask correctness."""
+"""Tests: cost model correctness."""
 from __future__ import annotations
 
 import pytest
@@ -8,49 +8,40 @@ from quant_rl.backtest.broker import Broker
 from quant_rl.backtest.costs import CostModel
 
 
-def test_fill_price_buy_is_ask():
+def test_cost_zero_slippage():
+    c = CostModel(spread_points=0.6, slippage_points=0.0, commission_per_lot=0.0)
+    cost = c.total_cost(lots=1.0, direction=1)
+    assert cost == pytest.approx(0.0, rel=1e-6)
+
+
+def test_fill_price_long():
     c = CostModel(spread_points=1.0, slippage_points=0.0)
-    fill = c.fill_price(bid=99.5, ask=100.5, direction=1)
+    fill = c.fill_price(mid_price=100.0, direction=1)
     assert fill == pytest.approx(100.5)
 
 
-def test_fill_price_sell_is_bid():
+def test_fill_price_short():
     c = CostModel(spread_points=1.0, slippage_points=0.0)
-    fill = c.fill_price(bid=99.5, ask=100.5, direction=-1)
+    fill = c.fill_price(mid_price=100.0, direction=-1)
     assert fill == pytest.approx(99.5)
 
 
-def test_total_cost_is_commission_only():
+def test_commission_added():
     c = CostModel(spread_points=0.6, commission_per_lot=3.0)
-    assert c.total_cost(lots=2.0) == pytest.approx(6.0)
+    cost = c.total_cost(lots=2.0, direction=1)
+    assert cost == pytest.approx(6.0)
 
 
-def test_bar_quote_derives_ask_from_close():
-    c = CostModel(spread_points=0.6, point_size=0.01)
-    bid, ask = c.bar_quote(close=20000.0)
-    assert bid == pytest.approx(20000.0)
-    assert ask == pytest.approx(20000.6)
+def test_broker_roundtrip_uses_bid_ask_once_long_and_short():
+    c = CostModel(spread_points=0.6, slippage_points=0.0, commission_per_lot=0.0)
+    b = Broker(cost_model=c, contract_size=1.0)
 
+    for direction in (1, -1):
+        acc = AccountState(initial_balance=100_000.0)
+        pos = b.open_position(acc, price=100.0, lots=1.0, direction=direction)
+        assert pos is not None
 
-def test_long_opens_at_ask_closes_at_bid():
-    cm = CostModel(spread_points=1.0, slippage_points=0.0, commission_per_lot=0.0)
-    broker = Broker(cost_model=cm, margin_pct=0.02)
-    acc = AccountState(initial_balance=100_000.0)
+        # close at same mid; result should be exactly one full spread loss
+        pnl = b.close_position(acc, pos, price=100.0)
+        assert pnl == pytest.approx(-0.6, rel=1e-6)
 
-    pos = broker.open_position(acc, quote=(99.5, 100.5), lots=1.0, direction=1)
-    assert pos is not None
-    assert pos.entry_price == pytest.approx(100.5)
-
-    pnl = broker.close_position(acc, pos, quote=(99.5, 100.5))
-    assert pnl == pytest.approx(-1.0)
-
-
-def test_round_trip_spread_charged_once():
-    cm = CostModel(spread_points=1.0, slippage_points=0.0, commission_per_lot=0.0)
-    broker = Broker(cost_model=cm, margin_pct=0.02)
-    acc = AccountState(initial_balance=100_000.0)
-
-    quote = (100.0, 101.0)
-    pos = broker.open_position(acc, quote=quote, lots=1.0, direction=1)
-    pnl = broker.close_position(acc, pos, quote=quote)
-    assert pnl == pytest.approx(-1.0)

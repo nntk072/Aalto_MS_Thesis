@@ -22,7 +22,6 @@ from .costs import CostModel
 
 
 Direction = Literal[-1, 0, 1]
-Quote = tuple[float, float]   # (bid, ask)
 
 
 @dataclass
@@ -52,18 +51,14 @@ class Broker:
     def open_position(
         self,
         acc: AccountState,
-        quote: Quote,
+        price: float,
         lots: float,
         direction: int,
+        spread_points: float | None = None,
     ) -> Position | None:
-        """Attempt to open a position.
-
-        Long opens fill at ask; short opens fill at bid.
-        Returns the new ``Position`` or ``None`` if margin is insufficient.
-        """
-        bid, ask = quote
-        fill = self.cost_model.fill_price(bid, ask, direction)
-        margin = self.required_margin(fill, lots)
+        """Attempt to open a position; returns Position or None if insufficient margin."""
+        fill_price = self.cost_model.fill_price(price, direction, spread_points=spread_points)
+        margin = self.required_margin(fill_price, lots)
         if acc.equity < margin:
             return None
         cost = self.cost_model.total_cost(lots)
@@ -71,7 +66,7 @@ class Broker:
         return Position(
             direction=direction,
             size=lots,
-            entry_price=fill,
+            entry_price=fill_price,
             margin_used=margin,
         )
 
@@ -79,19 +74,14 @@ class Broker:
         self,
         acc: AccountState,
         position: Position,
-        quote: Quote,
+        price: float,
+        spread_points: float | None = None,
     ) -> float:
-        """Close an open position and return the realised P&L.
-
-        Long closes fill at bid; short closes fill at ask.
-        Commission is deducted from P&L before booking to the account.
-        """
-        bid, ask = quote
-        # Closing direction is opposite to the position direction
-        fill = self.cost_model.fill_price(bid, ask, -position.direction)
-        cost = self.cost_model.total_cost(position.size)
+        """Close position at *price*, return realised P&L."""
+        fill_price = self.cost_model.fill_price(price, -position.direction, spread_points=spread_points)
+        cost = self.cost_model.total_cost(position.size, -position.direction)
         pnl = (
-            (fill - position.entry_price)
+            (fill_price - position.entry_price)
             * position.direction
             * position.size
             * self.contract_size
