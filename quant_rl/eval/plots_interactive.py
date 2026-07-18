@@ -17,7 +17,7 @@ except ImportError:
     _PLOTLY_AVAILABLE = False
 
 
-_TEMPLATE = "plotly_dark"
+_TEMPLATE = "plotly_white"
 _LONG_COLOR  = "#26a69a"
 _SHORT_COLOR = "#ef5350"
 _CLOSE_COLOR = "#ffd54f"
@@ -75,26 +75,7 @@ def plot_equity_curve(
                       annotation_text=f"Max loss limit ${max_loss_limit:,.0f}",
                       annotation_position="bottom right")
 
-    # One accurate vline per real breach event
-    if breach_events:
-        for ev in breach_events:
-            ts = ev.get("time")
-            reason = ev.get("reason", "breach")
-            ts_str = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
-            # Use add_shape instead of add_vline to avoid plotly annotation bug
-            fig.add_shape(
-                type="line",
-                x0=ts_str, x1=ts_str, xref="x",
-                y0=0, y1=1, yref="paper",
-                line=dict(color=_BREACH_COLOR, width=1.0, dash="dash"),
-                opacity=0.7,
-            )
-            fig.add_annotation(
-                x=ts_str, xref="x", yref="paper",
-                y=0.99, text=reason,
-                showarrow=False, font=dict(size=9, color=_BREACH_COLOR),
-                align="right",
-            )
+    # User preference: do not draw breach vertical lines on equity chart.
 
     fig.update_layout(
         template=_TEMPLATE,
@@ -185,58 +166,84 @@ def plot_price_with_orders(
         else:
             long_opens = short_opens = pd.DataFrame()
 
+        min_ts = ohlcv.index.min()
+        max_ts = ohlcv.index.max()
+
         def _bin_to_candle(times: pd.Series) -> pd.Index:
-            """Floor times to candle_tf and snap to nearest available candle."""
+            """Floor times to candle_tf and skip markers outside the plotted window."""
             binned = pd.DatetimeIndex(times).floor(candle_tf)
             result = []
             for ts in binned:
+                if ts < min_ts or ts > max_ts:
+                    continue
                 if ts in ohlcv.index:
                     result.append(ts)
                 else:
                     loc = ohlcv.index.searchsorted(ts, side="left")
-                    loc = min(loc, len(ohlcv) - 1)
-                    result.append(ohlcv.index[loc])
+                    if loc >= len(ohlcv):
+                        continue
+                    candidate = ohlcv.index[loc]
+                    if candidate < min_ts or candidate > max_ts:
+                        continue
+                    result.append(candidate)
             return pd.DatetimeIndex(result)
 
-        def _price_col(df: pd.DataFrame, col: str = "price") -> np.ndarray:
-            if col in df.columns:
-                return df[col].values
-            snapped = _bin_to_candle(df["time"])
-            return ohlcv["close"].reindex(snapped, method="nearest", tolerance=pd.Timedelta(candle_tf)).fillna(
-                method="ffill"
-            ).values
+        def _snap_df(df: pd.DataFrame, prefer_trade_price: bool = False) -> tuple[pd.Index, np.ndarray]:
+            """Return aligned (x, y) arrays for markers within plotted candle range."""
+            if df.empty:
+                return pd.DatetimeIndex([]), np.array([])
+
+            snapped_times: list[pd.Timestamp] = []
+            y_vals: list[float] = []
+
+            for _, row in df.iterrows():
+                ts = pd.Timestamp(row["time"])
+                snapped = _bin_to_candle(pd.Series([ts]))
+                if len(snapped) == 0:
+                    continue
+                s_ts = snapped[0]
+                snapped_times.append(s_ts)
+
+                if prefer_trade_price and "price" in df.columns and pd.notna(row.get("price")):
+                    y_vals.append(float(row["price"]))
+                else:
+                    y_vals.append(float(ohlcv.at[s_ts, "close"]))
+
+            return pd.DatetimeIndex(snapped_times), np.asarray(y_vals, dtype=float)
 
         if not long_opens.empty:
-            snapped_x = _bin_to_candle(long_opens["time"])
-            fig.add_trace(go.Scatter(
-                x=snapped_x, y=_price_col(long_opens),
-                mode="markers", name="Long open",
-                marker=dict(symbol="triangle-up", size=12, color=_LONG_COLOR, opacity=0.9),
-            ))
+            snapped_x, snapped_y = _snap_df(long_opens, prefer_trade_price=True)
+            if len(snapped_x) > 0:
+                fig.add_trace(go.Scatter(
+                    x=snapped_x, y=snapped_y,
+                    mode="markers", name="Long open",
+                    marker=dict(symbol="triangle-up", size=12, color=_LONG_COLOR, opacity=0.9),
+                ))
         if not short_opens.empty:
-            snapped_x = _bin_to_candle(short_opens["time"])
-            fig.add_trace(go.Scatter(
-                x=snapped_x, y=_price_col(short_opens),
-                mode="markers", name="Short open",
-                marker=dict(symbol="triangle-down", size=12, color=_SHORT_COLOR, opacity=0.9),
-            ))
+            snapped_x, snapped_y = _snap_df(short_opens, prefer_trade_price=True)
+            if len(snapped_x) > 0:
+                fig.add_trace(go.Scatter(
+                    x=snapped_x, y=snapped_y,
+                    mode="markers", name="Short open",
+                    marker=dict(symbol="triangle-down", size=12, color=_SHORT_COLOR, opacity=0.9),
+                ))
         if not normal_closes.empty:
-            snapped_x = _bin_to_candle(normal_closes["time"])
-            close_prices = ohlcv["close"].reindex(snapped_x, method="nearest", tolerance=pd.Timedelta(candle_tf)).fillna(method="ffill")
-            fig.add_trace(go.Scatter(
-                x=snapped_x, y=close_prices.values,
-                mode="markers", name="Close",
-                marker=dict(symbol="x", size=9, color=_CLOSE_COLOR, opacity=0.85),
-            ))
+            snapped_x, snapped_y = _snap_df(normal_closes, prefer_trade_price=False)
+            if len(snapped_x) > 0:
+                fig.add_trace(go.Scatter(
+                    x=snapped_x, y=snapped_y,
+                    mode="markers", name="Close",
+                    marker=dict(symbol="x", size=9, color=_CLOSE_COLOR, opacity=0.85),
+                ))
         if not forced_closes.empty:
-            snapped_x = _bin_to_candle(forced_closes["time"])
-            forced_prices = ohlcv["close"].reindex(snapped_x, method="nearest", tolerance=pd.Timedelta(candle_tf)).fillna(method="ffill")
-            fig.add_trace(go.Scatter(
-                x=snapped_x, y=forced_prices.values,
-                mode="markers", name="Forced/Stop close",
-                marker=dict(symbol="x-open", size=14, color=_BREACH_COLOR,
-                            line=dict(width=2, color=_BREACH_COLOR), opacity=1.0),
-            ))
+            snapped_x, snapped_y = _snap_df(forced_closes, prefer_trade_price=False)
+            if len(snapped_x) > 0:
+                fig.add_trace(go.Scatter(
+                    x=snapped_x, y=snapped_y,
+                    mode="markers", name="Forced/Stop close",
+                    marker=dict(symbol="x-open", size=14, color=_BREACH_COLOR,
+                                line=dict(width=2, color=_BREACH_COLOR), opacity=1.0),
+                ))
 
     fig.update_layout(
         template=_TEMPLATE,

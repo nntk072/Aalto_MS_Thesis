@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 
 from quant_rl.eval.metrics import calculate_metrics, Metrics
-from quant_rl.eval.report import build_summary_table, save_metrics_json
+from quant_rl.eval.report import build_summary_table, build_comparison_table, save_metrics_json
 from quant_rl.eval.export import save_run, build_run_dir
 
 
@@ -95,6 +95,13 @@ def test_build_summary_table(metrics):
     assert "Sharpe" in table
     assert "Max Drawdown" in table
     assert "Breach Rate" in table
+
+
+def test_build_comparison_table(metrics):
+    table = build_comparison_table(metrics, metrics)
+    assert "Train" in table
+    assert "Test" in table
+    assert "Sharpe" in table
 
 
 def test_save_metrics_json(metrics, tmp_path):
@@ -189,24 +196,34 @@ def test_interactive_drawdown(synthetic_equity, tmp_path):
 
 def test_save_run_creates_files(synthetic_result, metrics, tmp_path):
     run_dir = save_run(
-        synthetic_result, metrics,
         out_dir=tmp_path, name="test_run",
+        train_result=synthetic_result, train_metrics=metrics,
+        test_result=synthetic_result,  test_metrics=metrics,
         save_plots=True, save_html=True, save_csv=True, dpi=72,
     )
     assert run_dir.exists()
-    assert (run_dir / "equity.csv").stat().st_size > 0
-    assert (run_dir / "trades.csv").stat().st_size > 0
-    assert (run_dir / "metrics.json").stat().st_size > 0
+    # Root: only config/summary — no raw data or charts
     assert (run_dir / "summary.txt").stat().st_size > 0
-    assert (run_dir / "equity.png").stat().st_size > 0
-    assert (run_dir / "drawdown.png").stat().st_size > 0
+    assert not (run_dir / "equity.csv").exists()
+    assert not (run_dir / "equity.png").exists()
+    # Training subfolder
+    assert (run_dir / "training" / "equity.csv").stat().st_size > 0
+    assert (run_dir / "training" / "trades.csv").stat().st_size > 0
+    assert (run_dir / "training" / "metrics.json").stat().st_size > 0
+    assert (run_dir / "training" / "equity.png").stat().st_size > 0
+    assert (run_dir / "training" / "drawdown.png").stat().st_size > 0
+    # Testing subfolder
+    assert (run_dir / "testing" / "equity.csv").stat().st_size > 0
+    assert (run_dir / "testing" / "metrics.json").stat().st_size > 0
 
 
 def test_save_run_no_overwrite(synthetic_result, metrics, tmp_path):
     """Two calls with the same name must produce two different directories."""
-    d1 = save_run(synthetic_result, metrics, out_dir=tmp_path, name="run",
+    d1 = save_run(out_dir=tmp_path, name="run",
+                  train_result=synthetic_result, train_metrics=metrics,
                   save_plots=False, save_html=False)
     import time; time.sleep(1.1)  # ensure different timestamp
-    d2 = save_run(synthetic_result, metrics, out_dir=tmp_path, name="run",
+    d2 = save_run(out_dir=tmp_path, name="run",
+                  train_result=synthetic_result, train_metrics=metrics,
                   save_plots=False, save_html=False)
     assert d1 != d2

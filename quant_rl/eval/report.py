@@ -77,6 +77,44 @@ def build_summary_table(m: Metrics) -> str:
     return "\n".join(lines)
 
 
+def build_comparison_table(train_m: Metrics, test_m: Metrics | None = None) -> str:
+    """Return a two-column Train vs Test comparison table."""
+    has_test = test_m is not None
+    width = 62 if has_test else 42
+    sep = "=" * width
+    mid = "-" * width
+
+    def row(label: str, train_val: str, test_val: str = "") -> str:
+        base = f"  {label:<22} {train_val:>14}"
+        return base + (f"  {test_val:>14}" if has_test else "")
+
+    header = f"  {'Metric':<22} {'Train':>14}" + (f"  {'Test':>14}" if has_test else "")
+
+    def pct(v: float) -> str:
+        return f"{v * 100:.2f}%"
+
+    def fp4(v: float) -> str:
+        return f"{v:.4f}"
+
+    lines = [sep, header, mid,
+        row("Sharpe",          fp4(train_m.sharpe),          fp4(test_m.sharpe)          if test_m else ""),
+        row("Sortino",         fp4(train_m.sortino),         fp4(test_m.sortino)         if test_m else ""),
+        row("Calmar",          fp4(train_m.calmar),          fp4(test_m.calmar)          if test_m else ""),
+        row("Max Drawdown",    pct(train_m.max_drawdown),    pct(test_m.max_drawdown)    if test_m else ""),
+        row("Total Return",    pct(train_m.total_return),    pct(test_m.total_return)    if test_m else ""),
+        row("Profit Factor",   fp4(train_m.profit_factor),   fp4(test_m.profit_factor)   if test_m else ""),
+        row("Expectancy",      fp4(train_m.expectancy),      fp4(test_m.expectancy)      if test_m else ""),
+        row("Win Rate",        pct(train_m.win_rate),        pct(test_m.win_rate)        if test_m else ""),
+        row("Total Trades",    str(train_m.total_trades),    str(test_m.total_trades)    if test_m else ""),
+        row("Total PnL",       f"{train_m.total_pnl:.2f}",  f"{test_m.total_pnl:.2f}"  if test_m else ""),
+        row("Avg Trade PnL",   fp4(train_m.avg_trade),       fp4(test_m.avg_trade)       if test_m else ""),
+        row("Max Consec Loss", str(train_m.max_consec_loss), str(test_m.max_consec_loss) if test_m else ""),
+        row("Breach Rate",     pct(train_m.breach_rate),     pct(test_m.breach_rate)     if test_m else ""),
+        sep,
+    ]
+    return "\n".join(lines)
+
+
 def save_metrics_json(m: Metrics, path: Path | str) -> None:
     """Persist a Metrics instance to a JSON file."""
     Path(path).write_text(json.dumps(asdict(m), indent=2))
