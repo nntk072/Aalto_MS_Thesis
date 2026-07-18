@@ -538,7 +538,7 @@ def plot_per_trade_orders(
     show_mae_mfe: bool = True,
     show_sl_tp: bool = True,
 ) -> None:
-    """Generate one M1 candlestick PNG per trade in *orders_dir* with MT5-style overlays.
+    """Generate 2-panel PNG per trade: candlesticks+EMA50+entries/exits, then MACD below.
 
     Filenames encode the key trade metadata::
 
@@ -567,6 +567,7 @@ def plot_per_trade_orders(
         return
 
     from .trade_metrics import compute_trade_metrics
+    from .chart_indicators import compute_chart_overlays
 
     orders_dir = Path(orders_dir)
     orders_dir.mkdir(parents=True, exist_ok=True)
@@ -610,6 +611,9 @@ def plot_per_trade_orders(
             lots=lots,
             contract_size=contract_size,
         )
+        
+        # Compute chart overlays (EMA50, MACD)
+        overlays = compute_chart_overlays(window)
 
         # Entry marker (green arrow up for long, green arrow down for short)
         entry_s = pd.Series(np.nan, index=window.index)
@@ -625,6 +629,11 @@ def plot_per_trade_orders(
             exit_s.iloc[i_c] = float(window["close"].iloc[i_c])
 
         addplots = []
+        
+        # EMA50 overlay
+        addplots.append(mpf.make_addplot(
+            overlays["ema50"], color="#0066cc", linewidth=1.5, ylabel="EMA50"
+        ))
         
         # Green entry arrow
         if entry_s.notna().any():
@@ -707,8 +716,72 @@ def plot_per_trade_orders(
                    fontsize=9, verticalalignment='bottom', horizontalalignment='right',
                    bbox=props, family='monospace')
             
-            fig.savefig(str(orders_dir / fname), dpi=dpi, bbox_inches="tight")
-            plt.close(fig)
+            # Add MACD subplot below the candlestick chart
+            # Create a new figure with 2 subplots
+            fig2, (ax_price, ax_macd) = plt.subplots(2, 1, figsize=(14, 8), 
+                                                       gridspec_kw={'height_ratios': [2, 1]},
+                                                       sharex=True)
+            
+            # Top panel: candlesticks + EMA50 + entry/exit
+            colors_up = [LONG_COLOR if o <= c else SHORT_COLOR for o, c in zip(window["open"], window["close"])]
+            width = 0.6
+            x_idx = np.arange(len(window))
+            
+            for i in x_idx:
+                hl_color = colors_up[i]
+                ax_price.plot([i, i], [window["low"].iloc[i], window["high"].iloc[i]], color=hl_color, linewidth=0.5)
+                body_height = abs(window["close"].iloc[i] - window["open"].iloc[i])
+                body_bottom = min(window["open"].iloc[i], window["close"].iloc[i])
+                ax_price.add_patch(plt.Rectangle((i - width/2, body_bottom), width, body_height, 
+                                                 facecolor=colors_up[i], edgecolor=hl_color))
+            
+            # EMA50 line
+            ax_price.plot(x_idx, overlays["ema50"], color="#0066cc", linewidth=2, label="EMA50")
+            
+            # Entry marker
+            i_o_idx = window.index.get_indexer([t_open], method="nearest")[0]
+            if 0 <= i_o_idx < len(window):
+                ax_price.scatter([i_o_idx], [entry_s.iloc[i_o_idx]], marker="^" if direction == 1 else "v", 
+                               s=200, color="#00cc00", zorder=5, label="Entry")
+            
+            # Exit marker
+            i_c_idx = window.index.get_indexer([t_close], method="nearest")[0]
+            if 0 <= i_c_idx < len(window):
+                ax_price.scatter([i_c_idx], [exit_s.iloc[i_c_idx]], marker="v" if direction == 1 else "^",
+                               s=150, color="#ff0000", zorder=5, label="Exit")
+            
+            # MAE/MFE lines
+            if show_mae_mfe:
+                ax_price.axhline(metrics.mae_price, color="#ff6666", linewidth=1, linestyle="--", alpha=0.5, label="MAE")
+                ax_price.axhline(metrics.mfe_price, color="#66ff66", linewidth=1, linestyle="--", alpha=0.5, label="MFE")
+            
+            # SL/TP lines
+            if show_sl_tp:
+                if metrics.sl_price is not None:
+                    ax_price.axhline(metrics.sl_price, color="#ff0000", linewidth=0.8, linestyle=":", alpha=0.5, label="SL")
+                if metrics.tp_price is not None:
+                    ax_price.axhline(metrics.tp_price, color="#00cc00", linewidth=0.8, linestyle=":", alpha=0.5, label="TP")
+            
+            ax_price.set_ylabel("Price")
+            ax_price.legend(loc="upper left", fontsize=8)
+            ax_price.grid(True, alpha=0.3)
+            ax_price.set_title(title)
+            
+            # Bottom panel: MACD
+            ax_macd.plot(x_idx, overlays["macd"], color="#0066cc", linewidth=1.5, label="MACD")
+            ax_macd.plot(x_idx, overlays["signal"], color="#ff6600", linewidth=1.5, label="Signal")
+            ax_macd.bar(x_idx, overlays["histogram"], color=["#00cc00" if h > 0 else "#ff0000" for h in overlays["histogram"]],
+                       alpha=0.3, label="Histogram")
+            ax_macd.axhline(0, color="#000000", linewidth=0.5, linestyle="-", alpha=0.3)
+            ax_macd.set_ylabel("MACD")
+            ax_macd.set_xlabel("Time")
+            ax_macd.legend(loc="upper left", fontsize=8)
+            ax_macd.grid(True, alpha=0.3)
+            
+            fig2.tight_layout()
+            fig2.savefig(str(orders_dir / fname), dpi=dpi, bbox_inches="tight")
+            plt.close(fig2)
+            
         except Exception as exc:
             log.debug("Skipping per-trade PNG %d: %s", seq_i + 1, exc)
 
