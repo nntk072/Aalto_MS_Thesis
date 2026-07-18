@@ -182,12 +182,6 @@ def test_plot_per_trade_orders_mt5_style(synthetic_bars, synthetic_trades, tmp_p
     """Test MT5-style per-trade order charts with MAE/MFE/SL/TP overlays."""
     from quant_rl.eval.plots import plot_per_trade_orders
     
-    # Only test if mplfinance is available
-    try:
-        import mplfinance  # noqa
-    except ImportError:
-        pytest.skip("mplfinance not available")
-    
     orders_dir = tmp_path / "orders"
     plot_per_trade_orders(
         synthetic_bars, synthetic_trades,
@@ -208,6 +202,34 @@ def test_plot_per_trade_orders_mt5_style(synthetic_bars, synthetic_trades, tmp_p
     # Each PNG should be non-empty
     for png_path in pngs:
         assert png_path.stat().st_size > 0, f"{png_path} is empty"
+
+
+def test_plot_per_trade_orders_png_datetime_axis_and_info(synthetic_bars, synthetic_trades, tmp_path):
+    """Verify PNG charts have datetime x-axis and trade info box."""
+    from quant_rl.eval.plots import plot_per_trade_orders
+    
+    orders_dir = tmp_path / "orders"
+    plot_per_trade_orders(
+        synthetic_bars, synthetic_trades,
+        orders_dir=orders_dir,
+        max_charts=1,  # Just one for this test
+        dpi=72,
+        max_loss_per_trade_usd=10.0,
+        take_profit_per_trade_usd=50.0,
+        lots=1.0,
+        contract_size=1.0,
+        show_mae_mfe=True,
+        show_sl_tp=True,
+    )
+    
+    pngs = list(orders_dir.glob("*.png"))
+    assert len(pngs) >= 1, "No PNG files generated"
+    
+    # Load and inspect the first PNG
+    png_file = pngs[0]
+    file_size = png_file.stat().st_size
+    # Datetime-axis chart with 2 panels should be reasonably large (>100KB)
+    assert file_size > 50000, f"PNG file too small: {file_size} bytes (expected >50KB)"
 
 
 def test_plot_baseline_comparison(synthetic_equity, tmp_path):

@@ -538,7 +538,7 @@ def plot_per_trade_orders(
     show_mae_mfe: bool = True,
     show_sl_tp: bool = True,
 ) -> None:
-    """Generate 2-panel PNG per trade: candlesticks+EMA50+entries/exits, then MACD below.
+    """Generate 2-panel PNG per trade with datetime axes, EMA50, MACD, and trade info.
 
     Filenames encode the key trade metadata::
 
@@ -560,14 +560,9 @@ def plot_per_trade_orders(
     show_mae_mfe : Whether to plot MAE/MFE lines.
     show_sl_tp : Whether to plot SL/TP lines.
     """
-    try:
-        import mplfinance as mpf
-    except ImportError:
-        log.warning("mplfinance not available — skipping per-trade PNG charts")
-        return
-
     from .trade_metrics import compute_trade_metrics
     from .chart_indicators import compute_chart_overlays
+    import matplotlib.dates as mdates
 
     orders_dir = Path(orders_dir)
     orders_dir.mkdir(parents=True, exist_ok=True)
@@ -584,26 +579,18 @@ def plot_per_trade_orders(
     else:
         log.info("Per-trade PNG: %d charts → %s", total, orders_dir)
 
-    mc = mpf.make_marketcolors(up=LONG_COLOR, down=SHORT_COLOR,
-                                edge="inherit", wick="inherit", volume="in")
-    mpf_style = mpf.make_mpf_style(
-        base_mpf_style="yahoo", marketcolors=mc,
-        facecolor="#ffffff", figcolor="#ffffff",
-        gridcolor="#e6e6e6", gridstyle="--",
-    )
-
     for seq_i, (open_row, close_row) in enumerate(pairs):
-        t_open  = pd.Timestamp(open_row["time"])
+        t_open = pd.Timestamp(open_row["time"])
         t_close = pd.Timestamp(close_row["time"])
-        window  = _extract_window(bars, t_open, t_close, context_bars)
+        window = _extract_window(bars, t_open, t_close, context_bars)
         if len(window) < 3:
             continue
 
-        direction  = int(open_row["direction"]) if pd.notna(open_row.get("direction")) else 0
-        pnl        = float(close_row["pnl"])    if pd.notna(close_row.get("pnl"))       else 0.0
+        direction = int(open_row["direction"]) if pd.notna(open_row.get("direction")) else 0
+        pnl = float(close_row["pnl"]) if pd.notna(close_row.get("pnl")) else 0.0
         close_type = str(close_row["type"])
 
-        # Compute MAE/MFE/SL/TP metrics
+        # Compute metrics
         metrics = compute_trade_metrics(
             bars, open_row, close_row,
             max_loss_per_trade_usd=max_loss_per_trade_usd,
@@ -611,177 +598,171 @@ def plot_per_trade_orders(
             lots=lots,
             contract_size=contract_size,
         )
-        
-        # Compute chart overlays (EMA50, MACD)
         overlays = compute_chart_overlays(window)
 
-        # Entry marker (green arrow up for long, green arrow down for short)
-        entry_s = pd.Series(np.nan, index=window.index)
-        i_o = window.index.get_indexer([t_open], method="nearest")[0]
-        if 0 <= i_o < len(window):
-            ep = float(open_row["price"]) if pd.notna(open_row.get("price")) else float(window["low"].iloc[i_o])
-            entry_s.iloc[i_o] = ep * 0.9995 if direction == 1 else ep * 1.0005
+        # Create 2-panel figure with datetime x-axis
+        fig, (ax_price, ax_macd) = plt.subplots(
+            2, 1,
+            figsize=(14, 8),
+            gridspec_kw={"height_ratios": [2, 1]},
+            sharex=True,
+        )
 
-        # Exit marker (red arrow down for long exit, red arrow up for short exit)
-        exit_s = pd.Series(np.nan, index=window.index)
-        i_c = window.index.get_indexer([t_close], method="nearest")[0]
-        if 0 <= i_c < len(window):
-            exit_s.iloc[i_c] = float(window["close"].iloc[i_c])
+        # --- Top panel: Candlesticks + EMA50 + Entry/Exit + MAE/MFE/SL/TP ---
+        colors_up = [
+            LONG_COLOR if o <= c else SHORT_COLOR
+            for o, c in zip(window["open"], window["close"])
+        ]
 
-        addplots = []
-        
-        # EMA50 overlay
-        addplots.append(mpf.make_addplot(
-            overlays["ema50"], color="#0066cc", width=2
-        ))
-        
-        # Green entry arrow
-        if entry_s.notna().any():
-            addplots.append(mpf.make_addplot(
-                entry_s, type="scatter", markersize=120,
-                marker="^" if direction == 1 else "v",
-                color="#00cc00",  # bright green
-            ))
-        
-        # Red exit arrow
-        if exit_s.notna().any():
-            addplots.append(mpf.make_addplot(
-                exit_s, type="scatter", markersize=100,
-                marker="v" if direction == 1 else "^",
-                color="#ff0000",  # bright red
-            ))
+        for i, (idx, row) in enumerate(window.iterrows()):
+            hl_color = colors_up[i]
+            # High-low line
+            ax_price.plot(
+                [idx, idx],
+                [row["low"], row["high"]],
+                color=hl_color,
+                linewidth=0.5,
+            )
+            # Open-close body
+            body_height = abs(row["close"] - row["open"])
+            body_bottom = min(row["open"], row["close"])
+            rect = plt.Rectangle(
+                (idx - pd.Timedelta("1min") / 2, body_bottom),
+                pd.Timedelta("1min"),
+                body_height,
+                facecolor=hl_color,
+                edgecolor=hl_color,
+                linewidth=0.8,
+            )
+            ax_price.add_patch(rect)
 
+        # EMA50
+        ax_price.plot(
+            window.index, overlays["ema50"],
+            color="#0066cc", linewidth=2, label="EMA50", zorder=3,
+        )
+
+        # Entry marker
+        ep_entry = metrics.entry_price
+        ax_price.scatter(
+            [t_open], [ep_entry],
+            marker="^" if direction == 1 else "v",
+            s=200,
+            color="#00cc00",
+            zorder=5,
+            label="Entry",
+        )
+
+        # Exit marker
+        ep_exit = metrics.exit_price
+        ax_price.scatter(
+            [t_close], [ep_exit],
+            marker="v" if direction == 1 else "^",
+            s=150,
+            color="#ff0000",
+            zorder=5,
+            label="Exit",
+        )
+
+        # MAE/MFE
+        if show_mae_mfe:
+            ax_price.axhline(
+                metrics.mae_price, color="#ff6666", linewidth=1, linestyle="--",
+                alpha=0.5, label="MAE",
+            )
+            ax_price.axhline(
+                metrics.mfe_price, color="#66ff66", linewidth=1, linestyle="--",
+                alpha=0.5, label="MFE",
+            )
+
+        # SL/TP
+        if show_sl_tp:
+            if metrics.sl_price is not None:
+                ax_price.axhline(
+                    metrics.sl_price, color="#ff0000", linewidth=0.8, linestyle=":",
+                    alpha=0.5, label="SL",
+                )
+            if metrics.tp_price is not None:
+                ax_price.axhline(
+                    metrics.tp_price, color="#00cc00", linewidth=0.8, linestyle=":",
+                    alpha=0.5, label="TP",
+                )
+
+        # Formatting
+        ax_price.set_ylabel("Price")
+        ax_price.legend(loc="upper left", fontsize=8)
+        ax_price.grid(True, alpha=0.3)
+        
+        # Format x-axis as datetime
+        ax_price.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+        ax_price.xaxis.set_major_locator(mdates.MinuteLocator(interval=10))
+        plt.setp(ax_price.xaxis.get_majorticklabels(), rotation=45, ha="right")
+
+        # --- Bottom panel: MACD ---
+        ax_macd.plot(
+            window.index, overlays["macd"],
+            color="#0066cc", linewidth=1.5, label="MACD",
+        )
+        ax_macd.plot(
+            window.index, overlays["signal"],
+            color="#ff6600", linewidth=1.5, label="Signal",
+        )
+        ax_macd.bar(
+            window.index, overlays["histogram"],
+            color=["#00cc00" if h > 0 else "#ff0000" for h in overlays["histogram"]],
+            alpha=0.3, label="Histogram",
+            width=pd.Timedelta("0.8min"),
+        )
+        ax_macd.axhline(0, color="#000000", linewidth=0.5, linestyle="-", alpha=0.3)
+        ax_macd.set_ylabel("MACD")
+        ax_macd.set_xlabel("Time (M1)")
+        ax_macd.legend(loc="upper left", fontsize=8)
+        ax_macd.grid(True, alpha=0.3)
+        
+        # Format x-axis as datetime
+        ax_macd.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+        ax_macd.xaxis.set_major_locator(mdates.MinuteLocator(interval=10))
+        plt.setp(ax_macd.xaxis.get_majorticklabels(), rotation=45, ha="right")
+
+        # --- Trade info box ---
+        duration_mins = int((t_close - t_open).total_seconds() / 60)
+        duration_secs = int((t_close - t_open).total_seconds() % 60)
+        lots_val = float(open_row.get("lots", 1.0)) if pd.notna(open_row.get("lots")) else 1.0
+        
+        trade_info = (
+            f"Direction: {'Buy' if direction == 1 else 'Sell'}\n"
+            f"Open: {metrics.entry_price:.2f}\n"
+            f"Close: {metrics.exit_price:.2f}\n"
+            f"Volume: {lots_val:.2f}\n"
+            f"Duration: {duration_mins}m{duration_secs}s"
+        )
+        props = dict(boxstyle="round", facecolor="wheat", alpha=0.8)
+        ax_price.text(
+            0.98, 0.02, trade_info,
+            transform=ax_price.transAxes,
+            fontsize=9,
+            verticalalignment="bottom",
+            horizontalalignment="right",
+            bbox=props,
+            family="monospace",
+        )
+
+        # --- Title ---
         dir_label = "Long" if direction == 1 else "Short"
         close_reason = close_type if close_type != "close" else "normal"
         title = (
-            f"{dir_label}  |  Open {t_open.strftime('%Y-%m-%d %H:%M')} "
-            f"→ Close {t_close.strftime('%H:%M')}  |  "
-            f"PnL: {pnl:+.2f}  |  {close_reason}"
+            f"{dir_label} | Open {t_open.strftime('%Y-%m-%d %H:%M')} "
+            f"→ Close {t_close.strftime('%H:%M')} | "
+            f"PnL: {pnl:+.2f} | {close_reason}"
         )
+        fig.suptitle(title, fontsize=11, fontweight="bold")
 
+        # Save
         fname = _trade_filename(seq_i + 1, open_row, close_row, "png")
-        pk: dict[str, Any] = dict(
-            type="candle", style=mpf_style,
-            title=title,
-            warn_too_much_data=len(window) + 1,
-            returnfig=True,
-            savefig=dict(fname=str(orders_dir / fname), dpi=dpi, bbox_inches="tight"),
-        )
-        if addplots:
-            pk["addplot"] = addplots
-
         try:
-            fig, axes = mpf.plot(window, **pk)
-            ax = axes[0] if isinstance(axes, (list, tuple)) else axes
-            
-            # Add horizontal lines for MAE/MFE/SL/TP after candlestick plot
-            if show_mae_mfe:
-                # MAE line (red dashed)
-                ax.axhline(metrics.mae_price, color="#ff6666", linewidth=1.0, 
-                          linestyle="--", alpha=0.7, label="MAE")
-                # MFE line (green dashed)
-                ax.axhline(metrics.mfe_price, color="#66ff66", linewidth=1.0,
-                          linestyle="--", alpha=0.7, label="MFE")
-            
-            if show_sl_tp:
-                # SL line (red dotted, if configured)
-                if metrics.sl_price is not None:
-                    ax.axhline(metrics.sl_price, color="#ff0000", linewidth=0.8,
-                              linestyle=":", alpha=0.6, label="SL")
-                # TP line (green dotted, if configured)
-                if metrics.tp_price is not None:
-                    ax.axhline(metrics.tp_price, color="#00cc00", linewidth=0.8,
-                              linestyle=":", alpha=0.6, label="TP")
-            
-            # Add legend to the plot
-            ax.legend(loc="upper left", fontsize=7)
-            
-            # Add trade info box in the lower right
-            duration_mins = int((t_close - t_open).total_seconds() / 60)
-            duration_secs = int((t_close - t_open).total_seconds() % 60)
-            lots_val = float(open_row.get("lots", 1.0)) if pd.notna(open_row.get("lots")) else 1.0
-            volume = lots_val  # Volume in lots
-            
-            trade_info = (
-                f"Direction: {'Buy' if direction == 1 else 'Sell'}\n"
-                f"Open: {metrics.entry_price:.2f}\n"
-                f"Close: {metrics.exit_price:.2f}\n"
-                f"Volume: {volume:.2f}\n"
-                f"Duration: {duration_mins}m{duration_secs}s"
-            )
-            
-            # Create text box with trade info
-            props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
-            ax.text(0.98, 0.02, trade_info, transform=ax.transAxes,
-                   fontsize=9, verticalalignment='bottom', horizontalalignment='right',
-                   bbox=props, family='monospace')
-            
-            # Add MACD subplot below the candlestick chart
-            # Create a new figure with 2 subplots
-            fig2, (ax_price, ax_macd) = plt.subplots(2, 1, figsize=(14, 8), 
-                                                       gridspec_kw={'height_ratios': [2, 1]},
-                                                       sharex=True)
-            
-            # Top panel: candlesticks + EMA50 + entry/exit
-            colors_up = [LONG_COLOR if o <= c else SHORT_COLOR for o, c in zip(window["open"], window["close"])]
-            width = 0.6
-            x_idx = np.arange(len(window))
-            
-            for i in x_idx:
-                hl_color = colors_up[i]
-                ax_price.plot([i, i], [window["low"].iloc[i], window["high"].iloc[i]], color=hl_color, linewidth=0.5)
-                body_height = abs(window["close"].iloc[i] - window["open"].iloc[i])
-                body_bottom = min(window["open"].iloc[i], window["close"].iloc[i])
-                ax_price.add_patch(plt.Rectangle((i - width/2, body_bottom), width, body_height, 
-                                                 facecolor=colors_up[i], edgecolor=hl_color))
-            
-            # EMA50 line
-            ax_price.plot(x_idx, overlays["ema50"], color="#0066cc", linewidth=2, label="EMA50")
-            
-            # Entry marker
-            i_o_idx = window.index.get_indexer([t_open], method="nearest")[0]
-            if 0 <= i_o_idx < len(window):
-                ax_price.scatter([i_o_idx], [entry_s.iloc[i_o_idx]], marker="^" if direction == 1 else "v", 
-                               s=200, color="#00cc00", zorder=5, label="Entry")
-            
-            # Exit marker
-            i_c_idx = window.index.get_indexer([t_close], method="nearest")[0]
-            if 0 <= i_c_idx < len(window):
-                ax_price.scatter([i_c_idx], [exit_s.iloc[i_c_idx]], marker="v" if direction == 1 else "^",
-                               s=150, color="#ff0000", zorder=5, label="Exit")
-            
-            # MAE/MFE lines
-            if show_mae_mfe:
-                ax_price.axhline(metrics.mae_price, color="#ff6666", linewidth=1, linestyle="--", alpha=0.5, label="MAE")
-                ax_price.axhline(metrics.mfe_price, color="#66ff66", linewidth=1, linestyle="--", alpha=0.5, label="MFE")
-            
-            # SL/TP lines
-            if show_sl_tp:
-                if metrics.sl_price is not None:
-                    ax_price.axhline(metrics.sl_price, color="#ff0000", linewidth=0.8, linestyle=":", alpha=0.5, label="SL")
-                if metrics.tp_price is not None:
-                    ax_price.axhline(metrics.tp_price, color="#00cc00", linewidth=0.8, linestyle=":", alpha=0.5, label="TP")
-            
-            ax_price.set_ylabel("Price")
-            ax_price.legend(loc="upper left", fontsize=8)
-            ax_price.grid(True, alpha=0.3)
-            ax_price.set_title(title)
-            
-            # Bottom panel: MACD
-            ax_macd.plot(x_idx, overlays["macd"], color="#0066cc", linewidth=1.5, label="MACD")
-            ax_macd.plot(x_idx, overlays["signal"], color="#ff6600", linewidth=1.5, label="Signal")
-            ax_macd.bar(x_idx, overlays["histogram"], color=["#00cc00" if h > 0 else "#ff0000" for h in overlays["histogram"]],
-                       alpha=0.3, label="Histogram")
-            ax_macd.axhline(0, color="#000000", linewidth=0.5, linestyle="-", alpha=0.3)
-            ax_macd.set_ylabel("MACD")
-            ax_macd.set_xlabel("Time")
-            ax_macd.legend(loc="upper left", fontsize=8)
-            ax_macd.grid(True, alpha=0.3)
-            
-            fig2.tight_layout()
-            fig2.savefig(str(orders_dir / fname), dpi=dpi, bbox_inches="tight")
-            plt.close(fig2)
-            
+            fig.tight_layout(rect=[0, 0, 1, 0.96])
+            fig.savefig(str(orders_dir / fname), dpi=dpi, bbox_inches="tight")
+            plt.close(fig)
         except Exception as exc:
             log.debug("Skipping per-trade PNG %d: %s", seq_i + 1, exc)
 

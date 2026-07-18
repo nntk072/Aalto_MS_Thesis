@@ -177,15 +177,20 @@ def main() -> None:
         
         log.info("MACD baseline: computed precomputed actions for train & test splits")
 
-    def _create_macd_policy(actions_series):
-        """Create a policy that returns precomputed action for each bar."""
-        idx_to_action = {i: actions_series.iloc[i] for i in range(len(actions_series))}
-        bar_counter = [0]  # Use list for nonlocal in Python < 3.8 compatibility
+    def _create_macd_policy(actions_series, obs_window):
+        """Create a policy that returns precomputed action for each bar.
+        
+        Critical: Start at obs_window so engine bar i maps to actions_series.iloc[i],
+        not to actions_series.iloc[i - obs_window]. This ensures MACD crosses align
+        with the bars where they actually occur.
+        """
+        state = {"i": obs_window}
         
         def policy(obs):
-            idx = bar_counter[0]
-            action = idx_to_action.get(idx, 0)
-            bar_counter[0] += 1
+            action = 0
+            if state["i"] < len(actions_series):
+                action = int(actions_series.iloc[state["i"]])
+            state["i"] += 1
             return action
         
         return policy
@@ -196,8 +201,9 @@ def main() -> None:
     macd_train_policy = None
     macd_test_policy = None
     if args.strategy == "macd":
-        macd_train_policy = _create_macd_policy(macd_train_actions)
-        macd_test_policy = _create_macd_policy(macd_test_actions)
+        obs_window = cfg.env.obs_window if hasattr(cfg.env, "obs_window") else 60
+        macd_train_policy = _create_macd_policy(macd_train_actions, obs_window)
+        macd_test_policy = _create_macd_policy(macd_test_actions, obs_window)
 
     def _run(bars, feats, ticks, label: str, macd_policy=None) -> tuple[dict, object]:
         log.info(
