@@ -82,11 +82,14 @@ class Broker:
         acc: AccountState,
         position: Position,
         quote: Quote,
-    ) -> float:
-        """Close an open position and return the realised P&L.
+    ) -> tuple[float, float]:
+        """Close an open position and return (pnl, fill_price).
 
         Long closes fill at bid; short closes fill at ask.
         Commission is deducted from P&L before booking to the account.
+        
+        Returns:
+            tuple of (realised_pnl, fill_price)
         """
         bid, ask = quote
         # Closing direction is opposite to the position direction
@@ -100,7 +103,7 @@ class Broker:
             - cost
         )
         acc.close_trade(pnl)
-        return pnl
+        return pnl, fill
 
     def mark_to_market(
         self,
