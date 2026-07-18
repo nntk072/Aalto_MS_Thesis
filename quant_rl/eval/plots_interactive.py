@@ -463,7 +463,7 @@ def plot_per_trade_orders(
     _check()
     from .plots import _pair_trades, _extract_window, _trade_filename
     from .trade_metrics import compute_trade_metrics
-    from .chart_indicators import compute_chart_overlays
+    from .chart_indicators import compute_chart_overlays_full, slice_overlays
 
     orders_dir = Path(orders_dir)
     orders_dir.mkdir(parents=True, exist_ok=True)
@@ -479,6 +479,10 @@ def plot_per_trade_orders(
         log.info("Per-trade HTML: sampling %d/%d trades → %s", max_charts, total, orders_dir)
     else:
         log.info("Per-trade HTML: %d charts → %s", total, orders_dir)
+
+    # Compute EMA50/MACD once on the full history so indicators are properly
+    # warmed up and match the strategy's real signals, then slice per trade.
+    full_overlays = compute_chart_overlays_full(bars)
 
     for seq_i, (open_row, close_row) in enumerate(pairs):
         t_open  = pd.Timestamp(open_row["time"])
@@ -500,8 +504,8 @@ def plot_per_trade_orders(
             contract_size=contract_size,
         )
         
-        # Compute chart overlays (EMA50, MACD)
-        overlays = compute_chart_overlays(window)
+        # Compute chart overlays (EMA50, MACD), sliced from full-history calc
+        overlays = slice_overlays(full_overlays, window.index)
         
         # Use Plotly subplots (2 rows: price on top, MACD on bottom)
         from plotly.subplots import make_subplots
