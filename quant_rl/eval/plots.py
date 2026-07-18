@@ -3,19 +3,23 @@
 All functions save a PNG and return the Figure object.
 Uses the non-interactive Agg backend so it works headless in CI.
 """
+
 from __future__ import annotations
 
 import logging
+
 import matplotlib
+
 matplotlib.use("Agg")
 
-import matplotlib.pyplot as plt
+from pathlib import Path
+from typing import Any
+
 import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -38,11 +42,11 @@ STYLE = {
     "font.size": 10,
 }
 
-LONG_COLOR  = "#26a69a"   # teal
-SHORT_COLOR = "#ef5350"   # red
-CLOSE_COLOR = "#ffd54f"   # amber
+LONG_COLOR = "#26a69a"  # teal
+SHORT_COLOR = "#ef5350"  # red
+CLOSE_COLOR = "#ffd54f"  # amber
 EQUITY_COLOR = "#42a5f5"  # blue
-PEAK_COLOR   = "#90caf9"  # lighter blue
+PEAK_COLOR = "#90caf9"  # lighter blue
 BREACH_COLOR = "#ff1744"  # bright red
 
 
@@ -80,14 +84,26 @@ def plot_equity_curve(
 
     peak = equity.cummax()
     ax.plot(equity.index, equity.values, color=EQUITY_COLOR, label="Equity")
-    ax.plot(equity.index, peak.values, color=PEAK_COLOR, alpha=0.5, linewidth=0.8, label="Peak equity")
+    ax.plot(
+        equity.index, peak.values, color=PEAK_COLOR, alpha=0.5, linewidth=0.8, label="Peak equity"
+    )
 
     if daily_loss_limit is not None:
-        ax.axhline(initial_balance - daily_loss_limit, color="#ff9800", linewidth=0.9,
-                   linestyle=":", label=f"Daily loss limit (${daily_loss_limit:,.0f})")
+        ax.axhline(
+            initial_balance - daily_loss_limit,
+            color="#ff9800",
+            linewidth=0.9,
+            linestyle=":",
+            label=f"Daily loss limit (${daily_loss_limit:,.0f})",
+        )
     if max_loss_limit is not None:
-        ax.axhline(initial_balance - max_loss_limit, color=BREACH_COLOR, linewidth=0.9,
-                   linestyle=":", label=f"Max loss limit (${max_loss_limit:,.0f})")
+        ax.axhline(
+            initial_balance - max_loss_limit,
+            color=BREACH_COLOR,
+            linewidth=0.9,
+            linestyle=":",
+            label=f"Max loss limit (${max_loss_limit:,.0f})",
+        )
 
     # User preference: do not draw breach vertical lines on equity chart.
 
@@ -164,10 +180,19 @@ def plot_price_with_orders(
     ohlcv = bars[["open", "high", "low", "close"]].copy()
     if "volume" in bars.columns:
         ohlcv["volume"] = bars["volume"]
-    ohlcv = ohlcv.resample(candle_tf).agg({
-        "open": "first", "high": "max", "low": "min", "close": "last",
-        **({} if "volume" not in ohlcv.columns else {"volume": "sum"}),
-    }).dropna()
+    ohlcv = (
+        ohlcv.resample(candle_tf)
+        .agg(
+            {
+                "open": "first",
+                "high": "max",
+                "low": "min",
+                "close": "last",
+                **({} if "volume" not in ohlcv.columns else {"volume": "sum"}),
+            }
+        )
+        .dropna()
+    )
 
     if len(ohlcv) > max_points:
         ohlcv = ohlcv.iloc[-max_points:]
@@ -175,9 +200,10 @@ def plot_price_with_orders(
     # Build addplots for orders — candle-interval binning via floor to candle_tf
     addplots = []
     if trades is not None and not trades.empty and "time" in trades.columns:
-        opens  = trades[trades["type"] == "open"].copy()
-        closes = trades[trades["type"].isin(["close", "forced_close", "eod_close", "stop_close"])].copy()
-        forced = trades[trades["type"].isin(["forced_close", "stop_close"])].copy()
+        opens = trades[trades["type"] == "open"].copy()
+        closes = trades[
+            trades["type"].isin(["close", "forced_close", "eod_close", "stop_close"])
+        ].copy()
 
         min_ts = ohlcv.index.min()
         max_ts = ohlcv.index.max()
@@ -199,7 +225,11 @@ def plot_price_with_orders(
             return candidate
 
         def _make_series(subset: pd.DataFrame, direction: int) -> pd.Series | None:
-            mask = (subset["direction"] == direction) if "direction" in subset.columns else pd.Series(False, index=subset.index)
+            mask = (
+                (subset["direction"] == direction)
+                if "direction" in subset.columns
+                else pd.Series(False, index=subset.index)
+            )
             rows = subset[mask] if "direction" in subset.columns else pd.DataFrame()
             if rows.empty:
                 return None
@@ -209,10 +239,14 @@ def plot_price_with_orders(
                 if candle_ts is None:
                     continue
                 loc = ohlcv.index.get_loc(candle_ts)
-                s.iloc[loc] = ohlcv["low"].iloc[loc] * 0.9995 if direction == 1 else ohlcv["high"].iloc[loc] * 1.0005
+                s.iloc[loc] = (
+                    ohlcv["low"].iloc[loc] * 0.9995
+                    if direction == 1
+                    else ohlcv["high"].iloc[loc] * 1.0005
+                )
             return s
 
-        long_s  = _make_series(opens, 1)
+        long_s = _make_series(opens, 1)
         short_s = _make_series(opens, -1)
 
         close_s = pd.Series(np.nan, index=ohlcv.index)
@@ -228,23 +262,41 @@ def plot_price_with_orders(
                 close_s.iloc[loc] = ohlcv["close"].iloc[loc]
 
         if long_s is not None and long_s.notna().any():
-            addplots.append(mpf.make_addplot(long_s, type="scatter", markersize=80,
-                                              marker="^", color=LONG_COLOR))
+            addplots.append(
+                mpf.make_addplot(
+                    long_s, type="scatter", markersize=80, marker="^", color=LONG_COLOR
+                )
+            )
         if short_s is not None and short_s.notna().any():
-            addplots.append(mpf.make_addplot(short_s, type="scatter", markersize=80,
-                                              marker="v", color=SHORT_COLOR))
+            addplots.append(
+                mpf.make_addplot(
+                    short_s, type="scatter", markersize=80, marker="v", color=SHORT_COLOR
+                )
+            )
         if close_s.notna().any():
-            addplots.append(mpf.make_addplot(close_s, type="scatter", markersize=50,
-                                              marker="x", color=CLOSE_COLOR))
+            addplots.append(
+                mpf.make_addplot(
+                    close_s, type="scatter", markersize=50, marker="x", color=CLOSE_COLOR
+                )
+            )
         if forced_s.notna().any():
-            addplots.append(mpf.make_addplot(forced_s, type="scatter", markersize=80,
-                                              marker="X", color=BREACH_COLOR))
+            addplots.append(
+                mpf.make_addplot(
+                    forced_s, type="scatter", markersize=80, marker="X", color=BREACH_COLOR
+                )
+            )
 
-    mc = mpf.make_marketcolors(up=LONG_COLOR, down=SHORT_COLOR, edge="inherit",
-                                wick="inherit", volume="in")
-    s  = mpf.make_mpf_style(base_mpf_style="yahoo", marketcolors=mc,
-                             facecolor="#ffffff", figcolor="#ffffff",
-                             gridcolor="#e6e6e6", gridstyle="--")
+    mc = mpf.make_marketcolors(
+        up=LONG_COLOR, down=SHORT_COLOR, edge="inherit", wick="inherit", volume="in"
+    )
+    s = mpf.make_mpf_style(
+        base_mpf_style="yahoo",
+        marketcolors=mc,
+        facecolor="#ffffff",
+        figcolor="#ffffff",
+        gridcolor="#e6e6e6",
+        gridstyle="--",
+    )
 
     save_kwargs: dict[str, Any] = {}
     if out_path:
@@ -278,23 +330,54 @@ def _plot_price_line_fallback(bars, trades, max_points, out_path, dpi) -> plt.Fi
     ax.plot(close.index, close.values, color=EQUITY_COLOR, linewidth=0.8, label="Close")
 
     if trades is not None and not trades.empty and "time" in trades.columns:
-        opens  = trades[trades["type"] == "open"]
-        long_opens  = opens[opens.get("direction", pd.Series()) == 1] if "direction" in opens.columns else pd.DataFrame()
-        short_opens = opens[opens.get("direction", pd.Series()) == -1] if "direction" in opens.columns else pd.DataFrame()
+        opens = trades[trades["type"] == "open"]
+        long_opens = (
+            opens[opens.get("direction", pd.Series()) == 1]
+            if "direction" in opens.columns
+            else pd.DataFrame()
+        )
+        short_opens = (
+            opens[opens.get("direction", pd.Series()) == -1]
+            if "direction" in opens.columns
+            else pd.DataFrame()
+        )
         closes = trades[trades["type"].isin(["close", "forced_close", "eod_close"])]
 
         if not long_opens.empty:
-            ax.scatter(long_opens["time"], long_opens["price"] if "price" in long_opens.columns else
-                       close.reindex(long_opens["time"], method="nearest").values,
-                       marker="^", color=LONG_COLOR, s=40, label="Long", zorder=5)
+            ax.scatter(
+                long_opens["time"],
+                long_opens["price"]
+                if "price" in long_opens.columns
+                else close.reindex(long_opens["time"], method="nearest").values,
+                marker="^",
+                color=LONG_COLOR,
+                s=40,
+                label="Long",
+                zorder=5,
+            )
         if not short_opens.empty:
-            ax.scatter(short_opens["time"], short_opens["price"] if "price" in short_opens.columns else
-                       close.reindex(short_opens["time"], method="nearest").values,
-                       marker="v", color=SHORT_COLOR, s=40, label="Short", zorder=5)
+            ax.scatter(
+                short_opens["time"],
+                short_opens["price"]
+                if "price" in short_opens.columns
+                else close.reindex(short_opens["time"], method="nearest").values,
+                marker="v",
+                color=SHORT_COLOR,
+                s=40,
+                label="Short",
+                zorder=5,
+            )
         if not closes.empty and "equity" in closes.columns:
             close_prices = close.reindex(closes["time"], method="nearest")
-            ax.scatter(closes["time"], close_prices.values,
-                       marker="x", color=CLOSE_COLOR, s=30, label="Close", zorder=5)
+            ax.scatter(
+                closes["time"],
+                close_prices.values,
+                marker="x",
+                color=CLOSE_COLOR,
+                s=30,
+                label="Close",
+                zorder=5,
+            )
 
     ax.set_title("Price + Orders", fontweight="bold")
     ax.set_xlabel("Date")
@@ -327,15 +410,17 @@ def plot_trade_pnl_hist(
         return fig
 
     pnl = trades["pnl"].dropna()
-    wins   = pnl[pnl >= 0]
+    wins = pnl[pnl >= 0]
     losses = pnl[pnl < 0]
 
     fig, ax = plt.subplots(figsize=(10, 4))
     bins = min(60, max(10, len(pnl) // 10))
     if not wins.empty:
-        ax.hist(wins.values,   bins=bins, color=LONG_COLOR,  alpha=0.8, label=f"Wins ({len(wins)})")
+        ax.hist(wins.values, bins=bins, color=LONG_COLOR, alpha=0.8, label=f"Wins ({len(wins)})")
     if not losses.empty:
-        ax.hist(losses.values, bins=bins, color=SHORT_COLOR, alpha=0.8, label=f"Losses ({len(losses)})")
+        ax.hist(
+            losses.values, bins=bins, color=SHORT_COLOR, alpha=0.8, label=f"Losses ({len(losses)})"
+        )
     ax.axvline(0, color="#777", linewidth=0.8)
     ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"${x:,.0f}"))
     ax.set_title("Trade PnL Distribution", fontweight="bold")
@@ -364,7 +449,9 @@ def plot_returns_dist(
 
     fig, ax = plt.subplots(figsize=(10, 4))
     bins = min(80, max(20, len(rets) // 50))
-    ax.hist(rets.values * 100, bins=bins, color=EQUITY_COLOR, alpha=0.75, density=True, label="Returns")
+    ax.hist(
+        rets.values * 100, bins=bins, color=EQUITY_COLOR, alpha=0.75, density=True, label="Returns"
+    )
 
     # Normal overlay
     mu, sigma = rets.mean() * 100, rets.std() * 100
@@ -372,6 +459,7 @@ def plot_returns_dist(
         x = np.linspace(mu - 5 * sigma, mu + 5 * sigma, 300)
         try:
             from scipy.stats import norm
+
             ax.plot(x, norm.pdf(x, mu, sigma), color="#333", linewidth=1.0, label="Normal fit")
         except ImportError:
             pass
@@ -399,15 +487,34 @@ def plot_monthly_returns_heatmap(
     monthly = equity.resample("ME").last().pct_change().dropna() * 100
     if monthly.empty:
         fig, ax = plt.subplots(figsize=(8, 3))
-        ax.text(0.5, 0.5, "Insufficient data for monthly heatmap",
-                ha="center", va="center", transform=ax.transAxes)
+        ax.text(
+            0.5,
+            0.5,
+            "Insufficient data for monthly heatmap",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
         if out_path:
             _save(fig, out_path, dpi)
         return fig
 
-    years  = sorted(monthly.index.year.unique())
+    years = sorted(monthly.index.year.unique())
     months = list(range(1, 13))
-    month_labels = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    month_labels = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    ]
 
     matrix = np.full((len(years), 12), np.nan)
     for dt, val in monthly.items():
@@ -428,8 +535,15 @@ def plot_monthly_returns_heatmap(
         for mi in range(12):
             v = matrix[yi, mi]
             if not np.isnan(v):
-                ax.text(mi, yi, f"{v:.1f}%", ha="center", va="center",
-                        fontsize=7, color="#000" if abs(v) < vabs * 0.6 else "#fff")
+                ax.text(
+                    mi,
+                    yi,
+                    f"{v:.1f}%",
+                    ha="center",
+                    va="center",
+                    fontsize=7,
+                    color="#000" if abs(v) < vabs * 0.6 else "#fff",
+                )
 
     plt.colorbar(im, ax=ax, fraction=0.03, label="Monthly Return (%)")
     ax.set_title("Monthly Returns Heatmap", fontweight="bold")
@@ -458,7 +572,7 @@ def plot_baseline_comparison(
         ax.plot(normed.index, normed.values, label=name, color=col)
 
     ax.axhline(1.0, color="#555", linewidth=0.7, linestyle=":")
-    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{(x-1)*100:.0f}%"))
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{(x - 1) * 100:.0f}%"))
     ax.xaxis.set_major_formatter(mdates.AutoDateFormatter(mdates.AutoDateLocator()))
     fig.autofmt_xdate()
     ax.set_title("Strategy Comparison — Normalized Returns", fontweight="bold")
@@ -477,14 +591,33 @@ def plot_baseline_comparison(
 # Trade-pairing helpers (also imported by plots_interactive.py)
 # ---------------------------------------------------------------------------
 
+_CLOSE_TYPES = {"close", "forced_close", "eod_close", "stop_close", "tp_close"}
+
+
 def _pair_trades(trades: pd.DataFrame) -> list[tuple]:
-    """Return a list of (open_row, close_row) Series pairs for each completed trade."""
-    opens  = trades[trades["type"] == "open"].reset_index(drop=True)
-    closes = trades[trades["type"].isin(
-        ["close", "forced_close", "eod_close", "stop_close"]
-    )].reset_index(drop=True)
-    n = min(len(opens), len(closes))
-    return [(opens.iloc[i], closes.iloc[i]) for i in range(n)]
+    """Return a list of (open_row, close_row) Series pairs for each completed trade.
+
+    Walks the trade log in chronological order (the engine appends rows in
+    bar order) with a simple open/close state machine: each ``open`` row is
+    paired with the very next row whose type is in ``_CLOSE_TYPES``. This is
+    robust to *any* close type — including ``tp_close`` — so a take-profit
+    exit can never desync the pairing and cause a later open to be matched
+    with the wrong close (which previously mixed one order's entry/volume
+    with a different order's PnL on the chart).
+    """
+    if "bar" in trades.columns and trades["bar"].notna().any():
+        trades = trades.sort_values("bar", kind="stable")
+
+    pairs: list[tuple] = []
+    pending_open: pd.Series | None = None
+    for _, row in trades.iterrows():
+        row_type = row.get("type")
+        if row_type == "open":
+            pending_open = row
+        elif row_type in _CLOSE_TYPES and pending_open is not None:
+            pairs.append((pending_open, row))
+            pending_open = None
+    return pairs
 
 
 def _extract_window(
@@ -495,7 +628,7 @@ def _extract_window(
 ) -> pd.DataFrame:
     """Return bars[t_open − context : t_close + context] by integer position."""
     idx = bars.index
-    i_o = idx.get_indexer([t_open],  method="nearest")[0]
+    i_o = idx.get_indexer([t_open], method="nearest")[0]
     i_c = idx.get_indexer([t_close], method="nearest")[0]
     if i_o < 0 or i_c < 0:
         return pd.DataFrame(columns=bars.columns)
@@ -509,20 +642,21 @@ def _trade_filename(idx: int, open_row: pd.Series, close_row: pd.Series, ext: st
 
     Format: ``trade_NNNN_YYYYMMDD_HHMMopen_HHMMclose_{L|S}_{p|m}PnL.{ext}``
     """
-    t_open  = pd.Timestamp(open_row["time"])
+    t_open = pd.Timestamp(open_row["time"])
     t_close = pd.Timestamp(close_row["time"])
-    date    = t_open.strftime("%Y%m%d")
-    t_o     = t_open.strftime("%H%M")
-    t_c     = t_close.strftime("%H%M")
-    side    = "L" if open_row.get("direction", 0) == 1 else "S"
-    pnl     = float(close_row["pnl"]) if pd.notna(close_row.get("pnl")) else 0.0
-    sign    = "p" if pnl >= 0 else "m"
+    date = t_open.strftime("%Y%m%d")
+    t_o = t_open.strftime("%H%M")
+    t_c = t_close.strftime("%H%M")
+    side = "L" if open_row.get("direction", 0) == 1 else "S"
+    pnl = float(close_row["pnl"]) if pd.notna(close_row.get("pnl")) else 0.0
+    sign = "p" if pnl >= 0 else "m"
     return f"trade_{idx:04d}_{date}_{t_o}_{t_c}_{side}_{sign}{abs(pnl):.1f}.{ext}"
 
 
 # ---------------------------------------------------------------------------
 # 8. Per-trade M1 candlestick charts (one PNG per trade)
 # ---------------------------------------------------------------------------
+
 
 def plot_per_trade_orders(
     bars: pd.DataFrame,
@@ -560,9 +694,10 @@ def plot_per_trade_orders(
     show_mae_mfe : Whether to plot MAE/MFE lines.
     show_sl_tp : Whether to plot SL/TP lines.
     """
-    from .trade_metrics import compute_trade_metrics
-    from .chart_indicators import compute_chart_overlays_full, slice_overlays
     import matplotlib.dates as mdates
+
+    from .chart_indicators import compute_chart_overlays_full, slice_overlays
+    from .trade_metrics import compute_trade_metrics
 
     orders_dir = Path(orders_dir)
     orders_dir.mkdir(parents=True, exist_ok=True)
@@ -596,7 +731,9 @@ def plot_per_trade_orders(
 
         # Compute metrics
         metrics = compute_trade_metrics(
-            bars, open_row, close_row,
+            bars,
+            open_row,
+            close_row,
             max_loss_per_trade_usd=max_loss_per_trade_usd,
             take_profit_per_trade_usd=take_profit_per_trade_usd,
             lots=lots,
@@ -606,7 +743,8 @@ def plot_per_trade_orders(
 
         # Create 2-panel figure with datetime x-axis
         fig, (ax_price, ax_macd) = plt.subplots(
-            2, 1,
+            2,
+            1,
             figsize=(14, 8),
             gridspec_kw={"height_ratios": [2, 1]},
             sharex=True,
@@ -614,8 +752,7 @@ def plot_per_trade_orders(
 
         # --- Top panel: Candlesticks + EMA50 + Entry/Exit + MAE/MFE/SL/TP ---
         colors_up = [
-            LONG_COLOR if o <= c else SHORT_COLOR
-            for o, c in zip(window["open"], window["close"])
+            LONG_COLOR if o <= c else SHORT_COLOR for o, c in zip(window["open"], window["close"])
         ]
 
         for i, (idx, row) in enumerate(window.iterrows()):
@@ -642,14 +779,19 @@ def plot_per_trade_orders(
 
         # EMA50
         ax_price.plot(
-            window.index, overlays["ema50"],
-            color="#0066cc", linewidth=2, label="EMA50", zorder=3,
+            window.index,
+            overlays["ema50"],
+            color="#0066cc",
+            linewidth=2,
+            label="EMA50",
+            zorder=3,
         )
 
         # Entry marker
         ep_entry = metrics.entry_price
         ax_price.scatter(
-            [t_open], [ep_entry],
+            [t_open],
+            [ep_entry],
             marker="^" if direction == 1 else "v",
             s=200,
             color="#00cc00",
@@ -660,7 +802,8 @@ def plot_per_trade_orders(
         # Exit marker
         ep_exit = metrics.exit_price
         ax_price.scatter(
-            [t_close], [ep_exit],
+            [t_close],
+            [ep_exit],
             marker="v" if direction == 1 else "^",
             s=150,
             color="#ff0000",
@@ -671,32 +814,48 @@ def plot_per_trade_orders(
         # MAE/MFE
         if show_mae_mfe:
             ax_price.axhline(
-                metrics.mae_price, color="#ff6666", linewidth=1, linestyle="--",
-                alpha=0.5, label="MAE",
+                metrics.mae_price,
+                color="#ff6666",
+                linewidth=1,
+                linestyle="--",
+                alpha=0.5,
+                label="MAE",
             )
             ax_price.axhline(
-                metrics.mfe_price, color="#66ff66", linewidth=1, linestyle="--",
-                alpha=0.5, label="MFE",
+                metrics.mfe_price,
+                color="#66ff66",
+                linewidth=1,
+                linestyle="--",
+                alpha=0.5,
+                label="MFE",
             )
 
         # SL/TP
         if show_sl_tp:
             if metrics.sl_price is not None:
                 ax_price.axhline(
-                    metrics.sl_price, color="#ff0000", linewidth=0.8, linestyle=":",
-                    alpha=0.5, label="SL",
+                    metrics.sl_price,
+                    color="#ff0000",
+                    linewidth=0.8,
+                    linestyle=":",
+                    alpha=0.5,
+                    label="SL",
                 )
             if metrics.tp_price is not None:
                 ax_price.axhline(
-                    metrics.tp_price, color="#00cc00", linewidth=0.8, linestyle=":",
-                    alpha=0.5, label="TP",
+                    metrics.tp_price,
+                    color="#00cc00",
+                    linewidth=0.8,
+                    linestyle=":",
+                    alpha=0.5,
+                    label="TP",
                 )
 
         # Formatting
         ax_price.set_ylabel("Price")
         ax_price.legend(loc="upper left", fontsize=8)
         ax_price.grid(True, alpha=0.3)
-        
+
         # Format x-axis as datetime in the bars' own timezone (matplotlib
         # otherwise renders tz-aware datetimes in UTC, which would show
         # tick labels several hours off from the title's local time).
@@ -707,17 +866,25 @@ def plot_per_trade_orders(
 
         # --- Bottom panel: MACD ---
         ax_macd.plot(
-            window.index, overlays["macd"],
-            color="#0066cc", linewidth=1.5, label="MACD",
+            window.index,
+            overlays["macd"],
+            color="#0066cc",
+            linewidth=1.5,
+            label="MACD",
         )
         ax_macd.plot(
-            window.index, overlays["signal"],
-            color="#ff6600", linewidth=1.5, label="Signal",
+            window.index,
+            overlays["signal"],
+            color="#ff6600",
+            linewidth=1.5,
+            label="Signal",
         )
         ax_macd.bar(
-            window.index, overlays["histogram"],
+            window.index,
+            overlays["histogram"],
             color=["#00cc00" if h > 0 else "#ff0000" for h in overlays["histogram"]],
-            alpha=0.3, label="Histogram",
+            alpha=0.3,
+            label="Histogram",
             width=pd.Timedelta("0.8min"),
         )
         ax_macd.axhline(0, color="#000000", linewidth=0.5, linestyle="-", alpha=0.3)
@@ -725,7 +892,7 @@ def plot_per_trade_orders(
         ax_macd.set_xlabel("Time (M1)")
         ax_macd.legend(loc="upper left", fontsize=8)
         ax_macd.grid(True, alpha=0.3)
-        
+
         # Format x-axis as datetime (same tz-aware handling as top panel)
         ax_macd.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M", tz=axis_tz))
         ax_macd.xaxis.set_major_locator(mdates.MinuteLocator(interval=10, tz=axis_tz))
@@ -735,17 +902,31 @@ def plot_per_trade_orders(
         duration_mins = int((t_close - t_open).total_seconds() / 60)
         duration_secs = int((t_close - t_open).total_seconds() % 60)
         lots_val = float(open_row.get("lots", 1.0)) if pd.notna(open_row.get("lots")) else 1.0
-        
+
+        # Reconciliation: recompute PnL from the entry/exit prices shown on
+        # this chart and compare to the logged PnL. A mismatch flags a
+        # pairing bug or a stale/fallback exit price rather than a "weird"
+        # strategy result.
+        pnl_calc = (metrics.exit_price - metrics.entry_price) * direction * lots_val * contract_size
+        close_reason_detail = (
+            str(close_row.get("reason")) if pd.notna(close_row.get("reason")) else close_type
+        )
+
         trade_info = (
             f"Direction: {'Buy' if direction == 1 else 'Sell'}\n"
             f"Open: {metrics.entry_price:.2f}\n"
             f"Close: {metrics.exit_price:.2f}\n"
             f"Volume: {lots_val:.2f}\n"
-            f"Duration: {duration_mins}m{duration_secs}s"
+            f"Duration: {duration_mins}m{duration_secs}s\n"
+            f"PnL (logged): {pnl:+.2f}\n"
+            f"PnL (calc): {pnl_calc:+.2f}\n"
+            f"Reason: {close_reason_detail}"
         )
         props = dict(boxstyle="round", facecolor="wheat", alpha=0.8)
         ax_price.text(
-            0.98, 0.02, trade_info,
+            0.98,
+            0.02,
+            trade_info,
             transform=ax_price.transAxes,
             fontsize=9,
             verticalalignment="bottom",
@@ -772,4 +953,3 @@ def plot_per_trade_orders(
             plt.close(fig)
         except Exception as exc:
             log.debug("Skipping per-trade PNG %d: %s", seq_i + 1, exc)
-

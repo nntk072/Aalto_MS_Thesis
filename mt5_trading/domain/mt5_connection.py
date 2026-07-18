@@ -5,7 +5,9 @@ import MetaTrader5 as mt5
 from loguru import logger
 
 
-def ensure_mt5_logged_in(*, login: str | int, password: str, server: str, terminal_path: str) -> None:
+def ensure_mt5_logged_in(
+    *, login: str | int, password: str, server: str, terminal_path: str
+) -> None:
     """
     Initialize the MT5 terminal and login once per process.
     Safe to call multiple times; it won't re-login if already on the same account.

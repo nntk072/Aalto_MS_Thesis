@@ -31,6 +31,7 @@ Usage::
         cfg=cfg,
     )
 """
+
 from __future__ import annotations
 
 import json
@@ -42,7 +43,7 @@ from typing import Any
 import pandas as pd
 
 from .metrics import Metrics
-from .report import build_summary_table, build_comparison_table, save_metrics_json
+from .report import build_comparison_table, build_summary_table, save_metrics_json
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +51,7 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def build_run_dir(base: str | Path, name: str) -> Path:
     """Return a new timestamped directory path (does not create it yet)."""
@@ -62,7 +64,7 @@ def _extract_ftmo_limits(cfg: Any) -> tuple[float | None, float | None]:
     if cfg is not None:
         try:
             daily_loss_limit = cfg.ftmo.daily_loss_limit
-            max_loss_limit   = cfg.ftmo.max_loss_limit
+            max_loss_limit = cfg.ftmo.max_loss_limit
         except Exception:
             pass
     return daily_loss_limit, max_loss_limit
@@ -86,9 +88,19 @@ def _extract_trade_chart_config(cfg: Any) -> dict[str, Any]:
             # This fallback is only used for legacy fixed-USD-TP mode
             if hasattr(cfg.account, "lots"):
                 config["lots"] = cfg.account.lots
-            config["contract_size"] = cfg.account.contract_size if hasattr(cfg.account, "contract_size") else 1.0
-            config["show_mae_mfe"] = cfg.output.trade_chart_show_mae_mfe if hasattr(cfg.output, "trade_chart_show_mae_mfe") else True
-            config["show_sl_tp"] = cfg.output.trade_chart_show_sl_tp if hasattr(cfg.output, "trade_chart_show_sl_tp") else True
+            config["contract_size"] = (
+                cfg.account.contract_size if hasattr(cfg.account, "contract_size") else 1.0
+            )
+            config["show_mae_mfe"] = (
+                cfg.output.trade_chart_show_mae_mfe
+                if hasattr(cfg.output, "trade_chart_show_mae_mfe")
+                else True
+            )
+            config["show_sl_tp"] = (
+                cfg.output.trade_chart_show_sl_tp
+                if hasattr(cfg.output, "trade_chart_show_sl_tp")
+                else True
+            )
         except Exception:
             pass
     return config
@@ -97,6 +109,7 @@ def _extract_trade_chart_config(cfg: Any) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Per-split writer (all data + charts for one split go into one subfolder)
 # ---------------------------------------------------------------------------
+
 
 def _write_split(
     split_dir: Path,
@@ -120,10 +133,10 @@ def _write_split(
     """Write all data + charts for one split into *split_dir*."""
     split_dir.mkdir(parents=True, exist_ok=True)
 
-    equity: pd.Series         = result.get("equity", pd.Series(dtype=float))
-    trades: pd.DataFrame      = result.get("trades", pd.DataFrame())
+    equity: pd.Series = result.get("equity", pd.Series(dtype=float))
+    trades: pd.DataFrame = result.get("trades", pd.DataFrame())
     breach_events: list[dict] = result.get("breach_events", [])
-    initial_balance: float    = result.get("initial_balance", 100_000.0)
+    initial_balance: float = result.get("initial_balance", 100_000.0)
 
     # ------------------------------------------------------------------
     # CSVs + diagnostics
@@ -136,10 +149,10 @@ def _write_split(
         if breach_events:
             pd.DataFrame(breach_events).to_csv(split_dir / "breach_events.csv", index=False)
         session_diag = {
-            "n_sessions":             result.get("n_sessions", 0),
-            "n_breach_sessions":      result.get("n_breach_sessions", 0),
+            "n_sessions": result.get("n_sessions", 0),
+            "n_breach_sessions": result.get("n_breach_sessions", 0),
             "n_sessions_with_trades": result.get("n_sessions_with_trades", 0),
-            "n_sessions_skipped":     result.get("n_sessions_skipped", 0),
+            "n_sessions_skipped": result.get("n_sessions_skipped", 0),
         }
         (split_dir / "session_activity.json").write_text(json.dumps(session_diag, indent=2))
 
@@ -156,11 +169,13 @@ def _write_split(
         from . import plots as _plt
 
         _plt.plot_equity_curve(
-            equity, breach_events=breach_events,
+            equity,
+            breach_events=breach_events,
             initial_balance=initial_balance,
             daily_loss_limit=daily_loss_limit,
             max_loss_limit=max_loss_limit,
-            out_path=split_dir / "equity.png", dpi=dpi,
+            out_path=split_dir / "equity.png",
+            dpi=dpi,
         )
         _plt.plot_drawdown(equity, out_path=split_dir / "drawdown.png", dpi=dpi)
 
@@ -174,7 +189,8 @@ def _write_split(
 
         if bars is not None and not trades.empty:
             _plt.plot_per_trade_orders(
-                bars, trades,
+                bars,
+                trades,
                 orders_dir=split_dir / "orders",
                 max_charts=max_order_charts,
                 dpi=dpi,
@@ -194,7 +210,8 @@ def _write_split(
             from . import plots_interactive as _pi
 
             _pi.plot_equity_curve(
-                equity, breach_events=breach_events,
+                equity,
+                breach_events=breach_events,
                 initial_balance=initial_balance,
                 daily_loss_limit=daily_loss_limit,
                 max_loss_limit=max_loss_limit,
@@ -210,7 +227,8 @@ def _write_split(
 
             if bars is not None and not trades.empty:
                 _pi.plot_per_trade_orders(
-                    bars, trades,
+                    bars,
+                    trades,
                     orders_dir=split_dir / "orders",
                     max_charts=max_order_charts,
                     max_loss_per_trade_usd=max_loss_per_trade_usd,
@@ -227,6 +245,7 @@ def _write_split(
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def save_run(
     out_dir: str | Path = "outputs",
@@ -275,6 +294,7 @@ def save_run(
     if cfg is not None:
         try:
             from omegaconf import OmegaConf
+
             (run_dir / "config.yaml").write_text(OmegaConf.to_yaml(cfg))
         except Exception:
             pass
@@ -288,25 +308,20 @@ def save_run(
         dpi=dpi,
         max_order_charts=max_order_charts,
     )
-    
+
     # Add trade chart configuration from config
     trade_chart_config = _extract_trade_chart_config(cfg)
     split_kwargs.update(trade_chart_config)
 
     if train_result is not None and train_metrics is not None:
-        _write_split(run_dir / "training", train_result, train_metrics,
-                     train_bars, **split_kwargs)
+        _write_split(run_dir / "training", train_result, train_metrics, train_bars, **split_kwargs)
 
     if test_result is not None and test_metrics is not None:
-        _write_split(run_dir / "testing", test_result, test_metrics,
-                     test_bars, **split_kwargs)
+        _write_split(run_dir / "testing", test_result, test_metrics, test_bars, **split_kwargs)
 
     # Comparison summary at root
     if train_metrics is not None:
-        (run_dir / "summary.txt").write_text(
-            build_comparison_table(train_metrics, test_metrics)
-        )
+        (run_dir / "summary.txt").write_text(build_comparison_table(train_metrics, test_metrics))
 
     log.info("Run saved: %s", run_dir)
     return run_dir
-

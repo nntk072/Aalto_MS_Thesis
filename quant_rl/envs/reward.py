@@ -8,6 +8,7 @@ We also add:
 - Cost term (already captured in PnL but can be explicit)
 - Hard breach → terminal negative reward
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -17,9 +18,9 @@ class DSRReward:
     """Online differential Sharpe reward with FTMO soft penalties."""
 
     def __init__(self, eta: float = 0.01) -> None:
-        self.eta = eta          # EMA damping for A and B estimates
-        self._A: float = 0.0   # EMA of returns
-        self._B: float = 0.0   # EMA of squared returns
+        self.eta = eta  # EMA damping for A and B estimates
+        self._A: float = 0.0  # EMA of returns
+        self._B: float = 0.0  # EMA of squared returns
 
     def reset(self) -> None:
         self._A = 0.0
@@ -57,15 +58,13 @@ class DSRReward:
         A_prev = self._A
         B_prev = self._B
         self._A = A_prev + self.eta * (r - A_prev)
-        self._B = B_prev + self.eta * (r ** 2 - B_prev)
+        self._B = B_prev + self.eta * (r**2 - B_prev)
 
-        denom = (self._B - self._A ** 2)
+        denom = self._B - self._A**2
         if denom <= 1e-10:
             dsr = 0.0
         else:
-            dsr = (self._B * (r - A_prev) - 0.5 * self._A * (r ** 2 - B_prev)) / (
-                denom ** 1.5
-            )
+            dsr = (self._B * (r - A_prev) - 0.5 * self._A * (r**2 - B_prev)) / (denom**1.5)
 
         # Soft FTMO daily-loss proximity penalty (linear ramp in last 20% of limit)
         threshold = 0.8 * daily_loss_limit

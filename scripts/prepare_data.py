@@ -6,6 +6,7 @@ Usage
     python scripts/prepare_data.py
     python scripts/prepare_data.py data.cache_dir=my_cache features.window=60 --force
 """
+
 from __future__ import annotations
 
 import sys

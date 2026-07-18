@@ -1,15 +1,17 @@
 """Compute trade-level chart metrics: MAE, MFE, SL, TP price levels and timestamps."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 
 @dataclass
 class TradeChartMetrics:
     """Chart overlay metrics for a single trade.
-    
+
     Attributes
     ----------
     entry_price : float
@@ -31,6 +33,7 @@ class TradeChartMetrics:
     tp_price : float | None
         Take Profit level based on take_profit_per_trade_usd. None if not configured.
     """
+
     entry_price: float
     exit_price: float
     direction: int
@@ -52,14 +55,14 @@ def compute_trade_metrics(
     contract_size: float = 1.0,
 ) -> TradeChartMetrics:
     """Compute chart metrics for a single trade.
-    
+
     Extracts the trade window from open time to close time (inclusive),
     computes MAE/MFE from in-trade bar extrema, and obtains SL/TP levels
     from trade log (if available) or computes from configuration limits.
-    
+
     If open_row contains 'sl_price' or 'tp_price' (logged by structure-aware engine),
     those values take precedence over computed defaults.
-    
+
     Parameters
     ----------
     bars : pd.DataFrame
@@ -76,7 +79,7 @@ def compute_trade_metrics(
         Position size in lots (default 1.0).
     contract_size : float
         Contract size (default 1.0).
-    
+
     Returns
     -------
     TradeChartMetrics
@@ -87,37 +90,39 @@ def compute_trade_metrics(
     direction = int(open_row["direction"]) if pd.notna(open_row.get("direction")) else 0
     entry_price = float(open_row["price"]) if pd.notna(open_row.get("price")) else np.nan
     exit_price = float(close_row["price"]) if pd.notna(close_row.get("price")) else np.nan
-    
+
     # Extract bars within [t_open, t_close]
     trade_bars = bars.loc[(bars.index >= t_open) & (bars.index <= t_close)]
-    
+
     # Fallback: if exit_price is nan, use close price from the close bar
     if np.isnan(exit_price) and len(trade_bars) > 0:
         exit_price = trade_bars["close"].iloc[-1]
-    
+
     # Compute MAE and MFE
+    mfe_idx: pd.Timestamp
+    mae_idx: pd.Timestamp
     if len(trade_bars) > 0:
         if direction == 1:  # Long
             mfe_price = trade_bars["high"].max()
             mae_price = trade_bars["low"].min()
-            mfe_idx = trade_bars["high"].idxmax()
-            mae_idx = trade_bars["low"].idxmin()
+            mfe_idx = pd.Timestamp(trade_bars["high"].idxmax())
+            mae_idx = pd.Timestamp(trade_bars["low"].idxmin())
         else:  # Short (-1)
             mfe_price = trade_bars["low"].min()
             mae_price = trade_bars["high"].max()
-            mfe_idx = trade_bars["low"].idxmin()
-            mae_idx = trade_bars["high"].idxmax()
+            mfe_idx = pd.Timestamp(trade_bars["low"].idxmin())
+            mae_idx = pd.Timestamp(trade_bars["high"].idxmax())
     else:
         # Fallback if no bars in window
         mfe_price = entry_price
         mae_price = entry_price
         mfe_idx = t_open
         mae_idx = t_open
-    
+
     # Compute SL and TP levels
     sl_price = None
     tp_price = None
-    
+
     # Prefer per-trade SL/TP from trade log (structure-aware)
     if pd.notna(open_row.get("sl_price")):
         sl_price = float(open_row["sl_price"])
@@ -128,7 +133,7 @@ def compute_trade_metrics(
             sl_price = entry_price - price_move
         else:  # Short
             sl_price = entry_price + price_move
-    
+
     # Prefer per-trade TP from trade log (structure-aware)
     if pd.notna(open_row.get("tp_price")):
         tp_price = float(open_row["tp_price"])
@@ -139,7 +144,7 @@ def compute_trade_metrics(
             tp_price = entry_price + price_move
         else:  # Short
             tp_price = entry_price - price_move
-    
+
     return TradeChartMetrics(
         entry_price=entry_price,
         exit_price=exit_price,

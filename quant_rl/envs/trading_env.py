@@ -7,23 +7,25 @@ Wraps the backtest engine with a standard Gym interface. Actions are hybrid:
 Observation: Dict space with time-series features (60-bar window) + account state.
 Reward: Differential Sharpe Ratio (DSR) + small penalties for poor structure usage.
 """
+
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, cast
 
 import gymnasium as gym
 import numpy as np
 import pandas as pd
 from gymnasium import spaces
 
+from ..backtest.account import AccountState
 from ..backtest.broker import Broker, Position
-from ..backtest.costs import CostModel, COST_US100
+from ..backtest.costs import COST_US100, CostModel
 from ..backtest.guardrails import FTMOGuardrails
 from ..backtest.risk import compute_lots, compute_sl_tp_long, compute_sl_tp_short
 from ..envs.reward import DSRReward
 
 
-class TradingEnv(gym.Env):
+class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
     """RL trading environment with structure-aware SL/TP and hybrid action space."""
 
     metadata = {"render_modes": []}
@@ -35,8 +37,8 @@ class TradingEnv(gym.Env):
         obs_window: int = 60,
         initial_balance: float = 100_000.0,
         cost_model: CostModel = COST_US100,
-        broker_kwargs: dict | None = None,
-        guardrail_kwargs: dict | None = None,
+        broker_kwargs: dict[str, Any] | None = None,
+        guardrail_kwargs: dict[str, Any] | None = None,
         risk_frac_range: tuple[float, float] = (0.005, 0.02),
         rr_ratio_range: tuple[float, float] = (1.0, 3.0),
         swing_buffer_pts: float = 1.0,
@@ -45,6 +47,7 @@ class TradingEnv(gym.Env):
         contract_size: float = 1.0,
         max_loss_per_trade_usd: float = 100.0,
         dsr_eta: float = 0.01,
+        episodic: bool = True,
     ):
         """Initialize trading environment.
 
@@ -78,6 +81,15 @@ class TradingEnv(gym.Env):
             Safety cap on per-trade loss.
         dsr_eta : float
             Differential Sharpe Ratio damping factor.
+        episodic : bool
+            If ``True`` (default, used for PPO training), a guardrail breach
+            ends the episode (``done=True``) exactly as before. If ``False``
+            (used for walk-forward evaluation/rollout), a breach force-closes
+            any open position and blocks new trades for the rest of that
+            ``session_id`` (calendar day), then trading resumes on the next
+            session — mirroring ``quant_rl.backtest.engine.run_backtest`` — so
+            a single call to ``reset()`` + repeated ``step()`` calls can walk
+            the *entire* test set without terminating early.
         """
         self.bars = bars
         self.features = features
@@ -94,6 +106,7 @@ class TradingEnv(gym.Env):
         self.max_lot = max_lot
         self.contract_size = contract_size
         self.max_loss_per_trade_usd = max_loss_per_trade_usd
+        self.episodic = episodic
 
         self.reward_fn = DSRReward(eta=dsr_eta)
 
@@ -125,7 +138,11 @@ class TradingEnv(gym.Env):
 
         self.reset()
 
-    def reset(self, seed: int | None = None, options: dict | None = None) -> tuple[dict, dict]:
+    def reset(
+        self,
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[dict[str, np.ndarray[Any, Any]], dict[str, Any]]:
         """Reset environment to initial state."""
         super().reset(seed=seed, options=options)
 
@@ -134,26 +151,34 @@ class TradingEnv(gym.Env):
         self.position: Position | None = None
         self.equity_curve = [self.initial_balance]
         self.pnl_history = [0.0]
-        self.trade_log = []
+        self.trade_log: list[dict[str, Any]] = []
+
+        # Eval-mode (episodic=False) walk-forward bookkeeping. Harmless but
+        # unused when episodic=True (training).
+        self.prev_session: int | None = None
+        self.breached_sessions: set[int] = set()
+        self.sessions_with_trades: set[int] = set()
+        self.all_sessions: set[int] = set()
+        self.breach_log: list[str] = []
+        self.breach_events: list[dict[str, Any]] = []
 
         obs = self._get_observation()
         return obs, {}
 
-    def _create_account(self):
+    def _create_account(self) -> AccountState:
         """Factory for fresh account state."""
-        from ..backtest.account import AccountState
-
         return AccountState(initial_balance=self.initial_balance)
 
-    def step(self, action: dict) -> tuple[dict, float, bool, bool, dict]:
+    def step(
+        self,
+        action: int,
+    ) -> tuple[dict[str, np.ndarray[Any, Any]], float, bool, bool, dict[str, Any]]:
         """Execute one step.
 
         Parameters
         ----------
-        action : dict
-            {"discrete": int, "continuous": np.ndarray}
-            discrete: 0=hold, 1=enter_long, 2=enter_short, 3=exit
-            continuous: [risk_frac_normalized, rr_ratio_normalized] in [0, 1]
+        action : int
+            0=hold, 1-9=enter_long variants, 10-18=enter_short variants, 19=exit
         """
         if self.step_idx >= len(self.bars):
             done = True
@@ -163,6 +188,13 @@ class TradingEnv(gym.Env):
         bar = self.bars.iloc[self.step_idx]
         feat_row = self.features.iloc[self.step_idx]
         bar_time = self.bars.index[self.step_idx]
+        session_id = int(bar["session_id"]) if "session_id" in bar.index else 0
+
+        if not self.episodic:
+            self.all_sessions.add(session_id)
+            if session_id != self.prev_session:
+                self.account.reset_daily()
+                self.prev_session = session_id
 
         # Mark-to-market
         bid, ask = self._bar_quote(bar)
@@ -171,7 +203,6 @@ class TradingEnv(gym.Env):
 
         # Fill quote for next action
         if self.step_idx + 1 < len(self.bars):
-            fill_instant = self.bars.index[self.step_idx + 1]
             next_bar = self.bars.iloc[self.step_idx + 1]
             fill_bid, fill_ask = self._bar_quote(next_bar)
         else:
@@ -184,8 +215,8 @@ class TradingEnv(gym.Env):
         # 19: exit
         discrete_action = 0  # default hold
         risk_frac = self.risk_frac_range[0]  # default
-        rr_ratio = self.rr_ratio_range[0]    # default
-        
+        rr_ratio = self.rr_ratio_range[0]  # default
+
         if action == 0:
             discrete_action = 0  # hold
         elif 1 <= action <= 9:
@@ -193,7 +224,7 @@ class TradingEnv(gym.Env):
             # Map to risk/rr: low/med/high × low/med/high
             idx = action - 1
             risk_variant = idx // 3  # 0, 1, 2
-            rr_variant = idx % 3     # 0, 1, 2
+            rr_variant = idx % 3  # 0, 1, 2
             risk_levels = [
                 self.risk_frac_range[0],
                 (self.risk_frac_range[0] + self.risk_frac_range[1]) / 2,
@@ -227,16 +258,55 @@ class TradingEnv(gym.Env):
             discrete_action = 0  # exit action mapped to hold, exit handled below
 
         # Check guardrails
-        reason = self.guardrails.breach_reason(self.account)
+        if self.episodic:
+            reason = self.guardrails.breach_reason(self.account)
+            session_blocked = False
+        else:
+            # Eval mode: a breach blocks new trading for the rest of this
+            # session (calendar day) instead of ending the whole rollout —
+            # mirrors run_backtest's `breached_sessions` handling so a fresh
+            # breach is recorded/force-closed exactly once per session.
+            session_blocked = session_id in self.breached_sessions
+            reason = None if session_blocked else self.guardrails.breach_reason(self.account)
+            if reason:
+                self.breached_sessions.add(session_id)
+                session_blocked = True
+
         if reason:
             if self.position is not None:
-                pnl = self.broker.close_position(self.account, self.position, (fill_bid, fill_ask))
+                pnl, fill_price = self.broker.close_position(
+                    self.account, self.position, (fill_bid, fill_ask)
+                )
                 self.trade_log.append(
-                    {"type": "forced_close", "pnl": pnl, "reason": reason, "time": bar_time}
+                    {
+                        "type": "forced_close",
+                        "pnl": pnl,
+                        "price": fill_price,
+                        "reason": reason,
+                        "bar": self.step_idx,
+                        "time": bar_time,
+                        "equity": self.account.equity,
+                    }
                 )
                 self.position = None
-            done = True
-            truncated = True
+                self.sessions_with_trades.add(session_id)
+            if not self.episodic:
+                self.breach_log.append(reason)
+                self.breach_events.append(
+                    {
+                        "time": bar_time,
+                        "session_id": session_id,
+                        "reason": reason,
+                        "equity": self.account.equity,
+                    }
+                )
+            done = self.episodic
+            truncated = self.episodic
+        elif session_blocked:
+            # Already breached earlier today (eval mode only): no new
+            # trading until the next session, but keep the rollout going.
+            done = False
+            truncated = False
         else:
             done = False
             truncated = False
@@ -247,46 +317,96 @@ class TradingEnv(gym.Env):
                 if self.position.sl_price is not None:
                     if self.position.direction == 1 and float(bar["low"]) <= self.position.sl_price:
                         sl_hit = True
-                    elif self.position.direction == -1 and float(bar["high"]) >= self.position.sl_price:
+                    elif (
+                        self.position.direction == -1
+                        and float(bar["high"]) >= self.position.sl_price
+                    ):
                         sl_hit = True
 
                 if sl_hit:
-                    pnl = self.broker.close_position(self.account, self.position, (fill_bid, fill_ask))
+                    pnl, fill_price = self.broker.close_position(
+                        self.account, self.position, (fill_bid, fill_ask)
+                    )
                     self.trade_log.append(
-                        {"type": "stop_close", "pnl": pnl, "reason": "structure_sl", "time": bar_time}
+                        {
+                            "type": "stop_close",
+                            "pnl": pnl,
+                            "price": fill_price,
+                            "reason": "structure_sl",
+                            "bar": self.step_idx,
+                            "time": bar_time,
+                            "equity": self.account.equity,
+                        }
                     )
                     self.position = None
+                    self.sessions_with_trades.add(session_id)
                 elif self.position.tp_price is not None:
                     tp_hit = False
-                    if self.position.direction == 1 and float(bar["high"]) >= self.position.tp_price:
+                    if (
+                        self.position.direction == 1
+                        and float(bar["high"]) >= self.position.tp_price
+                    ):
                         tp_hit = True
-                    elif self.position.direction == -1 and float(bar["low"]) <= self.position.tp_price:
+                    elif (
+                        self.position.direction == -1
+                        and float(bar["low"]) <= self.position.tp_price
+                    ):
                         tp_hit = True
 
                     if tp_hit:
-                        pnl = self.broker.close_position(self.account, self.position, (fill_bid, fill_ask))
+                        pnl, fill_price = self.broker.close_position(
+                            self.account, self.position, (fill_bid, fill_ask)
+                        )
                         self.trade_log.append(
                             {
                                 "type": "tp_close",
                                 "pnl": pnl,
+                                "price": fill_price,
                                 "reason": "structure_tp",
+                                "bar": self.step_idx,
                                 "time": bar_time,
+                                "equity": self.account.equity,
                             }
                         )
                         self.position = None
+                        self.sessions_with_trades.add(session_id)
 
             # Action handling
             if not done:
                 if action == 19:  # exit action
                     if self.position is not None:
-                        pnl = self.broker.close_position(self.account, self.position, (fill_bid, fill_ask))
-                        self.trade_log.append({"type": "close", "pnl": pnl, "time": bar_time})
+                        pnl, fill_price = self.broker.close_position(
+                            self.account, self.position, (fill_bid, fill_ask)
+                        )
+                        self.trade_log.append(
+                            {
+                                "type": "close",
+                                "pnl": pnl,
+                                "price": fill_price,
+                                "bar": self.step_idx,
+                                "time": bar_time,
+                                "equity": self.account.equity,
+                            }
+                        )
                         self.position = None
+                        self.sessions_with_trades.add(session_id)
                 elif discrete_action != 0:  # enter_long or enter_short
                     if self.position is not None and self.position.direction != discrete_action:
-                        pnl = self.broker.close_position(self.account, self.position, (fill_bid, fill_ask))
-                        self.trade_log.append({"type": "close", "pnl": pnl, "time": bar_time})
+                        pnl, fill_price = self.broker.close_position(
+                            self.account, self.position, (fill_bid, fill_ask)
+                        )
+                        self.trade_log.append(
+                            {
+                                "type": "close",
+                                "pnl": pnl,
+                                "price": fill_price,
+                                "bar": self.step_idx,
+                                "time": bar_time,
+                                "equity": self.account.equity,
+                            }
+                        )
                         self.position = None
+                        self.sessions_with_trades.add(session_id)
 
                     if self.position is None and discrete_action in [1, -1]:
                         # Try to compute structure SL/TP
@@ -295,12 +415,14 @@ class TradingEnv(gym.Env):
 
                         last_swing_low = (
                             float(feat_row["last_swing_low"])
-                            if "last_swing_low" in feat_row.index and pd.notna(feat_row["last_swing_low"])
+                            if "last_swing_low" in feat_row.index
+                            and pd.notna(feat_row["last_swing_low"])
                             else np.nan
                         )
                         last_swing_high = (
                             float(feat_row["last_swing_high"])
-                            if "last_swing_high" in feat_row.index and pd.notna(feat_row["last_swing_high"])
+                            if "last_swing_high" in feat_row.index
+                            and pd.notna(feat_row["last_swing_high"])
                             else np.nan
                         )
 
@@ -359,9 +481,14 @@ class TradingEnv(gym.Env):
                                     "lots": self.position.size,
                                     "sl_price": sl_price,
                                     "tp_price": tp_price,
+                                    "risk_frac": risk_frac,
+                                    "rr_ratio": rr_ratio,
+                                    "bar": self.step_idx,
                                     "time": bar_time,
+                                    "equity": self.account.equity,
                                 }
                             )
+                            self.sessions_with_trades.add(session_id)
 
         self.equity_curve.append(self.account.equity)
         pnl_step = self.account.equity - self.equity_curve[-2]
@@ -397,23 +524,23 @@ class TradingEnv(gym.Env):
             bar_spread = None
         return self.cost_model.bar_quote(float(bar["close"]), bar_spread=bar_spread)
 
-    def _get_observation(self) -> dict[str, np.ndarray]:
+    def _get_observation(self) -> dict[str, np.ndarray[Any, Any]]:
         """Construct observation dict."""
         # Time-series features
         start_idx = max(0, self.step_idx - self.obs_window)
-        seq = self.features.iloc[start_idx : self.step_idx].values.astype(np.float32)
-        seq = np.nan_to_num(seq, nan=0.0)
+        seq = np.asarray(self.features.iloc[start_idx : self.step_idx].values, dtype=np.float32)
+        seq = cast(np.ndarray[Any, Any], np.nan_to_num(seq, nan=0.0))
         # Pad if needed
         if len(seq) < self.obs_window:
             pad_width = ((self.obs_window - len(seq), 0), (0, 0))
-            seq = np.pad(seq, pad_width, mode="constant", constant_values=0.0)
+            seq = cast(
+                np.ndarray[Any, Any], np.pad(seq, pad_width, mode="constant", constant_values=0.0)
+            )
 
         # Account state
         pos_dir = float(self.position.direction) if self.position is not None else 0.0
         open_pnl = float(self.account.open_pnl) if self.position is not None else 0.0
-        unrealised_r = (
-            (open_pnl / self.account.equity * 100) if self.account.equity > 0 else 0.0
-        )
+        unrealised_r = (open_pnl / self.account.equity * 100) if self.account.equity > 0 else 0.0
         dist_to_sl = 0.0
         if self.position is not None and self.position.sl_price is not None:
             dist_to_sl = (

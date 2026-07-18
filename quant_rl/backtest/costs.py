@@ -1,4 +1,5 @@
 """Transaction cost model: spread, slippage, commission."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,11 +9,11 @@ from dataclasses import dataclass
 class CostModel:
     """Holds cost parameters and computes fill costs."""
 
-    spread_points: float = 0.6         # US100 default
+    spread_points: float = 0.6  # US100 default
     slippage_points: float = 0.0
-    commission_per_lot: float = 0.0    # 0 as per spec
-    point_value: float = 1.0           # $ per point per unit of contract_size
-    point_size: float = 0.01           # minimum price increment (e.g., 0.01 for US100)
+    commission_per_lot: float = 0.0  # 0 as per spec
+    point_value: float = 1.0  # $ per point per unit of contract_size
+    point_size: float = 0.01  # minimum price increment (e.g., 0.01 for US100)
 
     def total_cost(self, lots: float, direction: int | None = None) -> float:
         """Return the explicit transaction cost for one side of a trade.
@@ -35,7 +36,7 @@ class CostModel:
         Direction mapping:
         - ``+1``: buy side (ask)
         - ``-1``: sell side (bid)
-        
+
         Parameters
         ----------
         bid : float
@@ -52,17 +53,17 @@ class CostModel:
 
     def bar_quote(self, close: float, bar_spread: float | None = None) -> tuple[float, float]:
         """Derive bid/ask from close price using spread.
-        
+
         In MT5 data, close is typically the bid price.
         Ask is derived as bid + spread.
-        
+
         Parameters
         ----------
         close : float
             Bar close price (MT5 close = bid)
         bar_spread : float | None
             Spread in points from data, or use default
-        
+
         Returns
         -------
         tuple[float, float]

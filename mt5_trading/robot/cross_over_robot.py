@@ -46,7 +46,7 @@ class CrossOverRobot:
         self.trader = trader
         self.strategy = strategy
         self.magic_number = 20240100
-        self.name = 'Cross Over'
+        self.name = "Cross Over"
         logger.info("Starting CrossOver Robot")
 
     def trade(self):
@@ -65,12 +65,13 @@ class CrossOverRobot:
                     self.volume,
                     mt5.ORDER_TYPE_BUY,
                     "CrossOver buy position",
-                    self.magic_number
+                    self.magic_number,
                 )
                 if result is None:
                     return  # Exit if AutoTrading is disabled
                 logger.info(
-                    f"Buy position opened: Order #{result.order}, Volume: {result.volume}, Price: {result.price}")
+                    f"Buy position opened: Order #{result.order}, Volume: {result.volume}, Price: {result.price}"
+                )
 
             total, _ = self.trader.get_opened_positions(symbol, mt5.ORDER_TYPE_SELL)
             if total > 0:
@@ -86,12 +87,13 @@ class CrossOverRobot:
                     self.volume,
                     mt5.ORDER_TYPE_SELL,
                     "CrossOver sell position",
-                    self.magic_number
+                    self.magic_number,
                 )
                 if result is None:
                     return  # Exit if AutoTrading is disabled
                 logger.info(
-                    f"Sell position opened: Order #{result.order}, Volume: {result.volume}, Price: {result.price}")
+                    f"Sell position opened: Order #{result.order}, Volume: {result.volume}, Price: {result.price}"
+                )
 
             total, _ = self.trader.get_opened_positions(symbol, mt5.ORDER_TYPE_BUY)
             if total > 0:

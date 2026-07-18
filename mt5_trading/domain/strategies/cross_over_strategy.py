@@ -1,8 +1,8 @@
-import talib
 import pandas as pd
+import talib
 from loguru import logger
 
-from mt5_trading.adapters import TradingStrategy, TradingData
+from mt5_trading.adapters import TradingData, TradingStrategy
 from mt5_trading.domain.signal import Signal
 
 
@@ -27,10 +27,8 @@ class CrossOverStrategy(TradingStrategy):
         last_buy = bool(buy_condition.iloc[-1])
         last_sell = bool(sell_condition.iloc[-1])
 
-
         if last_buy and not last_sell:
             return symbol, Signal.BUY
         if last_sell and not last_buy:
             return symbol, Signal.SELL
         return symbol, Signal.NONE
-

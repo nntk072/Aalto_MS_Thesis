@@ -8,6 +8,7 @@ Usage
     model.learn(total_timesteps=cfg.ppo.total_timesteps)
     model.save("models/ppo_trading")
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -17,6 +18,7 @@ from omegaconf import DictConfig
 try:
     from stable_baselines3 import PPO
     from stable_baselines3.common.vec_env import DummyVecEnv
+
     _SB3_AVAILABLE = True
 except ImportError:
     _SB3_AVAILABLE = False

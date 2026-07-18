@@ -12,6 +12,7 @@ Mark-to-market also uses the close-side price:
 * Long MTM   → valued at bid
 * Short MTM  → valued at ask
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -20,27 +21,26 @@ from typing import Literal
 from .account import AccountState
 from .costs import CostModel
 
-
 Direction = Literal[-1, 0, 1]
-Quote = tuple[float, float]   # (bid, ask)
+Quote = tuple[float, float]  # (bid, ask)
 
 
 @dataclass
 class Position:
-    direction: int          # +1 long, -1 short
-    size: float             # lots
+    direction: int  # +1 long, -1 short
+    size: float  # lots
     entry_price: float
     margin_used: float
-    sl_price: float | None = None       # stop loss price level
-    tp_price: float | None = None       # take profit price level
-    risk_frac: float | None = None      # risk fraction used for sizing
-    rr_ratio: float | None = None       # reward/risk ratio
+    sl_price: float | None = None  # stop loss price level
+    tp_price: float | None = None  # take profit price level
+    risk_frac: float | None = None  # risk fraction used for sizing
+    rr_ratio: float | None = None  # reward/risk ratio
 
 
 @dataclass
 class Broker:
     leverage: int = 50
-    margin_pct: float = 0.02    # 2%
+    margin_pct: float = 0.02  # 2%
     contract_size: float = 1.0  # multiplier per lot
     cost_model: CostModel = None  # type: ignore[assignment]
 
@@ -93,7 +93,7 @@ class Broker:
 
         Long closes fill at bid; short closes fill at ask.
         Commission is deducted from P&L before booking to the account.
-        
+
         Returns:
             tuple of (realised_pnl, fill_price)
         """
@@ -102,12 +102,8 @@ class Broker:
         fill = self.cost_model.fill_price(bid, ask, -position.direction)
         cost = self.cost_model.total_cost(position.size)
         pnl = (
-            (fill - position.entry_price)
-            * position.direction
-            * position.size
-            * self.contract_size
-            - cost
-        )
+            fill - position.entry_price
+        ) * position.direction * position.size * self.contract_size - cost
         acc.close_trade(pnl)
         return pnl, fill
 
@@ -132,4 +128,3 @@ class Broker:
         )
         acc.update_equity(unrealised)
         return unrealised
-

@@ -3,6 +3,7 @@
 SMT divergence: when one instrument makes a new swing high/low but the
 correlated instrument does NOT confirm → bearish/bullish divergence signal.
 """
+
 from __future__ import annotations
 
 import numpy as np

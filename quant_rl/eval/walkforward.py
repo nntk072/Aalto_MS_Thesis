@@ -2,19 +2,20 @@
 
 Adapted from the EA_SCALPER_XAUUSD oracle walk-forward pattern.
 """
+
 from __future__ import annotations
 
+from collections.abc import Generator
 from dataclasses import dataclass
-from typing import Generator
+from typing import Any
 
 import numpy as np
-import pandas as pd
 
 
 @dataclass
 class WFSplit:
-    train_idx: np.ndarray
-    test_idx: np.ndarray
+    train_idx: np.ndarray[Any, Any]
+    test_idx: np.ndarray[Any, Any]
     fold: int
 
 

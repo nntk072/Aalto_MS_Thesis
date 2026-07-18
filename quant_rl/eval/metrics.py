@@ -2,10 +2,10 @@
 
 Includes all standard metrics plus FTMO-specific ``breach_rate``.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -23,7 +23,7 @@ class Metrics:
     win_rate: float
     total_trades: int
     turnover: float
-    breach_rate: float   # fraction of sessions that hit an FTMO guardrail
+    breach_rate: float  # fraction of sessions that hit an FTMO guardrail
     total_pnl: float = 0.0
     avg_trade: float = 0.0
     max_consec_loss: int = 0
@@ -61,7 +61,7 @@ def calculate_metrics(
     trades: pd.DataFrame | None = None,
     n_sessions: int = 1,
     n_breach_sessions: int = 0,
-    periods_per_year: int = 252 * 390,   # M1 bars per year (approx)
+    periods_per_year: int = 252 * 390,  # M1 bars per year (approx)
 ) -> Metrics:
     """Compute all metrics.
 
@@ -96,7 +96,7 @@ def calculate_metrics(
         total_pnl = float(pnl.sum())
         avg_trade = float(pnl.mean())
         # max consecutive losses
-        consec = max_c = cur = 0
+        max_c = cur = 0
         for v in pnl:
             if v < 0:
                 cur += 1

@@ -1,4 +1,5 @@
 """Tests for swing structure detection."""
+
 import pandas as pd
 import pytest
 

@@ -29,7 +29,9 @@ class MT5Trader(Trader):
 
         if result and result.retcode == 10027:  # AutoTrading disabled error code
             logger.error("AutoTrading is disabled in MetaTrader 5")
-            logger.error("Please enable AutoTrading: Tools -> Options -> Expert Advisors -> Allow Automated Trading")
+            logger.error(
+                "Please enable AutoTrading: Tools -> Options -> Expert Advisors -> Allow Automated Trading"
+            )
             return None
 
         return result
@@ -45,7 +47,8 @@ class MT5Trader(Trader):
                 position_list = df_open_positions["ticket"].unique().tolist()
             else:
                 df_open_positions = df_open_positions[
-                    (df_open_positions["symbol"] == symbol) & (df_open_positions["type"] == position_type)
+                    (df_open_positions["symbol"] == symbol)
+                    & (df_open_positions["type"] == position_type)
                 ]
                 position_list = df_open_positions["ticket"].unique().tolist()
 
@@ -85,7 +88,9 @@ class MT5Trader(Trader):
     def get_opened_positions(self, symbol=None, position_type=None):
         try:
             opened_positions = mt5.positions_get()
-            df_opened_positions = pd.DataFrame(list(opened_positions), columns=opened_positions[0]._asdict().keys())
+            df_opened_positions = pd.DataFrame(
+                list(opened_positions), columns=opened_positions[0]._asdict().keys()
+            )
             if not symbol and position_type is None:
                 df = df_opened_positions
             elif symbol and position_type is None:
@@ -94,7 +99,8 @@ class MT5Trader(Trader):
                 df = df_opened_positions[df_opened_positions["type"] == position_type]
             else:
                 df = df_opened_positions[
-                    (df_opened_positions["symbol"] == symbol) & (df_opened_positions["type"] == position_type)
+                    (df_opened_positions["symbol"] == symbol)
+                    & (df_opened_positions["type"] == position_type)
                 ]
             total_opened_positions = len(df)
         except Exception:
@@ -105,7 +111,9 @@ class MT5Trader(Trader):
     def get_all_positions(self):
         try:
             opened_positions = mt5.positions_get()
-            df_opened_positions = pd.DataFrame(list(opened_positions), columns=opened_positions[0]._asdict().keys())
+            df_opened_positions = pd.DataFrame(
+                list(opened_positions), columns=opened_positions[0]._asdict().keys()
+            )
         except Exception:
             df_opened_positions = pd.DataFrame()
         return df_opened_positions

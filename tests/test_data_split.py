@@ -1,11 +1,11 @@
 """Tests for date-based train/test split."""
+
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
-from quant_rl.data.split import split_train_test, get_split_config
+from quant_rl.data.split import get_split_config, split_train_test
 
 
 def _make_bars(start: str, end: str, freq: str = "1D", tz: str = "Etc/GMT-3") -> pd.DataFrame:
@@ -19,10 +19,12 @@ def _make_feats(bars: pd.DataFrame, n_col: int = 5) -> pd.DataFrame:
 
 class TestSplitBoundaries:
     def setup_method(self):
-        self.bars = pd.concat([
-            _make_bars("2025-01-02", "2025-12-31"),
-            _make_bars("2026-01-01", "2026-06-30"),
-        ])
+        self.bars = pd.concat(
+            [
+                _make_bars("2025-01-02", "2025-12-31"),
+                _make_bars("2026-01-01", "2026-06-30"),
+            ]
+        )
         self.feat = _make_feats(self.bars)
 
     def test_train_max_date(self):
@@ -70,16 +72,18 @@ def test_empty_train_split():
 def test_get_split_config_fallback():
     """get_split_config should return defaults when cfg is None."""
     train_end, test_start = get_split_config(None)
-    assert train_end  == "2025-12-31"
+    assert train_end == "2025-12-31"
     assert test_start == "2026-01-01"
 
 
 def test_m1_frequency():
     """Split should work correctly on M1 bars (not just daily)."""
-    bars = pd.concat([
-        _make_bars("2025-12-30", "2025-12-31", freq="1min"),
-        _make_bars("2026-01-01", "2026-01-02", freq="1min"),
-    ])
+    bars = pd.concat(
+        [
+            _make_bars("2025-12-30", "2025-12-31", freq="1min"),
+            _make_bars("2026-01-01", "2026-01-02", freq="1min"),
+        ]
+    )
     feat = _make_feats(bars)
     tr_b, te_b, _, _ = split_train_test(bars, feat, "2025-12-31", "2026-01-01")
     assert not tr_b.empty

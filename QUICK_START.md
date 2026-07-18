@@ -19,6 +19,20 @@ source $HOME/.local/bin/env  # Activate environment
 
 **Expected:** 19/19 tests passing ✅
 
+## Lint + Typecheck (1 minute)
+```bash
+# Refresh dev tools if needed
+uv sync --extra dev
+
+# Ruff on the checked package scope
+uv run ruff check quant_rl
+
+# mypy on the full checked package
+uv run mypy quant_rl
+```
+
+**Expected:** Ruff and mypy pass on the core runtime scope ✅
+
 ---
 
 ## MACD Baseline Strategy

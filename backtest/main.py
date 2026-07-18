@@ -1,7 +1,6 @@
 import os
 
 import backtrader as bt
-
 from strategies.cross_over import CrossOverStrategy
 from utils.data_loader import download_data_from_yahoo
 
@@ -31,29 +30,29 @@ def run_backtest(data_feed, strategy=CrossOverStrategy, **kwargs):
     cerebro.broker.setcash(100000.0)
 
     # Add analyzers
-    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
-    cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
-    cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
-    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name="sharpe")
+    cerebro.addanalyzer(bt.analyzers.DrawDown, _name="drawdown")
+    cerebro.addanalyzer(bt.analyzers.Returns, _name="returns")
+    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name="trades")
 
     # Set the commission - 0.1% per trade
     cerebro.broker.setcommission(commission=0.001)
 
     # Print starting portfolio value
-    print('Starting Portfolio Value: %.2f' % cerebro.broker.getvalue())
+    print(f"Starting Portfolio Value: {cerebro.broker.getvalue():.2f}")
 
     # Run the backtest
     results = cerebro.run()
 
     # Print final portfolio value
-    print('Final Portfolio Value: %.2f' % cerebro.broker.getvalue())
+    print(f"Final Portfolio Value: {cerebro.broker.getvalue():.2f}")
 
     # Extract results
     strat = results[0]
 
-    print('Sharpe Ratio:', strat.analyzers.sharpe.get_analysis()['sharperatio'])
-    print('DrawDown:', strat.analyzers.drawdown.get_analysis()['max']['drawdown'])
-    print('Return:', strat.analyzers.returns.get_analysis()['rtot'])
+    print("Sharpe Ratio:", strat.analyzers.sharpe.get_analysis()["sharperatio"])
+    print("DrawDown:", strat.analyzers.drawdown.get_analysis()["max"]["drawdown"])
+    print("Return:", strat.analyzers.returns.get_analysis()["rtot"])
 
     trade_analysis = strat.analyzers.trades.get_analysis()
 
@@ -62,36 +61,38 @@ def run_backtest(data_feed, strategy=CrossOverStrategy, **kwargs):
     print(f"Won: {trade_analysis.get('won', {}).get('total', 0)}")
     print(f"Lost: {trade_analysis.get('lost', {}).get('total', 0)}")
 
-    if 'won' in trade_analysis and 'total' in trade_analysis['won'] and trade_analysis['won']['total'] > 0:
-        print(f"Win Rate: {trade_analysis['won']['total'] / trade_analysis['total']['total'] * 100:.2f}%")
+    if (
+        "won" in trade_analysis
+        and "total" in trade_analysis["won"]
+        and trade_analysis["won"]["total"] > 0
+    ):
+        print(
+            f"Win Rate: {trade_analysis['won']['total'] / trade_analysis['total']['total'] * 100:.2f}%"
+        )
 
     # Plot the results
-    cerebro.plot(style='candlestick')
+    cerebro.plot(style="candlestick")
 
     return cerebro
 
 
 if __name__ == "__main__":
     # Create data directory if it doesn't exist
-    os.makedirs('data', exist_ok=True)
-    os.makedirs('results', exist_ok=True)
+    os.makedirs("data", exist_ok=True)
+    os.makedirs("results", exist_ok=True)
 
     # Example 1: Using Yahoo Finance data
     print("Running backtest with Yahoo Finance data...")
-    symbol = 'EURUSD=X'  # EURUSD forex pair
-    start_date = '2020-01-01'
-    end_date = '2023-12-31'
+    symbol = "EURUSD=X"  # EURUSD forex pair
+    start_date = "2020-01-01"
+    end_date = "2023-12-31"
 
     # Download data
     data_feed = download_data_from_yahoo(symbol, start_date, end_date)
 
     # Run backtest
     cerebro = run_backtest(
-        data_feed,
-        strategy=CrossOverStrategy,
-        ma_short_period=20,
-        ma_long_period=50,
-        printlog=True
+        data_feed, strategy=CrossOverStrategy, ma_short_period=20, ma_long_period=50, printlog=True
     )
 
     # Example 2: Using local CSV data (if you have it)

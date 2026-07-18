@@ -3,6 +3,7 @@
 All higher-timeframe data is *forward-filled* into the M1 spine so that
 features at bar t use only information available at or before t (causal).
 """
+
 from __future__ import annotations
 
 import pandas as pd

@@ -1,10 +1,11 @@
 """Tests: NY session filter correctness."""
+
 from __future__ import annotations
 
 import pandas as pd
 import pytest
 
-from quant_rl.data.session import filter_session, add_session_id
+from quant_rl.data.session import add_session_id, filter_session
 
 
 @pytest.fixture

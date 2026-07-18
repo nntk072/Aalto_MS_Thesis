@@ -1,10 +1,9 @@
 import MetaTrader5 as mt5
-from typing import List, Dict, Optional
 from loguru import logger
 
 from mt5_trading.domain.data_sources.mt5_data import MT5Data
-from mt5_trading.domain.volatility_analyzer import VolatilityAnalyzer
 from mt5_trading.domain.mt5_connection import ensure_mt5_logged_in
+from mt5_trading.domain.volatility_analyzer import VolatilityAnalyzer
 
 
 class MultiSymbolManager:
@@ -13,8 +12,15 @@ class MultiSymbolManager:
     Handles symbol selection, data fetching, and volatility analysis.
     """
 
-    def __init__(self, login: str, server: str, password: str, terminal_path: str,
-                 symbols: List[str], timeframe: int = mt5.TIMEFRAME_H1):
+    def __init__(
+        self,
+        login: str,
+        server: str,
+        password: str,
+        terminal_path: str,
+        symbols: list[str],
+        timeframe: int = mt5.TIMEFRAME_H1,
+    ):
         """
         Initialize Multi-Symbol Manager.
 
@@ -42,8 +48,8 @@ class MultiSymbolManager:
         )
 
         # Initialize data sources for each symbol
-        self.data_sources: Dict[str, MT5Data] = {}
-        self.volatility_metrics: Dict[str, Dict] = {}
+        self.data_sources: dict[str, MT5Data] = {}
+        self.volatility_metrics: dict[str, dict] = {}
 
         self._initialize_data_sources()
 
@@ -57,10 +63,7 @@ class MultiSymbolManager:
                     continue
 
                 # Create data source
-                data_source = MT5Data(
-                    symbol,
-                    self.timeframe
-                )
+                data_source = MT5Data(symbol, self.timeframe)
 
                 self.data_sources[symbol] = data_source
                 logger.info(f"Initialized data source for {symbol}")
@@ -68,7 +71,7 @@ class MultiSymbolManager:
             except Exception as e:
                 logger.error(f"Error initializing data source for {symbol}: {e}")
 
-    def get_data_source(self, symbol: str) -> Optional[MT5Data]:
+    def get_data_source(self, symbol: str) -> MT5Data | None:
         """
         Get data source for a symbol.
 
@@ -80,7 +83,7 @@ class MultiSymbolManager:
         """
         return self.data_sources.get(symbol)
 
-    def get_all_data_sources(self) -> Dict[str, MT5Data]:
+    def get_all_data_sources(self) -> dict[str, MT5Data]:
         """
         Get all data sources.
 
@@ -104,7 +107,7 @@ class MultiSymbolManager:
             except Exception as e:
                 logger.error(f"Error updating volatility metrics for {symbol}: {e}")
 
-    def get_volatility_metrics(self, symbol: str) -> Optional[Dict]:
+    def get_volatility_metrics(self, symbol: str) -> dict | None:
         """
         Get volatility metrics for a symbol.
 
@@ -116,7 +119,7 @@ class MultiSymbolManager:
         """
         return self.volatility_metrics.get(symbol)
 
-    def get_all_volatility_metrics(self) -> Dict[str, Dict]:
+    def get_all_volatility_metrics(self) -> dict[str, dict]:
         """
         Get volatility metrics for all symbols.
 
@@ -146,10 +149,7 @@ class MultiSymbolManager:
                 return False
 
             # Create data source
-            data_source = MT5Data(
-                symbol,
-                self.timeframe
-            )
+            data_source = MT5Data(symbol, self.timeframe)
 
             self.data_sources[symbol] = data_source
             self.symbols.append(symbol)
@@ -196,7 +196,7 @@ class MultiSymbolManager:
             except Exception as e:
                 logger.error(f"Error refreshing data for {symbol}: {e}")
 
-    def get_active_symbols(self) -> List[str]:
+    def get_active_symbols(self) -> list[str]:
         """
         Get list of active (available) symbols.
 

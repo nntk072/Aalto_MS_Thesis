@@ -2,6 +2,7 @@
 
 Tracks equity, balance, daily P&L, peak equity, daily loss, and max drawdown.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -16,8 +17,8 @@ class AccountState:
     equity: float = field(init=False)
     peak_equity: float = field(init=False)
     session_start_balance: float = field(init=False)
-    daily_loss: float = field(init=False)          # positive = loss so far today
-    max_drawdown: float = field(init=False)        # running max drawdown (positive)
+    daily_loss: float = field(init=False)  # positive = loss so far today
+    max_drawdown: float = field(init=False)  # running max drawdown (positive)
     open_pnl: float = field(init=False)
 
     def __post_init__(self) -> None:

@@ -1,6 +1,4 @@
 import backtrader as bt
-import pandas as pd
-import numpy as np
 
 
 class CrossOverStrategy(bt.Strategy):
@@ -13,9 +11,9 @@ class CrossOverStrategy(bt.Strategy):
     """
 
     params = (
-        ('ma_short_period', 20),
-        ('ma_long_period', 50),
-        ('printlog', False),
+        ("ma_short_period", 20),
+        ("ma_long_period", 50),
+        ("printlog", False),
     )
 
     def __init__(self):
@@ -32,10 +30,7 @@ class CrossOverStrategy(bt.Strategy):
 
         # Add MACD indicator
         self.macd = bt.indicators.MACD(
-            self.dataclose,
-            period_me1=12,
-            period_me2=26,
-            period_signal=9
+            self.dataclose, period_me1=12, period_me2=26, period_signal=9
         )
 
         # To keep track of pending orders
@@ -50,7 +45,7 @@ class CrossOverStrategy(bt.Strategy):
         """Logging function"""
         if self.params.printlog or doprint:
             dt = dt or self.datas[0].datetime.date(0)
-            print(f'{dt.isoformat()} {txt}')
+            print(f"{dt.isoformat()} {txt}")
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -62,21 +57,21 @@ class CrossOverStrategy(bt.Strategy):
         if order.status in [order.Completed]:
             if order.isbuy():
                 self.log(
-                    f'BUY EXECUTED, Price: {order.executed.price:.2f}, '
-                    f'Cost: {order.executed.value:.2f}, '
-                    f'Comm: {order.executed.comm:.2f}'
+                    f"BUY EXECUTED, Price: {order.executed.price:.2f}, "
+                    f"Cost: {order.executed.value:.2f}, "
+                    f"Comm: {order.executed.comm:.2f}"
                 )
                 self.buyprice = order.executed.price
                 self.buycomm = order.executed.comm
             else:  # Sell
                 self.log(
-                    f'SELL EXECUTED, Price: {order.executed.price:.2f}, '
-                    f'Cost: {order.executed.value:.2f}, '
-                    f'Comm: {order.executed.comm:.2f}'
+                    f"SELL EXECUTED, Price: {order.executed.price:.2f}, "
+                    f"Cost: {order.executed.value:.2f}, "
+                    f"Comm: {order.executed.comm:.2f}"
                 )
 
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
-            self.log('Order Canceled/Margin/Rejected')
+            self.log("Order Canceled/Margin/Rejected")
 
         # Reset orders
         self.order = None
@@ -85,11 +80,11 @@ class CrossOverStrategy(bt.Strategy):
         if not trade.isclosed:
             return
 
-        self.log(f'OPERATION PROFIT, GROSS: {trade.pnl:.2f}, NET: {trade.pnlcomm:.2f}')
+        self.log(f"OPERATION PROFIT, GROSS: {trade.pnl:.2f}, NET: {trade.pnlcomm:.2f}")
 
     def next(self):
         # Log the closing price of the series
-        self.log(f'Close: {self.dataclose[0]:.2f}')
+        self.log(f"Close: {self.dataclose[0]:.2f}")
 
         # Check if an order is pending
         if self.order:
@@ -99,17 +94,18 @@ class CrossOverStrategy(bt.Strategy):
         if not self.position:
             # Not yet in market, look for buy signal
             if self.crossover > 0:  # if ma_short crosses above ma_long
-                self.log('BUY CREATE, {:.2f}'.format(self.dataclose[0]))
+                self.log(f"BUY CREATE, {self.dataclose[0]:.2f}")
                 self.order = self.buy()  # Keep track of the created order
 
         else:
             # Already in market, look for sell signal
             if self.crossover < 0:  # if ma_short crosses below ma_long
-                self.log('SELL CREATE, {:.2f}'.format(self.dataclose[0]))
+                self.log(f"SELL CREATE, {self.dataclose[0]:.2f}")
                 self.order = self.sell()  # Keep track of the created order
 
     def stop(self):
-        self.log('MA Short Period: {}, MA Long Period: {}'.format(
-            self.params.ma_short_period, self.params.ma_long_period
-        ), doprint=True)
-        self.log('(MA Strategy) Ending Value: %.2f' % self.broker.getvalue(), doprint=True)
+        self.log(
+            f"MA Short Period: {self.params.ma_short_period}, MA Long Period: {self.params.ma_long_period}",
+            doprint=True,
+        )
+        self.log(f"(MA Strategy) Ending Value: {self.broker.getvalue():.2f}", doprint=True)

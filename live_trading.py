@@ -6,27 +6,26 @@ multiple strategies: Crossover, SMC (Smart Money Concepts), and Trend Breakout.
 """
 
 import os
-import time
-import yaml
-from pathlib import Path
-from typing import List, Dict
 import sched
 import threading
-from dotenv import load_dotenv
-import MetaTrader5 as mt5
-from loguru import logger
+import time
+from pathlib import Path
 
+import MetaTrader5 as mt5
+import yaml
+from dotenv import load_dotenv
+from loguru import logger
 from mt5_trading.domain import MT5Trader
 from mt5_trading.domain.data_sources.mt5_data import MT5Data
-from mt5_trading.domain.volatility_analyzer import VolatilityAnalyzer
 from mt5_trading.domain.multi_symbol_manager import MultiSymbolManager
 from mt5_trading.domain.risk_manager import RiskManager
+from mt5_trading.domain.strategies.combined_strategy import CombinedStrategy
 from mt5_trading.domain.strategies.cross_over_strategy import CrossOverStrategy
 from mt5_trading.domain.strategies.smc_strategy import SMCStrategy
 from mt5_trading.domain.strategies.trend_breakout_strategy import TrendBreakoutStrategy
-from mt5_trading.domain.strategies.combined_strategy import CombinedStrategy
-from mt5_trading.robot.multi_symbol_robot import MultiSymbolRobot
+from mt5_trading.domain.volatility_analyzer import VolatilityAnalyzer
 from mt5_trading.logging_config import configure_logging
+from mt5_trading.robot.multi_symbol_robot import MultiSymbolRobot
 
 load_dotenv()
 configure_logging()
@@ -43,64 +42,59 @@ MAX_SYMBOLS = int(os.getenv("MAX_SYMBOLS", "2"))
 STRATEGY_TYPE = os.getenv("STRATEGY_TYPE", "combined")  # crossover, smc, trend_breakout, combined
 
 
-def load_config() -> Dict:
+def load_config() -> dict:
     """Load configuration from YAML file."""
     config_path = Path(__file__).parent / "config" / "symbols_config.yaml"
-    
+
     if not config_path.exists():
         logger.warning(f"Config file not found: {config_path}")
         return {}
-    
-    with open(config_path, 'r') as f:
+
+    with open(config_path) as f:
         config = yaml.safe_load(f) or {}
-    
+
     return config
 
 
-def get_symbol_candidates(config: Dict) -> List[str]:
+def get_symbol_candidates(config: dict) -> list[str]:
     """Get symbol candidates from config."""
     candidates = []
-    
-    if 'symbol_categories' in config:
-        categories = config['symbol_categories']
-        
+
+    if "symbol_categories" in config:
+        categories = config["symbol_categories"]
+
         # Add symbols from all categories
         for _, symbols in categories.items():
             if isinstance(symbols, list):
                 candidates.extend(symbols)
-    
+
     # Remove duplicates
     candidates = list(set(candidates))
-    
+
     return candidates
 
 
-def select_volatile_symbols(candidates: List[str], max_symbols: int = 3) -> List[str]:
+def select_volatile_symbols(candidates: list[str], max_symbols: int = 3) -> list[str]:
     """Select top volatile symbols."""
     logger.info(f"Analyzing volatility for {len(candidates)} symbol candidates...")
-    
+
     try:
         analyzer = VolatilityAnalyzer(
-            login=LOGIN,
-            server=SERVER,
-            password=PASSWORD,
-            terminal_path=TERMINAL_PATH
+            login=LOGIN, server=SERVER, password=PASSWORD, terminal_path=TERMINAL_PATH
         )
-        
+
         # Get volatility config
         config = load_config()
-        volatility_config = config.get('volatility_config', {})
-        min_threshold = volatility_config.get('min_volatility_threshold', 0.5)
-        
+        volatility_config = config.get("volatility_config", {})
+        min_threshold = volatility_config.get("min_volatility_threshold", 0.5)
+
         # Select top volatile symbols
         selected = analyzer.select_top_volatile_symbols(
-            symbols=candidates,
-            max_symbols=max_symbols,
-            min_volatility_threshold=min_threshold
+            symbols=candidates, max_symbols=max_symbols, min_volatility_threshold=min_threshold
         )
-        
+
         return selected
-        
+
     except Exception as e:
         logger.exception(f"Error selecting volatile symbols: {e}")
         # Fallback to first few candidates
@@ -127,40 +121,40 @@ def initialize_trading_system() -> MultiSymbolRobot:
     logger.info("=" * 80)
     logger.info("INITIALIZING LIVE TRADING SYSTEM")
     logger.info("=" * 80)
-    
+
     # Load configuration
     config = load_config()
-    
+
     # Get symbol candidates
     candidates = get_symbol_candidates(config)
     if not candidates:
         logger.error("No symbol candidates found in config")
         raise ValueError("No symbols configured")
-    
+
     logger.info(f"Found {len(candidates)} symbol candidates")
-    
+
     # Select volatile symbols
     selected_symbols = select_volatile_symbols(candidates, MAX_SYMBOLS)
     if not selected_symbols:
         logger.error("No symbols selected")
         raise ValueError("Failed to select symbols")
-    
+
     logger.info(f"Selected {len(selected_symbols)} symbols: {selected_symbols}")
-    
+
     # Get timeframe from config
-    volatility_config = config.get('volatility_config', {})
-    timeframe_str = volatility_config.get('timeframe', 'H1')
+    volatility_config = config.get("volatility_config", {})
+    timeframe_str = volatility_config.get("timeframe", "H1")
     timeframe_map = {
-        'M1': mt5.TIMEFRAME_M1,
-        'M5': mt5.TIMEFRAME_M5,
-        'M15': mt5.TIMEFRAME_M15,
-        'M30': mt5.TIMEFRAME_M30,
-        'H1': mt5.TIMEFRAME_H1,
-        'H4': mt5.TIMEFRAME_H4,
-        'D1': mt5.TIMEFRAME_D1
+        "M1": mt5.TIMEFRAME_M1,
+        "M5": mt5.TIMEFRAME_M5,
+        "M15": mt5.TIMEFRAME_M15,
+        "M30": mt5.TIMEFRAME_M30,
+        "H1": mt5.TIMEFRAME_H1,
+        "H4": mt5.TIMEFRAME_H4,
+        "D1": mt5.TIMEFRAME_D1,
     }
     timeframe = timeframe_map.get(timeframe_str, mt5.TIMEFRAME_H1)
-    
+
     # Initialize symbol manager
     symbol_manager = MultiSymbolManager(
         login=LOGIN,
@@ -168,18 +162,15 @@ def initialize_trading_system() -> MultiSymbolRobot:
         password=PASSWORD,
         terminal_path=TERMINAL_PATH,
         symbols=selected_symbols,
-        timeframe=timeframe
+        timeframe=timeframe,
     )
-    
+
     # Update volatility metrics
     analyzer = VolatilityAnalyzer(
-        login=LOGIN,
-        server=SERVER,
-        password=PASSWORD,
-        terminal_path=TERMINAL_PATH
+        login=LOGIN, server=SERVER, password=PASSWORD, terminal_path=TERMINAL_PATH
     )
     symbol_manager.update_volatility_metrics(analyzer)
-    
+
     # Create strategies for each symbol
     strategies = {}
     for symbol in selected_symbols:
@@ -187,31 +178,28 @@ def initialize_trading_system() -> MultiSymbolRobot:
         if data_source:
             strategies[symbol] = create_strategy(data_source, STRATEGY_TYPE)
             logger.info(f"Created {STRATEGY_TYPE} strategy for {symbol}")
-    
+
     # Initialize risk manager
-    trading_config = config.get('trading_config', {})
-    risk_per_symbol = trading_config.get('risk_per_symbol', 0.02)
-    max_total_risk = trading_config.get('max_total_risk', 0.05)
-    
-    risk_manager = RiskManager(
-        risk_per_symbol=risk_per_symbol,
-        max_total_risk=max_total_risk
-    )
-    
+    trading_config = config.get("trading_config", {})
+    risk_per_symbol = trading_config.get("risk_per_symbol", 0.02)
+    max_total_risk = trading_config.get("max_total_risk", 0.05)
+
+    risk_manager = RiskManager(risk_per_symbol=risk_per_symbol, max_total_risk=max_total_risk)
+
     # Initialize trader
     trader = MT5Trader()
-    
+
     # Initialize robot
-    default_lot_size = trading_config.get('default_lot_size', 0.1)
-    
+    default_lot_size = trading_config.get("default_lot_size", 0.1)
+
     robot = MultiSymbolRobot(
         symbol_manager=symbol_manager,
         trader=trader,
         strategies=strategies,
         risk_manager=risk_manager,
-        default_lot_size=default_lot_size
+        default_lot_size=default_lot_size,
     )
-    
+
     logger.info("=" * 80)
     logger.info("TRADING SYSTEM INITIALIZED")
     logger.info("=" * 80)
@@ -221,7 +209,7 @@ def initialize_trading_system() -> MultiSymbolRobot:
     logger.info(f"Risk per symbol: {risk_per_symbol * 100}%")
     logger.info(f"Max total risk: {max_total_risk * 100}%")
     logger.info("=" * 80)
-    
+
     return robot
 
 
@@ -231,62 +219,64 @@ scheduler = sched.scheduler(time.time, time.sleep)
 
 class TradingSystem:
     """Manages the trading system lifecycle."""
-    
+
     def __init__(self):
         self.robot_instance = None
         self.scheduler = sched.scheduler(time.time, time.sleep)
-    
+
     def run_trading_cycle(self):
         """Run a single trading cycle."""
         try:
             logger.info("=" * 80)
             logger.info(f"Starting trading cycle at {time.strftime('%Y-%m-%d %H:%M:%S')}")
             logger.info("=" * 80)
-            
+
             if self.robot_instance is None:
                 logger.error("Robot not initialized")
                 return
-            
+
             # Execute trading
             self.robot_instance.trade()
-            
+
             # Log status
             status = self.robot_instance.get_status()
-            logger.info(f"Status: {status['total_positions']} positions, "
-                       f"Total P/L: ${status['total_profit']:.2f}")
-            
+            logger.info(
+                f"Status: {status['total_positions']} positions, "
+                f"Total P/L: ${status['total_profit']:.2f}"
+            )
+
             logger.info("Trading cycle completed")
             logger.info("=" * 80)
-            
+
         except Exception as e:
             logger.exception(f"Error in trading cycle: {e}")
-    
+
     def schedule_trading(self):
         """Schedule the next trading cycle."""
         self.run_trading_cycle()
         self.scheduler.enter(TRADING_INTERVAL_MINUTES * 60, 1, self.schedule_trading)
-    
+
     def start_scheduler(self):
         """Start the trading scheduler."""
         self.scheduler.enter(0, 1, self.schedule_trading)
         t = threading.Thread(target=self.scheduler.run, daemon=True)
         t.start()
         return t
-    
+
     def start(self):
         """Start the trading system."""
         try:
             # Initialize trading system
             self.robot_instance = initialize_trading_system()
-            
+
             # Run initial trading cycle
             logger.info("Running initial trading cycle...")
             self.run_trading_cycle()
-            
+
             # Start scheduler
             logger.info(f"Starting scheduler (every {TRADING_INTERVAL_MINUTES} minutes)...")
             self.start_scheduler()
-            
+
             # Keep main thread alive
             logger.info("Trading system is running. Press Ctrl+C to stop.")
             try:
@@ -294,7 +284,7 @@ class TradingSystem:
                     time.sleep(1)
             except KeyboardInterrupt:
                 logger.info("Shutting down trading system...")
-                
+
         except Exception as e:
             logger.exception(f"Fatal error: {e}")
             raise

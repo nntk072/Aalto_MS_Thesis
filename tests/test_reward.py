@@ -1,7 +1,9 @@
 """Tests: DSR reward properties."""
+
 from __future__ import annotations
 
 import pytest
+
 from quant_rl.envs.reward import DSRReward
 
 

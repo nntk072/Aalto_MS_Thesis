@@ -9,10 +9,12 @@ Usage
     python -m quant_rl.train.run_baselines --strategy macd
     python -m quant_rl.train.run_baselines --strategy ema --seed 42
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import argparse
@@ -21,14 +23,14 @@ import logging
 import numpy as np
 import pandas as pd
 
-from quant_rl.config import load_config
-from quant_rl.data.pipeline import run_pipeline, build_tick_books
-from quant_rl.data.split import split_train_test, get_split_config
-from quant_rl.features.build import build_features
-from quant_rl.baselines.rule_based import macd_ema50_baseline
 from quant_rl.backtest.engine import run_backtest
-from quant_rl.eval.metrics import calculate_metrics
+from quant_rl.baselines.rule_based import macd_ema50_baseline
+from quant_rl.config import load_config
+from quant_rl.data.pipeline import build_tick_books, run_pipeline
+from quant_rl.data.split import get_split_config, split_train_test
 from quant_rl.eval.export import save_run
+from quant_rl.eval.metrics import calculate_metrics
+from quant_rl.features.build import build_features
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -41,7 +43,7 @@ def _macd_policy(obs: np.ndarray) -> int:
 
 def _make_macd_policy(actions_series: pd.Series, bar_times: pd.DatetimeIndex):
     """Create a policy function from precomputed MACD actions.
-    
+
     Parameters
     ----------
     actions_series : pd.Series
@@ -50,25 +52,25 @@ def _make_macd_policy(actions_series: pd.Series, bar_times: pd.DatetimeIndex):
         Bar times from backtest (for indexing).
     """
     idx_to_action = {ts: actions_series.loc[ts] for ts in actions_series.index}
-    
+
     def policy(obs: np.ndarray) -> int:
         # Note: This is called during backtest with obs from feature_array
         # We cannot access the timestamp here in the standard API
         # So we use a closure with state to track progress
         return 0  # Placeholder
-    
+
     # Return closure that will be used with special handling in backtest
     return idx_to_action  # Return dict for now, will handle in main()
 
 
 def _ema_policy(obs: np.ndarray) -> int:
     """Simple EMA crossover baseline (fast EMA > slow EMA = long).
-    
+
     This reads supposed EMA features from the observation.
     """
     if len(obs) < 2 or obs.shape[1] < 3:
         return 0
-    
+
     # Placeholder: use returns heuristic
     last_ret = obs[-1, 0] if obs.shape[1] > 0 else 0
     if last_ret > 0.0001:
@@ -81,12 +83,12 @@ def _ema_policy(obs: np.ndarray) -> int:
 
 def _rsi_policy(obs: np.ndarray) -> int:
     """Simple RSI extremes baseline (RSI < 30 = buy, RSI > 70 = sell).
-    
+
     Placeholder implementation.
     """
     if len(obs) < 2:
         return 0
-    
+
     # Placeholder: use returns heuristic
     last_ret = obs[-1, 0] if obs.shape[1] > 0 else 0
     if last_ret > 0.0001:
@@ -106,15 +108,22 @@ STRATEGIES = {
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run baseline strategy backtests.")
-    parser.add_argument("--strategy", choices=list(STRATEGIES.keys()), default="macd",
-                        help="Baseline strategy to use")
+    parser.add_argument(
+        "--strategy",
+        choices=list(STRATEGIES.keys()),
+        default="macd",
+        help="Baseline strategy to use",
+    )
     parser.add_argument("overrides", nargs="*", help="Config overrides (OmegaConf syntax)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--force", action="store_true", help="Force data pipeline rerun")
     parser.add_argument("--no-save", action="store_true", help="Skip saving artifacts")
     parser.add_argument("--out", default="outputs", help="Base output directory")
-    parser.add_argument("--use-structure-sl-tp", action="store_true",
-                        help="Use structure-aware SL/TP instead of fixed USD stops")
+    parser.add_argument(
+        "--use-structure-sl-tp",
+        action="store_true",
+        help="Use structure-aware SL/TP instead of fixed USD stops",
+    )
     args = parser.parse_args()
 
     np.random.seed(args.seed)
@@ -136,20 +145,33 @@ def main() -> None:
     train_bars, test_bars, train_feat, test_feat = split_train_test(
         primary_m1, features, train_end, test_start
     )
-    log.info("Split: train=%d bars (≤%s)  test=%d bars (≥%s)",
-             len(train_bars), train_end, len(test_bars), test_start)
+    log.info(
+        "Split: train=%d bars (≤%s)  test=%d bars (≥%s)",
+        len(train_bars),
+        train_end,
+        len(test_bars),
+        test_start,
+    )
 
     # Tick books
     tick_books = build_tick_books(cfg, force=args.force)
     primary_ticks = tick_books.get(cfg.data.primary)
-    train_ticks = primary_ticks.slice(
-        pd.Timestamp("2000-01-01", tz=cfg.data.tz),
-        pd.Timestamp(train_end + " 23:59:59", tz=cfg.data.tz),
-    ) if primary_ticks is not None else None
-    test_ticks = primary_ticks.slice(
-        pd.Timestamp(test_start + " 00:00:00", tz=cfg.data.tz),
-        pd.Timestamp("2099-01-01", tz=cfg.data.tz),
-    ) if primary_ticks is not None else None
+    train_ticks = (
+        primary_ticks.slice(
+            pd.Timestamp("2000-01-01", tz=cfg.data.tz),
+            pd.Timestamp(train_end + " 23:59:59", tz=cfg.data.tz),
+        )
+        if primary_ticks is not None
+        else None
+    )
+    test_ticks = (
+        primary_ticks.slice(
+            pd.Timestamp(test_start + " 00:00:00", tz=cfg.data.tz),
+            pd.Timestamp("2099-01-01", tz=cfg.data.tz),
+        )
+        if primary_ticks is not None
+        else None
+    )
 
     max_loss_per_trade = None
     risk_frac = 0.01
@@ -166,37 +188,37 @@ def main() -> None:
     # For MACD baseline: precompute actions and create special policy
     macd_train_actions = None
     macd_test_actions = None
-    
+
     if args.strategy == "macd":
         # Precompute MACD actions (returns series with +1, -1, 0, 2)
         macd_train_actions = macd_ema50_baseline(train_bars)
         macd_test_actions = macd_ema50_baseline(test_bars)
-        
+
         # Disable SL/TP for MACD baseline
         max_loss_per_trade = None
-        
+
         log.info("MACD baseline: computed precomputed actions for train & test splits")
 
     def _create_macd_policy(actions_series, obs_window):
         """Create a policy that returns precomputed action for each bar.
-        
+
         Critical: Start at obs_window so engine bar i maps to actions_series.iloc[i],
         not to actions_series.iloc[i - obs_window]. This ensures MACD crosses align
         with the bars where they actually occur.
         """
         state = {"i": obs_window}
-        
+
         def policy(obs):
             action = 0
             if state["i"] < len(actions_series):
                 action = int(actions_series.iloc[state["i"]])
             state["i"] += 1
             return action
-        
+
         return policy
 
     policy = STRATEGIES[args.strategy]
-    
+
     # Override policy for MACD
     macd_train_policy = None
     macd_test_policy = None
@@ -206,14 +228,11 @@ def main() -> None:
         macd_test_policy = _create_macd_policy(macd_test_actions, obs_window)
 
     def _run(bars, feats, ticks, label: str, macd_policy=None) -> tuple[dict, object]:
-        log.info(
-            "Running backtest [%s] strategy=%s …",
-            label, args.strategy
-        )
-        
+        log.info("Running backtest [%s] strategy=%s …", label, args.strategy)
+
         # Use MACD policy if provided, otherwise use generic strategy
         run_policy = macd_policy if macd_policy else policy
-        
+
         # For MACD: use hold_on_zero and exit_action
         result = run_backtest(
             bars=bars,
@@ -233,13 +252,17 @@ def main() -> None:
         )
         result["initial_balance"] = cfg.account.initial_balance
         m = calculate_metrics(
-            result["equity"], trades=result["trades"],
+            result["equity"],
+            trades=result["trades"],
             n_sessions=result.get("n_sessions", 1),
             n_breach_sessions=result.get("n_breach_sessions", 0),
         )
         log.info(
             "[%s] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%",
-            label, m.sharpe, m.max_drawdown * 100, m.total_trades,
+            label,
+            m.sharpe,
+            m.max_drawdown * 100,
+            m.total_trades,
             m.total_return * 100,
         )
         return result, m

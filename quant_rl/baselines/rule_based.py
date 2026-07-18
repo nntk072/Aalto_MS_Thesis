@@ -2,12 +2,14 @@
 
 Each strategy returns a Series of signals: +1 long, -1 short, 0 flat.
 """
+
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
-from ..features.indicators import _ema, atr, rsi as _rsi, macd as _macd
+from ..features.indicators import _ema, atr
+from ..features.indicators import macd as _macd
+from ..features.indicators import rsi as _rsi
 
 
 def _sma(series: pd.Series, period: int) -> pd.Series:
@@ -29,7 +31,7 @@ def ema_crossover(
     close = bars["close"]
     fast_e = _ema(close, fast)
     slow_e = _ema(close, slow)
-    atr_s = atr(bars, atr_period)
+    atr(bars, atr_period)
 
     signal = pd.Series(0, index=bars.index, dtype=int)
     signal[fast_e > slow_e] = 1

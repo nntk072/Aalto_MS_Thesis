@@ -3,6 +3,7 @@
 Swing detection uses only past bars (causal), suitable for real-time trading.
 Extends the swing detection logic from smt.py with explicit price levels.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -55,7 +56,7 @@ def structure_levels(
     # Forward-fill to get "last" level at each bar
     last_sh = pd.Series(np.nan, index=bars.index)
     last_sh_time = pd.Series(pd.NaT, index=bars.index, dtype="datetime64[ns]")
-    
+
     last_sl = pd.Series(np.nan, index=bars.index)
     last_sl_time = pd.Series(pd.NaT, index=bars.index, dtype="datetime64[ns]")
 
