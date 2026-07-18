@@ -1,11 +1,12 @@
+import datetime as dt
 import os
+
 import backtrader as bt
 import pandas as pd
-import datetime as dt
 import yfinance as yf
 
 
-def load_data_from_csv(file_path, date_format='%Y-%m-%d'):
+def load_data_from_csv(file_path, date_format="%Y-%m-%d"):
     """
     Load data from a CSV file into a Backtrader data feed
 
@@ -24,12 +25,12 @@ def load_data_from_csv(file_path, date_format='%Y-%m-%d'):
 
     # Convert the date column to datetime if it's not already
     if not pd.api.types.is_datetime64_any_dtype(df.index):
-        if 'date' in df.columns:
-            df['date'] = pd.to_datetime(df['date'], format=date_format)
-            df.set_index('date', inplace=True)
-        elif 'datetime' in df.columns:
-            df['datetime'] = pd.to_datetime(df['datetime'], format=date_format)
-            df.set_index('datetime', inplace=True)
+        if "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"], format=date_format)
+            df.set_index("date", inplace=True)
+        elif "datetime" in df.columns:
+            df["datetime"] = pd.to_datetime(df["datetime"], format=date_format)
+            df.set_index("datetime", inplace=True)
 
     # Create a Backtrader data feed
     data_feed = bt.feeds.PandasData(
@@ -40,13 +41,13 @@ def load_data_from_csv(file_path, date_format='%Y-%m-%d'):
         low=2,  # Column index for the low price
         close=3,  # Column index for the close price
         volume=4,  # Column index for the volume
-        openinterest=-1  # -1 if no open interest column
+        openinterest=-1,  # -1 if no open interest column
     )
 
     return data_feed
 
 
-def download_data_from_yahoo(symbol, start_date, end_date, timeframe='1d'):
+def download_data_from_yahoo(symbol, start_date, end_date, timeframe="1d"):
     """
     Download data from Yahoo Finance
 
@@ -61,9 +62,9 @@ def download_data_from_yahoo(symbol, start_date, end_date, timeframe='1d'):
     """
     # Convert string dates to datetime if needed
     if isinstance(start_date, str):
-        start_date = dt.datetime.strptime(start_date, '%Y-%m-%d')
+        start_date = dt.datetime.strptime(start_date, "%Y-%m-%d")
     if isinstance(end_date, str):
-        end_date = dt.datetime.strptime(end_date, '%Y-%m-%d')
+        end_date = dt.datetime.strptime(end_date, "%Y-%m-%d")
 
     # Download data from Yahoo Finance
     data = yf.download(symbol, start=start_date, end=end_date, interval=timeframe)

@@ -1,5 +1,8 @@
 """Clean raw bar DataFrames: dedup, sort, gap flag."""
+
 from __future__ import annotations
+
+from typing import cast
 
 import pandas as pd
 
@@ -19,10 +22,11 @@ def clean(df: pd.DataFrame, tz: str = "Etc/GMT-3") -> pd.DataFrame:
     df = df[~df.index.duplicated(keep="last")]
     df = df.sort_index()
     # Localise (timestamps are naive broker-local)
-    if df.index.tz is None:
-        df.index = df.index.tz_localize(tz, ambiguous="infer", nonexistent="shift_forward")
+    index = cast(pd.DatetimeIndex, df.index)
+    if index.tz is None:
+        df.index = index.tz_localize(tz, ambiguous="infer", nonexistent="shift_forward")
     # Gap flag: True when gap to previous bar is > 2× the modal bar duration
-    delta = df.index.to_series().diff()
+    delta = cast(pd.DatetimeIndex, df.index).to_series().diff()
     modal = delta.mode().iloc[0]
     df["gap_flag"] = delta > (2 * modal)
     df["gap_flag"] = df["gap_flag"].fillna(False)

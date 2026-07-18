@@ -31,6 +31,19 @@ source $HOME/.local/bin/env  # Activate environment
 - 10 risk tests passing
 - 7 MACD baseline tests passing
 
+### 1b. Run Ruff and mypy
+
+```bash
+# Install or refresh the dev environment
+uv sync --extra dev
+
+# Lint the checked package scope
+uv run ruff check quant_rl
+
+# Type-check the full checked package
+uv run mypy quant_rl
+```
+
 ---
 
 ## Phase 4: Baseline Validation
@@ -174,6 +187,12 @@ open outputs/baseline_macd_seed42/test/orders/trade_0001_*.png  # View first tra
 ```bash
 #!/bin/bash
 cd /home/l2nguyen/Aalto_MS_Thesis
+
+echo "=== Running Ruff ==="
+uv run ruff check quant_rl
+
+echo "=== Running mypy ==="
+uv run mypy quant_rl
 
 echo "=== Running Unit Tests ==="
 .venv/bin/python -m pytest tests/test_structure.py tests/test_risk.py -v

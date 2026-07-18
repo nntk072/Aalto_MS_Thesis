@@ -1,4 +1,5 @@
 """Feature build pipeline: indicators + SMT + normalisation → feature matrix."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,9 +8,9 @@ import pandas as pd
 from omegaconf import DictConfig
 
 from .indicators import build_indicators
+from .normalize import rolling_zscore
 from .smt import smt_divergence
 from .structure import structure_levels
-from .normalize import rolling_zscore
 
 
 def build_features(
@@ -48,6 +49,7 @@ def build_features(
     else:
         # fallback: basic returns only
         import numpy as np
+
         feat = pd.DataFrame(
             {"ret_1": np.log(primary["close"]).diff()},
             index=primary.index,

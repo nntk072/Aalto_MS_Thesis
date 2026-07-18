@@ -1,4 +1,5 @@
 """Tests: cost model + broker bid/ask correctness."""
+
 from __future__ import annotations
 
 import pytest

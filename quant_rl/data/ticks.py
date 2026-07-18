@@ -14,10 +14,12 @@ Typical use
     train_ticks = tick_book.slice(pd.Timestamp("2025-01-01", tz="Etc/GMT-3"),
                                   pd.Timestamp("2025-12-31 23:59", tz="Etc/GMT-3"))
 """
+
 from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -27,7 +29,7 @@ from .loader import iter_ticks_chunks
 log = logging.getLogger(__name__)
 
 
-def _ffill_inplace(arr: np.ndarray) -> None:
+def _ffill_inplace(arr: np.ndarray[Any, Any]) -> None:
     """In-place forward-fill of NaNs in a 1-D float array (no pandas)."""
     mask = np.isnan(arr)
     if not mask.any():
@@ -44,9 +46,9 @@ class TickBook:
 
     def __init__(
         self,
-        ts_ns: np.ndarray,
-        bid: np.ndarray,
-        ask: np.ndarray,
+        ts_ns: np.ndarray[Any, Any],
+        bid: np.ndarray[Any, Any],
+        ask: np.ndarray[Any, Any],
     ) -> None:
         self._ts = ts_ns
         self._bid = bid
@@ -73,7 +75,7 @@ class TickBook:
     def __len__(self) -> int:
         return len(self._ts)
 
-    def slice(self, start: pd.Timestamp, end: pd.Timestamp) -> "TickBook":
+    def slice(self, start: pd.Timestamp, end: pd.Timestamp) -> TickBook:
         """Return a sub-book covering the half-open interval [start, end)."""
         i_s = int(np.searchsorted(self._ts, start.value, side="left"))
         i_e = int(np.searchsorted(self._ts, end.value, side="left"))
@@ -118,16 +120,20 @@ def build_tick_book(
         if cache_path.exists() and not force:
             log.info("Loading tick cache: %s", cache_path)
             df = pd.read_parquet(cache_path)
-            return TickBook(df["ts_ns"].values, df["bid"].values, df["ask"].values)
+            return TickBook(
+                cast(np.ndarray[Any, Any], df["ts_ns"].to_numpy()),
+                cast(np.ndarray[Any, Any], df["bid"].to_numpy()),
+                cast(np.ndarray[Any, Any], df["ask"].to_numpy()),
+            )
 
     log.info("Building TickBook from %s (chunked, memory-safe) …", path)
 
     start_t = pd.Timestamp(f"2000-01-01 {session_start}").time()
     end_t = pd.Timestamp(f"2000-01-01 {session_end}").time()
 
-    ts_chunks: list[np.ndarray] = []
-    bid_chunks: list[np.ndarray] = []
-    ask_chunks: list[np.ndarray] = []
+    ts_chunks: list[np.ndarray[Any, Any]] = []
+    bid_chunks: list[np.ndarray[Any, Any]] = []
+    ask_chunks: list[np.ndarray[Any, Any]] = []
 
     last_bid = np.nan
     last_ask = np.nan
@@ -183,7 +189,9 @@ def build_tick_book(
 
     log.info(
         "Tick scan complete: kept %d / %d rows (%.1f%%)",
-        n_rows_kept, n_rows_total, 100.0 * n_rows_kept / max(n_rows_total, 1),
+        n_rows_kept,
+        n_rows_total,
+        100.0 * n_rows_kept / max(n_rows_total, 1),
     )
 
     if not ts_chunks:
@@ -200,9 +208,7 @@ def build_tick_book(
 
     if cache_path:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
-        pd.DataFrame({"ts_ns": ts_ns, "bid": bid, "ask": ask}).to_parquet(
-            cache_path, index=False
-        )
+        pd.DataFrame({"ts_ns": ts_ns, "bid": bid, "ask": ask}).to_parquet(cache_path, index=False)
         log.info("Tick cache written: %s (%d ticks)", cache_path, len(ts_ns))
 
     return TickBook(ts_ns, bid, ask)

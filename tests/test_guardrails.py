@@ -1,4 +1,5 @@
 """Tests: FTMO guardrail breach detection."""
+
 from __future__ import annotations
 
 from quant_rl.backtest.account import AccountState

@@ -11,9 +11,11 @@ Every order fill uses a ``(bid, ask)`` quote obtained in this priority:
 Mark-to-market and per-trade stop checks use the bar-close quote (long @ bid,
 short @ ask).
 """
+
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -27,7 +29,7 @@ from .risk import compute_lots, compute_sl_tp_long, compute_sl_tp_short
 if TYPE_CHECKING:
     from ..data.ticks import TickBook
 
-ActionFn = Callable[[np.ndarray], int]
+ActionFn = Callable[[np.ndarray[Any, Any]], int]
 
 
 def _bar_spread_price_units(row: pd.Series, cost_model: CostModel) -> float | None:
@@ -55,7 +57,7 @@ def _fill_quote(
     fill_instant: pd.Timestamp,
     row: pd.Series,
     cost_model: CostModel,
-    tickbook: "TickBook | None",
+    tickbook: TickBook | None,
 ) -> tuple[float, float]:
     """Return the fill quote for an order executed at *fill_instant*.
 
@@ -93,13 +95,13 @@ def run_backtest(
     policy: ActionFn,
     obs_window: int = 60,
     cost_model: CostModel = COST_US100,
-    broker_kwargs: dict | None = None,
-    guardrail_kwargs: dict | None = None,
+    broker_kwargs: dict[str, Any] | None = None,
+    guardrail_kwargs: dict[str, Any] | None = None,
     initial_balance: float = 100_000.0,
     lots: float = 1.0,
     max_loss_per_trade_usd: float | None = None,
     take_profit_per_trade_usd: float | None = None,
-    tickbook: "TickBook | None" = None,
+    tickbook: TickBook | None = None,
     use_structure_sl_tp: bool = False,
     risk_frac: float = 0.01,
     rr_ratio: float = 2.0,
@@ -111,7 +113,7 @@ def run_backtest(
     exit_action: int | None = None,
 ) -> dict[str, Any]:
     """Run a full backtest over aligned bars + features.
-    
+
     Parameters
     ----------
     use_structure_sl_tp : bool
@@ -136,9 +138,9 @@ def run_backtest(
     acc = AccountState(initial_balance=initial_balance)
 
     equity_curve: list[float] = []
-    trade_log: list[dict] = []
+    trade_log: list[dict[str, Any]] = []
     breach_log: list[str] = []
-    breach_events: list[dict] = []
+    breach_events: list[dict[str, Any]] = []
     breached_sessions: set[int] = set()
     session_set: set[int] = set()
     sessions_with_trades: set[int] = set()
@@ -151,8 +153,8 @@ def run_backtest(
     features = features.loc[common_idx]
 
     bar_times = bars.index
-    feat_array = features.values.astype(np.float32)
-    feat_array = np.nan_to_num(feat_array, nan=0.0)
+    feat_array: np.ndarray[Any, Any] = features.values.astype(np.float32)
+    feat_array = np.nan_to_num(feat_array, nan=0.0).astype(np.float32)
     n_bars = len(bars)
 
     for i in range(obs_window, n_bars):
@@ -188,30 +190,36 @@ def run_backtest(
                     sl_hit = True
 
             if sl_hit:
+                assert position is not None
                 pnl, fill_price = broker.close_position(acc, position, fq)
-                trade_log.append({
-                    "type": "stop_close",
-                    "pnl": pnl,
-                    "price": fill_price,
-                    "reason": "structure_sl",
-                    "bar": i,
-                    "time": bar_time,
-                    "equity": acc.equity,
-                })
+                trade_log.append(
+                    {
+                        "type": "stop_close",
+                        "pnl": pnl,
+                        "price": fill_price,
+                        "reason": "structure_sl",
+                        "bar": i,
+                        "time": bar_time,
+                        "equity": acc.equity,
+                    }
+                )
                 sessions_with_trades.add(session)
                 position = None
             # Fallback: check safety cap
             elif acc.open_pnl <= -abs(max_loss_per_trade_usd):
+                assert position is not None
                 pnl, fill_price = broker.close_position(acc, position, fq)
-                trade_log.append({
-                    "type": "stop_close",
-                    "pnl": pnl,
-                    "price": fill_price,
-                    "reason": "max_loss_cap",
-                    "bar": i,
-                    "time": bar_time,
-                    "equity": acc.equity,
-                })
+                trade_log.append(
+                    {
+                        "type": "stop_close",
+                        "pnl": pnl,
+                        "price": fill_price,
+                        "reason": "max_loss_cap",
+                        "bar": i,
+                        "time": bar_time,
+                        "equity": acc.equity,
+                    }
+                )
                 sessions_with_trades.add(session)
                 position = None
 
@@ -225,31 +233,37 @@ def run_backtest(
                     tp_hit = True
 
         if tp_hit and position is not None:
+            assert position is not None
             pnl, fill_price = broker.close_position(acc, position, fq)
-            trade_log.append({
-                "type": "tp_close",
-                "pnl": pnl,
-                "price": fill_price,
-                "reason": "structure_tp",
-                "bar": i,
-                "time": bar_time,
-                "equity": acc.equity,
-            })
+            trade_log.append(
+                {
+                    "type": "tp_close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "reason": "structure_tp",
+                    "bar": i,
+                    "time": bar_time,
+                    "equity": acc.equity,
+                }
+            )
             sessions_with_trades.add(session)
             position = None
         elif not use_structure_sl_tp and take_profit_per_trade_usd is not None:
             # Fallback: global USD-based TP
             if acc.open_pnl >= abs(take_profit_per_trade_usd):
+                assert position is not None
                 pnl, fill_price = broker.close_position(acc, position, fq)
-                trade_log.append({
-                    "type": "tp_close",
-                    "pnl": pnl,
-                    "price": fill_price,
-                    "reason": "take_profit_per_trade",
-                    "bar": i,
-                    "time": bar_time,
-                    "equity": acc.equity,
-                })
+                trade_log.append(
+                    {
+                        "type": "tp_close",
+                        "pnl": pnl,
+                        "price": fill_price,
+                        "reason": "take_profit_per_trade",
+                        "bar": i,
+                        "time": bar_time,
+                        "equity": acc.equity,
+                    }
+                )
                 sessions_with_trades.add(session)
                 position = None
 
@@ -257,23 +271,28 @@ def run_backtest(
         if reason and session not in breached_sessions:
             breached_sessions.add(session)
             breach_log.append(reason)
-            breach_events.append({
-                "time": bar_time,
-                "session_id": session,
-                "reason": reason,
-                "equity": acc.equity,
-            })
-            if position is not None:
-                pnl, fill_price = broker.close_position(acc, position, fq)
-                trade_log.append({
-                    "type": "forced_close",
-                    "pnl": pnl,
-                    "price": fill_price,
-                    "reason": reason,
-                    "bar": i,
+            breach_events.append(
+                {
                     "time": bar_time,
+                    "session_id": session,
+                    "reason": reason,
                     "equity": acc.equity,
-                })
+                }
+            )
+            if position is not None:
+                assert position is not None
+                pnl, fill_price = broker.close_position(acc, position, fq)
+                trade_log.append(
+                    {
+                        "type": "forced_close",
+                        "pnl": pnl,
+                        "price": fill_price,
+                        "reason": reason,
+                        "bar": i,
+                        "time": bar_time,
+                        "equity": acc.equity,
+                    }
+                )
                 sessions_with_trades.add(session)
                 position = None
 
@@ -287,29 +306,35 @@ def run_backtest(
 
         if action == exit_action and position is not None:
             # Explicit exit action (e.g., 2 for MACD)
+            assert position is not None
             pnl, fill_price = broker.close_position(acc, position, fq)
-            trade_log.append({
-                "type": "close",
-                "pnl": pnl,
-                "price": fill_price,
-                "bar": i,
-                "time": bar_time,
-                "equity": acc.equity,
-            })
-            sessions_with_trades.add(session)
-            position = None
-
-        elif action in (1, -1):
-            if position is not None and position.direction != action:
-                pnl, fill_price = broker.close_position(acc, position, fq)
-                trade_log.append({
+            trade_log.append(
+                {
                     "type": "close",
                     "pnl": pnl,
                     "price": fill_price,
                     "bar": i,
                     "time": bar_time,
                     "equity": acc.equity,
-                })
+                }
+            )
+            sessions_with_trades.add(session)
+            position = None
+
+        elif action in (1, -1):
+            if position is not None and position.direction != action:
+                assert position is not None
+                pnl, fill_price = broker.close_position(acc, position, fq)
+                trade_log.append(
+                    {
+                        "type": "close",
+                        "pnl": pnl,
+                        "price": fill_price,
+                        "bar": i,
+                        "time": bar_time,
+                        "equity": acc.equity,
+                    }
+                )
                 sessions_with_trades.add(session)
                 position = None
 
@@ -318,25 +343,29 @@ def run_backtest(
                 sl_price = None
                 tp_price = None
                 actual_lots = lots
-                
+
                 if use_structure_sl_tp:
                     # Try to extract swing levels from features
                     feat_row = features.iloc[i]
-                    last_swing_low = (
-                        feat_row.get("last_swing_low")
-                        if "last_swing_low" in feat_row.index
-                        else np.nan
+                    last_swing_low_raw = (
+                        feat_row["last_swing_low"] if "last_swing_low" in feat_row.index else np.nan
                     )
-                    last_swing_high = (
-                        feat_row.get("last_swing_high")
+                    last_swing_high_raw = (
+                        feat_row["last_swing_high"]
                         if "last_swing_high" in feat_row.index
                         else np.nan
+                    )
+                    last_swing_low = (
+                        float(last_swing_low_raw) if pd.notna(last_swing_low_raw) else None
+                    )
+                    last_swing_high = (
+                        float(last_swing_high_raw) if pd.notna(last_swing_high_raw) else None
                     )
 
                     entry_price_for_calc = float(fq[1] if action == 1 else fq[0])
 
                     # Compute SL/TP based on direction
-                    if action == 1 and not np.isnan(last_swing_low):
+                    if action == 1 and last_swing_low is not None:
                         # Long
                         sl_price, tp_price = compute_sl_tp_long(
                             entry_price_for_calc,
@@ -354,7 +383,7 @@ def run_backtest(
                             max_lot=max_lot,
                             max_loss_cap=max_loss_per_trade_usd,
                         )
-                    elif action == -1 and not np.isnan(last_swing_high):
+                    elif action == -1 and last_swing_high is not None:
                         # Short
                         sl_price, tp_price = compute_sl_tp_short(
                             entry_price_for_calc,
@@ -380,33 +409,37 @@ def run_backtest(
                     position.tp_price = tp_price
                     position.risk_frac = risk_frac
                     position.rr_ratio = rr_ratio
-                    
-                    trade_log.append({
-                        "type": "open",
-                        "direction": action,
-                        "price": position.entry_price,
-                        "lots": position.size,
-                        "sl_price": sl_price,
-                        "tp_price": tp_price,
-                        "risk_frac": risk_frac,
-                        "rr_ratio": rr_ratio,
-                        "bar": i,
-                        "time": bar_time,
-                        "equity": acc.equity,
-                    })
+
+                    trade_log.append(
+                        {
+                            "type": "open",
+                            "direction": action,
+                            "price": position.entry_price,
+                            "lots": position.size,
+                            "sl_price": sl_price,
+                            "tp_price": tp_price,
+                            "risk_frac": risk_frac,
+                            "rr_ratio": rr_ratio,
+                            "bar": i,
+                            "time": bar_time,
+                            "equity": acc.equity,
+                        }
+                    )
                     sessions_with_trades.add(session)
 
         elif action == 0 and position is not None and not hold_on_zero:
             # Close position on action=0 (unless hold_on_zero is True)
             pnl, fill_price = broker.close_position(acc, position, fq)
-            trade_log.append({
-                "type": "close",
-                "pnl": pnl,
-                "price": fill_price,
-                "bar": i,
-                "time": bar_time,
-                "equity": acc.equity,
-            })
+            trade_log.append(
+                {
+                    "type": "close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "bar": i,
+                    "time": bar_time,
+                    "equity": acc.equity,
+                }
+            )
             sessions_with_trades.add(session)
             position = None
 
@@ -414,15 +447,18 @@ def run_backtest(
         last_row = bars.iloc[-1]
         last_time = bar_times[-1]
         last_fq = _fill_quote(last_time, last_row, cost_model, tickbook)
+        assert position is not None
         pnl, fill_price = broker.close_position(acc, position, last_fq)
-        trade_log.append({
-            "type": "eod_close",
-            "pnl": pnl,
-            "price": fill_price,
-            "bar": n_bars - 1,
-            "time": last_time,
-            "equity": acc.equity,
-        })
+        trade_log.append(
+            {
+                "type": "eod_close",
+                "pnl": pnl,
+                "price": fill_price,
+                "bar": n_bars - 1,
+                "time": last_time,
+                "equity": acc.equity,
+            }
+        )
 
     trades_df = pd.DataFrame(trade_log)
     equity_series = pd.Series(equity_curve, index=bar_times[obs_window:])

@@ -9,10 +9,12 @@ Usage
     uv run python -m quant_rl.train.train_rl --seed 42
     uv run python -m quant_rl.train.train_rl --mvp --seed 42  # MVP: first 30 days
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import argparse
@@ -21,26 +23,20 @@ import logging
 from datetime import datetime
 
 import numpy as np
-import pandas as pd
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 
 from quant_rl.config import load_config
-from quant_rl.data.pipeline import run_pipeline, build_tick_books
-from quant_rl.data.split import split_train_test, get_split_config
-from quant_rl.features.build import build_features
+from quant_rl.data.pipeline import run_pipeline
+from quant_rl.data.split import get_split_config, split_train_test
 from quant_rl.envs.trading_env import TradingEnv
-from quant_rl.backtest.engine import run_backtest
+from quant_rl.eval.export import build_run_dir, save_run
 from quant_rl.eval.metrics import calculate_metrics
-from quant_rl.eval.export import save_run, build_run_dir
+from quant_rl.eval.rollout import evaluate_model
+from quant_rl.features.build import build_features
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
-
-
-def _rl_policy(obs: np.ndarray) -> int:
-    """Placeholder: returns output from trained policy (will be set after training)."""
-    return 0  # Hold by default
 
 
 def main() -> None:
@@ -54,6 +50,7 @@ def main() -> None:
 
     np.random.seed(args.seed)
     import random
+
     random.seed(args.seed)
 
     cfg = load_config(args.overrides)
@@ -80,8 +77,13 @@ def main() -> None:
     train_bars, test_bars, train_feat, test_feat = split_train_test(
         primary_m1, features, train_end, test_start
     )
-    log.info("Split: train=%d bars (≤%s)  test=%d bars (≥%s)",
-             len(train_bars), train_end, len(test_bars), test_start)
+    log.info(
+        "Split: train=%d bars (≤%s)  test=%d bars (≥%s)",
+        len(train_bars),
+        train_end,
+        len(test_bars),
+        test_start,
+    )
 
     # Slice for MVP
     if args.mvp and len(train_bars) > 30 * 390:  # ~30 trading days * 390 M1 bars
@@ -143,26 +145,23 @@ def main() -> None:
     model.save(model_path)
     log.info("Model saved: %s", model_path)
 
-    # Create a policy function that uses the trained model
-    def _trained_policy(obs_array: np.ndarray) -> int:
-        """Extract action from trained model (stub for backtest compatibility)."""
-        # Note: This is simplified. Full integration would use the model properly.
-        return 0
-
-    # Evaluate on test set
-    log.info("Running backtest on test set with trained policy…")
-    test_result = run_backtest(
+    # Evaluate the trained model on the test set by rolling it through the
+    # same TradingEnv (Dict obs + Discrete(20) actions) it was trained on —
+    # run_backtest's plain-array policy interface doesn't match this model's
+    # observation/action format, so it can't be used here directly.
+    log.info("Evaluating trained model on test set…")
+    test_result = evaluate_model(
+        model,
         bars=test_bars,
         features=test_feat,
-        policy=_trained_policy,
         obs_window=cfg.env.obs_window,
         initial_balance=cfg.account.initial_balance,
-        max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
-        use_structure_sl_tp=True,
-        risk_frac=cfg.risk.default_risk_frac,
-        rr_ratio=cfg.risk.rr_ratio_default,
+        risk_frac_range=(cfg.risk.default_risk_frac * 0.5, cfg.risk.default_risk_frac * 2.0),
+        rr_ratio_range=(cfg.risk.rr_ratio_default * 0.5, cfg.risk.rr_ratio_default * 1.5),
         swing_buffer_pts=cfg.risk.swing_buffer_pts,
         contract_size=cfg.account.contract_size,
+        max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
+        dsr_eta=cfg.env.reward_dsr_eta,
     )
     test_result["initial_balance"] = cfg.account.initial_balance
     test_m = calculate_metrics(
@@ -173,13 +172,30 @@ def main() -> None:
     )
     log.info(
         "[test] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%",
-        test_m.sharpe, test_m.max_drawdown * 100, test_m.total_trades, test_m.total_return * 100,
+        test_m.sharpe,
+        test_m.max_drawdown * 100,
+        test_m.total_trades,
+        test_m.total_return * 100,
+    )
+
+    # Export test artifacts so the RL run includes the same plots as other runners.
+    save_run(
+        run_dir=run_dir,
+        test_result=test_result,
+        test_metrics=test_m,
+        test_bars=test_bars,
+        cfg=cfg,
+        save_plots=getattr(cfg.output, "save_plots", True),
+        save_html=getattr(cfg.output, "save_html", True),
+        save_csv=getattr(cfg.output, "save_csv", True),
+        dpi=getattr(cfg.output, "dpi", 150),
     )
 
     # Save config
     if cfg is not None:
         try:
             from omegaconf import OmegaConf
+
             (run_dir / "config.yaml").write_text(OmegaConf.to_yaml(cfg))
         except Exception:
             pass

@@ -6,12 +6,13 @@ File format (tab-separated):
 Date format: YYYY.MM.DD, time: HH:MM:SS
 SPREAD is in price points.
 """
+
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pandas as pd
-
 
 _BAR_COLS = ["date", "time", "open", "high", "low", "close", "tickvol", "vol", "spread"]
 _TICK_COLS = ["date", "time", "bid", "ask", "last", "volume", "flags"]
@@ -40,9 +41,7 @@ def load_bars(path: str | Path) -> pd.DataFrame:
         },
         na_values=[""],
     )
-    df["datetime"] = pd.to_datetime(
-        df["date"] + " " + df["time"], format="%Y.%m.%d %H:%M:%S"
-    )
+    df["datetime"] = pd.to_datetime(df["date"] + " " + df["time"], format="%Y.%m.%d %H:%M:%S")
     df = df.drop(columns=["date", "time"])
     df = df.set_index("datetime")
     df = df.sort_index()
@@ -69,16 +68,14 @@ def load_ticks(path: str | Path) -> pd.DataFrame:
         dtype={"bid": "float64", "ask": "float64", "last": "float64", "volume": "float64"},
         na_values=[""],
     )
-    df["datetime"] = pd.to_datetime(
-        df["date"] + " " + df["time"], format="%Y.%m.%d %H:%M:%S.%f"
-    )
+    df["datetime"] = pd.to_datetime(df["date"] + " " + df["time"], format="%Y.%m.%d %H:%M:%S.%f")
     df = df.drop(columns=["date", "time"])
     df = df.set_index("datetime")
     df = df.sort_index()
     return df
 
 
-def iter_ticks_chunks(path: str | Path, chunksize: int = 2_000_000):
+def iter_ticks_chunks(path: str | Path, chunksize: int = 2_000_000) -> Iterator[pd.DataFrame]:
     """Stream a raw MT5 tick CSV in bounded-size chunks.
 
     Only the ``date``, ``time``, ``bid``, ``ask`` columns are parsed —
