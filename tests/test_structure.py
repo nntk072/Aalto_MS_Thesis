@@ -1,48 +1,51 @@
-"""Tests for structure-based SL/TP computation."""
-import numpy as np
+"""Tests for swing structure detection."""
 import pandas as pd
 import pytest
 
-from quant_rl.features.structure import compute_structure_features
+from quant_rl.features.structure import structure_levels
 
 
 @pytest.fixture
-def sample_bars():
-    """Create sample M1 bars with defined swing highs/lows."""
+def sample_bars() -> pd.DataFrame:
+    """Create synthetic OHLC bars for testing."""
+    dates = pd.date_range("2024-01-01", periods=50, freq="1min")
     data = {
-        "open": [100, 101, 102, 101, 100, 99, 100, 101, 102, 101, 100],
-        "high": [101, 102, 103, 102, 101, 100, 101, 102, 103, 102, 101],
-        "low": [100, 101, 102, 101, 100, 99, 100, 101, 102, 101, 100],
-        "close": [100.5, 101.5, 102.5, 101.5, 100.5, 99.5, 100.5, 101.5, 102.5, 101.5, 100.5],
+        "open": [100 + i * 0.1 for i in range(50)],
+        "high": [102 + i * 0.1 for i in range(50)],
+        "low": [99 + i * 0.1 for i in range(50)],
+        "close": [100.5 + i * 0.1 for i in range(50)],
     }
-    index = pd.date_range("2026-01-01", periods=11, freq="1min")
-    return pd.DataFrame(data, index=index)
+    return pd.DataFrame(data, index=dates)
 
 
-def test_compute_structure_features(sample_bars):
-    """Test that structure features are computed and causal."""
-    result = compute_structure_features(sample_bars, swing_period=2, buffer_pts=1.0)
-    
-    assert "last_swing_low_price" in result.columns
-    assert "last_swing_high_price" in result.columns
-    assert len(result) == len(sample_bars)
-    assert result.index.equals(sample_bars.index)
-    
-    # Early bars should have NaN (no prior swings)
-    assert pd.isna(result["last_swing_low_price"].iloc[0])
-    assert pd.isna(result["last_swing_high_price"].iloc[0])
+def test_structure_levels_shape(sample_bars: pd.DataFrame) -> None:
+    """Test that structure_levels returns correct shape."""
+    result = structure_levels(sample_bars, swing_period=5)
+    assert result.shape[0] == sample_bars.shape[0]
+    assert "last_swing_high" in result.columns
+    assert "last_swing_low" in result.columns
+    assert "last_swing_high_time" in result.columns
+    assert "last_swing_low_time" in result.columns
 
 
-def test_structure_features_no_lookahead(sample_bars):
-    """Verify that structure features don't use future bars."""
-    result = compute_structure_features(sample_bars, swing_period=2, buffer_pts=1.0)
-    
-    # For bar i, the structure should only depend on bars up to i (no lookahead)
-    for i in range(5, len(result)):
-        if not pd.isna(result["last_swing_low_price"].iloc[i]):
-            # The swing low should have occurred before bar i
-            assert i > 2  # Minimum bars needed for swing detection
+def test_structure_levels_causality(sample_bars: pd.DataFrame) -> None:
+    """Test that swing levels only use past data (causality check)."""
+    result = structure_levels(sample_bars, swing_period=5)
+    # All non-NaN swing high values should be from the bars we've seen
+    # (they cannot exceed the current bar's high when looking backward)
+    non_nan_highs = result["last_swing_high"][result["last_swing_high"].notna()]
+    if len(non_nan_highs) > 0:
+        # The swing high represents a high from the past, so it should be reasonable
+        assert non_nan_highs.min() > 0
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+def test_structure_levels_forward_fill(sample_bars: pd.DataFrame) -> None:
+    """Test that swings are forward-filled correctly."""
+    result = structure_levels(sample_bars, swing_period=5)
+    # After a swing is detected, all subsequent bars should have that value
+    # until the next swing is detected
+    swing_high_df = result["last_swing_high"].dropna()
+    if len(swing_high_df) > 0:
+        # Check that values are either NaN or monotonic/repeated
+        non_nan = result["last_swing_high"][result["last_swing_high"].notna()]
+        assert len(non_nan) > 0

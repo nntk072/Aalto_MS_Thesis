@@ -87,9 +87,6 @@ def main() -> None:
         take_profit_per_trade = cfg.backtest.validation.take_profit_per_trade_usd
     except Exception:
         pass
-    
-    contract_size = cfg.account.contract_size if hasattr(cfg.account, 'contract_size') else 1.0
-    default_risk_frac = cfg.risk.default_risk_frac if hasattr(cfg, 'risk') else 0.01
 
     def _run(bars, feats, ticks, label: str) -> tuple[dict, object]:
         log.info("Running backtest [%s] seed=%d …", label, args.seed)
@@ -101,9 +98,6 @@ def main() -> None:
             max_loss_per_trade_usd=max_loss_per_trade,
             take_profit_per_trade_usd=take_profit_per_trade,
             tickbook=ticks,
-            use_structure_sl_tp=True,
-            contract_size=contract_size,
-            default_risk_frac=default_risk_frac,
         )
         result["initial_balance"] = cfg.account.initial_balance
         m = calculate_metrics(
