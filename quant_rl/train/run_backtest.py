@@ -5,6 +5,7 @@ Usage
     cd Aalto_MS_Thesis
     python -m quant_rl.train.run_backtest
     python -m quant_rl.train.run_backtest env.obs_window=30 --seed=42
+    python -m quant_rl.train.run_backtest --no-save
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ from quant_rl.features.build import build_features
 from quant_rl.backtest.engine import run_backtest
 from quant_rl.eval.metrics import calculate_metrics
 from quant_rl.eval.report import print_report, aggregate_seeds
+from quant_rl.eval.export import save_run
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -38,6 +40,8 @@ def main() -> None:
     parser.add_argument("overrides", nargs="*")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--no-save", action="store_true", help="Skip saving artifacts")
+    parser.add_argument("--out", default="outputs", help="Base output directory")
     args = parser.parse_args()
 
     random.seed(args.seed)
@@ -63,13 +67,26 @@ def main() -> None:
         obs_window=cfg.env.obs_window,
         initial_balance=cfg.account.initial_balance,
     )
+    result["initial_balance"] = cfg.account.initial_balance
 
     equity = result["equity"]
     trades = result["trades"]
-    m = calculate_metrics(equity, trades=trades, n_breach_sessions=len(result["breaches"]))
+    m = calculate_metrics(
+        equity, trades=trades,
+        n_sessions=result.get("n_sessions", 1),
+        n_breach_sessions=result.get("n_breach_sessions", 0),
+    )
 
-    log.info("Sharpe=%.3f  Sortino=%.3f  MaxDD=%.2f%%  Trades=%d  Breaches=%d",
-             m.sharpe, m.sortino, m.max_drawdown * 100, m.total_trades, len(result["breaches"]))
+    log.info("Sharpe=%.3f  Sortino=%.3f  MaxDD=%.2f%%  Trades=%d  Breaches=%d/%d sessions",
+             m.sharpe, m.sortino, m.max_drawdown * 100, m.total_trades,
+             result.get("n_breach_sessions", 0), result.get("n_sessions", 1))
+
+    if not args.no_save:
+        run_dir = save_run(
+            result, m, out_dir=args.out, name=f"random_seed{args.seed}",
+            bars=primary_m1, cfg=cfg,
+        )
+        log.info("Artifacts saved to %s", run_dir)
 
 
 if __name__ == "__main__":
