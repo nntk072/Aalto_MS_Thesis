@@ -1,0 +1,79 @@
+# quant_rl default configuration
+# All monetary values in account currency (USD).  Prices in points unless noted.
+
+data:
+  raw_dir: "data"                      # relative to project root
+  cache_dir: "cache"                   # parquet cache
+  tz: "Etc/GMT-3"                      # broker server timezone (UTC+3)
+  symbols: ["US100.cash", "US500.cash"]
+  primary: "US100.cash"
+  secondary: "US500.cash"              # used only for SMT divergence
+  timeframes: ["M1", "M5", "M15", "M30", "H1", "H4", "D1"]
+  # True M1 source files (other TF files are known duplicates – see README)
+  m1_files:
+    US100.cash: "US100.cash_M1_202412300105_202607031959.csv"
+    US500.cash: "US500.cash_M1_202412300105_202607031959.csv"
+
+session:
+  tz: "Etc/GMT-3"                      # session times below are in this tz
+  start: "16:30"                       # NY open proxy
+  end:   "23:00"                       # NY close proxy
+  # DST caveat: broker tz shift ~1 h around DST transitions; flag only, no fix
+  dst_flag: true
+
+account:
+  initial_balance: 100000.0
+  currency: "USD"
+  leverage: 50
+  margin_pct: 0.02                     # 2 % margin requirement
+  contract_size: 1.0
+
+costs:
+  # spread in price points (not pips)
+  spread_us100: 0.6
+  spread_us500: 1.53
+  slippage_points: 0.0
+  commission_per_lot: 0.0
+
+ftmo:
+  daily_loss_limit: 5000.0             # hard kill-switch
+  max_loss_limit: 10000.0              # trailing max drawdown kill-switch
+  risk_per_trade_limit: 1000.0         # per-trade risk kill-switch
+  profit_target: 10000.0               # not enforced in env, only reported
+
+features:
+  window: 60                           # look-back bars fed to encoder
+  ema_periods: [9, 13, 21, 50, 200]
+  rsi_period: 14
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  atr_period: 14
+  adx_period: 14
+  bb_period: 20
+  bb_std: 2.0
+  stoch_k: 14
+  stoch_d: 3
+  vwap_session: true
+  return_horizons: [1, 5, 15, 30]
+  realized_vol_period: 20
+  smt_swing_period: 5                  # bars for swing high/low detection
+  smt_corr_window: 20
+  zscore_window: 252                   # rolling train-only normalisation window
+
+env:
+  obs_window: 60                       # T in [T, F] obs
+  action_type: "discrete"              # "discrete" | "continuous"
+  max_episode_steps: 1000
+  reward_dsr_eta: 0.01                 # differential Sharpe damping
+
+ppo:
+  n_steps: 2048
+  batch_size: 64
+  n_epochs: 10
+  learning_rate: 3.0e-4
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  total_timesteps: 500000
