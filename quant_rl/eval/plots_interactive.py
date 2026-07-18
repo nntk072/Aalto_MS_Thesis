@@ -4,6 +4,7 @@ All functions save a self-contained HTML file and return the Figure object.
 """
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -16,6 +17,7 @@ try:
 except ImportError:
     _PLOTLY_AVAILABLE = False
 
+log = logging.getLogger(__name__)
 
 _TEMPLATE = "plotly_white"
 _LONG_COLOR  = "#26a69a"
@@ -419,3 +421,121 @@ def plot_baseline_comparison(
     if out_path:
         _save(fig, out_path)
     return fig
+
+
+# ---------------------------------------------------------------------------
+# Per-trade M1 candlestick charts (one HTML per trade)
+# ---------------------------------------------------------------------------
+
+def plot_per_trade_orders(
+    bars: pd.DataFrame,
+    trades: pd.DataFrame,
+    orders_dir: Path | str,
+    context_bars: int = 60,
+    max_charts: int = 200,
+) -> None:
+    """Generate one M1 candlestick HTML per trade in *orders_dir*.
+
+    Filenames match the PNG counterpart produced by ``plots.plot_per_trade_orders``::
+
+        trade_NNNN_YYYYMMDD_HHMMopen_HHMMclose_{L|S}_{p|m}PnL.html
+
+    Parameters
+    ----------
+    bars : M1 price bars (DatetimeIndex, open/high/low/close columns).
+    trades : Trade log with type/direction/price/time/pnl columns.
+    orders_dir : Destination folder; created if absent.
+    context_bars : M1 bars to show before entry and after exit.
+    max_charts : Cap on number of charts; trades sampled evenly when over limit.
+    """
+    _check()
+    from .plots import _pair_trades, _extract_window, _trade_filename
+
+    orders_dir = Path(orders_dir)
+    orders_dir.mkdir(parents=True, exist_ok=True)
+
+    pairs = _pair_trades(trades)
+    if not pairs:
+        return
+
+    total = len(pairs)
+    if total > max_charts:
+        indices = np.linspace(0, total - 1, max_charts, dtype=int).tolist()
+        pairs = [pairs[i] for i in indices]
+        log.info("Per-trade HTML: sampling %d/%d trades → %s", max_charts, total, orders_dir)
+    else:
+        log.info("Per-trade HTML: %d charts → %s", total, orders_dir)
+
+    for seq_i, (open_row, close_row) in enumerate(pairs):
+        t_open  = pd.Timestamp(open_row["time"])
+        t_close = pd.Timestamp(close_row["time"])
+        window  = _extract_window(bars, t_open, t_close, context_bars)
+        if len(window) < 3:
+            continue
+
+        direction  = int(open_row["direction"]) if pd.notna(open_row.get("direction")) else 0
+        pnl        = float(close_row["pnl"])    if pd.notna(close_row.get("pnl"))       else 0.0
+        close_type = str(close_row["type"])
+
+        fig = go.Figure()
+        fig.add_trace(go.Candlestick(
+            x=window.index,
+            open=window["open"], high=window["high"],
+            low=window["low"],   close=window["close"],
+            name="Price",
+            increasing_line_color=_LONG_COLOR,
+            decreasing_line_color=_SHORT_COLOR,
+        ))
+
+        # Entry marker
+        i_o = window.index.get_indexer([t_open], method="nearest")[0]
+        if 0 <= i_o < len(window):
+            ep = float(open_row["price"]) if pd.notna(open_row.get("price")) else float(window["close"].iloc[i_o])
+            fig.add_trace(go.Scatter(
+                x=[window.index[i_o]], y=[ep],
+                mode="markers", name="Entry",
+                marker=dict(
+                    symbol="triangle-up" if direction == 1 else "triangle-down",
+                    size=14,
+                    color=_LONG_COLOR if direction == 1 else _SHORT_COLOR,
+                ),
+            ))
+
+        # Exit marker
+        i_c = window.index.get_indexer([t_close], method="nearest")[0]
+        if 0 <= i_c < len(window):
+            ep2 = float(window["close"].iloc[i_c])
+            is_stop = close_type in ("forced_close", "stop_close")
+            fig.add_trace(go.Scatter(
+                x=[window.index[i_c]], y=[ep2],
+                mode="markers", name="Exit",
+                marker=dict(
+                    symbol="x", size=12,
+                    color=_BREACH_COLOR if is_stop else _CLOSE_COLOR,
+                    line=dict(width=2,
+                              color=_BREACH_COLOR if is_stop else _CLOSE_COLOR),
+                ),
+            ))
+
+        dir_label = "Long" if direction == 1 else "Short"
+        title = (
+            f"{dir_label} | Open {t_open.strftime('%Y-%m-%d %H:%M')} "
+            f"→ Close {t_close.strftime('%H:%M')} | "
+            f"PnL: {pnl:+.2f} | {close_type}"
+        )
+        fig.update_layout(
+            template=_TEMPLATE,
+            title=title,
+            xaxis_title="Time (M1)",
+            yaxis_title="Price",
+            xaxis_rangeslider_visible=False,
+            hovermode="x unified",
+            height=500,
+        )
+
+        fname = _trade_filename(seq_i + 1, open_row, close_row, "html")
+        try:
+            _save(fig, orders_dir / fname)
+        except Exception as exc:
+            log.debug("Skipping per-trade HTML %d: %s", seq_i + 1, exc)
+
