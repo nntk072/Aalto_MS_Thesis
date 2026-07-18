@@ -632,7 +632,7 @@ def plot_per_trade_orders(
         
         # EMA50 overlay
         addplots.append(mpf.make_addplot(
-            overlays["ema50"], color="#0066cc", linewidth=1.5, ylabel="EMA50"
+            overlays["ema50"], color="#0066cc", width=2
         ))
         
         # Green entry arrow
