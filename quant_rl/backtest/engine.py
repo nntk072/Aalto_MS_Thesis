@@ -30,9 +30,24 @@ if TYPE_CHECKING:
 ActionFn = Callable[[np.ndarray], int]
 
 
+def _bar_spread_price_units(row: pd.Series, cost_model: CostModel) -> float | None:
+    """Convert the bar's raw MT5 ``spread`` column (broker points) to price units.
+
+    MT5 CSVs report ``spread`` in integer broker points (e.g. ``80``), not
+    price units. ``CostModel.bar_quote``/``fill_price`` expect the spread
+    already in price units (e.g. ``0.6`` for US100), so it must be scaled by
+    ``point_size`` here. Without this conversion a raw value like 80 was
+    being added directly to the close price, producing bid/ask quotes tens
+    to hundreds of points away from the visible candle.
+    """
+    if "spread" not in row.index or pd.isna(row["spread"]):
+        return None
+    return float(row["spread"]) * cost_model.point_size
+
+
 def _bar_quote(row: pd.Series, cost_model: CostModel) -> tuple[float, float]:
     """Derive ``(bid, ask)`` from a bar row (MT5 close = bid)."""
-    bar_spread = float(row["spread"]) if "spread" in row.index else None
+    bar_spread = _bar_spread_price_units(row, cost_model)
     return cost_model.bar_quote(float(row["close"]), bar_spread=bar_spread)
 
 
@@ -42,12 +57,33 @@ def _fill_quote(
     cost_model: CostModel,
     tickbook: "TickBook | None",
 ) -> tuple[float, float]:
-    """Return the fill quote for an order executed at *fill_instant*."""
+    """Return the fill quote for an order executed at *fill_instant*.
+
+    *row* must be the bar whose time range contains *fill_instant* (i.e. the
+    bar actually being executed into) — it is used both as the bar-quote
+    fallback and as a sanity range for tick fills.
+
+    Guards against tick-data gaps/outliers: a ``TickBook`` forward-fills
+    quotes across data gaps, which can return a stale tick far from the
+    current candle. If the tick quote's mid price falls outside this bar's
+    ``[low, high]`` range (widened by a small buffer for spread), the tick
+    fill is rejected in favour of a bar-based quote, so fills always land
+    on/near a visible candle.
+    """
+    bar_spread = _bar_spread_price_units(row, cost_model)
     if tickbook is not None:
         q = tickbook.quote_at(fill_instant)
         if q is not None:
-            return q
-    bar_spread = float(row["spread"]) if "spread" in row.index else None
+            bid, ask = q
+            mid = (bid + ask) / 2.0
+            lo = float(row["low"])
+            hi = float(row["high"])
+            buffer = max(hi - lo, bar_spread or 0.0, cost_model.spread_points)
+            if lo - buffer <= mid <= hi + buffer:
+                return q
+            # Outlier/gap tick (mid far outside the executing bar's range):
+            # fall through to the bar-based quote below instead of returning
+            # a fill price disconnected from the visible candles.
     return cost_model.bar_quote(float(row["close"]), bar_spread=bar_spread)
 
 
@@ -136,9 +172,11 @@ def run_backtest(
 
         if i + 1 < n_bars:
             fill_instant = bar_times[i + 1]
+            fill_row = bars.iloc[i + 1]
         else:
             fill_instant = bar_time + pd.Timedelta("1min")
-        fq = _fill_quote(fill_instant, row, cost_model, tickbook)
+            fill_row = row
+        fq = _fill_quote(fill_instant, fill_row, cost_model, tickbook)
 
         if position is not None and max_loss_per_trade_usd is not None:
             # Check intrabar high/low vs SL
@@ -261,7 +299,7 @@ def run_backtest(
             sessions_with_trades.add(session)
             position = None
 
-        elif action != 0:
+        elif action in (1, -1):
             if position is not None and position.direction != action:
                 pnl, fill_price = broker.close_position(acc, position, fq)
                 trade_log.append({

@@ -232,6 +232,76 @@ def test_plot_per_trade_orders_png_datetime_axis_and_info(synthetic_bars, synthe
     assert file_size > 50000, f"PNG file too small: {file_size} bytes (expected >50KB)"
 
 
+def test_macd_backtest_fills_within_bar_and_charts_render(tmp_path):
+    """End-to-end regression: run the real MACD baseline through the engine,
+    verify every fill price lands within its executing bar's [low, high]
+    range (guards Bug 4: tick-outlier fills detached from candles), then
+    render per-trade PNG charts from those trades without error (guards
+    Bug 3: full-history indicator overlays must slice cleanly per trade).
+    """
+    from quant_rl.baselines.rule_based import macd_ema50_baseline
+    from quant_rl.backtest.engine import run_backtest
+    from quant_rl.features.build import build_features
+    from quant_rl.eval.plots import plot_per_trade_orders
+
+    rng = np.random.default_rng(7)
+    idx = pd.date_range("2025-02-01 00:00", periods=400, freq="1min")
+    close = 21000.0 + np.cumsum(rng.normal(0, 1.0, 400))
+    bars = pd.DataFrame({
+        "open": close - rng.uniform(0, 0.5, 400),
+        "high": close + rng.uniform(0, 1.0, 400),
+        "low": close - rng.uniform(0, 1.0, 400),
+        "close": close,
+    }, index=idx)
+
+    features = build_features(bars, cfg=None)
+    actions = macd_ema50_baseline(bars)
+
+    obs_window = 60
+    state = {"i": obs_window}
+
+    def policy(obs):
+        action = int(actions.iloc[state["i"]]) if state["i"] < len(actions) else 0
+        state["i"] += 1
+        return action
+
+    result = run_backtest(
+        bars=bars, features=features, policy=policy,
+        obs_window=obs_window, hold_on_zero=True, exit_action=2,
+    )
+    trades_df = result["trades"]
+
+    # No open row may carry an invalid direction (guards Bug 1).
+    opens = trades_df[trades_df["type"] == "open"]
+    for _, row in opens.iterrows():
+        assert row["direction"] in (1.0, -1.0)
+
+    # All fill prices must land within (a small buffer around) the nearby
+    # bar range, not detached from any visible candle (guards Bug 4).
+    for _, row in trades_df.iterrows():
+        price = row.get("price")
+        if price is None or pd.isna(price):
+            continue
+        bar_time = pd.Timestamp(row["time"])
+        pos = bars.index.get_indexer([bar_time], method="nearest")[0]
+        lo = bars["low"].iloc[max(0, pos - 1): pos + 2].min()
+        hi = bars["high"].iloc[max(0, pos - 1): pos + 2].max()
+        assert lo - 1.0 <= price <= hi + 1.0, (
+            f"Fill price {price} at {bar_time} outside nearby range [{lo}, {hi}]"
+        )
+
+    if len(opens) > 0:
+        orders_dir = tmp_path / "orders"
+        plot_per_trade_orders(
+            bars, trades_df, orders_dir=orders_dir,
+            max_charts=20, dpi=72,
+        )
+        pngs = list(orders_dir.glob("*.png"))
+        assert len(pngs) > 0
+        for png_path in pngs:
+            assert png_path.stat().st_size > 0
+
+
 def test_plot_baseline_comparison(synthetic_equity, tmp_path):
     from quant_rl.eval.plots import plot_baseline_comparison
     eq2 = synthetic_equity * 1.05

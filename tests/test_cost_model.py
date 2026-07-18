@@ -41,8 +41,9 @@ def test_long_opens_at_ask_closes_at_bid():
     assert pos is not None
     assert pos.entry_price == pytest.approx(100.5)
 
-    pnl = broker.close_position(acc, pos, quote=(99.5, 100.5))
+    pnl, fill_price = broker.close_position(acc, pos, quote=(99.5, 100.5))
     assert pnl == pytest.approx(-1.0)
+    assert fill_price == pytest.approx(99.5)
 
 
 def test_round_trip_spread_charged_once():
@@ -52,5 +53,6 @@ def test_round_trip_spread_charged_once():
 
     quote = (100.0, 101.0)
     pos = broker.open_position(acc, quote=quote, lots=1.0, direction=1)
-    pnl = broker.close_position(acc, pos, quote=quote)
+    pnl, fill_price = broker.close_position(acc, pos, quote=quote)
     assert pnl == pytest.approx(-1.0)
+    assert fill_price == pytest.approx(100.0)
