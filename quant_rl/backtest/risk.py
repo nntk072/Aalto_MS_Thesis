@@ -1,133 +1,124 @@
-"""Risk-based position sizing and SL/TP calculation.
+"""Risk-based SL/TP/lot sizing calculations.
 
-Core formulas:
-- risk_usd = equity * risk_frac
-- sl_distance = |entry - sl_price|
-- lots = risk_usd / (sl_distance * contract_size)
-- tp_price = entry ± rr_ratio * sl_distance
+Computes stop loss, take profit, and lot sizes based on trade structure
+and equity risk parameters, following MT5-style risk management.
 """
 from __future__ import annotations
 
 import numpy as np
 
 
-def compute_sl_price(
+def compute_sl_tp_long(
     entry_price: float,
-    direction: int,
-    last_swing_low: float | None,
-    last_swing_high: float | None,
+    last_swing_low: float,
     buffer_pts: float = 1.0,
-) -> float:
-    """Compute SL price from swing structure.
-    
-    Parameters
-    ----------
-    entry_price : float
-        Fill price at entry.
-    direction : int
-        +1 for long, -1 for short.
-    last_swing_low : float | None
-        Most recent swing low price (for long SL).
-    last_swing_high : float | None
-        Most recent swing high price (for short SL).
-    buffer_pts : float
-        Safety offset beyond swing (default 1.0 pt).
-    
-    Returns
-    -------
-    float
-        SL price level. If no swing available, uses entry ± buffer as fallback.
-    """
-    if direction == 1:  # Long
-        if last_swing_low is not None and not np.isnan(last_swing_low):
-            return last_swing_low - buffer_pts
-        else:
-            return entry_price - 2.0  # Fallback
-    else:  # Short
-        if last_swing_high is not None and not np.isnan(last_swing_high):
-            return last_swing_high + buffer_pts
-        else:
-            return entry_price + 2.0  # Fallback
-
-
-def compute_tp_price(
-    entry_price: float,
-    sl_price: float,
-    direction: int,
     rr_ratio: float = 2.0,
-) -> float:
-    """Compute TP price from entry, SL, and R:R ratio.
-    
+) -> tuple[float, float]:
+    """Compute SL and TP for a long trade.
+
     Parameters
     ----------
     entry_price : float
-        Fill price at entry.
-    sl_price : float
-        Stop loss price level.
-    direction : int
-        +1 for long, -1 for short.
+        Entry fill price.
+    last_swing_low : float
+        Most recent confirmed swing low price.
+    buffer_pts : float
+        Buffer below swing low for SL placement (in price points).
     rr_ratio : float
-        Risk-to-Reward ratio (TP distance / SL distance).
-    
+        Risk:reward ratio (e.g. 2.0 means TP distance = 2 × SL distance).
+
     Returns
     -------
-    float
-        TP price level.
+    tuple[float, float]
+        (sl_price, tp_price)
     """
-    r = abs(entry_price - sl_price)
-    if direction == 1:  # Long
-        return entry_price + rr_ratio * r
-    else:  # Short
-        return entry_price - rr_ratio * r
+    sl_price = last_swing_low - buffer_pts
+    r = entry_price - sl_price
+    tp_price = entry_price + rr_ratio * r
+    return sl_price, tp_price
+
+
+def compute_sl_tp_short(
+    entry_price: float,
+    last_swing_high: float,
+    buffer_pts: float = 1.0,
+    rr_ratio: float = 2.0,
+) -> tuple[float, float]:
+    """Compute SL and TP for a short trade.
+
+    Parameters
+    ----------
+    entry_price : float
+        Entry fill price.
+    last_swing_high : float
+        Most recent confirmed swing high price.
+    buffer_pts : float
+        Buffer above swing high for SL placement (in price points).
+    rr_ratio : float
+        Risk:reward ratio.
+
+    Returns
+    -------
+    tuple[float, float]
+        (sl_price, tp_price)
+    """
+    sl_price = last_swing_high + buffer_pts
+    r = sl_price - entry_price
+    tp_price = entry_price - rr_ratio * r
+    return sl_price, tp_price
 
 
 def compute_lots(
     equity: float,
     risk_frac: float,
-    sl_distance: float,
+    entry_price: float,
+    sl_price: float,
     contract_size: float = 1.0,
-    max_loss_usd: float | None = None,
     min_lot: float = 0.01,
     max_lot: float = 100.0,
+    max_loss_cap: float | None = None,
 ) -> float:
-    """Compute position size (lots) from equity risk and SL distance.
-    
+    """Compute lot size from risk budget and SL distance.
+
     Parameters
     ----------
     equity : float
-        Current account equity in USD.
+        Current account equity.
     risk_frac : float
-        Risk as fraction of equity (e.g. 0.01 = 1%).
-    sl_distance : float
-        Distance from entry to SL in price units.
+        Fraction of equity at risk (e.g. 0.01 for 1%).
+    entry_price : float
+        Entry price.
+    sl_price : float
+        Stop loss price.
     contract_size : float
-        Contract size multiplier (default 1.0).
-    max_loss_usd : float | None
-        Hard cap on per-trade loss (e.g. 100.0). If given, lots are capped.
+        Contract multiplier (default 1.0).
     min_lot : float
-        Minimum lot size (default 0.01).
+        Minimum lot size to trade.
     max_lot : float
-        Maximum lot size (default 100.0).
-    
+        Maximum lot size to trade.
+    max_loss_cap : float | None
+        If set, cap the USD loss at this amount (e.g. 100 for $100).
+
     Returns
     -------
     float
-        Position size in lots, clipped to [min_lot, max_lot].
+        Computed lot size, clipped to [min_lot, max_lot].
     """
     risk_usd = equity * risk_frac
-    
-    if sl_distance <= 0 or np.isnan(sl_distance):
+    sl_distance = abs(entry_price - sl_price)
+
+    if sl_distance < 1e-8:
+        # Avoid division by near-zero
         return min_lot
-    
-    # Base calculation
+
     lots = risk_usd / (sl_distance * contract_size)
-    
-    # Apply hard USD cap if given
-    if max_loss_usd is not None and max_loss_usd > 0:
-        max_lots_from_cap = max_loss_usd / (sl_distance * contract_size)
+
+    # Apply safety cap if configured
+    if max_loss_cap is not None:
+        max_lots_from_cap = max_loss_cap / (sl_distance * contract_size)
         lots = min(lots, max_lots_from_cap)
-    
-    # Clip to configured bounds
+
+    # Clip to [min_lot, max_lot]
     lots = np.clip(lots, min_lot, max_lot)
-    
+
     return float(lots)

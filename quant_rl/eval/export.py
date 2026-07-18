@@ -73,7 +73,7 @@ def _extract_trade_chart_config(cfg: Any) -> dict[str, Any]:
     config = {
         "max_loss_per_trade_usd": None,
         "take_profit_per_trade_usd": None,
-        "lots": 1.0,
+        "lots": 1.0,  # fallback only (per-trade lots are in trade log)
         "contract_size": 1.0,
         "show_mae_mfe": True,
         "show_sl_tp": True,
@@ -82,12 +82,10 @@ def _extract_trade_chart_config(cfg: Any) -> dict[str, Any]:
         try:
             config["max_loss_per_trade_usd"] = cfg.backtest.validation.max_loss_per_trade_usd
             config["take_profit_per_trade_usd"] = cfg.backtest.validation.take_profit_per_trade_usd
-            # Try account.lots first (new RL structure), fallback to leverage (legacy)
-            config["lots"] = (
-                cfg.account.lots 
-                if hasattr(cfg.account, "lots") 
-                else (cfg.account.leverage if hasattr(cfg.account, "leverage") else 1.0)
-            )
+            # Note: when structure SL/TP is used, per-trade lots are in trade log
+            # This fallback is only used for legacy fixed-USD-TP mode
+            if hasattr(cfg.account, "lots"):
+                config["lots"] = cfg.account.lots
             config["contract_size"] = cfg.account.contract_size if hasattr(cfg.account, "contract_size") else 1.0
             config["show_mae_mfe"] = cfg.output.trade_chart_show_mae_mfe if hasattr(cfg.output, "trade_chart_show_mae_mfe") else True
             config["show_sl_tp"] = cfg.output.trade_chart_show_sl_tp if hasattr(cfg.output, "trade_chart_show_sl_tp") else True

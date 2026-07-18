@@ -103,8 +103,8 @@ output:
 
 backtest:
   validation:
-    max_loss_per_trade_usd: 100.0      # hard per-trade stop in USD (null = disabled)
-    take_profit_per_trade_usd: null    # hard per-trade profit limit in USD (null = disabled)
+    max_loss_per_trade_usd: 100.0      # safety cap in USD; structure SL is primary
+    take_profit_per_trade_usd: null    # per-trade structure TP replaces global USD TP
     include_costs_in_trade_risk: true
     validation_mode: false             # set true to relax global FTMO limits for viz testing
 

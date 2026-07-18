@@ -53,20 +53,25 @@ def compute_trade_metrics(
 ) -> TradeChartMetrics:
     """Compute chart metrics for a single trade.
     
-    Prefers per-trade SL/TP from trade log; falls back to global USD config.
+    Extracts the trade window from open time to close time (inclusive),
+    computes MAE/MFE from in-trade bar extrema, and obtains SL/TP levels
+    from trade log (if available) or computes from configuration limits.
+    
+    If open_row contains 'sl_price' or 'tp_price' (logged by structure-aware engine),
+    those values take precedence over computed defaults.
     
     Parameters
     ----------
     bars : pd.DataFrame
         M1 price bars with index as DatetimeIndex and columns: open, high, low, close.
     open_row : pd.Series
-        Trade open record with fields: time, direction, price, [sl_price, tp_price].
+        Trade open record with fields: time, direction, price, and optionally sl_price, tp_price.
     close_row : pd.Series
         Trade close record with fields: time, price.
     max_loss_per_trade_usd : float | None
-        Maximum loss limit in USD (fallback if not in open_row).
+        Maximum loss limit in USD; if set, SL level is computed (fallback).
     take_profit_per_trade_usd : float | None
-        Maximum profit limit in USD (fallback if not in open_row).
+        Maximum profit limit in USD; if set, TP level is computed (fallback).
     lots : float
         Position size in lots (default 1.0).
     contract_size : float
@@ -109,23 +114,26 @@ def compute_trade_metrics(
         mfe_idx = t_open
         mae_idx = t_open
     
-    # Compute SL and TP levels, preferring per-trade values from log
+    # Compute SL and TP levels
     sl_price = None
     tp_price = None
     
-    # Check if per-trade SL/TP are in the trade log
-    if "sl_price" in open_row.index and pd.notna(open_row["sl_price"]):
+    # Prefer per-trade SL/TP from trade log (structure-aware)
+    if pd.notna(open_row.get("sl_price")):
         sl_price = float(open_row["sl_price"])
     elif max_loss_per_trade_usd is not None and not np.isnan(entry_price):
+        # Fallback: compute from USD-based config
         price_move = max_loss_per_trade_usd / (lots * contract_size)
         if direction == 1:  # Long
             sl_price = entry_price - price_move
         else:  # Short
             sl_price = entry_price + price_move
     
-    if "tp_price" in open_row.index and pd.notna(open_row["tp_price"]):
+    # Prefer per-trade TP from trade log (structure-aware)
+    if pd.notna(open_row.get("tp_price")):
         tp_price = float(open_row["tp_price"])
     elif take_profit_per_trade_usd is not None and not np.isnan(entry_price):
+        # Fallback: compute from USD-based config
         price_move = take_profit_per_trade_usd / (lots * contract_size)
         if direction == 1:  # Long
             tp_price = entry_price + price_move

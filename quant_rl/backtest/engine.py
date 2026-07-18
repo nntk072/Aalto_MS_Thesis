@@ -22,7 +22,7 @@ from .account import AccountState
 from .broker import Broker, Position
 from .costs import COST_US100, CostModel
 from .guardrails import FTMOGuardrails
-from .risk import compute_sl_price, compute_tp_price, compute_lots
+from .risk import compute_lots, compute_sl_tp_long, compute_sl_tp_short
 
 if TYPE_CHECKING:
     from ..data.ticks import TickBook
@@ -64,11 +64,31 @@ def run_backtest(
     max_loss_per_trade_usd: float | None = None,
     take_profit_per_trade_usd: float | None = None,
     tickbook: "TickBook | None" = None,
-    use_structure_sl_tp: bool = True,
+    use_structure_sl_tp: bool = False,
+    risk_frac: float = 0.01,
+    rr_ratio: float = 2.0,
+    swing_buffer_pts: float = 1.0,
+    min_lot: float = 0.01,
+    max_lot: float = 100.0,
     contract_size: float = 1.0,
-    default_risk_frac: float = 0.01,
 ) -> dict[str, Any]:
-    """Run a full backtest over aligned bars + features."""
+    """Run a full backtest over aligned bars + features.
+    
+    Parameters
+    ----------
+    use_structure_sl_tp : bool
+        If True, compute SL/TP from last_swing_low/high in features.
+    risk_frac : float
+        Risk fraction of equity for lot sizing.
+    rr_ratio : float
+        Reward/risk ratio for TP calculation.
+    swing_buffer_pts : float
+        Buffer in price points beyond swing for SL placement.
+    min_lot, max_lot : float
+        Lot size bounds.
+    contract_size : float
+        Contract multiplier.
+    """
     broker = Broker(cost_model=cost_model, **(broker_kwargs or {}))
     guardrails = FTMOGuardrails(**(guardrail_kwargs or {}))
     acc = AccountState(initial_balance=initial_balance)
@@ -114,77 +134,34 @@ def run_backtest(
             fill_instant = bar_time + pd.Timedelta("1min")
         fq = _fill_quote(fill_instant, row, cost_model, tickbook)
 
-        # --- Per-trade SL/TP enforcement from structure ---
-        if position is not None and use_structure_sl_tp and position.sl_price is not None:
-            high = float(row.get("high", row.get("close")))
-            low = float(row.get("low", row.get("close")))
-            
-            if position.direction == 1 and low <= position.sl_price:
-                # Long hit SL
-                pnl = broker.close_position(acc, position, fq)
-                trade_log.append({
-                    "type": "stop_close",
-                    "pnl": pnl,
-                    "reason": "structure_sl",
-                    "bar": i,
-                    "time": bar_time,
-                    "equity": acc.equity,
-                })
-                sessions_with_trades.add(session)
-                position = None
-            elif position.direction == -1 and high >= position.sl_price:
-                # Short hit SL
-                pnl = broker.close_position(acc, position, fq)
-                trade_log.append({
-                    "type": "stop_close",
-                    "pnl": pnl,
-                    "reason": "structure_sl",
-                    "bar": i,
-                    "time": bar_time,
-                    "equity": acc.equity,
-                })
-                sessions_with_trades.add(session)
-                position = None
-        
-        # --- Per-trade TP enforcement from structure ---
-        if position is not None and use_structure_sl_tp and position.tp_price is not None:
-            high = float(row.get("high", row.get("close")))
-            low = float(row.get("low", row.get("close")))
-            
-            if position.direction == 1 and high >= position.tp_price:
-                # Long hit TP
-                pnl = broker.close_position(acc, position, fq)
-                trade_log.append({
-                    "type": "tp_close",
-                    "pnl": pnl,
-                    "reason": "structure_tp",
-                    "bar": i,
-                    "time": bar_time,
-                    "equity": acc.equity,
-                })
-                sessions_with_trades.add(session)
-                position = None
-            elif position.direction == -1 and low <= position.tp_price:
-                # Short hit TP
-                pnl = broker.close_position(acc, position, fq)
-                trade_log.append({
-                    "type": "tp_close",
-                    "pnl": pnl,
-                    "reason": "structure_tp",
-                    "bar": i,
-                    "time": bar_time,
-                    "equity": acc.equity,
-                })
-                sessions_with_trades.add(session)
-                position = None
-
         if position is not None and max_loss_per_trade_usd is not None:
-            if acc.open_pnl <= -abs(max_loss_per_trade_usd):
+            # Check intrabar high/low vs SL
+            sl_hit = False
+            if position.sl_price is not None:
+                if position.direction == 1 and float(row["low"]) <= position.sl_price:
+                    sl_hit = True
+                elif position.direction == -1 and float(row["high"]) >= position.sl_price:
+                    sl_hit = True
+
+            if sl_hit:
                 pnl = broker.close_position(acc, position, fq)
                 trade_log.append({
                     "type": "stop_close",
                     "pnl": pnl,
-                    "reason": "max_loss_per_trade",
+                    "reason": "structure_sl",
+                    "bar": i,
+                    "time": bar_time,
+                    "equity": acc.equity,
+                })
+                sessions_with_trades.add(session)
+                position = None
+            # Fallback: check safety cap
+            elif acc.open_pnl <= -abs(max_loss_per_trade_usd):
+                pnl = broker.close_position(acc, position, fq)
+                trade_log.append({
+                    "type": "stop_close",
+                    "pnl": pnl,
+                    "reason": "max_loss_cap",
                     "bar": i,
                     "time": bar_time,
                     "equity": acc.equity,
@@ -192,19 +169,41 @@ def run_backtest(
                 sessions_with_trades.add(session)
                 position = None
 
-        if position is not None and take_profit_per_trade_usd is not None:
-            if acc.open_pnl >= abs(take_profit_per_trade_usd):
+        # Check TP (structure-based if available, else use global)
+        if position is not None:
+            tp_hit = False
+            if position.tp_price is not None:
+                if position.direction == 1 and float(row["high"]) >= position.tp_price:
+                    tp_hit = True
+                elif position.direction == -1 and float(row["low"]) <= position.tp_price:
+                    tp_hit = True
+
+            if tp_hit:
                 pnl = broker.close_position(acc, position, fq)
                 trade_log.append({
                     "type": "tp_close",
                     "pnl": pnl,
-                    "reason": "take_profit_per_trade",
+                    "reason": "structure_tp",
                     "bar": i,
                     "time": bar_time,
                     "equity": acc.equity,
                 })
                 sessions_with_trades.add(session)
                 position = None
+            elif not use_structure_sl_tp and take_profit_per_trade_usd is not None:
+                # Fallback: global USD-based TP
+                if acc.open_pnl >= abs(take_profit_per_trade_usd):
+                    pnl = broker.close_position(acc, position, fq)
+                    trade_log.append({
+                        "type": "tp_close",
+                        "pnl": pnl,
+                        "reason": "take_profit_per_trade",
+                        "bar": i,
+                        "time": bar_time,
+                        "equity": acc.equity,
+                    })
+                    sessions_with_trades.add(session)
+                    position = None
 
         reason = guardrails.breach_reason(acc)
         if reason and session not in breached_sessions:
@@ -251,42 +250,85 @@ def run_backtest(
                 position = None
 
             if position is None:
-                position = broker.open_position(acc, fq, lots, action)
-                if position:
-                    # Compute structure-based SL/TP if available
-                    if use_structure_sl_tp and "last_swing_low_price" in features.columns and "last_swing_high_price" in features.columns:
-                        last_swing_low = float(features.iloc[i].get("last_swing_low_price", np.nan))
-                        last_swing_high = float(features.iloc[i].get("last_swing_high_price", np.nan))
-                        
-                        position.sl_price = compute_sl_price(
-                            position.entry_price,
-                            action,
+                # Extract structure features if available
+                sl_price = None
+                tp_price = None
+                actual_lots = lots
+                
+                if use_structure_sl_tp:
+                    # Try to extract swing levels from features
+                    feat_row = features.iloc[i]
+                    last_swing_low = (
+                        feat_row.get("last_swing_low")
+                        if "last_swing_low" in feat_row.index
+                        else np.nan
+                    )
+                    last_swing_high = (
+                        feat_row.get("last_swing_high")
+                        if "last_swing_high" in feat_row.index
+                        else np.nan
+                    )
+
+                    entry_price_for_calc = float(fq[1] if action == 1 else fq[0])
+
+                    # Compute SL/TP based on direction
+                    if action == 1 and not np.isnan(last_swing_low):
+                        # Long
+                        sl_price, tp_price = compute_sl_tp_long(
+                            entry_price_for_calc,
                             last_swing_low,
-                            last_swing_high,
-                            buffer_pts=1.0,
-                        )
-                        
-                        # Compute TP with default R:R ratio
-                        rr_ratio = 2.0
-                        position.tp_price = compute_tp_price(
-                            position.entry_price,
-                            position.sl_price,
-                            action,
+                            buffer_pts=swing_buffer_pts,
                             rr_ratio=rr_ratio,
                         )
+                        actual_lots = compute_lots(
+                            acc.equity,
+                            risk_frac,
+                            entry_price_for_calc,
+                            sl_price,
+                            contract_size=contract_size,
+                            min_lot=min_lot,
+                            max_lot=max_lot,
+                            max_loss_cap=max_loss_per_trade_usd,
+                        )
+                    elif action == -1 and not np.isnan(last_swing_high):
+                        # Short
+                        sl_price, tp_price = compute_sl_tp_short(
+                            entry_price_for_calc,
+                            last_swing_high,
+                            buffer_pts=swing_buffer_pts,
+                            rr_ratio=rr_ratio,
+                        )
+                        actual_lots = compute_lots(
+                            acc.equity,
+                            risk_frac,
+                            entry_price_for_calc,
+                            sl_price,
+                            contract_size=contract_size,
+                            min_lot=min_lot,
+                            max_lot=max_lot,
+                            max_loss_cap=max_loss_per_trade_usd,
+                        )
+
+                position = broker.open_position(acc, fq, actual_lots, action)
+                if position:
+                    # Attach SL/TP/risk info
+                    position.sl_price = sl_price
+                    position.tp_price = tp_price
+                    position.risk_frac = risk_frac
+                    position.rr_ratio = rr_ratio
                     
                     trade_log.append({
                         "type": "open",
                         "direction": action,
                         "price": position.entry_price,
-                        "lots": lots,
+                        "lots": position.size,
+                        "sl_price": sl_price,
+                        "tp_price": tp_price,
+                        "risk_frac": risk_frac,
+                        "rr_ratio": rr_ratio,
                         "bar": i,
                         "time": bar_time,
                         "equity": acc.equity,
-                        "sl_price": position.sl_price if position.sl_price else np.nan,
-                        "tp_price": position.tp_price if position.tp_price else np.nan,
-                        "last_swing_low": float(features.iloc[i].get("last_swing_low_price", np.nan)) if use_structure_sl_tp else np.nan,
-                        "last_swing_high": float(features.iloc[i].get("last_swing_high_price", np.nan)) if use_structure_sl_tp else np.nan,
                     })
                     sessions_with_trades.add(session)
 
