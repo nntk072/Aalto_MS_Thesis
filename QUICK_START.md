@@ -9,16 +9,41 @@ source $HOME/.local/bin/env  # Activate environment
 ## Run Tests (1 minute)
 ```bash
 # All tests
-.venv/bin/python -m pytest tests/test_structure.py tests/test_risk.py -v
+.venv/bin/python -m pytest tests/test_structure.py tests/test_risk.py tests/test_macd_baseline.py -v
 
 # Individual test files
 .venv/bin/python -m pytest tests/test_structure.py -v
 .venv/bin/python -m pytest tests/test_risk.py -v
+.venv/bin/python -m pytest tests/test_macd_baseline.py -v
 ```
 
-**Expected:** 12/12 tests passing ✅
+**Expected:** 19/19 tests passing ✅
 
 ---
+
+## MACD Baseline Strategy
+
+The MACD baseline implements a true crossover strategy with EMA50 filtering:
+
+### Rules:
+- **Indicators:** MACD (EMA12/26), Signal (SMA9 on MACD), EMA50 trend filter
+- **Long entry:** `close > EMA50` **and** bullish MACD cross (MACD crosses above signal)
+- **Long exit:** Bearish MACD cross (goes flat, does NOT flip to short)
+- **Short entry:** `close < EMA50` **and** bearish MACD cross
+- **Short exit:** Bullish MACD cross (goes flat, does NOT flip to long)
+- **Cooldown:** After any exit, wait ≥5 minutes (5 M1 bars) before next entry
+- **No SL/TP:** Positions exit only on opposite MACD cross
+
+### Per-trade order chart layout (all strategies):
+```
+┌─────────────────────────────┐
+│ Candlesticks + EMA50 overlay│  ← Price panel
+│ Entry/exit arrows           │
+│ MAE/MFE/SL/TP lines (if any)│
+├─────────────────────────────┤
+│ MACD line + signal + hist   │  ← Indicator panel
+└─────────────────────────────┘
+```
 
 ## Run Baseline (10 seconds)
 ```bash
@@ -29,13 +54,14 @@ source $HOME/.local/bin/env  # Activate environment
 .venv/bin/python -m quant_rl.train.run_baselines --strategy macd
 
 # View results
-ls -1 outputs/baseline_macd_seed*/test/orders/trade_*.png | head -3
+ls -1 outputs/baseline_macd_seed*/test/orders/trade_*.{png,html} | head -5
 ```
 
 **Expected:** 
 - Training Sharpe: -5 to -10
 - Test Sharpe: -8 to -12
-- Charts with SL/TP lines visible ✅
+- 83-150 trades per split (realistic hold times, no rapid entry/exit)
+- Charts with EMA50 line + MACD panel below candlesticks ✅
 
 ---
 

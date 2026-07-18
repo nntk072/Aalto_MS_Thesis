@@ -10,7 +10,7 @@ source $HOME/.local/bin/env  # Activate environment
 
 ## Phase Testing & Validation
 
-### 1. Run Unit Tests (Structure & Risk)
+### 1. Run Unit Tests (Structure, Risk, MACD Baseline)
 
 ```bash
 # Test structure features (causal swing detection)
@@ -19,13 +19,17 @@ source $HOME/.local/bin/env  # Activate environment
 # Test risk sizing (SL/TP/lots computation)
 .venv/bin/python -m pytest tests/test_risk.py -v
 
-# Run both together
-.venv/bin/python -m pytest tests/test_structure.py tests/test_risk.py -v
+# Test MACD baseline strategy
+.venv/bin/python -m pytest tests/test_macd_baseline.py -v
+
+# Run all together
+.venv/bin/python -m pytest tests/test_structure.py tests/test_risk.py tests/test_macd_baseline.py -v
 ```
 
 **Expected output:**
 - 2 structure tests passing
 - 10 risk tests passing
+- 7 MACD baseline tests passing
 
 ---
 
@@ -33,21 +37,53 @@ source $HOME/.local/bin/env  # Activate environment
 
 ### 2. Run MACD Baseline Strategy
 
+The MACD baseline implements a true crossover strategy with the following rules:
+
+#### Indicators:
+- **MACD Line:** EMA(12) - EMA(26) on close
+- **Signal Line:** SMA(9) on MACD line (not EMA — this is important)
+- **Trend Filter:** EMA(50) on close
+
+#### Entry / Exit Rules:
+1. **Long entry:** `close > EMA50` **AND** bullish MACD cross
+   - Bullish cross: MACD crosses above signal (macd[t-1] ≤ signal[t-1], macd[t] > signal[t])
+2. **Long exit:** Bearish MACD cross only (goes flat, does NOT flip to short)
+3. **Short entry:** `close < EMA50` **AND** bearish MACD cross
+4. **Short exit:** Bullish MACD cross only (goes flat, does NOT flip to long)
+5. **Cooldown:** After any exit, wait ≥5 M1 bars (5 minutes) before next entry
+6. **No SL/TP:** Baseline uses no stop loss or take profit levels
+
+#### Per-trade Charts (All Strategies):
+Every trade chart (PNG and HTML) displays a 2-panel layout:
+- **Top panel:** Candlesticks with EMA50 overlay, entry/exit arrows, MAE/MFE/SL/TP lines
+- **Bottom panel:** MACD line, signal line, histogram (green if positive, red if negative)
+
+#### Run commands:
+
 ```bash
-# Quick test (uses default config)
+# Quick test (no charts saved, uses default config)
 .venv/bin/python -m quant_rl.train.run_baselines --strategy macd --no-save
 
 # Full run with chart generation
 .venv/bin/python -m quant_rl.train.run_baselines --strategy macd
 
-# Run EMA baseline
+# View generated charts
+ls -1 outputs/baseline_macd_seed*/test/orders/trade_*.png | head -5
+open outputs/baseline_macd_seed42/test/orders/trade_0001_*.png  # View first trade
+
+# Run other baselines for comparison
 .venv/bin/python -m quant_rl.train.run_baselines --strategy ema
+.venv/bin/python -m quant_rl.train.run_baselines --strategy rsi
 ```
 
 **What this does:**
-- Runs MACD momentum-based policy with structure SL/TP
-- Generates per-trade charts (PNG + HTML) showing realistic hold times
-- Verifies structure SL/TP enforcement works correctly
+- Executes MACD crossover policy (no RL model)
+- Generates per-trade charts (PNG + HTML) showing:
+  - Candlesticks, EMA50 line, entry/exit markers
+  - MACD, signal, histogram in bottom panel
+  - Trade info (direction, open/close prices, volume, duration)
+- Typical output: 80-150 trades per split with realistic hold times
+- Verifies order chart layout works correctly
 
 **Output:** `outputs/baseline_macd_seed42/`
 - `training/orders/trade_*.png` — Per-trade charts with SL/TP levels
