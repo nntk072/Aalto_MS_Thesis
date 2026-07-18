@@ -341,9 +341,15 @@ class TradingEnv(gym.Env):
         pnl_step = self.account.equity - self.equity_curve[-2]
         self.pnl_history.append(pnl_step)
 
-        # Compute reward
-        equity_series = pd.Series(self.equity_curve)
-        reward = self.reward_fn.compute(equity_series, self.account.equity)
+        # Compute reward using DSR
+        daily_loss = self.initial_balance - self.account.equity
+        reward = self.reward_fn(
+            pnl_step,
+            daily_loss=daily_loss,
+            daily_loss_limit=self.guardrails.daily_loss_limit,
+            initial_balance=self.initial_balance,
+            breach=done and truncated,
+        )
 
         obs = self._get_observation()
         info = {"equity": self.account.equity, "position": self.position is not None}
