@@ -1,0 +1,13 @@
+# Pinned dev/CI tooling, exported from uv.lock (dev extra).
+# Installs the runtime pins plus lint/type-check tooling:
+#   pip install -r requirements.txt -r requirements-dev.txt
+# Single source of truth is uv.lock; regenerate with `make lock-export`.
+# (torch is installed separately from the PyTorch index; see requirements.txt.)
+-r requirements.txt
+
+ast-serialize==0.6.0
+librt==0.13.0 ; platform_python_implementation != 'PyPy'
+mypy-extensions==1.1.0
+mypy==2.3.0
+pathspec==1.1.1
+ruff==0.15.22

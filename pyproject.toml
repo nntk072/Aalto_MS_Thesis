@@ -58,6 +58,16 @@ dev = [
     "ruff>=0.7",
 ]
 
+# Use the CPU build of torch so `uv sync` / uv.lock stay small and match CI.
+# Remove this section (and re-lock) if you need GPU/CUDA torch locally.
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v"
