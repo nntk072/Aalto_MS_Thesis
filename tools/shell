@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Open a bash shell inside the Docker dev container.
+# Auto-builds the image if missing or outdated (Dockerfile changed).
+#
+# Usage:
+#   ./tools/shell                              # interactive bash
+#   ./tools/shell python -c "import quant_rl"  # run a single command
+
+# Check if user is in the docker group
+if ! groups | grep -qw docker; then
+  echo "ERROR: User is not in the docker group. Run:" >&2
+  echo "  newgrp docker" >&2
+  echo "or log out and back in to apply group changes." >&2
+  exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SCRIPT_DIR"
+
+IMAGE="quant-rl-thesis:dev"
+COMPOSE_FILE="docker-compose.yml"
+
+# Rebuild if the image doesn't exist or the Dockerfile is newer than the image.
+IMAGE_EXISTS=$(docker image inspect "$IMAGE" --format '{{.Id}}' 2>/dev/null || echo "")
+DOCKERFILE_MTIME=$(stat -c %Y Dockerfile docker-compose.yml 2>/dev/null | sort -rn | head -1)
+IMAGE_MTIME=0
+if [ -n "$IMAGE_EXISTS" ]; then
+  IMAGE_MTIME=$(docker image inspect "$IMAGE" --format '{{.Created}}' 2>/dev/null \
+    | xargs -I{} date -d "{}" +%s 2>/dev/null || echo 0)
+fi
+
+if [ -z "$IMAGE_EXISTS" ] || [ "${DOCKERFILE_MTIME:-0}" -gt "${IMAGE_MTIME:-0}" ]; then
+  echo "==> Building dev image (first run or Dockerfile changed)..."
+  docker compose -f "$COMPOSE_FILE" build dev
+  echo ""
+fi
+
+if [ $# -gt 0 ]; then
+  exec docker compose -f "$COMPOSE_FILE" run --rm dev "$@"
+else
+  exec docker compose -f "$COMPOSE_FILE" run --rm --entrypoint /bin/bash dev
+fi

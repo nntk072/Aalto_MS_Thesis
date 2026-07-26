@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Check markdown documentation files exist and are non-empty.
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SCRIPT_DIR"
+
+found=0
+for f in *.md; do
+  if [ -f "$f" ]; then
+    echo "==> Checking $f"
+    lines=$(wc -l < "$f")
+    if [ "$lines" -eq 0 ]; then
+      echo "ERROR: $f is empty"
+      exit 1
+    fi
+    echo "  $lines lines"
+    found=1
+  fi
+done
+
+if [ "$found" -eq 0 ]; then
+  echo "No markdown files found."
+fi

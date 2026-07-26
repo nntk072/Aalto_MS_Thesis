@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Verify .venv exists and is functional.
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SCRIPT_DIR"
+
+if [ ! -d .venv ]; then
+  echo "ERROR: .venv not found. Run 'uv sync --extra dev' first."
+  exit 1
+fi
+
+if ! .venv/bin/python --version >/dev/null 2>&1; then
+  echo "ERROR: .venv Python interpreter is not functional."
+  exit 1
+fi
+
+echo ".venv is functional: $(.venv/bin/python --version)"

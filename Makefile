@@ -82,3 +82,69 @@ deps-check: lock-check
 	    rm -rf $$tmp; exit 1; \
 	fi; \
 	rm -rf $$tmp; echo 'pip pin files are in sync with uv.lock.'
+
+# --- Docker targets ---
+
+DOCKER_COMPOSE ?= docker compose
+DOCKER_FILE = docker-compose.yml
+
+.PHONY: docker-build docker-build-dev docker-build-test docker-pipeline docker-parallel docker-clean docker-logs docker-shell
+
+## Build the runtime Docker image.
+docker-build:
+	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) build base
+
+## Build dev image (includes lint/type-check tooling).
+docker-build-dev:
+	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) build dev
+
+## Build test image.
+docker-build-test:
+	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) build test
+
+## Build all Docker images.
+docker-build-all: docker-build docker-build-dev docker-build-test
+
+## Run the full pipeline (lint -> typecheck -> test -> baseline).
+docker-pipeline:
+	scripts/docker/pipeline.sh
+
+## Run parallel batch jobs. Usage: make docker-parallel SERVICE=<service> ARGS="--symbol EURUSD --symbol GBPUSD"
+docker-parallel:
+	@if [ -z "$(SERVICE)" ]; then echo "Usage: make docker-parallel SERVICE=<service> ARGS=\"...\""; exit 1; fi
+	scripts/docker/parallel-run.sh $(SERVICE) $(ARGS)
+
+## Run tests in Docker.
+docker-test:
+	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) run --rm test
+
+## Run lint in Docker.
+docker-lint:
+	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) run --rm lint
+
+## Run typecheck in Docker.
+docker-typecheck:
+	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) run --rm typecheck
+
+## Run a specific service. Usage: make docker-run SERVICE=<service>
+docker-run:
+	@if [ -z "$(SERVICE)" ]; then echo "Usage: make docker-run SERVICE=<service>"; exit 1; fi
+	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) run --rm $(SERVICE)
+
+## Open a shell in the dev container.
+docker-shell:
+	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) run --entrypoint /bin/bash --rm dev
+
+## Remove all containers and images built by this project.
+docker-clean:
+	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) down --rmi all --volumes 2>/dev/null || true
+
+## Tail logs from the most recent pipeline run.
+docker-logs:
+	@latest=$$(ls -t outputs/pipeline-logs/ 2>/dev/null | head -1); \
+	if [ -n "$$latest" ]; then \
+	  echo "=== pipeline-logs/$$latest ==="; \
+	  cat "outputs/pipeline-logs/$$latest"; \
+	else \
+	  echo "No pipeline logs found."; \
+	fi

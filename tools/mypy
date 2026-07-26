@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Run mypy type checker.
+# Usage:
+#   ./tools/mypy            # check quant_rl/ (default)
+#   ./tools/mypy quant_rl/data/  # check specific path
+
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SCRIPT_DIR"
+
+if [ $# -gt 0 ]; then
+  exec uv run mypy "$@"
+else
+  exec uv run mypy quant_rl
+fi

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Run unit tests.
+# Usage:
+#   ./tools/test                  # run all tests
+#   ./tools/test tests/unit/      # run specific directory
+#   ./tools/test -k test_name     # run matching tests
+
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SCRIPT_DIR"
+
+uv sync --extra dev
+
+if [ $# -gt 0 ]; then
+  exec uv run pytest "$@"
+else
+  exec uv run pytest tests/ -v
+fi

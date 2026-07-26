@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Install dependencies using uv (sync from uv.lock).
+# Usage:
+#   ./tools/uv-install          # install runtime deps only
+#   ./tools/uv-install --dev    # install runtime + dev deps (ruff, mypy)
+
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SCRIPT_DIR"
+
+if [ "${1:-}" = "--dev" ]; then
+  echo "==> uv sync --extra dev"
+  uv sync --extra dev
+else
+  echo "==> uv sync"
+  uv sync
+fi
+
+echo "==> done. venv at .venv/"

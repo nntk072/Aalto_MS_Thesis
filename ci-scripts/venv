@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Create .venv using CI-style pip install (mirrors .github/workflows/ci.yml).
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SCRIPT_DIR"
+
+if [ -d .venv ]; then
+  echo "==> .venv already exists, removing..."
+  rm -rf .venv
+fi
+
+echo "==> Creating .venv with python -m venv ..."
+python3.12 -m venv .venv
+source .venv/bin/activate
+
+echo "==> Upgrading pip ..."
+python -m pip install --upgrade pip
+
+echo "==> Installing torch (CPU) ..."
+pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu
+
+echo "==> Installing pinned dependencies ..."
+pip install -c constraints.txt -r requirements.txt -r requirements-dev.txt
+pip install -c constraints.txt -e . --no-deps
+
+echo "==> done. Activate with: source .venv/bin/activate"

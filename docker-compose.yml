@@ -1,0 +1,112 @@
+services:
+  base:
+    build:
+      context: .
+      target: runtime
+    image: quant-rl-thesis:latest
+    user: "1001:1001"
+    volumes:
+      - ./outputs:/app/outputs
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./cache:/app/cache
+      - ./logs:/app/logs
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+
+  dev:
+    build:
+      context: .
+      target: dev
+    image: quant-rl-thesis:dev
+    volumes:
+      - .:/app
+      - ./outputs:/app/outputs
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./cache:/app/cache
+      - ./logs:/app/logs
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - UV_SYSTEM_PYTHON=1
+
+  test:
+    build:
+      context: .
+      target: test
+    image: quant-rl-thesis:test
+    volumes:
+      - ./outputs:/app/outputs
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./cache:/app/cache
+      - ./logs:/app/logs
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    command:
+      - tests/
+      - -v
+      - --tb=short
+
+  # --- Pipeline stages ---
+
+  prepare-data:
+    extends: base
+    command: ["scripts/prepare_data.py"]
+
+  discover-symbols:
+    extends: base
+    command: ["scripts/discover_symbols.py"]
+
+  baseline-macd:
+    extends: base
+    command:
+      - -m
+      - quant_rl.train.run_baselines
+      - --strategy
+      - macd
+
+  train-rl:
+    extends: base
+    command:
+      - -m
+      - quant_rl.train.train_rl
+
+  backtest:
+    extends: base
+    command:
+      - -m
+      - quant_rl.train.run_backtest
+
+  lint:
+    extends: dev
+    command:
+      - -m
+      - ruff
+      - check
+      - quant_rl
+
+  typecheck:
+    extends: dev
+    command:
+      - -m
+      - mypy
+      - quant_rl
+
+  # --- Convenience aliases ---
+
+  demo-trading:
+    extends: base
+    command: ["demo_trading.py"]
+
+  live-trading:
+    extends: base
+    command: ["live_trading.py"]
+    network_mode: host
+
+networks:
+  default:
+    name: quant-rl-thesis

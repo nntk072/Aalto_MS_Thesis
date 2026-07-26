@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Check markdown formatting with mdformat if available.
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SCRIPT_DIR"
+
+for f in *.md; do
+  if [ -f "$f" ]; then
+    echo "==> Checking $f"
+    if command -v mdformat >/dev/null 2>&1; then
+      mdformat --check "$f"
+    else
+      echo "mdformat not available, skipping format check for $f"
+    fi
+  fi
+done

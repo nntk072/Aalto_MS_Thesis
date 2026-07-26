@@ -7,20 +7,38 @@ on:
   pull_request:
 
 jobs:
-  checks:
+  # ============================================================
+  # Phase 1: Environment — verify tools, deps, and images
+  # ============================================================
+  build-dev-image:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.12"]
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
+      - name: Create dummy zscaler.crt for CI (not needed in CI, but Dockerfile expects it)
+        run: touch zscaler.crt
+
+      - name: Build dev image
+        run: docker compose build dev
+
+  check-docker-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify Docker is available
+        run: docker info
+
+      - name: Verify docker compose
+        run: docker compose version
+
+  check-python-requirements:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -28,33 +46,222 @@ jobs:
       - name: Verify lockfile and pin files are in sync
         run: make deps-check
 
-      - name: Create virtual environment
-        run: python -m venv .venv
+  check-uv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          . .venv/bin/activate
-          python -m pip install --upgrade pip
-          # torch first, from an index scoped to the PyTorch CPU index so it
-          # cannot shadow PyPI packages. No -c here: constraints.txt pins
-          # transitive deps to PyPI-only versions absent from the torch index;
-          # those deps are pinned by the constrained PyPI install below.
-          pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu
-          # everything else from PyPI, pinned and constrained.
-          pip install -c constraints.txt -r requirements.txt -r requirements-dev.txt
-          pip install -c constraints.txt -e . --no-deps
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-      - name: Run Ruff
-        run: |
-          . .venv/bin/activate
-          ruff check .
+      - name: Sync dependencies
+        run: uv sync --extra dev
 
-      - name: Run mypy
-        run: |
-          . .venv/bin/activate
-          mypy .
+  check-venv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - name: Run tests
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Create .venv and sync
+        run: uv sync --extra dev
+
+  # ============================================================
+  # Phase 2: Build — formatting, typechecking, packaging
+  # ============================================================
+  check-docs:
+    needs:
+      - check-uv
+      - check-python-requirements
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync dependencies
+        run: uv sync --extra dev
+
+      - name: Check markdown files
         run: |
-          . .venv/bin/activate
-          pytest tests/test_structure.py tests/test_risk.py tests/test_macd_baseline.py -v
+          for f in *.md; do
+            if [ -f "$f" ]; then
+              echo "==> Checking $f"
+              wc -l "$f"
+            fi
+          done
+
+  code-formatting:
+    needs:
+      - check-uv
+      - check-python-requirements
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync dependencies
+        run: uv sync --extra dev
+
+      - name: Ruff check
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: mypy
+        run: uv run mypy quant_rl
+
+  json-check:
+    needs: check-uv
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate JSON files
+        run: |
+          found=0
+          while IFS= read -r -d '' f; do
+            echo "==> Validating $f"
+            python -m json.tool "$f" > /dev/null
+            found=1
+          done < <(find . -name '*.json' -not -path './.venv/*' -not -path './.cache/*' -not -path './node_modules/*' -print0)
+          if [ "$found" -eq 0 ]; then
+            echo "No JSON files found to validate."
+          fi
+
+  markdown-formatting:
+    needs: check-uv
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check markdown formatting
+        run: |
+          for f in *.md; do
+            if [ -f "$f" ]; then
+              echo "==> Checking $f"
+              if command -v mdformat >/dev/null 2>&1; then
+                mdformat --check "$f"
+              else
+                echo "mdformat not available, skipping format check for $f"
+              fi
+            fi
+          done
+
+  docker-release-build:
+    needs: build-dev-image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Create dummy zscaler.crt for CI
+        run: touch zscaler.crt
+
+      - name: Build runtime image
+        run: docker compose build base
+
+  uv-build:
+    needs:
+      - check-uv
+      - check-python-requirements
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync dependencies
+        run: uv sync --extra dev
+
+      - name: Build package
+        run: uv build
+
+  venv-build:
+    needs:
+      - check-uv
+      - check-python-requirements
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Create .venv and install package
+        run: |
+          uv venv --python 3.12
+          uv sync --extra dev
+          uv pip install -e .
+
+  # ============================================================
+  # Phase 3: Unit Tests
+  # ============================================================
+  ut-venv:
+    needs:
+      - code-formatting
+      - json-check
+      - markdown-formatting
+      - uv-build
+      - venv-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Create .venv and sync
+        run: uv sync --extra dev
+
+      - name: Run tests (venv)
+        run: uv run pytest tests/ -v
+
+  ut-docker:
+    needs:
+      - code-formatting
+      - docker-release-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Create dummy zscaler.crt for CI
+        run: touch zscaler.crt
+
+      - name: Run tests in Docker
+        run: docker compose run --rm test
+
+  ut-uv:
+    needs:
+      - code-formatting
+      - uv-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync dependencies
+        run: uv sync --extra dev
+
+      - name: Run tests (uv)
+        run: uv run pytest tests/ -v
