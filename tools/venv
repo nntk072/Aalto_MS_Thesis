@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Create a Python virtual environment and install dependencies.
+# Usage:
+#   ./tools/venv                  # create .venv, install runtime deps
+#   ./tools/venv --dev            # create .venv, install runtime + dev deps
+#   ./tools/venv --uv             # use uv instead of pip (faster)
+#   ./tools/venv --dev --uv       # both
+
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SCRIPT_DIR"
+
+if [ -d .venv ]; then
+  rm -rf .venv
+fi
+
+USE_UV=false
+EXTRA=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --dev) EXTRA="dev" ;;
+    --uv)  USE_UV=true ;;
+  esac
+done
+
+if [ "$USE_UV" = true ]; then
+  echo "==> Creating .venv with uv ..."
+  uv venv --python 3.12
+  source .venv/bin/activate
+  if [ "$EXTRA" = "dev" ]; then
+    uv sync --extra dev
+  else
+    uv sync
+  fi
+else
+  echo "==> Creating .venv with python -m venv ..."
+  python3.12 -m venv .venv
+  source .venv/bin/activate
+  python -m pip install --upgrade pip
+  if [ "$EXTRA" = "dev" ]; then
+    pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu
+    pip install -c constraints.txt -r requirements.txt -r requirements-dev.txt
+    pip install -c constraints.txt -e . --no-deps
+  else
+    pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu
+    pip install -c constraints.txt -r requirements.txt
+    pip install -c constraints.txt -e . --no-deps
+  fi
+fi
+
+echo "==> done. Activate with: source .venv/bin/activate"

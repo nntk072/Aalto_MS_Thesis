@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Run Ruff linter + formatter on the codebase.
+# Usage:
+#   ./tools/ruffen          # check only
+#   ./tools/ruffen --fix    # auto-fix issues
+#   ./tools/ruffen --format # also run ruff format
+#
+# Accepts optional paths to limit scope:
+#   ./tools/ruffen quant_rl/data/
+
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SCRIPT_DIR"
+
+FIX=false
+FORMAT=false
+PATHS=()
+
+for arg in "$@"; do
+  case "$arg" in
+    --fix)    FIX=true ;;
+    --format) FORMAT=true ;;
+    *)        PATHS+=("$arg") ;;
+  esac
+done
+
+if [ ${#PATHS[@]} -eq 0 ]; then
+  PATHS=(quant_rl tests)
+fi
+
+echo "==> ruff check ${PATHS[*]}"
+if [ "$FIX" = true ]; then
+  uv run ruff check --fix "${PATHS[@]}"
+else
+  uv run ruff check "${PATHS[@]}"
+fi
+
+if [ "$FORMAT" = true ]; then
+  echo "==> ruff format ${PATHS[*]}"
+  uv run ruff format "${PATHS[@]}"
+fi
+
+echo "==> done"
