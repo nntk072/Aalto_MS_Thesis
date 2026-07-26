@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Build all Docker images (runtime, dev, test).
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SCRIPT_DIR"
+
+if ! docker info >/dev/null 2>&1; then
+  echo "Docker not available"
+  exit 0
+fi
+
+exec docker compose build base dev test

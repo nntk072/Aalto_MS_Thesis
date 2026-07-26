@@ -174,5 +174,12 @@ logs/
 /models/
 /outputs/
 
+# Docker pipeline logs
+/outputs/pipeline-logs/
+/outputs/parallel-logs/
+
+# Local corporate certificate (not reproducible outside this env)
+zscaler.crt
+
 # VS Code local workspace files
 .vscode/

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Verify lockfile and pip pin files are in sync with pyproject.toml.
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SCRIPT_DIR"
+exec make deps-check

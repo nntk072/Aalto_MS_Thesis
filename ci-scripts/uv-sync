@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Create .venv with uv and sync dev dependencies from uv.lock.
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SCRIPT_DIR"
+
+if [ -d .venv ]; then
+  echo "==> Removing existing .venv..."
+  rm -rf .venv
+fi
+
+echo "==> Creating .venv with uv ..."
+uv venv --python 3.12
+
+echo "==> Syncing dev dependencies ..."
+exec uv sync --extra dev
