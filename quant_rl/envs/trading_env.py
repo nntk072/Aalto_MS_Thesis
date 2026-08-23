@@ -1,11 +1,11 @@
 """Gymnasium environment for RL-based trading with structure-aware SL/TP.
 
-Wraps the backtest engine with a standard Gym interface. Actions are hybrid:
-- Discrete: {hold=0, enter_long=1, enter_short=2, exit=3}
-- Continuous (only when entering): risk_frac, rr_ratio
+Wraps the backtest engine with a standard Gym interface. Actions support:
+- Discrete: {hold=0, enter_long=1-9, enter_short=10-18, exit=19}
+- Continuous: Box(-1, 1) for proportional position sizing
 
 Observation: Dict space with time-series features (60-bar window) + account state.
-Reward: Differential Sharpe Ratio (DSR) + small penalties for poor structure usage.
+Reward: Differential Sharpe Ratio (DSR) or Sweep Confirmation Reward.
 """
 
 from __future__ import annotations
@@ -23,9 +23,11 @@ from ..backtest.costs import COST_US100, CostModel
 from ..backtest.guardrails import FTMOGuardrails
 from ..backtest.risk import compute_lots, compute_sl_tp_long, compute_sl_tp_short
 from ..envs.reward import DSRReward
+from ..envs.sweep_reward import CompositeReward, SweepConfirmationReward
+from ..models.vae import VAE
 
 
-class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
+class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, Any]]):
     """RL trading environment with structure-aware SL/TP and hybrid action space."""
 
     metadata = {"render_modes": []}
@@ -48,6 +50,18 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
         max_loss_per_trade_usd: float = 100.0,
         dsr_eta: float = 0.01,
         episodic: bool = True,
+        use_sweep_reward: bool = False,
+        sweep_alpha: float = 0.1,
+        sweep_beta: float = 0.01,
+        sweep_hold_bars: int = 3,
+        dsr_weight: float = 0.3,
+        sweep_weight: float = 0.7,
+        continuous_actions: bool = False,
+        max_risk_frac: float = 0.01,
+        use_vae: bool = False,
+        vae: VAE | None = None,
+        pre_ny_data: pd.DataFrame | None = None,
+        ny_session_start_idx: int | None = None,
     ):
         """Initialize trading environment.
 
@@ -90,6 +104,32 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
             session — mirroring ``quant_rl.backtest.engine.run_backtest`` — so
             a single call to ``reset()`` + repeated ``step()`` calls can walk
             the *entire* test set without terminating early.
+        use_sweep_reward : bool
+            If True, use SweepConfirmationReward instead of DSRReward.
+        sweep_alpha : float
+            Weight for sweep confirmation score C_t.
+        sweep_beta : float
+            Weight for time decay penalty T_t.
+        sweep_hold_bars : int
+            Number of bars price must hold beyond level for confirmation.
+        dsr_weight : float
+            Weight for DSR reward in composite.
+        sweep_weight : float
+            Weight for sweep reward in composite.
+        continuous_actions : bool
+            If True, use Box(-1, 1) continuous action space for position sizing.
+        max_risk_frac : float
+            Maximum risk fraction per trade when using continuous actions (default: 0.01 = 1%).
+        use_vae : bool
+            If True, use VAE to extract latent narrative embedding from pre-NY sequence.
+        vae : VAE | None
+            Pre-trained VAE model for narrative embedding. Required if use_vae=True.
+        pre_ny_data : pd.DataFrame | None
+            Pre-NY session data (01:05-16:29 UTC+3) for VAE input. Required if use_vae=True.
+        ny_session_start_idx : int | None
+            Index of the first NY session bar (16:30 UTC+3). Used to compute
+            minutes_since_open for the sweep time-decay penalty. If None, the
+            observation window length is used as the default.
         """
         self.bars = bars
         self.features = features
@@ -107,18 +147,61 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
         self.contract_size = contract_size
         self.max_loss_per_trade_usd = max_loss_per_trade_usd
         self.episodic = episodic
+        self.use_sweep_reward = use_sweep_reward
 
-        self.reward_fn = DSRReward(eta=dsr_eta)
+        # Initialize reward function
+        self.reward_fn: DSRReward | CompositeReward
+        if use_sweep_reward:
+            sweep_reward = SweepConfirmationReward(
+                alpha=sweep_alpha, beta=sweep_beta, hold_bars=sweep_hold_bars
+            )
+            self.reward_fn = CompositeReward(
+                sweep_reward=sweep_reward,
+                dsr_weight=dsr_weight,
+                sweep_weight=sweep_weight,
+            )
+            self.dsr_reward = DSRReward(eta=dsr_eta)  # Keep for composite
+        else:
+            self.reward_fn = DSRReward(eta=dsr_eta)
 
-        # Action space: simplified discrete
-        # 0=hold, 1-9=enter_long with risk/rr variants, 10-18=enter_short variants, 19=exit
-        # This avoids Dict space which PPO doesn't support natively
-        self.action_space = spaces.Discrete(20)
+        # Action space: continuous or discrete
+        self.continuous_actions = continuous_actions
+        self.max_risk_frac = max_risk_frac
 
-        # Observation space: dict with time-series + account state
+        # VAE for narrative embedding
+        self.use_vae = use_vae
+        self.vae = vae
+        self.pre_ny_data = pre_ny_data
+
+        if use_vae:
+            if vae is None:
+                raise ValueError("vae must be provided when use_vae=True")
+            if pre_ny_data is None:
+                raise ValueError("pre_ny_data must be provided when use_vae=True")
+            # Freeze VAE encoder
+            for param in vae.parameters():
+                param.requires_grad = False
+
+        if continuous_actions:
+            # Continuous action space: Box(-1, 1) for position sizing
+            # -1.0 = max short, +1.0 = max long, 0 = hold
+            self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
+        else:
+            # Discrete action space: 0=hold, 1-9=enter_long, 10-18=enter_short, 19=exit
+            self.action_space = spaces.Discrete(20)
+
+        # NY session start index for time decay penalty
+        self.ny_session_start_idx = (
+            ny_session_start_idx if ny_session_start_idx is not None else self.obs_window
+        )
+
+        # Observation space: dict with time-series + account state (+ VAE latent if enabled)
         # features: (obs_window, n_features)
         # account: [equity, position_direction, open_pnl, unrealised_r, dist_to_sl]
+        # vae_z: latent embedding from VAE (if use_vae=True)
         n_features = features.shape[1] if len(features) > 0 else 1
+        vae_latent_dim = vae.encoder.latent_dim if use_vae and vae is not None else 0
+
         self.observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(
@@ -135,6 +218,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
                 ),
             }
         )
+        # Add VAE latent to observation space if enabled
+        if use_vae and vae_latent_dim > 0:
+            self.observation_space.spaces["vae_z"] = spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(vae_latent_dim,),
+                dtype=np.float32,
+            )
 
         self.reset()
 
@@ -153,6 +244,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
         self.pnl_history = [0.0]
         self.trade_log: list[dict[str, Any]] = []
 
+        # Reset reward function
+        self.reward_fn.reset()
+
         # Eval-mode (episodic=False) walk-forward bookkeeping. Harmless but
         # unused when episodic=True (training).
         self.prev_session: int | None = None
@@ -169,16 +263,69 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
         """Factory for fresh account state."""
         return AccountState(initial_balance=self.initial_balance)
 
+    def _check_entry_gate(
+        self,
+        price: float,
+        discrete_action: int,
+        feat_row: pd.Series,
+    ) -> bool:
+        """Check if action is allowed based on multi-liquidity entry gate.
+
+        Entry Gate Rules:
+        - Long: (price > LondonHigh OR price > AsianHigh) AND volume_spike > 1.5
+        - Short: (price < LondonLow OR price < AsianLow) AND volume_spike > 1.5
+        - Exit/Hold: Always allowed
+
+        Parameters
+        ----------
+        price : float
+            Current price
+        discrete_action : int
+            -1 = short, 0 = hold/exit, 1 = long
+        feat_row : pd.Series
+            Feature row with liquidity levels and volume_spike
+
+        Returns
+        -------
+        bool
+            True if action is allowed, False otherwise
+        """
+        if discrete_action == 0:  # Hold or exit
+            return True
+
+        # Check if we have the required features
+        if not all(
+            col in feat_row.index
+            for col in ["london_high", "london_low", "asian_high", "asian_low", "volume_spike"]
+        ):
+            return True  # Fallback: allow if features missing
+
+        london_high = float(feat_row["london_high"])
+        london_low = float(feat_row["london_low"])
+        asian_high = float(feat_row["asian_high"])
+        asian_low = float(feat_row["asian_low"])
+        volume_spike = float(feat_row["volume_spike"])
+
+        if discrete_action == 1:  # Long
+            # Long allowed if price > LondonHigh OR price > AsianHigh AND volume_spike > 1.5
+            return (price > london_high or price > asian_high) and volume_spike > 1.5
+        elif discrete_action == -1:  # Short
+            # Short allowed if price < LondonLow OR price < AsianLow AND volume_spike > 1.5
+            return (price < london_low or price < asian_low) and volume_spike > 1.5
+
+        return True
+
     def step(
         self,
-        action: int,
+        action: int | np.ndarray[Any, Any],
     ) -> tuple[dict[str, np.ndarray[Any, Any]], float, bool, bool, dict[str, Any]]:
         """Execute one step.
 
         Parameters
         ----------
-        action : int
-            0=hold, 1-9=enter_long variants, 10-18=enter_short variants, 19=exit
+        action : int or np.ndarray
+            Discrete: 0=hold, 1-9=enter_long variants, 10-18=enter_short variants, 19=exit
+            Continuous: Box(-1, 1) for proportional position sizing
         """
         if self.step_idx >= len(self.bars):
             done = True
@@ -208,54 +355,78 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
         else:
             fill_bid, fill_ask = bid, ask
 
-        # Decode discrete action (0-19)
-        # 0: hold
-        # 1-9: enter_long with different risk/rr (3x3 grid)
-        # 10-18: enter_short with different risk/rr (3x3 grid)
-        # 19: exit
+        # Decode action (discrete or continuous)
         discrete_action = 0  # default hold
         risk_frac = self.risk_frac_range[0]  # default
         rr_ratio = self.rr_ratio_range[0]  # default
 
-        if action == 0:
-            discrete_action = 0  # hold
-        elif 1 <= action <= 9:
-            discrete_action = 1  # enter_long
-            # Map to risk/rr: low/med/high × low/med/high
-            idx = action - 1
-            risk_variant = idx // 3  # 0, 1, 2
-            rr_variant = idx % 3  # 0, 1, 2
-            risk_levels = [
-                self.risk_frac_range[0],
-                (self.risk_frac_range[0] + self.risk_frac_range[1]) / 2,
-                self.risk_frac_range[1],
-            ]
-            rr_levels = [
-                self.rr_ratio_range[0],
-                (self.rr_ratio_range[0] + self.rr_ratio_range[1]) / 2,
-                self.rr_ratio_range[1],
-            ]
-            risk_frac = risk_levels[risk_variant]
-            rr_ratio = rr_levels[rr_variant]
-        elif 10 <= action <= 18:
-            discrete_action = -1  # enter_short
-            idx = action - 10
-            risk_variant = idx // 3
-            rr_variant = idx % 3
-            risk_levels = [
-                self.risk_frac_range[0],
-                (self.risk_frac_range[0] + self.risk_frac_range[1]) / 2,
-                self.risk_frac_range[1],
-            ]
-            rr_levels = [
-                self.rr_ratio_range[0],
-                (self.rr_ratio_range[0] + self.rr_ratio_range[1]) / 2,
-                self.rr_ratio_range[1],
-            ]
-            risk_frac = risk_levels[risk_variant]
-            rr_ratio = rr_levels[rr_variant]
-        else:  # action == 19
-            discrete_action = 0  # exit action mapped to hold, exit handled below
+        # Handle continuous actions
+        if self.continuous_actions:
+            if isinstance(action, np.ndarray):
+                # Continuous action: Box(-1, 1)
+                action_value = float(action[0]) if action.size > 0 else 0.0
+            else:
+                # For backward compatibility, treat as discrete
+                action_value = 0.0
+
+            # Map continuous action to discrete_action and risk_frac
+            if action_value > 0.1:
+                discrete_action = 1  # long
+                risk_frac = self.max_risk_frac * action_value
+            elif action_value < -0.1:
+                discrete_action = -1  # short
+                risk_frac = self.max_risk_frac * abs(action_value)
+            else:
+                discrete_action = 0  # hold
+                risk_frac = 0.0
+        else:
+            # Discrete actions
+            if action == 0:
+                discrete_action = 0  # hold
+            elif 1 <= action <= 9:
+                discrete_action = 1  # enter_long
+                # Map to risk/rr: low/med/high × low/med/high
+                idx = action - 1
+                risk_variant = idx // 3  # 0, 1, 2
+                rr_variant = idx % 3  # 0, 1, 2
+                risk_levels = [
+                    self.risk_frac_range[0],
+                    (self.risk_frac_range[0] + self.risk_frac_range[1]) / 2,
+                    self.risk_frac_range[1],
+                ]
+                rr_levels = [
+                    self.rr_ratio_range[0],
+                    (self.rr_ratio_range[0] + self.rr_ratio_range[1]) / 2,
+                    self.rr_ratio_range[1],
+                ]
+                risk_frac = risk_levels[risk_variant]
+                rr_ratio = rr_levels[rr_variant]
+            elif 10 <= action <= 18:
+                discrete_action = -1  # enter_short
+                idx = action - 10
+                risk_variant = idx // 3
+                rr_variant = idx % 3
+                risk_levels = [
+                    self.risk_frac_range[0],
+                    (self.risk_frac_range[0] + self.risk_frac_range[1]) / 2,
+                    self.risk_frac_range[1],
+                ]
+                rr_levels = [
+                    self.rr_ratio_range[0],
+                    (self.rr_ratio_range[0] + self.rr_ratio_range[1]) / 2,
+                    self.rr_ratio_range[1],
+                ]
+                risk_frac = risk_levels[risk_variant]
+                rr_ratio = rr_levels[rr_variant]
+            else:  # action == 19
+                discrete_action = 0  # exit action mapped to hold, exit handled below
+
+        # Check entry gate for new positions
+        if discrete_action != 0:  # Only check for long/short entries
+            if not self._check_entry_gate(float(bar["close"]), discrete_action, feat_row):
+                # Gate not satisfied, force to hold
+                discrete_action = 0
+                risk_frac = 0.0
 
         # Check guardrails
         if self.episodic:
@@ -494,15 +665,42 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
         pnl_step = self.account.equity - self.equity_curve[-2]
         self.pnl_history.append(pnl_step)
 
-        # Compute reward using DSR
+        # Compute reward
         daily_loss = self.initial_balance - self.account.equity
-        reward = self.reward_fn(
-            pnl_step,
-            daily_loss=daily_loss,
-            daily_loss_limit=self.guardrails.daily_loss_limit,
-            initial_balance=self.initial_balance,
-            breach=done and truncated,
-        )
+
+        # Minutes elapsed since the NY open (5-min bars) for time-decay penalty
+        minutes_since_open = max(0, (self.step_idx - self.ny_session_start_idx)) * 5.0 / 60.0
+
+        reward_kwargs: dict[str, Any] = {
+            "daily_loss": daily_loss,
+            "daily_loss_limit": self.guardrails.daily_loss_limit,
+            "initial_balance": self.initial_balance,
+            "breach": done and truncated,
+        }
+
+        # Add sweep parameters (incl. minutes since open for time decay)
+        # only when the composite reward is active; DSR ignores them.
+        if self.use_sweep_reward and isinstance(self.reward_fn, CompositeReward):
+            current_feat = self.features.iloc[self.step_idx]
+            position_changed = (
+                self.position is not None
+                and len(self.trade_log) > 0
+                and self.trade_log[-1].get("type") in ("open", "close")
+            )
+            reward_kwargs.update(
+                {
+                    "cost": 0.0,
+                    "price": float(bar["close"]),
+                    "london_high": float(current_feat.get("london_high", float("nan"))),
+                    "london_low": float(current_feat.get("london_low", float("nan"))),
+                    "asian_high": float(current_feat.get("asian_high", float("nan"))),
+                    "asian_low": float(current_feat.get("asian_low", float("nan"))),
+                    "minutes_since_open": float(minutes_since_open),
+                    "position_changed": bool(position_changed),
+                }
+            )
+
+        reward = self.reward_fn(pnl_step, **reward_kwargs)
 
         obs = self._get_observation()
         info = {"equity": self.account.equity, "position": self.position is not None}
@@ -560,4 +758,25 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
             dtype=np.float32,
         )
 
-        return {"seq": seq, "account": account_state}
+        obs: dict[str, np.ndarray[Any, Any]] = {"seq": seq, "account": account_state}
+
+        # Add VAE latent embedding if enabled
+        if self.use_vae and self.vae is not None and self.pre_ny_data is not None:
+            # Get the current day's pre-NY sequence
+            # Assuming pre_ny_data is aligned with bars and features
+            # and contains the full pre-NY sequence for each day
+            current_idx = min(self.step_idx, len(self.pre_ny_data) - 1)
+            pre_ny_seq = np.asarray(self.pre_ny_data.iloc[current_idx].values, dtype=np.float32)
+            pre_ny_seq = np.nan_to_num(pre_ny_seq, nan=0.0)
+
+            # Get VAE latent embedding (mu)
+            import torch
+
+            pre_ny_tensor = torch.from_numpy(pre_ny_seq).unsqueeze(0).float()
+            with torch.no_grad():
+                mu, _ = self.vae.encode(pre_ny_tensor)
+            vae_z = mu.numpy().astype(np.float32)
+
+            obs["vae_z"] = vae_z
+
+        return obs

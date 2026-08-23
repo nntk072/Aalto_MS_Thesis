@@ -222,5 +222,66 @@ class TransformerEncoder(BaseFeaturesExtractor):
         return torch.cat([latent, account], dim=1)  # [B, D+A]
 
 
-# Default alias (TCN is faster to train; swap to Transformer for ablation)
+# ---------------------------------------------------------------------------
+# GRUEncoder
+# ---------------------------------------------------------------------------
+
+
+class GRUEncoder(BaseFeaturesExtractor):
+    """GRU-based sequence encoder for RL.
+
+    A 2-layer Gated Recurrent Unit that processes the last N volume bars.
+    Simpler and more stable than Transformer but may suffer from memory decay
+    and delayed reaction to sudden spikes.
+
+    Parameters (pass via ``policy_kwargs["features_extractor_kwargs"]``)
+    --------------------------------------------------------------------
+    seq_len    : T – observation window length
+    n_features : F – features per bar
+    latent_dim : D – encoder output dimension
+    hidden_size: GRU hidden state size
+    num_layers : number of GRU layers
+    dropout    : dropout rate between GRU layers
+    """
+
+    def __init__(
+        self,
+        observation_space: spaces.Space[Any],
+        seq_len: int = 128,
+        n_features: int = 64,
+        latent_dim: int = 128,
+        hidden_size: int = 256,
+        num_layers: int = 2,
+        dropout: float = 0.1,
+    ) -> None:
+        super().__init__(observation_space, features_dim=latent_dim + ACCOUNT_DIM)
+        self.seq_len = seq_len
+        self.n_features = n_features
+        self.latent_dim = latent_dim
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+
+        self.gru = nn.GRU(
+            input_size=n_features,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0.0,
+            bidirectional=False,
+        )
+        self.proj = nn.Linear(hidden_size, latent_dim)
+
+    def forward(self, observations: dict[str, torch.Tensor]) -> torch.Tensor:
+        seq = observations["seq"]  # [B, T, F]
+        account = observations["account"]  # [B, A]
+
+        # GRU expects [B, T, F]
+        h, _ = self.gru(seq)  # [B, T, hidden_size]
+
+        # Use the last timestep
+        latent = self.proj(h[:, -1, :])  # [B, D]
+        return torch.cat([latent, account], dim=1)  # [B, D+A]
+
+
+# Default alias (TCN is faster to train; swap to Transformer/GRU for ablation)
 SequenceEncoder = TCNEncoder

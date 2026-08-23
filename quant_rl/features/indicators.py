@@ -74,6 +74,25 @@ def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     return tr.ewm(alpha=1 / period, adjust=False).mean().rename("atr")
 
 
+def volume_spike(volume: pd.Series, window: int = 20) -> pd.Series:
+    """Compute volume spike as ratio to rolling median.
+
+    Parameters
+    ----------
+    volume : pd.Series
+        Volume series
+    window : int
+        Rolling window for median calculation (default: 20)
+
+    Returns
+    -------
+    pd.Series
+        Volume spike ratio (volume / median_volume)
+    """
+    median_vol = volume.rolling(window, min_periods=1).median()
+    return volume / median_vol.replace(0, np.nan)
+
+
 def adx(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
     tr = _true_range(df)
     up = df["high"].diff()
@@ -159,6 +178,96 @@ def atr_normalized_price(df: pd.DataFrame, period: int = 14) -> pd.Series:
     """Close distance from previous close, normalised by ATR."""
     atr_s = atr(df, period)
     return df["close"].diff() / atr_s.replace(0, np.nan)
+
+
+def sweep_velocity(
+    df: pd.DataFrame,
+    london_high: pd.Series | None = None,
+    london_low: pd.Series | None = None,
+    asian_high: pd.Series | None = None,
+    asian_low: pd.Series | None = None,
+    atr_period: int = 5,
+) -> pd.DataFrame:
+    """Compute bullish and bearish sweep velocity.
+
+    Bullish Sweep Velocity: (Close - LondonHigh) / ATR_5
+    Bearish Sweep Velocity: (LondonLow - Close) / ATR_5
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        OHLCV DataFrame
+    london_high : pd.Series or None
+        London session high (will be computed from df if None)
+    london_low : pd.Series or None
+        London session low (will be computed from df if None)
+    asian_high : pd.Series or None
+        Asian session high (will be computed from df if None)
+    asian_low : pd.Series or None
+        Asian session low (will be computed from df if None)
+    atr_period : int
+        ATR period for normalization (default: 5)
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with columns: sweep_velocity_bullish, sweep_velocity_bearish
+    """
+    close = df["close"]
+    atr_val = atr(df, atr_period)
+
+    # Compute velocities
+    if london_high is None:
+        london_high = df.get("london_high", pd.Series(dtype=float))
+    if london_low is None:
+        london_low = df.get("london_low", pd.Series(dtype=float))
+
+    bullish_velocity = (close - london_high) / atr_val.replace(0, np.nan)
+    bearish_velocity = (london_low - close) / atr_val.replace(0, np.nan)
+
+    return pd.DataFrame(
+        {
+            "sweep_velocity_bullish": bullish_velocity,
+            "sweep_velocity_bearish": bearish_velocity,
+        },
+        index=df.index,
+    )
+
+
+def wick_ratio(df: pd.DataFrame) -> pd.Series:
+    """Compute wick ratio: |High - max(Open, Close)| / (High - Low).
+
+    High values indicate rejection (false sweep).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        OHLCV DataFrame
+
+    Returns
+    -------
+    pd.Series
+        Wick ratio values
+    """
+    high = df["high"]
+    low = df["low"]
+    open_ = df["open"]
+    close = df["close"]
+
+    # max(Open, Close)
+    max_oc = pd.concat([open_, close], axis=1).max(axis=1)
+
+    # |High - max(Open, Close)|
+    wick = (high - max_oc).abs()
+
+    # High - Low
+    range_ = high - low
+
+    # Wick ratio
+    wick_ratio = wick / range_.replace(0, np.nan)
+    wick_ratio.name = "wick_ratio"
+
+    return wick_ratio
 
 
 # ---------------------------------------------------------------------------

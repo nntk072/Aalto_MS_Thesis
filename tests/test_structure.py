@@ -15,6 +15,7 @@ def sample_bars() -> pd.DataFrame:
         "high": [102 + i * 0.1 for i in range(50)],
         "low": [99 + i * 0.1 for i in range(50)],
         "close": [100.5 + i * 0.1 for i in range(50)],
+        "volume": [1000 + i * 10 for i in range(50)],
     }
     return pd.DataFrame(data, index=dates)
 
