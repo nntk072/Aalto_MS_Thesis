@@ -15,12 +15,13 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from omegaconf import OmegaConf  # noqa: E402
+from omegaconf import DictConfig, OmegaConf  # noqa: E402
 
 from quant_rl.envs.trading_env import TradingEnv  # noqa: E402
 from quant_rl.evaluation import run_episode, sweep_delay_breakdown  # noqa: E402
@@ -32,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bars-csv", required=True, help="OHLCV CSV with DatetimeIndex")
     parser.add_argument("--features-csv", help="Feature CSV; defaults to numeric bars columns")
-    parser.add_argument("--config", default="config/env.yaml", help="Env config YAML")
+    parser.add_argument("--config", default="quant_rl/config/default.yaml", help="Env config YAML")
     parser.add_argument("--steps", type=int, default=50_000, help="Training steps per arch")
     parser.add_argument(
         "--archs", nargs="+", default=["gru", "transformer"], choices=["tcn", "gru", "transformer"]
@@ -51,20 +52,25 @@ def main() -> None:
         features = pd.read_csv(args.features_csv, index_col=0, parse_dates=True)
     else:
         features = bars.select_dtypes(include=["number"])
-    cfg = OmegaConf.load(args.config)
+    loaded = OmegaConf.load(args.config)
+    cfg = OmegaConf.create(loaded) if not isinstance(loaded, OmegaConf) else loaded
+    assert isinstance(cfg, DictConfig)
 
     results: dict[str, dict[str, float]] = {}
+    continuous = args.algo == "sac"
     for arch in args.archs:
         print(f"=== training {args.algo.upper()} + {arch} for {args.steps} steps ===")
-        env = TradingEnv(bars=bars, features=features)
+        env = TradingEnv(bars=bars, features=features, continuous_actions=continuous)
         model = build_agent(env, cfg, arch=arch, algo=args.algo)
         model.set_random_seed(args.seed)
         model.learn(total_timesteps=args.steps)
 
-        eval_env = TradingEnv(bars=bars, features=features)
-        metrics = run_episode(
-            eval_env, action_fn=lambda obs: float(model.predict(obs, deterministic=True)[0])
-        )
+        eval_env = TradingEnv(bars=bars, features=features, continuous_actions=continuous)
+
+        def action_fn(obs: dict[str, Any]) -> Any:
+            return model.predict(obs, deterministic=True)[0]
+
+        metrics = run_episode(eval_env, action_fn=action_fn)
         delays = sweep_delay_breakdown(eval_env.trade_log)
 
         row = {
