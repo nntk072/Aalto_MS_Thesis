@@ -46,3 +46,8 @@ Always prefix shell commands with `rtk` as documented in `antigravity-rtk-rules.
 - Do not read secrets (`.env`, credentials).
 - Batch independent commands in parallel; avoid redundant runs.
 - Explain conclusions in prose; do not quote large output.
+
+## Relations
+
+- Activates: whenever running terminal commands, builds, tests, git, docker, or inspecting JSON/logs.
+- Always combined with [antigravity-rtk-rules.md](antigravity-rtk-rules.md); complements [token-efficient-context-replies.md](token-efficient-context-replies.md).

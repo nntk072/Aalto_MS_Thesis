@@ -30,3 +30,8 @@ rtk proxy <cmd>       # Run raw (no filtering, for debugging)
 ## Why
 
 RTK filters and compresses command output before it reaches the LLM context, saving 60-90% tokens on common operations. Always use `rtk <cmd>` instead of raw commands.
+
+## Relations
+
+- Activates: always, for every shell command (highest-priority wrapper rule).
+- Works together with [token-efficient-shell.md](token-efficient-shell.md) (which commands to run compactly) and [token-efficient-context-replies.md](token-efficient-context-replies.md) (how output enters context).
