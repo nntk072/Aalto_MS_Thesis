@@ -24,6 +24,7 @@ from ..backtest.guardrails import FTMOGuardrails
 from ..backtest.risk import compute_lots, compute_sl_tp_long, compute_sl_tp_short
 from ..envs.reward import DSRReward
 from ..envs.sweep_reward import CompositeReward, SweepConfirmationReward
+from ..models.vae import VAE
 
 
 class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, Any]]):
@@ -57,6 +58,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         sweep_weight: float = 0.7,
         continuous_actions: bool = False,
         max_risk_frac: float = 0.01,
+        use_vae: bool = False,
+        vae: VAE | None = None,
+        pre_ny_data: pd.DataFrame | None = None,
     ):
         """Initialize trading environment.
 
@@ -115,6 +119,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             If True, use Box(-1, 1) continuous action space for position sizing.
         max_risk_frac : float
             Maximum risk fraction per trade when using continuous actions (default: 0.01 = 1%).
+        use_vae : bool
+            If True, use VAE to extract latent narrative embedding from pre-NY sequence.
+        vae : VAE | None
+            Pre-trained VAE model for narrative embedding. Required if use_vae=True.
+        pre_ny_data : pd.DataFrame | None
+            Pre-NY session data (01:05-16:29 UTC+3) for VAE input. Required if use_vae=True.
         """
         self.bars = bars
         self.features = features
@@ -153,6 +163,20 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.continuous_actions = continuous_actions
         self.max_risk_frac = max_risk_frac
 
+        # VAE for narrative embedding
+        self.use_vae = use_vae
+        self.vae = vae
+        self.pre_ny_data = pre_ny_data
+
+        if use_vae:
+            if vae is None:
+                raise ValueError("vae must be provided when use_vae=True")
+            if pre_ny_data is None:
+                raise ValueError("pre_ny_data must be provided when use_vae=True")
+            # Freeze VAE encoder
+            for param in vae.parameters():
+                param.requires_grad = False
+
         if continuous_actions:
             # Continuous action space: Box(-1, 1) for position sizing
             # -1.0 = max short, +1.0 = max long, 0 = hold
@@ -161,10 +185,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             # Discrete action space: 0=hold, 1-9=enter_long, 10-18=enter_short, 19=exit
             self.action_space = spaces.Discrete(20)
 
-        # Observation space: dict with time-series + account state
+        # Observation space: dict with time-series + account state (+ VAE latent if enabled)
         # features: (obs_window, n_features)
         # account: [equity, position_direction, open_pnl, unrealised_r, dist_to_sl]
+        # vae_z: latent embedding from VAE (if use_vae=True)
         n_features = features.shape[1] if len(features) > 0 else 1
+        vae_latent_dim = vae.encoder.latent_dim if use_vae and vae is not None else 0
+
         self.observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(
@@ -181,6 +208,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 ),
             }
         )
+        # Add VAE latent to observation space if enabled
+        if use_vae and vae_latent_dim > 0:
+            self.observation_space.spaces["vae_z"] = spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(vae_latent_dim,),
+                dtype=np.float32,
+            )
 
         self.reset()
 
@@ -686,4 +721,25 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             dtype=np.float32,
         )
 
-        return {"seq": seq, "account": account_state}
+        obs: dict[str, np.ndarray[Any, Any]] = {"seq": seq, "account": account_state}
+
+        # Add VAE latent embedding if enabled
+        if self.use_vae and self.vae is not None and self.pre_ny_data is not None:
+            # Get the current day's pre-NY sequence
+            # Assuming pre_ny_data is aligned with bars and features
+            # and contains the full pre-NY sequence for each day
+            current_idx = min(self.step_idx, len(self.pre_ny_data) - 1)
+            pre_ny_seq = np.asarray(self.pre_ny_data.iloc[current_idx].values, dtype=np.float32)
+            pre_ny_seq = np.nan_to_num(pre_ny_seq, nan=0.0)
+
+            # Get VAE latent embedding (mu)
+            import torch
+
+            pre_ny_tensor = torch.from_numpy(pre_ny_seq).unsqueeze(0).float()
+            with torch.no_grad():
+                mu, _ = self.vae.encode(pre_ny_tensor)
+            vae_z = mu.numpy().astype(np.float32)
+
+            obs["vae_z"] = vae_z
+
+        return obs
