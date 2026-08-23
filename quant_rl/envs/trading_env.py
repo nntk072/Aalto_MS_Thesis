@@ -23,6 +23,7 @@ from ..backtest.costs import COST_US100, CostModel
 from ..backtest.guardrails import FTMOGuardrails
 from ..backtest.risk import compute_lots, compute_sl_tp_long, compute_sl_tp_short
 from ..envs.reward import DSRReward
+from ..envs.sweep_reward import CompositeReward, SweepConfirmationReward
 
 
 class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
@@ -48,6 +49,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
         max_loss_per_trade_usd: float = 100.0,
         dsr_eta: float = 0.01,
         episodic: bool = True,
+        use_sweep_reward: bool = False,
+        sweep_alpha: float = 0.1,
+        sweep_beta: float = 0.01,
+        sweep_hold_bars: int = 3,
+        dsr_weight: float = 0.3,
+        sweep_weight: float = 0.7,
     ):
         """Initialize trading environment.
 
@@ -90,6 +97,18 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
             session — mirroring ``quant_rl.backtest.engine.run_backtest`` — so
             a single call to ``reset()`` + repeated ``step()`` calls can walk
             the *entire* test set without terminating early.
+        use_sweep_reward : bool
+            If True, use SweepConfirmationReward instead of DSRReward.
+        sweep_alpha : float
+            Weight for sweep confirmation score C_t.
+        sweep_beta : float
+            Weight for time decay penalty T_t.
+        sweep_hold_bars : int
+            Number of bars price must hold beyond level for confirmation.
+        dsr_weight : float
+            Weight for DSR reward in composite.
+        sweep_weight : float
+            Weight for sweep reward in composite.
         """
         self.bars = bars
         self.features = features
@@ -107,8 +126,22 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
         self.contract_size = contract_size
         self.max_loss_per_trade_usd = max_loss_per_trade_usd
         self.episodic = episodic
+        self.use_sweep_reward = use_sweep_reward
 
-        self.reward_fn = DSRReward(eta=dsr_eta)
+        # Initialize reward function
+        self.reward_fn: DSRReward | CompositeReward
+        if use_sweep_reward:
+            sweep_reward = SweepConfirmationReward(
+                alpha=sweep_alpha, beta=sweep_beta, hold_bars=sweep_hold_bars
+            )
+            self.reward_fn = CompositeReward(
+                sweep_reward=sweep_reward,
+                dsr_weight=dsr_weight,
+                sweep_weight=sweep_weight,
+            )
+            self.dsr_reward = DSRReward(eta=dsr_eta)  # Keep for composite
+        else:
+            self.reward_fn = DSRReward(eta=dsr_eta)
 
         # Action space: simplified discrete
         # 0=hold, 1-9=enter_long with risk/rr variants, 10-18=enter_short variants, 19=exit
@@ -152,6 +185,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
         self.equity_curve = [self.initial_balance]
         self.pnl_history = [0.0]
         self.trade_log: list[dict[str, Any]] = []
+
+        # Reset reward function
+        self.reward_fn.reset()
 
         # Eval-mode (episodic=False) walk-forward bookkeeping. Harmless but
         # unused when episodic=True (training).
