@@ -1,0 +1,30 @@
+features:
+  # Indicator periods
+  ema_periods: [10, 20, 50]
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  rsi_period: 14
+  atr_period: 14
+  adx_period: 14
+  bb_period: 20
+  bb_std: 2.0
+  stoch_k: 14
+  stoch_d: 3
+  return_horizons: [1, 5, 10]
+  realized_vol_period: 20
+
+  # SMT settings
+  smt_swing_period: 50
+  smt_corr_window: 100
+
+  # Normalization
+  zscore_window: 252
+
+  # Liquidity detection settings
+  liquidity:
+    asian_start: "01:05"
+    asian_end: "09:00"
+    london_end: "16:30"
+    swing_period: 50
+    min_bars_per_session: 10
