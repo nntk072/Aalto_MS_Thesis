@@ -1,11 +1,11 @@
 """Gymnasium environment for RL-based trading with structure-aware SL/TP.
 
-Wraps the backtest engine with a standard Gym interface. Actions are hybrid:
-- Discrete: {hold=0, enter_long=1, enter_short=2, exit=3}
-- Continuous (only when entering): risk_frac, rr_ratio
+Wraps the backtest engine with a standard Gym interface. Actions support:
+- Discrete: {hold=0, enter_long=1-9, enter_short=10-18, exit=19}
+- Continuous: Box(-1, 1) for proportional position sizing
 
 Observation: Dict space with time-series features (60-bar window) + account state.
-Reward: Differential Sharpe Ratio (DSR) + small penalties for poor structure usage.
+Reward: Differential Sharpe Ratio (DSR) or Sweep Confirmation Reward.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from ..envs.reward import DSRReward
 from ..envs.sweep_reward import CompositeReward, SweepConfirmationReward
 
 
-class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
+class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, Any]]):
     """RL trading environment with structure-aware SL/TP and hybrid action space."""
 
     metadata = {"render_modes": []}
@@ -55,6 +55,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
         sweep_hold_bars: int = 3,
         dsr_weight: float = 0.3,
         sweep_weight: float = 0.7,
+        continuous_actions: bool = False,
+        max_risk_frac: float = 0.01,
     ):
         """Initialize trading environment.
 
@@ -109,6 +111,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
             Weight for DSR reward in composite.
         sweep_weight : float
             Weight for sweep reward in composite.
+        continuous_actions : bool
+            If True, use Box(-1, 1) continuous action space for position sizing.
+        max_risk_frac : float
+            Maximum risk fraction per trade when using continuous actions (default: 0.01 = 1%).
         """
         self.bars = bars
         self.features = features
@@ -143,10 +149,17 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
         else:
             self.reward_fn = DSRReward(eta=dsr_eta)
 
-        # Action space: simplified discrete
-        # 0=hold, 1-9=enter_long with risk/rr variants, 10-18=enter_short variants, 19=exit
-        # This avoids Dict space which PPO doesn't support natively
-        self.action_space = spaces.Discrete(20)
+        # Action space: continuous or discrete
+        self.continuous_actions = continuous_actions
+        self.max_risk_frac = max_risk_frac
+
+        if continuous_actions:
+            # Continuous action space: Box(-1, 1) for position sizing
+            # -1.0 = max short, +1.0 = max long, 0 = hold
+            self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
+        else:
+            # Discrete action space: 0=hold, 1-9=enter_long, 10-18=enter_short, 19=exit
+            self.action_space = spaces.Discrete(20)
 
         # Observation space: dict with time-series + account state
         # features: (obs_window, n_features)
@@ -207,14 +220,15 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
 
     def step(
         self,
-        action: int,
+        action: int | np.ndarray[Any, Any],
     ) -> tuple[dict[str, np.ndarray[Any, Any]], float, bool, bool, dict[str, Any]]:
         """Execute one step.
 
         Parameters
         ----------
-        action : int
-            0=hold, 1-9=enter_long variants, 10-18=enter_short variants, 19=exit
+        action : int or np.ndarray
+            Discrete: 0=hold, 1-9=enter_long variants, 10-18=enter_short variants, 19=exit
+            Continuous: Box(-1, 1) for proportional position sizing
         """
         if self.step_idx >= len(self.bars):
             done = True
@@ -244,54 +258,71 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int]):
         else:
             fill_bid, fill_ask = bid, ask
 
-        # Decode discrete action (0-19)
-        # 0: hold
-        # 1-9: enter_long with different risk/rr (3x3 grid)
-        # 10-18: enter_short with different risk/rr (3x3 grid)
-        # 19: exit
+        # Decode action (discrete or continuous)
         discrete_action = 0  # default hold
         risk_frac = self.risk_frac_range[0]  # default
         rr_ratio = self.rr_ratio_range[0]  # default
 
-        if action == 0:
-            discrete_action = 0  # hold
-        elif 1 <= action <= 9:
-            discrete_action = 1  # enter_long
-            # Map to risk/rr: low/med/high × low/med/high
-            idx = action - 1
-            risk_variant = idx // 3  # 0, 1, 2
-            rr_variant = idx % 3  # 0, 1, 2
-            risk_levels = [
-                self.risk_frac_range[0],
-                (self.risk_frac_range[0] + self.risk_frac_range[1]) / 2,
-                self.risk_frac_range[1],
-            ]
-            rr_levels = [
-                self.rr_ratio_range[0],
-                (self.rr_ratio_range[0] + self.rr_ratio_range[1]) / 2,
-                self.rr_ratio_range[1],
-            ]
-            risk_frac = risk_levels[risk_variant]
-            rr_ratio = rr_levels[rr_variant]
-        elif 10 <= action <= 18:
-            discrete_action = -1  # enter_short
-            idx = action - 10
-            risk_variant = idx // 3
-            rr_variant = idx % 3
-            risk_levels = [
-                self.risk_frac_range[0],
-                (self.risk_frac_range[0] + self.risk_frac_range[1]) / 2,
-                self.risk_frac_range[1],
-            ]
-            rr_levels = [
-                self.rr_ratio_range[0],
-                (self.rr_ratio_range[0] + self.rr_ratio_range[1]) / 2,
-                self.rr_ratio_range[1],
-            ]
-            risk_frac = risk_levels[risk_variant]
-            rr_ratio = rr_levels[rr_variant]
-        else:  # action == 19
-            discrete_action = 0  # exit action mapped to hold, exit handled below
+        # Handle continuous actions
+        if self.continuous_actions:
+            if isinstance(action, np.ndarray):
+                # Continuous action: Box(-1, 1)
+                action_value = float(action[0]) if action.size > 0 else 0.0
+            else:
+                # For backward compatibility, treat as discrete
+                action_value = 0.0
+
+            # Map continuous action to discrete_action and risk_frac
+            if action_value > 0.1:
+                discrete_action = 1  # long
+                risk_frac = self.max_risk_frac * action_value
+            elif action_value < -0.1:
+                discrete_action = -1  # short
+                risk_frac = self.max_risk_frac * abs(action_value)
+            else:
+                discrete_action = 0  # hold
+                risk_frac = 0.0
+        else:
+            # Discrete actions
+            if action == 0:
+                discrete_action = 0  # hold
+            elif 1 <= action <= 9:
+                discrete_action = 1  # enter_long
+                # Map to risk/rr: low/med/high × low/med/high
+                idx = action - 1
+                risk_variant = idx // 3  # 0, 1, 2
+                rr_variant = idx % 3  # 0, 1, 2
+                risk_levels = [
+                    self.risk_frac_range[0],
+                    (self.risk_frac_range[0] + self.risk_frac_range[1]) / 2,
+                    self.risk_frac_range[1],
+                ]
+                rr_levels = [
+                    self.rr_ratio_range[0],
+                    (self.rr_ratio_range[0] + self.rr_ratio_range[1]) / 2,
+                    self.rr_ratio_range[1],
+                ]
+                risk_frac = risk_levels[risk_variant]
+                rr_ratio = rr_levels[rr_variant]
+            elif 10 <= action <= 18:
+                discrete_action = -1  # enter_short
+                idx = action - 10
+                risk_variant = idx // 3
+                rr_variant = idx % 3
+                risk_levels = [
+                    self.risk_frac_range[0],
+                    (self.risk_frac_range[0] + self.risk_frac_range[1]) / 2,
+                    self.risk_frac_range[1],
+                ]
+                rr_levels = [
+                    self.rr_ratio_range[0],
+                    (self.rr_ratio_range[0] + self.rr_ratio_range[1]) / 2,
+                    self.rr_ratio_range[1],
+                ]
+                risk_frac = risk_levels[risk_variant]
+                rr_ratio = rr_levels[rr_variant]
+            else:  # action == 19
+                discrete_action = 0  # exit action mapped to hold, exit handled below
 
         # Check guardrails
         if self.episodic:
