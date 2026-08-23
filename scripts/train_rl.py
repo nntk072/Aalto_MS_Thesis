@@ -34,6 +34,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--arch", default="gru", choices=["tcn", "gru", "transformer"])
     parser.add_argument("--use-vae", type=int, default=0)
     parser.add_argument("--steps", type=int, default=50_000)
+    parser.add_argument("--lr", type=float, default=None, help="Override learning rate")
+    parser.add_argument("--entropy-coef", type=float, default=None)
+    parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--wandb", action="store_true", help="Log run to Weights & Biases")
     parser.add_argument("--run-name", default=None)
@@ -51,6 +54,14 @@ def main() -> None:
         else bars.select_dtypes(include=["number"])
     )
     loaded = OmegaConf.load(args.config)
+    overrides = {
+        f"{args.algo}.lr": args.lr,
+        f"{args.algo}.ent_coef": args.entropy_coef,
+        f"{args.algo}.batch_size": args.batch_size,
+    }
+    loaded = OmegaConf.merge(
+        loaded, OmegaConf.from_dotlist([f"{k}={v}" for k, v in overrides.items() if v is not None])
+    )
     cfg = OmegaConf.create(loaded) if not isinstance(loaded, OmegaConf) else loaded
     from omegaconf import DictConfig
 
