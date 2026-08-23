@@ -1,0 +1,30 @@
+# VAE Configuration
+# This configuration file is used by scripts/train_vae.py for training
+# the Variational Autoencoder on pre-NY session data.
+
+# Data configuration
+data_path: data/pre_ny_sequences.npy  # Path to pre-NY sequence data (n_samples, seq_len, n_features)
+output_dir: output/vae  # Directory to save trained models and configs
+
+# Sequence parameters
+seq_len: 186  # Number of 5-minute bars in pre-NY sequence (01:05-16:29 UTC+3)
+n_features: 5  # Number of features per bar (OHLCV = 5)
+
+# VAE architecture
+latent_dim: 16  # Dimension of latent space
+encoder_channels: [64, 32, 16]  # Channels for encoder CNN layers
+decoder_channels: [16, 32, 64]  # Channels for decoder CNN layers
+kernel_size: 3  # Kernel size for CNN layers
+stride: 2  # Stride for CNN layers
+
+# Training parameters
+batch_size: 32
+lr: 0.001  # Learning rate
+epochs: 100  # Number of training epochs
+
+# Loss weights
+reconstruction_weight: 1.0  # Weight for reconstruction loss (MSE)
+kl_weight: 1.0  # Weight for KL divergence loss
+
+# Device
+device: cuda  # Set to "cpu" if no CUDA available
