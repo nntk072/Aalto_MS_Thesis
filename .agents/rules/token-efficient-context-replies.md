@@ -21,3 +21,8 @@ Rules add to every request — keep behavior tight; do not compensate with long 
 - Summarize tool results in prose; do not paste large logs or directory listings.
 - Show code via line citations or small hunks — not whole files after an edit.
 - Match depth to the ask; do not repeat explanations across turns.
+
+## Relations
+
+- Activates: always, on every request (context/reply discipline).
+- Feeds into [token-efficient-shell.md](token-efficient-shell.md) and [code-review-graph.md](code-review-graph.md); see [README.md](README.md) for the full activation map.
