@@ -6,7 +6,43 @@ import math
 
 import pytest
 
-from quant_rl.evaluation.metrics import PerformanceMetrics, compute_metrics, max_drawdown
+from quant_rl.evaluation.metrics import (
+    PerformanceMetrics,
+    compute_metrics,
+    max_drawdown,
+    sweep_delay_breakdown,
+)
+
+
+@pytest.mark.unit
+class TestSweepDelayBreakdown:
+    def test_summarises_delays_and_level_split(self) -> None:
+        # Arrange
+        trade_log = [
+            {"type": "open", "sweep_delay_s": 10.0, "level_type": "london_high"},
+            {"type": "close", "pnl": 100.0},
+            {"type": "open", "sweep_delay_s": 30.0, "level_type": "asian_low"},
+            {"type": "open", "sweep_delay_s": float("nan"), "level_type": "asian_high"},
+            {"type": "open", "level_type": None},  # entry without level info
+        ]
+
+        # Act
+        stats = sweep_delay_breakdown(trade_log)
+
+        # Assert
+        assert stats["n_entries"] == 4
+        assert stats["sweep_delay_mean_s"] == pytest.approx(20.0)
+        assert stats["sweep_delay_median_s"] == pytest.approx(20.0)
+        assert stats["london_pct"] == pytest.approx(100.0 / 3.0)
+        assert stats["asian_pct"] == pytest.approx(200.0 / 3.0)
+
+    def test_empty_log_gives_zeros(self) -> None:
+        # Act
+        stats = sweep_delay_breakdown([])
+
+        # Assert
+        assert stats["n_entries"] == 0
+        assert stats["sweep_delay_mean_s"] == 0.0
 
 
 @pytest.mark.unit
