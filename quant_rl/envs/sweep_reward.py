@@ -264,34 +264,56 @@ class CompositeReward:
     def __call__(
         self,
         pnl_step: float,
-        cost: float,
-        price: float,
-        london_high: float,
-        london_low: float,
-        asian_high: float,
-        asian_low: float,
-        minutes_since_open: float,
+        *,
+        daily_loss: float = 0.0,
+        daily_loss_limit: float = 5_000.0,
+        initial_balance: float = 100_000.0,
+        breach: bool = False,
+        # Additional parameters for sweep reward (optional)
+        cost: float = 0.0,
+        price: float | None = None,
+        london_high: float | None = None,
+        london_low: float | None = None,
+        asian_high: float | None = None,
+        asian_low: float | None = None,
+        minutes_since_open: float = 0.0,
         position_changed: bool = False,
-        dsr_reward: float = 0.0,
+        dsr_reward: float | None = None,
     ) -> float:
         """Compute composite reward.
 
-        Parameters
-        ----------
-        dsr_reward : float
-            Differential Sharpe Ratio reward from existing DSRReward
+        Supports both DSR-style arguments and sweep-style arguments.
+        For backward compatibility, accepts DSR arguments and uses sweep
+        reward only when sweep parameters are provided.
         """
-        sweep_r = self.sweep_reward(
-            pnl_step,
-            cost,
-            price,
-            london_high,
-            london_low,
-            asian_high,
-            asian_low,
-            minutes_since_open,
-            position_changed,
-        )
+        # Compute DSR reward if not provided
+        if dsr_reward is None:
+            # Import here to avoid circular dependency
+            from ..envs.reward import DSRReward
 
-        # Combine rewards
-        return (self.dsr_weight * dsr_reward) + (self.sweep_weight * sweep_r)
+            dsr_fn = DSRReward(eta=0.01)
+            dsr_reward = dsr_fn(
+                pnl_step,
+                daily_loss=daily_loss,
+                daily_loss_limit=daily_loss_limit,
+                initial_balance=initial_balance,
+                breach=breach,
+            )
+
+        # If sweep parameters are provided, compute sweep reward
+        if all(p is not None for p in [price, london_high, london_low, asian_high, asian_low]):
+            sweep_r = self.sweep_reward(
+                pnl_step,
+                cost,
+                float(price),  # type: ignore[arg-type]
+                float(london_high),  # type: ignore[arg-type]
+                float(london_low),  # type: ignore[arg-type]
+                float(asian_high),  # type: ignore[arg-type]
+                float(asian_low),  # type: ignore[arg-type]
+                minutes_since_open,
+                position_changed,
+            )
+            return (self.dsr_weight * dsr_reward) + (self.sweep_weight * sweep_r)
+        else:
+            # Fallback to DSR only
+            return dsr_reward
