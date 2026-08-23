@@ -74,6 +74,25 @@ def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     return tr.ewm(alpha=1 / period, adjust=False).mean().rename("atr")
 
 
+def volume_spike(volume: pd.Series, window: int = 20) -> pd.Series:
+    """Compute volume spike as ratio to rolling median.
+
+    Parameters
+    ----------
+    volume : pd.Series
+        Volume series
+    window : int
+        Rolling window for median calculation (default: 20)
+
+    Returns
+    -------
+    pd.Series
+        Volume spike ratio (volume / median_volume)
+    """
+    median_vol = volume.rolling(window, min_periods=1).median()
+    return volume / median_vol.replace(0, np.nan)
+
+
 def adx(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
     tr = _true_range(df)
     up = df["high"].diff()
