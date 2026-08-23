@@ -255,6 +255,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.all_sessions: set[int] = set()
         self.breach_log: list[str] = []
         self.breach_events: list[dict[str, Any]] = []
+        self._level_crosses: dict[tuple[int, str], Any] = {}
 
         obs = self._get_observation()
         return obs, {}
@@ -336,6 +337,24 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         feat_row = self.features.iloc[self.step_idx]
         bar_time = self.bars.index[self.step_idx]
         session_id = int(bar["session_id"]) if "session_id" in bar.index else 0
+
+        # Track first crossing of each liquidity level per session (for the
+        # Sweep Delay metric: time between level cross and agent entry).
+        price = float(bar["close"])
+        for level_name, level_value in (
+            ("london_high", feat_row.get("london_high", float("nan"))),
+            ("asian_high", feat_row.get("asian_high", float("nan"))),
+            ("london_low", feat_row.get("london_low", float("nan"))),
+            ("asian_low", feat_row.get("asian_low", float("nan"))),
+        ):
+            level_value = float(level_value)
+            key = (session_id, level_name)
+            if key in self._level_crosses or not np.isfinite(level_value):
+                continue
+            crossed = level_name.endswith("high") and price > level_value
+            crossed = crossed or (level_name.endswith("low") and price < level_value)
+            if crossed:
+                self._level_crosses[key] = bar_time
 
         if not self.episodic:
             self.all_sessions.add(session_id)
@@ -644,6 +663,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                             self.position.tp_price = tp_price
                             self.position.risk_frac = risk_frac
                             self.position.rr_ratio = rr_ratio
+                            entry_level, cross_time = self._matched_entry_level(
+                                session_id, discrete_action
+                            )
+                            sweep_delay = (
+                                float("nan")
+                                if cross_time is None
+                                else float((bar_time - cross_time).total_seconds())
+                            )
                             self.trade_log.append(
                                 {
                                     "type": "open",
@@ -657,6 +684,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                                     "bar": self.step_idx,
                                     "time": bar_time,
                                     "equity": self.account.equity,
+                                    "level_type": entry_level,
+                                    "sweep_delay_s": sweep_delay,
                                 }
                             )
                             self.sessions_with_trades.add(session_id)
@@ -708,6 +737,28 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.step_idx += 1
 
         return obs, float(reward), done, truncated, info
+
+    def _matched_entry_level(self, session_id: int, discrete_action: int) -> tuple[str | None, Any]:
+        """Match an entry to the most recently crossed liquidity level.
+
+        Args:
+            session_id: Current trading session identifier.
+            discrete_action: Signed action (+1 long, -1 short).
+
+        Returns:
+            Tuple of (level name or None, crossing time or None). Longs
+            match high levels, shorts match low levels.
+        """
+        candidates = {
+            name
+            for (sid, name) in self._level_crosses
+            if sid == session_id
+            and (name.endswith("high") if discrete_action > 0 else name.endswith("low"))
+        }
+        if not candidates:
+            return None, None
+        latest_name = max(candidates, key=lambda n: self._level_crosses[(session_id, n)])
+        return latest_name, self._level_crosses[(session_id, latest_name)]
 
     def _bar_quote(self, bar: pd.Series) -> tuple[float, float]:
         """Get (bid, ask) from a bar using cost model.
