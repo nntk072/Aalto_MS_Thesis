@@ -45,3 +45,8 @@ Scoped searches only — no repo-wide dumps:
 
 - Stop when a subgraph is all leaves or low-risk.
 - Spend tokens on hot spots; diff + summary for low-risk subgraphs.
+
+## Relations
+
+- Activates: reviewing a diff/PR/local change touching >1 file or shared symbols; skip for single-file typo edits.
+- Uses [token-efficient-context-replies.md](token-efficient-context-replies.md) read discipline and [token-efficient-shell.md](token-efficient-shell.md) git commands; findings feed [git-commit-rules.md](git-commit-rules.md) pre-commit checks.
