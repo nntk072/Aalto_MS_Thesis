@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -46,6 +47,50 @@ class PerformanceMetrics:
     n_trades: int = 0
     breach_count: int = 0
     extras: dict[str, float] = field(default_factory=dict)
+
+
+def sweep_delay_breakdown(
+    trade_log: Sequence[dict[str, Any]],
+    delay_key: str = "sweep_delay_s",
+    level_key: str = "level_type",
+) -> dict[str, float]:
+    """Summarise Sweep Delay and Asian-vs-London targeting from open trades.
+
+    Args:
+        trade_log: The environment's ``trade_log`` list.
+        delay_key: Trade-log key holding the delay in seconds.
+        level_key: Trade-log key holding the swept level name.
+
+    Returns:
+        Dict with ``sweep_delay_mean_s``, ``sweep_delay_median_s``,
+        ``n_entries``, ``london_pct`` and ``asian_pct`` (percent of
+        entries attributed to London/Asian levels).
+    """
+    delays: list[float] = []
+    london = 0
+    asian = 0
+    n_entries = 0
+    for trade in trade_log:
+        if trade.get("type") != "open":
+            continue
+        n_entries += 1
+        delay = trade.get(delay_key)
+        if delay is not None and np.isfinite(delay):
+            delays.append(float(delay))
+        level = str(trade.get(level_key, ""))
+        if "london" in level:
+            london += 1
+        elif "asian" in level:
+            asian += 1
+
+    total = float(london + asian)
+    return {
+        "sweep_delay_mean_s": float(np.mean(delays)) if delays else 0.0,
+        "sweep_delay_median_s": float(np.median(delays)) if delays else 0.0,
+        "n_entries": float(n_entries),
+        "london_pct": london / total * 100.0 if total else 0.0,
+        "asian_pct": asian / total * 100.0 if total else 0.0,
+    }
 
 
 def _bar_returns(equity: NDArray[np.float64]) -> NDArray[np.float64]:
