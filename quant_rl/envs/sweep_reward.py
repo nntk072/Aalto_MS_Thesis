@@ -238,3 +238,60 @@ class SweepConfirmationReward:
 
         # No sweep detected
         return 0.0
+
+
+class CompositeReward:
+    """Composite reward combining multiple reward components.
+
+    This is a wrapper that allows combining SweepConfirmationReward
+    with other reward signals (e.g., DSR from existing code).
+    """
+
+    def __init__(
+        self,
+        sweep_reward: SweepConfirmationReward,
+        dsr_weight: float = 0.5,
+        sweep_weight: float = 0.5,
+    ):
+        self.sweep_reward = sweep_reward
+        self.dsr_weight = dsr_weight
+        self.sweep_weight = sweep_weight
+
+    def reset(self) -> None:
+        """Reset all component reward functions."""
+        self.sweep_reward.reset()
+
+    def __call__(
+        self,
+        pnl_step: float,
+        cost: float,
+        price: float,
+        london_high: float,
+        london_low: float,
+        asian_high: float,
+        asian_low: float,
+        minutes_since_open: float,
+        position_changed: bool = False,
+        dsr_reward: float = 0.0,
+    ) -> float:
+        """Compute composite reward.
+
+        Parameters
+        ----------
+        dsr_reward : float
+            Differential Sharpe Ratio reward from existing DSRReward
+        """
+        sweep_r = self.sweep_reward(
+            pnl_step,
+            cost,
+            price,
+            london_high,
+            london_low,
+            asian_high,
+            asian_low,
+            minutes_since_open,
+            position_changed,
+        )
+
+        # Combine rewards
+        return (self.dsr_weight * dsr_reward) + (self.sweep_weight * sweep_r)
