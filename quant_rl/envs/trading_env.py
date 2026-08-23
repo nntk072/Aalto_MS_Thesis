@@ -218,6 +218,58 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         """Factory for fresh account state."""
         return AccountState(initial_balance=self.initial_balance)
 
+    def _check_entry_gate(
+        self,
+        price: float,
+        discrete_action: int,
+        feat_row: pd.Series,
+    ) -> bool:
+        """Check if action is allowed based on multi-liquidity entry gate.
+
+        Entry Gate Rules:
+        - Long: (price > LondonHigh OR price > AsianHigh) AND volume_spike > 1.5
+        - Short: (price < LondonLow OR price < AsianLow) AND volume_spike > 1.5
+        - Exit/Hold: Always allowed
+
+        Parameters
+        ----------
+        price : float
+            Current price
+        discrete_action : int
+            -1 = short, 0 = hold/exit, 1 = long
+        feat_row : pd.Series
+            Feature row with liquidity levels and volume_spike
+
+        Returns
+        -------
+        bool
+            True if action is allowed, False otherwise
+        """
+        if discrete_action == 0:  # Hold or exit
+            return True
+
+        # Check if we have the required features
+        if not all(
+            col in feat_row.index
+            for col in ["london_high", "london_low", "asian_high", "asian_low", "volume_spike"]
+        ):
+            return True  # Fallback: allow if features missing
+
+        london_high = float(feat_row["london_high"])
+        london_low = float(feat_row["london_low"])
+        asian_high = float(feat_row["asian_high"])
+        asian_low = float(feat_row["asian_low"])
+        volume_spike = float(feat_row["volume_spike"])
+
+        if discrete_action == 1:  # Long
+            # Long allowed if price > LondonHigh OR price > AsianHigh AND volume_spike > 1.5
+            return (price > london_high or price > asian_high) and volume_spike > 1.5
+        elif discrete_action == -1:  # Short
+            # Short allowed if price < LondonLow OR price < AsianLow AND volume_spike > 1.5
+            return (price < london_low or price < asian_low) and volume_spike > 1.5
+
+        return True
+
     def step(
         self,
         action: int | np.ndarray[Any, Any],
@@ -323,6 +375,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 rr_ratio = rr_levels[rr_variant]
             else:  # action == 19
                 discrete_action = 0  # exit action mapped to hold, exit handled below
+
+        # Check entry gate for new positions
+        if discrete_action != 0:  # Only check for long/short entries
+            if not self._check_entry_gate(float(bar["close"]), discrete_action, feat_row):
+                # Gate not satisfied, force to hold
+                discrete_action = 0
+                risk_frac = 0.0
 
         # Check guardrails
         if self.episodic:
