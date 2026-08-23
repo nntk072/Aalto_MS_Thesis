@@ -77,3 +77,51 @@ class CostModel:
 
 COST_US100 = CostModel(spread_points=0.6)
 COST_US500 = CostModel(spread_points=1.53)
+
+
+class TradingCostModel:
+    """Model for computing trading costs with spread and slippage.
+
+    This class provides explicit cost calculation for trading, including
+    spread, slippage, and per-trade costs. It integrates with the sweep
+    reward system.
+    """
+
+    def __init__(self, spread: float = 1.5, slippage_frac: float = 0.1):
+        """Initialize trading cost model.
+
+        Parameters
+        ----------
+        spread : float
+            Base spread in price units (default: 1.5)
+        slippage_frac : float
+            Slippage as fraction of spread (default: 0.1 = 10%)
+        """
+        self.spread = spread
+        self.slippage_frac = slippage_frac
+
+    def compute_cost(self, position_size: float, price: float) -> float:
+        """Compute cost for a trade.
+
+        Parameters
+        ----------
+        position_size : float
+            Size of the position (in lots or contracts)
+        price : float
+            Current price
+
+        Returns
+        -------
+        float
+            Total trading cost
+        """
+        if position_size == 0:
+            return 0.0
+
+        # Spread cost + slippage
+        cost = self.spread + (self.spread * self.slippage_frac)
+        return cost * abs(position_size)
+
+    def compute_spread(self) -> float:
+        """Return the total effective spread including slippage."""
+        return self.spread * (1 + self.slippage_frac)
