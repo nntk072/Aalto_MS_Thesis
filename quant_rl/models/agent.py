@@ -1,10 +1,11 @@
-"""PPO agent wiring: builds an SB3 PPO with the sequence encoder.
+"""RL agent wiring: builds SB3 PPO or SAC with sequence encoders.
 
 Usage
 -----
     from quant_rl.models.agent import build_agent
-    model = build_agent(env, cfg)                    # default TCN
+    model = build_agent(env, cfg)                    # default PPO with TCN
     model = build_agent(env, cfg, arch="transformer")
+    model = build_agent(env, cfg, arch="gru", algo="sac")  # SAC agent
     model.learn(total_timesteps=cfg.ppo.total_timesteps)
     model.save("models/ppo_trading")
 """
@@ -13,10 +14,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from gymnasium import spaces
 from omegaconf import DictConfig
 
 try:
-    from stable_baselines3 import PPO
+    from stable_baselines3 import PPO, SAC
     from stable_baselines3.common.vec_env import DummyVecEnv
 
     _SB3_AVAILABLE = True
@@ -24,8 +26,14 @@ except ImportError:
     _SB3_AVAILABLE = False
 
 
-def build_agent(env: Any, cfg: DictConfig, arch: str = "tcn") -> Any:
-    """Build an SB3 PPO agent wired to the sequence encoder.
+def build_agent(
+    env: Any,
+    cfg: DictConfig,
+    arch: str = "tcn",
+    algo: str = "ppo",
+    use_vae: bool = False,
+) -> Any:
+    """Build an SB3 PPO or SAC agent wired to the sequence encoder.
 
     Parameters
     ----------
@@ -34,35 +42,84 @@ def build_agent(env: Any, cfg: DictConfig, arch: str = "tcn") -> Any:
     cfg:
         Full OmegaConf config.
     arch:
-        ``"tcn"`` (default) or ``"transformer"``.
+        ``"tcn"`` (default), ``"transformer"``, or ``"gru"``.
+    algo:
+        ``"ppo"`` (default) or ``"sac"``.
+    use_vae:
+        If True, use the VAE feature extractor (default: False).
 
     Returns
     -------
-    ``stable_baselines3.PPO`` ready to call ``.learn()``.
+    ``stable_baselines3.PPO`` or ``stable_baselines3.SAC`` ready to call
+    ``.learn()``.
     """
     if not _SB3_AVAILABLE:
         raise ImportError("stable-baselines3 is required: pip install stable-baselines3")
 
-    from .encoder import TCNEncoder, TransformerEncoder
-
-    extractor_cls = TransformerEncoder if arch == "transformer" else TCNEncoder
+    from .encoder import GRUEncoder, TCNEncoder, TransformerEncoder
+    from .vae import VAEFeatureExtractor
 
     # Infer F from the env's observation space
     n_features: int = env.observation_space["seq"].shape[1]
 
-    policy_kwargs: dict[str, Any] = dict(
-        features_extractor_class=extractor_cls,
-        features_extractor_kwargs=dict(
+    # Choose feature extractor based on architecture / VAE use
+    extractor_cls: Any
+    if use_vae and "vae_z" in env.observation_space.spaces:
+        extractor_cls = VAEFeatureExtractor
+        latent_dim = env.observation_space["vae_z"].shape[0]
+        vae = cfg.get("vae", {}).get("model") if hasattr(cfg, "vae") else None
+        extractor_kwargs: dict[str, Any] = {"vae": vae, "freeze": True}
+    else:
+        if arch == "transformer":
+            extractor_cls = TransformerEncoder
+        elif arch == "gru":
+            extractor_cls = GRUEncoder
+        else:
+            extractor_cls = TCNEncoder
+
+        latent_dim = 128
+        extractor_kwargs = dict(
             seq_len=cfg.env.obs_window,
             n_features=n_features,
-            latent_dim=128,
-        ),
-        # Two hidden layers after the encoder
-        net_arch=dict(pi=[256, 128], vf=[256, 128]),
+            latent_dim=latent_dim,
+        )
+
+    # Two hidden layers after the encoder. SAC uses ``qf`` for the critic.
+    if algo == "sac":
+        net_arch: dict[str, Any] = dict(pi=[256, 128], qf=[256, 128])
+    else:
+        net_arch = dict(pi=[256, 128], vf=[256, 128])
+
+    policy_kwargs: dict[str, Any] = dict(
+        features_extractor_class=extractor_cls,
+        features_extractor_kwargs=extractor_kwargs,
+        net_arch=net_arch,
     )
 
     vec_env = DummyVecEnv([lambda: env])
 
+    if algo == "sac":
+        # SAC requires continuous action space
+        if not isinstance(env.action_space, spaces.Box):
+            raise ValueError("SAC requires continuous action space (Box)")
+
+        return SAC(
+            "MultiInputPolicy",
+            vec_env,
+            policy_kwargs=policy_kwargs,
+            learning_rate=cfg.get("sac", cfg.get("ppo", {})).get("learning_rate", 3e-4),
+            buffer_size=cfg.get("sac", cfg.get("ppo", {})).get("buffer_size", 1_000_000),
+            batch_size=cfg.get("sac", cfg.get("ppo", {})).get("batch_size", 256),
+            tau=cfg.get("sac", cfg.get("ppo", {})).get("tau", 0.005),
+            gamma=cfg.get("sac", cfg.get("ppo", {})).get("gamma", 0.99),
+            train_freq=cfg.get("sac", cfg.get("ppo", {})).get("train_freq", 1),
+            gradient_steps=cfg.get("sac", cfg.get("ppo", {})).get("gradient_steps", 1),
+            ent_coef=cfg.get("sac", cfg.get("ppo", {})).get("ent_coef", "auto"),
+            learning_starts=cfg.get("sac", cfg.get("ppo", {})).get("learning_starts", 10_000),
+            verbose=1,
+        )
+
+    # Default to PPO
     return PPO(
         "MultiInputPolicy",
         vec_env,
