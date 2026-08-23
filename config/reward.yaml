@@ -1,0 +1,18 @@
+reward:
+  # Sweep confirmation parameters
+  alpha: 0.1    # Weight for C_t (sweep confirmation score)
+  beta: 0.01    # Weight for T_t (time decay penalty)
+  hold_bars: 3   # Bars to hold for confirmation
+
+  # Cost parameters
+  spread: 1.5    # Base spread in price units
+  slippage_frac: 0.1  # 10% of spread
+  cost_per_trade: 0.0  # Additional cost per trade
+
+  # Composite reward (optional)
+  use_composite: false
+  dsr_weight: 0.3
+  sweep_weight: 0.7
+
+  # Sweep levels
+  london_priority: true  # London sweeps take priority over Asian
