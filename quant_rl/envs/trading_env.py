@@ -61,6 +61,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         use_vae: bool = False,
         vae: VAE | None = None,
         pre_ny_data: pd.DataFrame | None = None,
+        ny_session_start_idx: int | None = None,
     ):
         """Initialize trading environment.
 
@@ -125,6 +126,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             Pre-trained VAE model for narrative embedding. Required if use_vae=True.
         pre_ny_data : pd.DataFrame | None
             Pre-NY session data (01:05-16:29 UTC+3) for VAE input. Required if use_vae=True.
+        ny_session_start_idx : int | None
+            Index of the first NY session bar (16:30 UTC+3). Used to compute
+            minutes_since_open for the sweep time-decay penalty. If None, the
+            observation window length is used as the default.
         """
         self.bars = bars
         self.features = features
@@ -184,6 +189,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         else:
             # Discrete action space: 0=hold, 1-9=enter_long, 10-18=enter_short, 19=exit
             self.action_space = spaces.Discrete(20)
+
+        # NY session start index for time decay penalty
+        self.ny_session_start_idx = (
+            ny_session_start_idx if ny_session_start_idx is not None else self.obs_window
+        )
 
         # Observation space: dict with time-series + account state (+ VAE latent if enabled)
         # features: (obs_window, n_features)
@@ -655,15 +665,42 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         pnl_step = self.account.equity - self.equity_curve[-2]
         self.pnl_history.append(pnl_step)
 
-        # Compute reward using DSR
+        # Compute reward
         daily_loss = self.initial_balance - self.account.equity
-        reward = self.reward_fn(
-            pnl_step,
-            daily_loss=daily_loss,
-            daily_loss_limit=self.guardrails.daily_loss_limit,
-            initial_balance=self.initial_balance,
-            breach=done and truncated,
-        )
+
+        # Minutes elapsed since the NY open (5-min bars) for time-decay penalty
+        minutes_since_open = max(0, (self.step_idx - self.ny_session_start_idx)) * 5.0 / 60.0
+
+        reward_kwargs: dict[str, Any] = {
+            "daily_loss": daily_loss,
+            "daily_loss_limit": self.guardrails.daily_loss_limit,
+            "initial_balance": self.initial_balance,
+            "breach": done and truncated,
+        }
+
+        # Add sweep parameters (incl. minutes since open for time decay)
+        # only when the composite reward is active; DSR ignores them.
+        if self.use_sweep_reward and isinstance(self.reward_fn, CompositeReward):
+            current_feat = self.features.iloc[self.step_idx]
+            position_changed = (
+                self.position is not None
+                and len(self.trade_log) > 0
+                and self.trade_log[-1].get("type") in ("open", "close")
+            )
+            reward_kwargs.update(
+                {
+                    "cost": 0.0,
+                    "price": float(bar["close"]),
+                    "london_high": float(current_feat.get("london_high", float("nan"))),
+                    "london_low": float(current_feat.get("london_low", float("nan"))),
+                    "asian_high": float(current_feat.get("asian_high", float("nan"))),
+                    "asian_low": float(current_feat.get("asian_low", float("nan"))),
+                    "minutes_since_open": float(minutes_since_open),
+                    "position_changed": bool(position_changed),
+                }
+            )
+
+        reward = self.reward_fn(pnl_step, **reward_kwargs)
 
         obs = self._get_observation()
         info = {"equity": self.account.equity, "position": self.position is not None}
