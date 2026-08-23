@@ -82,3 +82,83 @@ def structure_levels(
         },
         index=bars.index,
     )
+
+
+def detect_session_levels(
+    df: pd.DataFrame,
+    asian_start: str = "01:05",
+    asian_end: str = "09:00",
+    london_end: str = "16:30",
+    swing_period: int = 50,
+    min_bars_per_session: int = 10,
+) -> pd.DataFrame:
+    """Detect Asian High/Low and London High/Low from pre-NY data.
+
+    Uses rolling swing high/low detection within each session window.
+    Levels are forward-filled to the NY session for use in real-time trading.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        OHLCV DataFrame with timezone-aware DatetimeIndex.
+        Required columns: ['open', 'high', 'low', 'close', 'volume']
+    asian_start : str
+        Asian session start time (HH:MM format, UTC+3)
+    asian_end : str
+        Asian session end time (HH:MM format, UTC+3)
+    london_end : str
+        London session end time (HH:MM format, UTC+3)
+    swing_period : int
+        Rolling window for swing high/low detection
+    min_bars_per_session : int
+        Minimum bars required in a session to compute levels
+
+    Returns
+    -------
+    pd.DataFrame
+        Same index as input, with added columns:
+        - asian_high: Rolling swing high from Asian session
+        - asian_low: Rolling swing low from Asian session
+        - london_high: Rolling swing high from London session
+        - london_low: Rolling swing low from London session
+        - prev_day_close: Previous day's close price
+    """
+    df = df.copy()
+    idx = df.index
+    assert isinstance(idx, pd.DatetimeIndex), "Index must be DatetimeIndex"
+
+    asian_start_time = pd.Timestamp(f"2000-01-01 {asian_start}").time()
+    asian_end_time = pd.Timestamp(f"2000-01-01 {asian_end}").time()
+    london_end_time = pd.Timestamp(f"2000-01-01 {london_end}").time()
+
+    asian_mask = (idx.time >= asian_start_time) & (idx.time < asian_end_time)
+    london_mask = (idx.time >= asian_end_time) & (idx.time < london_end_time)
+
+    result = pd.DataFrame(index=idx)
+
+    asian_data = df[asian_mask].copy()
+    if len(asian_data) >= min_bars_per_session:
+        asian_high = asian_data["high"].rolling(swing_period, min_periods=1).max()
+        asian_low = asian_data["low"].rolling(swing_period, min_periods=1).min()
+        result["asian_high"] = asian_high.reindex(idx).ffill()
+        result["asian_low"] = asian_low.reindex(idx).ffill()
+    else:
+        result["asian_high"] = np.nan
+        result["asian_low"] = np.nan
+
+    london_data = df[london_mask].copy()
+    if len(london_data) >= min_bars_per_session:
+        london_high = london_data["high"].rolling(swing_period, min_periods=1).max()
+        london_low = london_data["low"].rolling(swing_period, min_periods=1).min()
+        result["london_high"] = london_high.reindex(idx).ffill()
+        result["london_low"] = london_low.reindex(idx).ffill()
+    else:
+        result["london_high"] = np.nan
+        result["london_low"] = np.nan
+
+    prev_close = df["close"].shift(1)
+    result["prev_day_close"] = prev_close
+
+    result = result.ffill()
+
+    return result

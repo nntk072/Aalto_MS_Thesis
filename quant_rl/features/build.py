@@ -7,10 +7,10 @@ from pathlib import Path
 import pandas as pd
 from omegaconf import DictConfig
 
-from .indicators import build_indicators
+from .indicators import atr, build_indicators, sweep_velocity, volume_spike, wick_ratio
 from .normalize import rolling_zscore
 from .smt import smt_divergence
-from .structure import structure_levels
+from .structure import detect_session_levels, structure_levels
 
 
 def build_features(
@@ -75,6 +75,29 @@ def build_features(
         # Drop time columns (not needed in feature matrix)
         structure = structure[["last_swing_high", "last_swing_low"]]
         feat = pd.concat([feat, structure], axis=1)
+
+    # --- Liquidity Levels + Volume Spike + ATR - add AFTER normalization ---
+    levels = detect_session_levels(primary)
+    feat = pd.concat([feat, levels], axis=1)
+    # Only compute volume_spike if volume column exists
+    if "volume" in primary.columns:
+        feat["volume_spike"] = volume_spike(primary["volume"], window=20)
+    feat["atr_5"] = atr(primary, period=5)
+
+    # --- Sweep Velocity and Wick Ratio - for PLAN 3 ---
+    # Add sweep velocity (uses liquidity levels from levels)
+    sweep_vel = sweep_velocity(
+        primary,
+        london_high=levels.get("london_high"),
+        london_low=levels.get("london_low"),
+        asian_high=levels.get("asian_high"),
+        asian_low=levels.get("asian_low"),
+        atr_period=5,
+    )
+    feat = pd.concat([feat, sweep_vel], axis=1)
+
+    # Add wick ratio
+    feat["wick_ratio"] = wick_ratio(primary)
 
     # Drop leading NaNs from warmup
     feat = feat.dropna(how="all")
