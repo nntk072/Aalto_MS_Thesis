@@ -29,7 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bars-csv", required=True)
     parser.add_argument("--features-csv", help="Feature CSV; defaults to numeric bars columns")
-    parser.add_argument("--config", default="config/env.yaml")
+    parser.add_argument("--config", default="quant_rl/config/default.yaml")
     parser.add_argument("--algo", default="ppo", choices=["ppo", "sac"])
     parser.add_argument("--arch", default="gru", choices=["tcn", "gru", "transformer"])
     parser.add_argument("--use-vae", type=int, default=0)
@@ -86,7 +86,12 @@ def main() -> None:
             },
         )
 
-    train_env = TradingEnv(bars=bars, features=features, use_sweep_reward=True)
+    train_env = TradingEnv(
+        bars=bars,
+        features=features,
+        use_sweep_reward=True,
+        continuous_actions=args.algo == "sac",
+    )
     model = build_agent(
         train_env,
         cfg,
@@ -100,7 +105,12 @@ def main() -> None:
     model_path = out_dir / "model"
     model.save(model_path)
 
-    eval_env = TradingEnv(bars=bars, features=features, use_sweep_reward=True)
+    eval_env = TradingEnv(
+        bars=bars,
+        features=features,
+        use_sweep_reward=True,
+        continuous_actions=args.algo == "sac",
+    )
 
     def policy(obs: dict[str, Any]) -> tuple[Any, Any]:
         prediction: tuple[Any, Any] = model.predict(obs, deterministic=True)

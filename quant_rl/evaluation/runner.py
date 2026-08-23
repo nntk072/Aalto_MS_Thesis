@@ -42,8 +42,10 @@ def run_episode(
 
     while not (done or truncated) and steps < max_steps:
         observation, _, done, truncated, info = env.step(action_fn(observation))
-        equities.append(float(info["equity"]))
         steps += 1
+        # Some environments emit an empty info dict on the terminal step
+        if "equity" in info:
+            equities.append(float(info["equity"]))
 
     if not equities:
         raise ValueError("episode produced no steps; equity curve is empty")
