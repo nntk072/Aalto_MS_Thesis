@@ -9,6 +9,7 @@ from .metrics import (
 )
 from .runner import run_episode
 from .temporal import (
+    conditional_pnl_distributions,
     holding_time_distribution,
     sweep_delay_distribution,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "PerformanceMetrics",
     "compute_distribution_metrics",
     "compute_metrics",
+    "conditional_pnl_distributions",
     "holding_time_distribution",
     "max_drawdown",
     "run_episode",

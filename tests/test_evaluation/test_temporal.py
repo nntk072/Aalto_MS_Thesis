@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 from quant_rl.evaluation import (
+    conditional_pnl_distributions,
     holding_time_distribution,
     sweep_delay_distribution,
 )
@@ -86,3 +87,50 @@ class TestSweepDelay:
         # Assert
         assert dist.count == 1
         assert dist.mean == pytest.approx(2.0)
+
+
+@pytest.mark.unit
+class TestConditionalDistributions:
+    def _log(self) -> list[dict[str, object]]:
+        return [
+            {"type": "open", "direction": 1, "level_type": "london_high"},
+            {"type": "close", "pnl": 100.0},
+            {"type": "open", "direction": -1, "level_type": "asian_low"},
+            {"type": "close", "pnl": -50.0},
+            {"type": "open", "direction": 1, "level_type": None},
+            {"type": "close", "pnl": 25.0},
+        ]
+
+    def test_groups_are_present(self) -> None:
+        # Act
+        groups = conditional_pnl_distributions(self._log())
+
+        # Assert
+        assert set(groups) == {"overall", "long", "short", "london", "asian"}
+        assert groups["overall"].count == 3
+
+    def test_long_short_split(self) -> None:
+        # Arrange
+        dist = conditional_pnl_distributions(self._log())
+
+        # Assert
+        assert dist["long"].count == 2
+        assert dist["short"].count == 1
+        assert dist["long"].mean == pytest.approx(62.5)
+
+    def test_level_split(self) -> None:
+        # Arrange
+        dist = conditional_pnl_distributions(self._log())
+
+        # Assert
+        assert dist["london"].count == 1
+        assert dist["asian"].count == 1
+        assert dist["london"].mean == pytest.approx(100.0)
+
+    def test_empty_log_all_groups_empty(self) -> None:
+        # Act
+        dist = conditional_pnl_distributions([])
+
+        # Assert
+        assert dist["overall"].count == 0
+        assert dist["long"].count == 0
