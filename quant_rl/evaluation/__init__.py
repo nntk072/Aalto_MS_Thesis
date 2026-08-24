@@ -1,5 +1,6 @@
 """Evaluation utilities shared across baselines and RL agents."""
 
+from .distributions import DistributionMetrics, compute_distribution_metrics
 from .metrics import (
     PerformanceMetrics,
     compute_metrics,
@@ -9,7 +10,9 @@ from .metrics import (
 from .runner import run_episode
 
 __all__ = [
+    "DistributionMetrics",
     "PerformanceMetrics",
+    "compute_distribution_metrics",
     "compute_metrics",
     "max_drawdown",
     "run_episode",
