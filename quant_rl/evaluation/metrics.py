@@ -47,6 +47,8 @@ class PerformanceMetrics:
     n_trades: int = 0
     breach_count: int = 0
     extras: dict[str, float] = field(default_factory=dict)
+    # Additive distributional layer (PLAN 9) — never changes legacy fields.
+    pnl_distribution: dict[str, float] = field(default_factory=dict)
 
 
 def sweep_delay_breakdown(
@@ -162,6 +164,7 @@ def compute_metrics(
     periods_per_year: int = DEFAULT_PERIODS_PER_YEAR,
     breach_count: int = 0,
     extras: dict[str, float] | None = None,
+    distribution: dict[str, float] | None = None,
 ) -> PerformanceMetrics:
     """Compute the standard metric set for one evaluation run.
 
@@ -209,4 +212,5 @@ def compute_metrics(
         n_trades=int(pnls.size),
         breach_count=breach_count,
         extras=dict(extras or {}),
+        pnl_distribution=dict(distribution or {}),
     )

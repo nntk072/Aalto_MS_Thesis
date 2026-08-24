@@ -9,10 +9,12 @@ and breaches from ``breach_events``, both maintained by :class:`TradingEnv`.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import asdict
 from typing import Any
 
 import numpy as np
 
+from .distributions import compute_distribution_metrics
 from .metrics import DEFAULT_PERIODS_PER_YEAR, PerformanceMetrics, compute_metrics
 
 
@@ -54,10 +56,13 @@ def run_episode(
     breach_count = len(getattr(env, "breach_events", []))
     initial_balance = float(getattr(env, "initial_balance", equities[0]))
 
+    dist = compute_distribution_metrics(trade_pnls)
+
     return compute_metrics(
         equities,
         initial_balance=initial_balance,
         trade_pnls=trade_pnls,
         periods_per_year=periods_per_year,
         breach_count=breach_count,
+        distribution={k: float(v) for k, v in asdict(dist).items()},
     )

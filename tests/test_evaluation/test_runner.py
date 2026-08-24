@@ -82,3 +82,21 @@ class TestRunEpisode:
 
         # Assert
         assert metrics.total_return_pct == pytest.approx(500.0 / 100_000.0 * 100.0)
+
+
+@pytest.mark.integration
+class TestPnLDistributionAdditive:
+    def test_legacy_fields_unchanged_and_distribution_present(self) -> None:
+        # Arrange
+        env = _FakeEnv()
+        baseline = run_episode(env, action_fn=lambda obs: 0.5)
+
+        # Assert legacy fields unchanged
+        assert baseline.n_trades == 2
+        assert baseline.expectancy == pytest.approx(100.0)
+        assert baseline.total_pnl == pytest.approx(150.0)
+
+        # Assert additive distribution present with expected count
+        assert baseline.pnl_distribution
+        assert "count" in baseline.pnl_distribution
+        assert int(baseline.pnl_distribution["count"]) == 2
