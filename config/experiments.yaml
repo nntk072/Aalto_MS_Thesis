@@ -1,0 +1,27 @@
+# Ablation experiment matrix (thesis Week 13, PLAN 6).
+# Each variant trains with the given hyperparameters and is scored through
+# the shared evaluation pipeline. `steps`/`seeds` can be overridden on the
+# command line for smoke runs.
+defaults:
+  algo: ppo
+  arch: gru
+  use_vae: 0
+  steps: 100000
+  seeds: [42, 43, 44, 45, 46]
+
+variants:
+  - name: ablation_baseline_unconditional
+    use_vae: 0
+
+  - name: ablation_conditional_narrative
+    use_vae: 1
+
+  - name: ablation_transformer_encoder
+    arch: transformer
+
+  - name: ablation_sac_agent
+    algo: sac
+
+  - name: ablation_discrete_actions
+    algo: ppo
+    arch: tcn
