@@ -35,6 +35,16 @@ class BaseStrategy(ABC):
         """Reset the internal step counter for a new episode."""
         self._idx = 0
 
+    def fast_forward(self, n_bars: int) -> None:
+        """Advance the step counter by ``n_bars`` without emitting actions.
+
+        ``TradingEnv.reset()`` starts stepping at bar ``obs_window``, so a
+        strategy evaluated through :func:`run_episode` must skip the first
+        ``obs_window`` pre-computed signals to stay aligned with the bars
+        the environment actually trades.
+        """
+        self._idx = min(self._idx + max(n_bars, 0), self._n_bars)
+
     def act(self, obs: dict[str, Any]) -> float:
         """Return the action for the current bar.
 
