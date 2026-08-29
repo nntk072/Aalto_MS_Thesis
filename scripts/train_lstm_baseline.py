@@ -1,5 +1,16 @@
 """Train the LSTM sweep-direction classifier (supervised baseline).
 
+Training samples come from the in-sample slice (≤ --train-end) and both the
+validation accuracy and the trading evaluation use the held-out slice
+(≥ --test-start).  Because the sweep dataset is built independently per
+slice, the boundary carries an implicit purge gap of at least
+``window + horizon`` bars — no window/label straddle.
+
+After training, the classifier is wrapped in ``LSTMStrategy`` and scored
+through the shared evaluation pipeline (``run_episode`` + ``TradingEnv``)
+on the held-out slice, so its Sharpe/drawdown/PnL are directly comparable
+to the RL agent and rule-based baselines.
+
 Example:
     python scripts/train_lstm_baseline.py \
         --bars-csv data/us100_2025.csv --features-csv data/us100_feat.csv \
@@ -9,6 +20,7 @@ Example:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -19,7 +31,16 @@ from torch import nn
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from quant_rl.baselines import LSTMSweepClassifier, build_sweep_dataset  # noqa: E402
+from quant_rl.baselines import (  # noqa: E402
+    LSTMStrategy,
+    LSTMSweepClassifier,
+    build_sweep_dataset,
+)
+from quant_rl.data.split import split_train_test  # noqa: E402
+from quant_rl.envs.trading_env import TradingEnv  # noqa: E402
+from quant_rl.evaluation import build_run_report, run_episode  # noqa: E402
+
+OBS_WINDOW = 60  # must match TradingEnv's default obs_window
 
 
 def parse_args() -> argparse.Namespace:
@@ -36,6 +57,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out", default="models/lstm_sweep.pt")
+    parser.add_argument("--train-end", default="2025-12-31", help="Last in-sample date")
+    parser.add_argument("--test-start", default="2026-01-01", help="First held-out date")
+    parser.add_argument("--obs-window", type=int, default=OBS_WINDOW, help="Env observation window")
     return parser.parse_args()
 
 
@@ -48,7 +72,7 @@ def _load_csv(path: str, index_col: str | None) -> pd.DataFrame:
 
 
 def main() -> None:
-    """Train, report accuracy, and save the model."""
+    """Train on the in-sample slice, then report accuracy + trading metrics."""
     args = parse_args()
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -59,13 +83,24 @@ def main() -> None:
     else:
         features = bars.select_dtypes(include=[np.number])
 
-    x, y = build_sweep_dataset(bars, features, window=args.window, horizon=args.horizon)
-    n_train = int(0.8 * len(x))
-    x_train, y_train = x[:n_train], y[:n_train]
-    x_val, y_val = x[n_train:], y[n_train:]
-    print(f"samples: train={len(x_train)} val={len(x_val)}")
+    train_bars, test_bars, train_features, test_features = split_train_test(
+        bars, features, args.train_end, args.test_start
+    )
+    if train_bars.empty or test_bars.empty:
+        raise SystemExit(
+            f"empty split with --train-end {args.train_end} / --test-start {args.test_start}: "
+            f"train={len(train_bars)} bars, test={len(test_bars)} bars"
+        )
 
-    model = LSTMSweepClassifier(x.shape[-1], hidden_size=args.hidden_size)
+    x_train, y_train = build_sweep_dataset(
+        train_bars, train_features, window=args.window, horizon=args.horizon
+    )
+    x_val, y_val = build_sweep_dataset(
+        test_bars, test_features, window=args.window, horizon=args.horizon
+    )
+    print(f"sweep samples: train={len(x_train)} held-out={len(x_val)}")
+
+    model = LSTMSweepClassifier(x_train.shape[-1], hidden_size=args.hidden_size)
     optimiser = torch.optim.Adam(model.parameters(), lr=args.lr)
     loss_fn = nn.CrossEntropyLoss(
         weight=torch.tensor([1.0, 1.0, 1.0])  # classes: -1, 0, +1
@@ -90,18 +125,51 @@ def main() -> None:
             f"epoch {epoch + 1}/{args.epochs} loss={total / len(x_train):.4f} val_acc={val_acc:.3f}"
         )
 
+    # Trading evaluation of the trained classifier on the held-out slice,
+    # through the same pipeline as the RL agent and rule-based baselines.
+    strategy = LSTMStrategy(model, test_features, window=args.window)
+    strategy.fast_forward(args.obs_window)
+    env = TradingEnv(
+        bars=test_bars,
+        features=test_features,
+        continuous_actions=True,
+        # Eval mode: a breach blocks trading for the rest of the session
+        # instead of truncating the episode (mirrors run_backtest).
+        episodic=False,
+    )
+    metrics = run_episode(
+        env,
+        # LSTMStrategy emits floats on the continuous [-1, 1] contract;
+        # TradingEnv's continuous decoder expects an ndarray action.
+        action_fn=lambda obs: np.array([strategy.act(obs)], dtype=np.float32),
+    )
+    report = {
+        "run_name": "lstm_sweep_baseline",
+        "val_acc": val_acc,
+        "split": {
+            "train_end": args.train_end,
+            "test_start": args.test_start,
+            "train_bars": int(len(train_bars)),
+            "test_bars": int(len(test_bars)),
+        },
+        "out_of_sample": build_run_report(metrics, env.trade_log),
+    }
+
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
         {
             "state_dict": model.state_dict(),
-            "n_features": x.shape[-1],
+            "n_features": x_train.shape[-1],
             "hidden_size": args.hidden_size,
             "window": args.window,
         },
         out_path,
     )
+    metrics_path = out_path.parent / f"{out_path.stem}_metrics.json"
+    metrics_path.write_text(json.dumps(report, indent=2))
     print(f"saved model to {out_path}")
+    print(f"saved trading metrics to {metrics_path}")
 
 
 if __name__ == "__main__":
