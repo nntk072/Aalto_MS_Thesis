@@ -42,8 +42,8 @@ from typing import Any
 
 import pandas as pd
 
-from .metrics import Metrics
-from .report import build_comparison_table, build_summary_table, save_metrics_json
+from ..evaluation import PerformanceMetrics
+from ..evaluation.report import build_comparison_table, build_summary_table, save_metrics_json
 
 log = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ def _extract_trade_chart_config(cfg: Any) -> dict[str, Any]:
 def _write_split(
     split_dir: Path,
     result: dict[str, Any],
-    metrics: Metrics,
+    metrics: PerformanceMetrics,
     bars: pd.DataFrame | None,
     daily_loss_limit: float | None,
     max_loss_limit: float | None,
@@ -252,9 +252,9 @@ def save_run(
     name: str = "run",
     run_dir: Path | None = None,
     train_result: dict[str, Any] | None = None,
-    train_metrics: Metrics | None = None,
+    train_metrics: PerformanceMetrics | None = None,
     test_result: dict[str, Any] | None = None,
-    test_metrics: Metrics | None = None,
+    test_metrics: PerformanceMetrics | None = None,
     train_bars: pd.DataFrame | None = None,
     test_bars: pd.DataFrame | None = None,
     cfg: Any | None = None,

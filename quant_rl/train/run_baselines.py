@@ -29,7 +29,7 @@ from quant_rl.config import load_config
 from quant_rl.data.pipeline import build_tick_books, run_pipeline
 from quant_rl.data.split import get_split_config, split_train_test
 from quant_rl.eval.export import save_run
-from quant_rl.eval.metrics import calculate_metrics
+from quant_rl.evaluation import calculate_metrics
 from quant_rl.features.build import build_features
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -262,8 +262,8 @@ def main() -> None:
             label,
             m.sharpe,
             m.max_drawdown * 100,
-            m.total_trades,
-            m.total_return * 100,
+            m.n_trades,
+            m.total_return_pct,
         )
         return result, m
 
