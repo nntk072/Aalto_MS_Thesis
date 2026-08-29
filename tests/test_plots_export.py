@@ -17,8 +17,12 @@ import pandas as pd
 import pytest
 
 from quant_rl.eval.export import save_run
-from quant_rl.eval.metrics import Metrics, calculate_metrics
-from quant_rl.eval.report import build_comparison_table, build_summary_table, save_metrics_json
+from quant_rl.evaluation import PerformanceMetrics, calculate_metrics
+from quant_rl.evaluation.report import (
+    build_comparison_table,
+    build_summary_table,
+    save_metrics_json,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -102,7 +106,7 @@ def synthetic_result(synthetic_equity, synthetic_trades) -> dict:
 
 
 @pytest.fixture()
-def metrics(synthetic_equity, synthetic_trades) -> Metrics:
+def metrics(synthetic_equity, synthetic_trades) -> PerformanceMetrics:
     return calculate_metrics(
         synthetic_equity,
         trades=synthetic_trades,
@@ -120,7 +124,7 @@ def test_metrics_fields(metrics):
     assert hasattr(metrics, "total_pnl")
     assert hasattr(metrics, "avg_trade")
     assert hasattr(metrics, "max_consec_loss")
-    assert isinstance(metrics.total_trades, int)
+    assert isinstance(metrics.n_trades, int)
     assert 0.0 <= metrics.win_rate <= 1.0
 
 

@@ -32,7 +32,14 @@ class PerformanceMetrics:
         win_rate: Fraction of winning trades.
         expectancy: Mean PnL per trade.
         n_trades: Number of closed trades used for trade statistics.
-        breach_count: Number of risk-limit breaches recorded by the caller.
+        breach_count: Number of risk-limit breach events recorded by the caller.
+        breach_rate: Fraction of sessions with at least one breach event
+            (``breach_count / n_sessions``).  Session-level semantics from the
+            legacy ``quant_rl.eval.metrics.Metrics`` dataclass, kept alongside
+            the raw event count because they answer different questions.
+        turnover: Number of trades per evaluation bar.
+        max_consec_loss: Longest streak of consecutive losing trades.
+        avg_trade: Alias of ``expectancy`` (mean PnL per trade).
     """
 
     sharpe: float = 0.0
@@ -46,6 +53,10 @@ class PerformanceMetrics:
     expectancy: float = 0.0
     n_trades: int = 0
     breach_count: int = 0
+    breach_rate: float = 0.0
+    turnover: float = 0.0
+    max_consec_loss: int = 0
+    avg_trade: float = 0.0
     extras: dict[str, float] = field(default_factory=dict)
 
 
@@ -155,12 +166,25 @@ def _trade_stats(trade_pnls: NDArray[np.float64]) -> dict[str, float]:
     }
 
 
+def _max_consec_loss(pnls: NDArray[np.float64]) -> int:
+    """Longest streak of consecutive negative trade PnLs."""
+    max_streak = current = 0
+    for pnl in pnls:
+        if pnl < 0:
+            current += 1
+            max_streak = max(max_streak, current)
+        else:
+            current = 0
+    return max_streak
+
+
 def compute_metrics(
-    equity_curve: Sequence[float],
+    equity_curve: Sequence[float] | NDArray[np.floating[Any]],
     initial_balance: float,
     trade_pnls: Sequence[float] | None = None,
     periods_per_year: int = DEFAULT_PERIODS_PER_YEAR,
     breach_count: int = 0,
+    n_sessions: int = 1,
     extras: dict[str, float] | None = None,
 ) -> PerformanceMetrics:
     """Compute the standard metric set for one evaluation run.
@@ -170,7 +194,9 @@ def compute_metrics(
         initial_balance: Account balance before the first bar.
         trade_pnls: Per-trade PnL of closed trades, if available.
         periods_per_year: Bars per year used to annualise ratios.
-        breach_count: Risk-limit breaches recorded during the run.
+        breach_count: Risk-limit breach events recorded during the run.
+        n_sessions: Number of trading sessions in the run; used for
+            ``breach_rate`` (fraction of sessions with a breach).
         extras: Caller-specific metrics (e.g. sweep delay) merged into output.
 
     Returns:
@@ -208,5 +234,64 @@ def compute_metrics(
         expectancy=stats["expectancy"],
         n_trades=int(pnls.size),
         breach_count=breach_count,
+        breach_rate=(breach_count / n_sessions) if n_sessions > 0 else 0.0,
+        turnover=float(pnls.size / curve.size) if curve.size else 0.0,
+        max_consec_loss=_max_consec_loss(pnls),
+        avg_trade=stats["expectancy"],
         extras=dict(extras or {}),
+    )
+
+
+# M1 bars per year: kept as the default for the pandas adapter below so the
+# migrated ``quant_rl.train`` runners preserve their historical annualisation.
+LEGACY_M1_PERIODS_PER_YEAR = 252 * 390
+
+
+def calculate_metrics(
+    equity: Any,
+    trades: Any = None,
+    n_sessions: int = 1,
+    n_breach_sessions: int = 0,
+    periods_per_year: int = LEGACY_M1_PERIODS_PER_YEAR,
+) -> PerformanceMetrics:
+    """Pandas-friendly adapter matching the legacy ``eval.metrics`` signature.
+
+    Accepts a ``pd.Series`` (or any sequence) equity curve and an optional
+    ``pd.DataFrame`` of trades with a ``pnl`` column, and delegates to
+    :func:`compute_metrics`.  The initial balance is taken from the first
+    equity value, matching the legacy behaviour of the migrated
+    ``quant_rl.train`` runners.
+
+    Args:
+        equity: Bar-level equity curve (``pd.Series`` or sequence).
+        trades: Trade records (``pd.DataFrame`` with a ``pnl`` column) or None.
+        n_sessions: Number of trading sessions, for ``breach_rate``.
+        n_breach_sessions: Sessions in which a guardrail breach occurred.
+        periods_per_year: Bars per year for annualisation.  Defaults to M1
+            bars (``252 * 390``) to match the legacy ``quant_rl.eval`` runs.
+
+    Returns:
+        A frozen :class:`PerformanceMetrics` instance.
+    """
+    curve = (
+        equity.to_numpy(dtype=float)
+        if hasattr(equity, "to_numpy")
+        else np.asarray(equity, dtype=float)
+    )  # noqa: E501
+    if curve.size == 0:
+        raise ValueError("equity must contain at least one value")
+
+    trade_pnls: list[float] | None = None
+    if trades is not None and len(trades) > 0 and "pnl" in trades:
+        pnl = trades["pnl"]
+        pnl = pnl.dropna() if hasattr(pnl, "dropna") else pnl
+        trade_pnls = [float(v) for v in pnl]
+
+    return compute_metrics(
+        curve,
+        initial_balance=float(curve[0]),
+        trade_pnls=trade_pnls,
+        periods_per_year=periods_per_year,
+        breach_count=int(n_breach_sessions),
+        n_sessions=n_sessions,
     )
