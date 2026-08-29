@@ -1,6 +1,9 @@
 """Purged + embargoed walk-forward cross-validation splits.
 
 Adapted from the EA_SCALPER_XAUUSD oracle walk-forward pattern.
+Canonical home of the walk-forward splitter; the copy previously living in
+``quant_rl/eval/walkforward.py`` was retired when the two evaluation stacks
+were unified (see the W9 eval-metrics implementation plan, §1).
 """
 
 from __future__ import annotations

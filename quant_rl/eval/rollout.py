@@ -15,7 +15,7 @@ new trading for the rest of that session instead of ending the whole
 rollout early (see the ``episodic`` parameter docstring on ``TradingEnv``).
 
 The returned dict mirrors ``run_backtest``'s return shape so it can be
-passed straight into ``quant_rl.eval.metrics.calculate_metrics`` and
+passed straight into ``quant_rl.evaluation.calculate_metrics`` and
 ``quant_rl.eval.export.save_run`` unchanged.
 """
 

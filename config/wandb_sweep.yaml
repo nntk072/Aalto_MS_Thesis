@@ -1,0 +1,42 @@
+# W&B hyperparameter sweep for the conditional SAC agent (Gate G3).
+# Run with: wandb sweep config/wandb_sweep.yaml && wandb agent <sweep-id>
+method: bayes
+metric:
+  name: sharpe
+  goal: maximize
+parameters:
+  algo:
+    value: sac
+  arch:
+    values: [gru, transformer]
+  use_vae:
+    value: 1
+  lr:
+    distribution: log_uniform_values
+    min: 1.0e-5
+    max: 1.0e-3
+  entropy_coef:
+    distribution: log_uniform_values
+    min: 1.0e-4
+    max: 1.0e-2
+  batch_size:
+    values: [64, 128, 256]
+  steps:
+    value: 200000
+command:
+  - python
+  - scripts/train_rl.py
+  - --algo
+  - ${parameters.algo}
+  - --arch
+  - ${parameters.arch}
+  - --use-vae
+  - ${parameters.use_vae}
+  - --lr
+  - ${parameters.lr}
+  - --entropy-coef
+  - ${parameters.entropy_coef}
+  - --batch-size
+  - ${parameters.batch_size}
+  - --steps
+  - ${parameters.steps}
