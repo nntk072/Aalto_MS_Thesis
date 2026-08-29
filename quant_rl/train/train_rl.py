@@ -31,8 +31,8 @@ from quant_rl.data.pipeline import run_pipeline
 from quant_rl.data.split import get_split_config, split_train_test
 from quant_rl.envs.trading_env import TradingEnv
 from quant_rl.eval.export import build_run_dir, save_run
-from quant_rl.eval.metrics import calculate_metrics
 from quant_rl.eval.rollout import evaluate_model
+from quant_rl.evaluation import calculate_metrics
 from quant_rl.features.build import build_features
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -174,8 +174,8 @@ def main() -> None:
         "[test] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%",
         test_m.sharpe,
         test_m.max_drawdown * 100,
-        test_m.total_trades,
-        test_m.total_return * 100,
+        test_m.n_trades,
+        test_m.total_return_pct,
     )
 
     # Export test artifacts so the RL run includes the same plots as other runners.
@@ -209,8 +209,8 @@ def main() -> None:
         "test_bars": len(test_bars),
         "test_sharpe": float(test_m.sharpe),
         "test_max_dd": float(test_m.max_drawdown),
-        "test_trades": test_m.total_trades,
-        "test_return": float(test_m.total_return),
+        "test_trades": test_m.n_trades,
+        "test_return": float(test_m.total_return_pct),
         "timestamp": datetime.now().isoformat(),
     }
     (run_dir / "training_log.json").write_text(json.dumps(training_log, indent=2))

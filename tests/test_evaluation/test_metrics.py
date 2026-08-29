@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import math
 
+import pandas as pd
 import pytest
 
 from quant_rl.evaluation.metrics import (
     PerformanceMetrics,
+    calculate_metrics,
     compute_metrics,
     max_drawdown,
     sweep_delay_breakdown,
@@ -164,3 +166,66 @@ class TestComputeMetrics:
         assert isinstance(metrics, PerformanceMetrics)
         with pytest.raises(AttributeError):
             metrics.sharpe = 1.0  # type: ignore[misc]
+
+    def test_legacy_fields_are_populated(self) -> None:
+        # Arrange — 2 losses, 1 win, 2 losses in a row at the end
+        equity = [100_000.0, 100_000.0, 100_000.0, 100_000.0, 100_000.0, 100_000.0]
+        trades = [-100.0, 200.0, -50.0, -30.0]
+
+        # Act
+        metrics = compute_metrics(
+            equity,
+            initial_balance=100_000.0,
+            trade_pnls=trades,
+            breach_count=2,
+            n_sessions=4,
+        )
+
+        # Assert
+        assert metrics.max_consec_loss == 2
+        assert metrics.avg_trade == pytest.approx(metrics.expectancy)
+        assert metrics.turnover == pytest.approx(4 / 6)
+        assert metrics.breach_rate == pytest.approx(2 / 4)
+
+    def test_breach_rate_zero_sessions_is_safe(self) -> None:
+        # Act
+        metrics = compute_metrics(
+            [100_000.0, 100_001.0], initial_balance=100_000.0, breach_count=1, n_sessions=0
+        )
+
+        # Assert
+        assert metrics.breach_rate == 0.0
+        assert metrics.breach_count == 1
+
+
+@pytest.mark.unit
+class TestCalculateMetricsAdapter:
+    def test_accepts_pandas_series_and_trade_frame(self) -> None:
+        # Arrange
+        equity = pd.Series([100_000.0, 100_500.0, 100_200.0])
+        trades = pd.DataFrame({"pnl": [600.0, -400.0, 100.0]})
+
+        # Act
+        metrics = calculate_metrics(equity, trades=trades, n_sessions=2, n_breach_sessions=1)
+
+        # Assert
+        assert metrics.total_pnl == pytest.approx(200.0)
+        assert metrics.n_trades == 3
+        assert metrics.win_rate == pytest.approx(2 / 3)
+        assert metrics.max_consec_loss == 1
+        assert metrics.breach_rate == pytest.approx(0.5)
+
+    def test_m1_annualisation_default_is_preserved(self) -> None:
+        # The adapter keeps the legacy 252*390 default so migrated runners
+        # produce the same annualised numbers as before the unification.
+        from quant_rl.evaluation.metrics import LEGACY_M1_PERIODS_PER_YEAR
+
+        assert LEGACY_M1_PERIODS_PER_YEAR == 252 * 390
+
+    def test_none_trades_gives_no_trade_stats(self) -> None:
+        # Act
+        metrics = calculate_metrics(pd.Series([100.0, 101.0]))
+
+        # Assert
+        assert metrics.n_trades == 0
+        assert metrics.max_consec_loss == 0

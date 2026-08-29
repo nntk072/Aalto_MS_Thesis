@@ -28,7 +28,7 @@ from quant_rl.config import load_config
 from quant_rl.data.pipeline import build_tick_books, run_pipeline
 from quant_rl.data.split import get_split_config, split_train_test
 from quant_rl.eval.export import save_run
-from quant_rl.eval.metrics import Metrics, calculate_metrics
+from quant_rl.evaluation import PerformanceMetrics, calculate_metrics
 from quant_rl.features.build import build_features
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -109,7 +109,7 @@ def main() -> None:
         feats: pd.DataFrame,
         ticks: Any,
         label: str,
-    ) -> tuple[dict[str, Any], Metrics]:
+    ) -> tuple[dict[str, Any], PerformanceMetrics]:
         log.info("Running backtest [%s] seed=%d …", label, args.seed)
         result = run_backtest(
             bars=bars,
@@ -133,10 +133,10 @@ def main() -> None:
             label,
             m.sharpe,
             m.max_drawdown * 100,
-            m.total_trades,
+            m.n_trades,
             result.get("n_breach_sessions", 0),
             result.get("n_sessions", 1),
-            m.total_return * 100,
+            m.total_return_pct,
         )
         return result, m
 
