@@ -217,4 +217,3 @@ def get_session(
     else:
         # Outside all sessions (e.g., 23:50-01:05)
         return "ny"  # Still counts as NY session (overnight)
-    return result
