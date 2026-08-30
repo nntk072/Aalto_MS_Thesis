@@ -7,11 +7,14 @@ import pandas as pd
 import pytest
 
 from quant_rl.features.po3_config import (
+    detect_po3_entries,
+    detect_ltf_ifvg,
     EntryConfig,
     FVGConfig,
     IFVGConfig,
     detect_entry_trigger,
     detect_fvg,
+    detect_htf_fvg,
     detect_ifvg_confirmation,
 )
 
@@ -27,9 +30,10 @@ def sample_bars() -> pd.DataFrame:
     high = close + np.abs(np.random.randn(100) * 0.05)
     low = close - np.abs(np.random.randn(100) * 0.05)
     open_price = close.shift(1).fillna(close.iloc[0])
+    volume = pd.Series(np.random.randint(100, 1000, size=100), index=dates)
     
     return pd.DataFrame(
-        {"open": open_price, "high": high, "low": low, "close": close},
+        {"open": open_price, "high": high, "low": low, "close": close, "volume": volume},
         index=dates,
     )
 
@@ -143,3 +147,128 @@ class TestDetectEntryTrigger:
         config = EntryConfig(retest_threshold=0.05)
         entry_result = detect_entry_trigger(sample_bars, ifvg_result, config=config)
         assert isinstance(entry_result, pd.DataFrame)
+
+
+class TestDetectHTFFVG:
+    """Tests for HTF FVG detection."""
+
+    def test_htf_fvg_returns_expected_columns(self, sample_bars: pd.DataFrame) -> None:
+        """Test that HTF FVG detection returns expected columns."""
+        result = detect_htf_fvg(sample_bars, htf='M5')
+        assert "htf_fvg_bullish" in result.columns
+        assert "htf_fvg_bearish" in result.columns
+        assert "htf_fvg_bullish_low" in result.columns
+        assert "htf_fvg_bearish_high" in result.columns
+
+    def test_htf_fvg_output_shape(self, sample_bars: pd.DataFrame) -> None:
+        """Test that output has same length as M1 input."""
+        result = detect_htf_fvg(sample_bars, htf='M5')
+        assert len(result) == len(sample_bars)
+        assert result.index.equals(sample_bars.index)
+
+    def test_htf_fvg_binary_values(self, sample_bars: pd.DataFrame) -> None:
+        """Test that HTF FVG signals are binary (0 or 1)."""
+        result = detect_htf_fvg(sample_bars, htf='M5')
+        assert set(result["htf_fvg_bullish"].unique()).issubset({0, 1})
+        assert set(result["htf_fvg_bearish"].unique()).issubset({0, 1})
+
+    def test_htf_fvg_with_custom_config(self, sample_bars: pd.DataFrame) -> None:
+        """Test HTF FVG detection with custom configuration."""
+        config = FVGConfig(min_imbalance_pts=0.5)
+        result = detect_htf_fvg(sample_bars, htf='M15', config=config)
+        assert isinstance(result, pd.DataFrame)
+
+    def test_htf_fvg_with_different_timeframes(self, sample_bars: pd.DataFrame) -> None:
+        """Test HTF FVG detection with different timeframes."""
+        for tf in ['M5', 'M15', 'M30']:
+            result = detect_htf_fvg(sample_bars, htf=tf)
+            assert isinstance(result, pd.DataFrame)
+            assert len(result) == len(sample_bars)
+
+
+class TestDetectLTFIFVG:
+    """Tests for LTF IFVG confirmation detection."""
+
+    def test_ltf_ifvg_returns_expected_columns(self, sample_bars: pd.DataFrame) -> None:
+        """Test that LTF IFVG detection returns expected columns."""
+        result = detect_ltf_ifvg(sample_bars, primary_tf='M5')
+        assert "ltf_ifvg_bullish_confirmed" in result.columns
+        assert "ltf_ifvg_bearish_confirmed" in result.columns
+        assert "ltf_ifvg_bullish_low" in result.columns
+        assert "ltf_ifvg_bearish_high" in result.columns
+
+    def test_ltf_ifvg_output_shape(self, sample_bars: pd.DataFrame) -> None:
+        """Test that output has same length as M1 input."""
+        result = detect_ltf_ifvg(sample_bars, primary_tf='M5')
+        assert len(result) == len(sample_bars)
+        assert result.index.equals(sample_bars.index)
+
+    def test_ltf_ifvg_binary_values(self, sample_bars: pd.DataFrame) -> None:
+        """Test that LTF IFVG signals are binary (0 or 1)."""
+        result = detect_ltf_ifvg(sample_bars, primary_tf='M5')
+        assert set(result["ltf_ifvg_bullish_confirmed"].unique()).issubset({0, 1})
+        assert set(result["ltf_ifvg_bearish_confirmed"].unique()).issubset({0, 1})
+
+    def test_ltf_ifvg_with_custom_configs(self, sample_bars: pd.DataFrame) -> None:
+        """Test LTF IFVG detection with custom configurations."""
+        fvg_config = FVGConfig(min_imbalance_pts=0.5)
+        ifvg_config = IFVGConfig(close_through_threshold=0.3)
+        result = detect_ltf_ifvg(sample_bars, primary_tf='M15', fvg_config=fvg_config, ifvg_config=ifvg_config)
+        assert isinstance(result, pd.DataFrame)
+
+    def test_ltf_ifvg_with_different_primary_timeframes(self, sample_bars: pd.DataFrame) -> None:
+        """Test LTF IFVG detection with different primary timeframes."""
+        for tf in ['M5', 'M15', 'M30']:
+            result = detect_ltf_ifvg(sample_bars, primary_tf=tf)
+            assert isinstance(result, pd.DataFrame)
+            assert len(result) == len(sample_bars)
+
+
+class TestDetectPO3Entries:
+    """Tests for unified PO3 entry detection."""
+
+    def test_po3_entries_returns_expected_columns(self, sample_bars: pd.DataFrame) -> None:
+        """Test that unified PO3 entry detection returns expected columns."""
+        result = detect_po3_entries(sample_bars)
+        # Check HTF FVG columns
+        assert "htf_fvg_bullish" in result.columns
+        assert "htf_fvg_bearish" in result.columns
+        # Check LTF IFVG columns
+        assert "ltf_ifvg_bullish_confirmed" in result.columns
+        assert "ltf_ifvg_bearish_confirmed" in result.columns
+        # Check entry columns
+        assert "entry_long" in result.columns
+        assert "entry_short" in result.columns
+        assert "entry_trigger_type" in result.columns
+
+    def test_po3_entries_output_shape(self, sample_bars: pd.DataFrame) -> None:
+        """Test that output has same length as M1 input."""
+        result = detect_po3_entries(sample_bars)
+        assert len(result) == len(sample_bars)
+        assert result.index.equals(sample_bars.index)
+
+    def test_po3_entries_with_different_entry_types(self, sample_bars: pd.DataFrame) -> None:
+        """Test unified PO3 entry detection with different entry types."""
+        for entry_type in ['retest', 'close_through']:
+            result = detect_po3_entries(sample_bars, entry_type=entry_type)
+            assert isinstance(result, pd.DataFrame)
+            assert len(result) == len(sample_bars)
+
+    def test_po3_entries_with_custom_timeframes(self, sample_bars: pd.DataFrame) -> None:
+        """Test unified PO3 entry detection with custom timeframes."""
+        result = detect_po3_entries(sample_bars, htf='M30', primary_tf='M15')
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == len(sample_bars)
+
+    def test_po3_entries_with_custom_configs(self, sample_bars: pd.DataFrame) -> None:
+        """Test unified PO3 entry detection with custom configurations."""
+        fvg_config = FVGConfig(min_imbalance_pts=0.5)
+        ifvg_config = IFVGConfig(close_through_threshold=0.3)
+        entry_config = EntryConfig(retest_threshold=0.05)
+        result = detect_po3_entries(
+            sample_bars,
+            fvg_config=fvg_config,
+            ifvg_config=ifvg_config,
+            entry_config=entry_config,
+        )
+        assert isinstance(result, pd.DataFrame)
