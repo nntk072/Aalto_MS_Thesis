@@ -57,3 +57,19 @@ def test_round_trip_spread_charged_once():
     pnl, fill_price = broker.close_position(acc, pos, quote=quote)
     assert pnl == pytest.approx(-1.0)
     assert fill_price == pytest.approx(100.0)
+
+
+def test_round_trip_commission_deducted():
+    cm = CostModel(spread_points=0.0, slippage_points=0.0, commission_per_lot=2.5)
+    broker = Broker(cost_model=cm, margin_pct=0.02)
+    acc = AccountState(initial_balance=100_000.0)
+
+    quote = (100.0, 100.0)
+    pos = broker.open_position(acc, quote=quote, lots=2.0, direction=1)
+    assert pos is not None
+
+    pnl, fill_price = broker.close_position(acc, pos, quote=quote)
+
+    total_cost = 100_000.0 - acc.balance
+    assert total_cost == pytest.approx(10.0)
+    assert fill_price == pytest.approx(100.0)

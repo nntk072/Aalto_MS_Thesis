@@ -32,6 +32,7 @@ def build_agent(
     arch: str = "tcn",
     algo: str = "ppo",
     use_vae: bool = False,
+    vae: Any | None = None,
 ) -> Any:
     """Build an SB3 PPO or SAC agent wired to the sequence encoder.
 
@@ -47,17 +48,28 @@ def build_agent(
         ``"ppo"`` (default) or ``"sac"``.
     use_vae:
         If True, use the VAE feature extractor (default: False).
+    vae:
+        A trained :class:`quant_rl.models.vae.VAE` instance.  Required when
+        ``use_vae`` is ``True``.
 
     Returns
     -------
     ``stable_baselines3.PPO`` or ``stable_baselines3.SAC`` ready to call
     ``.learn()``.
+
+    Raises
+    ------
+    ValueError
+        If ``use_vae`` is ``True`` but ``vae`` is ``None``.
     """
     if not _SB3_AVAILABLE:
         raise ImportError("stable-baselines3 is required: pip install stable-baselines3")
 
     from .encoder import GRUEncoder, TCNEncoder, TransformerEncoder
     from .vae import VAEFeatureExtractor
+
+    if use_vae and vae is None:
+        raise ValueError("use_vae=True requires a constructed VAE instance passed via vae=")
 
     # Infer F from the env's observation space
     n_features: int = env.observation_space["seq"].shape[1]
@@ -67,7 +79,6 @@ def build_agent(
     if use_vae and "vae_z" in env.observation_space.spaces:
         extractor_cls = VAEFeatureExtractor
         latent_dim = env.observation_space["vae_z"].shape[0]
-        vae = cfg.get("vae", {}).get("model") if hasattr(cfg, "vae") else None
         extractor_kwargs: dict[str, Any] = {"vae": vae, "freeze": True}
     else:
         if arch == "transformer":

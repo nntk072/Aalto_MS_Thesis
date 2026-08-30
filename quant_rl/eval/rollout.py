@@ -91,7 +91,10 @@ def evaluate_model(
         action = int(np.asarray(raw_action).reshape(-1)[0])
         obs, _, done, truncated, _ = env.step(action)
 
-    equity_series = pd.Series(env.equity_curve[1:], index=env.bars.index[env.obs_window :])
+    equity_series = pd.Series(
+        env.equity_curve,
+        index=env.bars.index[env.obs_window - 1 : env.obs_window - 1 + len(env.equity_curve)],
+    )
     trades_df = pd.DataFrame(env.trade_log)
 
     return {
@@ -103,5 +106,5 @@ def evaluate_model(
         "n_sessions": len(env.all_sessions),
         "n_breach_sessions": len(env.breached_sessions),
         "n_sessions_with_trades": len(env.sessions_with_trades),
-        "n_sessions_skipped": len(env.breached_sessions),
+        "n_sessions_skipped": len(env.all_sessions) - len(env.sessions_with_trades),
     }

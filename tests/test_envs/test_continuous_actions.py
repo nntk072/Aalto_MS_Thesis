@@ -84,20 +84,11 @@ class TestContinuousActionSpace:
         )
         env.reset()
 
-        # Test positive action (long)
-        action = np.array([0.5])
-        obs, _, _, _, _ = env.step(action)
-
-        # Test negative action (short)
-        action = np.array([-0.5])
-        obs, _, _, _, _ = env.step(action)
-
-        # Test zero action (hold)
-        action = np.array([0.0])
-        obs, _, _, _, _ = env.step(action)
-
-        # All should work without errors
-        assert True
+        for action_val in [0.5, -0.5, 0.0]:
+            action = np.array([action_val])
+            obs, _, _, _, info = env.step(action)
+            assert np.isfinite(obs["seq"]).all()
+            assert "position" in info
 
     def test_entry_gate_long_allowed(self, sample_bars: pd.DataFrame) -> None:
         """Test that long entry is allowed when conditions are met."""
@@ -122,9 +113,9 @@ class TestContinuousActionSpace:
 
         # Long action should be allowed
         action = np.array([0.5])
-        obs, _, _, _, _ = env.step(action)
+        obs, _, _, _, info = env.step(action)
 
-        assert True
+        assert env.position is not None or info.get("position") is not None
 
     def test_entry_gate_long_blocked(self, sample_bars: pd.DataFrame) -> None:
         """Test that long entry is blocked when conditions are not met."""
@@ -177,9 +168,9 @@ class TestContinuousActionSpace:
 
         # Short action should be allowed
         action = np.array([-0.5])
-        obs, _, _, _, _ = env.step(action)
+        obs, _, _, _, info = env.step(action)
 
-        assert True
+        assert env.position is not None or info.get("position") is not None
 
     def test_entry_gate_short_blocked(self, sample_bars: pd.DataFrame) -> None:
         """Test that short entry is blocked when conditions are not met."""
@@ -246,6 +237,6 @@ class TestContinuousActionSpace:
 
         # Exit should be allowed
         action = 19  # exit
-        obs, _, _, _, _ = env.step(action)
+        obs, _, _, _, info = env.step(action)
 
-        assert True
+        assert env.position is None or info.get("position") is None

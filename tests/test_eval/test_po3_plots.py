@@ -88,7 +88,7 @@ def test_interactive_plot_has_zone_shapes(
     signal_bars: pd.DataFrame, po3_signals: pd.DataFrame
 ) -> None:
     fig = plot_fvg_signals_interactive(signal_bars, po3_signals, candle_tf="1min")
-    assert len(fig.layout.shapes) >= 0  # shapes key is always present
+    assert len(fig.layout.shapes) > 0
 
 
 def test_interactive_plot_window(signal_bars: pd.DataFrame, po3_signals: pd.DataFrame) -> None:

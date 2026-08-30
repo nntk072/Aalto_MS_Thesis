@@ -44,8 +44,9 @@ class TestAuxiliaryLoss:
         targets = torch.randn(4, 5)
 
         total = aux(rl_loss, latent, targets)
-        # Total must differ from the raw RL loss by the weighted aux term.
-        assert not torch.allclose(total, rl_loss)
+        pred_returns = head(latent)
+        expected_total = rl_loss + 0.1 * torch.nn.functional.mse_loss(pred_returns, targets)
+        assert torch.allclose(total, expected_total)
 
     def test_zero_weight_returns_rl_loss_only(self) -> None:
         head = ReturnPredictionHead(latent_dim=16, prediction_horizon=5)
@@ -63,8 +64,18 @@ class TestCumulativeReturnPredictor:
         predictor = CumulativeReturnPredictor(horizon=3)
         returns = torch.randn(4, 20)
         targets = predictor.compute_targets(returns)
-        assert targets.shape[0] == 4
-        assert targets.shape[-1] == 3
+        assert targets.shape == (4, 17, 3)
+
+    def test_exact_cumulative_targets(self) -> None:
+        predictor = CumulativeReturnPredictor(horizon=3)
+        returns = torch.arange(1, 21, dtype=torch.float32).repeat(2, 1)
+        targets = predictor.compute_targets(returns)
+        expected = torch.zeros(2, 17, 3)
+        for b in range(2):
+            for t in range(17):
+                for h in range(3):
+                    expected[b, t, h] = returns[b, t + 1 : t + 1 + h + 1].sum()
+        assert torch.allclose(targets, expected)
 
 
 class TestEntropyBonus:
