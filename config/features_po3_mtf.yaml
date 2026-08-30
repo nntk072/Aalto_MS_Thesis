@@ -1,0 +1,8 @@
+features:
+  # Chain A multi-timeframe spine (identical across all three variants so
+  # differences are attributable to the additive block below).
+  htf_timeframes: ["M5", "M15", "H1"]
+  # Chain B variant 2 additive block: PO3 daily-cycle phase tag
+  # (accumulation → manipulation → distribution) + session progress.
+  include_po3: true
+  include_fvg_ifvg: false
