@@ -1,4 +1,11 @@
-"""Feature build pipeline: indicators + SMT + normalisation → feature matrix."""
+"""Feature build pipeline: indicators + SMT + normalisation → feature matrix.
+
+Chain A: per-timeframe technical features. For every timeframe listed in
+``cfg.features.htf_timeframes`` the same ``build_indicators()`` call used
+for M1 is run on that timeframe's own bars, then causally forward-filled
+onto the M1 spine via :func:`quant_rl.data.align.align_timeframes` with
+``{TF}_{indicator}`` column names.
+"""
 
 from __future__ import annotations
 
@@ -7,10 +14,18 @@ from pathlib import Path
 import pandas as pd
 from omegaconf import DictConfig
 
+from ..data.align import align_timeframes
+from ..data.resample import resample
 from .indicators import atr, build_indicators, sweep_velocity, volume_spike, wick_ratio
 from .normalize import rolling_zscore
 from .smt import smt_divergence
 from .structure import detect_session_levels, structure_levels
+
+# Bump whenever build_features() output schema changes so stale caches are
+# not silently reused by the {symbol}_features.parquet call sites.
+FEATURE_CACHE_VERSION = "v2-htf"
+
+_DEFAULT_HTF_TIMEFRAMES = ("M5", "M15", "H1")
 
 
 def build_features(
@@ -64,6 +79,20 @@ def build_features(
             corr_window=feat_cfg.smt_corr_window,
         )
         feat = pd.concat([feat, smt], axis=1)
+
+    # --- Higher-timeframe technical features (Chain A) ---
+    # Run the same indicator build on each HTF's own bars, then causally
+    # forward-fill onto the M1 spine. Done BEFORE normalisation so HTF
+    # columns are z-scored like the M1 ones.
+    if feat_cfg is not None:
+        htf_cfg_tfs = getattr(feat_cfg, "htf_timeframes", None)
+        htf_tfs = list(htf_cfg_tfs) if htf_cfg_tfs is not None else list(_DEFAULT_HTF_TIMEFRAMES)
+        if htf_tfs:
+            htf_blocks: dict[str, pd.DataFrame] = {}
+            for tf in htf_tfs:
+                tf_bars = resample(primary, tf)  # type: ignore[arg-type]
+                htf_blocks[str(tf)] = build_indicators(tf_bars, feat_cfg)
+            feat = align_timeframes(feat, htf_blocks)
 
     # --- normalisation ---
     window = feat_cfg.zscore_window if feat_cfg is not None else 252

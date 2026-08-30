@@ -72,6 +72,10 @@ features:
   smt_swing_period: 5                  # bars for swing high/low detection
   smt_corr_window: 20
   zscore_window: 252                   # rolling train-only normalisation window
+  # Higher timeframes whose own indicator blocks are causally aligned onto
+  # the M1 spine (Chain A). Each listed TF gets the same build_indicators()
+  # call as M1, forward-filled with {TF}_{indicator} column names.
+  htf_timeframes: ["M5", "M15", "H1"]
 
 env:
   obs_window: 60                       # T in [T, F] obs

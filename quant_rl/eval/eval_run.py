@@ -129,7 +129,7 @@ def main() -> None:
     secondary_m1 = data.get(cfg.data.secondary, {}).get("M1")
 
     cache_dir = Path(cfg.data.cache_dir)
-    feat_cache = cache_dir / f"{cfg.data.primary}_features.parquet"
+    feat_cache = cache_dir / f"{cfg.data.primary}_features_v2_htf.parquet"
     features = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
 
     train_end, test_start = get_split_config(cfg)
