@@ -142,3 +142,11 @@ training:
   primary_only: false    # true = ignore secondary symbol entirely
   max_days: null         # null = all data; integer = last N calendar days for training
   total_timesteps_mvp: 8192   # short timestep count used in mvp mode
+
+# Chain E Step 0 — auxiliary return-prediction head (opt-in).
+auxiliary:
+  aux_weight: 0.0        # 0.0 = disabled (control); 0.1 = treatment arm
+  prediction_horizon: 5  # bars ahead for the per-bar-return target
+  lr: 0.0001             # auxiliary optimizer lr (head + encoder)
+  grad_steps: 4          # gradient steps per rollout
+  batch_windows: 256     # supervised windows sampled per rollout

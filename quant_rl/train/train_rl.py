@@ -34,6 +34,7 @@ from quant_rl.eval.export import build_run_dir, save_run
 from quant_rl.eval.rollout import evaluate_model
 from quant_rl.evaluation import calculate_metrics
 from quant_rl.features.build import build_features
+from quant_rl.train.auxiliary_training import AuxiliaryTrainerCallback
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -138,7 +139,24 @@ def main() -> None:
         seed=args.seed,
     )
 
-    model.learn(total_timesteps=timesteps, callback=checkpoint_callback)
+    aux_cb = None
+    aux_cfg = getattr(cfg, "auxiliary", None)
+    if aux_cfg is not None and float(aux_cfg.get("aux_weight", 0.0)) > 0.0:
+        aux_cb = AuxiliaryTrainerCallback(
+            prediction_horizon=int(aux_cfg.get("prediction_horizon", 5)),
+            aux_weight=float(aux_cfg.get("aux_weight", 0.1)),
+            lr=float(aux_cfg.get("lr", 1e-4)),
+            grad_steps=int(aux_cfg.get("grad_steps", 4)),
+            batch_windows=int(aux_cfg.get("batch_windows", 256)),
+        )
+        log.info(
+            "Auxiliary loss enabled: aux_weight=%.3f horizon=%d",
+            aux_cb.aux_weight,
+            aux_cb.prediction_horizon,
+        )
+
+    callbacks = [c for c in (checkpoint_callback, aux_cb) if c is not None]
+    model.learn(total_timesteps=timesteps, callback=callbacks)
 
     # Save final model
     model_path = model_dir / "ppo_final"
