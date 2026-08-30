@@ -152,6 +152,7 @@ class TestTrainingScriptSmoke:
         assert np.isfinite(report["out_of_sample"]["sharpe"])
 
     def test_train_rl(self, bars_csv: Path, tmp_path: Path) -> None:
+        """Smoke-test PPO training with the default config (discrete actions)."""
         # Arrange — smallest viable training budget
         out_dir = tmp_path / "rl_runs"
         sys.argv = [

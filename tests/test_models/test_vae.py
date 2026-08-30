@@ -153,6 +153,33 @@ class TestVAE:
         recon_error = torch.nn.functional.mse_loss(x_recon, x)
         assert torch.isfinite(recon_error), f"Reconstruction error is not finite: {recon_error}"
 
+        # Output must not be a degenerate zero tensor (would pass shape-only tests)
+        assert x_recon.abs().sum() > 0.0, "VAE decoder produced all zeros"
+
+    def test_vae_kl_divergence_positive(self) -> None:
+        """KL term should be positive for non-degenerate latents."""
+        vae = VAE(seq_len=186, n_features=5, latent_dim=16)
+        x = torch.randn(4, 186, 5)
+
+        _, mu, log_var = vae(x)
+
+        kl = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp(), dim=-1)
+        assert (kl > 0).all(), "KL divergence should be positive for random inputs"
+
+    def test_vae_reparameterization_differs(self) -> None:
+        """Different (mu, log_var) should yield different z samples."""
+        vae = VAE(seq_len=186, n_features=5, latent_dim=16)
+
+        mu1 = torch.zeros(4, 16)
+        log_var1 = torch.zeros(4, 16)
+        mu2 = torch.ones(4, 16)
+        log_var2 = torch.zeros(4, 16)
+
+        z1 = vae.reparameterize(mu1, log_var1)
+        z2 = vae.reparameterize(mu2, log_var2)
+
+        assert not torch.allclose(z1, z2), "Different latents should yield different z"
+
 
 class TestVAETraining:
     """Tests for VAE training behavior."""

@@ -240,3 +240,89 @@ class TestEncoderComparison:
             # Should not raise an error
             output = encoder(obs)
             assert output.shape[0] == 4
+
+    def test_encoder_output_changes_with_seq(self) -> None:
+        """Encoder output must depend on the sequence input."""
+        observation_space = spaces.Dict(
+            {
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=float),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+            }
+        )
+        encoder = TCNEncoder(
+            observation_space=observation_space, seq_len=60, n_features=64, latent_dim=128
+        )
+        obs1 = {
+            "seq": torch.randn(2, 60, 64),
+            "account": torch.randn(2, 5),
+        }
+        obs2 = {
+            "seq": torch.randn(2, 60, 64),
+            "account": obs1["account"],
+        }
+        out1 = encoder(obs1)
+        out2 = encoder(obs2)
+        assert not torch.allclose(out1, out2)
+
+    def test_encoder_output_changes_with_account(self) -> None:
+        """Encoder output must depend on the account input."""
+        observation_space = spaces.Dict(
+            {
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=float),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+            }
+        )
+        encoder = TransformerEncoder(
+            observation_space=observation_space, seq_len=60, n_features=64, latent_dim=128
+        )
+        obs1 = {
+            "seq": torch.randn(2, 60, 64),
+            "account": torch.randn(2, 5),
+        }
+        obs2 = {
+            "seq": obs1["seq"],
+            "account": torch.randn(2, 5),
+        }
+        out1 = encoder(obs1)
+        out2 = encoder(obs2)
+        assert not torch.allclose(out1, out2)
+
+    def test_encoder_deterministic_tcn(self) -> None:
+        """Same input must produce identical output."""
+        observation_space = spaces.Dict(
+            {
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=float),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+            }
+        )
+        encoder = TCNEncoder(
+            observation_space=observation_space, seq_len=60, n_features=64, latent_dim=128
+        )
+        encoder.eval()
+        seq = torch.randn(2, 60, 64)
+        account = torch.randn(2, 5)
+        obs = {"seq": seq, "account": account}
+        with torch.no_grad():
+            out1 = encoder(obs)
+            out2 = encoder(obs)
+        assert torch.allclose(out1, out2)
+
+    def test_encoder_deterministic_transformer(self) -> None:
+        """Same input must produce identical output."""
+        observation_space = spaces.Dict(
+            {
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=float),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+            }
+        )
+        encoder = TransformerEncoder(
+            observation_space=observation_space, seq_len=60, n_features=64, latent_dim=128
+        )
+        encoder.eval()
+        seq = torch.randn(2, 60, 64)
+        account = torch.randn(2, 5)
+        obs = {"seq": seq, "account": account}
+        with torch.no_grad():
+            out1 = encoder(obs)
+            out2 = encoder(obs)
+        assert torch.allclose(out1, out2)

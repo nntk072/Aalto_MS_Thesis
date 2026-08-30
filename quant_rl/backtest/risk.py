@@ -32,7 +32,16 @@ def compute_sl_tp_long(
     -------
     tuple[float, float]
         (sl_price, tp_price)
+
+    Raises
+    ------
+    ValueError
+        If ``last_swing_low`` is not strictly below ``entry_price``.
     """
+    if last_swing_low >= entry_price:
+        raise ValueError(
+            f"Invalid long structure: swing low {last_swing_low} must be below entry {entry_price}"
+        )
     sl_price = last_swing_low - buffer_pts
     r = entry_price - sl_price
     tp_price = entry_price + rr_ratio * r
@@ -62,7 +71,16 @@ def compute_sl_tp_short(
     -------
     tuple[float, float]
         (sl_price, tp_price)
+
+    Raises
+    ------
+    ValueError
+        If ``last_swing_high`` is not strictly above ``entry_price``.
     """
+    if last_swing_high <= entry_price:
+        raise ValueError(
+            f"Invalid short structure: swing high {last_swing_high} must be above entry {entry_price}"
+        )
     sl_price = last_swing_high + buffer_pts
     r = sl_price - entry_price
     tp_price = entry_price - rr_ratio * r
@@ -75,6 +93,7 @@ def compute_lots(
     entry_price: float,
     sl_price: float,
     contract_size: float = 1.0,
+    point_value: float = 1.0,
     min_lot: float = 0.01,
     max_lot: float = 100.0,
     max_loss_cap: float | None = None,
@@ -93,6 +112,8 @@ def compute_lots(
         Stop loss price.
     contract_size : float
         Contract multiplier (default 1.0).
+    point_value : float
+        Dollar value per point per contract (default 1.0).
     min_lot : float
         Minimum lot size to trade.
     max_lot : float
@@ -112,11 +133,11 @@ def compute_lots(
         # Avoid division by near-zero
         return min_lot
 
-    lots = risk_usd / (sl_distance * contract_size)
+    lots = risk_usd / (sl_distance * contract_size * point_value)
 
     # Apply safety cap if configured
     if max_loss_cap is not None:
-        max_lots_from_cap = max_loss_cap / (sl_distance * contract_size)
+        max_lots_from_cap = max_loss_cap / (sl_distance * contract_size * point_value)
         lots = min(lots, max_lots_from_cap)
 
     # Clip to [min_lot, max_lot]

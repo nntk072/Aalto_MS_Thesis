@@ -107,11 +107,13 @@ def compute_trade_metrics(
             mae_price = trade_bars["low"].min()
             mfe_idx = pd.Timestamp(trade_bars["high"].idxmax())
             mae_idx = pd.Timestamp(trade_bars["low"].idxmin())
-        else:  # Short (-1)
+        elif direction == -1:  # Short
             mfe_price = trade_bars["low"].min()
             mae_price = trade_bars["high"].max()
             mfe_idx = pd.Timestamp(trade_bars["low"].idxmin())
             mae_idx = pd.Timestamp(trade_bars["high"].idxmax())
+        else:
+            raise ValueError(f"Invalid trade direction: {direction} (expected +1 or -1)")
     else:
         # Fallback if no bars in window
         mfe_price = entry_price
@@ -131,8 +133,10 @@ def compute_trade_metrics(
         price_move = max_loss_per_trade_usd / (lots * contract_size)
         if direction == 1:  # Long
             sl_price = entry_price - price_move
-        else:  # Short
+        elif direction == -1:  # Short
             sl_price = entry_price + price_move
+        else:
+            raise ValueError(f"Invalid trade direction: {direction} (expected +1 or -1)")
 
     # Prefer per-trade TP from trade log (structure-aware)
     if pd.notna(open_row.get("tp_price")):
@@ -142,8 +146,10 @@ def compute_trade_metrics(
         price_move = take_profit_per_trade_usd / (lots * contract_size)
         if direction == 1:  # Long
             tp_price = entry_price + price_move
-        else:  # Short
+        elif direction == -1:  # Short
             tp_price = entry_price - price_move
+        else:
+            raise ValueError(f"Invalid trade direction: {direction} (expected +1 or -1)")
 
     return TradeChartMetrics(
         entry_price=entry_price,

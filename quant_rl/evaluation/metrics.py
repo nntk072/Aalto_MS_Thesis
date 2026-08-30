@@ -253,14 +253,15 @@ def calculate_metrics(
     n_sessions: int = 1,
     n_breach_sessions: int = 0,
     periods_per_year: int = LEGACY_M1_PERIODS_PER_YEAR,
+    initial_balance: float | None = None,
 ) -> PerformanceMetrics:
     """Pandas-friendly adapter matching the legacy ``eval.metrics`` signature.
 
     Accepts a ``pd.Series`` (or any sequence) equity curve and an optional
     ``pd.DataFrame`` of trades with a ``pnl`` column, and delegates to
     :func:`compute_metrics`.  The initial balance is taken from the first
-    equity value, matching the legacy behaviour of the migrated
-    ``quant_rl.train`` runners.
+    equity value when ``initial_balance`` is ``None``, matching the legacy
+    behaviour of the migrated ``quant_rl.train`` runners.
 
     Args:
         equity: Bar-level equity curve (``pd.Series`` or sequence).
@@ -269,6 +270,8 @@ def calculate_metrics(
         n_breach_sessions: Sessions in which a guardrail breach occurred.
         periods_per_year: Bars per year for annualisation.  Defaults to M1
             bars (``252 * 390``) to match the legacy ``quant_rl.eval`` runs.
+        initial_balance: Account balance before the first bar.  When ``None``,
+            the first value of the equity curve is used as the initial balance.
 
     Returns:
         A frozen :class:`PerformanceMetrics` instance.
@@ -287,9 +290,11 @@ def calculate_metrics(
         pnl = pnl.dropna() if hasattr(pnl, "dropna") else pnl
         trade_pnls = [float(v) for v in pnl]
 
+    init_bal = float(curve[0]) if initial_balance is None else float(initial_balance)
+
     return compute_metrics(
         curve,
-        initial_balance=float(curve[0]),
+        initial_balance=init_bal,
         trade_pnls=trade_pnls,
         periods_per_year=periods_per_year,
         breach_count=int(n_breach_sessions),
