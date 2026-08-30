@@ -161,4 +161,60 @@ def detect_session_levels(
 
     result = result.ffill()
 
+    result = result.ffill()
+
+    return result
+
+
+def get_session(
+    timestamp: pd.Timestamp | str,
+    tz: str = "Etc/GMT-3",
+) -> str:
+    """Determine trading session for a given timestamp.
+
+    Session times (UTC+3):
+    - Asia:   01:05 – 09:00
+    - London: 09:00 – 16:30
+    - NY:     16:30 – 23:50 (or next day 00:00)
+
+    Parameters
+    ----------
+    timestamp:
+        Timestamp to classify (timezone-aware or naive).
+    tz:
+        Timezone for session times (default: broker timezone UTC+3).
+
+    Returns
+    -------
+    Literal[\"asia\", \"london\", \"ny\"]
+        Session name for the timestamp.
+    """
+    if isinstance(timestamp, str):
+        ts = pd.Timestamp(timestamp)
+    else:
+        ts = timestamp
+
+    # Localize to session timezone if naive
+    if ts.tzinfo is None:
+        ts = ts.tz_localize(tz)
+    else:
+        ts = ts.tz_convert(tz)
+
+    t = ts.time()
+
+    # Session boundaries (UTC+3)
+    asia_start = pd.Timestamp("2000-01-01 01:05").time()
+    asia_end = pd.Timestamp("2000-01-01 09:00").time()
+    london_end = pd.Timestamp("2000-01-01 16:30").time()
+    ny_end = pd.Timestamp("2000-01-01 23:50").time()
+
+    if asia_start <= t < asia_end:
+        return "asia"
+    elif asia_end <= t < london_end:
+        return "london"
+    elif london_end <= t < ny_end:
+        return "ny"
+    else:
+        # Outside all sessions (e.g., 23:50-01:05)
+        return "ny"  # Still counts as NY session (overnight)
     return result

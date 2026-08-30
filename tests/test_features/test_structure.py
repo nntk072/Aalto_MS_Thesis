@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from quant_rl.features.structure import detect_session_levels, get_session
 from quant_rl.features.structure import detect_session_levels
 
 
@@ -68,3 +69,50 @@ class TestDetectSessionLevels:
         assert isinstance(levels, pd.DataFrame)
         assert len(levels) == len(full_day_bars)
         assert levels.index.equals(full_day_bars.index)
+
+
+class TestGetSession:
+    """Tests for session tagging function."""
+
+    def test_asian_session(self) -> None:
+        """Test timestamps within Asian session."""
+        # 01:05 to 08:59 should be Asia
+        assert get_session("2025-01-01 01:05:00+03:00") == "asia"
+        assert get_session("2025-01-01 05:30:00+03:00") == "asia"
+        assert get_session("2025-01-01 08:59:00+03:00") == "asia"
+
+    def test_london_session(self) -> None:
+        """Test timestamps within London session."""
+        # 09:00 to 16:29 should be London
+        assert get_session("2025-01-01 09:00:00+03:00") == "london"
+        assert get_session("2025-01-01 12:30:00+03:00") == "london"
+        assert get_session("2025-01-01 16:29:00+03:00") == "london"
+
+    def test_ny_session(self) -> None:
+        """Test timestamps within NY session."""
+        # 16:30 to 23:49 should be NY
+        assert get_session("2025-01-01 16:30:00+03:00") == "ny"
+        assert get_session("2025-01-01 20:00:00+03:00") == "ny"
+        assert get_session("2025-01-01 23:49:00+03:00") == "ny"
+
+    def test_ny_overnight(self) -> None:
+        """Test overnight hours (23:50-01:05) count as NY."""
+        assert get_session("2025-01-01 23:50:00+03:00") == "ny"
+        assert get_session("2025-01-01 00:00:00+03:00") == "ny"
+        assert get_session("2025-01-01 01:00:00+03:00") == "ny"
+
+    def test_naive_timestamp(self) -> None:
+        """Test that naive timestamps are localized to default tz."""
+        ts = pd.Timestamp("2025-01-01 10:00:00")  # naive
+        assert get_session(ts) == "london"
+
+    def test_different_timezones(self) -> None:
+        """Test conversion from different timezones."""
+        # 10:00 UTC = 13:00 UTC+3 (London)
+        ts_utc = pd.Timestamp("2025-01-01 10:00:00+00:00")
+        assert get_session(ts_utc) == "london"
+
+    def test_string_input(self) -> None:
+        """Test string timestamp input."""
+        assert get_session("2025-01-01 14:00:00+03:00") == "london"
+        assert get_session("2025-01-01 18:00:00+03:00") == "ny"
