@@ -47,8 +47,8 @@ def resample(m1: pd.DataFrame, tf: TF) -> pd.DataFrame:
     if tf == "M1":
         return m1.copy()
     rule = _TF_TO_RULE[tf]
-    # label='left', closed='left' → bar timestamp is the bar open time
-    agg_spec: Any = _OHLCV_AGG
+    # Only aggregate columns that exist in the input DataFrame
+    agg_spec = {k: v for k, v in _OHLCV_AGG.items() if k in m1.columns}
     resampled = m1.resample(rule, label="left", closed="left").agg(agg_spec)
     resampled = resampled.dropna(subset=["open"])
     return resampled
