@@ -157,7 +157,9 @@ class CumulativeReturnPredictor:
         Returns
         -------
         torch.Tensor
-            Cumulative returns of shape (batch_size, seq_len - horizon + 1, horizon).
+            Cumulative returns of shape (batch_size, seq_len - horizon, horizon).
+            Each target at position t, horizon h equals the sum of returns
+            ``t+1`` through ``t+h+1`` (forward-looking).
         """
         batch_size, seq_len = returns.shape
 
@@ -256,7 +258,7 @@ class EntropyBonus:
         """
         # Entropy of Gaussian: 0.5 * (1 + log(2 * pi) + 2 * log(std))
         # log_std is log(std), so 2 * log(std) = 2 * log_std
-        log_2pi = torch.log(2 * torch.tensor(math.pi))
+        log_2pi = torch.log(torch.tensor(2.0 * math.pi, device=log_std.device, dtype=log_std.dtype))
         entropy = 0.5 * (1 + log_2pi + 2 * log_std)
 
         # Sum over action dimensions and scale

@@ -122,3 +122,38 @@ class TestSACAgentAct:
             assert float(action[0][0]) >= -1.0 - 1e-6
             assert float(action[0][0]) <= 1.0 + 1e-6
             obs, _, _, _ = vec_env.step(np.array([action[0]], dtype=np.float32))
+
+    def test_act_responds_to_nonzero_obs(self) -> None:
+        """Encoder features should differ when observations differ."""
+        from gymnasium import spaces
+
+        from quant_rl.models.encoder import TCNEncoder
+
+        observation_space = spaces.Dict(
+            {
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(10, 64), dtype=float),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+            }
+        )
+        encoder = TCNEncoder(
+            observation_space=observation_space, seq_len=10, n_features=64, latent_dim=128
+        )
+        encoder.eval()
+
+        obs1 = {
+            "seq": np.zeros((1, 10, 64), dtype=np.float32),
+            "account": np.zeros((1, 5), dtype=np.float32),
+        }
+        obs2 = {
+            "seq": np.ones((1, 10, 64), dtype=np.float32),
+            "account": np.ones((1, 5), dtype=np.float32),
+        }
+
+        import torch
+
+        with torch.no_grad():
+            out1 = encoder({k: torch.from_numpy(v) for k, v in obs1.items()})
+            out2 = encoder({k: torch.from_numpy(v) for k, v in obs2.items()})
+        assert not torch.allclose(out1, out2), (
+            "Encoder features should differ when observations differ"
+        )

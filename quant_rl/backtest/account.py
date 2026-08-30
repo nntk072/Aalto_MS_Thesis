@@ -62,6 +62,9 @@ class AccountState:
         self.daily_loss = 0.0
 
     def drawdown_pct(self) -> float:
+        # NOTE: denominator is initial_balance, not peak_equity.  This may be an
+        # intentional FTMO spec (drawdown from initial deposit).  Confirm with
+        # stakeholder before renaming to drawdown_from_initial_pct.
         return self.max_drawdown / self.initial_balance if self.initial_balance else 0.0
 
     def to_array(self) -> list[float]:

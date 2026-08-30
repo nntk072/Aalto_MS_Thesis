@@ -32,16 +32,21 @@ class TestPlan1Integration:
         assert "london_high" in features.columns
         assert "london_low" in features.columns
         assert "prev_day_close" in features.columns
+        assert features["asian_high"].notna().any()
+        assert features["volume_spike"].notna().any()
+        assert features["atr_5"].notna().any()
 
     def test_volume_spike_in_features(self, full_day_data: pd.DataFrame) -> None:
         """Test that volume_spike is present in feature pipeline."""
         features = build_features(full_day_data)
         assert "volume_spike" in features.columns
+        assert features["volume_spike"].notna().any()
 
     def test_atr_in_features(self, full_day_data: pd.DataFrame) -> None:
         """Test that atr_5 is present in feature pipeline."""
         features = build_features(full_day_data)
         assert "atr_5" in features.columns
+        assert features["atr_5"].notna().any()
 
     def test_detect_session_levels_returns_expected_columns(
         self, full_day_data: pd.DataFrame
@@ -59,8 +64,10 @@ class TestPlan1Integration:
         volume = pd.Series([1000, 1100, 1200, 1500, 2000, 1800, 1600, 1400, 1300, 1200])
         spike = volume_spike(volume, window=3)
         assert len(spike) == len(volume)
-        # Spike should be > 1 when volume > median
-        assert spike.iloc[-1] > 0
+        # Window [1800, 1600, 1400] -> median=1600, ratio=1400/1600=0.875
+        assert spike.iloc[7] == pytest.approx(0.875, rel=1e-3)
+        # Window [1200, 1500, 2000] -> median=1500, ratio=2000/1500=1.333
+        assert spike.iloc[4] > 1.0
 
     def test_atr_function(self, full_day_data: pd.DataFrame) -> None:
         """Test atr function directly."""

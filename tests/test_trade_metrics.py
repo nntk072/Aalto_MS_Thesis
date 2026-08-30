@@ -121,9 +121,9 @@ def test_sl_calculation_long() -> None:
         contract_size=1.0,
     )
 
-    # For a long trade: SL = entry - (max_loss / (lots * contract_size))
-    expected_sl = 100.0 - 10.0
-    assert metrics.sl_price == expected_sl
+    assert metrics.sl_price is not None
+    usd_risk = (100.0 - metrics.sl_price) * 1.0 * 1.0
+    assert usd_risk == pytest.approx(10.0)
 
 
 def test_sl_calculation_short() -> None:
@@ -162,9 +162,9 @@ def test_sl_calculation_short() -> None:
         contract_size=1.0,
     )
 
-    # For a short trade: SL = entry + (max_loss / (lots * contract_size))
-    expected_sl = 100.0 + 10.0
-    assert metrics.sl_price == expected_sl
+    assert metrics.sl_price is not None
+    usd_risk = (metrics.sl_price - 100.0) * 1.0 * 1.0
+    assert usd_risk == pytest.approx(10.0)
 
 
 def test_tp_calculation_long() -> None:
@@ -203,9 +203,9 @@ def test_tp_calculation_long() -> None:
         contract_size=1.0,
     )
 
-    # For a long trade: TP = entry + (tp_profit / (lots * contract_size))
-    expected_tp = 100.0 + 20.0
-    assert metrics.tp_price == expected_tp
+    assert metrics.tp_price is not None
+    usd_profit = (metrics.tp_price - 100.0) * 1.0 * 1.0
+    assert usd_profit == pytest.approx(20.0)
 
 
 def test_tp_calculation_short() -> None:
@@ -244,9 +244,9 @@ def test_tp_calculation_short() -> None:
         contract_size=1.0,
     )
 
-    # For a short trade: TP = entry - (tp_profit / (lots * contract_size))
-    expected_tp = 100.0 - 20.0
-    assert metrics.tp_price == expected_tp
+    assert metrics.tp_price is not None
+    usd_profit = (100.0 - metrics.tp_price) * 1.0 * 1.0
+    assert usd_profit == pytest.approx(20.0)
 
 
 def test_sl_tp_none_when_not_configured() -> None:
@@ -320,5 +320,9 @@ def test_sl_tp_with_different_lots_and_contract_size() -> None:
         contract_size=0.5,
     )
 
-    assert metrics.sl_price == 100.0 - 10.0
-    assert metrics.tp_price == 100.0 + 20.0
+    assert metrics.sl_price is not None
+    assert metrics.tp_price is not None
+    usd_risk = (100.0 - metrics.sl_price) * 2.0 * 0.5
+    usd_profit = (metrics.tp_price - 100.0) * 2.0 * 0.5
+    assert usd_risk == pytest.approx(10.0)
+    assert usd_profit == pytest.approx(20.0)

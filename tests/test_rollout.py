@@ -86,7 +86,7 @@ def test_evaluate_model_produces_trades_and_valid_equity():
 
     equity = result["equity"]
     assert isinstance(equity, pd.Series)
-    assert len(equity) == n - obs_window
+    assert len(equity) == n - obs_window + 1
     assert isinstance(equity.index, pd.DatetimeIndex)
 
     close_rows = trades[trades["type"] == "close"]

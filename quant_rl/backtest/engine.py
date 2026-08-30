@@ -47,6 +47,27 @@ def _bar_spread_price_units(row: pd.Series, cost_model: CostModel) -> float | No
     return float(row["spread"]) * cost_model.point_size
 
 
+def _sl_tp_fill_quote(
+    direction: int,
+    hit_price: float,
+    cost_model: CostModel,
+) -> tuple[float, float]:
+    """Build a fill quote for an intrabar SL/TP hit on the triggering bar.
+
+    The fill price is pinned to the SL/TP level; the opposite side is
+    extended by the model spread so that ``Broker.close_position`` can
+    deduct the round-turn spread cost.
+    """
+    spread = cost_model.spread_points * cost_model.point_size
+    if direction == 1:
+        bid = hit_price
+        ask = hit_price + spread
+    else:
+        ask = hit_price
+        bid = hit_price - spread
+    return bid, ask
+
+
 def _bar_quote(row: pd.Series, cost_model: CostModel) -> tuple[float, float]:
     """Derive ``(bid, ask)`` from a bar row (MT5 close = bid)."""
     bar_spread = _bar_spread_price_units(row, cost_model)
@@ -191,7 +212,9 @@ def run_backtest(
 
             if sl_hit:
                 assert position is not None
-                pnl, fill_price = broker.close_position(acc, position, fq)
+                assert position.sl_price is not None
+                sl_fq = _sl_tp_fill_quote(position.direction, position.sl_price, cost_model)
+                pnl, fill_price = broker.close_position(acc, position, sl_fq)
                 trade_log.append(
                     {
                         "type": "stop_close",
@@ -234,7 +257,9 @@ def run_backtest(
 
         if tp_hit and position is not None:
             assert position is not None
-            pnl, fill_price = broker.close_position(acc, position, fq)
+            assert position.tp_price is not None
+            tp_fq = _sl_tp_fill_quote(position.direction, position.tp_price, cost_model)
+            pnl, fill_price = broker.close_position(acc, position, tp_fq)
             trade_log.append(
                 {
                     "type": "tp_close",
@@ -379,6 +404,7 @@ def run_backtest(
                             entry_price_for_calc,
                             sl_price,
                             contract_size=contract_size,
+                            point_value=cost_model.point_value,
                             min_lot=min_lot,
                             max_lot=max_lot,
                             max_loss_cap=max_loss_per_trade_usd,
@@ -397,10 +423,22 @@ def run_backtest(
                             entry_price_for_calc,
                             sl_price,
                             contract_size=contract_size,
+                            point_value=cost_model.point_value,
                             min_lot=min_lot,
                             max_lot=max_lot,
                             max_loss_cap=max_loss_per_trade_usd,
                         )
+
+                if sl_price is not None:
+                    sl_distance = abs(entry_price_for_calc - sl_price)
+                    trade_risk = sl_distance * contract_size * actual_lots * cost_model.point_value
+                elif max_loss_per_trade_usd is not None:
+                    trade_risk = max_loss_per_trade_usd
+                else:
+                    trade_risk = None
+
+                if trade_risk is not None and guardrails.check_trade_risk(trade_risk):
+                    continue
 
                 position = broker.open_position(acc, fq, actual_lots, action)
                 if position:
@@ -472,5 +510,5 @@ def run_backtest(
         "n_sessions": len(session_set),
         "n_breach_sessions": len(breached_sessions),
         "n_sessions_with_trades": len(sessions_with_trades),
-        "n_sessions_skipped": len(breached_sessions),
+        "n_sessions_skipped": len(session_set) - len(sessions_with_trades),
     }

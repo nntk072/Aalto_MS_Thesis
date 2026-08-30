@@ -672,7 +672,11 @@ def plot_per_trade_orders(
         # Exit marker: red arrow (triangle-down for long, triangle-up for short)
         i_c = window.index.get_indexer([t_close], method="nearest")[0]
         if 0 <= i_c < len(window):
-            ep2 = float(window["close"].iloc[i_c])
+            ep2 = (
+                float(close_row["price"])
+                if pd.notna(close_row.get("price"))
+                else float(window["close"].iloc[i_c])
+            )
             fig.add_trace(
                 go.Scatter(
                     x=[window.index[i_c]],
