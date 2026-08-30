@@ -156,6 +156,8 @@ def detect_ifvg_confirmation(
 
     ifvg_bullish_confirmed = pd.Series(0, index=df.index, dtype=int)
     ifvg_bearish_confirmed = pd.Series(0, index=df.index, dtype=int)
+    ifvg_bullish_low = pd.Series(float('nan'), index=df.index)
+    ifvg_bearish_high = pd.Series(float('nan'), index=df.index)
 
     # Track active FVG zones
     active_fvg_bullish = []  # List of (start_idx, fvg_low, fvg_high)
@@ -188,6 +190,7 @@ def detect_ifvg_confirmation(
                 close_through_pct = (close_price - fvg_high) / fvg_size
                 if close_through_pct >= config.close_through_threshold:
                     ifvg_bullish_confirmed.iloc[i] = 1
+                    ifvg_bullish_low.iloc[i] = fvg_low
                     active_fvg_bullish.remove((fvg_start, fvg_low, fvg_high))
 
         # Bearish confirmation: close below FVG zone
@@ -197,6 +200,7 @@ def detect_ifvg_confirmation(
                 close_through_pct = (fvg_low - close_price) / fvg_size
                 if close_through_pct >= config.close_through_threshold:
                     ifvg_bearish_confirmed.iloc[i] = 1
+                    ifvg_bearish_high.iloc[i] = fvg_high
                     active_fvg_bearish.remove((fvg_start, fvg_low, fvg_high))
 
         # Remove old FVGs (older than lookback period)
@@ -208,6 +212,8 @@ def detect_ifvg_confirmation(
         {
             'ifvg_bullish_confirmed': ifvg_bullish_confirmed,
             'ifvg_bearish_confirmed': ifvg_bearish_confirmed,
+            'ifvg_bullish_low': ifvg_bullish_low,
+            'ifvg_bearish_high': ifvg_bearish_high,
         },
         index=df.index,
     )
@@ -358,5 +364,252 @@ def detect_entry_trigger(
         },
         index=df.index,
     )
+
+    return result
+
+
+def detect_htf_fvg(
+    m1_bars: pd.DataFrame,
+    htf: str = 'M15',
+    config: FVGConfig | None = None,
+) -> pd.DataFrame:
+    """Detect FVG on higher timeframe and map back to M1 bars.
+
+    This function resamples M1 data to the specified HTF, detects FVG on the
+    HTF bars, then forward-fills the HTF FVG signals to each M1 bar within
+    that HTF period.
+
+    Parameters
+    ----------
+    m1_bars : pd.DataFrame
+        M1 OHLC DataFrame with DatetimeIndex.
+    htf : str
+        Higher timeframe label (e.g., 'M5', 'M15', 'M30', 'H1').
+    config : FVGConfig, optional
+        Configuration for FVG detection. Uses defaults if None.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with same index as M1 input, containing:
+        - htf_fvg_bullish: 1 if bullish FVG detected on HTF
+        - htf_fvg_bearish: 1 if bearish FVG detected on HTF
+        - htf_fvg_bullish_low: Low price of HTF FVG zone
+        - htf_fvg_bearish_high: High price of HTF FVG zone
+    """
+    from quant_rl.data.resample import resample
+
+    # Resample to HTF
+    htf_bars = resample(m1_bars, htf)  # type: ignore[arg-type]
+
+    # Detect FVG on HTF
+    if config is None:
+        config = FVGConfig()
+    htf_fvg = detect_fvg(htf_bars, config=config)
+
+    # Map HTF FVG signals back to M1 bars
+    # For each M1 bar, find which HTF bar it belongs to and use that HTF bar's FVG
+    n = len(m1_bars)
+    htf_fvg_bullish = pd.Series(0, index=m1_bars.index, dtype=int)
+    htf_fvg_bearish = pd.Series(0, index=m1_bars.index, dtype=int)
+    htf_fvg_bullish_low = pd.Series(float('nan'), index=m1_bars.index)
+    htf_fvg_bearish_high = pd.Series(float('nan'), index=m1_bars.index)
+
+    # For each HTF bar, forward-fill its FVG signal to all M1 bars in that HTF period
+    for htf_idx in htf_bars.index:
+        # Find M1 bars that belong to this HTF bar
+        # HTF bar at time T covers M1 bars from T to T+htf_period-1min
+        if htf_idx in htf_fvg.index:
+            # Get the row position of this HTF bar in the HTF bars DataFrame
+            htf_loc = htf_bars.index.get_loc(htf_idx)
+            # Next HTF bar (if exists)
+            next_htf_idx = htf_bars.index[htf_loc + 1] if htf_loc + 1 < len(htf_bars) else None
+
+            # Select M1 bars in this HTF period
+            if next_htf_idx is not None:
+                m1_mask = (m1_bars.index >= htf_idx) & (m1_bars.index < next_htf_idx)
+            else:
+                m1_mask = m1_bars.index >= htf_idx
+
+            # Assign HTF FVG values to these M1 bars
+            htf_fvg_bullish.loc[m1_mask] = htf_fvg['fvg_bullish'].loc[htf_idx]
+            htf_fvg_bearish.loc[m1_mask] = htf_fvg['fvg_bearish'].loc[htf_idx]
+            htf_fvg_bullish_low.loc[m1_mask] = htf_fvg['fvg_bullish_low'].loc[htf_idx]
+            htf_fvg_bearish_high.loc[m1_mask] = htf_fvg['fvg_bearish_high'].loc[htf_idx]
+
+    result = pd.DataFrame(
+        {
+            'htf_fvg_bullish': htf_fvg_bullish,
+            'htf_fvg_bearish': htf_fvg_bearish,
+            'htf_fvg_bullish_low': htf_fvg_bullish_low,
+            'htf_fvg_bearish_high': htf_fvg_bearish_high,
+        },
+        index=m1_bars.index,
+    )
+
+    return result
+
+
+def detect_ltf_ifvg(
+    m1_bars: pd.DataFrame,
+    primary_tf: str = 'M5',
+    ltf: str = 'M1',
+    fvg_config: FVGConfig | None = None,
+    ifvg_config: IFVGConfig | None = None,
+) -> pd.DataFrame:
+    """Detect IFVG on lower timeframe and map back to primary timeframe bars.
+
+    This function resamples M1 data to the primary timeframe, detects FVG and
+    IFVG confirmation on that primary TF, then maps the IFVG signals back to
+    each M1 bar within that primary TF period.
+
+    Parameters
+    ----------
+    m1_bars : pd.DataFrame
+        M1 OHLC DataFrame with DatetimeIndex.
+    primary_tf : str
+        Primary timeframe label (e.g., 'M5', 'M15', 'M30').
+    ltf : str
+        Lower timeframe label (e.g., 'M1'). Default is 'M1'.
+    fvg_config : FVGConfig, optional
+        Configuration for FVG detection. Uses defaults if None.
+    ifvg_config : IFVGConfig, optional
+        Configuration for IFVG confirmation. Uses defaults if None.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with same index as M1 input, containing:
+        - ltf_ifvg_bullish_confirmed: 1 if bullish IFVG confirmed on LTF
+        - ltf_ifvg_bearish_confirmed: 1 if bearish IFVG confirmed on LTF
+        - ltf_ifvg_bullish_low: Low price of LTF IFVG zone
+        - ltf_ifvg_bearish_high: High price of LTF IFVG zone
+    """
+    from quant_rl.data.resample import resample
+
+    # Resample M1 to primary TF
+    primary_bars = resample(m1_bars, primary_tf)  # type: ignore[arg-type]
+
+    # Detect FVG on primary TF
+    if fvg_config is None:
+        fvg_config = FVGConfig()
+    primary_fvg = detect_fvg(primary_bars, config=fvg_config)
+
+    # Detect IFVG confirmation on primary TF
+    if ifvg_config is None:
+        ifvg_config = IFVGConfig()
+    primary_ifvg = detect_ifvg_confirmation(primary_bars, primary_fvg, config=ifvg_config)
+
+    # Map primary TF IFVG signals back to M1 bars
+    n = len(m1_bars)
+    ltf_ifvg_bullish = pd.Series(0, index=m1_bars.index, dtype=int)
+    ltf_ifvg_bearish = pd.Series(0, index=m1_bars.index, dtype=int)
+    ltf_ifvg_bullish_low = pd.Series(float('nan'), index=m1_bars.index)
+    ltf_ifvg_bearish_high = pd.Series(float('nan'), index=m1_bars.index)
+
+    # For each primary TF bar, forward-fill its IFVG signal to all M1 bars in that period
+    for primary_idx in primary_bars.index:
+        if primary_idx in primary_ifvg.index:
+            # Get the row position of this primary bar
+            primary_loc = primary_bars.index.get_loc(primary_idx)
+            # Next primary bar (if exists)
+            next_primary_idx = primary_bars.index[primary_loc + 1] if primary_loc + 1 < len(primary_bars) else None
+
+            # Select M1 bars in this primary TF period
+            if next_primary_idx is not None:
+                m1_mask = (m1_bars.index >= primary_idx) & (m1_bars.index < next_primary_idx)
+            else:
+                m1_mask = m1_bars.index >= primary_idx
+
+            # Assign primary TF IFVG values to these M1 bars
+            ltf_ifvg_bullish.loc[m1_mask] = primary_ifvg['ifvg_bullish_confirmed'].loc[primary_idx]
+            ltf_ifvg_bearish.loc[m1_mask] = primary_ifvg['ifvg_bearish_confirmed'].loc[primary_idx]
+            ltf_ifvg_bullish_low.loc[m1_mask] = primary_ifvg['ifvg_bullish_low'].loc[primary_idx]
+            ltf_ifvg_bearish_high.loc[m1_mask] = primary_ifvg['ifvg_bearish_high'].loc[primary_idx]
+
+    result = pd.DataFrame(
+        {
+            'ltf_ifvg_bullish_confirmed': ltf_ifvg_bullish,
+            'ltf_ifvg_bearish_confirmed': ltf_ifvg_bearish,
+            'ltf_ifvg_bullish_low': ltf_ifvg_bullish_low,
+            'ltf_ifvg_bearish_high': ltf_ifvg_bearish_high,
+        },
+        index=m1_bars.index,
+    )
+
+    return result
+
+
+def detect_po3_entries(
+    m1_bars: pd.DataFrame,
+    htf: str = 'M15',
+    primary_tf: str = 'M5',
+    entry_type: EntryTriggerType = 'retest',
+    fvg_config: FVGConfig | None = None,
+    ifvg_config: IFVGConfig | None = None,
+    entry_config: EntryConfig | None = None,
+) -> pd.DataFrame:
+    """Unified PO3 entry detection combining HTF FVG, LTF IFVG, and entry triggers.
+
+    This function integrates the full PO3/IFVG detection pipeline:
+    1. Detect HTF FVG (e.g., M15)
+    2. Detect LTF IFVG confirmation (e.g., M5)
+    3. Generate entry triggers based on specified type
+
+    Parameters
+    ----------
+    m1_bars : pd.DataFrame
+        M1 OHLC DataFrame with DatetimeIndex.
+    htf : str
+        Higher timeframe for FVG detection (default: 'M15').
+    primary_tf : str
+        Primary timeframe for IFVG confirmation (default: 'M5').
+    entry_type : EntryTriggerType
+        Type of entry trigger: 'retest', 'close_through', or 'ltf_fvg'.
+    fvg_config : FVGConfig, optional
+        Configuration for FVG detection.
+    ifvg_config : IFVGConfig, optional
+        Configuration for IFVG confirmation.
+    entry_config : EntryConfig, optional
+        Configuration for entry triggers.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with same index as M1 input, containing:
+        - All HTF FVG columns
+        - All LTF IFVG columns
+        - entry_long: 1 if long entry signal
+        - entry_short: 1 if short entry signal
+        - entry_trigger_type: Type of entry trigger that fired
+    """
+    # Step 1: Detect HTF FVG
+    htf_fvg = detect_htf_fvg(m1_bars, htf=htf, config=fvg_config)
+
+    # Step 2: Detect LTF IFVG confirmation
+    ltf_ifvg = detect_ltf_ifvg(
+        m1_bars,
+        primary_tf=primary_tf,
+        fvg_config=fvg_config,
+        ifvg_config=ifvg_config,
+    )
+
+    # Step 3: Generate entry triggers based on LTF IFVG
+    # Rename LTF IFVG columns to match expected format for detect_entry_trigger
+    ifvg_for_entry = ltf_ifvg.rename(columns={
+        'ltf_ifvg_bullish_confirmed': 'ifvg_bullish_confirmed',
+        'ltf_ifvg_bearish_confirmed': 'ifvg_bearish_confirmed',
+        'ltf_ifvg_bullish_low': 'ifvg_bullish_low',
+        'ltf_ifvg_bearish_high': 'ifvg_bearish_high',
+    })
+    entry_result = detect_entry_trigger(
+        m1_bars,
+        ifvg_for_entry,
+        entry_type=entry_type,
+        config=entry_config,
+    )
+
+    # Combine all results
+    result = pd.concat([htf_fvg, ltf_ifvg, entry_result], axis=1)
 
     return result
