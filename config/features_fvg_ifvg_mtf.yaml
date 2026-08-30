@@ -1,0 +1,9 @@
+features:
+  # Chain A multi-timeframe spine (identical across all three variants so
+  # differences are attributable to the additive block below).
+  htf_timeframes: ["M5", "M15", "H1"]
+  # Chain B variant 3 additive block: per-TF FVG zone features (in-zone
+  # flags + ATR-normalised distance to nearest active zone edge), computed
+  # from po3_config.detect_fvg/build_fvg_zones on each timeframe's own bars.
+  include_po3: false
+  include_fvg_ifvg: true

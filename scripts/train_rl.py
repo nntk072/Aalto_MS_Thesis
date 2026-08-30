@@ -46,6 +46,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bars-csv", required=True)
     parser.add_argument("--features-csv", help="Feature CSV; defaults to numeric bars columns")
     parser.add_argument("--config", default="quant_rl/config/default.yaml")
+    parser.add_argument(
+        "--features-config",
+        default=None,
+        help="Variant features YAML (e.g. config/features_po3_mtf.yaml); its 'features' block is merged over the main config",
+    )
     parser.add_argument("--algo", default="ppo", choices=["ppo", "sac"])
     parser.add_argument("--arch", default="gru", choices=["tcn", "gru", "transformer"])
     parser.add_argument("--use-vae", type=int, default=0)
@@ -76,6 +81,10 @@ def parse_args() -> argparse.Namespace:
 def load_config(args: argparse.Namespace) -> DictConfig:
     """Load the YAML config and apply CLI overrides."""
     loaded = OmegaConf.load(args.config)
+    # Chain B variant support: merge a variant features block over the base.
+    if getattr(args, "features_config", None):
+        variant = OmegaConf.load(args.features_config)
+        loaded = OmegaConf.merge(loaded, variant)
     overrides = {
         f"{args.algo}.lr": args.lr,
         f"{args.algo}.ent_coef": args.entropy_coef,
