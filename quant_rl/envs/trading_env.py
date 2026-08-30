@@ -62,6 +62,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         vae: VAE | None = None,
         pre_ny_data: pd.DataFrame | None = None,
         ny_session_start_idx: int | None = None,
+        fill_latency_bars: int = 0,
     ):
         """Initialize trading environment.
 
@@ -172,6 +173,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.use_vae = use_vae
         self.vae = vae
         self.pre_ny_data = pre_ny_data
+        # Chain C: decision-to-fill latency, expressed in whole M1 bars.
+        # 0 = idealised next-bar fill (previous behaviour); 1 = 1-bar delay, etc.
+        self.fill_latency_bars = max(0, int(fill_latency_bars))
 
         if use_vae:
             if vae is None:
@@ -367,9 +371,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         if self.position is not None:
             self.broker.mark_to_market(self.account, self.position, (bid, ask))
 
-        # Fill quote for next action
-        if self.step_idx + 1 < len(self.bars):
-            next_bar = self.bars.iloc[self.step_idx + 1]
+        # Fill quote for next action (latency-shifted: decision at bar t
+        # fills at the quote of bar t + fill_latency_bars, not t + 1)
+        fill_idx = self.step_idx + 1 + self.fill_latency_bars
+        if fill_idx < len(self.bars):
+            next_bar = self.bars.iloc[fill_idx]
             fill_bid, fill_ask = self._bar_quote(next_bar)
         else:
             fill_bid, fill_ask = bid, ask
