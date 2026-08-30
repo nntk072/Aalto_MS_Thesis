@@ -270,3 +270,36 @@ outputs/                         ← Results saved here
 ---
 
 **READY TO RUN! Pick a command above and execute.** ✅
+
+---
+
+## Train/Test Split Configuration
+
+The project uses a **locked out-of-sample (OOS) split**:
+
+- **Training period:** ≤ 2025-12-31 (in-sample)
+- **Test period:** ≥ 2026-01-01 (out-of-sample)
+
+This split is defined in `quant_rl/config/default.yaml` and enforced by `quant_rl/data/split.py`.
+
+### Purged Walk-Forward Validation
+
+For more robust evaluation, a purged walk-forward splitter is available in `quant_rl/evaluation/walkforward.py`:
+
+```python
+from quant_rl.evaluation.walkforward import purged_walk_forward
+
+# Generate 5-fold purged walk-forward splits
+for split in purged_walk_forward(n=len(data), n_splits=5, purge_bars=60, embargo_bars=20):
+    train_idx = split.train_idx
+    test_idx = split.test_idx
+    # Use these indices for training/validation
+```
+
+**Parameters:**
+- `purge_bars=60`: Removes last 60 bars from training to prevent feature leakage
+- `embargo_bars=20`: Removes first 20 bars from test to allow market to reset
+- `n_splits=5`: Number of folds
+
+This is useful for hyperparameter tuning without touching the locked 2026 OOS set.
+**READY TO RUN! Pick a command above and execute.** ✅
