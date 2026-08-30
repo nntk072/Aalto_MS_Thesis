@@ -12,7 +12,7 @@ with HTF/LTF IFVG confirmation, excluding MSS/BOS detection steps.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 import pandas as pd
 
@@ -58,6 +58,8 @@ def detect_fvg(
         - fvg_bullish: 1 if bullish FVG detected at this bar, else 0
         - fvg_bearish: 1 if bearish FVG detected at this bar, else 0
         - fvg_bullish_low: Low price of the FVG zone (for bullish)
+        - fvg_bullish_high: High price of the FVG zone (for bullish)
+        - fvg_bearish_low: Low price of the FVG zone (for bearish)
         - fvg_bearish_high: High price of the FVG zone (for bearish)
     """
     if config is None:
@@ -68,15 +70,17 @@ def detect_fvg(
 
     fvg_bullish = pd.Series(0, index=df.index, dtype=int)
     fvg_bearish = pd.Series(0, index=df.index, dtype=int)
-    fvg_bullish_low = pd.Series(float('nan'), index=df.index)
-    fvg_bearish_high = pd.Series(float('nan'), index=df.index)
+    fvg_bullish_low = pd.Series(float("nan"), index=df.index)
+    fvg_bullish_high = pd.Series(float("nan"), index=df.index)
+    fvg_bearish_low = pd.Series(float("nan"), index=df.index)
+    fvg_bearish_high = pd.Series(float("nan"), index=df.index)
 
     # Detect FVG using 3-bar rule
     for i in range(2, n):
-        bar1_high = df['high'].iloc[i - 2]
-        bar1_low = df['low'].iloc[i - 2]
-        bar3_high = df['high'].iloc[i]
-        bar3_low = df['low'].iloc[i]
+        bar1_high = df["high"].iloc[i - 2]
+        bar1_low = df["low"].iloc[i - 2]
+        bar3_high = df["high"].iloc[i]
+        bar3_low = df["low"].iloc[i]
 
         # Bullish FVG: bar3.low > bar1.high
         if bar3_low > bar1_high:
@@ -84,20 +88,24 @@ def detect_fvg(
             if imbalance >= config.min_imbalance_pts:
                 fvg_bullish.iloc[i] = 1
                 fvg_bullish_low.iloc[i] = bar1_high  # Bottom of FVG zone
+                fvg_bullish_high.iloc[i] = bar3_low  # Top of FVG zone
 
         # Bearish FVG: bar3.high < bar1.low
         if bar3_high < bar1_low:
             imbalance = bar1_low - bar3_high
             if imbalance >= config.min_imbalance_pts:
                 fvg_bearish.iloc[i] = 1
+                fvg_bearish_low.iloc[i] = bar3_high  # Bottom of FVG zone
                 fvg_bearish_high.iloc[i] = bar1_low  # Top of FVG zone
 
     result = pd.DataFrame(
         {
-            'fvg_bullish': fvg_bullish,
-            'fvg_bearish': fvg_bearish,
-            'fvg_bullish_low': fvg_bullish_low,
-            'fvg_bearish_high': fvg_bearish_high,
+            "fvg_bullish": fvg_bullish,
+            "fvg_bearish": fvg_bearish,
+            "fvg_bullish_low": fvg_bullish_low,
+            "fvg_bullish_high": fvg_bullish_high,
+            "fvg_bearish_low": fvg_bearish_low,
+            "fvg_bearish_high": fvg_bearish_high,
         },
         index=df.index,
     )
@@ -147,6 +155,10 @@ def detect_ifvg_confirmation(
         DataFrame with same index, containing:
         - ifvg_bullish_confirmed: 1 if bullish IFVG confirmed at this bar
         - ifvg_bearish_confirmed: 1 if bearish IFVG confirmed at this bar
+        - ifvg_bullish_low: Low price of the IFVG zone (for bullish)
+        - ifvg_bullish_high: High price of the IFVG zone (for bullish)
+        - ifvg_bearish_low: Low price of the IFVG zone (for bearish)
+        - ifvg_bearish_high: High price of the IFVG zone (for bearish)
     """
     if config is None:
         config = IFVGConfig()
@@ -156,8 +168,10 @@ def detect_ifvg_confirmation(
 
     ifvg_bullish_confirmed = pd.Series(0, index=df.index, dtype=int)
     ifvg_bearish_confirmed = pd.Series(0, index=df.index, dtype=int)
-    ifvg_bullish_low = pd.Series(float('nan'), index=df.index)
-    ifvg_bearish_high = pd.Series(float('nan'), index=df.index)
+    ifvg_bullish_low = pd.Series(float("nan"), index=df.index)
+    ifvg_bullish_high = pd.Series(float("nan"), index=df.index)
+    ifvg_bearish_low = pd.Series(float("nan"), index=df.index)
+    ifvg_bearish_high = pd.Series(float("nan"), index=df.index)
 
     # Track active FVG zones
     active_fvg_bullish = []  # List of (start_idx, fvg_low, fvg_high)
@@ -165,23 +179,22 @@ def detect_ifvg_confirmation(
 
     for i in range(n):
         # Check for new FVGs
-        if i < len(fvg_df) and fvg_df['fvg_bullish'].iloc[i] == 1:
+        if i < len(fvg_df) and fvg_df["fvg_bullish"].iloc[i] == 1:
             # FVG zone: from bar1_high to bar3_low
-            fvg_low = fvg_df['fvg_bullish_low'].iloc[i]
-            # Find the bar1 (2 bars ago)
+            fvg_low = fvg_df["fvg_bullish_low"].iloc[i]
+            fvg_high = fvg_df["fvg_bullish_high"].iloc[i]
             if i >= 2:
-                fvg_high = df['high'].iloc[i - 2]
                 active_fvg_bullish.append((i, fvg_low, fvg_high))
 
-        if i < len(fvg_df) and fvg_df['fvg_bearish'].iloc[i] == 1:
+        if i < len(fvg_df) and fvg_df["fvg_bearish"].iloc[i] == 1:
             # FVG zone: from bar3_high to bar1_low
-            fvg_high = fvg_df['fvg_bearish_high'].iloc[i]
+            fvg_high = fvg_df["fvg_bearish_high"].iloc[i]
+            fvg_low = fvg_df["fvg_bearish_low"].iloc[i]
             if i >= 2:
-                fvg_low = df['low'].iloc[i - 2]
                 active_fvg_bearish.append((i, fvg_low, fvg_high))
 
         # Check for IFVG confirmation (close-through)
-        close_price = df['close'].iloc[i]
+        close_price = df["close"].iloc[i]
 
         # Bullish confirmation: close above FVG zone
         for fvg_start, fvg_low, fvg_high in active_fvg_bullish[:]:
@@ -191,6 +204,7 @@ def detect_ifvg_confirmation(
                 if close_through_pct >= config.close_through_threshold:
                     ifvg_bullish_confirmed.iloc[i] = 1
                     ifvg_bullish_low.iloc[i] = fvg_low
+                    ifvg_bullish_high.iloc[i] = fvg_high
                     active_fvg_bullish.remove((fvg_start, fvg_low, fvg_high))
 
         # Bearish confirmation: close below FVG zone
@@ -200,20 +214,23 @@ def detect_ifvg_confirmation(
                 close_through_pct = (fvg_low - close_price) / fvg_size
                 if close_through_pct >= config.close_through_threshold:
                     ifvg_bearish_confirmed.iloc[i] = 1
+                    ifvg_bearish_low.iloc[i] = fvg_low
                     ifvg_bearish_high.iloc[i] = fvg_high
                     active_fvg_bearish.remove((fvg_start, fvg_low, fvg_high))
 
         # Remove old FVGs (older than lookback period)
         max_age = 50  # bars
-        active_fvg_bullish = [(s, l, h) for s, l, h in active_fvg_bullish if i - s < max_age]
-        active_fvg_bearish = [(s, l, h) for s, l, h in active_fvg_bearish if i - s < max_age]
+        active_fvg_bullish = [(s, lo, h) for s, lo, h in active_fvg_bullish if i - s < max_age]
+        active_fvg_bearish = [(s, lo, h) for s, lo, h in active_fvg_bearish if i - s < max_age]
 
     result = pd.DataFrame(
         {
-            'ifvg_bullish_confirmed': ifvg_bullish_confirmed,
-            'ifvg_bearish_confirmed': ifvg_bearish_confirmed,
-            'ifvg_bullish_low': ifvg_bullish_low,
-            'ifvg_bearish_high': ifvg_bearish_high,
+            "ifvg_bullish_confirmed": ifvg_bullish_confirmed,
+            "ifvg_bearish_confirmed": ifvg_bearish_confirmed,
+            "ifvg_bullish_low": ifvg_bullish_low,
+            "ifvg_bullish_high": ifvg_bullish_high,
+            "ifvg_bearish_low": ifvg_bearish_low,
+            "ifvg_bearish_high": ifvg_bearish_high,
         },
         index=df.index,
     )
@@ -221,7 +238,7 @@ def detect_ifvg_confirmation(
     return result
 
 
-EntryTriggerType = Literal['retest', 'ltf_fvg', 'close_through']
+EntryTriggerType = Literal["retest", "ltf_fvg", "close_through"]
 
 
 @dataclass
@@ -240,14 +257,14 @@ class EntryConfig:
     """
 
     retest_threshold: float = 0.1
-    ltf_timeframe: str = 'M1'
+    ltf_timeframe: str = "M1"
     ltf_fvg_min_imbalance: float = 0.0
 
 
 def detect_entry_trigger(
     bars: pd.DataFrame,
     ifvg_df: pd.DataFrame,
-    entry_type: EntryTriggerType = 'retest',
+    entry_type: EntryTriggerType = "retest",
     config: EntryConfig | None = None,
 ) -> pd.DataFrame:
     """Detect entry triggers based on IFVG confirmation.
@@ -285,7 +302,7 @@ def detect_entry_trigger(
 
     entry_long = pd.Series(0, index=df.index, dtype=int)
     entry_short = pd.Series(0, index=df.index, dtype=int)
-    entry_trigger_type = pd.Series('', index=df.index, dtype=object)
+    entry_trigger_type = pd.Series("", index=df.index, dtype=object)
 
     # Track confirmed IFVG zones
     confirmed_bullish_ifvg = []  # List of (idx, fvg_low, fvg_high)
@@ -294,22 +311,34 @@ def detect_entry_trigger(
     for i in range(n):
         # Record new IFVG confirmations
         if i < len(ifvg_df):
-            if ifvg_df['ifvg_bullish_confirmed'].iloc[i] == 1:
-                if i >= 2:
-                    fvg_low = df['low'].iloc[i - 2]
-                    fvg_high = df['high'].iloc[i - 2]
+            if ifvg_df["ifvg_bullish_confirmed"].iloc[i] == 1:
+                if "ifvg_bullish_low" in ifvg_df.columns:
+                    fvg_low = ifvg_df["ifvg_bullish_low"].iloc[i]
+                else:
+                    fvg_low = df["low"].iloc[i - 2] if i >= 2 else float("nan")
+                if "ifvg_bullish_high" in ifvg_df.columns:
+                    fvg_high = ifvg_df["ifvg_bullish_high"].iloc[i]
+                else:
+                    fvg_high = df["high"].iloc[i - 2] if i >= 2 else float("nan")
+                if not (pd.isna(fvg_low) or pd.isna(fvg_high)):
                     confirmed_bullish_ifvg.append((i, fvg_low, fvg_high))
 
-            if ifvg_df['ifvg_bearish_confirmed'].iloc[i] == 1:
-                if i >= 2:
-                    fvg_low = df['low'].iloc[i - 2]
-                    fvg_high = df['high'].iloc[i - 2]
+            if ifvg_df["ifvg_bearish_confirmed"].iloc[i] == 1:
+                if "ifvg_bearish_low" in ifvg_df.columns:
+                    fvg_low = ifvg_df["ifvg_bearish_low"].iloc[i]
+                else:
+                    fvg_low = df["low"].iloc[i - 2] if i >= 2 else float("nan")
+                if "ifvg_bearish_high" in ifvg_df.columns:
+                    fvg_high = ifvg_df["ifvg_bearish_high"].iloc[i]
+                else:
+                    fvg_high = df["high"].iloc[i - 2] if i >= 2 else float("nan")
+                if not (pd.isna(fvg_low) or pd.isna(fvg_high)):
                     confirmed_bearish_ifvg.append((i, fvg_low, fvg_high))
 
         # Detect entry triggers based on type
-        close_price = df['close'].iloc[i]
+        close_price = df["close"].iloc[i]
 
-        if entry_type == 'retest':
+        if entry_type == "retest":
             # Long entry: price retests bullish IFVG zone
             for idx, fvg_low, fvg_high in confirmed_bullish_ifvg[:]:
                 fvg_size = fvg_high - fvg_low
@@ -317,7 +346,7 @@ def detect_entry_trigger(
                     distance = abs(close_price - fvg_high) / fvg_size
                     if distance <= config.retest_threshold and close_price >= fvg_low:
                         entry_long.iloc[i] = 1
-                        entry_trigger_type.iloc[i] = 'retest'
+                        entry_trigger_type.iloc[i] = "retest"
                         break
 
             # Short entry: price retests bearish IFVG zone
@@ -327,25 +356,25 @@ def detect_entry_trigger(
                     distance = abs(close_price - fvg_low) / fvg_size
                     if distance <= config.retest_threshold and close_price <= fvg_high:
                         entry_short.iloc[i] = 1
-                        entry_trigger_type.iloc[i] = 'retest'
+                        entry_trigger_type.iloc[i] = "retest"
                         break
 
-        elif entry_type == 'close_through':
+        elif entry_type == "close_through":
             # Long entry: strong close above bearish IFVG
             for idx, fvg_low, fvg_high in confirmed_bearish_ifvg[:]:
                 if close_price > fvg_high:
                     entry_long.iloc[i] = 1
-                    entry_trigger_type.iloc[i] = 'close_through'
+                    entry_trigger_type.iloc[i] = "close_through"
                     break
 
             # Short entry: strong close below bullish IFVG
             for idx, fvg_low, fvg_high in confirmed_bullish_ifvg[:]:
                 if close_price < fvg_low:
                     entry_short.iloc[i] = 1
-                    entry_trigger_type.iloc[i] = 'close_through'
+                    entry_trigger_type.iloc[i] = "close_through"
                     break
 
-        elif entry_type == 'ltf_fvg':
+        elif entry_type == "ltf_fvg":
             # LTF FVG detection would require multi-timeframe data
             # For now, use a simplified version based on M1 bars
             # This is a placeholder - full implementation needs LTF data
@@ -353,14 +382,18 @@ def detect_entry_trigger(
 
         # Clean up old IFVGs
         max_age = 50
-        confirmed_bullish_ifvg = [(idx, l, h) for idx, l, h in confirmed_bullish_ifvg if i - idx < max_age]
-        confirmed_bearish_ifvg = [(idx, l, h) for idx, l, h in confirmed_bearish_ifvg if i - idx < max_age]
+        confirmed_bullish_ifvg = [
+            (idx, lo, h) for idx, lo, h in confirmed_bullish_ifvg if i - idx < max_age
+        ]
+        confirmed_bearish_ifvg = [
+            (idx, lo, h) for idx, lo, h in confirmed_bearish_ifvg if i - idx < max_age
+        ]
 
     result = pd.DataFrame(
         {
-            'entry_long': entry_long,
-            'entry_short': entry_short,
-            'entry_trigger_type': entry_trigger_type,
+            "entry_long": entry_long,
+            "entry_short": entry_short,
+            "entry_trigger_type": entry_trigger_type,
         },
         index=df.index,
     )
@@ -370,7 +403,7 @@ def detect_entry_trigger(
 
 def detect_htf_fvg(
     m1_bars: pd.DataFrame,
-    htf: str = 'M15',
+    htf: str = "M15",
     config: FVGConfig | None = None,
 ) -> pd.DataFrame:
     """Detect FVG on higher timeframe and map back to M1 bars.
@@ -395,6 +428,8 @@ def detect_htf_fvg(
         - htf_fvg_bullish: 1 if bullish FVG detected on HTF
         - htf_fvg_bearish: 1 if bearish FVG detected on HTF
         - htf_fvg_bullish_low: Low price of HTF FVG zone
+        - htf_fvg_bullish_high: High price of HTF FVG zone
+        - htf_fvg_bearish_low: Low price of HTF FVG zone
         - htf_fvg_bearish_high: High price of HTF FVG zone
     """
     from quant_rl.data.resample import resample
@@ -409,19 +444,20 @@ def detect_htf_fvg(
 
     # Map HTF FVG signals back to M1 bars
     # For each M1 bar, find which HTF bar it belongs to and use that HTF bar's FVG
-    n = len(m1_bars)
     htf_fvg_bullish = pd.Series(0, index=m1_bars.index, dtype=int)
     htf_fvg_bearish = pd.Series(0, index=m1_bars.index, dtype=int)
-    htf_fvg_bullish_low = pd.Series(float('nan'), index=m1_bars.index)
-    htf_fvg_bearish_high = pd.Series(float('nan'), index=m1_bars.index)
+    htf_fvg_bullish_low = pd.Series(float("nan"), index=m1_bars.index)
+    htf_fvg_bullish_high = pd.Series(float("nan"), index=m1_bars.index)
+    htf_fvg_bearish_low = pd.Series(float("nan"), index=m1_bars.index)
+    htf_fvg_bearish_high = pd.Series(float("nan"), index=m1_bars.index)
 
     # For each HTF bar, forward-fill its FVG signal to all M1 bars in that HTF period
     for htf_idx in htf_bars.index:
         # Find M1 bars that belong to this HTF bar
         # HTF bar at time T covers M1 bars from T to T+htf_period-1min
         if htf_idx in htf_fvg.index:
-            # Get the row position of this HTF bar in the HTF bars DataFrame
-            htf_loc = htf_bars.index.get_loc(htf_idx)
+            # Manipulation-leg FVG detection uses the DatetimeIndex position.
+            htf_loc = cast(int, htf_bars.index.get_loc(htf_idx))
             # Next HTF bar (if exists)
             next_htf_idx = htf_bars.index[htf_loc + 1] if htf_loc + 1 < len(htf_bars) else None
 
@@ -432,17 +468,21 @@ def detect_htf_fvg(
                 m1_mask = m1_bars.index >= htf_idx
 
             # Assign HTF FVG values to these M1 bars
-            htf_fvg_bullish.loc[m1_mask] = htf_fvg['fvg_bullish'].loc[htf_idx]
-            htf_fvg_bearish.loc[m1_mask] = htf_fvg['fvg_bearish'].loc[htf_idx]
-            htf_fvg_bullish_low.loc[m1_mask] = htf_fvg['fvg_bullish_low'].loc[htf_idx]
-            htf_fvg_bearish_high.loc[m1_mask] = htf_fvg['fvg_bearish_high'].loc[htf_idx]
+            htf_fvg_bullish.loc[m1_mask] = htf_fvg["fvg_bullish"].loc[htf_idx]
+            htf_fvg_bearish.loc[m1_mask] = htf_fvg["fvg_bearish"].loc[htf_idx]
+            htf_fvg_bullish_low.loc[m1_mask] = htf_fvg["fvg_bullish_low"].loc[htf_idx]
+            htf_fvg_bullish_high.loc[m1_mask] = htf_fvg["fvg_bullish_high"].loc[htf_idx]
+            htf_fvg_bearish_low.loc[m1_mask] = htf_fvg["fvg_bearish_low"].loc[htf_idx]
+            htf_fvg_bearish_high.loc[m1_mask] = htf_fvg["fvg_bearish_high"].loc[htf_idx]
 
     result = pd.DataFrame(
         {
-            'htf_fvg_bullish': htf_fvg_bullish,
-            'htf_fvg_bearish': htf_fvg_bearish,
-            'htf_fvg_bullish_low': htf_fvg_bullish_low,
-            'htf_fvg_bearish_high': htf_fvg_bearish_high,
+            "htf_fvg_bullish": htf_fvg_bullish,
+            "htf_fvg_bearish": htf_fvg_bearish,
+            "htf_fvg_bullish_low": htf_fvg_bullish_low,
+            "htf_fvg_bullish_high": htf_fvg_bullish_high,
+            "htf_fvg_bearish_low": htf_fvg_bearish_low,
+            "htf_fvg_bearish_high": htf_fvg_bearish_high,
         },
         index=m1_bars.index,
     )
@@ -452,8 +492,8 @@ def detect_htf_fvg(
 
 def detect_ltf_ifvg(
     m1_bars: pd.DataFrame,
-    primary_tf: str = 'M5',
-    ltf: str = 'M1',
+    primary_tf: str = "M5",
+    ltf: str = "M1",
     fvg_config: FVGConfig | None = None,
     ifvg_config: IFVGConfig | None = None,
 ) -> pd.DataFrame:
@@ -483,6 +523,8 @@ def detect_ltf_ifvg(
         - ltf_ifvg_bullish_confirmed: 1 if bullish IFVG confirmed on LTF
         - ltf_ifvg_bearish_confirmed: 1 if bearish IFVG confirmed on LTF
         - ltf_ifvg_bullish_low: Low price of LTF IFVG zone
+        - ltf_ifvg_bullish_high: High price of LTF IFVG zone
+        - ltf_ifvg_bearish_low: Low price of LTF IFVG zone
         - ltf_ifvg_bearish_high: High price of LTF IFVG zone
     """
     from quant_rl.data.resample import resample
@@ -501,19 +543,22 @@ def detect_ltf_ifvg(
     primary_ifvg = detect_ifvg_confirmation(primary_bars, primary_fvg, config=ifvg_config)
 
     # Map primary TF IFVG signals back to M1 bars
-    n = len(m1_bars)
     ltf_ifvg_bullish = pd.Series(0, index=m1_bars.index, dtype=int)
     ltf_ifvg_bearish = pd.Series(0, index=m1_bars.index, dtype=int)
-    ltf_ifvg_bullish_low = pd.Series(float('nan'), index=m1_bars.index)
-    ltf_ifvg_bearish_high = pd.Series(float('nan'), index=m1_bars.index)
+    ltf_ifvg_bullish_low = pd.Series(float("nan"), index=m1_bars.index)
+    ltf_ifvg_bullish_high = pd.Series(float("nan"), index=m1_bars.index)
+    ltf_ifvg_bearish_low = pd.Series(float("nan"), index=m1_bars.index)
+    ltf_ifvg_bearish_high = pd.Series(float("nan"), index=m1_bars.index)
 
     # For each primary TF bar, forward-fill its IFVG signal to all M1 bars in that period
     for primary_idx in primary_bars.index:
         if primary_idx in primary_ifvg.index:
             # Get the row position of this primary bar
-            primary_loc = primary_bars.index.get_loc(primary_idx)
+            primary_loc = cast(int, primary_bars.index.get_loc(primary_idx))
             # Next primary bar (if exists)
-            next_primary_idx = primary_bars.index[primary_loc + 1] if primary_loc + 1 < len(primary_bars) else None
+            next_primary_idx = (
+                primary_bars.index[primary_loc + 1] if primary_loc + 1 < len(primary_bars) else None
+            )
 
             # Select M1 bars in this primary TF period
             if next_primary_idx is not None:
@@ -522,17 +567,21 @@ def detect_ltf_ifvg(
                 m1_mask = m1_bars.index >= primary_idx
 
             # Assign primary TF IFVG values to these M1 bars
-            ltf_ifvg_bullish.loc[m1_mask] = primary_ifvg['ifvg_bullish_confirmed'].loc[primary_idx]
-            ltf_ifvg_bearish.loc[m1_mask] = primary_ifvg['ifvg_bearish_confirmed'].loc[primary_idx]
-            ltf_ifvg_bullish_low.loc[m1_mask] = primary_ifvg['ifvg_bullish_low'].loc[primary_idx]
-            ltf_ifvg_bearish_high.loc[m1_mask] = primary_ifvg['ifvg_bearish_high'].loc[primary_idx]
+            ltf_ifvg_bullish.loc[m1_mask] = primary_ifvg["ifvg_bullish_confirmed"].loc[primary_idx]
+            ltf_ifvg_bearish.loc[m1_mask] = primary_ifvg["ifvg_bearish_confirmed"].loc[primary_idx]
+            ltf_ifvg_bullish_low.loc[m1_mask] = primary_ifvg["ifvg_bullish_low"].loc[primary_idx]
+            ltf_ifvg_bullish_high.loc[m1_mask] = primary_ifvg["ifvg_bullish_high"].loc[primary_idx]
+            ltf_ifvg_bearish_low.loc[m1_mask] = primary_ifvg["ifvg_bearish_low"].loc[primary_idx]
+            ltf_ifvg_bearish_high.loc[m1_mask] = primary_ifvg["ifvg_bearish_high"].loc[primary_idx]
 
     result = pd.DataFrame(
         {
-            'ltf_ifvg_bullish_confirmed': ltf_ifvg_bullish,
-            'ltf_ifvg_bearish_confirmed': ltf_ifvg_bearish,
-            'ltf_ifvg_bullish_low': ltf_ifvg_bullish_low,
-            'ltf_ifvg_bearish_high': ltf_ifvg_bearish_high,
+            "ltf_ifvg_bullish_confirmed": ltf_ifvg_bullish,
+            "ltf_ifvg_bearish_confirmed": ltf_ifvg_bearish,
+            "ltf_ifvg_bullish_low": ltf_ifvg_bullish_low,
+            "ltf_ifvg_bullish_high": ltf_ifvg_bullish_high,
+            "ltf_ifvg_bearish_low": ltf_ifvg_bearish_low,
+            "ltf_ifvg_bearish_high": ltf_ifvg_bearish_high,
         },
         index=m1_bars.index,
     )
@@ -542,9 +591,9 @@ def detect_ltf_ifvg(
 
 def detect_po3_entries(
     m1_bars: pd.DataFrame,
-    htf: str = 'M15',
-    primary_tf: str = 'M5',
-    entry_type: EntryTriggerType = 'retest',
+    htf: str = "M15",
+    primary_tf: str = "M5",
+    entry_type: EntryTriggerType = "retest",
     fvg_config: FVGConfig | None = None,
     ifvg_config: IFVGConfig | None = None,
     entry_config: EntryConfig | None = None,
@@ -596,12 +645,16 @@ def detect_po3_entries(
 
     # Step 3: Generate entry triggers based on LTF IFVG
     # Rename LTF IFVG columns to match expected format for detect_entry_trigger
-    ifvg_for_entry = ltf_ifvg.rename(columns={
-        'ltf_ifvg_bullish_confirmed': 'ifvg_bullish_confirmed',
-        'ltf_ifvg_bearish_confirmed': 'ifvg_bearish_confirmed',
-        'ltf_ifvg_bullish_low': 'ifvg_bullish_low',
-        'ltf_ifvg_bearish_high': 'ifvg_bearish_high',
-    })
+    ifvg_for_entry = ltf_ifvg.rename(
+        columns={
+            "ltf_ifvg_bullish_confirmed": "ifvg_bullish_confirmed",
+            "ltf_ifvg_bearish_confirmed": "ifvg_bearish_confirmed",
+            "ltf_ifvg_bullish_low": "ifvg_bullish_low",
+            "ltf_ifvg_bullish_high": "ifvg_bullish_high",
+            "ltf_ifvg_bearish_low": "ifvg_bearish_low",
+            "ltf_ifvg_bearish_high": "ifvg_bearish_high",
+        }
+    )
     entry_result = detect_entry_trigger(
         m1_bars,
         ifvg_for_entry,
@@ -613,3 +666,145 @@ def detect_po3_entries(
     result = pd.concat([htf_fvg, ltf_ifvg, entry_result], axis=1)
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Zone building for visualization
+# ---------------------------------------------------------------------------
+
+_ZONE_SPECS: list[tuple[str, str, str, str, str]] = [
+    # (kind, side, signal_col, zone_low_col, zone_high_col)
+    ("htf_fvg", "bullish", "htf_fvg_bullish", "htf_fvg_bullish_low", "htf_fvg_bullish_high"),
+    ("htf_fvg", "bearish", "htf_fvg_bearish", "htf_fvg_bearish_low", "htf_fvg_bearish_high"),
+    (
+        "ltf_ifvg",
+        "bullish",
+        "ltf_ifvg_bullish_confirmed",
+        "ltf_ifvg_bullish_low",
+        "ltf_ifvg_bullish_high",
+    ),
+    (
+        "ltf_ifvg",
+        "bearish",
+        "ltf_ifvg_bearish_confirmed",
+        "ltf_ifvg_bearish_low",
+        "ltf_ifvg_bearish_high",
+    ),
+]
+
+
+@dataclass
+class FVGZone:
+    """A drawable FVG/IFVG zone rectangle.
+
+    Attributes
+    ----------
+    kind : str
+        'htf_fvg' for a higher-timeframe FVG or 'ltf_ifvg' for a confirmed IFVG.
+    side : str
+        'bullish' or 'bearish'.
+    start_ts : pd.Timestamp
+        First bar timestamp of the zone.
+    end_ts : pd.Timestamp
+        Last bar timestamp: the bar where the zone was filled (invalidated) or
+        where the horizon expired.
+    zone_low : float
+        Lower price bound of the zone.
+    zone_high : float
+        Upper price bound of the zone.
+    confirmed : bool
+        True if the zone was confirmed as an IFVG.
+    invalidated : bool
+        True if price traded back through the gap (zone filled) before expiry.
+    """
+
+    kind: str
+    side: str
+    start_ts: pd.Timestamp
+    end_ts: pd.Timestamp
+    zone_low: float
+    zone_high: float
+    confirmed: bool
+    invalidated: bool = False
+
+
+def build_fvg_zones(
+    bars: pd.DataFrame,
+    signals: pd.DataFrame,
+    max_zone_bars: int = 50,
+) -> list[FVGZone]:
+    """Build drawable zone rectangles from PO3 signal columns.
+
+    Each contiguous run of a ``*_bullish``/``*_bearish`` signal (0 -> 1 edge)
+    produces exactly one :class:`FVGZone`.  A zone ends when price trades back
+    through the gap (``invalidated=True``) or after ``max_zone_bars`` bars.
+
+    Parameters
+    ----------
+    bars : pd.DataFrame
+        M1 OHLC bars (DatetimeIndex, 'high'/'low' columns) that produced the signals.
+    signals : pd.DataFrame
+        Output of :func:`detect_htf_fvg`, :func:`detect_ltf_ifvg`, or the
+        combined output of :func:`detect_po3_entries`.  Must share the index of
+        ``bars`` and contain a subset of the well-known column names.
+    max_zone_bars : int
+        Maximum number of bars a zone stays active before it is considered expired.
+
+    Returns
+    -------
+    list[FVGZone]
+        One zone per formation event, ordered by start timestamp.
+    """
+    zones: list[FVGZone] = []
+
+    if signals.empty or len(bars) == 0:
+        return zones
+
+    for kind, side, sig_col, low_col, high_col in _ZONE_SPECS:
+        if sig_col not in signals.columns:
+            continue
+
+        sig = signals[sig_col]
+        # Only start a zone on the 0 -> 1 edge (handles forward-filled runs).
+        starts = (sig == 1) & (sig.shift(1, fill_value=0) == 0)
+        if low_col not in signals.columns or high_col not in signals.columns:
+            continue
+
+        for i in range(len(bars)):
+            if not bool(starts.iloc[i]):
+                continue
+            zone_low = signals[low_col].iloc[i]
+            zone_high = signals[high_col].iloc[i]
+            if pd.isna(zone_low) or pd.isna(zone_high) or zone_high <= zone_low:
+                continue
+
+            start_ts = bars.index[i]
+            end_iloc = min(len(bars) - 1, i + max_zone_bars)
+            invalidated = False
+            end_ts = bars.index[end_iloc]
+
+            for j in range(i + 1, end_iloc + 1):
+                if side == "bullish" and bars["low"].iloc[j] <= zone_low:
+                    invalidated = True
+                    end_ts = bars.index[j]
+                    break
+                if side == "bearish" and bars["high"].iloc[j] >= zone_high:
+                    invalidated = True
+                    end_ts = bars.index[j]
+                    break
+
+            zones.append(
+                FVGZone(
+                    kind=kind,
+                    side=side,
+                    start_ts=start_ts,
+                    end_ts=end_ts,
+                    zone_low=float(zone_low),
+                    zone_high=float(zone_high),
+                    confirmed=(kind == "ltf_ifvg"),
+                    invalidated=invalidated,
+                )
+            )
+
+    zones.sort(key=lambda z: z.start_ts)
+    return zones

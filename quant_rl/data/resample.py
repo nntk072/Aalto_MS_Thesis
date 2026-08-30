@@ -6,7 +6,7 @@ Every timeframe is built from the true M1 source via pandas resample().
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import pandas as pd
 
@@ -49,7 +49,7 @@ def resample(m1: pd.DataFrame, tf: TF) -> pd.DataFrame:
     rule = _TF_TO_RULE[tf]
     # Only aggregate columns that exist in the input DataFrame
     agg_spec = {k: v for k, v in _OHLCV_AGG.items() if k in m1.columns}
-    resampled = m1.resample(rule, label="left", closed="left").agg(agg_spec)
+    resampled = m1.resample(rule, label="left", closed="left").agg(cast(Any, agg_spec))
     resampled = resampled.dropna(subset=["open"])
     return resampled
 
