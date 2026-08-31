@@ -35,6 +35,7 @@ from quant_rl.eval.rollout import evaluate_model
 from quant_rl.evaluation import calculate_metrics
 from quant_rl.features.build import build_features
 from quant_rl.train.auxiliary_training import AuxiliaryTrainerCallback
+from quant_rl.train.callbacks import BestCheckpointEvalCallback
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -111,6 +112,7 @@ def main() -> None:
         contract_size=cfg.account.contract_size,
         max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
         dsr_eta=cfg.env.reward_dsr_eta,
+        max_episode_steps=int(cfg.env.get("max_episode_steps", 1000)),
     )
 
     # Setup output directory for model
@@ -162,6 +164,39 @@ def main() -> None:
         )
 
     callbacks = [c for c in (checkpoint_callback, aux_cb) if c is not None]
+
+    # Best-checkpoint eval: every N rollouts, evaluate on a fresh copy of the
+    # training env (episodic=False so guardrail breaches don't kill the run)
+    # and save the best policy to model_dir/best_model. PPO's final save is
+    # rarely the best one; this gives us a "best-so-far" snapshot for the
+    # final test evaluation.
+    best_eval_freq = max(1, cfg.ppo.n_steps)  # default: once per rollout
+    best_cb = BestCheckpointEvalCallback(
+        eval_env_factory=lambda: TradingEnv(
+            bars=train_bars,
+            features=train_feat,
+            obs_window=cfg.env.obs_window,
+            initial_balance=cfg.account.initial_balance,
+            risk_frac_range=(
+                cfg.risk.default_risk_frac * 0.5,
+                cfg.risk.default_risk_frac * 2.0,
+            ),
+            rr_ratio_range=(
+                cfg.risk.rr_ratio_default * 0.5,
+                cfg.risk.rr_ratio_default * 1.5,
+            ),
+            swing_buffer_pts=cfg.risk.swing_buffer_pts,
+            contract_size=cfg.account.contract_size,
+            max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
+            dsr_eta=cfg.env.reward_dsr_eta,
+            max_episode_steps=int(cfg.env.get("max_episode_steps", 1000)),
+            episodic=False,  # eval mode: walk the whole set, don't end on breach
+        ),
+        eval_freq=best_eval_freq,
+        best_model_path=model_dir / "ppo_best",
+    )
+    callbacks.append(best_cb)
+
     model.learn(total_timesteps=timesteps, callback=callbacks)
 
     # Save final model
@@ -186,6 +221,7 @@ def main() -> None:
         contract_size=cfg.account.contract_size,
         max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
         dsr_eta=cfg.env.reward_dsr_eta,
+        max_episode_steps=int(cfg.env.get("max_episode_steps", 1000)),
     )
     test_result["initial_balance"] = cfg.account.initial_balance
     test_m = calculate_metrics(
