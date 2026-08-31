@@ -26,6 +26,8 @@ import torch.nn.functional as F
 from gymnasium import spaces
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
+from .encoder import ACCOUNT_DIM
+
 
 class VAEEncoder(nn.Module):
     """VAE encoder that compresses pre-NY sequence into latent embedding.
@@ -387,7 +389,8 @@ class VAEFeatureExtractor(BaseFeaturesExtractor):
 
     This wraps the VAE encoder to be compatible with Stable Baselines3
     feature extractors. It extracts the latent vector z from the pre-NY
-    sequence and concatenates it with other features.
+    sequence and concatenates it with the account state (matching the
+    TCNEncoder/GRUEncoder/TransformerEncoder pattern in encoder.py).
 
     Parameters
     ----------
@@ -407,7 +410,7 @@ class VAEFeatureExtractor(BaseFeaturesExtractor):
     ) -> None:
         super().__init__(
             observation_space,
-            features_dim=vae.encoder.latent_dim,
+            features_dim=vae.encoder.latent_dim + ACCOUNT_DIM,
         )
         self.vae = vae
         self.freeze = freeze
@@ -423,14 +426,16 @@ class VAEFeatureExtractor(BaseFeaturesExtractor):
         Parameters
         ----------
         observations : dict[str, torch.Tensor]
-            Dictionary containing 'pre_ny_seq' key with pre-NY sequence
+            Dictionary containing 'pre_ny_seq' and 'account' keys
 
         Returns
         -------
         features : torch.Tensor
-            Latent vector z of shape (batch_size, latent_dim)
+            Latent vector z concatenated with account state:
+            (batch_size, latent_dim + ACCOUNT_DIM)
         """
         pre_ny_seq = observations["pre_ny_seq"]  # [B, T, F]
+        account = observations["account"]  # [B, A]
         mu: torch.Tensor
         mu, _ = self.vae.encode(pre_ny_seq)
-        return mu
+        return torch.cat([mu, account], dim=1)  # [B, latent_dim + A]
