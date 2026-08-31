@@ -42,6 +42,12 @@ log = logging.getLogger(__name__)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train PPO on structure-aware trading.")
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="Base config YAML (default: quant_rl/config/default.yaml). "
+        "Lets this entrypoint load config/features_*_mtf.yaml variant configs.",
+    )
     parser.add_argument("overrides", nargs="*", help="Config overrides")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--mvp", action="store_true", help="MVP mode: first 30 days only")
@@ -54,7 +60,7 @@ def main() -> None:
 
     random.seed(args.seed)
 
-    cfg = load_config(args.overrides)
+    cfg = load_config(args.overrides, config_path=args.config)
 
     # Override for MVP mode
     if args.mvp:
@@ -70,7 +76,7 @@ def main() -> None:
     secondary_m1 = data.get(secondary_sym, {}).get("M1")
 
     cache_dir = Path(cfg.data.cache_dir)
-    feat_cache = cache_dir / f"{primary_sym}_features_v2_htf.parquet"
+    feat_cache = cache_dir / f"{primary_sym}_features_v4_po3causal.parquet"
     features = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
 
     # Split

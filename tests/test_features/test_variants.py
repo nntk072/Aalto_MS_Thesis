@@ -147,3 +147,60 @@ def test_variant_config_files_merge():
         assert merged.features.include_po3 is want_po3
         assert merged.features.include_fvg_ifvg is want_fvg
         assert list(merged.features.htf_timeframes) == ["M5", "M15", "H1"]
+
+
+def test_po3_full_flag_additive(m1_bars):
+    """include_po3_full=true adds the full PO3 entry-trigger columns on top of base."""
+    from quant_rl.features.build import build_features
+
+    cfg_base = OmegaConf.create(_base_cfg())
+    base = build_features(m1_bars, cfg=cfg_base)
+
+    cfg_full = OmegaConf.merge(cfg_base, OmegaConf.create({"features": {"include_po3_full": True}}))
+    full = build_features(m1_bars, cfg=cfg_full)
+
+    assert set(map(str, base.columns)) < set(map(str, full.columns))
+    for col in ["entry_long", "entry_short", "entry_trigger_type"]:
+        assert col in set(map(str, full.columns))
+    # matrix must stay homogeneous numeric (TradingEnv casts to float32)
+    assert all(pd.api.types.is_numeric_dtype(full[c]) for c in full.columns)
+    # entry signals are binary; trigger type is encoded 0..3
+    assert set(full["entry_long"].dropna().unique()).issubset({0.0, 1.0})
+    assert set(full["entry_short"].dropna().unique()).issubset({0.0, 1.0})
+    assert set(full["entry_trigger_type"].dropna().unique()).issubset({0.0, 1.0, 2.0, 3.0})
+
+
+def test_po3_full_no_lookahead_on_entries(m1_bars):
+    """Entry signals at bar t must be unchanged by appending future bars.
+
+    detect_po3_entries consumes only bars <= t when marking bar t (the M1
+    loop uses each bar's own close once), so truncation must not alter past
+    entry columns.
+    """
+    from quant_rl.features.build import build_features
+
+    cfg = OmegaConf.merge(
+        OmegaConf.create(_base_cfg()), OmegaConf.create({"features": {"include_po3_full": True}})
+    )
+    full = build_features(m1_bars, cfg=cfg)
+    trunc = build_features(m1_bars.iloc[:400], cfg=cfg)
+
+    overlap = trunc.index[:300]
+    entry_cols = ["entry_long", "entry_short", "entry_trigger_type"]
+    pd.testing.assert_frame_equal(
+        full.loc[overlap, entry_cols],
+        trunc.loc[overlap, entry_cols],
+        rtol=1e-9,
+    )
+
+
+def test_combined_config_merges_all_blocks():
+    """config/features_full_po3_mtf.yaml enables all three additive blocks."""
+    base = OmegaConf.load("quant_rl/config/default.yaml")
+    merged = OmegaConf.merge(base, OmegaConf.load("config/features_full_po3_mtf.yaml"))
+    assert merged.features.include_po3 is True
+    assert merged.features.include_fvg_ifvg is True
+    assert merged.features.include_po3_full is True
+    assert merged.features.po3_htf == "M15"
+    assert merged.features.po3_ltf == "M5"
+    assert list(merged.features.htf_timeframes) == ["M5", "M15", "H1"]

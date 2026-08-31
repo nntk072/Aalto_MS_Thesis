@@ -20,17 +20,28 @@ from ..data.align import align_timeframes
 from ..data.resample import resample
 from .indicators import atr, build_indicators, sweep_velocity, volume_spike, wick_ratio
 from .normalize import rolling_zscore
-from .po3_config import FVGConfig, build_fvg_zones, detect_fvg
+from .po3_config import (
+    FVGConfig,
+    build_fvg_zones,
+    detect_fvg,
+    detect_po3_entries,
+)
 from .smt import smt_divergence
 from .structure import detect_session_levels, structure_levels
 
 # Bump whenever build_features() output schema changes so stale caches are
 # not silently reused by the {symbol}_features.parquet call sites.
-FEATURE_CACHE_VERSION = "v2-htf"
+# v4: Chain F + causal PO3 mapping — detect_htf_fvg/detect_ltf_ifvg now shift
+# signals one HTF/primary period forward (no within-period lookahead).
+FEATURE_CACHE_VERSION = "v4-po3causal"
 
 _DEFAULT_HTF_TIMEFRAMES = ("M5", "M15", "H1")
 # Capped normalised FVG distance: value used when no zone is active nearby.
 _FVG_DIST_CAP = 5.0
+
+# Numeric encoding of detect_po3_entries' entry_trigger_type string column so
+# the feature matrix stays homogeneous float (TradingEnv casts to float32).
+_PO3_TRIGGER_CODE = {"": 0, "retest": 1, "close_through": 2, "ltf_fvg": 3}
 
 
 def build_po3_phase_features(
@@ -236,6 +247,23 @@ def build_features(
         # Drop time columns (not needed in feature matrix)
         structure = structure[["last_swing_high", "last_swing_low"]]
         feat = pd.concat([feat, structure], axis=1)
+
+    # --- Full PO3 pipeline (Chain F): HTF FVG -> LTF IFVG -> entry triggers ---
+    # Added AFTER normalization so the 0/1 entry signals and the numeric
+    # trigger code keep their raw meaning (exactly like structure levels).
+    if feat_cfg is not None and bool(getattr(feat_cfg, "include_po3_full", False)):
+        po3_signals = detect_po3_entries(
+            primary,
+            htf=str(getattr(feat_cfg, "po3_htf", "M15")),
+            primary_tf=str(getattr(feat_cfg, "po3_ltf", "M5")),
+        )
+        po3_feats = po3_signals[["entry_long", "entry_short", "entry_trigger_type"]].copy()
+        # entry_trigger_type is a string column; encode numerically so the
+        # matrix stays homogeneous float for TradingEnv's float32 cast.
+        po3_feats["entry_trigger_type"] = (
+            po3_feats["entry_trigger_type"].map(_PO3_TRIGGER_CODE).fillna(0.0).astype("float64")
+        )
+        feat = pd.concat([feat, po3_feats], axis=1)
 
     # --- Liquidity Levels + Volume Spike + ATR - add AFTER normalization ---
     levels = detect_session_levels(primary)

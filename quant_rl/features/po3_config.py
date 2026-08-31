@@ -12,7 +12,7 @@ with HTF/LTF IFVG confirmation, excluding MSS/BOS detection steps.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import Literal
 
 import pandas as pd
 
@@ -375,10 +375,21 @@ def detect_entry_trigger(
                     break
 
         elif entry_type == "ltf_fvg":
-            # LTF FVG detection would require multi-timeframe data
-            # For now, use a simplified version based on M1 bars
-            # This is a placeholder - full implementation needs LTF data
-            pass
+            # LTF FVG entry: price re-enters a confirmed inverted-FVG zone after
+            # the IFVG confirms. The confirmed zone bounds come from the tracked
+            # confirmed_*_ifvg lists (populated from ifvg_df's zone columns, which
+            # detect_po3_entries renames from 'ltf_ifvg_*' to 'ifvg_*').
+            for fvg_low, fvg_high in ((lo, hi) for _idx, lo, hi in confirmed_bullish_ifvg[:]):
+                if fvg_low <= close_price <= fvg_high:
+                    entry_long.iloc[i] = 1
+                    entry_trigger_type.iloc[i] = "ltf_fvg"
+                    break
+
+            for fvg_low, fvg_high in ((lo, hi) for _idx, lo, hi in confirmed_bearish_ifvg[:]):
+                if fvg_low <= close_price <= fvg_high:
+                    entry_short.iloc[i] = 1
+                    entry_trigger_type.iloc[i] = "ltf_fvg"
+                    break
 
         # Clean up old IFVGs
         max_age = 50
@@ -408,9 +419,11 @@ def detect_htf_fvg(
 ) -> pd.DataFrame:
     """Detect FVG on higher timeframe and map back to M1 bars.
 
-    This function resamples M1 data to the specified HTF, detects FVG on the
-    HTF bars, then forward-fills the HTF FVG signals to each M1 bar within
-    that HTF period.
+    This function resamples M1 data to the specified HTF, detects FVG on
+    the HTF bars, then maps the signals onto the M1 spine with zero
+    within-period lookahead: the signal of an HTF bar spanning [T, T+period)
+    is only observable from the next HTF open (the moment the bar closes)
+    onward.
 
     Parameters
     ----------
@@ -442,47 +455,26 @@ def detect_htf_fvg(
         config = FVGConfig()
     htf_fvg = detect_fvg(htf_bars, config=config)
 
-    # Map HTF FVG signals back to M1 bars
-    # For each M1 bar, find which HTF bar it belongs to and use that HTF bar's FVG
-    htf_fvg_bullish = pd.Series(0, index=m1_bars.index, dtype=int)
-    htf_fvg_bearish = pd.Series(0, index=m1_bars.index, dtype=int)
-    htf_fvg_bullish_low = pd.Series(float("nan"), index=m1_bars.index)
-    htf_fvg_bullish_high = pd.Series(float("nan"), index=m1_bars.index)
-    htf_fvg_bearish_low = pd.Series(float("nan"), index=m1_bars.index)
-    htf_fvg_bearish_high = pd.Series(float("nan"), index=m1_bars.index)
-
-    # For each HTF bar, forward-fill its FVG signal to all M1 bars in that HTF period
-    for htf_idx in htf_bars.index:
-        # Find M1 bars that belong to this HTF bar
-        # HTF bar at time T covers M1 bars from T to T+htf_period-1min
-        if htf_idx in htf_fvg.index:
-            # Manipulation-leg FVG detection uses the DatetimeIndex position.
-            htf_loc = cast(int, htf_bars.index.get_loc(htf_idx))
-            # Next HTF bar (if exists)
-            next_htf_idx = htf_bars.index[htf_loc + 1] if htf_loc + 1 < len(htf_bars) else None
-
-            # Select M1 bars in this HTF period
-            if next_htf_idx is not None:
-                m1_mask = (m1_bars.index >= htf_idx) & (m1_bars.index < next_htf_idx)
-            else:
-                m1_mask = m1_bars.index >= htf_idx
-
-            # Assign HTF FVG values to these M1 bars
-            htf_fvg_bullish.loc[m1_mask] = htf_fvg["fvg_bullish"].loc[htf_idx]
-            htf_fvg_bearish.loc[m1_mask] = htf_fvg["fvg_bearish"].loc[htf_idx]
-            htf_fvg_bullish_low.loc[m1_mask] = htf_fvg["fvg_bullish_low"].loc[htf_idx]
-            htf_fvg_bullish_high.loc[m1_mask] = htf_fvg["fvg_bullish_high"].loc[htf_idx]
-            htf_fvg_bearish_low.loc[m1_mask] = htf_fvg["fvg_bearish_low"].loc[htf_idx]
-            htf_fvg_bearish_high.loc[m1_mask] = htf_fvg["fvg_bearish_high"].loc[htf_idx]
+    # Causally map HTF FVG signals back to M1 bars. An HTF bar spanning
+    # [T, T+period) only closes at the NEXT HTF open, so its signal may only
+    # be observed by M1 bars from that instant onward. shift(1) moves each
+    # bar's signal to its successor's open (the moment it completes) and
+    # reindex(method="ffill") carries each completed bar's signal onto the M1
+    # spine — M1 bar t sees only HTF bars *completed* at or before t, never an
+    # HTF bar still forming. The final HTF bar's signal is dropped because it
+    # never completes inside this sample.
+    htf_aligned = htf_fvg.shift(1).reindex(m1_bars.index, method="ffill")
 
     result = pd.DataFrame(
         {
-            "htf_fvg_bullish": htf_fvg_bullish,
-            "htf_fvg_bearish": htf_fvg_bearish,
-            "htf_fvg_bullish_low": htf_fvg_bullish_low,
-            "htf_fvg_bullish_high": htf_fvg_bullish_high,
-            "htf_fvg_bearish_low": htf_fvg_bearish_low,
-            "htf_fvg_bearish_high": htf_fvg_bearish_high,
+            # Binary signals: NaN only occurs before the first completed HTF
+            # bar; treat that as "no signal yet" (0) to keep the 0/1 contract.
+            "htf_fvg_bullish": htf_aligned["fvg_bullish"].fillna(0),
+            "htf_fvg_bearish": htf_aligned["fvg_bearish"].fillna(0),
+            "htf_fvg_bullish_low": htf_aligned["fvg_bullish_low"],
+            "htf_fvg_bullish_high": htf_aligned["fvg_bullish_high"],
+            "htf_fvg_bearish_low": htf_aligned["fvg_bearish_low"],
+            "htf_fvg_bearish_high": htf_aligned["fvg_bearish_high"],
         },
         index=m1_bars.index,
     )
@@ -501,7 +493,9 @@ def detect_ltf_ifvg(
 
     This function resamples M1 data to the primary timeframe, detects FVG and
     IFVG confirmation on that primary TF, then maps the IFVG signals back to
-    each M1 bar within that primary TF period.
+    the M1 spine with zero within-period lookahead: a confirmation signal is
+    only observable from the next primary-TF open (the moment its bar closes)
+    onward.
 
     Parameters
     ----------
@@ -542,46 +536,21 @@ def detect_ltf_ifvg(
         ifvg_config = IFVGConfig()
     primary_ifvg = detect_ifvg_confirmation(primary_bars, primary_fvg, config=ifvg_config)
 
-    # Map primary TF IFVG signals back to M1 bars
-    ltf_ifvg_bullish = pd.Series(0, index=m1_bars.index, dtype=int)
-    ltf_ifvg_bearish = pd.Series(0, index=m1_bars.index, dtype=int)
-    ltf_ifvg_bullish_low = pd.Series(float("nan"), index=m1_bars.index)
-    ltf_ifvg_bullish_high = pd.Series(float("nan"), index=m1_bars.index)
-    ltf_ifvg_bearish_low = pd.Series(float("nan"), index=m1_bars.index)
-    ltf_ifvg_bearish_high = pd.Series(float("nan"), index=m1_bars.index)
-
-    # For each primary TF bar, forward-fill its IFVG signal to all M1 bars in that period
-    for primary_idx in primary_bars.index:
-        if primary_idx in primary_ifvg.index:
-            # Get the row position of this primary bar
-            primary_loc = cast(int, primary_bars.index.get_loc(primary_idx))
-            # Next primary bar (if exists)
-            next_primary_idx = (
-                primary_bars.index[primary_loc + 1] if primary_loc + 1 < len(primary_bars) else None
-            )
-
-            # Select M1 bars in this primary TF period
-            if next_primary_idx is not None:
-                m1_mask = (m1_bars.index >= primary_idx) & (m1_bars.index < next_primary_idx)
-            else:
-                m1_mask = m1_bars.index >= primary_idx
-
-            # Assign primary TF IFVG values to these M1 bars
-            ltf_ifvg_bullish.loc[m1_mask] = primary_ifvg["ifvg_bullish_confirmed"].loc[primary_idx]
-            ltf_ifvg_bearish.loc[m1_mask] = primary_ifvg["ifvg_bearish_confirmed"].loc[primary_idx]
-            ltf_ifvg_bullish_low.loc[m1_mask] = primary_ifvg["ifvg_bullish_low"].loc[primary_idx]
-            ltf_ifvg_bullish_high.loc[m1_mask] = primary_ifvg["ifvg_bullish_high"].loc[primary_idx]
-            ltf_ifvg_bearish_low.loc[m1_mask] = primary_ifvg["ifvg_bearish_low"].loc[primary_idx]
-            ltf_ifvg_bearish_high.loc[m1_mask] = primary_ifvg["ifvg_bearish_high"].loc[primary_idx]
+    # Causally map primary-TF IFVG signals back to M1 bars, with the same
+    # one-period delay as detect_htf_fvg: a primary bar [T, T+period) only
+    # completes at the next primary open, so confirmation signals are shifted
+    # one period forward and forward-filled onto the M1 spine. The final
+    # primary bar's signal is dropped since it never completes in-sample.
+    primary_aligned = primary_ifvg.shift(1).reindex(m1_bars.index, method="ffill")
 
     result = pd.DataFrame(
         {
-            "ltf_ifvg_bullish_confirmed": ltf_ifvg_bullish,
-            "ltf_ifvg_bearish_confirmed": ltf_ifvg_bearish,
-            "ltf_ifvg_bullish_low": ltf_ifvg_bullish_low,
-            "ltf_ifvg_bullish_high": ltf_ifvg_bullish_high,
-            "ltf_ifvg_bearish_low": ltf_ifvg_bearish_low,
-            "ltf_ifvg_bearish_high": ltf_ifvg_bearish_high,
+            "ltf_ifvg_bullish_confirmed": primary_aligned["ifvg_bullish_confirmed"].fillna(0),
+            "ltf_ifvg_bearish_confirmed": primary_aligned["ifvg_bearish_confirmed"].fillna(0),
+            "ltf_ifvg_bullish_low": primary_aligned["ifvg_bullish_low"],
+            "ltf_ifvg_bullish_high": primary_aligned["ifvg_bullish_high"],
+            "ltf_ifvg_bearish_low": primary_aligned["ifvg_bearish_low"],
+            "ltf_ifvg_bearish_high": primary_aligned["ifvg_bearish_high"],
         },
         index=m1_bars.index,
     )

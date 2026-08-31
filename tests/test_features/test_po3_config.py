@@ -109,6 +109,24 @@ class TestDetectIFVGConfirmation:
 class TestDetectEntryTrigger:
     """Tests for entry trigger detection."""
 
+    @pytest.fixture()
+    def bullish_close_through_bars(self) -> pd.DataFrame:
+        """Bars with a bullish FVG (zone [10, 12]) confirmed by a close above it.
+
+        Bar 2 is the FVG (bar3.low 12 > bar1.high 10) and confirms immediately
+        (close 13). Bars 3+ pull back into the zone so ltf_fvg entries can fire.
+        """
+        idx = pd.date_range("2025-01-01", periods=10, freq="1min")
+        return pd.DataFrame(
+            {
+                "open": [9, 10, 11, 12, 11, 13, 14, 14, 13, 12],
+                "high": [10, 11, 13, 13, 12, 14, 15, 15, 14, 13],
+                "low": [9, 10, 12, 11, 10, 12, 13, 13, 12, 11],
+                "close": [9, 10, 13, 12, 11, 13, 14, 14, 13, 12],
+            },
+            index=idx,
+        )
+
     def test_entry_trigger_returns_expected_columns(self, sample_bars: pd.DataFrame) -> None:
         """Test that entry trigger returns expected columns."""
         fvg_result = detect_fvg(sample_bars)
@@ -154,6 +172,36 @@ class TestDetectEntryTrigger:
         config = EntryConfig(retest_threshold=0.05)
         entry_result = detect_entry_trigger(sample_bars, ifvg_result, config=config)
         assert isinstance(entry_result, pd.DataFrame)
+
+    def test_entry_trigger_ltf_fvg_fires_on_zone_reentry(
+        self, bullish_close_through_bars: pd.DataFrame
+    ) -> None:
+        """The ltf_fvg entry fires when price re-enters a confirmed IFVG zone.
+
+        Reuses the bullish close-through fixture (zone [10, 12], confirmed at
+        bar 2 by a close of 13). Price re-entering the zone (close 12 at bar 3)
+        must produce an ltf_fvg long entry, not a retest/close_through tag.
+        """
+        fvg = detect_fvg(bullish_close_through_bars)
+        ifvg = detect_ifvg_confirmation(bullish_close_through_bars, fvg)
+        entry = detect_entry_trigger(bullish_close_through_bars, ifvg, entry_type="ltf_fvg")
+
+        assert entry["entry_long"].sum() > 0
+        first = entry.index[entry["entry_long"] == 1][0]
+        assert first == bullish_close_through_bars.index[3]
+        assert entry.loc[bullish_close_through_bars.index[2], "entry_long"] == 0
+        fired = entry.loc[entry["entry_trigger_type"] != ""]
+        assert set(fired["entry_trigger_type"].unique()) == {"ltf_fvg"}
+
+    def test_entry_trigger_ltf_fvg_not_a_pass(
+        self, bullish_close_through_bars: pd.DataFrame
+    ) -> None:
+        """The placeholder pass must be gone: a run terminates and emits entries."""
+        fvg = detect_fvg(bullish_close_through_bars)
+        ifvg = detect_ifvg_confirmation(bullish_close_through_bars, fvg)
+        entry = detect_entry_trigger(bullish_close_through_bars, ifvg, entry_type="ltf_fvg")
+        assert len(entry) == len(bullish_close_through_bars)
+        assert "entry_trigger_type" in entry.columns
 
 
 class TestDetectHTFFVG:
@@ -528,12 +576,177 @@ class TestBuildFVGZones:
         zones = build_fvg_zones(fvg_bars, signals, max_zone_bars=3)
         bull = [z for z in zones if z.side == "bullish"]
         assert bull
-        # Zone starts at the first M1 bar of the FVG M5 bar (00:10) and,
-        # never being filled, ends 3 bars later at 00:13.
+        # The FVG forms in the M5 bar at 00:10, which only completes at 00:15,
+        # so the zone is first observable at 00:15 (index 15) and, never being
+        # filled, ends 3 bars later at 00:18.
         assert bull[0].invalidated is False
-        assert bull[0].end_ts == fvg_bars.index[13]
+        assert bull[0].end_ts == fvg_bars.index[18]
 
     def test_empty_signals(self, fvg_bars: pd.DataFrame) -> None:
         """Missing signal columns return an empty zone list."""
         zones = build_fvg_zones(fvg_bars, pd.DataFrame(index=fvg_bars.index))
         assert zones == []
+
+
+class TestMTFCausality:
+    """Zero within-period lookahead for HTF FVG / LTF IFVG mapping.
+
+    HTF bars are indexed by their *open* time (label=\"left\" in resample), so an
+    HTF bar spanning [T, T+period) is not complete until the next HTF open.
+    The M1 bar at time t must therefore only see signals of HTF bars already
+    *completed* — never the HTF bar that is still forming.
+    """
+
+    @pytest.fixture()
+    def causal_m5_bars(self) -> pd.DataFrame:
+        """25 M1 bars -> 5 M5 periods; bullish FVG forms in M5[2], IFVG at M5[3].
+
+        M5[0] (00:00, bars 0-4):  high 11, low 9
+        M5[1] (00:05, bars 5-9):  high 11, low 9
+        M5[2] (00:10, bars 10-14): low 12   -> FVG [11, 12] forms here
+        M5[3] (00:15, bars 15-19): close 13 -> IFVG confirmed (close > zone high)
+        M5[4] (00:20, bars 20-24): close 13 (zone stays unfilled)
+        """
+        idx = pd.date_range("2025-01-01", periods=25, freq="1min")
+        return pd.DataFrame(
+            {
+                "open": [
+                    9,
+                    9,
+                    9,
+                    9,
+                    9,
+                    10,
+                    9,
+                    9,
+                    10,
+                    9,
+                    12,
+                    12,
+                    12,
+                    12,
+                    12,
+                    13,
+                    13,
+                    12,
+                    12,
+                    12,
+                    13,
+                    13,
+                    12,
+                    12,
+                    12,
+                ],
+                "high": [
+                    10,
+                    11,
+                    10,
+                    11,
+                    10,
+                    11,
+                    10,
+                    11,
+                    10,
+                    10,
+                    13,
+                    14,
+                    13,
+                    14,
+                    13,
+                    14,
+                    13,
+                    14,
+                    13,
+                    14,
+                    14,
+                    13,
+                    14,
+                    13,
+                    14,
+                ],
+                "low": [
+                    9,
+                    9,
+                    9,
+                    9,
+                    9,
+                    9,
+                    9,
+                    9,
+                    9,
+                    9,
+                    12,
+                    12,
+                    12,
+                    12,
+                    12,
+                    12,
+                    12,
+                    12,
+                    12,
+                    12,
+                    12,
+                    12,
+                    12,
+                    12,
+                    12,
+                ],
+                "close": [
+                    9,
+                    10,
+                    9,
+                    10,
+                    9,
+                    10,
+                    9,
+                    10,
+                    9,
+                    9,
+                    12,
+                    13,
+                    12,
+                    13,
+                    12,
+                    13,
+                    12,
+                    13,
+                    12,
+                    13,
+                    13,
+                    12,
+                    13,
+                    12,
+                    13,
+                ],
+            },
+            index=idx,
+        )
+
+    def test_htf_fvg_not_visible_within_own_period(self, causal_m5_bars) -> None:
+        """The FVG forming at 00:10 must not be visible to M1 bars of that period."""
+        sig = detect_htf_fvg(causal_m5_bars, htf="M5")
+        bull = sig["htf_fvg_bullish"]
+        # bars 10-14 belong to the M5 bar where the FVG forms -> still hidden
+        assert (bull.iloc[10:15] == 0).all(), "FVG leaked to its own (unclosed) M5 period"
+        # bar 00:16 sits in the period after that M5 bar closes -> visible
+        assert sig.loc[pd.Timestamp("2025-01-01 00:16"), "htf_fvg_bullish"] == 1
+        assert sig.loc[pd.Timestamp("2025-01-01 00:16"), "htf_fvg_bullish_low"] == 11.0
+        assert sig.loc[pd.Timestamp("2025-01-01 00:16"), "htf_fvg_bullish_high"] == 12.0
+
+    def test_ltf_ifvg_confirmation_not_visible_within_own_period(self, causal_m5_bars) -> None:
+        """The IFVG confirming at 00:15 must only be visible from 00:20 onward."""
+        sig = detect_ltf_ifvg(causal_m5_bars, primary_tf="M5")
+        conf = sig["ltf_ifvg_bullish_confirmed"]
+        # bars 15-19: confirmation happens in this M5 period -> still hidden
+        assert (conf.iloc[15:20] == 0).all(), "IFVG confirmation leaked into its own period"
+        # bar 00:20 is the first M1 bar of the period after confirmation -> visible
+        assert sig.loc[pd.Timestamp("2025-01-01 00:20"), "ltf_ifvg_bullish_confirmed"] == 1
+
+    def test_po3_entries_no_entry_before_confirmation_visible(self, causal_m5_bars) -> None:
+        """detect_po3_entries must not fire retest entries before the confirmation is observable."""
+        res = detect_po3_entries(causal_m5_bars, htf="M5", primary_tf="M5")
+        pre = res.loc[: pd.Timestamp("2025-01-01 00:19"), "entry_long"]
+        assert (pre == 0).all(), "entry fired before IFVG confirmation was observable"
+        # once the confirmation (00:20) is visible, a close at 00:21 retests the
+        # zone [11, 12] -> long entry fires
+        assert res.loc[pd.Timestamp("2025-01-01 00:21"), "entry_long"] == 1
