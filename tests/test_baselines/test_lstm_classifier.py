@@ -13,6 +13,10 @@ from quant_rl.baselines import (
     build_sweep_dataset,
 )
 
+# Real torch training inside these tests: minutes on CPU. Tagged slow so the
+# `-m 'not slow'` inner loop stays fast; CI runs the full suite.
+pytestmark = pytest.mark.slow
+
 
 def _make_bars_with_sweep(n: int = 200) -> pd.DataFrame:
     """Range-bound bars that break out upward near the end."""

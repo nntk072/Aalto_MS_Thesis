@@ -26,6 +26,11 @@ from scripts.train_rl import main as train_rl_main
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG = str(REPO_ROOT / "quant_rl" / "config" / "default.yaml")
 
+# Module-level: these smoke tests invoke real (tiny-budget) training runs.
+# Marked slow so the default `-m 'not slow'` inner loop stays fast; CI still
+# runs the full suite. See [tool.pytest.ini_options] markers in pyproject.toml.
+pytestmark = pytest.mark.slow
+
 
 def _make_bars_csv(path: Path, n_bars: int = 3000) -> Path:
     """Write a tiny synthetic bars CSV spanning the default train/test split.

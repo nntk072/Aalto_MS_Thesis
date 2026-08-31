@@ -10,6 +10,7 @@ Reward: Differential Sharpe Ratio (DSR) or Sweep Confirmation Reward.
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, cast
 
 import gymnasium as gym
@@ -165,6 +166,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         else:
             self.reward_fn = DSRReward(eta=dsr_eta)
 
+        # Entry-gate: warn once (not per-step) if required features are missing.
+        self._entry_gate_warned: bool = False
+
         # Action space: continuous or discrete
         self.continuous_actions = continuous_actions
         self.max_risk_frac = max_risk_frac
@@ -247,6 +251,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.equity_curve = [self.initial_balance]
         self.pnl_history = [0.0]
         self.trade_log: list[dict[str, Any]] = []
+        # Warn-once flag for the entry gate; re-arm per episode so a new
+        # feature matrix (possibly missing gate columns) warns again.
+        self._entry_gate_warned = False
 
         # Reset reward function
         self.reward_fn.reset()
@@ -303,6 +310,16 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             col in feat_row.index
             for col in ["london_high", "london_low", "asian_high", "asian_low", "volume_spike"]
         ):
+            # Features missing: the gate cannot evaluate, so it would silently
+            # allow every entry. Warn once rather than spamming every step.
+            if not self._entry_gate_warned:
+                warnings.warn(
+                    "Entry-gate features (london/asian levels, volume_spike) missing "
+                    "from feature matrix — gate falls back to allowing all entries. "
+                    "Check that session-liquidity and volume-spike features are enabled.",
+                    stacklevel=2,
+                )
+                self._entry_gate_warned = True
             return True  # Fallback: allow if features missing
 
         london_high = float(feat_row["london_high"])
@@ -624,10 +641,18 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
                         entry_price = float(fill_ask if discrete_action == 1 else fill_bid)
 
-                        # Track whether structure levels were available so we
-                        # never open a naked position (no SL/TP) as a fallback.
+                        # Track whether structure levels were available AND
+                        # geometrically valid so we never open a naked position
+                        # (no SL/TP) as a fallback and never crash the episode.
                         has_levels = False
-                        if discrete_action == 1 and not np.isnan(last_swing_low):
+                        # Long needs the swing low strictly below entry; short
+                        # needs the swing high strictly above entry. Stale/
+                        # equal levels would make compute_sl_tp_* raise.
+                        if (
+                            discrete_action == 1
+                            and not np.isnan(last_swing_low)
+                            and last_swing_low < entry_price
+                        ):
                             sl_price, tp_price = compute_sl_tp_long(
                                 entry_price,
                                 last_swing_low,
@@ -645,7 +670,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                                 max_loss_cap=self.max_loss_per_trade_usd,
                             )
                             has_levels = True
-                        elif discrete_action == -1 and not np.isnan(last_swing_high):
+                        elif (
+                            discrete_action == -1
+                            and not np.isnan(last_swing_high)
+                            and last_swing_high > entry_price
+                        ):
                             sl_price, tp_price = compute_sl_tp_short(
                                 entry_price,
                                 last_swing_high,

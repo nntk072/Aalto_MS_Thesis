@@ -11,6 +11,8 @@
 #   # torch (index-scoped, installed WITHOUT -c: constraints pin PyPI-only
 #   # transitive versions absent from the torch index):
 #   pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu
+#   # GPU variant (Blackwell needs cu130 for torch 2.13.0; no +cpu suffix):
+#   pip install --index-url https://download.pytorch.org/whl/cu130 torch==2.13.0
 #
 # Single source of truth is uv.lock; regenerate with `make lock-export`.
 
