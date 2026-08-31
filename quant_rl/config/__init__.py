@@ -10,9 +10,28 @@ from omegaconf import DictConfig, OmegaConf
 _DEFAULT_CFG = Path(__file__).parent / "default.yaml"
 
 
-def load_config(overrides: list[str] | None = None) -> DictConfig:
-    """Load default config, then apply string overrides like key=value."""
-    cfg = cast(DictConfig, OmegaConf.load(_DEFAULT_CFG))
+def load_config(
+    overrides: list[str] | None = None,
+    config_path: str | Path | None = None,
+) -> DictConfig:
+    """Load config from ``config_path`` (default.yaml when None), then apply overrides.
+
+    Parameters
+    ----------
+    overrides : list[str], optional
+        ``key=value`` string overrides applied on top of the loaded YAML.
+    config_path : str | Path, optional
+        YAML config file to load instead of ``quant_rl/config/default.yaml``.
+        Lets ``quant_rl/train/train_rl.py`` load the Chain B variant configs
+        (``config/features_*_mtf.yaml``) just like ``scripts/train_rl.py``.
+    """
+    cfg_path = Path(config_path) if config_path else _DEFAULT_CFG
+    base = cast(DictConfig, OmegaConf.load(_DEFAULT_CFG))
+    extra = cast(DictConfig, OmegaConf.load(cfg_path)) if config_path else OmegaConf.create()
+    # Merge over default.yaml: works both for Chain B/F variant *fragments*
+    # (config/features_*_mtf.yaml only override the features.* keys they set,
+    # everything else comes from defaults) and for full standalone configs.
+    cfg = cast(DictConfig, OmegaConf.merge(base, extra))
     if overrides:
         for ov in overrides:
             key, _, val = ov.partition("=")

@@ -137,7 +137,7 @@ def main() -> None:
     secondary_m1 = data.get(secondary_sym, {}).get("M1")
 
     cache_dir = Path(cfg.data.cache_dir)
-    feat_cache = cache_dir / f"{primary_sym}_features_v2_htf.parquet"
+    feat_cache = cache_dir / f"{primary_sym}_features_v4_po3causal.parquet"
     features = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
 
     # Date-based train / test split

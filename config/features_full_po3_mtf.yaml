@@ -1,0 +1,14 @@
+features:
+  # Chain A multi-timeframe spine (identical across all three Chain B variants).
+  htf_timeframes: ["M5", "M15", "H1"]
+  # Chain F combined config: all three additive blocks enabled simultaneously.
+  # technical + structure            (base, always on)
+  # + PO3 time-of-day phase tag      (include_po3)
+  # + per-TF FVG zone features       (include_fvg_ifvg)
+  # + full HTF-FVG -> LTF-IFVG pipeline with entry triggers (include_po3_full)
+  include_po3: true
+  include_fvg_ifvg: true
+  include_po3_full: true
+  # HTF / primary-LTF timeframes used by the full PO3 entry pipeline.
+  po3_htf: "M15"
+  po3_ltf: "M5"
