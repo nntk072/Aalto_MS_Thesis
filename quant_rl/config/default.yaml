@@ -76,6 +76,13 @@ features:
   # the M1 spine (Chain A). Each listed TF gets the same build_indicators()
   # call as M1, forward-filled with {TF}_{indicator} column names.
   htf_timeframes: ["M5", "M15", "H1"]
+  # Chain B/F opt-in feature blocks (all off by default; enabled by the
+  # per-variant config files in config/features_*_mtf.yaml).
+  include_po3: false            # PO3 time-of-day phase tag (accum/manip/distrib)
+  include_fvg_ifvg: false       # per-TF FVG zone features (in-zone flag + ATR dist)
+  include_po3_full: false       # full HTF FVG -> LTF IFVG -> entry-trigger pipeline
+  po3_htf: "M15"                # HTF for the full PO3 pipeline
+  po3_ltf: "M5"                 # primary (LTF) for the full PO3 pipeline
 
 env:
   obs_window: 60                       # T in [T, F] obs
