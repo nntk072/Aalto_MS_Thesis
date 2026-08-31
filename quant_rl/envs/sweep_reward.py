@@ -252,14 +252,22 @@ class CompositeReward:
         sweep_reward: SweepConfirmationReward,
         dsr_weight: float = 0.5,
         sweep_weight: float = 0.5,
+        dsr_eta: float = 0.01,
     ):
         self.sweep_reward = sweep_reward
         self.dsr_weight = dsr_weight
         self.sweep_weight = sweep_weight
+        # Persist DSR state across steps so the EMA Sharpe estimate
+        # actually accumulates. A fresh DSRReward() per call would reset
+        # _A/_B every step and kill the signal.
+        from ..envs.reward import DSRReward
+
+        self._dsr_fn = DSRReward(eta=dsr_eta)
 
     def reset(self) -> None:
         """Reset all component reward functions."""
         self.sweep_reward.reset()
+        self._dsr_fn.reset()
 
     def __call__(
         self,
@@ -286,13 +294,9 @@ class CompositeReward:
         For backward compatibility, accepts DSR arguments and uses sweep
         reward only when sweep parameters are provided.
         """
-        # Compute DSR reward if not provided
+        # Compute DSR reward if not provided (reuses persistent state)
         if dsr_reward is None:
-            # Import here to avoid circular dependency
-            from ..envs.reward import DSRReward
-
-            dsr_fn = DSRReward(eta=0.01)
-            dsr_reward = dsr_fn(
+            dsr_reward = self._dsr_fn(
                 pnl_step,
                 daily_loss=daily_loss,
                 daily_loss_limit=daily_loss_limit,
