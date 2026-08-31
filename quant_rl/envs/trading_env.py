@@ -624,6 +624,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
                         entry_price = float(fill_ask if discrete_action == 1 else fill_bid)
 
+                        # Track whether structure levels were available so we
+                        # never open a naked position (no SL/TP) as a fallback.
+                        has_levels = False
                         if discrete_action == 1 and not np.isnan(last_swing_low):
                             sl_price, tp_price = compute_sl_tp_long(
                                 entry_price,
@@ -641,6 +644,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                                 max_lot=self.max_lot,
                                 max_loss_cap=self.max_loss_per_trade_usd,
                             )
+                            has_levels = True
                         elif discrete_action == -1 and not np.isnan(last_swing_high):
                             sl_price, tp_price = compute_sl_tp_short(
                                 entry_price,
@@ -658,12 +662,16 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                                 max_lot=self.max_lot,
                                 max_loss_cap=self.max_loss_per_trade_usd,
                             )
+                            has_levels = True
                         else:
-                            lots = 1.0  # Fallback if no swings available
+                            # No swing levels available: reject the entry
+                            # (treat as hold) rather than open a naked position.
+                            lots = 0.0
 
-                        self.position = self.broker.open_position(
-                            self.account, (fill_bid, fill_ask), lots, discrete_action
-                        )
+                        if has_levels:
+                            self.position = self.broker.open_position(
+                                self.account, (fill_bid, fill_ask), lots, discrete_action
+                            )
                         if self.position:
                             self.position.sl_price = sl_price
                             self.position.tp_price = tp_price
