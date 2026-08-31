@@ -64,6 +64,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         pre_ny_data: pd.DataFrame | None = None,
         ny_session_start_idx: int | None = None,
         fill_latency_bars: int = 0,
+        max_episode_steps: int | None = None,
+        normalize_account: bool = True,
     ):
         """Initialize trading environment.
 
@@ -132,6 +134,25 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             Index of the first NY session bar (16:30 UTC+3). Used to compute
             minutes_since_open for the sweep time-decay penalty. If None, the
             observation window length is used as the default.
+        max_episode_steps : int | None
+            Hard cap on episode length in environment steps. When the agent
+            has taken this many steps, the episode ends with
+            ``truncated=True`` (Gymnasium standard). ``None`` means no
+            truncation, so episodes run to the end of the data. PPO's
+            ``n_steps`` is the dominant rollout-length control; this is a
+            safety net against infinite episodes on small datasets.
+        normalize_account : bool
+            If True (default), the ``account`` vector in the observation is
+            rescaled so the per-element magnitudes are roughly comparable
+            with the z-scored ``seq`` features:
+              - equity:    log(equity / initial_balance)
+              - pos_dir:   -1 / 0 / +1
+              - open_pnl:  open_pnl / initial_balance
+              - unrealised_r: unchanged (already a percentage)
+              - dist_to_sl: dist_to_sl / current_bar_close
+            Without this, the equity and pnl fields sit at ~1e5 while the
+            z-scored seq features sit at ~1.0, dominating the policy's
+            MLP heads. Disable with ``False`` to recover the raw values.
         """
         self.bars = bars
         self.features = features
@@ -180,6 +201,15 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # Chain C: decision-to-fill latency, expressed in whole M1 bars.
         # 0 = idealised next-bar fill (previous behaviour); 1 = 1-bar delay, etc.
         self.fill_latency_bars = max(0, int(fill_latency_bars))
+
+        # Hard cap on episode length. None → run to data end; int → truncate
+        # at that step count (Gymnasium standard: truncated=True).
+        self.max_episode_steps: int | None = (
+            int(max_episode_steps) if max_episode_steps is not None else None
+        )
+        # Whether to rescale the account vector so its per-element magnitudes
+        # are comparable with the z-scored seq features. See __init__ docstring.
+        self.normalize_account = bool(normalize_account)
 
         if use_vae:
             if vae is None:
@@ -251,6 +281,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.equity_curve = [self.initial_balance]
         self.pnl_history = [0.0]
         self.trade_log: list[dict[str, Any]] = []
+        # Step counter within the current episode (0 at reset). Distinct
+        # from ``step_idx`` (the absolute bar index); used to enforce
+        # ``max_episode_steps`` truncation.
+        self.episode_step_count = 0
         # Warn-once flag for the entry gate; re-arm per episode so a new
         # feature matrix (possibly missing gate columns) warns again.
         self._entry_gate_warned = False
@@ -777,7 +811,20 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         obs = self._get_observation()
         info = {"equity": self.account.equity, "position": self.position is not None}
 
+        # Increment step counters: ``step_idx`` is the absolute bar index into
+        # the data; ``episode_step_count`` is the within-episode counter used
+        # to enforce ``max_episode_steps``. Bumping the per-episode counter
+        # *before* the truncation check lets a configured cap of N allow
+        # exactly N step() returns.
         self.step_idx += 1
+        self.episode_step_count += 1
+
+        # Apply max_episode_steps truncation last so it overrides
+        # data-end (done=True) and guardrail-breach (done=True) signals
+        # consistently: when the cap fires, we report truncated=True and
+        # keep the rest of the per-step accounting intact.
+        if self.max_episode_steps is not None and self.episode_step_count >= self.max_episode_steps:
+            truncated = True
 
         return obs, float(reward), done, truncated, info
 
@@ -841,16 +888,36 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 else self.position.sl_price - self.position.entry_price
             )
 
-        account_state = np.array(
-            [
-                self.account.equity,
-                pos_dir,
-                open_pnl,
-                unrealised_r,
-                dist_to_sl,
-            ],
-            dtype=np.float32,
-        )
+        if self.normalize_account:
+            # Rescale so the account vector matches the ~O(1) magnitude of
+            # the z-scored seq features. Without this, equity (1e5) and
+            # raw open_pnl dwarf the time-series signal.
+            init_bal = self.initial_balance
+            norm_equity = float(np.log(self.account.equity / init_bal)) if init_bal > 0 else 0.0
+            norm_pnl = open_pnl / init_bal if init_bal > 0 else 0.0
+            # The current bar is only known inside step(); in reset() we
+            # fall back to the first bar of the obs window. Both are
+            # O(1)-magnitude normalizers, so the choice barely matters.
+            if 0 <= self.step_idx < len(self.bars):
+                current_close = float(self.bars.iloc[self.step_idx]["close"])
+            else:
+                current_close = 1.0
+            norm_dist = dist_to_sl / current_close if current_close > 0 else 0.0
+            account_state = np.array(
+                [norm_equity, pos_dir, norm_pnl, unrealised_r, norm_dist],
+                dtype=np.float32,
+            )
+        else:
+            account_state = np.array(
+                [
+                    self.account.equity,
+                    pos_dir,
+                    open_pnl,
+                    unrealised_r,
+                    dist_to_sl,
+                ],
+                dtype=np.float32,
+            )
 
         obs: dict[str, np.ndarray[Any, Any]] = {"seq": seq, "account": account_state}
 
