@@ -22,6 +22,7 @@ coverage==7.15.2
 curl-cffi==0.13.0
 cycler==0.12.1
 cython==3.1.4
+execnet==2.1.2
 farama-notifications==0.0.6
 filelock==3.31.0
 fonttools==4.60.1
@@ -62,6 +63,7 @@ pyparsing==3.2.5
 pyproject-hooks==1.2.0
 pytest==9.1.1
 pytest-cov==7.1.0
+pytest-xdist==3.8.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 pytz==2025.2
