@@ -48,6 +48,7 @@ def evaluate_model(
     max_loss_per_trade_usd: float = 100.0,
     dsr_eta: float = 0.01,
     deterministic: bool = True,
+    max_episode_steps: int | None = None,
 ) -> dict[str, Any]:
     """Walk a trained PPO ``model`` over *bars*/*features* and collect trades.
 
@@ -81,6 +82,7 @@ def evaluate_model(
         max_loss_per_trade_usd=max_loss_per_trade_usd,
         dsr_eta=dsr_eta,
         episodic=False,
+        max_episode_steps=max_episode_steps,
     )
 
     obs, _ = env.reset()

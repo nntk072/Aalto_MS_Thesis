@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 from quant_rl.backtest.engine import run_backtest
-from quant_rl.baselines.rule_based import macd_ema50_baseline
+from quant_rl.baselines.rule_based import ema_crossover, macd_ema50_baseline, rsi_mean_reversion
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import build_tick_books, run_pipeline
 from quant_rl.data.split import get_split_config, split_train_test
@@ -41,62 +41,47 @@ def _macd_policy(obs: np.ndarray) -> int:
     return 0
 
 
-def _make_macd_policy(actions_series: pd.Series, bar_times: pd.DatetimeIndex):
-    """Create a policy function from precomputed MACD actions.
+def _make_indexed_policy(actions_series: pd.Series, obs_window: int):
+    """Build a stateful policy that returns the precomputed action for the
+    current absolute bar index.
 
-    Parameters
-    ----------
-    actions_series : pd.Series
-        Precomputed actions indexed by timestamp (+1, -1, 0, 2).
-    bar_times : pd.DatetimeIndex
-        Bar times from backtest (for indexing).
+    Mirrors ``_create_macd_policy``: starts at ``obs_window`` because the
+    engine drives ``policy(obs)`` with ``obs = feat_array[i - obs_window : i]``,
+    so the first call corresponds to absolute bar index ``obs_window``.
     """
-    idx_to_action = {ts: actions_series.loc[ts] for ts in actions_series.index}
+
+    state = {"i": obs_window}
 
     def policy(obs: np.ndarray) -> int:
-        # Note: This is called during backtest with obs from feature_array
-        # We cannot access the timestamp here in the standard API
-        # So we use a closure with state to track progress
-        return 0  # Placeholder
+        i = state["i"]
+        if i < len(actions_series):
+            action = int(actions_series.iloc[i])
+        else:
+            action = 0
+        state["i"] += 1
+        return action
 
-    # Return closure that will be used with special handling in backtest
-    return idx_to_action  # Return dict for now, will handle in main()
+    return policy
 
 
 def _ema_policy(obs: np.ndarray) -> int:
-    """Simple EMA crossover baseline (fast EMA > slow EMA = long).
+    """Placehodler — replaced by a real indexed policy in main().
 
-    This reads supposed EMA features from the observation.
+    Kept as a module-level no-op so the ``STRATEGIES`` registry below can
+    import cleanly; the actual EMA crossover is wired in main() via
+    :func:`ema_crossover` and :func:`_make_indexed_policy`.
     """
-    if len(obs) < 2 or obs.shape[1] < 3:
-        return 0
-
-    # Placeholder: use returns heuristic
-    last_ret = obs[-1, 0] if obs.shape[1] > 0 else 0
-    if last_ret > 0.0001:
-        return 1
-    elif last_ret < -0.0001:
-        return -1
-    else:
-        return 0
+    return 0
 
 
 def _rsi_policy(obs: np.ndarray) -> int:
-    """Simple RSI extremes baseline (RSI < 30 = buy, RSI > 70 = sell).
+    """Placeholder — replaced by a real indexed policy in main().
 
-    Placeholder implementation.
+    Kept as a module-level no-op so the ``STRATEGIES`` registry below can
+    import cleanly; the actual RSI mean-reversion is wired in main() via
+    :func:`rsi_mean_reversion` and :func:`_make_indexed_policy`.
     """
-    if len(obs) < 2:
-        return 0
-
-    # Placeholder: use returns heuristic
-    last_ret = obs[-1, 0] if obs.shape[1] > 0 else 0
-    if last_ret > 0.0001:
-        return 1
-    elif last_ret < -0.0001:
-        return -1
-    else:
-        return 0
+    return 0
 
 
 STRATEGIES = {
@@ -188,6 +173,10 @@ def main() -> None:
     # For MACD baseline: precompute actions and create special policy
     macd_train_actions = None
     macd_test_actions = None
+    ema_train_actions = None
+    ema_test_actions = None
+    rsi_train_actions = None
+    rsi_test_actions = None
 
     if args.strategy == "macd":
         # Precompute MACD actions (returns series with +1, -1, 0, 2)
@@ -198,6 +187,16 @@ def main() -> None:
         max_loss_per_trade = None
 
         log.info("MACD baseline: computed precomputed actions for train & test splits")
+    elif args.strategy == "ema":
+        # Real EMA crossover: 9 vs 21 on close.
+        ema_train_actions = ema_crossover(train_bars, fast=9, slow=21)
+        ema_test_actions = ema_crossover(test_bars, fast=9, slow=21)
+        log.info("EMA baseline: computed precomputed actions for train & test splits")
+    elif args.strategy == "rsi":
+        # Real RSI mean-reversion: <30 long, >70 short, neutral=flat.
+        rsi_train_actions = rsi_mean_reversion(train_bars, period=14)
+        rsi_test_actions = rsi_mean_reversion(test_bars, period=14)
+        log.info("RSI baseline: computed precomputed actions for train & test splits")
 
     def _create_macd_policy(actions_series, obs_window):
         """Create a policy that returns precomputed action for each bar.
@@ -219,21 +218,33 @@ def main() -> None:
 
     policy = STRATEGIES[args.strategy]
 
-    # Override policy for MACD
-    macd_train_policy = None
-    macd_test_policy = None
+    # Precomputed policies per strategy
+    train_precomputed_policy = None
+    test_precomputed_policy = None
     if args.strategy == "macd":
         obs_window = cfg.env.obs_window if hasattr(cfg.env, "obs_window") else 60
-        macd_train_policy = _create_macd_policy(macd_train_actions, obs_window)
-        macd_test_policy = _create_macd_policy(macd_test_actions, obs_window)
+        train_precomputed_policy = _create_macd_policy(macd_train_actions, obs_window)
+        test_precomputed_policy = _create_macd_policy(macd_test_actions, obs_window)
+    elif args.strategy == "ema":
+        obs_window = cfg.env.obs_window if hasattr(cfg.env, "obs_window") else 60
+        train_precomputed_policy = _make_indexed_policy(ema_train_actions, obs_window)
+        test_precomputed_policy = _make_indexed_policy(ema_test_actions, obs_window)
+    elif args.strategy == "rsi":
+        obs_window = cfg.env.obs_window if hasattr(cfg.env, "obs_window") else 60
+        train_precomputed_policy = _make_indexed_policy(rsi_train_actions, obs_window)
+        test_precomputed_policy = _make_indexed_policy(rsi_test_actions, obs_window)
 
-    def _run(bars, feats, ticks, label: str, macd_policy=None) -> tuple[dict, object]:
+    def _run(bars, feats, ticks, label: str, indexed_policy=None) -> tuple[dict, object]:
         log.info("Running backtest [%s] strategy=%s …", label, args.strategy)
 
-        # Use MACD policy if provided, otherwise use generic strategy
-        run_policy = macd_policy if macd_policy else policy
+        # Use the precomputed policy if we built one (macd/ema/rsi), else
+        # fall back to the generic STRATEGIES entry. This is the spot where
+        # the placeholders are overridden with real indicator logic.
+        if indexed_policy is not None:
+            run_policy = indexed_policy
+        else:
+            run_policy = policy
 
-        # For MACD: use hold_on_zero and exit_action
         result = run_backtest(
             bars=bars,
             features=feats,
@@ -242,7 +253,7 @@ def main() -> None:
             initial_balance=cfg.account.initial_balance,
             max_loss_per_trade_usd=max_loss_per_trade,
             tickbook=ticks,
-            use_structure_sl_tp=False,  # MACD has no structure SL/TP
+            use_structure_sl_tp=False,
             risk_frac=risk_frac,
             rr_ratio=rr_ratio,
             swing_buffer_pts=swing_buffer,
@@ -267,8 +278,10 @@ def main() -> None:
         )
         return result, m
 
-    train_result, train_m = _run(train_bars, train_feat, train_ticks, "training", macd_train_policy)
-    test_result, test_m = _run(test_bars, test_feat, test_ticks, "testing", macd_test_policy)
+    train_result, train_m = _run(
+        train_bars, train_feat, train_ticks, "training", train_precomputed_policy
+    )
+    test_result, test_m = _run(test_bars, test_feat, test_ticks, "testing", test_precomputed_policy)
 
     if not args.no_save:
         run_dir = save_run(
