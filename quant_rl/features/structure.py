@@ -161,8 +161,6 @@ def detect_session_levels(
 
     result = result.ffill()
 
-    result = result.ffill()
-
     return result
 
 

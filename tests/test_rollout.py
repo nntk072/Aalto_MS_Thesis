@@ -54,9 +54,20 @@ def _make_bars(n: int, session_split: int | None = None) -> pd.DataFrame:
 
 
 def _make_features(bars: pd.DataFrame) -> pd.DataFrame:
-    """Trivial feature matrix aligned 1:1 with *bars* (no swing/SMT columns
-    needed — entries fall back to lots=1.0, sl_price/tp_price=None)."""
-    return pd.DataFrame({"ret_1": np.zeros(len(bars))}, index=bars.index)
+    """Trivial feature matrix aligned 1:1 with *bars*.
+
+    Provides swing levels so entries compute structure SL/TP (the env no
+    longer opens naked lots=1.0 positions when swing levels are missing).
+    """
+    n = len(bars)
+    return pd.DataFrame(
+        {
+            "ret_1": np.zeros(n),
+            "last_swing_low": np.full(n, 19990.0),
+            "last_swing_high": np.full(n, 20010.0),
+        },
+        index=bars.index,
+    )
 
 
 def test_evaluate_model_produces_trades_and_valid_equity():

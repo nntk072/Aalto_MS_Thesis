@@ -118,10 +118,14 @@ def test_callback_co_trains_with_ppo(synthetic):
     from quant_rl.models.auxiliary import AuxiliaryLoss
 
     loss_fn = AuxiliaryLoss(head, aux_weight=0.1)
-    obs_t = torch.zeros(4, 4)  # CartPole Box(4,) obs — extractor input
+    obs_t = torch.zeros(4, 4, device=model.policy.device)  # CartPole Box(4,) obs
     latent = model.policy.extract_features(obs_t, model.policy.features_extractor)
     before_head = {k: v.clone() for k, v in head.state_dict().items()}
-    loss = loss_fn(torch.zeros(()), latent, torch.randn(4, 5))
+    loss = loss_fn(
+        torch.zeros((), device=model.policy.device),
+        latent,
+        torch.randn(4, 5, device=model.policy.device),
+    )
     loss.backward()
     optimizer.step()
     after_head = head.state_dict()

@@ -245,4 +245,78 @@ class TestCompositeReward:
         composite.reset()
 
         assert sweep_reward.prev_price is None
+        assert sweep_reward.prev_price is None
+        assert sweep_reward.in_london_long_sweep is False
+
+    def test_composite_dsr_state_persists(self) -> None:
+        """DSR EMA state must accumulate across steps, not reset each call.
+
+        The old bug created a fresh DSRReward() inside __call__, zeroing the
+        EMA (A, B) every step so the DSR signal was always ~0. With a
+        persistent instance, feeding repeated positive PnL should produce a
+        non-zero, evolving DSR component.
+        """
+        sweep_reward = SweepConfirmationReward()
+        composite = CompositeReward(sweep_reward=sweep_reward, dsr_weight=1.0, sweep_weight=0.0)
+        composite.reset()
+
+        rewards = []
+        for _ in range(20):
+            r = composite(
+                pnl_step=50.0,
+                daily_loss=0.0,
+                daily_loss_limit=5000.0,
+                initial_balance=100_000.0,
+                breach=False,
+            )
+            rewards.append(r)
+
+        assert any(abs(r) > 1e-6 for r in rewards), "DSR component is dead (all zeros)"
+        assert len(set(round(r, 8) for r in rewards)) > 1, (
+            "DSR signal is static — EMA not accumulating"
+        )
+
+    def test_composite_dsr_reset_clears_state(self) -> None:
+        """reset() must clear the DSR EMA so episodes start cold.
+
+        Note: a cold-start first step does NOT yield ~0 — with a single sample
+        the DSR denominator (B - A²) is tiny, so the ratio is large. The right
+        invariant is cold-start equivalence: after reset(), the reward must be
+        identical to what a fresh instance produces on its first step.
+        """
+        sweep_reward = SweepConfirmationReward()
+        composite = CompositeReward(sweep_reward=sweep_reward, dsr_weight=1.0, sweep_weight=0.0)
+        composite.reset()
+
+        for _ in range(10):
+            composite(
+                pnl_step=50.0,
+                daily_loss=0.0,
+                daily_loss_limit=5000.0,
+                initial_balance=100_000.0,
+                breach=False,
+            )
+
+        composite.reset()
+        first_after_reset = composite(
+            pnl_step=50.0,
+            daily_loss=0.0,
+            daily_loss_limit=5000.0,
+            initial_balance=100_000.0,
+            breach=False,
+        )
+
+        # Reference: a fresh instance's first step (same cold EMA state A=B=0)
+        fresh = CompositeReward(
+            sweep_reward=SweepConfirmationReward(), dsr_weight=1.0, sweep_weight=0.0
+        )
+        fresh_first = fresh(
+            pnl_step=50.0,
+            daily_loss=0.0,
+            daily_loss_limit=5000.0,
+            initial_balance=100_000.0,
+            breach=False,
+        )
+
+        assert first_after_reset == pytest.approx(fresh_first, abs=1e-12)
         assert sweep_reward.in_london_long_sweep is False
