@@ -57,7 +57,12 @@ def trending_bars() -> pd.DataFrame:
 def _make_env(bars: pd.DataFrame, latency: int):
     from quant_rl.envs.trading_env import TradingEnv
 
+    # Swing levels below/above the uptrend's entry prices so long entries
+    # compute structure SL/TP. Without them the env now rejects entries
+    # (no naked positions), which would skip the latency assertions.
     feats = pd.DataFrame(0.0, index=bars.index, columns=["f0"])
+    feats["last_swing_low"] = 19990.0
+    feats["last_swing_high"] = 20020.0
     return TradingEnv(
         bars=bars,
         features=feats,
@@ -71,7 +76,8 @@ def test_latency_env_constructs_and_steps(trending_bars, latency):
     """Env accepts fill_latency_bars and steps without error."""
     env = _make_env(trending_bars, latency)
     obs, _ = env.reset(seed=42)
-    assert obs["seq"].shape == (10, 1)
+    # 3 feature columns: f0 + last_swing_low + last_swing_high
+    assert obs["seq"].shape == (10, 3)
     for _ in range(20):
         obs, *_ = env.step(0)  # hold
     assert env.fill_latency_bars == latency
