@@ -48,6 +48,7 @@ dependencies = [
     "omegaconf>=2.3",
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "pytest-xdist>=3.6",
     "mplfinance>=0.12",
     "pandas-stubs>=2.2.3",
 ]
@@ -58,19 +59,33 @@ dev = [
     "ruff>=0.7",
 ]
 
-# Use the CPU build of torch so `uv sync` / uv.lock stay small and match CI.
-# Remove this section (and re-lock) if you need GPU/CUDA torch locally.
+# Torch source: CPU by default so `uv sync` / uv.lock stay small and match CI
+# (CI installs from the CPU lock). To use GPU/CUDA torch locally, swap the
+# active line in [tool.uv.sources] (comment/uncomment) and run `uv sync`.
+# NOTE: the RTX PRO 500 (Blackwell, sm_120) requires CUDA >= 12.8 kernels, and
+# torch 2.13.0 is only published for cp312 linux on the cu130 index (cu128
+# stops at 2.11.0), hence cu130.
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
+# torch = { index = "pytorch-gpu" }
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
+# GPU index (Blackwell-capable CUDA 13.0 build; activate via [tool.uv.sources]).
+[[tool.uv.index]]
+name = "pytorch-gpu"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v"
+markers = [
+    "slow: torch/SB3 training tests (minutes on CPU); deselect with -m 'not slow'",
+]
 
 [tool.ruff]
 line-length = 100

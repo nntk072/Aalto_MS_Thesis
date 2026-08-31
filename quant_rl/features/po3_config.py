@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+import numpy as np
 import pandas as pd
 
 
@@ -65,49 +66,36 @@ def detect_fvg(
     if config is None:
         config = FVGConfig()
 
-    df = bars.copy()
-    n = len(df)
+    high = bars["high"]
+    low = bars["low"]
 
-    fvg_bullish = pd.Series(0, index=df.index, dtype=int)
-    fvg_bearish = pd.Series(0, index=df.index, dtype=int)
-    fvg_bullish_low = pd.Series(float("nan"), index=df.index)
-    fvg_bullish_high = pd.Series(float("nan"), index=df.index)
-    fvg_bearish_low = pd.Series(float("nan"), index=df.index)
-    fvg_bearish_high = pd.Series(float("nan"), index=df.index)
+    # bar1 = bar at i-2, bar3 = current bar (i). shift(2) aligns bar1 with bar3.
+    bar1_high = high.shift(2)
+    bar1_low = low.shift(2)
+    bar3_high = high
+    bar3_low = low
 
-    # Detect FVG using 3-bar rule
-    for i in range(2, n):
-        bar1_high = df["high"].iloc[i - 2]
-        bar1_low = df["low"].iloc[i - 2]
-        bar3_high = df["high"].iloc[i]
-        bar3_low = df["low"].iloc[i]
+    # Bullish FVG: bar3.low > bar1.high (with min imbalance threshold)
+    bullish_imbalance = bar3_low - bar1_high
+    bullish_mask = (bullish_imbalance > 0) & (bullish_imbalance >= config.min_imbalance_pts)
 
-        # Bullish FVG: bar3.low > bar1.high
-        if bar3_low > bar1_high:
-            imbalance = bar3_low - bar1_high
-            if imbalance >= config.min_imbalance_pts:
-                fvg_bullish.iloc[i] = 1
-                fvg_bullish_low.iloc[i] = bar1_high  # Bottom of FVG zone
-                fvg_bullish_high.iloc[i] = bar3_low  # Top of FVG zone
+    # Bearish FVG: bar3.high < bar1.low (with min imbalance threshold)
+    bearish_imbalance = bar1_low - bar3_high
+    bearish_mask = (bearish_imbalance > 0) & (bearish_imbalance >= config.min_imbalance_pts)
 
-        # Bearish FVG: bar3.high < bar1.low
-        if bar3_high < bar1_low:
-            imbalance = bar1_low - bar3_high
-            if imbalance >= config.min_imbalance_pts:
-                fvg_bearish.iloc[i] = 1
-                fvg_bearish_low.iloc[i] = bar3_high  # Bottom of FVG zone
-                fvg_bearish_high.iloc[i] = bar1_low  # Top of FVG zone
+    fvg_bullish = bullish_mask.astype(int)
+    fvg_bearish = bearish_mask.astype(int)
 
     result = pd.DataFrame(
         {
             "fvg_bullish": fvg_bullish,
             "fvg_bearish": fvg_bearish,
-            "fvg_bullish_low": fvg_bullish_low,
-            "fvg_bullish_high": fvg_bullish_high,
-            "fvg_bearish_low": fvg_bearish_low,
-            "fvg_bearish_high": fvg_bearish_high,
+            "fvg_bullish_low": bar1_high.where(bullish_mask),
+            "fvg_bullish_high": bar3_low.where(bullish_mask),
+            "fvg_bearish_low": bar3_high.where(bearish_mask),
+            "fvg_bearish_high": bar1_low.where(bearish_mask),
         },
-        index=df.index,
+        index=bars.index,
     )
 
     return result
@@ -166,45 +154,50 @@ def detect_ifvg_confirmation(
     df = bars.copy()
     n = len(df)
 
-    ifvg_bullish_confirmed = pd.Series(0, index=df.index, dtype=int)
-    ifvg_bearish_confirmed = pd.Series(0, index=df.index, dtype=int)
-    ifvg_bullish_low = pd.Series(float("nan"), index=df.index)
-    ifvg_bullish_high = pd.Series(float("nan"), index=df.index)
-    ifvg_bearish_low = pd.Series(float("nan"), index=df.index)
-    ifvg_bearish_high = pd.Series(float("nan"), index=df.index)
-
     # Track active FVG zones
     active_fvg_bullish = []  # List of (start_idx, fvg_low, fvg_high)
     active_fvg_bearish = []
 
+    # Pre-extract numpy arrays once: scalar access inside the loop via
+    # pandas .iloc is ~10x slower than ndarray indexing over 100k+ bars.
+    close_arr = df["close"].to_numpy(dtype=float)
+    bull_flag = fvg_df["fvg_bullish"].to_numpy(dtype=int)
+    bear_flag = fvg_df["fvg_bearish"].to_numpy(dtype=int)
+    bull_low_arr = fvg_df["fvg_bullish_low"].to_numpy(dtype=float)
+    bull_high_arr = fvg_df["fvg_bullish_high"].to_numpy(dtype=float)
+    bear_low_arr = fvg_df["fvg_bearish_low"].to_numpy(dtype=float)
+    bear_high_arr = fvg_df["fvg_bearish_high"].to_numpy(dtype=float)
+
+    confirm_out_bull = np.zeros(n, dtype=int)
+    confirm_out_bear = np.zeros(n, dtype=int)
+    out_bull_low = np.full(n, np.nan)
+    out_bull_high = np.full(n, np.nan)
+    out_bear_low = np.full(n, np.nan)
+    out_bear_high = np.full(n, np.nan)
+
+    threshold = config.close_through_threshold
+    max_age = 50  # bars; zones older than this are dropped
+
     for i in range(n):
         # Check for new FVGs
-        if i < len(fvg_df) and fvg_df["fvg_bullish"].iloc[i] == 1:
-            # FVG zone: from bar1_high to bar3_low
-            fvg_low = fvg_df["fvg_bullish_low"].iloc[i]
-            fvg_high = fvg_df["fvg_bullish_high"].iloc[i]
-            if i >= 2:
-                active_fvg_bullish.append((i, fvg_low, fvg_high))
-
-        if i < len(fvg_df) and fvg_df["fvg_bearish"].iloc[i] == 1:
-            # FVG zone: from bar3_high to bar1_low
-            fvg_high = fvg_df["fvg_bearish_high"].iloc[i]
-            fvg_low = fvg_df["fvg_bearish_low"].iloc[i]
-            if i >= 2:
-                active_fvg_bearish.append((i, fvg_low, fvg_high))
+        if i < len(fvg_df):
+            if bull_flag[i] == 1 and i >= 2:
+                active_fvg_bullish.append((i, bull_low_arr[i], bull_high_arr[i]))
+            if bear_flag[i] == 1 and i >= 2:
+                active_fvg_bearish.append((i, bear_low_arr[i], bear_high_arr[i]))
 
         # Check for IFVG confirmation (close-through)
-        close_price = df["close"].iloc[i]
+        close_price = close_arr[i]
 
         # Bullish confirmation: close above FVG zone
         for fvg_start, fvg_low, fvg_high in active_fvg_bullish[:]:
             fvg_size = fvg_high - fvg_low
             if fvg_size > 0:
                 close_through_pct = (close_price - fvg_high) / fvg_size
-                if close_through_pct >= config.close_through_threshold:
-                    ifvg_bullish_confirmed.iloc[i] = 1
-                    ifvg_bullish_low.iloc[i] = fvg_low
-                    ifvg_bullish_high.iloc[i] = fvg_high
+                if close_through_pct >= threshold:
+                    confirm_out_bull[i] = 1
+                    out_bull_low[i] = fvg_low
+                    out_bull_high[i] = fvg_high
                     active_fvg_bullish.remove((fvg_start, fvg_low, fvg_high))
 
         # Bearish confirmation: close below FVG zone
@@ -212,25 +205,24 @@ def detect_ifvg_confirmation(
             fvg_size = fvg_high - fvg_low
             if fvg_size > 0:
                 close_through_pct = (fvg_low - close_price) / fvg_size
-                if close_through_pct >= config.close_through_threshold:
-                    ifvg_bearish_confirmed.iloc[i] = 1
-                    ifvg_bearish_low.iloc[i] = fvg_low
-                    ifvg_bearish_high.iloc[i] = fvg_high
+                if close_through_pct >= threshold:
+                    confirm_out_bear[i] = 1
+                    out_bear_low[i] = fvg_low
+                    out_bear_high[i] = fvg_high
                     active_fvg_bearish.remove((fvg_start, fvg_low, fvg_high))
 
         # Remove old FVGs (older than lookback period)
-        max_age = 50  # bars
         active_fvg_bullish = [(s, lo, h) for s, lo, h in active_fvg_bullish if i - s < max_age]
         active_fvg_bearish = [(s, lo, h) for s, lo, h in active_fvg_bearish if i - s < max_age]
 
     result = pd.DataFrame(
         {
-            "ifvg_bullish_confirmed": ifvg_bullish_confirmed,
-            "ifvg_bearish_confirmed": ifvg_bearish_confirmed,
-            "ifvg_bullish_low": ifvg_bullish_low,
-            "ifvg_bullish_high": ifvg_bullish_high,
-            "ifvg_bearish_low": ifvg_bearish_low,
-            "ifvg_bearish_high": ifvg_bearish_high,
+            "ifvg_bullish_confirmed": confirm_out_bull,
+            "ifvg_bearish_confirmed": confirm_out_bear,
+            "ifvg_bullish_low": out_bull_low,
+            "ifvg_bullish_high": out_bull_high,
+            "ifvg_bearish_low": out_bear_low,
+            "ifvg_bearish_high": out_bear_high,
         },
         index=df.index,
     )
@@ -300,43 +292,72 @@ def detect_entry_trigger(
     df = bars.copy()
     n = len(df)
 
-    entry_long = pd.Series(0, index=df.index, dtype=int)
-    entry_short = pd.Series(0, index=df.index, dtype=int)
-    entry_trigger_type = pd.Series("", index=df.index, dtype=object)
-
     # Track confirmed IFVG zones
     confirmed_bullish_ifvg = []  # List of (idx, fvg_low, fvg_high)
     confirmed_bearish_ifvg = []
 
+    # Pre-extract numpy arrays once: scalar access inside the loop via
+    # pandas .iloc is ~10x slower than ndarray indexing over 100k+ bars.
+    close_arr = df["close"].to_numpy(dtype=float)
+    low_arr = df["low"].to_numpy(dtype=float)
+    high_arr = df["high"].to_numpy(dtype=float)
+
+    have_bull_zone = (
+        "ifvg_bullish_low" in ifvg_df.columns and "ifvg_bullish_high" in ifvg_df.columns
+    )
+    have_bear_zone = (
+        "ifvg_bearish_low" in ifvg_df.columns and "ifvg_bearish_high" in ifvg_df.columns
+    )
+    bull_confirm = (
+        ifvg_df["ifvg_bullish_confirmed"].to_numpy(dtype=int)
+        if "ifvg_bullish_confirmed" in ifvg_df.columns
+        else np.zeros(n, dtype=int)
+    )
+    bear_confirm = (
+        ifvg_df["ifvg_bearish_confirmed"].to_numpy(dtype=int)
+        if "ifvg_bearish_confirmed" in ifvg_df.columns
+        else np.zeros(n, dtype=int)
+    )
+    if have_bull_zone:
+        bull_zone_low = ifvg_df["ifvg_bullish_low"].to_numpy(dtype=float)
+        bull_zone_high = ifvg_df["ifvg_bullish_high"].to_numpy(dtype=float)
+    else:
+        # Fallback (legacy contract): zone bounds = bar at i-2 (bar1 of the FVG).
+        bull_zone_low = np.full(n, np.nan)
+        bull_zone_high = np.full(n, np.nan)
+        bull_zone_low[2:] = low_arr[:-2]
+        bull_zone_high[2:] = high_arr[:-2]
+    if have_bear_zone:
+        bear_zone_low = ifvg_df["ifvg_bearish_low"].to_numpy(dtype=float)
+        bear_zone_high = ifvg_df["ifvg_bearish_high"].to_numpy(dtype=float)
+    else:
+        bear_zone_low = np.full(n, np.nan)
+        bear_zone_high = np.full(n, np.nan)
+        bear_zone_low[2:] = low_arr[:-2]
+        bear_zone_high[2:] = high_arr[:-2]
+
+    out_entry_long = np.zeros(n, dtype=int)
+    out_entry_short = np.zeros(n, dtype=int)
+    out_trigger_type: np.ndarray = np.empty(n, dtype=object)  # type: ignore[type-arg]
+    out_trigger_type[:] = ""
+
     for i in range(n):
         # Record new IFVG confirmations
         if i < len(ifvg_df):
-            if ifvg_df["ifvg_bullish_confirmed"].iloc[i] == 1:
-                if "ifvg_bullish_low" in ifvg_df.columns:
-                    fvg_low = ifvg_df["ifvg_bullish_low"].iloc[i]
-                else:
-                    fvg_low = df["low"].iloc[i - 2] if i >= 2 else float("nan")
-                if "ifvg_bullish_high" in ifvg_df.columns:
-                    fvg_high = ifvg_df["ifvg_bullish_high"].iloc[i]
-                else:
-                    fvg_high = df["high"].iloc[i - 2] if i >= 2 else float("nan")
+            if bull_confirm[i] == 1:
+                fvg_low = bull_zone_low[i] if i < len(bull_zone_low) else float("nan")
+                fvg_high = bull_zone_high[i] if i < len(bull_zone_high) else float("nan")
                 if not (pd.isna(fvg_low) or pd.isna(fvg_high)):
                     confirmed_bullish_ifvg.append((i, fvg_low, fvg_high))
 
-            if ifvg_df["ifvg_bearish_confirmed"].iloc[i] == 1:
-                if "ifvg_bearish_low" in ifvg_df.columns:
-                    fvg_low = ifvg_df["ifvg_bearish_low"].iloc[i]
-                else:
-                    fvg_low = df["low"].iloc[i - 2] if i >= 2 else float("nan")
-                if "ifvg_bearish_high" in ifvg_df.columns:
-                    fvg_high = ifvg_df["ifvg_bearish_high"].iloc[i]
-                else:
-                    fvg_high = df["high"].iloc[i - 2] if i >= 2 else float("nan")
+            if bear_confirm[i] == 1:
+                fvg_low = bear_zone_low[i] if i < len(bear_zone_low) else float("nan")
+                fvg_high = bear_zone_high[i] if i < len(bear_zone_high) else float("nan")
                 if not (pd.isna(fvg_low) or pd.isna(fvg_high)):
                     confirmed_bearish_ifvg.append((i, fvg_low, fvg_high))
 
         # Detect entry triggers based on type
-        close_price = df["close"].iloc[i]
+        close_price = close_arr[i]
 
         if entry_type == "retest":
             # Long entry: price retests bullish IFVG zone
@@ -345,8 +366,8 @@ def detect_entry_trigger(
                 if fvg_size > 0:
                     distance = abs(close_price - fvg_high) / fvg_size
                     if distance <= config.retest_threshold and close_price >= fvg_low:
-                        entry_long.iloc[i] = 1
-                        entry_trigger_type.iloc[i] = "retest"
+                        out_entry_long[i] = 1
+                        out_trigger_type[i] = "retest"
                         break
 
             # Short entry: price retests bearish IFVG zone
@@ -355,23 +376,23 @@ def detect_entry_trigger(
                 if fvg_size > 0:
                     distance = abs(close_price - fvg_low) / fvg_size
                     if distance <= config.retest_threshold and close_price <= fvg_high:
-                        entry_short.iloc[i] = 1
-                        entry_trigger_type.iloc[i] = "retest"
+                        out_entry_short[i] = 1
+                        out_trigger_type[i] = "retest"
                         break
 
         elif entry_type == "close_through":
             # Long entry: strong close above bearish IFVG
             for idx, fvg_low, fvg_high in confirmed_bearish_ifvg[:]:
                 if close_price > fvg_high:
-                    entry_long.iloc[i] = 1
-                    entry_trigger_type.iloc[i] = "close_through"
+                    out_entry_long[i] = 1
+                    out_trigger_type[i] = "close_through"
                     break
 
             # Short entry: strong close below bullish IFVG
             for idx, fvg_low, fvg_high in confirmed_bullish_ifvg[:]:
                 if close_price < fvg_low:
-                    entry_short.iloc[i] = 1
-                    entry_trigger_type.iloc[i] = "close_through"
+                    out_entry_short[i] = 1
+                    out_trigger_type[i] = "close_through"
                     break
 
         elif entry_type == "ltf_fvg":
@@ -381,14 +402,14 @@ def detect_entry_trigger(
             # detect_po3_entries renames from 'ltf_ifvg_*' to 'ifvg_*').
             for fvg_low, fvg_high in ((lo, hi) for _idx, lo, hi in confirmed_bullish_ifvg[:]):
                 if fvg_low <= close_price <= fvg_high:
-                    entry_long.iloc[i] = 1
-                    entry_trigger_type.iloc[i] = "ltf_fvg"
+                    out_entry_long[i] = 1
+                    out_trigger_type[i] = "ltf_fvg"
                     break
 
             for fvg_low, fvg_high in ((lo, hi) for _idx, lo, hi in confirmed_bearish_ifvg[:]):
                 if fvg_low <= close_price <= fvg_high:
-                    entry_short.iloc[i] = 1
-                    entry_trigger_type.iloc[i] = "ltf_fvg"
+                    out_entry_short[i] = 1
+                    out_trigger_type[i] = "ltf_fvg"
                     break
 
         # Clean up old IFVGs
@@ -402,9 +423,9 @@ def detect_entry_trigger(
 
     result = pd.DataFrame(
         {
-            "entry_long": entry_long,
-            "entry_short": entry_short,
-            "entry_trigger_type": entry_trigger_type,
+            "entry_long": out_entry_long,
+            "entry_short": out_entry_short,
+            "entry_trigger_type": out_trigger_type,
         },
         index=df.index,
     )

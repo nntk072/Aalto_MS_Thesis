@@ -1,5 +1,7 @@
 """Tests for continuous action space and entry gate."""
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -7,27 +9,28 @@ import pytest
 from quant_rl.envs.trading_env import TradingEnv
 
 
+@pytest.fixture
+def sample_bars() -> pd.DataFrame:
+    """Create sample bars for testing."""
+    n = 100
+    dates = pd.date_range("2020-01-01", periods=n, freq="1min")
+    data = {
+        "open": np.random.uniform(100, 110, n),
+        "high": np.random.uniform(100, 110, n),
+        "low": np.random.uniform(95, 100, n),
+        "close": np.random.uniform(95, 110, n),
+        "volume": np.random.randint(1000, 5000, n),
+        "session_id": [0] * n,
+    }
+    bars = pd.DataFrame(data, index=dates)
+    # Make high >= open, close and low <= open, close for valid OHLC
+    bars["high"] = bars[["open", "close", "high"]].max(axis=1)
+    bars["low"] = bars[["open", "close", "low"]].min(axis=1)
+    return bars
+
+
 class TestContinuousActionSpace:
     """Tests for continuous action space functionality."""
-
-    @pytest.fixture
-    def sample_bars(self) -> pd.DataFrame:
-        """Create sample bars for testing."""
-        n = 100
-        dates = pd.date_range("2020-01-01", periods=n, freq="1min")
-        data = {
-            "open": np.random.uniform(100, 110, n),
-            "high": np.random.uniform(100, 110, n),
-            "low": np.random.uniform(95, 100, n),
-            "close": np.random.uniform(95, 110, n),
-            "volume": np.random.randint(1000, 5000, n),
-            "session_id": [0] * n,
-        }
-        bars = pd.DataFrame(data, index=dates)
-        # Make high >= open, close and low <= open, close for valid OHLC
-        bars["high"] = bars[["open", "close", "high"]].max(axis=1)
-        bars["low"] = bars[["open", "close", "low"]].min(axis=1)
-        return bars
 
     @pytest.fixture
     def sample_features(self, sample_bars: pd.DataFrame) -> pd.DataFrame:
@@ -239,4 +242,77 @@ class TestContinuousActionSpace:
         action = 19  # exit
         obs, _, _, _, info = env.step(action)
 
-        assert env.position is None or info.get("position") is None
+
+class TestEntryGateWarningsAndRiskFallback:
+    """Tests for entry-gate missing-feature warnings and the no-naked-position fallback."""
+
+    @pytest.fixture
+    def bare_features(self, sample_bars: pd.DataFrame) -> pd.DataFrame:
+        """Features without any entry-gate or swing-level columns."""
+        features = pd.DataFrame(index=sample_bars.index)
+        features["dummy_feature"] = 0.0
+        return features
+
+    def test_entry_gate_warns_once_on_missing_features(
+        self, sample_bars: pd.DataFrame, bare_features: pd.DataFrame
+    ) -> None:
+        """Missing gate columns must emit exactly one warning, then allow silently."""
+        env = TradingEnv(sample_bars, bare_features, continuous_actions=False, obs_window=10)
+        env.reset()
+        feat_row = env.features.iloc[env.step_idx]
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            # Gate falls back to allowing the entry (documented fallback)...
+            assert env._check_entry_gate(100.0, 1, feat_row) is True
+            # ...but warns exactly once...
+            assert len(caught) == 1
+            assert "Entry-gate features" in str(caught[0].message)
+            # ...and does not re-warn on subsequent calls.
+            assert env._check_entry_gate(100.0, -1, feat_row) is True
+            assert len(caught) == 1
+
+    def test_entry_gate_warning_rearms_after_reset(
+        self, sample_bars: pd.DataFrame, bare_features: pd.DataFrame
+    ) -> None:
+        """reset() re-arms the warn-once flag so a new episode warns again."""
+        env = TradingEnv(sample_bars, bare_features, continuous_actions=False, obs_window=10)
+        env.reset()
+        feat_row = env.features.iloc[env.step_idx]
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            env._check_entry_gate(100.0, 1, feat_row)
+            assert len(caught) == 1
+
+        env.reset()
+        with warnings.catch_warnings(record=True) as caught2:
+            warnings.simplefilter("always")
+            env._check_entry_gate(100.0, 1, feat_row)
+            assert len(caught2) == 1
+
+    def test_no_naked_position_without_swing_levels(self, sample_bars: pd.DataFrame) -> None:
+        """Entry without swing levels must be rejected, not opened naked at 1.0 lots.
+
+        The old fallback opened lots=1.0 with sl_price=None/tp_price=None when
+        no swing levels were available, bypassing the entire risk framework.
+        """
+        # Gate columns present (entry passes the gate) but NO swing levels.
+        features = pd.DataFrame(index=sample_bars.index)
+        features["london_high"] = 100.0
+        features["london_low"] = 90.0
+        features["asian_high"] = 98.0
+        features["asian_low"] = 92.0
+        features["volume_spike"] = 2.0  # > 1.5 → gate allows entries
+
+        env = TradingEnv(sample_bars, features, continuous_actions=False, obs_window=10)
+        env.reset()
+
+        # Price above London High → long gate passes
+        sample_bars.loc[sample_bars.index[10], "close"] = 105.0
+
+        obs, _, _, _, _ = env.step(1)  # enter_long
+
+        # Phase A fix: no swing levels → entry rejected (treated as hold)
+        assert env.position is None
+        assert env.trade_log == []
