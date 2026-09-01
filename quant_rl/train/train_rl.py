@@ -23,7 +23,6 @@ import logging
 from datetime import datetime
 
 import numpy as np
-from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 
 from quant_rl.config import load_config
@@ -77,14 +76,27 @@ def main() -> None:
     parser.add_argument("--force", action="store_true", help="Force data pipeline rerun")
     parser.add_argument("--out", default="outputs", help="Base output directory")
     parser.add_argument("--algo", choices=["ppo", "sac"], default="ppo", help="RL algorithm")
-    parser.add_argument("--arch", choices=["tcn", "gru", "transformer"], default="tcn", help="Encoder architecture")
+    parser.add_argument(
+        "--arch", choices=["tcn", "gru", "transformer"], default="tcn", help="Encoder architecture"
+    )
     parser.add_argument("--reward", choices=["dsr", "sweep"], default="dsr", help="Reward function")
-    parser.add_argument("--use-vae", action="store_true", help="Use VAE feature extractor (not yet implemented)")
-    parser.add_argument("--walk-forward", action="store_true", help="Run purged walk-forward validation")
+    parser.add_argument(
+        "--use-vae", action="store_true", help="Use VAE feature extractor (not yet implemented)"
+    )
+    parser.add_argument(
+        "--walk-forward", action="store_true", help="Run purged walk-forward validation"
+    )
     parser.add_argument("--wf-splits", type=int, default=5, help="Number of walk-forward folds")
     parser.add_argument("--purge-bars", type=int, default=60, help="Purge bars for walk-forward")
-    parser.add_argument("--embargo-bars", type=int, default=20, help="Embargo bars for walk-forward")
-    parser.add_argument("--wf-steps", type=int, default=None, help="Timesteps per WF fold (default: reuse main timesteps)")
+    parser.add_argument(
+        "--embargo-bars", type=int, default=20, help="Embargo bars for walk-forward"
+    )
+    parser.add_argument(
+        "--wf-steps",
+        type=int,
+        default=None,
+        help="Timesteps per WF fold (default: reuse main timesteps)",
+    )
     args = parser.parse_args()
 
     if args.use_vae:
@@ -304,7 +316,9 @@ def main() -> None:
                 len(fold_test_bars),
             )
 
-            fold_env = make_env(fold_train_bars, fold_train_feat, cfg, algo=args.algo, reward=args.reward)
+            fold_env = make_env(
+                fold_train_bars, fold_train_feat, cfg, algo=args.algo, reward=args.reward
+            )
             fold_model = build_agent(fold_env, cfg, arch=args.arch, algo=args.algo)
             fold_model.learn(total_timesteps=wf_steps, callback=None, progress_bar=False)
 
@@ -314,7 +328,10 @@ def main() -> None:
                 features=fold_test_feat,
                 obs_window=cfg.env.obs_window,
                 initial_balance=cfg.account.initial_balance,
-                risk_frac_range=(cfg.risk.default_risk_frac * 0.5, cfg.risk.default_risk_frac * 2.0),
+                risk_frac_range=(
+                    cfg.risk.default_risk_frac * 0.5,
+                    cfg.risk.default_risk_frac * 2.0,
+                ),
                 rr_ratio_range=(cfg.risk.rr_ratio_default * 0.5, cfg.risk.rr_ratio_default * 1.5),
                 swing_buffer_pts=cfg.risk.swing_buffer_pts,
                 contract_size=cfg.account.contract_size,
