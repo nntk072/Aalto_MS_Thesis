@@ -1,12 +1,12 @@
-"""Roll a trained PPO model through :class:`TradingEnv` to produce trades.
+"""Roll a trained PPO/SAC model through :class:`TradingEnv` to produce trades.
 
 ``quant_rl.backtest.engine.run_backtest`` drives a rule-based ``policy``
 callable (plain ``np.ndarray`` in, ``int`` action out in ``{-1, 0, 1, exit}``)
 through a lightweight event loop. The RL model, however, was trained against
 ``TradingEnv``'s own **Dict** observation (``{"seq": ..., "account": ...}``)
 and **Discrete(20)** action space (which additionally encodes risk_frac/
-rr_ratio variants for entries) — those formats don't match
-``run_backtest``'s interface at all.
+rr_ratio variants for entries) or **Box(-1, 1)** for continuous actions —
+those formats don't match ``run_backtest``'s interface at all.
 
 Rather than reverse-engineer an adapter, this module evaluates the model by
 walking it through the *exact* environment class/action space it was trained
@@ -49,8 +49,15 @@ def evaluate_model(
     dsr_eta: float = 0.01,
     deterministic: bool = True,
     max_episode_steps: int | None = None,
+    continuous_actions: bool = False,
+    use_sweep_reward: bool = False,
+    sweep_alpha: float = 0.1,
+    sweep_beta: float = 0.01,
+    sweep_hold_bars: int = 3,
+    dsr_weight: float = 0.3,
+    sweep_weight: float = 0.7,
 ) -> dict[str, Any]:
-    """Walk a trained PPO ``model`` over *bars*/*features* and collect trades.
+    """Walk a trained RL ``model`` over *bars*/*features* and collect trades.
 
     Parameters mirror ``TradingEnv.__init__`` exactly. ``risk_frac_range`` and
     ``rr_ratio_range`` change what the model's discrete entry actions *mean*
@@ -83,6 +90,13 @@ def evaluate_model(
         dsr_eta=dsr_eta,
         episodic=False,
         max_episode_steps=max_episode_steps,
+        continuous_actions=continuous_actions,
+        use_sweep_reward=use_sweep_reward,
+        sweep_alpha=sweep_alpha,
+        sweep_beta=sweep_beta,
+        sweep_hold_bars=sweep_hold_bars,
+        dsr_weight=dsr_weight,
+        sweep_weight=sweep_weight,
     )
 
     obs, _ = env.reset()
@@ -90,7 +104,10 @@ def evaluate_model(
     truncated = False
     while not (done or truncated):
         raw_action, _ = model.predict(obs, deterministic=deterministic)
-        action = int(np.asarray(raw_action).reshape(-1)[0])
+        if continuous_actions:
+            action = float(np.asarray(raw_action).reshape(-1)[0])
+        else:
+            action = int(np.asarray(raw_action).reshape(-1)[0])
         obs, _, done, truncated, _ = env.step(action)
 
     equity_series = pd.Series(

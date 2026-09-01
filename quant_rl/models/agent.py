@@ -114,19 +114,20 @@ def build_agent(
         if not isinstance(env.action_space, spaces.Box):
             raise ValueError("SAC requires continuous action space (Box)")
 
+        sac_cfg = cfg.get("sac", cfg.get("ppo", {}))
         return SAC(
             "MultiInputPolicy",
             vec_env,
             policy_kwargs=policy_kwargs,
-            learning_rate=cfg.get("sac", cfg.get("ppo", {})).get("learning_rate", 3e-4),
-            buffer_size=cfg.get("sac", cfg.get("ppo", {})).get("buffer_size", 1_000_000),
-            batch_size=cfg.get("sac", cfg.get("ppo", {})).get("batch_size", 256),
-            tau=cfg.get("sac", cfg.get("ppo", {})).get("tau", 0.005),
-            gamma=cfg.get("sac", cfg.get("ppo", {})).get("gamma", 0.99),
-            train_freq=cfg.get("sac", cfg.get("ppo", {})).get("train_freq", 1),
-            gradient_steps=cfg.get("sac", cfg.get("ppo", {})).get("gradient_steps", 1),
-            ent_coef=cfg.get("sac", cfg.get("ppo", {})).get("ent_coef", "auto"),
-            learning_starts=cfg.get("sac", cfg.get("ppo", {})).get("learning_starts", 10_000),
+            learning_rate=sac_cfg.get("learning_rate", 3e-4),
+            buffer_size=sac_cfg.get("buffer_size", 1_000_000),
+            batch_size=sac_cfg.get("batch_size", 256),
+            tau=sac_cfg.get("tau", 0.005),
+            gamma=sac_cfg.get("gamma", 0.99),
+            train_freq=sac_cfg.get("train_freq", 1),
+            gradient_steps=sac_cfg.get("gradient_steps", 1),
+            ent_coef=sac_cfg.get("ent_coef", "auto"),
+            learning_starts=sac_cfg.get("learning_starts", 500),
             verbose=1,
         )
 
