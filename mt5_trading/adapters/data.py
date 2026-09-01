@@ -7,5 +7,5 @@ class TradingData(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_symbol(self):
+    def get_symbol(self) -> str:
         raise NotImplementedError
