@@ -373,7 +373,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
     def step(
         self,
-        action: int | np.ndarray[Any, Any],
+        action: int | float | np.ndarray[Any, Any],
     ) -> tuple[dict[str, np.ndarray[Any, Any]], float, bool, bool, dict[str, Any]]:
         """Execute one step.
 
@@ -460,7 +460,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             elif 1 <= action <= 9:
                 discrete_action = 1  # enter_long
                 # Map to risk/rr: low/med/high × low/med/high
-                idx = action - 1
+                idx = int(action) - 1
                 risk_variant = idx // 3  # 0, 1, 2
                 rr_variant = idx % 3  # 0, 1, 2
                 risk_levels = [
@@ -477,7 +477,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 rr_ratio = rr_levels[rr_variant]
             elif 10 <= action <= 18:
                 discrete_action = -1  # enter_short
-                idx = action - 10
+                idx = int(action) - 10
                 risk_variant = idx // 3
                 rr_variant = idx % 3
                 risk_levels = [
@@ -731,10 +731,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
                         if has_levels:
                             sl_already_hit = False
-                            if discrete_action == 1 and fill_bid <= sl_price:
-                                sl_already_hit = True
-                            elif discrete_action == -1 and fill_ask >= sl_price:
-                                sl_already_hit = True
+                            if sl_price is not None:
+                                if discrete_action == 1 and fill_bid <= sl_price:
+                                    sl_already_hit = True
+                                elif discrete_action == -1 and fill_ask >= sl_price:
+                                    sl_already_hit = True
                             if not sl_already_hit:
                                 self.position = self.broker.open_position(
                                     self.account, (fill_bid, fill_ask), lots, discrete_action
