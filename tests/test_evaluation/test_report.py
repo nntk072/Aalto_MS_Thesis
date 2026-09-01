@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -65,7 +66,7 @@ class TestReportTables:
         assert "Test" in table
         assert "Sharpe" in table
 
-    def test_save_metrics_json_roundtrip(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    def test_save_metrics_json_roundtrip(self, tmp_path: Path) -> None:
         # Arrange
         path = tmp_path / "metrics.json"
 

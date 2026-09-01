@@ -88,7 +88,7 @@ class TestBuildSweepDataset:
 
         # Assert
         assert x.dtype == torch.float32 and y.dtype == torch.int64
-        assert set(y.unique().tolist()).issubset({-1, 0, 1})
+        assert set(y.unique().tolist()).issubset({-1, 0, 1})  # type: ignore[no-untyped-call]
         assert len(x) == len(y) > 0
 
     def test_no_samples_raises(self) -> None:

@@ -1,3 +1,5 @@
+from typing import Any
+
 import MetaTrader5 as mt5
 from loguru import logger
 
@@ -49,11 +51,11 @@ class MultiSymbolManager:
 
         # Initialize data sources for each symbol
         self.data_sources: dict[str, MT5Data] = {}
-        self.volatility_metrics: dict[str, dict] = {}
+        self.volatility_metrics: dict[str, dict[str, Any]] = {}
 
         self._initialize_data_sources()
 
-    def _initialize_data_sources(self):
+    def _initialize_data_sources(self) -> None:
         """Initialize data sources for all symbols."""
         for symbol in self.symbols:
             try:
@@ -92,7 +94,7 @@ class MultiSymbolManager:
         """
         return self.data_sources.copy()
 
-    def update_volatility_metrics(self, analyzer: VolatilityAnalyzer):
+    def update_volatility_metrics(self, analyzer: VolatilityAnalyzer) -> None:
         """
         Update volatility metrics for all symbols.
 
@@ -107,7 +109,7 @@ class MultiSymbolManager:
             except Exception as e:
                 logger.error(f"Error updating volatility metrics for {symbol}: {e}")
 
-    def get_volatility_metrics(self, symbol: str) -> dict | None:
+    def get_volatility_metrics(self, symbol: str) -> dict[str, Any] | None:
         """
         Get volatility metrics for a symbol.
 
@@ -119,7 +121,7 @@ class MultiSymbolManager:
         """
         return self.volatility_metrics.get(symbol)
 
-    def get_all_volatility_metrics(self) -> dict[str, dict]:
+    def get_all_volatility_metrics(self) -> dict[str, dict[str, Any]]:
         """
         Get volatility metrics for all symbols.
 
@@ -186,7 +188,7 @@ class MultiSymbolManager:
             logger.error(f"Error removing symbol {symbol}: {e}")
             return False
 
-    def refresh_data(self):
+    def refresh_data(self) -> None:
         """Refresh data for all symbols."""
         for symbol, data_source in self.data_sources.items():
             try:
@@ -205,6 +207,6 @@ class MultiSymbolManager:
         """
         return list(self.data_sources.keys())
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Cleanup MT5 connection."""
         mt5.shutdown()

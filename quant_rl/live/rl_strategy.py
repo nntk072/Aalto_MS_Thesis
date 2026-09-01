@@ -159,12 +159,12 @@ class RLStrategyAdapter:
 
             def signal(self) -> tuple[str, Signal]:
                 symbol = self.data.get_symbol()
-                bars = self.data.get_data()  # type: ignore[no-untyped-call]
+                bars = self.data.get_data()
                 if bars is None or len(bars) < adapter.obs_window + 10:
                     return symbol, Signal.NONE
                 secondary_bars: pd.DataFrame | None = None
                 if secondary_data_source is not None:
-                    secondary_bars = secondary_data_source.get_data()  # type: ignore[no-untyped-call]
+                    secondary_bars = secondary_data_source.get_data()
                 adapter.update_bars(bars, secondary_bars=secondary_bars)
                 try:
                     action = adapter.predict_signal()

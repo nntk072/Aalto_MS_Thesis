@@ -1,3 +1,5 @@
+from typing import Any
+
 import MetaTrader5 as mt5
 import pandas as pd
 from loguru import logger
@@ -33,7 +35,7 @@ class RiskManager:
             if account_info is None:
                 logger.error("Failed to get account info")
                 return 0.0
-            return account_info.balance
+            return float(account_info.balance)
         except Exception as e:
             logger.error(f"Error getting account balance: {e}")
             return 0.0
@@ -50,7 +52,7 @@ class RiskManager:
             if account_info is None:
                 logger.error("Failed to get account info")
                 return 0.0
-            return account_info.equity
+            return float(account_info.equity)
         except Exception as e:
             logger.error(f"Error getting account equity: {e}")
             return 0.0
@@ -138,13 +140,13 @@ class RiskManager:
                 f"volatility_mult: {volatility_multiplier:.2f})"
             )
 
-            return position_size
+            return float(position_size)
 
         except Exception as e:
             logger.error(f"Error calculating position size for {symbol}: {e}")
             return 0.0
 
-    def get_total_exposure(self, symbols: list[str] | None = None) -> dict:
+    def get_total_exposure(self, symbols: list[str] | None = None) -> dict[str, Any]:
         """
         Get total exposure across all open positions.
 

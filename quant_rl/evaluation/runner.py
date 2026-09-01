@@ -18,7 +18,9 @@ from .metrics import DEFAULT_PERIODS_PER_YEAR, PerformanceMetrics, compute_metri
 
 def run_episode(
     env: Any,
-    action_fn: Callable[[Any], int | float | np.floating[Any] | np.integer[Any]],
+    action_fn: Callable[
+        [Any], int | float | np.floating[Any] | np.integer[Any] | np.ndarray[Any, Any]
+    ],
     max_steps: int = 100_000,
     periods_per_year: int = DEFAULT_PERIODS_PER_YEAR,
 ) -> PerformanceMetrics:

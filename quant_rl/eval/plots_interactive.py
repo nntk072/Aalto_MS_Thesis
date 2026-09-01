@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -45,7 +46,7 @@ def _save(fig: go.Figure, path: Path | str) -> None:
 def plot_equity_curve(
     equity: pd.Series,
     breaches: list[str] | None = None,
-    breach_events: list[dict] | None = None,
+    breach_events: list[dict[str, Any]] | None = None,
     initial_balance: float = 100_000.0,
     daily_loss_limit: float | None = None,
     max_loss_limit: float | None = None,
@@ -215,10 +216,10 @@ def plot_price_with_orders(
                 if ts in ohlcv.index:
                     result.append(ts)
                 else:
-                    loc = ohlcv.index.searchsorted(ts, side="left")
+                    loc = int(ohlcv.index.searchsorted(ts, side="left"))
                     if loc >= len(ohlcv):
                         continue
-                    candidate = ohlcv.index[loc]
+                    candidate = pd.Timestamp(ohlcv.index[loc])
                     if candidate < min_ts or candidate > max_ts:
                         continue
                     result.append(candidate)
@@ -226,7 +227,7 @@ def plot_price_with_orders(
 
         def _snap_df(
             df: pd.DataFrame, prefer_trade_price: bool = False
-        ) -> tuple[pd.Index, np.ndarray]:
+        ) -> tuple[pd.Index, np.ndarray[Any, Any]]:
             """Return aligned (x, y) arrays for markers within plotted candle range."""
             if df.empty:
                 return pd.DatetimeIndex([]), np.array([])
@@ -245,7 +246,7 @@ def plot_price_with_orders(
                 if prefer_trade_price and "price" in df.columns and pd.notna(row.get("price")):
                     y_vals.append(float(row["price"]))
                 else:
-                    y_vals.append(float(ohlcv.at[s_ts, "close"]))
+                    y_vals.append(float(cast(Any, ohlcv["close"].at[s_ts])))
 
             return pd.DatetimeIndex(snapped_times), np.asarray(y_vals, dtype=float)
 
@@ -433,7 +434,7 @@ def plot_monthly_returns_heatmap(
             _save(fig, out_path)
         return fig
 
-    years = sorted(monthly.index.year.unique())
+    years = sorted(pd.DatetimeIndex(monthly.index).year.unique())
     month_labels = [
         "Jan",
         "Feb",
@@ -450,7 +451,8 @@ def plot_monthly_returns_heatmap(
     ]
     matrix = np.full((len(years), 12), np.nan)
     for dt, val in monthly.items():
-        matrix[years.index(dt.year), dt.month - 1] = val
+        dt_ts = cast(pd.Timestamp, dt)
+        matrix[years.index(dt_ts.year), dt_ts.month - 1] = val
 
     text = [[f"{v:.1f}%" if not np.isnan(v) else "" for v in row] for row in matrix]
     fig = go.Figure(
@@ -645,7 +647,7 @@ def plot_per_trade_orders(
         )
 
         # Entry marker: green arrow (triangle-up for long, triangle-down for short)
-        i_o = window.index.get_indexer([t_open], method="nearest")[0]
+        i_o = int(window.index.get_indexer(pd.Index([t_open]), method="nearest")[0])
         if 0 <= i_o < len(window):
             ep = (
                 float(open_row["price"])
@@ -670,7 +672,7 @@ def plot_per_trade_orders(
             )
 
         # Exit marker: red arrow (triangle-down for long, triangle-up for short)
-        i_c = window.index.get_indexer([t_close], method="nearest")[0]
+        i_c = int(window.index.get_indexer(pd.Index([t_close]), method="nearest")[0])
         if 0 <= i_c < len(window):
             ep2 = (
                 float(close_row["price"])
@@ -936,7 +938,7 @@ def plot_fvg_signals_interactive(
             for ts in signals.index[hits]:
                 if ts < ohlcv.index.min() or ts > ohlcv.index.max():
                     continue
-                loc = ohlcv.index.searchsorted(ts, side="left")
+                loc = int(ohlcv.index.searchsorted(ts, side="left"))
                 if loc >= len(ohlcv):
                     continue
                 base = ohlcv["high"].iloc[loc] if dy > 1 else ohlcv["low"].iloc[loc]

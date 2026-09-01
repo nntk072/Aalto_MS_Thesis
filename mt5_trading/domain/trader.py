@@ -6,7 +6,16 @@ from mt5_trading.adapters import Trader
 
 
 class MT5Trader(Trader):
-    def open_position(self, symbol, volume, position_type, comment, magic_number, sl=None, tp=None):
+    def open_position(
+        self,
+        symbol: str,
+        volume: float,
+        position_type: int,
+        comment: str,
+        magic_number: int,
+        sl: float | None = None,
+        tp: float | None = None,
+    ) -> object | None:
         # Base order dictionary with common parameters
         order = {
             "action": mt5.TRADE_ACTION_DEAL,
@@ -34,9 +43,11 @@ class MT5Trader(Trader):
             )
             return None
 
-        return result
+        return result  # type: ignore[no-any-return]
 
-    def close_positions(self, robot_name: str, symbol=None, position_type=None):
+    def close_positions(
+        self, robot_name: str, symbol: str | None = None, position_type: int | None = None
+    ) -> None:
         df_open_positions = self.get_all_positions()
 
         if not df_open_positions.empty:
@@ -85,7 +96,9 @@ class MT5Trader(Trader):
                     }
                     mt5.order_send(close_request)
 
-    def get_opened_positions(self, symbol=None, position_type=None):
+    def get_opened_positions(
+        self, symbol: str | None = None, position_type: int | None = None
+    ) -> tuple[int, pd.DataFrame]:
         try:
             opened_positions = mt5.positions_get()
             df_opened_positions = pd.DataFrame(
@@ -108,7 +121,7 @@ class MT5Trader(Trader):
             df = pd.DataFrame()
         return total_opened_positions, df
 
-    def get_all_positions(self):
+    def get_all_positions(self) -> pd.DataFrame:
         try:
             opened_positions = mt5.positions_get()
             df_opened_positions = pd.DataFrame(
@@ -118,7 +131,7 @@ class MT5Trader(Trader):
             df_opened_positions = pd.DataFrame()
         return df_opened_positions
 
-    def send_to_break_even(self, df: pd.DataFrame, percentage: float):
+    def send_to_break_even(self, df: pd.DataFrame, percentage: float) -> None:
         if not df.empty:
             for symbol in df["symbol"].unique().tolist():
                 df_symbol = df[df["symbol"] == symbol]
@@ -161,7 +174,7 @@ class MT5Trader(Trader):
                             }
                             mt5.order_send(modify_order_request)
 
-    def calculate_position_size(self, symbol: str, stop_loss: float, per_to_risk: float):
+    def calculate_position_size(self, symbol: str, stop_loss: float, per_to_risk: float) -> float:
         mt5.symbol_select(symbol, True)
         symbol_info_tick = mt5.symbol_info_tick(symbol)
         symbol_info = mt5.symbol_info(symbol)
@@ -175,4 +188,4 @@ class MT5Trader(Trader):
         tick_value = symbol_info.trade_tick_value
 
         position_size = round((balance * risk_per_trade) / (ticks_at_risk * tick_value), 2)
-        return position_size
+        return float(position_size)

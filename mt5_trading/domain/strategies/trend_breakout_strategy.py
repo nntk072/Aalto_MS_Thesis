@@ -140,7 +140,12 @@ class TrendBreakoutStrategy(TradingStrategy):
             return 0.0
 
         try:
-            adx = talib.ADX(df["high"].values, df["low"].values, df["close"].values, timeperiod=14)
+            adx = talib.ADX(
+                df["high"].to_numpy(dtype=float),
+                df["low"].to_numpy(dtype=float),
+                df["close"].to_numpy(dtype=float),
+                timeperiod=14,
+            )
             return adx[-1] if not np.isnan(adx[-1]) else 0.0
         except Exception:
             return 0.0

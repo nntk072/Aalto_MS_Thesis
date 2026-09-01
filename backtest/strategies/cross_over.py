@@ -22,10 +22,12 @@ class CrossOverStrategy(bt.Strategy):
 
         # Create the moving average indicators
         self.ma_short = bt.indicators.SimpleMovingAverage(
-            self.dataclose, period=self.params.ma_short_period
+            self.dataclose,
+            period=self.params.ma_short_period,  # type: ignore[attr-defined]
         )
         self.ma_long = bt.indicators.SimpleMovingAverage(
-            self.dataclose, period=self.params.ma_long_period
+            self.dataclose,
+            period=self.params.ma_long_period,  # type: ignore[attr-defined]
         )
 
         # Add MACD indicator
@@ -43,7 +45,7 @@ class CrossOverStrategy(bt.Strategy):
 
     def log(self, txt, dt=None, doprint=False):
         """Logging function"""
-        if self.params.printlog or doprint:
+        if self.params.printlog or doprint:  # type: ignore[attr-defined]
             dt = dt or self.datas[0].datetime.date(0)
             print(f"{dt.isoformat()} {txt}")
 
@@ -105,7 +107,7 @@ class CrossOverStrategy(bt.Strategy):
 
     def stop(self):
         self.log(
-            f"MA Short Period: {self.params.ma_short_period}, MA Long Period: {self.params.ma_long_period}",
+            f"MA Short Period: {self.params.ma_short_period}, MA Long Period: {self.params.ma_long_period}",  # type: ignore[attr-defined]
             doprint=True,
         )
         self.log(f"(MA Strategy) Ending Value: {self.broker.getvalue():.2f}", doprint=True)

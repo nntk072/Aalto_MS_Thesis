@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from mt5_trading.adapters import TradingData, TradingStrategy
 from mt5_trading.domain.signal import Signal
 from mt5_trading.domain.strategies.cross_over_strategy import CrossOverStrategy
@@ -16,7 +18,10 @@ class CombinedStrategy(TradingStrategy):
     """
 
     def __init__(
-        self, trading_data: TradingData, strategies: list[str] = None, require_all: bool = False
+        self,
+        trading_data: TradingData,
+        strategies: list[str] | None = None,
+        require_all: bool = False,
     ) -> None:
         """
         Initialize Combined Strategy.
@@ -31,7 +36,7 @@ class CombinedStrategy(TradingStrategy):
         self.require_all = require_all
 
         # Initialize strategies
-        self.strategies = {}
+        self.strategies: dict[str, TradingStrategy] = {}
 
         if strategies is None:
             strategies = ["crossover", "smc", "trend_breakout"]

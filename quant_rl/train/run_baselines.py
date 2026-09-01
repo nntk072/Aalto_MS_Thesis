@@ -13,7 +13,9 @@ Usage
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -28,20 +30,23 @@ from quant_rl.baselines.rule_based import ema_crossover, macd_ema50_baseline, rs
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import build_tick_books, run_pipeline
 from quant_rl.data.split import get_split_config, split_train_test
+from quant_rl.data.ticks import TickBook
 from quant_rl.eval.export import save_run
-from quant_rl.evaluation import calculate_metrics
+from quant_rl.evaluation import PerformanceMetrics, calculate_metrics
 from quant_rl.features.build import build_features
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
 
-def _macd_policy(obs: np.ndarray) -> int:
+def _macd_policy(obs: np.ndarray[Any, Any]) -> int:
     """Placeholder - will be replaced by precomputed policy in main()."""
     return 0
 
 
-def _make_indexed_policy(actions_series: pd.Series, obs_window: int):
+def _make_indexed_policy(
+    actions_series: pd.Series, obs_window: int
+) -> Callable[[np.ndarray[Any, Any]], int]:
     """Build a stateful policy that returns the precomputed action for the
     current absolute bar index.
 
@@ -52,7 +57,7 @@ def _make_indexed_policy(actions_series: pd.Series, obs_window: int):
 
     state = {"i": obs_window}
 
-    def policy(obs: np.ndarray) -> int:
+    def policy(obs: np.ndarray[Any, Any]) -> int:
         i = state["i"]
         if i < len(actions_series):
             action = int(actions_series.iloc[i])
@@ -64,7 +69,7 @@ def _make_indexed_policy(actions_series: pd.Series, obs_window: int):
     return policy
 
 
-def _ema_policy(obs: np.ndarray) -> int:
+def _ema_policy(obs: np.ndarray[Any, Any]) -> int:
     """Placehodler — replaced by a real indexed policy in main().
 
     Kept as a module-level no-op so the ``STRATEGIES`` registry below can
@@ -74,7 +79,7 @@ def _ema_policy(obs: np.ndarray) -> int:
     return 0
 
 
-def _rsi_policy(obs: np.ndarray) -> int:
+def _rsi_policy(obs: np.ndarray[Any, Any]) -> int:
     """Placeholder — replaced by a real indexed policy in main().
 
     Kept as a module-level no-op so the ``STRATEGIES`` registry below can
@@ -198,7 +203,9 @@ def main() -> None:
         rsi_test_actions = rsi_mean_reversion(test_bars, period=14)
         log.info("RSI baseline: computed precomputed actions for train & test splits")
 
-    def _create_macd_policy(actions_series, obs_window):
+    def _create_macd_policy(
+        actions_series: pd.Series | None, obs_window: int
+    ) -> Callable[[np.ndarray[Any, Any]], int]:
         """Create a policy that returns precomputed action for each bar.
 
         Critical: Start at obs_window so engine bar i maps to actions_series.iloc[i],
@@ -206,11 +213,12 @@ def main() -> None:
         with the bars where they actually occur.
         """
         state = {"i": obs_window}
+        series = actions_series if actions_series is not None else pd.Series(dtype=float)
 
-        def policy(obs):
+        def policy(obs: np.ndarray[Any, Any]) -> int:
             action = 0
-            if state["i"] < len(actions_series):
-                action = int(actions_series.iloc[state["i"]])
+            if state["i"] < len(series):
+                action = int(series.iloc[state["i"]])
             state["i"] += 1
             return action
 
@@ -223,18 +231,27 @@ def main() -> None:
     test_precomputed_policy = None
     if args.strategy == "macd":
         obs_window = cfg.env.obs_window if hasattr(cfg.env, "obs_window") else 60
+        assert macd_train_actions is not None and macd_test_actions is not None
         train_precomputed_policy = _create_macd_policy(macd_train_actions, obs_window)
         test_precomputed_policy = _create_macd_policy(macd_test_actions, obs_window)
     elif args.strategy == "ema":
         obs_window = cfg.env.obs_window if hasattr(cfg.env, "obs_window") else 60
+        assert ema_train_actions is not None and ema_test_actions is not None
         train_precomputed_policy = _make_indexed_policy(ema_train_actions, obs_window)
         test_precomputed_policy = _make_indexed_policy(ema_test_actions, obs_window)
     elif args.strategy == "rsi":
         obs_window = cfg.env.obs_window if hasattr(cfg.env, "obs_window") else 60
+        assert rsi_train_actions is not None and rsi_test_actions is not None
         train_precomputed_policy = _make_indexed_policy(rsi_train_actions, obs_window)
         test_precomputed_policy = _make_indexed_policy(rsi_test_actions, obs_window)
 
-    def _run(bars, feats, ticks, label: str, indexed_policy=None) -> tuple[dict, object]:
+    def _run(
+        bars: pd.DataFrame,
+        feats: pd.DataFrame,
+        ticks: TickBook | None,
+        label: str,
+        indexed_policy: Callable[[np.ndarray[Any, Any]], int] | None = None,
+    ) -> tuple[dict[str, Any], PerformanceMetrics]:
         log.info("Running backtest [%s] strategy=%s …", label, args.strategy)
 
         # Use the precomputed policy if we built one (macd/ema/rsi), else

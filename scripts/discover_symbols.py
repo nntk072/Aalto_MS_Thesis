@@ -8,6 +8,7 @@ Helps identify correct symbol names for trading.
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 import MetaTrader5 as mt5
 import yaml
@@ -98,7 +99,7 @@ def categorize_symbol(symbol: str, description: str = "") -> str:
     return "other"
 
 
-def discover_symbols() -> dict[str, list[dict]]:
+def discover_symbols() -> dict[str, list[dict[str, Any]]]:
     """
     Discover all available symbols on the broker.
 
@@ -127,7 +128,7 @@ def discover_symbols() -> dict[str, list[dict]]:
     logger.info(f"Found {len(symbols)} total symbols")
 
     # Categorize symbols
-    categorized = {
+    categorized: dict[str, list[dict[str, Any]]] = {
         "forex": [],
         "crypto": [],
         "commodities": [],
@@ -170,7 +171,7 @@ def discover_symbols() -> dict[str, list[dict]]:
     return categorized
 
 
-def print_symbols(categorized: dict[str, list[dict]]):
+def print_symbols(categorized: dict[str, list[dict[str, Any]]]) -> None:
     """Print discovered symbols in a formatted way."""
     print("\n" + "=" * 80)
     print("DISCOVERED SYMBOLS")
@@ -190,7 +191,7 @@ def print_symbols(categorized: dict[str, list[dict]]):
             print(f"  ... and {len(symbols) - 20} more")
 
 
-def save_symbols_to_config(categorized: dict[str, list[dict]], config_path: str):
+def save_symbols_to_config(categorized: dict[str, list[dict[str, Any]]], config_path: str) -> None:
     """
     Save discovered symbols to config file.
 
@@ -202,7 +203,7 @@ def save_symbols_to_config(categorized: dict[str, list[dict]], config_path: str)
     config_dir.mkdir(parents=True, exist_ok=True)
 
     # Read existing config if it exists
-    existing_config = {}
+    existing_config: dict[str, Any] = {}
     if os.path.exists(config_path):
         with open(config_path) as f:
             existing_config = yaml.safe_load(f) or {}
@@ -223,7 +224,7 @@ def save_symbols_to_config(categorized: dict[str, list[dict]], config_path: str)
     logger.info(f"Saved symbols to {config_path}")
 
 
-def main():
+def main() -> None:
     """Main function."""
     logger.info("Starting symbol discovery...")
 

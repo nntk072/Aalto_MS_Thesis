@@ -27,7 +27,7 @@ class TestReturnPredictionHead:
         head = ReturnPredictionHead(latent_dim=16, hidden_dim=32, prediction_horizon=3)
         pred = head(torch.randn(4, 16))
         loss = torch.nn.functional.mse_loss(pred, torch.zeros_like(pred))
-        loss.backward()
+        loss.backward()  # type: ignore[no-untyped-call]
         grads = [p.grad for p in head.parameters() if p.grad is not None]
         assert len(grads) > 0
 

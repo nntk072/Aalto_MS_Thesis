@@ -131,8 +131,8 @@ class TestSACAgentAct:
 
         observation_space = spaces.Dict(
             {
-                "seq": spaces.Box(low=-1.0, high=1.0, shape=(10, 64), dtype=float),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(10, 64), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
             }
         )
         encoder = TCNEncoder(

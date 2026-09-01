@@ -15,9 +15,9 @@ load_dotenv()
 configure_logging()
 
 terminal_path = r"C:\Program Files\MetaTrader 5\terminal64.exe"
-login = os.getenv("LOGIN")
-password = os.getenv("PASSWORD")
-server = os.getenv("SERVER")
+login = os.getenv("LOGIN", "")
+password = os.getenv("PASSWORD", "")
+server = os.getenv("SERVER", "")
 symbol = "EURUSD"
 lot_size = 0.1
 

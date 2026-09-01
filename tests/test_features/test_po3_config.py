@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -319,7 +321,7 @@ class TestDetectPO3Entries:
     def test_po3_entries_with_different_entry_types(self, sample_bars: pd.DataFrame) -> None:
         """Test unified PO3 entry detection with different entry types."""
         for entry_type in ["retest", "close_through"]:
-            result = detect_po3_entries(sample_bars, entry_type=entry_type)
+            result = detect_po3_entries(sample_bars, entry_type=cast(Any, entry_type))
             assert isinstance(result, pd.DataFrame)
             assert len(result) == len(sample_bars)
 

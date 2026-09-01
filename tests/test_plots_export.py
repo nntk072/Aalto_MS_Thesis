@@ -12,6 +12,8 @@ import matplotlib
 
 matplotlib.use("Agg")
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -83,7 +85,7 @@ def synthetic_trades(synthetic_equity) -> pd.DataFrame:
 
 
 @pytest.fixture()
-def synthetic_result(synthetic_equity, synthetic_trades) -> dict:
+def synthetic_result(synthetic_equity, synthetic_trades) -> dict[str, Any]:
     breach_events = [
         {
             "time": synthetic_equity.index[100],
@@ -410,7 +412,7 @@ def test_macd_backtest_fills_within_bar_and_charts_render(tmp_path):
         if price is None or pd.isna(price):
             continue
         bar_time = pd.Timestamp(row["time"])
-        pos = bars.index.get_indexer([bar_time], method="nearest")[0]
+        pos = bars.index.get_indexer(pd.Index([bar_time]), method="nearest")[0]
         lo = bars["low"].iloc[max(0, pos - 1) : pos + 2].min()
         hi = bars["high"].iloc[max(0, pos - 1) : pos + 2].max()
         assert lo - 1.0 <= price <= hi + 1.0, (

@@ -17,13 +17,13 @@ This test:
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
 pytestmark = pytest.mark.slow
 
 
-def _make_bars(n: int = 600, seed: int = 7) -> pd.DataFrame:  # noqa: F821
-    import pandas as pd
+def _make_bars(n: int = 600, seed: int = 7) -> pd.DataFrame:
 
     rng = np.random.default_rng(seed)
     idx = pd.date_range("2025-01-06 16:30", periods=n, freq="1min", tz="Etc/GMT-3")
@@ -45,8 +45,7 @@ def _make_bars(n: int = 600, seed: int = 7) -> pd.DataFrame:  # noqa: F821
     )
 
 
-def _make_features(bars) -> pd.DataFrame:  # noqa: F821
-    import pandas as pd
+def _make_features(bars) -> pd.DataFrame:
 
     n = len(bars)
     rng = np.random.default_rng(7)

@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 
 
 def parse_args() -> argparse.Namespace:
@@ -63,7 +64,7 @@ def _is_flat_log(run_dir: Path) -> bool:
     return (run_dir / "training_log.json").is_file() and not (run_dir / "metrics.json").is_file()
 
 
-def _oos(report: dict[str, object], *, is_flat_log: bool) -> dict[str, object]:
+def _oos(report: dict[str, Any], *, is_flat_log: bool) -> dict[str, Any]:
     """Extract the out-of-sample metrics block from either schema.
 
     For the flat ``training_log.json`` shape the test-split metric keys
@@ -90,7 +91,7 @@ def main() -> None:
         raise SystemExit(f"no metrics.json or training_log.json found under {runs_dir}")
 
     # Normalize every run into a common row: name/algo/arch/vae + oos block.
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for run_dir, report in reports:
         is_flat = _is_flat_log(run_dir)
         name = str(report.get("run_name", run_dir.name))
@@ -112,9 +113,9 @@ def main() -> None:
     conditional_passes: list[bool] = []
     for r in rows:
         name, oos = str(r["name"]), r["oos"]
-        sharpe = float(oos.get("sharpe", 0.0))  # type: ignore[arg-type]
-        mdd = float(oos.get("max_drawdown", 0.0))  # type: ignore[arg-type]
-        breach = int(oos.get("breach_count", 0))  # type: ignore[arg-type]
+        sharpe = float(oos.get("sharpe", 0.0))
+        mdd = float(oos.get("max_drawdown", 0.0))
+        breach = int(oos.get("breach_count", 0))
         print(
             f"{name:32} {r['algo']:5} {r['arch']:12} "
             f"{'yes' if r['vae'] else 'no':4} {sharpe:8.3f} {mdd:8.4f} {breach:5d}"
@@ -122,8 +123,8 @@ def main() -> None:
         if r["vae"]:
             conditional_passes.append(sharpe > args.sharpe_threshold and breach == 0)
 
-    best_sharpe = max(float(r["oos"].get("sharpe", 0.0)) for r in rows)  # type: ignore[arg-type]
-    any_breach = any(int(r["oos"].get("breach_count", 0)) > 0 for r in rows)  # type: ignore[arg-type]
+    best_sharpe = max(float(r["oos"].get("sharpe", 0.0)) for r in rows)
+    any_breach = any(int(r["oos"].get("breach_count", 0)) > 0 for r in rows)
     g3 = bool(conditional_passes) and not any_breach and best_sharpe > args.sharpe_threshold
     print("-" * len(header))
     verdict = "PASS" if g3 else "NOT PASSED"

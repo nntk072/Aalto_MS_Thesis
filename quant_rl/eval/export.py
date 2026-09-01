@@ -135,7 +135,7 @@ def _write_split(
 
     equity: pd.Series = result.get("equity", pd.Series(dtype=float))
     trades: pd.DataFrame = result.get("trades", pd.DataFrame())
-    breach_events: list[dict] = result.get("breach_events", [])
+    breach_events: list[dict[str, Any]] = result.get("breach_events", [])
     initial_balance: float = result.get("initial_balance", 100_000.0)
 
     # ------------------------------------------------------------------

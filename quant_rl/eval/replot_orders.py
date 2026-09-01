@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -41,7 +42,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger(__name__)
 
 
-def _load_run_config(run_dir: Path):
+def _load_run_config(run_dir: Path) -> Any:
     """Prefer the run's own config snapshot so split boundaries/account
     settings match exactly what produced its trades.csv."""
     cfg_path = run_dir / "config.yaml"
@@ -52,7 +53,7 @@ def _load_run_config(run_dir: Path):
     return load_config([])
 
 
-def _load_split_bars(cfg, split: str, force: bool) -> pd.DataFrame:
+def _load_split_bars(cfg: Any, split: str, force: bool) -> pd.DataFrame:
     """Rebuild the raw M1 bars for one split (charts only need OHLC, not features)."""
     data = run_pipeline(cfg, force=force)
     primary_m1 = data[cfg.data.primary]["M1"]
@@ -61,7 +62,7 @@ def _load_split_bars(cfg, split: str, force: bool) -> pd.DataFrame:
     return train_bars if split == "training" else test_bars
 
 
-def _replot_split(run_dir: Path, cfg, split: str, dpi: int, force: bool) -> None:
+def _replot_split(run_dir: Path, cfg: Any, split: str, dpi: int, force: bool) -> None:
     split_dir = run_dir / split
     trades_path = split_dir / "trades.csv"
     if not trades_path.exists():
@@ -71,11 +72,12 @@ def _replot_split(run_dir: Path, cfg, split: str, dpi: int, force: bool) -> None
     trades = pd.read_csv(trades_path, parse_dates=["time"])
     bars = _load_split_bars(cfg, split, force)
 
-    if bars.index.tz is not None:
+    bar_tz = pd.DatetimeIndex(bars.index).tz
+    if bar_tz is not None:
         if trades["time"].dt.tz is None:
-            trades["time"] = trades["time"].dt.tz_localize(bars.index.tz)
+            trades["time"] = trades["time"].dt.tz_localize(bar_tz)
         else:
-            trades["time"] = trades["time"].dt.tz_convert(bars.index.tz)
+            trades["time"] = trades["time"].dt.tz_convert(bar_tz)
 
     chart_cfg = _extract_trade_chart_config(cfg)
     orders_dir = split_dir / "orders"

@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import sys
 from types import ModuleType
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import pytest
+from mt5_trading.adapters.data import TradingData
 
 # --- headless MetaTrader5 stub (Windows-only package, absent on Linux) -----
 if "MetaTrader5" not in sys.modules:
@@ -119,11 +121,11 @@ def test_zero_latency_matches_legacy_default(trending_bars):
 class _StubModel:
     """Duck-typed SB3 model: action = +1 (long) always."""
 
-    def predict(self, obs: dict, deterministic: bool = True) -> np.ndarray:  # noqa: ARG002
+    def predict(self, obs: dict[str, Any], deterministic: bool = True) -> np.ndarray[Any, Any]:  # noqa: ARG002
         return np.array([1])
 
 
-class _StubData:
+class _StubData(TradingData):
     """Duck-typed MT5Data returning a small bars frame."""
 
     def __init__(self, bars: pd.DataFrame) -> None:
