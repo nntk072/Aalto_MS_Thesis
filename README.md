@@ -128,6 +128,9 @@ ls outputs/baseline_macd_seed*/test/orders/trade_*.{png,html} | head -5
 # Quick training (8k timesteps, 30 days)
 .venv/bin/python -m quant_rl.train.train_rl --mvp --seed=42
 
+# Select algorithm / encoder / reward
+.venv/bin/python -m quant_rl.train.train_rl --mvp --algo ppo --arch gru --reward dsr
+
 # View model output
 ls outputs/ppo_model_seed42
 ```
@@ -137,6 +140,31 @@ ls outputs/ppo_model_seed42
 # Full training (500k timesteps, all data)
 .venv/bin/python -m quant_rl.train.train_rl --seed=42
 ```
+
+### Purged Walk-Forward Validation
+```bash
+# 5 folds, 60-bar purge + 20-bar embargo between train/test windows
+.venv/bin/python -m quant_rl.train.train_rl --walk-forward --wf-splits 5 \
+    --purge-bars 60 --embargo-bars 20 --seed=42
+```
+
+### Live / Paper Trading
+```bash
+# Paper trade a trained checkpoint (PAPER_TRADING defaults to true — no orders placed)
+PAPER_TRADING=true RL_MODEL_PATH=outputs/<run>/model/ppo_final \
+    python live_trading_rl.py --once
+
+# Continuous paper loop on the M1 cadence
+PAPER_TRADING=true RL_MODEL_PATH=outputs/<run>/model/ppo_final python live_trading_rl.py
+
+# REAL orders — only after the DEPLOYMENT.md trial criteria are met
+PAPER_TRADING=false RL_MODEL_PATH=outputs/<run>/model/ppo_final python live_trading_rl.py
+```
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the paper→live promotion protocol,
+trial-period pass/fail criteria, and model versioning. Live risk sizing comes
+from `live_risk_overrides:` in `quant_rl/config/default.yaml`, which is kept
+aligned with the `ftmo:` block used by training-time guardrails.
 
 ### Run Backtest (~5 seconds)
 ```bash

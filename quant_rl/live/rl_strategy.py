@@ -127,8 +127,26 @@ class RLStrategyAdapter:
     # ------------------------------------------------------------------
     # mt5_trading adapter
     # ------------------------------------------------------------------
-    def as_strategy(self, data_source: TradingData) -> Any:
-        """Return a duck-typed ``TradingStrategy`` wrapping this adapter."""
+    def as_strategy(
+        self,
+        data_source: TradingData,
+        secondary_data_source: TradingData | None = None,
+    ) -> Any:
+        """Return a duck-typed ``TradingStrategy`` wrapping this adapter.
+
+        Parameters
+        ----------
+        data_source:
+            Primary-symbol MT5 data source (M1 bars).
+        secondary_data_source:
+            Optional secondary-symbol data source used for SMT divergence
+            features. When the deployed model was trained with SMT enabled
+            (``training.use_m1_only``/``primary_only`` both false), the live
+            feature vector silently misses those features unless the
+            secondary bars are fed each tick via ``update_bars(...,
+            secondary_bars=...)`` — this wired path exists precisely to avoid
+            that train/live mismatch.
+        """
         from mt5_trading.domain.signal import Signal
 
         adapter = self
@@ -140,11 +158,14 @@ class RLStrategyAdapter:
                 self.data = data_source
 
             def signal(self) -> tuple[str, Signal]:
-                symbol = self.data.get_symbol()  # type: ignore[no-untyped-call]
+                symbol = self.data.get_symbol()
                 bars = self.data.get_data()  # type: ignore[no-untyped-call]
                 if bars is None or len(bars) < adapter.obs_window + 10:
                     return symbol, Signal.NONE
-                adapter.update_bars(bars)
+                secondary_bars: pd.DataFrame | None = None
+                if secondary_data_source is not None:
+                    secondary_bars = secondary_data_source.get_data()  # type: ignore[no-untyped-call]
+                adapter.update_bars(bars, secondary_bars=secondary_bars)
                 try:
                     action = adapter.predict_signal()
                 except Exception:  # noqa: BLE001  (live loop must not crash)
