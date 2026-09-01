@@ -44,6 +44,8 @@ def iter_reports(runs_dir: Path) -> list[tuple[Path, dict[str, object]]]:
     in/out-of-sample schema); falls back to flat ``training_log.json``.
     """
     found: list[tuple[Path, dict[str, object]]] = []
+    if not runs_dir.is_dir():
+        return found
     for run_dir in sorted(runs_dir.iterdir()):
         if not run_dir.is_dir():
             continue
