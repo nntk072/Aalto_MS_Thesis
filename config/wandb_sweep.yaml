@@ -10,7 +10,10 @@ parameters:
   arch:
     values: [gru, transformer]
   use_vae:
-    value: 1
+    # NOTE: quant_rl/train/train_rl.py raises NotImplementedError for
+    # --use-vae until the VAE pipeline exists (Master Roadmap Stage 6).
+    # Keep this at 0 until then; set to 1 once VAE lands.
+    value: 0
   lr:
     distribution: log_uniform_values
     min: 1.0e-5
@@ -25,18 +28,21 @@ parameters:
     value: 200000
 command:
   - python
-  - scripts/train_rl.py
+  - -m
+  - quant_rl.train.train_rl
   - --algo
   - ${parameters.algo}
   - --arch
   - ${parameters.arch}
-  - --use-vae
-  - ${parameters.use_vae}
-  - --lr
-  - ${parameters.lr}
-  - --entropy-coef
-  - ${parameters.entropy_coef}
-  - --batch-size
-  - ${parameters.batch_size}
-  - --steps
-  - ${parameters.steps}
+  - --reward
+  - dsr
+  - --wandb
+  - --seed
+  - 42
+  # Config-override dotlists — note `learning_rate`, not the swept `lr`
+  # alias; the typo-safety guard in quant_rl.config.load_config will raise
+  # on anything else instead of silently training at the default LR.
+  - ${parameters.algo}.learning_rate=${parameters.lr}
+  - ${parameters.algo}.ent_coef=${parameters.entropy_coef}
+  - ${parameters.algo}.batch_size=${parameters.batch_size}
+  - ppo.total_timesteps=${parameters.steps}

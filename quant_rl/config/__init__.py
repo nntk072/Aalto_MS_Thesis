@@ -33,8 +33,16 @@ def load_config(
     # everything else comes from defaults) and for full standalone configs.
     cfg = cast(DictConfig, OmegaConf.merge(base, extra))
     if overrides:
+        # Snapshot the *pre-override* merged config so variant-config merges
+        # (which happen above, before overrides) are not flagged as typos.
+        known_paths = _leaf_paths(cfg)
         for ov in overrides:
-            key, _, val = ov.partition("=")
+            key = ov.partition("=")[0].strip()
+            if key and key not in known_paths:
+                raise ValueError(
+                    f"override key {key!r} does not exist in default.yaml — check for a typo"
+                )
+            _, _, val = ov.partition("=")
             # Try to coerce to int/float/bool before storing
             coerced: object = val
             try:
@@ -47,3 +55,17 @@ def load_config(
                         coerced = val.lower() == "true"
             OmegaConf.update(cfg, key.strip(), coerced, merge=True)
     return cfg
+
+
+def _leaf_paths(cfg: DictConfig, prefix: str = "") -> set[str]:
+    """Return all dot-paths to *leaf* keys (including explicit ``null`` leaves)."""
+    paths: set[str] = set()
+    for k in cfg.keys():
+        key = str(k)
+        path = f"{prefix}.{key}" if prefix else key
+        child = cfg[k]
+        if isinstance(child, DictConfig):
+            paths |= _leaf_paths(child, path)
+        else:
+            paths.add(path)
+    return paths
