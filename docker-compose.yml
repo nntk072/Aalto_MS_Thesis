@@ -94,7 +94,6 @@ services:
     command:
       - -m
       - mypy
-      - quant_rl
 
   # --- Convenience aliases ---
 

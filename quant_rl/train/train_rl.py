@@ -21,8 +21,10 @@ import argparse
 import json
 import logging
 from datetime import datetime
+from typing import Any
 
 import numpy as np
+import pandas as pd
 import torch
 from stable_baselines3.common.callbacks import CheckpointCallback
 
@@ -42,7 +44,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger(__name__)
 
 
-def make_env(bars, features, cfg, *, algo: str, reward: str, episodic: bool = True) -> TradingEnv:
+def make_env(
+    bars: pd.DataFrame,
+    features: pd.DataFrame,
+    cfg: Any,
+    *,
+    algo: str,
+    reward: str,
+    episodic: bool = True,
+) -> TradingEnv:
     continuous_actions = algo == "sac"
     use_sweep_reward = reward == "sweep"
     return TradingEnv(
@@ -167,7 +177,7 @@ def main() -> None:
     # Checkpoint callback
     checkpoint_callback = CheckpointCallback(
         save_freq=max(1000, len(train_bars) // 10),
-        save_path=model_dir,
+        save_path=str(model_dir),
         name_prefix="ppo_ckpt",
         save_replay_buffer=False,
     )
@@ -194,7 +204,9 @@ def main() -> None:
             aux_cb.prediction_horizon,
         )
 
-    callbacks = [c for c in (checkpoint_callback, aux_cb) if c is not None]
+    callbacks: list[CheckpointCallback | AuxiliaryTrainerCallback | BestCheckpointEvalCallback] = [
+        c for c in (checkpoint_callback, aux_cb) if c is not None
+    ]
 
     # Best-checkpoint eval: every N rollouts, evaluate on a fresh copy of the
     # training env (episodic=False so guardrail breaches don't kill the run)

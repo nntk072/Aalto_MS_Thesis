@@ -8,10 +8,12 @@ activity windows are deterministic.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import numpy as np
 import pandas as pd
 import pytest
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 
 from quant_rl.features.build import (
     build_fvg_zone_features,
@@ -47,8 +49,8 @@ def fvg_bars() -> pd.DataFrame:
         },
         index=idx,
     )
-    df.iloc[11, df.columns.get_loc("high")] = 100.8  # bar1 high (gap bottom)
-    df.iloc[13, df.columns.get_loc("low")] = 101.5  # bar3 low (gap top)
+    df.loc[df.index[11], "high"] = 100.8  # bar1 high (gap bottom)
+    df.loc[df.index[13], "low"] = 101.5  # bar3 low (gap top)
     return df
 
 
@@ -93,7 +95,7 @@ def test_fvg_zone_features_causal(fvg_bars):
     pd.testing.assert_frame_equal(full.loc[overlap], trunc.loc[overlap])
 
 
-def _base_cfg() -> dict:
+def _base_cfg() -> dict[str, Any]:
     return {
         "features": {
             "ema_periods": [9],
@@ -124,12 +126,12 @@ def test_variant_flags_additive(m1_bars):
     base = build_features(m1_bars, cfg=cfg_base)
 
     cfg_po3 = OmegaConf.merge(cfg_base, OmegaConf.create({"features": {"include_po3": True}}))
-    po3 = build_features(m1_bars, cfg=cfg_po3)
+    po3 = build_features(m1_bars, cfg=cast(DictConfig, cfg_po3))
     assert {"po3_phase", "session_progress"} <= set(map(str, po3.columns))
     assert set(map(str, base.columns)) < set(map(str, po3.columns))
 
     cfg_fvg = OmegaConf.merge(cfg_base, OmegaConf.create({"features": {"include_fvg_ifvg": True}}))
-    fvg = build_features(m1_bars, cfg=cfg_fvg)
+    fvg = build_features(m1_bars, cfg=cast(DictConfig, cfg_fvg))
     assert any(str(c).startswith("M5_fvg_") for c in fvg.columns)
     assert set(map(str, base.columns)) < set(map(str, fvg.columns))
 
@@ -157,7 +159,7 @@ def test_po3_full_flag_additive(m1_bars):
     base = build_features(m1_bars, cfg=cfg_base)
 
     cfg_full = OmegaConf.merge(cfg_base, OmegaConf.create({"features": {"include_po3_full": True}}))
-    full = build_features(m1_bars, cfg=cfg_full)
+    full = build_features(m1_bars, cfg=cast(DictConfig, cfg_full))
 
     assert set(map(str, base.columns)) < set(map(str, full.columns))
     for col in ["entry_long", "entry_short", "entry_trigger_type"]:
@@ -182,8 +184,8 @@ def test_po3_full_no_lookahead_on_entries(m1_bars):
     cfg = OmegaConf.merge(
         OmegaConf.create(_base_cfg()), OmegaConf.create({"features": {"include_po3_full": True}})
     )
-    full = build_features(m1_bars, cfg=cfg)
-    trunc = build_features(m1_bars.iloc[:400], cfg=cfg)
+    full = build_features(m1_bars, cfg=cast(DictConfig, cfg))
+    trunc = build_features(m1_bars.iloc[:400], cfg=cast(DictConfig, cfg))
 
     overlap = trunc.index[:300]
     entry_cols = ["entry_long", "entry_short", "entry_trigger_type"]

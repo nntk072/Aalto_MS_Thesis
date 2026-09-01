@@ -10,6 +10,7 @@ import sched
 import threading
 import time
 from pathlib import Path
+from typing import Any
 
 import MetaTrader5 as mt5
 import yaml
@@ -32,9 +33,9 @@ configure_logging()
 
 # MT5 Configuration
 TERMINAL_PATH = r"C:\Program Files\MetaTrader 5\terminal64.exe"
-LOGIN = os.getenv("LOGIN")
-PASSWORD = os.getenv("PASSWORD")
-SERVER = os.getenv("SERVER")
+LOGIN = os.getenv("LOGIN", "")
+PASSWORD = os.getenv("PASSWORD", "")
+SERVER = os.getenv("SERVER", "")
 
 # Trading Configuration
 TRADING_INTERVAL_MINUTES = int(os.getenv("TRADING_INTERVAL_MINUTES", "60"))
@@ -42,7 +43,7 @@ MAX_SYMBOLS = int(os.getenv("MAX_SYMBOLS", "2"))
 STRATEGY_TYPE = os.getenv("STRATEGY_TYPE", "combined")  # crossover, smc, trend_breakout, combined
 
 
-def load_config() -> dict:
+def load_config() -> dict[str, Any]:
     """Load configuration from YAML file."""
     config_path = Path(__file__).parent / "config" / "symbols_config.yaml"
 
@@ -56,7 +57,7 @@ def load_config() -> dict:
     return config
 
 
-def get_symbol_candidates(config: dict) -> list[str]:
+def get_symbol_candidates(config: dict[str, Any]) -> list[str]:
     """Get symbol candidates from config."""
     candidates = []
 

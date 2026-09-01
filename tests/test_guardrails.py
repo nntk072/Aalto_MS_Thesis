@@ -6,7 +6,7 @@ from quant_rl.backtest.account import AccountState
 from quant_rl.backtest.guardrails import FTMOGuardrails
 
 
-def _make(daily_loss=0.0, max_dd=0.0):
+def _make(daily_loss: float = 0.0, max_dd: float = 0.0) -> AccountState:
     acc = AccountState(initial_balance=100_000.0)
     acc.daily_loss = daily_loss
     acc.max_drawdown = max_dd

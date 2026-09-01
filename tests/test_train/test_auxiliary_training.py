@@ -7,8 +7,11 @@ real SB3 PPO model and co-trains without touching SB3's own update path.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import numpy as np
 import pytest
+import torch
 from omegaconf import OmegaConf
 
 from quant_rl.train.auxiliary_training import (
@@ -18,7 +21,7 @@ from quant_rl.train.auxiliary_training import (
 
 
 @pytest.fixture
-def synthetic() -> tuple[np.ndarray, np.ndarray]:
+def synthetic() -> tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]]:
     """(features, closes) with no NaNs: T=300 bars, F=3 features."""
     rng = np.random.default_rng(7)
     closes = 100.0 * np.exp(np.cumsum(rng.normal(0, 0.001, 300)))
@@ -111,7 +114,6 @@ def test_callback_co_trains_with_ppo(synthetic):
     assert len(seq) > 0
 
     # encoder gradient actually flows (features change after a step)
-    import torch
 
     head = cb.head
     optimizer = torch.optim.Adam(list(head.parameters()), lr=1e-3)
@@ -119,14 +121,16 @@ def test_callback_co_trains_with_ppo(synthetic):
 
     loss_fn = AuxiliaryLoss(head, aux_weight=0.1)
     obs_t = torch.zeros(4, 4, device=model.policy.device)  # CartPole Box(4,) obs
-    latent = model.policy.extract_features(obs_t, model.policy.features_extractor)
+    latent = cast(
+        torch.Tensor, model.policy.extract_features(obs_t, model.policy.features_extractor)
+    )
     before_head = {k: v.clone() for k, v in head.state_dict().items()}
     loss = loss_fn(
         torch.zeros((), device=model.policy.device),
         latent,
         torch.randn(4, 5, device=model.policy.device),
     )
-    loss.backward()
+    loss.backward()  # type: ignore[no-untyped-call]
     optimizer.step()
     after_head = head.state_dict()
     assert any(not torch.equal(before_head[k], after_head[k]) for k in before_head)

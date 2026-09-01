@@ -114,7 +114,7 @@ def test_evaluate_model_output_satisfies_metrics_contract() -> None:
         "evaluate_model must return a pd.Series for equity "
         "(calculate_metrics relies on .to_numpy())"
     )
-    eq = result["equity"].to_numpy(dtype=float)
+    eq = result["equity"].to_numpy(dtype=np.float32)
     assert eq.size > 0
     assert eq[0] > 0, "initial equity must be positive (calculate_metrics rejects <= 0)"
 

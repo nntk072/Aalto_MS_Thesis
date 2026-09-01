@@ -26,7 +26,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -103,7 +103,7 @@ def load_config(args: argparse.Namespace) -> DictConfig:
     merged = OmegaConf.merge(
         loaded, OmegaConf.from_dotlist([f"{k}={v}" for k, v in overrides.items() if v is not None])
     )
-    return OmegaConf.create(merged)
+    return cast("DictConfig", OmegaConf.create(merged))
 
 
 def evaluate_split(
@@ -212,7 +212,7 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if args.wandb:
-        import wandb  # type: ignore[import-not-found]
+        import wandb
 
         wandb.init(
             project="aalto-liquidity-sweep",

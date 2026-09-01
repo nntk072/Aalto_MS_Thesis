@@ -132,6 +132,6 @@ class TestPlan5SACIntegration:
         latent = torch.randn(8, features_dim, requires_grad=True)
         targets = torch.randn(8, 5)
 
-        total = aux(rl_loss, latent, targets)
-        total.backward()
+        total: torch.Tensor = aux(rl_loss, latent, targets)
+        total.backward()  # type: ignore[no-untyped-call]
         assert latent.grad is not None and torch.isfinite(latent.grad).all()

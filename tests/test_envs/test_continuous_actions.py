@@ -5,6 +5,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import pytest
+from gymnasium.spaces import Box, Discrete
 
 from quant_rl.envs.trading_env import TradingEnv
 
@@ -57,6 +58,7 @@ class TestContinuousActionSpace:
 
         # Check action space is Box(-1, 1)
         assert env.action_space.shape == (1,)
+        assert isinstance(env.action_space, Box)
         assert env.action_space.low[0] == -1.0
         assert env.action_space.high[0] == 1.0
 
@@ -72,6 +74,7 @@ class TestContinuousActionSpace:
         )
 
         # Check action space is Discrete(20)
+        assert isinstance(env.action_space, Discrete)
         assert env.action_space.n == 20
 
     def test_continuous_action_mapping(

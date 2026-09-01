@@ -36,9 +36,9 @@ for _attr in (
     if not hasattr(_mt5_stub, _attr):
         setattr(_mt5_stub, _attr, 1)  # all timeframes equal is fine headless
 if not hasattr(_mt5_stub, "ORDER_TYPE_BUY"):
-    _mt5_stub.ORDER_TYPE_BUY = 0
+    setattr(_mt5_stub, "ORDER_TYPE_BUY", 0)
 if not hasattr(_mt5_stub, "ORDER_TYPE_SELL"):
-    _mt5_stub.ORDER_TYPE_SELL = 1
+    setattr(_mt5_stub, "ORDER_TYPE_SELL", 1)
 
 import live_trading_rl  # noqa: E402
 
@@ -90,7 +90,7 @@ def test_load_risk_overrides_partial_block_warns_and_fills(monkeypatch: pytest.M
     """A dropped key must fall back explicitly, not silently shrink live risk."""
     warnings: list[str] = []
     monkeypatch.setattr(
-        live_trading_rl.logger,
+        getattr(live_trading_rl, "logger"),
         "warning",
         lambda msg, *a: warnings.append(str(msg)),
     )
