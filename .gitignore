@@ -166,7 +166,10 @@ cython_debug/
 *.ipynb
 
 logs/
-/data/
+/data/*
+# Tracked-on-purpose developer example (see data/examples/README.md)
+!/data/examples/
+!/data/examples/**
 
 # Generated artifacts and local runtime outputs (root-level only —
 # do NOT anchor-less match, or quant_rl/data, quant_rl/models etc. get swallowed)
