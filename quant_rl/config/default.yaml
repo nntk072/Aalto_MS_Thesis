@@ -53,6 +53,23 @@ ftmo:
   risk_per_trade_limit: 1000.0         # per-trade risk kill-switch
   profit_target: 10000.0               # not enforced in env, only reported
 
+# LIVE/paper execution risk for mt5_trading's RiskManager (used by
+# live_trading_rl.py / mt5_trading.robot.rl_robot). These are intentionally a
+# percentage-of-balance sizing model, NOT the FTMO dollar kill-switches in
+# `ftmo:` above: training/eval enforce ftmo.daily_loss_limit /
+# max_loss_limit / risk_per_trade_limit via FTMOGuardrails, while MT5 sizing
+# works from balance fractions. Scaling here is chosen so that on the default
+# $100k account, risk_per_symbol (1%) ≈ ftmo.risk_per_trade_limit ($1000) —
+# keep that ratio aligned if you change account size, and never change one
+# without the other. Silent divergence (training under a $1000 cap, live under
+# $5000) is the failure mode this block exists to prevent.
+live_risk_overrides:
+  risk_per_symbol: 0.01          # 1% of balance ≈ $1000 on a $100k account
+  max_total_risk: 0.02           # aggregate open-position risk cap (2%)
+  default_lot_size: 0.1          # fallback if risk-based sizing fails
+  stop_loss_pips: 50.0           # stop distance used by RiskManager sizing
+  interval_minutes: 1            # M1 policy cadence for live_trading_rl.py
+
 features:
   window: 60                           # look-back bars fed to encoder
   ema_periods: [9, 13, 21, 50, 200]

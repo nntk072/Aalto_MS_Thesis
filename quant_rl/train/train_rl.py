@@ -23,8 +23,8 @@ import logging
 from datetime import datetime
 
 import numpy as np
-from stable_baselines3.common.callbacks import CheckpointCallback
 import torch
+from stable_baselines3.common.callbacks import CheckpointCallback
 
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import run_pipeline

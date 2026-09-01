@@ -306,6 +306,62 @@ After running each phase, verify:
 
 ---
 
+## Live / Paper Trading (Stage 8+)
+
+### Paper trade a trained checkpoint (no orders placed)
+
+```bash
+# One dry-run cycle: logs signals + intended orders only
+PAPER_TRADING=true RL_MODEL_PATH=outputs/<run>/model/ppo_final \
+    python live_trading_rl.py --once
+
+# Continuous paper loop (default M1 cadence from live_risk_overrides)
+PAPER_TRADING=true RL_MODEL_PATH=outputs/<run>/model/ppo_final python live_trading_rl.py
+
+# Useful flags
+python live_trading_rl.py --help
+#   --model PATH          checkpoint (or $RL_MODEL_PATH)
+#   --config PATH         run config (default: the run's saved config.yaml)
+#   --symbol / --secondary-symbol   primary + SMT symbols (US100 / US500)
+#   --interval-minutes    override the cadence
+```
+
+`PAPER_TRADING` defaults to `true` — every signal and intended order is
+logged, nothing is sent to the broker. SMT/secondary-symbol data is wired
+automatically iff the deployed run was trained with it (`use_m1_only=false`
+and `primary_only=false`).
+
+### Go live (only after DEPLOYMENT.md criteria pass)
+
+```bash
+PAPER_TRADING=false RL_MODEL_PATH=outputs/<run>/model/ppo_final python live_trading_rl.py
+```
+
+### SAC / encoder variants / walk-forward (Stage 1 flags)
+
+```bash
+# SAC (continuous actions)
+.venv/bin/python -m quant_rl.train.train_rl --algo sac --seed=42
+
+# Transformer encoder + sweep reward
+.venv/bin/python -m quant_rl.train.train_rl --arch transformer --reward sweep --seed=42
+
+# Purged walk-forward validation
+.venv/bin/python -m quant_rl.train.train_rl --walk-forward --wf-splits 5 \
+    --purge-bars 60 --embargo-bars 20 --seed=42
+
+# Log to Weights & Biases
+.venv/bin/python -m quant_rl.train.train_rl --mvp --wandb
+```
+
+### Run-report gate (G3)
+
+```bash
+# Reads outputs/* (both metrics.json and training_log.json schemas)
+.venv/bin/python scripts/report_g3.py --runs-dir outputs --sharpe-threshold 1.0
+```
+
+## Troubleshooting
 ## Troubleshooting
 
 ### "Module not found" errors
