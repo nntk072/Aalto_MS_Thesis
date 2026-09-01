@@ -18,6 +18,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -89,7 +90,7 @@ def main() -> None:
     for name in args.strategies:
         strategy = strategies[name]
 
-        def action_fn(obs: object, _strategy: BaseStrategy = strategy) -> np.ndarray:
+        def action_fn(obs: Any, _strategy: BaseStrategy = strategy) -> np.ndarray[Any, Any]:
             # Baselines use the continuous action contract ([-1, 1] fraction);
             # TradingEnv's continuous decoder expects an ndarray action.
             return np.array([_strategy.act(obs)], dtype=np.float32)
@@ -104,7 +105,7 @@ def main() -> None:
             episodic=False,
         )
         metrics = run_episode(env, action_fn=action_fn)
-        report = {
+        report: dict[str, Any] = {
             "run_name": f"baseline_{name}",
             "split": {
                 "train_end": args.train_end,

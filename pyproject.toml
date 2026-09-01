@@ -102,18 +102,56 @@ known-first-party = ["quant_rl"]
 
 [tool.mypy]
 python_version = "3.12"
-files = ["quant_rl"]
+files = [
+    "quant_rl",
+    "mt5_trading",
+    "scripts",
+    "tests",
+    "backtest",
+    "demo_trading.py",
+    "live_trading.py",
+]
 strict = true
 show_error_codes = true
 warn_unused_ignores = true
 warn_return_any = true
 no_implicit_optional = true
 pretty = true
-exclude = "^(quant_rl/(eval/(export|plots|plots_interactive|replot_orders)|train/(run_backtest|run_baselines|train_rl))\\.py)$|^(backtest/|mt5_trading/|tests/|scripts/|demo_trading\\.py|live_trading\\.py)"
+# scripts/, tests/ and backtest/ have no __init__.py; resolve module names
+# against the repo root so files aren't seen under two different modules.
+namespace_packages = true
+explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = ["stable_baselines3", "stable_baselines3.*", "plotly", "plotly.*", "backtrader", "backtrader.*", "MetaTrader5", "MetaTrader5.*", "loguru", "loguru.*"]
+module = [
+    "stable_baselines3", "stable_baselines3.*", "plotly", "plotly.*", "backtrader", "backtrader.*",
+    "MetaTrader5", "MetaTrader5.*", "loguru", "loguru.*", "mplfinance", "mplfinance.*", "scipy", "scipy.*",
+    "wandb", "yaml", "yfinance", "yfinance.*",
+]
 ignore_missing_imports = true
+
+# --- Scoped relaxations (keep strict everywhere else) -----------------------
+# Tests: don't require full annotations on every helper/fixture.
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+# Plotting glue: matplotlib ships untyped helpers (AutoDateLocator, DateFormatter,
+# ...) in the pinned version; calling them is intentional.
+[[tool.mypy.overrides]]
+module = ["quant_rl.eval.plots", "quant_rl.eval.plots_interactive", "quant_rl.eval.replot_orders", "tests.test_plots_export", "tests.test_training_plots", "tests.test_eval.*"]
+disallow_untyped_calls = false
+
+# Legacy scaffold kept for reference (superseded by quant_rl + live_trading_rl):
+# resolved via sys.path hacks and untyped; check loosely, not not at all.
+[[tool.mypy.overrides]]
+module = ["backtest.*", "strategies.*", "utils.*", "demo_trading", "live_trading"]
+ignore_missing_imports = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_subclassing_any = false
 
 [build-system]
 requires = ["hatchling"]

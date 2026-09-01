@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import torch
 from gymnasium import spaces
 
@@ -15,8 +16,8 @@ class TestTCNEncoder:
         """Test TCNEncoder with proper observation space."""
         observation_space = spaces.Dict(
             {
-                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=float),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
             }
         )
 
@@ -33,8 +34,8 @@ class TestTCNEncoder:
         """Test TCNEncoder forward pass."""
         observation_space = spaces.Dict(
             {
-                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=float),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
             }
         )
 
@@ -64,8 +65,8 @@ class TestTransformerEncoder:
         """Test TransformerEncoder with proper observation space."""
         observation_space = spaces.Dict(
             {
-                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=float),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
             }
         )
 
@@ -82,8 +83,8 @@ class TestTransformerEncoder:
         """Test TransformerEncoder forward pass."""
         observation_space = spaces.Dict(
             {
-                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=float),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
             }
         )
 
@@ -111,8 +112,8 @@ class TestGRUEncoder:
         """Test GRUEncoder with proper observation space."""
         observation_space = spaces.Dict(
             {
-                "seq": spaces.Box(low=-1.0, high=1.0, shape=(128, 64), dtype=float),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(128, 64), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
             }
         )
 
@@ -129,8 +130,8 @@ class TestGRUEncoder:
         """Test GRUEncoder forward pass."""
         observation_space = spaces.Dict(
             {
-                "seq": spaces.Box(low=-1.0, high=1.0, shape=(128, 64), dtype=float),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(128, 64), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
             }
         )
 
@@ -154,8 +155,8 @@ class TestGRUEncoder:
         """Test GRUEncoder has trainable parameters."""
         observation_space = spaces.Dict(
             {
-                "seq": spaces.Box(low=-1.0, high=1.0, shape=(128, 64), dtype=float),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(128, 64), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
             }
         )
 
@@ -168,8 +169,8 @@ class TestGRUEncoder:
         """Test GRUEncoder with default parameters."""
         observation_space = spaces.Dict(
             {
-                "seq": spaces.Box(low=-1.0, high=1.0, shape=(128, 64), dtype=float),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(128, 64), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
             }
         )
 
@@ -190,8 +191,8 @@ class TestEncoderComparison:
         """Test that all encoders produce the same output shape."""
         observation_space = spaces.Dict(
             {
-                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=float),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
             }
         )
 
@@ -222,8 +223,8 @@ class TestEncoderComparison:
         """Test that all encoders accept dict input."""
         observation_space = spaces.Dict(
             {
-                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=float),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
             }
         )
 
@@ -245,8 +246,8 @@ class TestEncoderComparison:
         """Encoder output must depend on the sequence input."""
         observation_space = spaces.Dict(
             {
-                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=float),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
             }
         )
         encoder = TCNEncoder(
@@ -268,8 +269,8 @@ class TestEncoderComparison:
         """Encoder output must depend on the account input."""
         observation_space = spaces.Dict(
             {
-                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=float),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
             }
         )
         encoder = TransformerEncoder(
@@ -291,8 +292,8 @@ class TestEncoderComparison:
         """Same input must produce identical output."""
         observation_space = spaces.Dict(
             {
-                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=float),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
             }
         )
         encoder = TCNEncoder(
@@ -311,8 +312,8 @@ class TestEncoderComparison:
         """Same input must produce identical output."""
         observation_space = spaces.Dict(
             {
-                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=float),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=float),
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
             }
         )
         encoder = TransformerEncoder(

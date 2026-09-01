@@ -17,12 +17,13 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import torch
 import torch.nn as nn
 import yaml
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset, Subset, random_split
 
 # Add project root to path before importing VAE
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -36,13 +37,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class PreNYSequenceDataset(Dataset):
+class PreNYSequenceDataset(Dataset[torch.Tensor]):
     """Dataset for pre-NY session sequences.
 
     Each sample is a sequence of 5-minute OHLCV bars from 01:05 to 16:29 UTC+3.
     """
 
-    def __init__(self, data: np.ndarray) -> None:
+    def __init__(self, data: np.ndarray[Any, Any]) -> None:
         """Initialize dataset.
 
         Parameters
@@ -124,10 +125,10 @@ class VAELoss:
         # Total loss
         total_loss = self.reconstruction_weight * recon_loss + self.kl_weight * kl_loss
 
-        return total_loss
+        return cast(torch.Tensor, total_loss)
 
 
-def load_config(config_path: str) -> dict:
+def load_config(config_path: str) -> dict[str, Any]:
     """Load configuration from YAML file.
 
     Parameters
@@ -141,13 +142,13 @@ def load_config(config_path: str) -> dict:
         Configuration dictionary.
     """
     with open(config_path) as f:
-        config = yaml.safe_load(f)
+        config: dict[str, Any] = yaml.safe_load(f)
     return config
 
 
 def prepare_data(
-    config: dict,
-) -> tuple[PreNYSequenceDataset, PreNYSequenceDataset, PreNYSequenceDataset]:
+    config: dict[str, Any],
+) -> tuple[Subset[torch.Tensor], Subset[torch.Tensor], Subset[torch.Tensor]]:
     """Load and prepare training, validation, and test data.
 
     Parameters
@@ -157,7 +158,7 @@ def prepare_data(
 
     Returns
     -------
-    tuple[PreNYSequenceDataset, PreNYSequenceDataset, PreNYSequenceDataset]
+    tuple[Subset[torch.Tensor], Subset[torch.Tensor], Subset[torch.Tensor]]
         Training, validation, and test datasets.
     """
     data_path = Path(config["data_path"])
@@ -207,9 +208,9 @@ def prepare_data(
 
 def train_vae(
     model: VAE,
-    train_loader: DataLoader,
-    val_loader: DataLoader,
-    config: dict,
+    train_loader: DataLoader[Any],
+    val_loader: DataLoader[Any],
+    config: dict[str, Any],
     device: torch.device,
 ) -> VAE:
     """Train the VAE model.
@@ -235,7 +236,7 @@ def train_vae(
     # Setup
     optimizer = torch.optim.Adam(model.parameters(), lr=config["lr"])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", factor=0.5, patience=5, verbose=True
+        optimizer, mode="min", factor=0.5, patience=5
     )
     loss_fn = VAELoss(
         reconstruction_weight=config.get("reconstruction_weight", 1.0),
@@ -263,7 +264,7 @@ def train_vae(
 
             # Backward pass
             optimizer.zero_grad()
-            loss.backward()
+            loss.backward()  # type: ignore[no-untyped-call]
             optimizer.step()
 
         train_loss /= len(train_loader)
@@ -294,7 +295,7 @@ def train_vae(
     return model
 
 
-def evaluate_vae(model: VAE, test_loader: DataLoader, device: torch.device) -> float:
+def evaluate_vae(model: VAE, test_loader: DataLoader[Any], device: torch.device) -> float:
     """Evaluate the VAE model on test data.
 
     Parameters

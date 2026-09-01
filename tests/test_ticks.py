@@ -29,7 +29,9 @@ def _make_book() -> TickBook:
 def test_quote_at_exact_tick():
     book = _make_book()
     ts = pd.Timestamp("2025-01-06 16:30:05", tz="UTC")
-    bid, ask = book.quote_at(ts)
+    quote = book.quote_at(ts)
+    assert quote is not None
+    bid, ask = quote
     assert bid == pytest.approx(100.5)
     assert ask == pytest.approx(101.1)
 
@@ -88,7 +90,9 @@ def test_build_tick_book_chunked_matches_expected(tmp_path: Path):
 
     assert len(book) == 3
     ts = pd.Timestamp("2025-01-06 16:30:05", tz="Etc/GMT-3")
-    bid, ask = book.quote_at(ts)
+    quote = book.quote_at(ts)
+    assert quote is not None
+    bid, ask = quote
     assert bid == pytest.approx(100.0)  # forward-filled across the chunk boundary
     assert ask == pytest.approx(101.1)
 

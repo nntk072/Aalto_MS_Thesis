@@ -3,4 +3,4 @@ set -euo pipefail
 # Run mypy type checker.
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$SCRIPT_DIR"
-exec uv run mypy quant_rl
+exec uv run mypy

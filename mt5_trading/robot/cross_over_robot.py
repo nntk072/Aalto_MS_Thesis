@@ -49,7 +49,7 @@ class CrossOverRobot:
         self.name = "Cross Over"
         logger.info("Starting CrossOver Robot")
 
-    def trade(self):
+    def trade(self) -> None:
         """
         Executes the trading logic based on the strategy's signals.
         """

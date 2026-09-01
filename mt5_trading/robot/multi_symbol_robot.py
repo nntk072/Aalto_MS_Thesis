@@ -1,3 +1,5 @@
+from typing import Any
+
 import MetaTrader5 as mt5
 from loguru import logger
 
@@ -98,7 +100,7 @@ class MultiSymbolRobot:
         """
         return self.risk_manager.check_risk_limits(symbol, position_size, self.stop_loss_pips)
 
-    def trade_symbol(self, symbol: str):
+    def trade_symbol(self, symbol: str) -> None:
         """
         Execute trading logic for a single symbol.
 
@@ -214,7 +216,7 @@ class MultiSymbolRobot:
         except Exception as e:
             logger.exception(f"Error trading {symbol}: {e}")
 
-    def trade(self):
+    def trade(self) -> None:
         """
         Execute trading logic for all symbols.
         """
@@ -251,7 +253,7 @@ class MultiSymbolRobot:
         logger.info("=" * 80)
         logger.info("")
 
-    def get_status(self) -> dict:
+    def get_status(self) -> dict[str, Any]:
         """
         Get current status of the robot.
 

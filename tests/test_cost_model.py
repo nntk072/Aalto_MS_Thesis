@@ -54,6 +54,7 @@ def test_round_trip_spread_charged_once():
 
     quote = (100.0, 101.0)
     pos = broker.open_position(acc, quote=quote, lots=1.0, direction=1)
+    assert pos is not None
     pnl, fill_price = broker.close_position(acc, pos, quote=quote)
     assert pnl == pytest.approx(-1.0)
     assert fill_price == pytest.approx(100.0)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -20,7 +21,7 @@ from quant_rl.evaluation.metrics import (
 class TestSweepDelayBreakdown:
     def test_summarises_delays_and_level_split(self) -> None:
         # Arrange
-        trade_log = [
+        trade_log: list[dict[str, Any]] = [
             {"type": "open", "sweep_delay_s": 10.0, "level_type": "london_high"},
             {"type": "close", "pnl": 100.0},
             {"type": "open", "sweep_delay_s": 30.0, "level_type": "asian_low"},

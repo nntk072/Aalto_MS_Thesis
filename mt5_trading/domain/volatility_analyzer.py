@@ -1,3 +1,5 @@
+from typing import Any
+
 import MetaTrader5 as mt5
 import numpy as np
 import pandas as pd
@@ -85,13 +87,15 @@ class VolatilityAnalyzer:
         if len(atr_values) == 0:
             return 0.0
 
-        return (
+        return float(
             np.mean(atr_values[-self.lookback_period :])
             if len(atr_values) >= self.lookback_period
             else np.mean(atr_values)
         )
 
-    def calculate_volatility_metrics(self, symbol: str, timeframe: int = mt5.TIMEFRAME_H1) -> dict:
+    def calculate_volatility_metrics(
+        self, symbol: str, timeframe: int = mt5.TIMEFRAME_H1
+    ) -> dict[str, Any] | None:
         """
         Calculate volatility metrics for a symbol.
 
@@ -153,7 +157,7 @@ class VolatilityAnalyzer:
 
     def rank_symbols_by_volatility(
         self, symbols: list[str], timeframe: int = mt5.TIMEFRAME_H1
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         Rank symbols by volatility (highest first).
 
@@ -210,7 +214,7 @@ class VolatilityAnalyzer:
 
         return selected
 
-    def get_symbol_info(self, symbol: str) -> dict:
+    def get_symbol_info(self, symbol: str) -> dict[str, Any] | None:
         """
         Get basic information about a symbol.
 
@@ -239,6 +243,6 @@ class VolatilityAnalyzer:
             logger.error(f"Error getting symbol info for {symbol}: {e}")
             return None
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Cleanup MT5 connection."""
         mt5.shutdown()

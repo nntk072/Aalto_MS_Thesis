@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import sys
 from types import ModuleType, SimpleNamespace
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
+from mt5_trading.adapters import Trader, TradingData
 
 # --- headless MetaTrader5 stub (Windows-only package, absent on Linux) -----
 # Additive: several sibling test modules install their own partial stub; always
@@ -79,11 +81,11 @@ def _make_bars(n: int = 300, seed: int = 7) -> pd.DataFrame:
 class _StubModel:
     """Duck-typed SB3 model; action = +1 (long) always."""
 
-    def predict(self, obs: dict, deterministic: bool = True) -> np.ndarray:  # noqa: ARG002
+    def predict(self, obs: dict[str, Any], deterministic: bool = True) -> np.ndarray[Any, Any]:  # noqa: ARG002
         return np.array([1])
 
 
-class _StubData:
+class _StubData(TradingData):
     """Duck-typed MT5Data returning a fixed bars frame."""
 
     def __init__(self, bars: pd.DataFrame, symbol: str = "US100.cash") -> None:
@@ -97,12 +99,12 @@ class _StubData:
         return self._bars
 
 
-class RecordingTrader:
+class RecordingTrader(Trader):
     """Duck-typed Trader that records calls instead of touching MT5."""
 
     def __init__(self, *, sells_open: bool = False) -> None:
-        self.opened: list[tuple] = []
-        self.closed: list[tuple] = []
+        self.opened: list[tuple[Any, ...]] = []
+        self.closed: list[tuple[Any, ...]] = []
         self.sells_open = sells_open
 
     def open_position(self, symbol, volume, position_type, comment, magic_number, sl=None, tp=None):
@@ -148,7 +150,7 @@ def _make_robot(
     robot = RLRobot(
         adapter=adapter,
         data_source=_StubData(bars),
-        trader=trader or RecordingTrader(),
+        trader=cast(Trader, trader or RecordingTrader()),
         secondary_data_source=secondary_data,
         paper_trading=paper_trading,
     )
@@ -205,7 +207,7 @@ def test_too_few_bars_yields_no_signal() -> None:
     robot = RLRobot(
         adapter=adapter,
         data_source=_StubData(tiny),
-        trader=trader,
+        trader=cast(Trader, trader),
         paper_trading=False,
     )
     robot.trade()

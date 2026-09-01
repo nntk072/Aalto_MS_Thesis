@@ -20,7 +20,7 @@ def sample_bars():
 
 def test_session_filter_keeps_only_window(sample_bars):
     filtered = filter_session(sample_bars, start="16:30", end="23:00")
-    t = filtered.index.time
+    t = pd.DatetimeIndex(filtered.index).time
     start_t = pd.Timestamp("2000-01-01 16:30").time()
     end_t = pd.Timestamp("2000-01-01 23:00").time()
     assert all((t >= start_t) & (t <= end_t))
@@ -28,7 +28,7 @@ def test_session_filter_keeps_only_window(sample_bars):
 
 def test_session_filter_removes_outside(sample_bars):
     filtered = filter_session(sample_bars, start="16:30", end="23:00")
-    t = filtered.index.time
+    t = pd.DatetimeIndex(filtered.index).time
     # No bar before 16:30
     assert all(t >= pd.Timestamp("2000-01-01 16:30").time())
     # No bar after 23:00
