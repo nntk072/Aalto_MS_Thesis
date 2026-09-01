@@ -24,6 +24,7 @@ from datetime import datetime
 
 import numpy as np
 from stable_baselines3.common.callbacks import CheckpointCallback
+import torch
 
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import run_pipeline
@@ -83,6 +84,7 @@ def main() -> None:
     parser.add_argument(
         "--use-vae", action="store_true", help="Use VAE feature extractor (not yet implemented)"
     )
+    parser.add_argument("--wandb", action="store_true", help="Log run metrics to Weights & Biases")
     parser.add_argument(
         "--walk-forward", action="store_true", help="Run purged walk-forward validation"
     )
@@ -110,6 +112,10 @@ def main() -> None:
     import random
 
     random.seed(args.seed)
+    # SB3 seeds its own generator but does *not* seed torch.manual_seed — the
+    # caller's responsibility. Network init/dropout draw from torch's global
+    # RNG, so without this line two --seed 42 runs are not reproducible.
+    torch.manual_seed(args.seed)
 
     cfg = load_config(args.overrides, config_path=args.config)
 
@@ -286,9 +292,43 @@ def main() -> None:
         "test_max_dd": float(test_m.max_drawdown),
         "test_trades": test_m.n_trades,
         "test_return": float(test_m.total_return_pct),
+        # Gate G3 checks "zero kill-switch breaches"; the count is computed by
+        # evaluate_model but was not being written out.
+        "test_breaches": test_result.get("n_breach_sessions", 0),
         "timestamp": datetime.now().isoformat(),
     }
     (run_dir / "training_log.json").write_text(json.dumps(training_log, indent=2))
+
+    # Optional wandb logging — the sweep (config/wandb_sweep.yaml) reads
+    # these same keys when it launches this entrypoint.
+    if args.wandb:
+        try:
+            import wandb
+        except ImportError:
+            raise SystemExit("--wandb requires the wandb package: pip install wandb")
+        wandb.init(
+            project="aalto-liquidity-sweep",
+            name=run_dir.name,
+            config={
+                "algo": args.algo,
+                "arch": args.arch,
+                "reward": args.reward,
+                "seed": args.seed,
+                "mvp": args.mvp,
+                "timesteps": timesteps,
+            },
+        )
+        wandb.log(
+            {
+                "sharpe": training_log["test_sharpe"],
+                "test_sharpe": training_log["test_sharpe"],
+                "test_max_dd": training_log["test_max_dd"],
+                "test_trades": training_log["test_trades"],
+                "test_return": training_log["test_return"],
+                "test_breaches": training_log["test_breaches"],
+            }
+        )
+        wandb.finish()
 
     # Walk-forward validation (additive, does not alter the single-split flow)
     if args.walk_forward:

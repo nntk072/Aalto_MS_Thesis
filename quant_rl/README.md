@@ -18,10 +18,10 @@ python -m quant_rl.train.run_baselines
 # 4. Verify backtester (random policy)
 python -m quant_rl.train.run_backtest
 
-# 5. Verify env wiring (stub MLP policy, no encoder needed)
-python -m quant_rl.train.train_rl --stub
+# 5. Verify env wiring (stub config, no long training)
+python -m quant_rl.train.train_rl --mvp
 
-# 6. (After you implement quant_rl/models/encoder.py)
+# 6. Full run (encoders wired via quant_rl.models.agent.build_agent)
 python -m quant_rl.train.train_rl
 
 # 7. Run tests
@@ -37,10 +37,9 @@ quant_rl/
   features/       indicators, SMT divergence, rolling z-score, build
   backtest/       account, costs, guardrails, broker, event-driven engine
   envs/           Gymnasium TradingEnv + DSR reward
-  models/         ← YOU IMPLEMENT (typed stubs provided)
-    base.py       Encoder / Policy abstract interfaces
-    encoder.py    TCN/Transformer BaseFeaturesExtractor stub (NotImplementedError)
-    agent.py      PPO wiring stub
+  models/         TCN/GRU/Transformer encoders + build_agent (PPO/SAC)
+    encoder.py    TCN / GRU / Transformer BaseFeaturesExtractor implementations
+    agent.py      build_agent() wires the chosen encoder into SB3 PPO/SAC
   baselines/      buy-and-hold, EMA/MACD/RSI rule-based
   eval/           metrics (incl. breach_rate), purged walk-forward, multi-seed report
   train/          run_backtest.py, run_baselines.py, train_rl.py
@@ -54,7 +53,7 @@ tests/            causal features, guardrails, cost model, DSR reward, session f
 All higher-TF CSV files are mislabeled duplicates of finer TFs (see plan).
 **Every timeframe is resampled from the true M1 source** (`data/US100.cash_M1_*` and `data/US500.cash_M1_*`). Other CSV files are ignored by the pipeline.
 
-## Model stub contract
+## Model contract
 
 ### Observation space
 ```
@@ -62,23 +61,13 @@ obs["seq"]     : float32  [batch, T, F]   (T = cfg.env.obs_window, F = n_feature
 obs["account"] : float32  [batch, 5]      (normalised account state vector)
 ```
 
-### What you implement
-1. **`quant_rl/models/encoder.py`** – subclass `SequenceEncoder(BaseFeaturesExtractor)`, implement `forward(obs) → [batch, D + 5]`.
-2. **`quant_rl/models/agent.py`** – fill in `build_agent(env, cfg)` to wire your encoder to `stable_baselines3.PPO`.
-
-### Example encoder wiring
-```python
-policy_kwargs = dict(
-    features_extractor_class=SequenceEncoder,
-    features_extractor_kwargs=dict(
-        seq_len=cfg.env.obs_window,
-        n_features=<F>,
-        latent_dim=128,
-    ),
-)
-model = PPO("MultiInputPolicy", env, policy_kwargs=policy_kwargs,
-            n_steps=cfg.ppo.n_steps, ...)
-```
+### What `build_agent` wires
+1. **`quant_rl/models/encoder.py`** — `TCNEncoder` / `GRUEncoder` /
+   `TransformerEncoder` (all subclass `BaseFeaturesExtractor`), chosen by the
+   ``arch`` argument (`tcn` / `gru` / `transformer`).
+2. **`quant_rl/models/agent.py`** — `build_agent(env, cfg, arch, algo,
+   use_vae)` returns the SB3 `PPO` / `SAC` model wired to that encoder, used
+   by both `quant_rl/train/train_rl.py` and `scripts/compare_encoders.py`.
 
 ## Config overrides (key=value)
 ```bash
