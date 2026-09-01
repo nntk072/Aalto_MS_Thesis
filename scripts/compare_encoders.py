@@ -24,10 +24,10 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from omegaconf import DictConfig, OmegaConf  # noqa: E402
-from scripts.train_rl import make_action_fn  # noqa: E402
 
 from quant_rl.data.split import split_train_test  # noqa: E402
 from quant_rl.envs.trading_env import TradingEnv  # noqa: E402
+from quant_rl.eval.rollout import make_action_fn  # noqa: E402
 from quant_rl.evaluation import build_run_report, run_episode  # noqa: E402
 from quant_rl.models.agent import build_agent  # noqa: E402
 
@@ -62,7 +62,7 @@ def evaluate_split(
         # instead of truncating the episode (mirrors run_backtest).
         episodic=False,
     )
-    metrics = run_episode(env, action_fn=make_action_fn(model, algo))
+    metrics = run_episode(env, action_fn=make_action_fn(model, continuous_actions=algo == "sac"))
     return build_run_report(metrics, env.trade_log)
 
 

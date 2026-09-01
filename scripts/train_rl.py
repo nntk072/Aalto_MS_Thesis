@@ -1,4 +1,9 @@
-"""Train a PPO/SAC agent with an optional sequence encoder and VAE context.
+"""DEPRECATED — Train a PPO/SAC agent with an optional sequence encoder and VAE context.
+
+Use ``python -m quant_rl.train.train_rl`` instead (the canonical entrypoint;
+same features plus ``--mvp``/``--force``/``--out`` and typo-safe config
+overrides). This script is kept for the wandb sweep preview / deprecation
+transition and will be deleted once those consumers move.
 
 Training happens on a chronological in-sample slice (≤ --train-end) and all
 reported metrics are split into an in-sample block (for diagnosing
@@ -25,6 +30,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -32,6 +38,7 @@ from omegaconf import DictConfig, OmegaConf  # noqa: E402
 
 from quant_rl.data.split import split_train_test  # noqa: E402
 from quant_rl.envs.trading_env import TradingEnv  # noqa: E402
+from quant_rl.eval.rollout import make_action_fn  # noqa: E402
 from quant_rl.evaluation import (  # noqa: E402
     build_run_report,
     purged_walk_forward,
@@ -86,7 +93,10 @@ def load_config(args: argparse.Namespace) -> DictConfig:
         variant = OmegaConf.load(args.features_config)
         loaded = OmegaConf.merge(loaded, variant)
     overrides = {
-        f"{args.algo}.lr": args.lr,
+        # NOTE: default.yaml spells the key ``learning_rate``, not ``lr``.
+        # Omegaconf.from_dotlist silently *creates* a stray ``ppo.lr`` key
+        # otherwise and the sweep would train at the default LR forever.
+        f"{args.algo}.learning_rate": args.lr,
         f"{args.algo}.ent_coef": args.entropy_coef,
         f"{args.algo}.batch_size": args.batch_size,
     }
@@ -94,28 +104,6 @@ def load_config(args: argparse.Namespace) -> DictConfig:
         loaded, OmegaConf.from_dotlist([f"{k}={v}" for k, v in overrides.items() if v is not None])
     )
     return OmegaConf.create(merged)
-
-
-def make_action_fn(model: Any, algo: str) -> Any:
-    """Return an observation → action callable with explicit action typing.
-
-    PPO trains on ``TradingEnv``'s discrete action space, so the policy's
-    integer action id is passed through unchanged; SAC trains on the
-    continuous Box space and yields a float position-sizing fraction.
-    """
-    if algo == "sac":
-
-        def action_fn(obs: dict[str, Any]) -> float:
-            action = model.predict(obs, deterministic=True)[0]
-            return float(np.asarray(action).reshape(-1)[0])
-
-    else:
-
-        def action_fn(obs: dict[str, Any]) -> int:
-            action = model.predict(obs, deterministic=True)[0]
-            return int(np.asarray(action).item())
-
-    return action_fn
 
 
 def evaluate_split(
@@ -134,7 +122,7 @@ def evaluate_split(
         # session instead of truncating the episode, mirroring run_backtest.
         episodic=False,
     )
-    metrics = run_episode(env, action_fn=make_action_fn(model, algo))
+    metrics = run_episode(env, action_fn=make_action_fn(model, continuous_actions=algo == "sac"))
     return build_run_report(metrics, env.trade_log), env
 
 
@@ -204,6 +192,10 @@ def main() -> None:
         else bars.select_dtypes(include=["number"])
     )
     cfg = load_config(args)
+
+    # Seed torch's global RNG *before* model construction — network init /
+    # dropout draw from it and SB3 only seeds its own generator otherwise.
+    torch.manual_seed(args.seed)
 
     train_bars, test_bars, train_features, test_features = split_train_test(
         bars, features, args.train_end, args.test_start

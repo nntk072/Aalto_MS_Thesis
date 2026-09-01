@@ -30,6 +30,29 @@ from ..backtest.costs import COST_US100, CostModel
 from ..envs.trading_env import TradingEnv
 
 
+def make_action_fn(
+    model: Any,
+    continuous_actions: bool = False,
+    deterministic: bool = True,
+) -> Any:
+    """Return an observation → action callable with explicit action typing.
+
+    PPO trains on ``TradingEnv``'s discrete action space, so the policy's
+    integer action id is passed through unchanged; SAC trains on the
+    continuous Box space and yields a float position-sizing fraction.
+
+    This is the single shared implementation — ``scripts/train_rl.py`` and
+    ``scripts/compare_encoders.py`` used to each carry private copies.
+    """
+
+    def action_fn(obs: dict[str, Any]) -> Any:
+        action = model.predict(obs, deterministic=deterministic)[0]
+        scalar = np.asarray(action).reshape(-1)[0]
+        return float(scalar) if continuous_actions else int(scalar)
+
+    return action_fn
+
+
 def evaluate_model(
     model: Any,
     bars: pd.DataFrame,
@@ -102,13 +125,9 @@ def evaluate_model(
     obs, _ = env.reset()
     done = False
     truncated = False
+    action_fn = make_action_fn(model, continuous_actions, deterministic)
     while not (done or truncated):
-        raw_action, _ = model.predict(obs, deterministic=deterministic)
-        if continuous_actions:
-            action = float(np.asarray(raw_action).reshape(-1)[0])
-        else:
-            action = int(np.asarray(raw_action).reshape(-1)[0])
-        obs, _, done, truncated, _ = env.step(action)
+        obs, _, done, truncated, _ = env.step(action_fn(obs))
 
     equity_series = pd.Series(
         env.equity_curve,
