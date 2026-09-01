@@ -50,7 +50,8 @@ class TestPlan5SACIntegration:
         rewards = []
         for _ in range(20):
             action, _ = model.predict(obs, deterministic=True)
-            obs, reward, done, _ = vec_env.step(np.array([float(action[0])], dtype=np.float32))
+            action_arr = np.asarray(action).reshape(-1)
+            obs, reward, done, _ = vec_env.step(np.array([[float(action_arr[0])]], dtype=np.float32))
             rewards.append(float(reward[0]))
             if done.any():
                 break

@@ -439,17 +439,15 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # Handle continuous actions
         if self.continuous_actions:
             if isinstance(action, np.ndarray):
-                # Continuous action: Box(-1, 1)
                 action_value = float(action[0]) if action.size > 0 else 0.0
             else:
-                # For backward compatibility, treat as discrete
-                action_value = 0.0
+                action_value = float(action)
 
             # Map continuous action to discrete_action and risk_frac
-            if action_value > 0.1:
+            if action_value > 0:
                 discrete_action = 1  # long
                 risk_frac = self.max_risk_frac * action_value
-            elif action_value < -0.1:
+            elif action_value < 0:
                 discrete_action = -1  # short
                 risk_frac = self.max_risk_frac * abs(action_value)
             else:
@@ -732,9 +730,17 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                             lots = 0.0
 
                         if has_levels:
-                            self.position = self.broker.open_position(
-                                self.account, (fill_bid, fill_ask), lots, discrete_action
-                            )
+                            sl_already_hit = False
+                            if discrete_action == 1 and fill_bid <= sl_price:
+                                sl_already_hit = True
+                            elif discrete_action == -1 and fill_ask >= sl_price:
+                                sl_already_hit = True
+                            if not sl_already_hit:
+                                self.position = self.broker.open_position(
+                                    self.account, (fill_bid, fill_ask), lots, discrete_action
+                                )
+                            else:
+                                self.position = None
                         if self.position:
                             self.position.sl_price = sl_price
                             self.position.tp_price = tp_price

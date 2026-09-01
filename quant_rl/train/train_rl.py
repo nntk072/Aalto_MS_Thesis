@@ -1,6 +1,6 @@
-"""Train PPO agent on structure-aware trading environment.
+"""Train PPO/SAC agent on structure-aware trading environment.
 
-Trains a PPO policy to learn entry/exit timing and risk/reward parameter selection
+Trains a PPO or SAC policy to learn entry/exit timing and risk/reward parameter selection
 using swing structure and SMT divergence features.
 
 Usage
@@ -34,6 +34,7 @@ from quant_rl.eval.export import build_run_dir, save_run
 from quant_rl.eval.rollout import evaluate_model
 from quant_rl.evaluation import calculate_metrics
 from quant_rl.features.build import build_features
+from quant_rl.models.agent import build_agent
 from quant_rl.train.auxiliary_training import AuxiliaryTrainerCallback
 from quant_rl.train.callbacks import BestCheckpointEvalCallback
 
@@ -41,8 +42,29 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger(__name__)
 
 
+def make_env(bars, features, cfg, *, algo: str, reward: str, episodic: bool = True) -> TradingEnv:
+    continuous_actions = algo == "sac"
+    use_sweep_reward = reward == "sweep"
+    return TradingEnv(
+        bars=bars,
+        features=features,
+        obs_window=cfg.env.obs_window,
+        initial_balance=cfg.account.initial_balance,
+        risk_frac_range=(cfg.risk.default_risk_frac * 0.5, cfg.risk.default_risk_frac * 2.0),
+        rr_ratio_range=(cfg.risk.rr_ratio_default * 0.5, cfg.risk.rr_ratio_default * 1.5),
+        swing_buffer_pts=cfg.risk.swing_buffer_pts,
+        contract_size=cfg.account.contract_size,
+        max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
+        dsr_eta=cfg.env.reward_dsr_eta,
+        max_episode_steps=int(cfg.env.get("max_episode_steps", 1000)),
+        episodic=episodic,
+        continuous_actions=continuous_actions,
+        use_sweep_reward=use_sweep_reward,
+    )
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train PPO on structure-aware trading.")
+    parser = argparse.ArgumentParser(description="Train PPO/SAC on structure-aware trading.")
     parser.add_argument(
         "--config",
         default=None,
@@ -54,7 +76,23 @@ def main() -> None:
     parser.add_argument("--mvp", action="store_true", help="MVP mode: first 30 days only")
     parser.add_argument("--force", action="store_true", help="Force data pipeline rerun")
     parser.add_argument("--out", default="outputs", help="Base output directory")
+    parser.add_argument("--algo", choices=["ppo", "sac"], default="ppo", help="RL algorithm")
+    parser.add_argument("--arch", choices=["tcn", "gru", "transformer"], default="tcn", help="Encoder architecture")
+    parser.add_argument("--reward", choices=["dsr", "sweep"], default="dsr", help="Reward function")
+    parser.add_argument("--use-vae", action="store_true", help="Use VAE feature extractor (not yet implemented)")
+    parser.add_argument("--walk-forward", action="store_true", help="Run purged walk-forward validation")
+    parser.add_argument("--wf-splits", type=int, default=5, help="Number of walk-forward folds")
+    parser.add_argument("--purge-bars", type=int, default=60, help="Purge bars for walk-forward")
+    parser.add_argument("--embargo-bars", type=int, default=20, help="Embargo bars for walk-forward")
+    parser.add_argument("--wf-steps", type=int, default=None, help="Timesteps per WF fold (default: reuse main timesteps)")
     args = parser.parse_args()
+
+    if args.use_vae:
+        raise NotImplementedError(
+            "VAE support requires a pre_ny_data pipeline that does not exist yet "
+            "in quant_rl/train/train_rl.py — see 02_IMPLEMENTATION_PLAN.md Phase 3. "
+            "Run without --use-vae for now."
+        )
 
     np.random.seed(args.seed)
     import random
@@ -86,7 +124,7 @@ def main() -> None:
         primary_m1, features, train_end, test_start
     )
     log.info(
-        "Split: train=%d bars (≤%s)  test=%d bars (≥%s)",
+        "Split: train=%d bars (<=%s)  test=%d bars (>=%s)",
         len(train_bars),
         train_end,
         len(test_bars),
@@ -94,26 +132,14 @@ def main() -> None:
     )
 
     # Slice for MVP
-    if args.mvp and len(train_bars) > 30 * 390:  # ~30 trading days * 390 M1 bars
+    if args.mvp and len(train_bars) > 30 * 390:
         train_bars = train_bars.iloc[: 30 * 390]
         train_feat = train_feat.iloc[: 30 * 390]
         log.info("MVP: sliced training to %d bars", len(train_bars))
 
     # Create training environment
-    log.info("Creating training environment…")
-    train_env = TradingEnv(
-        bars=train_bars,
-        features=train_feat,
-        obs_window=cfg.env.obs_window,
-        initial_balance=cfg.account.initial_balance,
-        risk_frac_range=(cfg.risk.default_risk_frac * 0.5, cfg.risk.default_risk_frac * 2.0),
-        rr_ratio_range=(cfg.risk.rr_ratio_default * 0.5, cfg.risk.rr_ratio_default * 1.5),
-        swing_buffer_pts=cfg.risk.swing_buffer_pts,
-        contract_size=cfg.account.contract_size,
-        max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
-        dsr_eta=cfg.env.reward_dsr_eta,
-        max_episode_steps=int(cfg.env.get("max_episode_steps", 1000)),
-    )
+    log.info("Creating training environment...")
+    train_env = make_env(train_bars, train_feat, cfg, algo=args.algo, reward=args.reward)
 
     # Setup output directory for model
     run_dir = build_run_dir(args.out, f"rl_train_seed{args.seed}")
@@ -128,24 +154,11 @@ def main() -> None:
         save_replay_buffer=False,
     )
 
-    # Train PPO
+    # Train agent
     timesteps = cfg.ppo.total_timesteps if not args.mvp else cfg.training.total_timesteps_mvp
-    log.info("Training PPO for %d timesteps…", timesteps)
+    log.info("Training %s for %d timesteps...", args.algo.upper(), timesteps)
 
-    model = PPO(
-        "MultiInputPolicy",
-        train_env,
-        learning_rate=cfg.ppo.learning_rate,
-        n_steps=cfg.ppo.n_steps,
-        batch_size=cfg.ppo.batch_size,
-        n_epochs=cfg.ppo.n_epochs,
-        gamma=cfg.ppo.gamma,
-        gae_lambda=cfg.ppo.gae_lambda,
-        clip_range=cfg.ppo.clip_range,
-        ent_coef=cfg.ppo.ent_coef,
-        verbose=1,
-        seed=args.seed,
-    )
+    model = build_agent(train_env, cfg, arch=args.arch, algo=args.algo)
 
     aux_cb = None
     aux_cfg = getattr(cfg, "auxiliary", None)
@@ -170,27 +183,15 @@ def main() -> None:
     # and save the best policy to model_dir/best_model. PPO's final save is
     # rarely the best one; this gives us a "best-so-far" snapshot for the
     # final test evaluation.
-    best_eval_freq = max(1, cfg.ppo.n_steps)  # default: once per rollout
+    best_eval_freq = max(1, cfg.ppo.n_steps)
     best_cb = BestCheckpointEvalCallback(
-        eval_env_factory=lambda: TradingEnv(
-            bars=train_bars,
-            features=train_feat,
-            obs_window=cfg.env.obs_window,
-            initial_balance=cfg.account.initial_balance,
-            risk_frac_range=(
-                cfg.risk.default_risk_frac * 0.5,
-                cfg.risk.default_risk_frac * 2.0,
-            ),
-            rr_ratio_range=(
-                cfg.risk.rr_ratio_default * 0.5,
-                cfg.risk.rr_ratio_default * 1.5,
-            ),
-            swing_buffer_pts=cfg.risk.swing_buffer_pts,
-            contract_size=cfg.account.contract_size,
-            max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
-            dsr_eta=cfg.env.reward_dsr_eta,
-            max_episode_steps=int(cfg.env.get("max_episode_steps", 1000)),
-            episodic=False,  # eval mode: walk the whole set, don't end on breach
+        eval_env_factory=lambda: make_env(
+            train_bars,
+            train_feat,
+            cfg,
+            algo=args.algo,
+            reward=args.reward,
+            episodic=False,
         ),
         eval_freq=best_eval_freq,
         best_model_path=model_dir / "ppo_best",
@@ -204,11 +205,8 @@ def main() -> None:
     model.save(model_path)
     log.info("Model saved: %s", model_path)
 
-    # Evaluate the trained model on the test set by rolling it through the
-    # same TradingEnv (Dict obs + Discrete(20) actions) it was trained on —
-    # run_backtest's plain-array policy interface doesn't match this model's
-    # observation/action format, so it can't be used here directly.
-    log.info("Evaluating trained model on test set…")
+    # Evaluate the trained model on the test set
+    log.info("Evaluating trained model on test set...")
     test_result = evaluate_model(
         model,
         bars=test_bars,
@@ -222,6 +220,8 @@ def main() -> None:
         max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
         dsr_eta=cfg.env.reward_dsr_eta,
         max_episode_steps=int(cfg.env.get("max_episode_steps", 1000)),
+        continuous_actions=(args.algo == "sac"),
+        use_sweep_reward=(args.reward == "sweep"),
     )
     test_result["initial_balance"] = cfg.account.initial_balance
     test_m = calculate_metrics(
@@ -264,6 +264,9 @@ def main() -> None:
     training_log = {
         "seed": args.seed,
         "mvp": args.mvp,
+        "algo": args.algo,
+        "arch": args.arch,
+        "reward": args.reward,
         "timesteps": timesteps,
         "train_bars": len(train_bars),
         "test_bars": len(test_bars),
@@ -274,6 +277,87 @@ def main() -> None:
         "timestamp": datetime.now().isoformat(),
     }
     (run_dir / "training_log.json").write_text(json.dumps(training_log, indent=2))
+
+    # Walk-forward validation (additive, does not alter the single-split flow)
+    if args.walk_forward:
+        log.info("Running walk-forward validation with %d splits...", args.wf_splits)
+        from quant_rl.evaluation.walkforward import purged_walk_forward
+
+        wf_steps = args.wf_steps or timesteps
+        wf_results = []
+
+        for split in purged_walk_forward(
+            len(train_bars),
+            n_splits=args.wf_splits,
+            purge_bars=args.purge_bars,
+            embargo_bars=args.embargo_bars,
+        ):
+            fold_train_bars = train_bars.iloc[split.train_idx]
+            fold_train_feat = train_feat.iloc[split.train_idx]
+            fold_test_bars = train_bars.iloc[split.test_idx]
+            fold_test_feat = train_feat.iloc[split.test_idx]
+
+            log.info(
+                "WF fold %d: train=%d test=%d",
+                split.fold,
+                len(fold_train_bars),
+                len(fold_test_bars),
+            )
+
+            fold_env = make_env(fold_train_bars, fold_train_feat, cfg, algo=args.algo, reward=args.reward)
+            fold_model = build_agent(fold_env, cfg, arch=args.arch, algo=args.algo)
+            fold_model.learn(total_timesteps=wf_steps, callback=None, progress_bar=False)
+
+            fold_result = evaluate_model(
+                fold_model,
+                bars=fold_test_bars,
+                features=fold_test_feat,
+                obs_window=cfg.env.obs_window,
+                initial_balance=cfg.account.initial_balance,
+                risk_frac_range=(cfg.risk.default_risk_frac * 0.5, cfg.risk.default_risk_frac * 2.0),
+                rr_ratio_range=(cfg.risk.rr_ratio_default * 0.5, cfg.risk.rr_ratio_default * 1.5),
+                swing_buffer_pts=cfg.risk.swing_buffer_pts,
+                contract_size=cfg.account.contract_size,
+                max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
+                dsr_eta=cfg.env.reward_dsr_eta,
+                max_episode_steps=int(cfg.env.get("max_episode_steps", 1000)),
+                continuous_actions=(args.algo == "sac"),
+                use_sweep_reward=(args.reward == "sweep"),
+            )
+            fold_m = calculate_metrics(
+                fold_result["equity"],
+                trades=fold_result["trades"],
+                n_sessions=fold_result.get("n_sessions", 1),
+                n_breach_sessions=fold_result.get("n_breach_sessions", 0),
+            )
+            wf_results.append(
+                {
+                    "fold": split.fold,
+                    "train_bars": len(fold_train_bars),
+                    "test_bars": len(fold_test_bars),
+                    "sharpe": float(fold_m.sharpe),
+                    "max_drawdown": float(fold_m.max_drawdown),
+                    "total_return_pct": float(fold_m.total_return_pct),
+                    "n_trades": fold_m.n_trades,
+                }
+            )
+
+        wf_sharpes = [r["sharpe"] for r in wf_results]
+        wf_summary = {
+            "splits": args.wf_splits,
+            "purge_bars": args.purge_bars,
+            "embargo_bars": args.embargo_bars,
+            "wf_steps": wf_steps,
+            "folds": wf_results,
+            "mean_sharpe": float(np.mean(wf_sharpes)) if wf_sharpes else None,
+            "std_sharpe": float(np.std(wf_sharpes)) if wf_sharpes else None,
+        }
+        (run_dir / "walk_forward.json").write_text(json.dumps(wf_summary, indent=2))
+        log.info(
+            "Walk-forward complete. Mean Sharpe=%.3f std=%.3f",
+            wf_summary["mean_sharpe"],
+            wf_summary["std_sharpe"],
+        )
 
     log.info("Training complete. Run directory: %s", run_dir)
 

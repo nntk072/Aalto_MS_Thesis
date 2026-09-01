@@ -110,7 +110,7 @@ sac:
   train_freq: 1
   gradient_steps: 1
   ent_coef: 0.01
-  learning_starts: 10000
+  learning_starts: 500
 
 agent:
   type: "ppo"                 # "ppo" | "sac"

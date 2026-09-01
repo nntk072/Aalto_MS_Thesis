@@ -85,6 +85,8 @@ testpaths = ["tests"]
 addopts = "-v"
 markers = [
     "slow: torch/SB3 training tests (minutes on CPU); deselect with -m 'not slow'",
+    "unit: fast unit tests",
+    "integration: integration tests that touch data pipeline or external I/O",
 ]
 
 [tool.ruff]

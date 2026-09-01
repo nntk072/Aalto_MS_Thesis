@@ -55,10 +55,10 @@ def structure_levels(
 
     # Forward-fill to get "last" level at each bar
     last_sh = pd.Series(np.nan, index=bars.index)
-    last_sh_time = pd.Series(pd.NaT, index=bars.index, dtype="datetime64[ns]")
+    last_sh_time = pd.Series(pd.NaT, index=bars.index, dtype=bars.index.dtype)
 
     last_sl = pd.Series(np.nan, index=bars.index)
-    last_sl_time = pd.Series(pd.NaT, index=bars.index, dtype="datetime64[ns]")
+    last_sl_time = pd.Series(pd.NaT, index=bars.index, dtype=bars.index.dtype)
 
     if len(swing_high_prices) > 0:
         for ts, price in swing_high_prices.items():
