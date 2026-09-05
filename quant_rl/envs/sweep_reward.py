@@ -11,6 +11,8 @@ Where:
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 
@@ -253,10 +255,17 @@ class CompositeReward:
         dsr_weight: float = 0.5,
         sweep_weight: float = 0.5,
         dsr_eta: float = 0.01,
+        strategy_reward: Any = None,
+        strategy_weight: float = 0.0,
     ):
         self.sweep_reward = sweep_reward
         self.dsr_weight = dsr_weight
         self.sweep_weight = sweep_weight
+        # Optional per-strategy alignment reward (PO3Reward, DistributionReward).
+        # Weights are explicit config values; None disables the component so
+        # the baseline (Idea 3) is never affected (Agent.md §23, §36).
+        self.strategy_reward = strategy_reward
+        self.strategy_weight = strategy_weight
         # Persist DSR state across steps so the EMA Sharpe estimate
         # actually accumulates. A fresh DSRReward() per call would reset
         # _A/_B every step and kill the signal.
@@ -268,6 +277,11 @@ class CompositeReward:
         """Reset all component reward functions."""
         self.sweep_reward.reset()
         self._dsr_fn.reset()
+        if self.strategy_reward is not None:
+            sr = self.strategy_reward
+            reset = getattr(sr, "reset", None)
+            if callable(reset):
+                reset()
 
     def __call__(
         self,
@@ -287,6 +301,7 @@ class CompositeReward:
         minutes_since_open: float = 0.0,
         position_changed: bool = False,
         dsr_reward: float | None = None,
+        strategy_context: dict[str, Any] | None = None,
     ) -> float:
         """Compute composite reward.
 
@@ -317,7 +332,17 @@ class CompositeReward:
                 minutes_since_open,
                 position_changed,
             )
-            return (self.dsr_weight * dsr_reward) + (self.sweep_weight * sweep_r)
+            total = (self.dsr_weight * dsr_reward) + (self.sweep_weight * sweep_r)
         else:
             # Fallback to DSR only
-            return dsr_reward
+            total = dsr_reward
+
+        # Optional strategy-alignment component (event-based; see PO3Reward).
+        if self.strategy_reward is not None and total is not None:
+            if strategy_context:
+                sr = self.strategy_reward
+                required = getattr(sr, "required_inputs", ())
+                inputs = {k: v for k, v in strategy_context.items() if k in required}
+                if inputs:
+                    total = float(total) + self.strategy_weight * float(sr(**inputs))
+        return total

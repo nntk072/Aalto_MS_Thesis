@@ -22,8 +22,15 @@ from ..backtest.account import AccountState
 from ..backtest.broker import Broker, Position
 from ..backtest.costs import COST_US100, CostModel
 from ..backtest.guardrails import FTMOGuardrails
-from ..backtest.risk import compute_lots, compute_sl_tp_long, compute_sl_tp_short
+from ..backtest.risk import (
+    compute_lots,
+    compute_sl_tp_from_structure,
+    compute_sl_tp_long,
+    compute_sl_tp_short,
+    resolve_tp_target,
+)
 from ..envs.reward import DSRReward
+from ..envs.strategies import BaselineStrategy, TradingStrategy
 from ..envs.sweep_reward import CompositeReward, SweepConfirmationReward
 from ..models.vae import VAE
 
@@ -66,6 +73,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         fill_latency_bars: int = 0,
         max_episode_steps: int | None = None,
         normalize_account: bool = True,
+        strategy: TradingStrategy | None = None,
+        strategy_actions: bool = False,
+        sl_buffer_pts: float = 0.0,
+        strategy_reward: Any = None,
+        strategy_weight: float = 0.0,
     ):
         """Initialize trading environment.
 
@@ -153,6 +165,19 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             Without this, the equity and pnl fields sit at ~1e5 while the
             z-scored seq features sit at ~1.0, dominating the policy's
             MLP heads. Disable with ``False`` to recover the raw values.
+        strategy : TradingStrategy | None
+            Strategy semantics (entry gates, structural SL reference,
+            TP targets). Defaults to the no-op :class:`BaselineStrategy`,
+            which preserves existing behaviour exactly.
+        strategy_actions : bool
+            If True, use the Idea 1/2 four-dimensional Box action
+            ``[direction, risk, RR, TP-target]`` (Agent.md §12) and route
+            entries through the strategy's gates / structural SL / TP-target
+            resolver instead of the legacy discrete/1-D spaces and swing
+            levels. Baseline (Idea 3) keeps ``False``.
+        sl_buffer_pts : float
+            Buffer in price points for the structural stop in strategy
+            modes. ``0.0`` = ``sl_mode: exact``; positive = ``buffered``.
         """
         self.bars = bars
         self.features = features
@@ -174,7 +199,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         # Initialize reward function
         self.reward_fn: DSRReward | CompositeReward
-        if use_sweep_reward:
+        if use_sweep_reward or (strategy_actions and strategy_reward is not None):
             sweep_reward = SweepConfirmationReward(
                 alpha=sweep_alpha, beta=sweep_beta, hold_bars=sweep_hold_bars
             )
@@ -182,6 +207,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 sweep_reward=sweep_reward,
                 dsr_weight=dsr_weight,
                 sweep_weight=sweep_weight,
+                strategy_reward=strategy_reward,
+                strategy_weight=strategy_weight,
             )
             self.dsr_reward = DSRReward(eta=dsr_eta)  # Keep for composite
         else:
@@ -190,7 +217,23 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # Entry-gate: warn once (not per-step) if required features are missing.
         self._entry_gate_warned: bool = False
 
-        # Action space: continuous or discrete
+        # Strategy semantics (Idea 1/2) vs. legacy behaviour (Idea 3 baseline).
+        self.strategy: TradingStrategy = strategy if strategy is not None else BaselineStrategy()
+        self.strategy_actions = bool(strategy_actions)
+        self.sl_buffer_pts = float(sl_buffer_pts)
+        self._selected_tp_mode = "rr"
+        if self.strategy_actions:
+            missing = [c for c in self.strategy.required_features if c not in features.columns]
+            if missing:
+                raise ValueError(f"Missing strategy features: {missing}")
+
+        # Model-facing observation frame: the strategy's raw price-level
+        # columns stay in ``features`` for execution/risk but must not enter
+        # the normalised ``seq`` tensor (Agent.md §11).
+        drop_cols = [c for c in self.strategy.raw_columns if c in features.columns]
+        self._obs_features = features.drop(columns=drop_cols)
+
+        # Action space: strategy actions, continuous, or discrete
         self.continuous_actions = continuous_actions
         self.max_risk_frac = max_risk_frac
 
@@ -220,7 +263,18 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             for param in vae.parameters():
                 param.requires_grad = False
 
-        if continuous_actions:
+        if self.strategy_actions:
+            # 4-D strategy action (Agent.md §12):
+            #   action[0] in [-1, 1]: direction/entry intensity (|x| < 0.25 = hold)
+            #   action[1] in [0, 1]: risk selector -> risk_frac_range
+            #   action[2] in [0, 1]: RR selector -> rr_ratio_range
+            #   action[3] in [0, 1]: TP-target selector -> discrete modes
+            self.action_space = spaces.Box(
+                low=np.array([-1.0, 0.0, 0.0, 0.0], dtype=np.float32),
+                high=np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32),
+                dtype=np.float32,
+            )
+        elif continuous_actions:
             # Continuous action space: Box(-1, 1) for position sizing
             # -1.0 = max short, +1.0 = max long, 0 = hold
             self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
@@ -237,7 +291,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # features: (obs_window, n_features)
         # account: [equity, position_direction, open_pnl, unrealised_r, dist_to_sl]
         # vae_z: latent embedding from VAE (if use_vae=True)
-        n_features = features.shape[1] if len(features) > 0 else 1
+        n_features = self._obs_features.shape[1] if len(self._obs_features) > 0 else 1
         vae_latent_dim = vae.encoder.latent_dim if use_vae and vae is not None else 0
 
         self.observation_space = spaces.Dict(
@@ -436,8 +490,36 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         risk_frac = self.risk_frac_range[0]  # default
         rr_ratio = self.rr_ratio_range[0]  # default
 
+        # Handle strategy (4-D continuous) actions — Agent.md §12
+        if self.strategy_actions:
+            arr = np.asarray(action, dtype=np.float32).reshape(-1)
+            direction_val = float(arr[0]) if arr.size else 0.0
+            entry_threshold = 0.25
+            if direction_val > entry_threshold:
+                discrete_action = 1
+            elif direction_val < -entry_threshold:
+                discrete_action = -1
+            else:
+                discrete_action = 0
+            if arr.size >= 4:
+                r_lo, r_hi = self.risk_frac_range
+                rr_lo, rr_hi = self.rr_ratio_range
+                risk_frac = r_lo + float(arr[1]) * (r_hi - r_lo)
+                rr_ratio = rr_lo + float(arr[2]) * (rr_hi - rr_lo)
+                tp_modes = [
+                    "rr",
+                    "buyside_liquidity",
+                    "sellside_liquidity",
+                    "previous_day_high_low",
+                ]
+                tp_idx = min(int(round(float(arr[3]) * (len(tp_modes) - 1))), len(tp_modes) - 1)
+                self._selected_tp_mode = tp_modes[tp_idx]
+            else:
+                risk_frac = self.risk_frac_range[0]
+                rr_ratio = self.rr_ratio_range[0]
+                self._selected_tp_mode = "rr"
         # Handle continuous actions
-        if self.continuous_actions:
+        elif self.continuous_actions:
             if isinstance(action, np.ndarray):
                 action_value = float(action[0]) if action.size > 0 else 0.0
             else:
@@ -497,7 +579,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         # Check entry gate for new positions
         if discrete_action != 0:  # Only check for long/short entries
-            if not self._check_entry_gate(float(bar["close"]), discrete_action, feat_row):
+            if self.strategy_actions:
+                gate_ok = self.strategy.validate_entry(direction=discrete_action, row=feat_row)
+            else:
+                gate_ok = self._check_entry_gate(float(bar["close"]), discrete_action, feat_row)
+            if not gate_ok:
                 # Gate not satisfied, force to hold
                 discrete_action = 0
                 risk_frac = 0.0
@@ -618,7 +704,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
             # Action handling
             if not done:
-                if action == 19:  # exit action
+                if not self.strategy_actions and action == 19:  # exit action
                     if self.position is not None:
                         pnl, fill_price = self.broker.close_position(
                             self.account, self.position, (fill_bid, fill_ask)
@@ -673,14 +759,55 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
                         entry_price = float(fill_ask if discrete_action == 1 else fill_bid)
 
-                        # Track whether structure levels were available AND
-                        # geometrically valid so we never open a naked position
-                        # (no SL/TP) as a fallback and never crash the episode.
+                        # Track whether structural SL/TP levels were available
+                        # AND geometrically valid so we never open a naked
+                        # position (no SL/TP) as a fallback and never crash.
                         has_levels = False
+                        if self.strategy_actions:
+                            # Structural SL from the strategy object
+                            # (manipulation extreme for Idea 1, swept level for
+                            # Idea 2 — Agent.md §14), TP from the resolver
+                            # (Agent.md §15). Never from the normalised obs.
+                            sl_ref = self.strategy.sl_reference(
+                                direction=discrete_action, row=feat_row
+                            )
+                            if sl_ref is not None and np.isfinite(float(sl_ref)):
+                                try:
+                                    sl_price, _tp_rr = compute_sl_tp_from_structure(
+                                        direction=discrete_action,
+                                        entry_price=entry_price,
+                                        structure_level=float(sl_ref),
+                                        rr_ratio=rr_ratio,
+                                        buffer_pts=self.sl_buffer_pts,
+                                    )
+                                    tp_price = resolve_tp_target(
+                                        direction=discrete_action,
+                                        entry_price=entry_price,
+                                        sl_price=sl_price,
+                                        rr_ratio=rr_ratio,
+                                        target_mode=getattr(self, "_selected_tp_mode", "rr"),
+                                        row=feat_row,
+                                    )
+                                except ValueError:
+                                    sl_price, tp_price = None, None
+                            if sl_price is not None and tp_price is not None:
+                                lots = compute_lots(
+                                    self.account.equity,
+                                    risk_frac,
+                                    entry_price,
+                                    sl_price,
+                                    contract_size=self.contract_size,
+                                    min_lot=self.min_lot,
+                                    max_lot=self.max_lot,
+                                    max_loss_cap=self.max_loss_per_trade_usd,
+                                )
+                                has_levels = True
+                            else:
+                                lots = 0.0
                         # Long needs the swing low strictly below entry; short
                         # needs the swing high strictly above entry. Stale/
                         # equal levels would make compute_sl_tp_* raise.
-                        if (
+                        elif (
                             discrete_action == 1
                             and not np.isnan(last_swing_low)
                             and last_swing_low < entry_price
@@ -758,6 +885,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                             self.trade_log.append(
                                 {
                                     "type": "open",
+                                    "strategy": self.strategy.name,
                                     "direction": discrete_action,
                                     "price": self.position.entry_price,
                                     "lots": self.position.size,
@@ -770,6 +898,35 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                                     "equity": self.account.equity,
                                     "level_type": entry_level,
                                     "sweep_delay_s": sweep_delay,
+                                    "action_tp_mode": getattr(self, "_selected_tp_mode", "rr"),
+                                    "asian_high": float(feat_row.get("asian_high", float("nan"))),
+                                    "asian_low": float(feat_row.get("asian_low", float("nan"))),
+                                    "sweep_high": float(feat_row.get("sweep_high", float("nan"))),
+                                    "sweep_low": float(feat_row.get("sweep_low", float("nan"))),
+                                    "manipulation_high": float(
+                                        feat_row.get("po3_manipulation_high", float("nan"))
+                                    ),
+                                    "manipulation_low": float(
+                                        feat_row.get("po3_manipulation_low", float("nan"))
+                                    ),
+                                    "manipulation_end": float(
+                                        feat_row.get("po3_manipulation_end", float("nan"))
+                                    ),
+                                    "distribution_phase": float(
+                                        feat_row.get("po3_distribution", float("nan"))
+                                    ),
+                                    "ifvg_zone_low": float(
+                                        feat_row.get(
+                                            "ifvg_bull_low",
+                                            feat_row.get("ifvg_bear_low", float("nan")),
+                                        )
+                                    ),
+                                    "ifvg_zone_high": float(
+                                        feat_row.get(
+                                            "ifvg_bull_high",
+                                            feat_row.get("ifvg_bear_high", float("nan")),
+                                        )
+                                    ),
                                 }
                             )
                             self.sessions_with_trades.add(session_id)
@@ -812,6 +969,39 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     "position_changed": bool(position_changed),
                 }
             )
+
+        # Strategy-alignment reward context for Idea 1/Idea 2 (event-based,
+        # passed to the optional strategy_reward component — Agent.md §21/§22).
+        if self.strategy_actions and isinstance(self.reward_fn, CompositeReward):
+            if getattr(self.reward_fn, "strategy_reward", None) is not None:
+                current_feat = self.features.iloc[self.step_idx]
+                pos_dir = 0
+                in_ifvg = False
+                if self.position is not None:
+                    pos_dir = int(self.position.direction)
+                    in_ifvg = (
+                        float(current_feat.get("price_in_ifvg_bull", 0.0)) > 0
+                        if pos_dir == 1
+                        else float(current_feat.get("price_in_ifvg_bear", 0.0)) > 0
+                    )
+                reward_kwargs["strategy_context"] = {
+                    "position_changed": bool(
+                        self.position is not None
+                        and len(self.trade_log) > 0
+                        and self.trade_log[-1].get("type") in ("open", "close")
+                    ),
+                    "direction": pos_dir,
+                    "in_ifvg": in_ifvg,
+                    "manipulation_active": (
+                        float(current_feat.get("po3_manipulation_active", 0.0)) > 0
+                    ),
+                    "manipulation_end": (float(current_feat.get("po3_manipulation_end", 0.0)) > 0),
+                    "distribution_phase": (float(current_feat.get("po3_distribution", 0.0)) > 0),
+                    "sweep_high": float(current_feat.get("sweep_high", 0.0)) > 0,
+                    "sweep_low": float(current_feat.get("sweep_low", 0.0)) > 0,
+                    "bos_up": float(current_feat.get("bos_up", 0.0)) > 0,
+                    "bos_down": float(current_feat.get("bos_down", 0.0)) > 0,
+                }
 
         reward = self.reward_fn(pnl_step, **reward_kwargs)
 
@@ -872,9 +1062,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
     def _get_observation(self) -> dict[str, np.ndarray[Any, Any]]:
         """Construct observation dict."""
-        # Time-series features
+        # Time-series features (strategy raw price levels excluded — Agent.md §11)
         start_idx = max(0, self.step_idx - self.obs_window)
-        seq = np.asarray(self.features.iloc[start_idx : self.step_idx].values, dtype=np.float32)
+        seq = np.asarray(
+            self._obs_features.iloc[start_idx : self.step_idx].values, dtype=np.float32
+        )
         seq = cast(np.ndarray[Any, Any], np.nan_to_num(seq, nan=0.0))
         # Pad if needed
         if len(seq) < self.obs_window:

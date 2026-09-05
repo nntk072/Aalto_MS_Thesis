@@ -1,0 +1,38 @@
+# Idea 2 — Distribution + Swing High/Low strategy (Agent.md §10, §18).
+# Merged over default.yaml.
+features:
+  include_strategy_state: true
+
+env:
+  strategy_actions: true
+  sl_buffer_pts: 0.0           # exact-mode structural stops
+
+strategy:
+  name: "distribution"
+  session:
+    timezone: "Etc/GMT-3"
+  liquidity:
+    swing_period: 5
+    require_reclaim: true
+    max_age_bars: 120
+  risk:
+    sl_mode: "exact"
+    sl_buffer_pts: 1.0
+    risk_frac_range: [0.005, 0.02]
+    rr_range: [1.0, 3.0]
+  tp:
+    mode: "agent"
+    allowed_targets:
+      - "rr"
+      - "buyside_liquidity"
+      - "sellside_liquidity"
+      - "previous_day_high_low"
+    invalid_target_policy: "rr_fallback"
+  entry:
+    enforce_gate: false
+  reward:
+    entry_bonus: 0.01
+    manipulation_penalty: 0.02
+    invalid_ifvg_penalty: 0.01
+    distribution_bonus: 0.005
+    strategy_weight: 0.1
