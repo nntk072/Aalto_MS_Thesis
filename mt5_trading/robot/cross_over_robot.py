@@ -33,7 +33,9 @@ class CrossOverRobot:
     ```
     """
 
-    def __init__(self, volume: float, trader: Trader, strategy: TradingStrategy, paper_trading: bool = True):
+    def __init__(
+        self, volume: float, trader: Trader, strategy: TradingStrategy, paper_trading: bool = True
+    ):
         """
         Initializes the CrossOverRobot instance.
 
@@ -64,7 +66,9 @@ class CrossOverRobot:
             if total_buy == 0:
                 logger.info(f"Buying signal detected for {symbol}")
                 if self.paper_trading:
-                    logger.info(f"[PAPER] Would open buy position for {symbol}: Volume: {self.volume}")
+                    logger.info(
+                        f"[PAPER] Would open buy position for {symbol}: Volume: {self.volume}"
+                    )
                 else:
                     result = self.trader.open_position(
                         symbol,
@@ -93,7 +97,9 @@ class CrossOverRobot:
             if total_sell == 0:
                 logger.info(f"Selling signal detected for {symbol}")
                 if self.paper_trading:
-                    logger.info(f"[PAPER] Would open sell position for {symbol}: Volume: {self.volume}")
+                    logger.info(
+                        f"[PAPER] Would open sell position for {symbol}: Volume: {self.volume}"
+                    )
                 else:
                     result = self.trader.open_position(
                         symbol,

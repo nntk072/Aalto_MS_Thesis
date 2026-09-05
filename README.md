@@ -25,6 +25,7 @@ RL training → out-of-sample evaluation → chart visualization.
 - [Visualization](#visualization)
 - [Testing](#testing)
 - [CI / Code Quality](#ci--code-quality)
+- [Known Limitations / Future Work](#known-limitations--future-work)
 
 ---
 
@@ -439,6 +440,12 @@ pytest tests/test_integration/        # End-to-end smoke tests
 | Tests | `pytest tests/` |
 
 ---
+
+## Known Limitations / Future Work
+
+- **VAE feature extractor:** VAE feature extractor exists in `quant_rl/models/vae.py` but is not wired into the main training entrypoint. It is out of scope for this thesis. See `scripts/train_vae.py` to train it standalone.
+- **Rule-based live baseline (`live_trading.py`):** Uses simplified guardrail criteria (10-day paper trial, 20 trades, zero breaches) compared to the full RL promotion protocol. This reflects the different risk profile of rule-based vs learned strategies.
+- **Multi-timeframe alignment:** Some higher-timeframe feature alignment edge cases may benefit from additional validation.
 
 ## License
 

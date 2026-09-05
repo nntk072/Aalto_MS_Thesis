@@ -6,7 +6,7 @@ It is designed for onboarding and quick testing with a single symbol.
 Usage:
     # Paper trading mode (default) - logs signals only, no orders
     DEMO_SYMBOL=EURUSD PAPER_TRADING=true python demo_trading.py
-    
+
     # With custom parameters
     DEMO_SYMBOL=US100.cash DEMO_LOT_SIZE=0.5 PAPER_TRADING=true python demo_trading.py
 """
@@ -51,7 +51,7 @@ _cross_over_robot = None
 def get_robot():
     """Lazy initialization of the trading robot."""
     global _cross_over_robot
-    
+
     if _cross_over_robot is None:
         ensure_mt5_logged_in(
             login=login,
@@ -59,7 +59,7 @@ def get_robot():
             server=server,
             terminal_path=terminal_path,
         )
-        
+
         # Initialize components
         eurusd_h1_data = MT5Data(symbol, mt5.TIMEFRAME_H1)
         cross_over_strategy = CrossOverStrategy(eurusd_h1_data)
@@ -67,8 +67,9 @@ def get_robot():
         _cross_over_robot = CrossOverRobot(
             lot_size, mt5_trader, cross_over_strategy, paper_trading=paper_trading
         )
-    
+
     return _cross_over_robot
+
 
 # Scheduler setup: run every 60 minutes
 scheduler = sched.scheduler(time.time, time.sleep)
@@ -99,11 +100,11 @@ def start_scheduler():
 if __name__ == "__main__":
     logger.info("Starting scheduler (every 60 minutes)...")
     logger.info("Press Ctrl+C to stop.")
-    
+
     # Run one immediate cycle to show it's working
     logger.info("Running initial trade cycle...")
     run_job()
-    
+
     start_scheduler()
     try:
         while True:
