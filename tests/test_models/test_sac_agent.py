@@ -73,12 +73,13 @@ class TestSACAgentBuild:
             }
         )
 
-    def test_build_sac_on_continuous_env(self, cfg: Any) -> None:
+    @pytest.mark.parametrize("arch", ["tcn", "gru", "transformer"])
+    def test_build_sac_on_continuous_env(self, cfg: Any, arch: str) -> None:
         """SAC builds successfully when the action space is Box(-1, 1)."""
         from stable_baselines3 import SAC
 
         env = make_env(continuous=True)
-        model = build_agent(env, cfg, arch="tcn", algo="sac")
+        model = build_agent(env, cfg, arch=arch, algo="sac")
 
         assert isinstance(model, SAC)
 
@@ -88,10 +89,11 @@ class TestSACAgentBuild:
         with pytest.raises(ValueError, match="continuous"):
             build_agent(env, cfg, arch="tcn", algo="sac")
 
-    def test_sac_uses_config_values(self, cfg: Any) -> None:
+    @pytest.mark.parametrize("arch", ["tcn", "gru", "transformer"])
+    def test_sac_uses_config_values(self, cfg: Any, arch: str) -> None:
         """SAC hyperparameters come from the ``sac`` config section."""
         env = make_env(continuous=True)
-        model = build_agent(env, cfg, arch="tcn", algo="sac")
+        model = build_agent(env, cfg, arch=arch, algo="sac")
 
         assert model.learning_rate == pytest.approx(cfg.sac.learning_rate)
         assert model.buffer_size == cfg.sac.buffer_size
