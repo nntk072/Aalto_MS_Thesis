@@ -3,9 +3,6 @@
 import sys
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-
 # Mock MetaTrader5 module for testing in environments without MT5
 mock_mt5 = MagicMock()
 sys.modules['MetaTrader5'] = mock_mt5
