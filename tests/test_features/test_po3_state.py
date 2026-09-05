@@ -5,7 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
+from omegaconf import DictConfig, OmegaConf
 
+from quant_rl.features.build import build_features
 from quant_rl.features.po3_state import build_ifvg_zone_features, build_po3_state
 
 N = 20
@@ -212,3 +214,46 @@ class TestIFVGZones:
         full = build_ifvg_zone_features(bars, max_age_bars=50)
         short = build_ifvg_zone_features(bars.iloc[:8], max_age_bars=50)
         pd.testing.assert_frame_equal(full.iloc[:8], short, check_freq=False)
+
+
+class TestBuildFeaturesIntegration:
+    """The include_strategy_state block adds exactly its own columns (§8)."""
+
+    STRATEGY_COLUMNS = [
+        "sweep_high",
+        "sweep_low",
+        "sweep_low_level",
+        "po3_manipulation_low",
+        "po3_manipulation_high",
+        "po3_manipulation_end",
+        "po3_distribution",
+        "po3_distribution_direction",
+        "ifvg_bull_active",
+        "ifvg_bear_active",
+        "asian_range",
+        "price_to_asian_high_atr",
+        "price_to_asian_low_atr",
+        "manipulation_low_distance_atr",
+        "manipulation_high_distance_atr",
+    ]
+
+    def _cfg(self, flag: bool) -> DictConfig:
+        base = OmegaConf.load("quant_rl/config/default.yaml")
+        base.features.include_strategy_state = flag
+        base.features.htf_timeframes = []
+        base.features.zscore_window = 20
+        return base
+
+    def test_strategy_block_added_when_enabled(self) -> None:
+        bars = make_bars(LONG_PATH)
+        feat = build_features(bars, cfg=self._cfg(True))
+        for col in self.STRATEGY_COLUMNS:
+            assert col in feat.columns, f"missing strategy column: {col}"
+        # Distance features are finite where the underlying levels exist.
+        assert feat["price_to_asian_low_atr"].notna().any()
+
+    def test_baseline_schema_unchanged_when_disabled(self) -> None:
+        bars = make_bars(LONG_PATH)
+        feat = build_features(bars, cfg=self._cfg(False))
+        for col in self.STRATEGY_COLUMNS:
+            assert col not in feat.columns
