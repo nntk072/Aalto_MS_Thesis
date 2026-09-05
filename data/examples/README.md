@@ -8,6 +8,16 @@ file** — same columns, same encoding, same naming convention.
 
 ---
 
+## Table of Contents
+
+- [Timeframe CSVs Warning](#-timeframe-csvs)
+- [File naming convention](#file-naming-convention)
+- [File format (bar files)](#file-format-bar-files)
+- [How the pipeline consumes it](#how-the-pipeline-consumes-it)
+- [Using the sample](#using-the-sample)
+
+---
+
 ## File naming convention
 
 ```
@@ -17,6 +27,14 @@ file** — same columns, same encoding, same naming convention.
    │          └ M1, M5, M15, M30, H1, H4, Daily …
    └ e.g. US100.cash, US500.cash
 ```
+
+## ⚠️ Timeframe CSVs
+
+Any higher-timeframe CSV files in this directory other than the M1 source
+(`US100.cash_M1_*`, `US500.cash_M1_*`) are mislabeled duplicates of finer
+timeframes and are NOT used by the pipeline. `quant_rl/data/` resamples
+every timeframe (M5/M15/M30/H1/H4/D1) from the true M1 source. Do not load
+the other CSVs directly.
 
 Files present locally (all ignored by git):
 

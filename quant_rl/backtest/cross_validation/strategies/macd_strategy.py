@@ -5,13 +5,13 @@ import backtrader as bt
 
 class MACDStrategy(bt.Strategy):
     """Backtrader implementation of the MACD baseline strategy.
-    
+
     Matches the logic in quant_rl.baselines.rule_based.macd_baseline:
     - Long when MACD histogram > 0
     - Short when MACD histogram < 0
     - Flat when MACD histogram == 0
     """
-    
+
     params = (
         ("fast", 12),
         ("slow", 26),
@@ -22,20 +22,20 @@ class MACDStrategy(bt.Strategy):
     def __init__(self):
         # Keep reference to close
         self.dataclose = self.datas[0].close
-        
+
         # MACD parameters
         self.fast = self.p.fast  # type: ignore[attr-defined]
         self.slow = self.p.slow  # type: ignore[attr-defined]
         self.signal_period = self.p.signal_period  # type: ignore[attr-defined]
-        
+
         # MACD indicator
         self.macd = bt.indicators.MACD(
             self.dataclose,
             period_me1=self.fast,
             period_me2=self.slow,
-            period_signal=self.signal_period
+            period_signal=self.signal_period,
         )
-        
+
         # Track orders and position
         self.order = None
         self.buyprice = None
@@ -110,7 +110,7 @@ class MACDStrategy(bt.Strategy):
 
 class EMAMACDStrategy(bt.Strategy):
     """Backtrader implementation of the MACD + EMA50 baseline strategy.
-    
+
     Matches the logic in quant_rl.baselines.rule_based.macd_ema50_baseline:
     - Long entry: close > EMA50 AND bullish MACD cross
     - Long exit: bearish MACD cross
@@ -118,7 +118,7 @@ class EMAMACDStrategy(bt.Strategy):
     - Short exit: bullish MACD cross
     - Cooldown: wait >= 5 bars after any exit before next entry
     """
-    
+
     params = (
         ("fast", 12),
         ("slow", 26),
@@ -131,31 +131,27 @@ class EMAMACDStrategy(bt.Strategy):
     def __init__(self):
         # Keep reference to close
         self.dataclose = self.datas[0].close
-        
+
         # Parameters
         self.fast = self.p.fast  # type: ignore[attr-defined]
         self.slow = self.p.slow  # type: ignore[attr-defined]
         self.signal_period = self.p.signal_period  # type: ignore[attr-defined]
         self.ema50_period = self.p.ema50_period  # type: ignore[attr-defined]
         self.cooldown_bars = self.p.cooldown_bars  # type: ignore[attr-defined]
-        
+
         # Indicators
-        self.fast_ema = bt.indicators.ExponentialMovingAverage(
-            self.dataclose, period=self.fast
-        )
-        self.slow_ema = bt.indicators.ExponentialMovingAverage(
-            self.dataclose, period=self.slow
-        )
+        self.fast_ema = bt.indicators.ExponentialMovingAverage(self.dataclose, period=self.fast)
+        self.slow_ema = bt.indicators.ExponentialMovingAverage(self.dataclose, period=self.slow)
         self.ema50 = bt.indicators.ExponentialMovingAverage(
             self.dataclose, period=self.ema50_period
         )
-        
+
         # MACD line and signal line
         self.macd_line = self.fast_ema - self.slow_ema
         self.signal_line = bt.indicators.SimpleMovingAverage(
             self.macd_line, period=self.signal_period
         )
-        
+
         # Track state
         self.order = None
         self.position = 0  # 0=flat, 1=long, -1=short
@@ -204,13 +200,11 @@ class EMAMACDStrategy(bt.Strategy):
         # Detect crosses
         # Bullish cross: MACD line crosses above signal line
         bullish_cross = (
-            self.macd_line[-1] <= self.signal_line[-1] and 
-            self.macd_line[0] > self.signal_line[0]
+            self.macd_line[-1] <= self.signal_line[-1] and self.macd_line[0] > self.signal_line[0]
         )
         # Bearish cross: MACD line crosses below signal line
         bearish_cross = (
-            self.macd_line[-1] >= self.signal_line[-1] and 
-            self.macd_line[0] < self.signal_line[0]
+            self.macd_line[-1] >= self.signal_line[-1] and self.macd_line[0] < self.signal_line[0]
         )
 
         if self.position == 0:
