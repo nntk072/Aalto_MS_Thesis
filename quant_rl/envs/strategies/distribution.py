@@ -55,13 +55,14 @@ class DistributionStrategy(TradingStrategy):
         return False
 
     def sl_reference(self, *, direction: int, row: pd.Series) -> float | None:
-        """Long -> swept low, short -> swept high (Agent.md §14)."""
+        """Long -> swept low, short -> swept high (Agent.md §14).
+
+        Returns the raw reference level; the environment validates geometry
+        against the entry price and rejects invalid stops.
+        """
         col = "sweep_low_level" if direction == 1 else "sweep_high_level"
         level = float(row.get(col, np.nan))
-        valid = np.isfinite(level) and (
-            level < float(row["close"]) if direction == 1 else level > float(row["close"])
-        )
-        return level if valid else None
+        return level if np.isfinite(level) else None
 
     def target_candidates(self, *, direction: int, row: pd.Series) -> dict[str, float]:
         """Named structural targets; the TP resolver validates each side."""
