@@ -113,9 +113,9 @@ def main() -> None:
 
     if args.use_vae:
         raise NotImplementedError(
-            "VAE support requires a pre_ny_data pipeline that does not exist yet "
-            "in quant_rl/train/train_rl.py — see 02_IMPLEMENTATION_PLAN.md Phase 3. "
-            "Run without --use-vae for now."
+            "VAE feature extractor exists in quant_rl/models/vae.py but is not wired "
+            "into this training entrypoint; out of scope for this thesis. "
+            "See scripts/train_vae.py to train it standalone."
         )
 
     np.random.seed(args.seed)
