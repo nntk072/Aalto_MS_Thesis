@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any
 
 import backtrader as bt
-import numpy as np
 import pandas as pd
 
 from quant_rl.backtest.costs import COST_US100
@@ -116,7 +115,7 @@ def run_custom_engine(df: pd.DataFrame, tolerance: float = 0.01) -> dict[str, An
     features_df = pd.DataFrame(index=df.index)
 
     # Simple MACD-based policy function
-    def macd_policy(obs: np.ndarray) -> int:
+    def macd_policy(obs: Any) -> int:
         """MACD crossover policy: returns 1 (long), -1 (short), or 0 (hold)."""
         # For simplicity, we'll just return 0 for now - the real signal logic
         # will be implemented in the comparison
@@ -267,7 +266,7 @@ def main() -> None:
         "--tolerance",
         type=float,
         default=0.01,
-        help="Tolerance for PnL and drawdown comparison (default: 0.01 = 1%)",
+        help="Tolerance for PnL and drawdown comparison (default: 0.01, 1 percent)",
     )
     parser.add_argument("--json-output", type=str, default=None, help="Path to save JSON report")
 
