@@ -32,7 +32,7 @@ load_dotenv()
 configure_logging()
 
 # MT5 Configuration
-TERMINAL_PATH = r"C:\Program Files\MetaTrader 5\terminal64.exe"
+TERMINAL_PATH = os.getenv("MT5_TERMINAL_PATH", r"C:\Program Files\MetaTrader 5\terminal64.exe")
 LOGIN = os.getenv("LOGIN", "")
 PASSWORD = os.getenv("PASSWORD", "")
 SERVER = os.getenv("SERVER", "")
@@ -41,6 +41,7 @@ SERVER = os.getenv("SERVER", "")
 TRADING_INTERVAL_MINUTES = int(os.getenv("TRADING_INTERVAL_MINUTES", "60"))
 MAX_SYMBOLS = int(os.getenv("MAX_SYMBOLS", "2"))
 STRATEGY_TYPE = os.getenv("STRATEGY_TYPE", "combined")  # crossover, smc, trend_breakout, combined
+PAPER_TRADING = os.getenv("PAPER_TRADING", "true").strip().lower() != "false"
 
 
 def load_config() -> dict[str, Any]:
@@ -199,6 +200,7 @@ def initialize_trading_system() -> MultiSymbolRobot:
         strategies=strategies,
         risk_manager=risk_manager,
         default_lot_size=default_lot_size,
+        paper_trading=PAPER_TRADING,
     )
 
     logger.info("=" * 80)
@@ -209,6 +211,7 @@ def initialize_trading_system() -> MultiSymbolRobot:
     logger.info(f"Trading interval: {TRADING_INTERVAL_MINUTES} minutes")
     logger.info(f"Risk per symbol: {risk_per_symbol * 100}%")
     logger.info(f"Max total risk: {max_total_risk * 100}%")
+    logger.info(f"Paper trading: {PAPER_TRADING}")
     logger.info("=" * 80)
 
     return robot

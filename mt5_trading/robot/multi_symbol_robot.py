@@ -23,6 +23,7 @@ class MultiSymbolRobot:
         risk_manager: RiskManager,
         default_lot_size: float = 0.1,
         stop_loss_pips: float = 50.0,
+        paper_trading: bool = True,
     ):
         """
         Initialize Multi-Symbol Robot.
@@ -34,6 +35,8 @@ class MultiSymbolRobot:
             risk_manager: RiskManager instance
             default_lot_size: Default lot size if risk-based sizing fails
             stop_loss_pips: Default stop loss in pips
+            paper_trading: When True (the safe default), every signal and intended
+                order is logged but no orders are placed with the broker.
         """
         self.symbol_manager = symbol_manager
         self.trader = trader
@@ -41,10 +44,13 @@ class MultiSymbolRobot:
         self.risk_manager = risk_manager
         self.default_lot_size = default_lot_size
         self.stop_loss_pips = stop_loss_pips
+        self.paper_trading = paper_trading
         self.magic_number = 20240101
         self.name = "Multi-Symbol Robot"
 
-        logger.info(f"Initialized {self.name} with {len(strategies)} symbols")
+        logger.info(
+            f"Initialized {self.name} with {len(strategies)} symbols (paper_trading={paper_trading})"
+        )
 
     def calculate_position_size(self, symbol: str, volatility_multiplier: float = 1.0) -> float:
         """
@@ -136,6 +142,12 @@ class MultiSymbolRobot:
                         return
 
                     logger.info(f"Buy signal detected for {symbol}, opening position")
+                    if self.paper_trading:
+                        logger.info(
+                            f"[PAPER] Would open buy position for {symbol}: "
+                            f"Volume: {position_size}, Price: current market"
+                        )
+                        return
                     result = self.trader.open_position(
                         symbol,
                         position_size,
@@ -163,7 +175,10 @@ class MultiSymbolRobot:
                 total_sell, _ = self.trader.get_opened_positions(symbol, mt5.ORDER_TYPE_SELL)
                 if total_sell > 0:
                     logger.info(f"Closing existing sell positions for {symbol}")
-                    self.trader.close_positions(self.name, symbol, mt5.ORDER_TYPE_SELL)
+                    if not self.paper_trading:
+                        self.trader.close_positions(self.name, symbol, mt5.ORDER_TYPE_SELL)
+                    else:
+                        logger.info(f"[PAPER] Would close existing sell positions for {symbol}")
 
             # Process sell signal
             elif signal == Signal.SELL:
@@ -180,6 +195,12 @@ class MultiSymbolRobot:
                         return
 
                     logger.info(f"Sell signal detected for {symbol}, opening position")
+                    if self.paper_trading:
+                        logger.info(
+                            f"[PAPER] Would open sell position for {symbol}: "
+                            f"Volume: {position_size}, Price: current market"
+                        )
+                        return
                     result = self.trader.open_position(
                         symbol,
                         position_size,
@@ -207,7 +228,10 @@ class MultiSymbolRobot:
                 total_buy, _ = self.trader.get_opened_positions(symbol, mt5.ORDER_TYPE_BUY)
                 if total_buy > 0:
                     logger.info(f"Closing existing buy positions for {symbol}")
-                    self.trader.close_positions(self.name, symbol, mt5.ORDER_TYPE_BUY)
+                    if not self.paper_trading:
+                        self.trader.close_positions(self.name, symbol, mt5.ORDER_TYPE_BUY)
+                    else:
+                        logger.info(f"[PAPER] Would close existing buy positions for {symbol}")
 
             # No signal
             elif signal == Signal.NONE:
