@@ -50,7 +50,14 @@ if not hasattr(_mt5_stub, "symbol_info"):
     setattr(
         _mt5_stub,
         "symbol_info",
-        lambda *a, **k: SimpleNamespace(trade_tick_size=0.1, trade_tick_value=1.0, digits=5),
+        lambda *a, **k: SimpleNamespace(
+            trade_tick_size=0.1,
+            trade_tick_value=1.0,
+            digits=5,
+            volume_min=0.01,
+            volume_max=100.0,
+            volume_step=0.01,
+        ),
     )
 if not hasattr(_mt5_stub, "symbol_info_tick"):
     setattr(_mt5_stub, "symbol_info_tick", lambda *a, **k: SimpleNamespace(bid=100.0, ask=100.1))

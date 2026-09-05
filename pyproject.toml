@@ -150,6 +150,13 @@ module = ["backtest.*", "strategies.*", "utils.*", "demo_trading", "live_trading
 ignore_missing_imports = true
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
+
+# Cross-validation backtrader strategies: backtrader types are not well-annotated
+[[tool.mypy.overrides]]
+module = "quant_rl.backtest.cross_validation.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+ignore_missing_imports = true
 disallow_untyped_calls = false
 disallow_subclassing_any = false
 

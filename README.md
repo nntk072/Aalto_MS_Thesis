@@ -16,13 +16,16 @@ RL training → out-of-sample evaluation → chart visualization.
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+  - [5-Minute Demo](#-minute-demo)
 - [Project Structure](#project-structure)
 - [PO3 / FVG / IFVG Detection](#po3--fvg--ifvg-detection)
 - [RL Agent](#rl-agent)
 - [Backtesting](#backtesting)
+- [Engine Validation](#engine-validation)
 - [Visualization](#visualization)
 - [Testing](#testing)
 - [CI / Code Quality](#ci--code-quality)
+- [Known Limitations / Future Work](#known-limitations--future-work)
 
 ---
 
@@ -79,6 +82,20 @@ source .venv/bin/activate
 
 ## Quick Start & Commands
 
+### 🚀 5-Minute Demo
+
+See a live signal in under 5 minutes with the quickstart demo (no credentials required beyond a demo MT5 account):
+
+```bash
+# Paper trading mode (default) - logs signals only, no orders
+DEMO_SYMBOL=EURUSD PAPER_TRADING=true uv run python demo_trading.py
+
+# With custom parameters
+DEMO_SYMBOL=US100.cash DEMO_LOT_SIZE=0.5 PAPER_TRADING=true uv run python demo_trading.py
+```
+
+This single-file demo uses cross-over strategy on a single symbol. Perfect for onboarding and quick validation.
+
 ### One-Time Setup
 ```bash
 cd /home/nguyenl37/Aalto_MS_Thesis
@@ -123,6 +140,22 @@ ls outputs/baseline_macd_seed*/test/orders/trade_*.{png,html} | head -5
 
 **Rules:** MACD (EMA12/26) + Signal (SMA9) + EMA50 trend filter. Long when `close > EMA50` + bullish cross. Cooldown ≥5 bars after exit.
 
+### Engine Validation
+
+Cross-validate the custom event-driven backtest engine against the well-known `backtrader` library on identical data and signals:
+
+```bash
+# Run cross-validation (default: US100 M1 data)
+uv run python -m quant_rl.backtest.cross_validation.run
+
+# With custom data path and tolerance
+uv run python -m quant_rl.backtest.cross_validation.run --data-path data/US100.cash_M1_*.csv --tolerance 0.01
+```
+
+**What this proves:** Both engines process the same OHLCV bars through the same MACD/EMA crossover logic and produce trade counts, PnL, and drawdown numbers that agree within the configured tolerance (default 1%). This validates that the custom engine's fill pricing, commission logic, and mark-to-market semantics are implemented correctly.
+
+**Under the hood:** The harness runs identical MACD-based strategies through both `backtrader` and the custom engine in `quant_rl.backtest.engine`, then compares trade counts (exact match) and PnL/drawdown (within tolerance). See `tests/test_backtest/test_engine_cross_validation.py` for unit tests.
+
 ### Train RL Agent — MVP (~1 minute)
 ```bash
 # Quick training (8k timesteps, 30 days)
@@ -149,6 +182,10 @@ ls outputs/ppo_model_seed42
 ```
 
 ### Live / Paper Trading
+
+**Two entrypoints are available:**
+
+#### RL Agent (`live_trading_rl.py`)
 ```bash
 # Paper trade a trained checkpoint (PAPER_TRADING defaults to true — no orders placed)
 PAPER_TRADING=true RL_MODEL_PATH=outputs/<run>/model/ppo_final \
@@ -159,6 +196,18 @@ PAPER_TRADING=true RL_MODEL_PATH=outputs/<run>/model/ppo_final python live_tradi
 
 # REAL orders — only after the DEPLOYMENT.md trial criteria are met
 PAPER_TRADING=false RL_MODEL_PATH=outputs/<run>/model/ppo_final python live_trading_rl.py
+```
+
+#### Rule-based baseline (`live_trading.py`)
+```bash
+# Paper trading with combined strategy (PAPER_TRADING defaults to true)
+PAPER_TRADING=true STRATEGY_TYPE=combined python live_trading.py --once
+
+# Use specific strategy types: crossover, smc, trend_breakout, or combined
+PAPER_TRADING=true STRATEGY_TYPE=crossover python live_trading.py
+
+# REAL orders — only after the DEPLOYMENT.md promotion criteria are met
+PAPER_TRADING=false STRATEGY_TYPE=combined python live_trading.py
 ```
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the paper→live promotion protocol,
@@ -391,6 +440,12 @@ pytest tests/test_integration/        # End-to-end smoke tests
 | Tests | `pytest tests/` |
 
 ---
+
+## Known Limitations / Future Work
+
+- **VAE feature extractor:** VAE feature extractor exists in `quant_rl/models/vae.py` but is not wired into the main training entrypoint. It is out of scope for this thesis. See `scripts/train_vae.py` to train it standalone.
+- **Rule-based live baseline (`live_trading.py`):** Uses simplified guardrail criteria (10-day paper trial, 20 trades, zero breaches) compared to the full RL promotion protocol. This reflects the different risk profile of rule-based vs learned strategies.
+- **Multi-timeframe alignment:** Some higher-timeframe feature alignment edge cases may benefit from additional validation.
 
 ## License
 
