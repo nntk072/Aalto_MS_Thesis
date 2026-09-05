@@ -88,13 +88,14 @@ class PO3IFVGStrategy(TradingStrategy):
         return False
 
     def sl_reference(self, *, direction: int, row: pd.Series) -> float | None:
-        """Long -> manipulation low, short -> manipulation high (Agent.md §14)."""
+        """Long -> manipulation low, short -> manipulation high (Agent.md §14).
+
+        Returns the raw reference level; the environment validates geometry
+        against the entry price and rejects invalid stops.
+        """
         col = "po3_manipulation_low" if direction == 1 else "po3_manipulation_high"
         level = float(row.get(col, np.nan))
-        valid = np.isfinite(level) and (
-            level < float(row["close"]) if direction == 1 else level > float(row["close"])
-        )
-        return level if valid else None
+        return level if np.isfinite(level) else None
 
     def target_candidates(self, *, direction: int, row: pd.Series) -> dict[str, float]:
         """Named structural targets; the TP resolver validates each side."""
