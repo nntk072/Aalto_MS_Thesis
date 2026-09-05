@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import backtrader as bt
+import pandas as pd
 
 from .strategies.cross_over import CrossOverStrategy
 from .strategies.signal_following import SignalFollowingStrategy
