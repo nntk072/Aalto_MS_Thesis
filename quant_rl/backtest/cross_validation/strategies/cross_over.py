@@ -16,18 +16,18 @@ class CrossOverStrategy(bt.Strategy):
         ("printlog", False),
     )
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Keep a reference to the "close" line in the data[0] dataseries
         self.dataclose = self.datas[0].close
 
         # Create the moving average indicators
         self.ma_short = bt.indicators.SimpleMovingAverage(
             self.dataclose,
-            period=self.params.ma_short_period,  # type: ignore[attr-defined]
+            period=self.p.ma_short_period,
         )
         self.ma_long = bt.indicators.SimpleMovingAverage(
             self.dataclose,
-            period=self.params.ma_long_period,  # type: ignore[attr-defined]
+            period=self.p.ma_long_period,
         )
 
         # Add MACD indicator
@@ -43,13 +43,13 @@ class CrossOverStrategy(bt.Strategy):
         # Add a CrossOver indicator
         self.crossover = bt.indicators.CrossOver(self.ma_short, self.ma_long)
 
-    def log(self, txt, dt=None, doprint=False):
+    def log(self, txt: str, dt: object | None = None, doprint: bool = False) -> None:
         """Logging function"""
         if self.params.printlog or doprint:  # type: ignore[attr-defined]
             dt = dt or self.datas[0].datetime.date(0)
-            print(f"{dt.isoformat()} {txt}")
+            print(f"{dt.isoformat() if hasattr(dt, 'isoformat') else str(dt)} {txt}")
 
-    def notify_order(self, order):
+    def notify_order(self, order) -> None:
         if order.status in [order.Submitted, order.Accepted]:
             # Buy/Sell order submitted/accepted to/by broker - Nothing to do
             return
@@ -78,13 +78,13 @@ class CrossOverStrategy(bt.Strategy):
         # Reset orders
         self.order = None
 
-    def notify_trade(self, trade):
+    def notify_trade(self, trade) -> None:
         if not trade.isclosed:
             return
 
         self.log(f"OPERATION PROFIT, GROSS: {trade.pnl:.2f}, NET: {trade.pnlcomm:.2f}")
 
-    def next(self):
+    def next(self) -> None:
         # Log the closing price of the series
         self.log(f"Close: {self.dataclose[0]:.2f}")
 
@@ -105,9 +105,9 @@ class CrossOverStrategy(bt.Strategy):
                 self.log(f"SELL CREATE, {self.dataclose[0]:.2f}")
                 self.order = self.sell()  # Keep track of the created order
 
-    def stop(self):
+    def stop(self) -> None:
         self.log(
-            f"MA Short Period: {self.params.ma_short_period}, MA Long Period: {self.params.ma_long_period}",  # type: ignore[attr-defined]
+            f"MA Short Period: {self.p.ma_short_period}, MA Long Period: {self.p.ma_long_period}",
             doprint=True,
         )
         self.log(f"(MA Strategy) Ending Value: {self.broker.getvalue():.2f}", doprint=True)
