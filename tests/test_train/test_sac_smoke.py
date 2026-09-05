@@ -16,9 +16,14 @@ This test:
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 import pytest
+from omegaconf import OmegaConf
+
+from quant_rl.models.agent import build_agent
 
 pytestmark = pytest.mark.slow
 
@@ -63,11 +68,32 @@ def _make_features(bars) -> pd.DataFrame:
     )
 
 
-def test_sac_smoke_learns_a_few_steps() -> None:
+@pytest.fixture
+def sac_cfg() -> Any:
+    """Minimal OmegaConf config for SAC smoke tests."""
+    return OmegaConf.create(
+        {
+            "env": {"obs_window": 10},
+            "sac": {
+                "learning_rate": 3e-4,
+                "buffer_size": 512,
+                "batch_size": 32,
+                "tau": 0.005,
+                "gamma": 0.99,
+                "train_freq": 1,
+                "gradient_steps": 1,
+                "ent_coef": "auto",
+                "learning_starts": 64,
+            },
+        }
+    )
+
+
+@pytest.mark.parametrize("arch", ["tcn", "gru", "transformer"])
+def test_sac_smoke_learns_a_few_steps(sac_cfg: Any, arch: str) -> None:
     """Build SAC on a continuous-action TradingEnv and confirm it learns."""
     pytest.importorskip("torch")
     pytest.importorskip("stable_baselines3")
-    from stable_baselines3 import SAC
 
     from quant_rl.envs.trading_env import TradingEnv
 
@@ -77,31 +103,19 @@ def test_sac_smoke_learns_a_few_steps() -> None:
         bars=bars,
         features=features,
         obs_window=10,
-        continuous_actions=True,  # SAC requires Box
+        continuous_actions=True,
         max_risk_frac=0.01,
         max_episode_steps=64,
     )
 
-    # Tighter SAC config so the smoke test fits inside a few seconds.
-    model = SAC(
-        "MultiInputPolicy",
-        env,
-        learning_rate=3e-4,
-        buffer_size=512,
-        batch_size=32,
-        learning_starts=64,  # 1 rollout of warmup
-        train_freq=1,
-        gradient_steps=1,
-        ent_coef="auto",
-        verbose=0,
-        seed=0,
-    )
+    model = build_agent(env, sac_cfg, arch=arch, algo="sac")
 
-    # learning_starts=64 + a few gradient steps beyond it. Total budget
-    # 256 timesteps → ~3 gradient updates after warmup.
+    from stable_baselines3 import SAC
+
+    assert isinstance(model, SAC)
+
     model.learn(total_timesteps=256, progress_bar=False)
 
-    # Confirm the policy now produces actions in [-1, 1] on a fresh obs.
     obs, _ = env.reset(seed=0)
     raw, _ = model.predict(obs, deterministic=True)
     arr = np.asarray(raw).reshape(-1)
@@ -113,7 +127,6 @@ def test_sac_rejects_discrete_action_space() -> None:
     """SAC must raise on a Discrete env — guards against silent misconfig."""
     pytest.importorskip("torch")
     pytest.importorskip("stable_baselines3")
-    from stable_baselines3 import SAC
 
     from quant_rl.envs.trading_env import TradingEnv
 
@@ -123,11 +136,14 @@ def test_sac_rejects_discrete_action_space() -> None:
         bars=bars,
         features=features,
         obs_window=10,
-        continuous_actions=False,  # Discrete(20)
+        continuous_actions=False,
     )
 
-    with pytest.raises(Exception) as excinfo:
-        SAC("MultiInputPolicy", env, learning_starts=10, buffer_size=64, verbose=0, seed=0)
-    # SB3 raises AssertionError ("only supports Box") — accept any error
-    # so we don't lock the test to a specific exception type.
-    assert "Box" in str(excinfo.value) or "continuous" in str(excinfo.value)
+    cfg = OmegaConf.create(
+        {
+            "env": {"obs_window": 10},
+            "sac": {"learning_starts": 10, "buffer_size": 64},
+        }
+    )
+    with pytest.raises(ValueError, match="continuous"):
+        build_agent(env, cfg, arch="tcn", algo="sac")

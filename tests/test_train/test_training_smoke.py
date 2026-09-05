@@ -18,6 +18,8 @@ Slow on CPU; marked ``slow`` so it is skipped in fast unit-test runs.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -27,11 +29,7 @@ pytestmark = pytest.mark.slow
 
 
 def _make_synthetic_bars(n: int = 800, seed: int = 7) -> pd.DataFrame:
-    """Generate a minimal OHLC bar DataFrame for the env.
-
-    Mirrors the fields TradingEnv reads: open/high/low/close/spread/session_id.
-    Uses a deterministic RNG so the same dataset is produced every run.
-    """
+    """Generate a minimal OHLC bar DataFrame for the env."""
     rng = np.random.default_rng(seed)
     idx = pd.date_range("2025-01-06 16:30", periods=n, freq="1min", tz="Etc/GMT-3")
     close = 20000.0 + np.cumsum(rng.normal(0, 2, n))
@@ -55,13 +53,7 @@ def _make_synthetic_bars(n: int = 800, seed: int = 7) -> pd.DataFrame:
 
 
 def _make_synthetic_features(bars: pd.DataFrame, seed: int = 7) -> pd.DataFrame:
-    """Generate a feature matrix the env can consume without warnings.
-
-    The env only requires a feature DataFrame whose index matches
-    ``bars``; it pulls individual columns (london_high, last_swing_low, …)
-    defensively. We fill them with NaN except for a couple of constants
-    so the entry-gate warn-once branch is not triggered.
-    """
+    """Generate a feature matrix the env can consume without warnings."""
     rng = np.random.default_rng(seed)
     n = len(bars)
     return pd.DataFrame(
@@ -112,7 +104,8 @@ def test_trading_env_max_episode_truncation_fires(synthetic_env) -> None:
     assert done is False  # truncation is not a terminal failure
 
 
-def test_ppo_smoke_runs_and_takes_gradient_steps(synthetic_env) -> None:
+@pytest.mark.parametrize("arch", ["tcn", "gru", "transformer"])
+def test_ppo_smoke_runs_and_takes_gradient_steps(synthetic_env, arch: str) -> None:
     """Build a tiny PPO on a real TradingEnv and confirm gradients flow.
 
     We don't assert a specific Sharpe or PnL — PPO on a synthetic random-walk
@@ -129,6 +122,46 @@ def test_ppo_smoke_runs_and_takes_gradient_steps(synthetic_env) -> None:
     from stable_baselines3 import PPO
 
     env = synthetic_env
+    n_features = env.observation_space["seq"].shape[1]
+
+    extractor_cls: type[Any]
+    extractor_kwargs: dict[str, Any]
+    if arch == "transformer":
+        from quant_rl.models.encoder import TransformerEncoder
+
+        extractor_cls = TransformerEncoder
+        extractor_kwargs = dict(
+            seq_len=10,
+            n_features=n_features,
+            latent_dim=128,
+            d_model=128,
+            nhead=4,
+            num_layers=2,
+            dim_feedforward=256,
+            dropout=0.1,
+        )
+    elif arch == "gru":
+        from quant_rl.models.encoder import GRUEncoder
+
+        extractor_cls = GRUEncoder
+        extractor_kwargs = dict(
+            seq_len=10,
+            n_features=n_features,
+            latent_dim=128,
+            hidden_size=256,
+            num_layers=2,
+            dropout=0.1,
+        )
+    else:
+        from quant_rl.models.encoder import TCNEncoder
+
+        extractor_cls = TCNEncoder
+        extractor_kwargs = dict(
+            seq_len=10,
+            n_features=n_features,
+            latent_dim=128,
+        )
+
     model = PPO(
         "MultiInputPolicy",
         env,
@@ -138,6 +171,10 @@ def test_ppo_smoke_runs_and_takes_gradient_steps(synthetic_env) -> None:
         learning_rate=3e-4,
         verbose=0,
         seed=0,
+        policy_kwargs=dict(
+            features_extractor_class=extractor_cls,
+            features_extractor_kwargs=extractor_kwargs,
+        ),
     )
 
     # 256 total timesteps is the plan's specified smoke budget. n_steps=64
@@ -159,7 +196,55 @@ def test_ppo_smoke_runs_and_takes_gradient_steps(synthetic_env) -> None:
     obs, _ = env.reset(seed=0)
     raw_action, _ = model.predict(obs, deterministic=True)
     action = int(np.asarray(raw_action).reshape(-1)[0])
-    assert 0 <= action < env.action_space.n
+    assert 0 <= action < int(getattr(env.action_space, "n", 1))
+
+
+def test_ppo_smoke_with_sweep_reward() -> None:
+    """PPO smoke test with SweepConfirmationReward enabled.
+
+    Verifies that TradingEnv builds with use_sweep_reward=True and that
+    PPO can learn on the sweep-reward path without crashing.
+    """
+    pytest.importorskip("torch")
+    pytest.importorskip("stable_baselines3")
+
+    from stable_baselines3 import PPO
+
+    from quant_rl.envs.trading_env import TradingEnv
+
+    bars = _make_synthetic_bars()
+    features = _make_synthetic_features(bars)
+    env = TradingEnv(
+        bars=bars,
+        features=features,
+        obs_window=10,
+        initial_balance=100_000.0,
+        max_episode_steps=64,
+        use_sweep_reward=True,
+    )
+
+    model = PPO(
+        "MultiInputPolicy",
+        env,
+        n_steps=64,
+        batch_size=32,
+        n_epochs=2,
+        learning_rate=3e-4,
+        verbose=0,
+        seed=0,
+    )
+
+    model.learn(total_timesteps=256, progress_bar=False)
+
+    recorded = model.logger.name_to_value
+    assert "train/policy_gradient_loss" in recorded
+    pg_loss = float(recorded["train/policy_gradient_loss"])
+    assert np.isfinite(pg_loss)
+
+    obs, _ = env.reset(seed=0)
+    raw_action, _ = model.predict(obs, deterministic=True)
+    action = int(np.asarray(raw_action).reshape(-1)[0])
+    assert 0 <= action < int(getattr(env.action_space, "n", 1))
 
 
 def test_default_config_exposes_max_episode_steps() -> None:

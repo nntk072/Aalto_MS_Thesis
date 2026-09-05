@@ -74,6 +74,14 @@ def test_window_insufficient_data(synthetic):
     assert len(seq) == 0 and len(y) == 0
 
 
+def test_window_max_windows_cap(synthetic):
+    """max_windows should cap the number of windows returned."""
+    feats, closes = synthetic
+    seq, y = build_supervised_windows(feats, closes, obs_window=60, horizon=5, max_windows=10)
+    assert len(seq) == 10
+    assert len(y) == 10
+
+
 def test_callback_disabled_at_zero_weight():
     cb = AuxiliaryTrainerCallback(aux_weight=0.0)
     assert cb.aux_weight == 0.0
@@ -134,3 +142,75 @@ def test_callback_co_trains_with_ppo(synthetic):
     optimizer.step()
     after_head = head.state_dict()
     assert any(not torch.equal(before_head[k], after_head[k]) for k in before_head)
+
+
+def test_callback_co_trains_with_ppo_on_trading_env():
+    """Attach AuxiliaryTrainerCallback to PPO on a real TradingEnv.
+
+    The callback must extract features/bars from the wrapped env and
+    produce a finite aux loss after a rollout-end trigger.
+    """
+    pytest.importorskip("torch")
+    import pandas as pd
+
+    from quant_rl.envs.trading_env import TradingEnv
+    from quant_rl.models.agent import build_agent
+
+    rng = np.random.default_rng(7)
+    n_bars = 300
+    dates = pd.date_range("2020-01-01", periods=n_bars, freq="1min")
+    bars = pd.DataFrame(
+        {
+            "open": rng.uniform(100, 110, n_bars),
+            "high": rng.uniform(105, 115, n_bars),
+            "low": rng.uniform(90, 100, n_bars),
+            "close": rng.uniform(95, 110, n_bars),
+            "volume": rng.integers(1000, 5000, n_bars),
+            "session_id": [0] * n_bars,
+        },
+        index=dates,
+    )
+    bars["high"] = bars[["open", "close", "high"]].max(axis=1)
+    bars["low"] = bars[["open", "close", "low"]].min(axis=1)
+
+    features = pd.DataFrame(index=bars.index)
+    features["london_high"] = 112.0
+    features["london_low"] = 92.0
+    features["asian_high"] = 108.0
+    features["asian_low"] = 96.0
+    features["volume_spike"] = rng.uniform(0.5, 2.5, n_bars)
+
+    env = TradingEnv(
+        bars,
+        features,
+        continuous_actions=True,
+        obs_window=10,
+        episodic=True,
+        max_episode_steps=64,
+    )
+
+    cfg = OmegaConf.create(
+        {
+            "env": {"obs_window": 10},
+            "sac": {},
+            "ppo": {
+                "n_steps": 64,
+                "batch_size": 32,
+                "n_epochs": 2,
+                "learning_rate": 3e-4,
+                "gamma": 0.99,
+                "gae_lambda": 0.95,
+                "clip_range": 0.2,
+                "ent_coef": 0.01,
+            },
+        }
+    )
+
+    model = build_agent(env, cfg, arch="tcn", algo="ppo")
+    cb = AuxiliaryTrainerCallback(
+        aux_weight=0.1, grad_steps=1, batch_windows=64, prediction_horizon=5
+    )
+    model.learn(total_timesteps=256, callback=cb, progress_bar=False)
+
+    assert cb.last_aux_loss is not None
+    assert np.isfinite(cb.last_aux_loss)
