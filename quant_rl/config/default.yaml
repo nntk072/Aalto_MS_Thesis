@@ -98,6 +98,7 @@ features:
   include_po3: false            # PO3 time-of-day phase tag (accum/manip/distrib)
   include_fvg_ifvg: false       # per-TF FVG zone features (in-zone flag + ATR dist)
   include_po3_full: false       # full HTF FVG -> LTF IFVG -> entry-trigger pipeline
+  include_strategy_state: false # Idea 1: sweeps + PO3 manip/distrib state + IFVG zones
   po3_htf: "M15"                # HTF for the full PO3 pipeline
   po3_ltf: "M5"                 # primary (LTF) for the full PO3 pipeline
 
