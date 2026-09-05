@@ -29,10 +29,10 @@ class SignalFollowingStrategy(bt.Strategy):
         self.order = None
         self.bar_index = 0
 
-    def log(self, txt: str, dt: object = None, doprint: bool = False) -> None:
+    def log(self, txt: str, dt: object | None = None, doprint: bool = False) -> None:
         if self.p.printlog or doprint:
             dt = dt or self.datas[0].datetime.date(0)
-            print(f"{dt.isoformat()} {txt}")
+            print(f"{dt.isoformat() if hasattr(dt, 'isoformat') else str(dt)} {txt}")
 
     def notify_order(self, order: bt.Order) -> None:
         if order.status in (order.Submitted, order.Accepted):

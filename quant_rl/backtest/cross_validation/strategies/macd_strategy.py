@@ -19,14 +19,14 @@ class MACDStrategy(bt.Strategy):
         ("printlog", False),
     )
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Keep reference to close
         self.dataclose = self.datas[0].close
 
         # MACD parameters
-        self.fast = self.p.fast  # type: ignore[attr-defined]
-        self.slow = self.p.slow  # type: ignore[attr-defined]
-        self.signal_period = self.p.signal_period  # type: ignore[attr-defined]
+        self.fast = self.p.fast
+        self.slow = self.p.slow
+        self.signal_period = self.p.signal_period
 
         # MACD indicator
         self.macd = bt.indicators.MACD(
@@ -41,13 +41,13 @@ class MACDStrategy(bt.Strategy):
         self.buyprice = None
         self.buycomm = None
 
-    def log(self, txt: str, dt: object = None, doprint: bool = False) -> None:
+    def log(self, txt: str, dt: object | None = None, doprint: bool = False) -> None:
         """Logging function."""
-        if self.p.printlog or doprint:  # type: ignore[attr-defined]
+        if self.p.printlog or doprint:  # noqa: SLF001
             dt = dt or self.datas[0].datetime.date(0)
-            print(f"{dt.isoformat()} {txt}")
+            print(f"{dt.isoformat() if hasattr(dt, 'isoformat') else str(dt)} {txt}")
 
-    def notify_order(self, order):
+    def notify_order(self, order) -> None:
         if order.status in [order.Submitted, order.Accepted]:
             return
 
@@ -72,13 +72,13 @@ class MACDStrategy(bt.Strategy):
 
         self.order = None
 
-    def notify_trade(self, trade):
+    def notify_trade(self, trade) -> None:
         if not trade.isclosed:
             return
 
         self.log(f"OPERATION PROFIT, GROSS: {trade.pnl:.2f}, NET: {trade.pnlcomm:.2f}")
 
-    def next(self):
+    def next(self) -> None:
         # Log close price
         self.log(f"Close: {self.dataclose[0]:.2f}")
 
@@ -100,9 +100,9 @@ class MACDStrategy(bt.Strategy):
                 self.log(f"SELL CREATE, {self.dataclose[0]:.2f}")
                 self.order = self.sell()
 
-    def stop(self):
+    def stop(self) -> None:
         self.log(
-            f"MACD Fast: {self.p.fast}, Slow: {self.p.slow}, Signal: {self.p.signal_period}",  # type: ignore[attr-defined]
+            f"MACD Fast: {self.p.fast}, Slow: {self.p.slow}, Signal: {self.p.signal_period}",
             doprint=True,
         )
         self.log(f"(MACD Strategy) Ending Value: {self.broker.getvalue():.2f}", doprint=True)
@@ -128,16 +128,16 @@ class EMAMACDStrategy(bt.Strategy):
         ("printlog", False),
     )
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Keep reference to close
         self.dataclose = self.datas[0].close
 
         # Parameters
-        self.fast = self.p.fast  # type: ignore[attr-defined]
-        self.slow = self.p.slow  # type: ignore[attr-defined]
-        self.signal_period = self.p.signal_period  # type: ignore[attr-defined]
-        self.ema50_period = self.p.ema50_period  # type: ignore[attr-defined]
-        self.cooldown_bars = self.p.cooldown_bars  # type: ignore[attr-defined]
+        self.fast = self.p.fast
+        self.slow = self.p.slow
+        self.signal_period = self.p.signal_period
+        self.ema50_period = self.p.ema50_period
+        self.cooldown_bars = self.p.cooldown_bars
 
         # Indicators
         self.fast_ema = bt.indicators.ExponentialMovingAverage(self.dataclose, period=self.fast)
@@ -157,13 +157,13 @@ class EMAMACDStrategy(bt.Strategy):
         self.position = 0  # 0=flat, 1=long, -1=short
         self.cooldown_counter = 0
 
-    def log(self, txt: str, dt: object = None, doprint: bool = False) -> None:
+    def log(self, txt: str, dt: object | None = None, doprint: bool = False) -> None:
         """Logging function."""
-        if self.p.printlog or doprint:  # type: ignore[attr-defined]
+        if self.p.printlog or doprint:  # noqa: SLF001
             dt = dt or self.datas[0].datetime.date(0)
-            print(f"{dt.isoformat()} {txt}")
+            print(f"{dt.isoformat() if hasattr(dt, 'isoformat') else str(dt)} {txt}")
 
-    def notify_order(self, order):
+    def notify_order(self, order) -> None:
         if order.status in [order.Submitted, order.Accepted]:
             return
 
@@ -188,7 +188,7 @@ class EMAMACDStrategy(bt.Strategy):
 
         self.order = None
 
-    def next(self):
+    def next(self) -> None:
         # Decrement cooldown
         if self.cooldown_counter > 0:
             self.cooldown_counter -= 1
