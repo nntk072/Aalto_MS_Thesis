@@ -213,14 +213,14 @@ $ grep -r "02_IMPLEMENTATION_PLAN" .
 - [x] ruff format clean
 - [x] All three previously-legacy scripts run, are tested, and documented
 - [x] VERIFICATION_LOG.md with real run output
-- [ ] git log hygiene review
-- [ ] PR merged
+- [x] git log hygiene review - all commits follow 50-char max subject line with imperative verbs
+- [ ] PR merged (awaiting user action)
 
 ---
 
 ## Summary
 
-**Overall Status:** 90% COMPLETE
+**Overall Status:** 95% COMPLETE
 
 **Completed:**
 - Phase 0: Setup ✅
