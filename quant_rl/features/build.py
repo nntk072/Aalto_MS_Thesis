@@ -19,7 +19,7 @@ from omegaconf import DictConfig, OmegaConf
 from ..data.align import align_timeframes
 from ..data.resample import resample
 from .indicators import atr, build_indicators, sweep_velocity, volume_spike, wick_ratio
-from .liquidity import detect_liquidity_sweeps
+from .liquidity import detect_bos, detect_liquidity_sweeps
 from .normalize import rolling_zscore
 from .po3_config import (
     FVGConfig,
@@ -298,9 +298,10 @@ def build_features(
     if feat_cfg is not None and bool(getattr(feat_cfg, "include_strategy_state", False)):
         swings = int(getattr(feat_cfg, "smt_swing_period", 5))
         sweeps = detect_liquidity_sweeps(primary, swing_period=swings)
+        bos = detect_bos(primary, structure)
         po3_state = build_po3_state(primary, sweeps, levels)
         ifvg_zones = build_ifvg_zone_features(primary)
-        feat = pd.concat([feat, sweeps, po3_state, ifvg_zones], axis=1)
+        feat = pd.concat([feat, sweeps, bos, po3_state, ifvg_zones], axis=1)
 
         # ATR-normalised distances for the model; the raw levels in the frame
         # above stay available for the environment's structural SL/TP logic
