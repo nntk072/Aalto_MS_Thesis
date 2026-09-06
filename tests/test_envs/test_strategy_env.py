@@ -5,9 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-from gymnasium.spaces import Box, Dict
+from gymnasium.spaces import Box
 
-from quant_rl.envs.strategies import BaselineStrategy, PO3IFVGStrategy
+from quant_rl.envs.strategies import PO3IFVGStrategy
 from quant_rl.envs.trading_env import TradingEnv
 
 

@@ -32,6 +32,7 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import run_pipeline
 from quant_rl.data.split import get_split_config, split_train_test
+from quant_rl.envs.distribution_reward import DistributionReward
 from quant_rl.envs.po3_reward import PO3Reward
 from quant_rl.envs.strategies import (
     BaselineStrategy,
@@ -72,6 +73,7 @@ def _strategy_from_cfg(cfg: Any) -> tuple[Any, Any, float]:
     reward_cfg = strat_cfg.get("reward", {})
     weight = float(reward_cfg.get("strategy_weight", 0.0)) if reward_cfg else 0.0
 
+    reward: PO3Reward | DistributionReward | None = None
     strategy: TradingStrategy
     if name == "po3_ifvg":
         strategy = PO3IFVGStrategy(enforce_gate=enforce_gate)
@@ -83,7 +85,12 @@ def _strategy_from_cfg(cfg: Any) -> tuple[Any, Any, float]:
         )
     elif name == "distribution":
         strategy = DistributionStrategy(enforce_gate=enforce_gate)
-        reward = None  # DistributionReward wired in Phase 4
+        reward_cfg = strat_cfg.get("reward", {}) or {}
+        reward = DistributionReward(
+            entry_bonus=float(reward_cfg.get("entry_bonus", 0.01)),
+            sweep_penalty=float(reward_cfg.get("sweep_penalty", 0.02)),
+            distribution_bonus=float(reward_cfg.get("distribution_bonus", 0.005)),
+        )
     else:
         strategy = BaselineStrategy()
         reward = None
