@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
-from omegaconf import OmegaConf
 
 from quant_rl.config import load_config
 from quant_rl.envs.strategies import PO3IFVGStrategy
