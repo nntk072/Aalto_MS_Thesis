@@ -19,6 +19,7 @@ from omegaconf import DictConfig, OmegaConf
 from ..data.align import align_timeframes
 from ..data.resample import resample
 from .indicators import atr, build_indicators, sweep_velocity, volume_spike, wick_ratio
+from .liquidity import detect_bos, detect_liquidity_sweeps
 from .normalize import rolling_zscore
 from .po3_config import (
     FVGConfig,
@@ -26,6 +27,7 @@ from .po3_config import (
     detect_fvg,
     detect_po3_entries,
 )
+from .po3_state import build_ifvg_zone_features, build_po3_state
 from .smt import smt_divergence
 from .structure import detect_session_levels, structure_levels
 
@@ -33,7 +35,9 @@ from .structure import detect_session_levels, structure_levels
 # not silently reused by the {symbol}_features.parquet call sites.
 # v4: Chain F + causal PO3 mapping — detect_htf_fvg/detect_ltf_ifvg now shift
 # signals one HTF/primary period forward (no within-period lookahead).
-FEATURE_CACHE_VERSION = "v4-po3causal"
+# v5: Idea 1 strategy state — liquidity sweeps, PO3 manipulation/distribution
+# state and IFVG active zones (include_strategy_state opt-in block).
+FEATURE_CACHE_VERSION = "v5-idea1-strategy-state"
 
 _DEFAULT_HTF_TIMEFRAMES = ("M5", "M15", "H1")
 # Capped normalised FVG distance: value used when no zone is active nearby.
@@ -287,6 +291,31 @@ def build_features(
 
     # Add wick ratio
     feat["wick_ratio"] = wick_ratio(primary)
+
+    # --- Idea 1 (PO3 + IFVG) strategy state features (opt-in) ---
+    # Assembled after session levels and ATR so the state machine can consume
+    # the causal Asian levels and the distance features can use atr_5.
+    if feat_cfg is not None and bool(getattr(feat_cfg, "include_strategy_state", False)):
+        swings = int(getattr(feat_cfg, "smt_swing_period", 5))
+        sweeps = detect_liquidity_sweeps(primary, swing_period=swings)
+        bos = detect_bos(primary, structure)
+        po3_state = build_po3_state(primary, sweeps, levels)
+        ifvg_zones = build_ifvg_zone_features(primary)
+        feat = pd.concat([feat, sweeps, bos, po3_state, ifvg_zones], axis=1)
+
+        # ATR-normalised distances for the model; the raw levels in the frame
+        # above stay available for the environment's structural SL/TP logic
+        # and must be excluded from the model sequence (env seq_exclude).
+        atr5 = feat["atr_5"].where(feat["atr_5"] > 0)
+        feat["asian_range"] = feat["asian_high"] - feat["asian_low"]
+        feat["price_to_asian_high_atr"] = (feat["asian_high"] - primary["close"]) / atr5
+        feat["price_to_asian_low_atr"] = (primary["close"] - feat["asian_low"]) / atr5
+        feat["manipulation_low_distance_atr"] = (
+            primary["close"] - feat["po3_manipulation_low"]
+        ) / atr5
+        feat["manipulation_high_distance_atr"] = (
+            feat["po3_manipulation_high"] - primary["close"]
+        ) / atr5
 
     # Drop leading NaNs from warmup
     feat = feat.dropna(how="all")

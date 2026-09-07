@@ -21,16 +21,25 @@ import argparse
 import json
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 import torch
+from omegaconf import DictConfig, OmegaConf
 from stable_baselines3.common.callbacks import CheckpointCallback
 
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import run_pipeline
 from quant_rl.data.split import get_split_config, split_train_test
+from quant_rl.envs.distribution_reward import DistributionReward
+from quant_rl.envs.po3_reward import PO3Reward
+from quant_rl.envs.strategies import (
+    BaselineStrategy,
+    DistributionStrategy,
+    PO3IFVGStrategy,
+    TradingStrategy,
+)
 from quant_rl.envs.trading_env import TradingEnv
 from quant_rl.eval.export import build_run_dir, save_run
 from quant_rl.eval.rollout import evaluate_model
@@ -42,6 +51,51 @@ from quant_rl.train.callbacks import BestCheckpointEvalCallback
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
+
+_STRATEGY_CONFIGS = {
+    "po3_ifvg": "config/idea1_po3_ifvg.yaml",
+    "distribution": "config/idea2_distribution.yaml",
+}
+
+
+def _strategy_from_cfg(cfg: Any) -> tuple[Any, Any, float]:
+    """Build (strategy, strategy_reward, strategy_weight) from merged config.
+
+    Baseline (Idea 3, P2) keeps the no-op strategy and no alignment reward
+    unless ``env.strategy_actions`` is explicitly enabled by a variant config.
+    """
+    strat_cfg = getattr(cfg, "strategy", None)
+    if strat_cfg is None or not bool(cfg.env.get("strategy_actions", False)):
+        return BaselineStrategy(), None, 0.0
+
+    name = str(strat_cfg.get("name", "baseline"))
+    enforce_gate = bool(strat_cfg.get("entry", {}).get("enforce_gate", False))
+    reward_cfg = strat_cfg.get("reward", {})
+    weight = float(reward_cfg.get("strategy_weight", 0.0)) if reward_cfg else 0.0
+
+    reward: PO3Reward | DistributionReward | None = None
+    strategy: TradingStrategy
+    if name == "po3_ifvg":
+        strategy = PO3IFVGStrategy(enforce_gate=enforce_gate)
+        reward = PO3Reward(
+            entry_bonus=float(reward_cfg.get("entry_bonus", 0.01)),
+            manipulation_penalty=float(reward_cfg.get("manipulation_penalty", 0.02)),
+            invalid_ifvg_penalty=float(reward_cfg.get("invalid_ifvg_penalty", 0.01)),
+            distribution_bonus=float(reward_cfg.get("distribution_bonus", 0.005)),
+        )
+    elif name == "distribution":
+        strategy = DistributionStrategy(enforce_gate=enforce_gate)
+        reward_cfg = strat_cfg.get("reward", {}) or {}
+        reward = DistributionReward(
+            entry_bonus=float(reward_cfg.get("entry_bonus", 0.01)),
+            sweep_penalty=float(reward_cfg.get("sweep_penalty", 0.02)),
+            distribution_bonus=float(reward_cfg.get("distribution_bonus", 0.005)),
+        )
+    else:
+        strategy = BaselineStrategy()
+        reward = None
+        weight = 0.0
+    return strategy, reward, weight
 
 
 def make_env(
@@ -55,6 +109,7 @@ def make_env(
 ) -> TradingEnv:
     continuous_actions = algo == "sac"
     use_sweep_reward = reward == "sweep"
+    strategy, strategy_reward, strategy_weight = _strategy_from_cfg(cfg)
     return TradingEnv(
         bars=bars,
         features=features,
@@ -70,6 +125,11 @@ def make_env(
         episodic=episodic,
         continuous_actions=continuous_actions,
         use_sweep_reward=use_sweep_reward,
+        strategy=strategy,
+        strategy_actions=bool(cfg.env.get("strategy_actions", False)),
+        sl_buffer_pts=float(cfg.env.get("sl_buffer_pts", 0.0)),
+        strategy_reward=strategy_reward,
+        strategy_weight=strategy_weight,
     )
 
 
@@ -91,6 +151,12 @@ def main() -> None:
         "--arch", choices=["tcn", "gru", "transformer"], default="tcn", help="Encoder architecture"
     )
     parser.add_argument("--reward", choices=["dsr", "sweep"], default="dsr", help="Reward function")
+    parser.add_argument(
+        "--strategy",
+        choices=["baseline", "po3_ifvg", "distribution"],
+        default="baseline",
+        help="RL strategy variant (Agent.md: Idea 1 = po3_ifvg, Idea 2 = distribution, Idea 3 = baseline).",
+    )
     parser.add_argument(
         "--use-vae", action="store_true", help="Use VAE feature extractor (not yet implemented)"
     )
@@ -129,6 +195,15 @@ def main() -> None:
 
     cfg = load_config(args.overrides, config_path=args.config)
 
+    # Merge the strategy variant config (Idea 1/2) on top of the base config.
+    # Baseline (Idea 3) leaves cfg untouched.
+    if args.strategy in _STRATEGY_CONFIGS:
+        variant_path = _STRATEGY_CONFIGS[args.strategy]
+        cfg = cast(DictConfig, OmegaConf.merge(cfg, OmegaConf.load(variant_path)))
+        log.info("Merged strategy config: %s", variant_path)
+    elif args.strategy != "baseline":
+        raise ValueError(f"unknown strategy: {args.strategy}")
+
     # Override for MVP mode
     if args.mvp:
         log.info("MVP mode: using first 30 days of training data")
@@ -143,7 +218,12 @@ def main() -> None:
     secondary_m1 = data.get(secondary_sym, {}).get("M1")
 
     cache_dir = Path(cfg.data.cache_dir)
-    feat_cache = cache_dir / f"{primary_sym}_features_v4_po3causal.parquet"
+    # Feature cache is versioned by schema; the strategy-state block changes the
+    # schema, so Idea 1/2 runs use a distinct cache file (FEATURE_CACHE_VERSION).
+    cache_tag = (
+        "v5_idea1" if bool(cfg.features.get("include_strategy_state", False)) else "v4_po3causal"
+    )
+    feat_cache = cache_dir / f"{primary_sym}_features_{cache_tag}.parquet"
     features = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
 
     # Split
@@ -284,8 +364,6 @@ def main() -> None:
     # Save config
     if cfg is not None:
         try:
-            from omegaconf import OmegaConf
-
             (run_dir / "config.yaml").write_text(OmegaConf.to_yaml(cfg))
         except Exception:
             pass
