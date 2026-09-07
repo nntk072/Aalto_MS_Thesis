@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "code-review-graph": {
+      "command": "uvx",
+      "args": [
+        "code-review-graph",
+        "serve"
+      ],
+      "cwd": "/home/nguyenl37/Aalto_MS_Thesis",
+      "type": "stdio"
+    }
+  }
+}
