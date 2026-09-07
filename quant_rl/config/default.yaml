@@ -98,6 +98,7 @@ features:
   include_po3: false            # PO3 time-of-day phase tag (accum/manip/distrib)
   include_fvg_ifvg: false       # per-TF FVG zone features (in-zone flag + ATR dist)
   include_po3_full: false       # full HTF FVG -> LTF IFVG -> entry-trigger pipeline
+  include_strategy_state: false # Idea 1: sweeps + PO3 manip/distrib state + IFVG zones
   po3_htf: "M15"                # HTF for the full PO3 pipeline
   po3_ltf: "M5"                 # primary (LTF) for the full PO3 pipeline
 
@@ -106,6 +107,8 @@ env:
   action_type: "discrete"              # "discrete" | "continuous"
   max_episode_steps: 1000
   reward_dsr_eta: 0.01                 # differential Sharpe damping
+  strategy_actions: false              # Idea 1/2 4-D Box [dir, risk, rr, tp]
+  sl_buffer_pts: 0.0                   # structural stop buffer (0 = exact)
 
 ppo:
   n_steps: 2048
@@ -173,4 +176,42 @@ auxiliary:
   prediction_horizon: 5  # bars ahead for the per-bar-return target
   lr: 0.0001             # auxiliary optimizer lr (head + encoder)
   grad_steps: 4          # gradient steps per rollout
+# Idea 1 / Idea 2 strategy semantics (Agent.md §10). All keys default to
+# the Idea 1 (PO3 + IFVG) values; config/idea2_distribution.yaml overrides.
+strategy:
+  name: "po3_ifvg"              # "baseline" | "po3_ifvg" | "distribution"
+  session:
+    timezone: "Etc/GMT-3"
+  liquidity:
+    swing_period: 5
+    require_reclaim: true
+    max_age_bars: 120
+  po3:
+    require_manipulation_sweep: true
+    require_distribution_confirmation: true
+  ifvg:
+    enabled: true
+    max_age_bars: 50
+    require_price_retest: true
+  risk:
+    sl_mode: "exact"            # "exact" | "buffered"
+    sl_buffer_pts: 1.0
+    risk_frac_range: [0.005, 0.02]
+    rr_range: [1.0, 3.0]
+  tp:
+    mode: "agent"
+    allowed_targets:
+      - "rr"
+      - "buyside_liquidity"
+      - "sellside_liquidity"
+      - "previous_day_high_low"
+    invalid_target_policy: "rr_fallback"
+  entry:
+    enforce_gate: false         # false = diagnostic; true = hard gate
+  reward:
+    entry_bonus: 0.01
+    manipulation_penalty: 0.02
+    invalid_ifvg_penalty: 0.01
+    distribution_bonus: 0.005
+    strategy_weight: 0.1
   batch_windows: 256     # supervised windows sampled per rollout

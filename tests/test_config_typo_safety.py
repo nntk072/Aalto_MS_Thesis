@@ -44,3 +44,29 @@ def test_null_valued_leaf_override_is_allowed() -> None:
     )
     assert cfg.training.max_days == 14
     assert cfg.backtest.validation.take_profit_per_trade_usd == 50.0
+
+
+def test_idea1_config_merges_and_sets_strategy() -> None:
+    """config/idea1_po3_ifvg.yaml enables the Idea 1 stack (Agent.md §10)."""
+    cfg = load_config(config_path="config/idea1_po3_ifvg.yaml")
+    assert cfg.features.include_strategy_state is True
+    assert cfg.env.strategy_actions is True
+    assert cfg.strategy.name == "po3_ifvg"
+    assert cfg.strategy.risk.sl_mode == "exact"
+    assert "buyside_liquidity" in cfg.strategy.tp.allowed_targets
+    assert cfg.strategy.reward.strategy_weight > 0
+
+
+def test_idea2_config_merges_and_sets_strategy() -> None:
+    """config/idea2_distribution.yaml selects the distribution strategy."""
+    cfg = load_config(config_path="config/idea2_distribution.yaml")
+    assert cfg.features.include_strategy_state is True
+    assert cfg.env.strategy_actions is True
+    assert cfg.strategy.name == "distribution"
+
+
+def test_default_strategy_is_po3_ifvg_with_actions_off() -> None:
+    """The default config must keep baseline behaviour until opted in."""
+    cfg = load_config()
+    assert cfg.env.strategy_actions is False
+    assert cfg.features.include_strategy_state is False
