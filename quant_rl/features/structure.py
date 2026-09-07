@@ -49,36 +49,41 @@ def structure_levels(
     sh = _swing_highs(bars["high"], swing_period)
     sl = _swing_lows(bars["low"], swing_period)
 
-    # Extract prices at swing points
-    swing_high_prices = bars["high"][sh == 1]
-    swing_low_prices = bars["low"][sl == 1]
+    # The swing flag fires ``swing_period`` bars AFTER the extremum bar, so the
+    # swing price is the raw series shifted back to the swing bar (using the
+    # flag bar's own price would record the wrong level).
+    conf_h = (sh == 1).to_numpy()
+    conf_l = (sl == 1).to_numpy()
+    price_h = bars["high"].shift(swing_period).to_numpy()
+    price_l = bars["low"].shift(swing_period).to_numpy()
+    times = np.asarray(bars.index, dtype="datetime64[ns]")
 
-    # Forward-fill to get "last" level at each bar
-    last_sh = pd.Series(np.nan, index=bars.index)
-    last_sh_time = pd.Series(pd.NaT, index=bars.index, dtype=bars.index.dtype)
+    n = len(bars)
+    sh_vals = np.full(n, np.nan)
+    sl_vals = np.full(n, np.nan)
+    sh_times = np.full(n, np.datetime64("NaT"), dtype="datetime64[ns]")
+    sl_times = np.full(n, np.datetime64("NaT"), dtype="datetime64[ns]")
 
-    last_sl = pd.Series(np.nan, index=bars.index)
-    last_sl_time = pd.Series(pd.NaT, index=bars.index, dtype=bars.index.dtype)
-
-    if len(swing_high_prices) > 0:
-        for ts, price in swing_high_prices.items():
-            # All bars at or after this swing point get this level until next swing
-            mask = bars.index >= ts
-            last_sh[mask] = price
-            last_sh_time[mask] = ts
-
-    if len(swing_low_prices) > 0:
-        for ts, price in swing_low_prices.items():
-            mask = bars.index >= ts
-            last_sl[mask] = price
-            last_sl_time[mask] = ts
+    # Running "current confirmed level": updates at each confirmation bar and
+    # persists forward (equivalent to forward-fill from the flag position).
+    cur_hv, cur_ht = np.nan, np.datetime64("NaT")
+    cur_lv, cur_lt = np.nan, np.datetime64("NaT")
+    for i in range(n):
+        if conf_h[i]:
+            cur_hv, cur_ht = price_h[i], times[i - swing_period]
+        if conf_l[i]:
+            cur_lv, cur_lt = price_l[i], times[i - swing_period]
+        sh_vals[i] = cur_hv
+        sl_vals[i] = cur_lv
+        sh_times[i] = cur_ht
+        sl_times[i] = cur_lt
 
     return pd.DataFrame(
         {
-            "last_swing_high": last_sh,
-            "last_swing_low": last_sl,
-            "last_swing_high_time": last_sh_time,
-            "last_swing_low_time": last_sl_time,
+            "last_swing_high": sh_vals,
+            "last_swing_low": sl_vals,
+            "last_swing_high_time": pd.Series(sh_times, index=bars.index, dtype=bars.index.dtype),
+            "last_swing_low_time": pd.Series(sl_times, index=bars.index, dtype=bars.index.dtype),
         },
         index=bars.index,
     )

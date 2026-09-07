@@ -7,6 +7,7 @@ and equity risk parameters, following MT5-style risk management.
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 
 
 def compute_sl_tp_long(
@@ -144,3 +145,99 @@ def compute_lots(
     lots = np.clip(lots, min_lot, max_lot)
 
     return float(lots)
+
+
+def compute_sl_tp_from_structure(
+    *,
+    direction: int,
+    entry_price: float,
+    structure_level: float,
+    rr_ratio: float,
+    buffer_pts: float = 0.0,
+) -> tuple[float, float]:
+    """Compute structural SL/TP for Idea 1/Idea 2 trades (Agent.md §14).
+
+    Long: SL = structure_level - buffer. Short: SL = structure_level + buffer.
+    ``buffer_pts=0.0`` implements the ``sl_mode: exact`` configuration;
+    a positive buffer implements ``sl_mode: buffered``.
+
+    Raises
+    ------
+    ValueError
+        If ``direction`` is not +/-1 or the geometry is invalid (the level is
+        on the wrong side of the entry), so a backwards stop is never created.
+    """
+    if direction == 1:
+        return compute_sl_tp_long(entry_price, structure_level, buffer_pts, rr_ratio)
+    if direction == -1:
+        return compute_sl_tp_short(entry_price, structure_level, buffer_pts, rr_ratio)
+    raise ValueError(f"direction must be +1 or -1, got {direction}")
+
+
+# Structural level columns probed for each liquidity target mode, in priority
+# order. The first finite level wins; missing columns are skipped.
+_TARGET_LEVELS: dict[str, dict[int, tuple[str, ...]]] = {
+    "buyside_liquidity": {1: ("sweep_high_level", "london_high", "asian_high"), -1: ()},
+    "sellside_liquidity": {1: (), -1: ("sweep_low_level", "london_low", "asian_low")},
+    "previous_day_high_low": {1: ("prev_day_high",), -1: ("prev_day_low",)},
+}
+
+
+def _structural_target(
+    direction: int, target_mode: str, row: pd.Series, entry_price: float
+) -> float:
+    """Return a valid structural target for the direction, or NaN."""
+    per_dir = _TARGET_LEVELS.get(target_mode)
+    if not per_dir:
+        raise ValueError(f"unknown target_mode: {target_mode!r}")
+    for col in per_dir.get(direction, ()):
+        if col in row.index:
+            level = float(row[col])
+            if np.isfinite(level) and (
+                level > entry_price if direction == 1 else level < entry_price
+            ):
+                return level
+    return float("nan")
+
+
+def resolve_tp_target(
+    *,
+    direction: int,
+    entry_price: float,
+    sl_price: float,
+    rr_ratio: float,
+    target_mode: str,
+    row: pd.Series,
+) -> float:
+    """Resolve the take-profit price for a trade (Agent.md §15).
+
+    Supported modes: ``rr``, ``buyside_liquidity``, ``sellside_liquidity``,
+    ``previous_day_high_low``. Structural targets that are NaN or on the
+    wrong side of the entry fall back to the RR target (``rr_fallback``
+    policy) — an invalid TP is never silently created.
+
+    Raises
+    ------
+    ValueError
+        If ``target_mode`` is unknown or the RR fallback itself is invalid.
+    """
+    risk = (entry_price - sl_price) if direction == 1 else (sl_price - entry_price)
+    rr_tp = entry_price + direction * rr_ratio * risk
+    if risk > 0 and direction in (1, -1):
+        fallback_ok = True
+    else:
+        fallback_ok = False
+
+    if target_mode == "rr":
+        if not fallback_ok:
+            raise ValueError(f"invalid RR geometry: risk {risk} must be positive")
+        return rr_tp
+
+    level = _structural_target(direction, target_mode, row, entry_price)
+    if np.isfinite(level):
+        return level
+    if not fallback_ok:
+        raise ValueError(
+            f"invalid target {target_mode!r} and RR fallback unavailable (risk {risk})"
+        )
+    return rr_tp
