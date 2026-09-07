@@ -186,3 +186,5 @@ zscaler.crt
 
 # VS Code local workspace files
 .vscode/
+# Added by code-review-graph
+.code-review-graph/

@@ -14,6 +14,7 @@
 ```python
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True)
 class SymbolConfig:
     symbol: str
