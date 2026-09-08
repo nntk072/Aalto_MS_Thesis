@@ -12,6 +12,7 @@ RL training → out-of-sample evaluation → chart visualization.
 ## Table of Contents
 
 - [Overview](#overview)
+- [Architecture](docs/architecture.md) — framework page: pipeline, contracts, invariants, adding a strategy
 - [Key Components](#key-components)
 - [Requirements](#requirements)
 - [Installation](#installation)
@@ -194,7 +195,7 @@ PAPER_TRADING=true RL_MODEL_PATH=outputs/<run>/model/ppo_final \
 # Continuous paper loop on the M1 cadence
 PAPER_TRADING=true RL_MODEL_PATH=outputs/<run>/model/ppo_final python live_trading_rl.py
 
-# REAL orders — only after the DEPLOYMENT.md trial criteria are met
+# REAL orders — only after the doc/DEPLOYMENT.md trial criteria are met
 PAPER_TRADING=false RL_MODEL_PATH=outputs/<run>/model/ppo_final python live_trading_rl.py
 ```
 
@@ -206,11 +207,11 @@ PAPER_TRADING=true STRATEGY_TYPE=combined python live_trading.py --once
 # Use specific strategy types: crossover, smc, trend_breakout, or combined
 PAPER_TRADING=true STRATEGY_TYPE=crossover python live_trading.py
 
-# REAL orders — only after the DEPLOYMENT.md promotion criteria are met
+# REAL orders — only after the doc/DEPLOYMENT.md promotion criteria are met
 PAPER_TRADING=false STRATEGY_TYPE=combined python live_trading.py
 ```
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for the paper→live promotion protocol,
+See [DEPLOYMENT.md](doc/DEPLOYMENT.md) for the paper→live promotion protocol,
 trial-period pass/fail criteria, and model versioning. Live risk sizing comes
 from `live_risk_overrides:` in `quant_rl/config/default.yaml`, which is kept
 aligned with the `ftmo:` block used by training-time guardrails.

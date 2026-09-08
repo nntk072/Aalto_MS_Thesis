@@ -32,6 +32,8 @@ class TestPlan1Integration:
         assert "london_high" in features.columns
         assert "london_low" in features.columns
         assert "prev_day_close" in features.columns
+        assert "prev_day_high" in features.columns
+        assert "prev_day_low" in features.columns
         assert features["asian_high"].notna().any()
         assert features["volume_spike"].notna().any()
         assert features["atr_5"].notna().any()
@@ -58,6 +60,8 @@ class TestPlan1Integration:
         assert "london_high" in levels.columns
         assert "london_low" in levels.columns
         assert "prev_day_close" in levels.columns
+        assert "prev_day_high" in levels.columns
+        assert "prev_day_low" in levels.columns
 
     def test_volume_spike_function(self) -> None:
         """Test volume_spike function directly."""
