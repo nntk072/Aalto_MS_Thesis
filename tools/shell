@@ -2,10 +2,13 @@
 set -euo pipefail
 # Open a bash shell inside the Docker dev container.
 # Auto-builds the image if missing or outdated (Dockerfile changed).
+# Defaults to GPU dev container; use --cpu for CPU-only container.
 #
 # Usage:
-#   ./tools/shell                              # interactive bash
-#   ./tools/shell python -c "import quant_rl"  # run a single command
+#   ./tools/shell                              # interactive bash in dev-gpu
+#   ./tools/shell --cpu                        # interactive bash in dev (CPU)
+#   ./tools/shell python -c "import quant_rl"  # run a single command in dev-gpu
+#   ./tools/shell --cpu python -c "import quant_rl"  # run in dev (CPU)
 
 # Check if user is in the docker group
 if ! groups | grep -qw docker; then
@@ -20,8 +23,33 @@ cd "$SCRIPT_DIR"
 
 IMAGE="quant-rl-thesis:dev"
 COMPOSE_FILE="docker-compose.yml"
+SERVICE="dev-gpu"
+TORCH_DEVICE="cu130"
+
+for arg in "$@"; do
+  case "$arg" in
+    --cpu)
+      SERVICE="dev"
+      TORCH_DEVICE="cpu"
+      shift
+      ;;
+    --gpu)
+      SERVICE="dev-gpu"
+      TORCH_DEVICE="cu130"
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
 # Rebuild if the image doesn't exist or the Dockerfile is newer than the image.
+if [ "$SERVICE" = "dev-gpu" ]; then
+  IMAGE="quant-rl-thesis:dev-gpu"
+else
+  IMAGE="quant-rl-thesis:dev"
+fi
 IMAGE_EXISTS=$(docker image inspect "$IMAGE" --format '{{.Id}}' 2>/dev/null || echo "")
 DOCKERFILE_MTIME=$(stat -c %Y Dockerfile docker-compose.yml 2>/dev/null | sort -rn | head -1)
 IMAGE_MTIME=0
@@ -31,13 +59,13 @@ if [ -n "$IMAGE_EXISTS" ]; then
 fi
 
 if [ -z "$IMAGE_EXISTS" ] || [ "${DOCKERFILE_MTIME:-0}" -gt "${IMAGE_MTIME:-0}" ]; then
-  echo "==> Building dev image (first run or Dockerfile changed)..."
-  docker compose -f "$COMPOSE_FILE" build dev
+  echo "==> Building ${SERVICE} image (first run or Dockerfile changed)..."
+  docker compose -f "$COMPOSE_FILE" build "$SERVICE"
   echo ""
 fi
 
 if [ $# -gt 0 ]; then
-  exec docker compose -f "$COMPOSE_FILE" run --rm dev "$@"
+  exec docker compose -f "$COMPOSE_FILE" run --rm "$SERVICE" "$@"
 else
-  exec docker compose -f "$COMPOSE_FILE" run --rm --entrypoint /bin/bash dev
+  exec docker compose -f "$COMPOSE_FILE" run --rm --entrypoint /bin/bash "$SERVICE"
 fi
