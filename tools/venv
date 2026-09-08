@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Create a Python virtual environment and install dependencies.
+# Defaults to GPU/CUDA torch when available; use --cpu for CPU-only installs.
+#
 # Usage:
-#   ./tools/venv                  # create .venv, install runtime deps
-#   ./tools/venv --dev            # create .venv, install runtime + dev deps
-#   ./tools/venv --uv             # use uv instead of pip (faster)
-#   ./tools/venv --dev --uv       # both
+#   ./tools/venv                  # create .venv, install runtime deps (GPU torch)
+#   ./tools/venv --cpu            # create .venv, install runtime deps (CPU torch)
+#   ./tools/venv --dev            # create .venv, install runtime + dev deps (GPU)
+#   ./tools/venv --dev --cpu      # create .venv, install runtime + dev deps (CPU)
+#   ./tools/venv --uv             # use uv instead of pip (GPU)
+#   ./tools/venv --uv --cpu       # use uv instead of pip (CPU)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$SCRIPT_DIR"
@@ -16,11 +20,13 @@ fi
 
 USE_UV=false
 EXTRA=""
+TORCH_DEVICE="cu130"
 
 for arg in "$@"; do
   case "$arg" in
     --dev) EXTRA="dev" ;;
     --uv)  USE_UV=true ;;
+    --cpu) TORCH_DEVICE="cpu" ;;
   esac
 done
 
@@ -38,12 +44,17 @@ else
   python3.12 -m venv .venv
   source .venv/bin/activate
   python -m pip install --upgrade pip
-  if [ "$EXTRA" = "dev" ]; then
+  if [ "$TORCH_DEVICE" = "cu130" ]; then
+    echo "==> Installing CUDA 13.0 torch ..."
+    pip install --index-url https://download.pytorch.org/whl/cu130 torch==2.13.0+cu130
+  else
+    echo "==> Installing CPU torch ..."
     pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu
+  fi
+  if [ "$EXTRA" = "dev" ]; then
     pip install -c constraints.txt -r requirements.txt -r requirements-dev.txt
     pip install -c constraints.txt -e . --no-deps
   else
-    pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu
     pip install -c constraints.txt -r requirements.txt
     pip install -c constraints.txt -e . --no-deps
   fi
