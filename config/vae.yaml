@@ -27,4 +27,4 @@ reconstruction_weight: 1.0  # Weight for reconstruction loss (MSE)
 kl_weight: 1.0  # Weight for KL divergence loss
 
 # Device
-device: cuda  # Set to "cpu" if no CUDA available
+device: auto  # Set to "cpu" if no CUDA available

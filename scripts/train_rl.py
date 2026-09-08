@@ -45,6 +45,7 @@ from quant_rl.evaluation import (  # noqa: E402
     run_episode,
 )
 from quant_rl.models.agent import build_agent  # noqa: E402
+from quant_rl.utils.device import get_device  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -131,6 +132,7 @@ def run_walk_forward(
     cfg: DictConfig,
     bars: pd.DataFrame,
     features: pd.DataFrame,
+    device: str | torch.device | None = None,
 ) -> dict[str, Any]:
     """Train + evaluate per purged/embargoed fold and aggregate the results."""
     wf_steps = args.wf_steps if args.wf_steps is not None else args.steps
@@ -154,6 +156,7 @@ def run_walk_forward(
             arch=args.arch,
             algo=args.algo,
             use_vae=bool(args.use_vae),
+            device=device,
         )
         fold_model.set_random_seed(args.seed + split.fold)
         fold_model.learn(total_timesteps=wf_steps, progress_bar=False)
@@ -192,6 +195,9 @@ def main() -> None:
         else bars.select_dtypes(include=["number"])
     )
     cfg = load_config(args)
+
+    device = get_device()
+    print(f"Using device: {device}")
 
     # Seed torch's global RNG *before* model construction — network init /
     # dropout draw from it and SB3 only seeds its own generator otherwise.
@@ -240,6 +246,7 @@ def main() -> None:
         arch=args.arch,
         algo=args.algo,
         use_vae=bool(args.use_vae),
+        device=device,
     )
     model.set_random_seed(args.seed)
     model.learn(total_timesteps=args.steps, progress_bar=False)
@@ -263,7 +270,7 @@ def main() -> None:
     }
 
     if args.walk_forward:
-        report["walk_forward"] = run_walk_forward(args, cfg, bars, features)
+        report["walk_forward"] = run_walk_forward(args, cfg, bars, features, device=device)
 
     (out_dir / "metrics.json").write_text(json.dumps(report, indent=2))
 

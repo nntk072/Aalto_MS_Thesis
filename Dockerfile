@@ -1,5 +1,7 @@
 FROM python:3.12-slim AS builder
 
+ARG TORCH_DEVICE=cpu
+
 COPY zscaler.crt /usr/local/share/ca-certificates/zscaler.crt
 RUN update-ca-certificates \
     && sed -i 's|http://|https://|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || true \
@@ -20,10 +22,18 @@ WORKDIR /build
 
 RUN python -m venv .venv
 
-RUN curl -k -fsSL -o /tmp/torch-2.13.0+cpu-cp312-cp312-manylinux_2_28_x86_64.whl \
-    "https://download-r2.pytorch.org/whl/cpu/torch-2.13.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl" \
-    && uv pip install --python .venv /tmp/torch-2.13.0+cpu-cp312-cp312-manylinux_2_28_x86_64.whl \
-    && rm /tmp/torch-2.13.0+cpu-cp312-cp312-manylinux_2_28_x86_64.whl
+RUN case "${TORCH_DEVICE}" in \
+      cu130) \
+        curl -k -fsSL -o /tmp/torch.whl \
+          "https://download-r2.pytorch.org/whl/cu130/torch-2.13.0%2Bcu130-cp312-cp312-manylinux_2_28_x86_64.whl" \
+        ;; \
+      *) \
+        curl -k -fsSL -o /tmp/torch.whl \
+          "https://download-r2.pytorch.org/whl/cpu/torch-2.13.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl" \
+        ;; \
+    esac \
+    && uv pip install --python .venv /tmp/torch.whl \
+    && rm /tmp/torch.whl
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project

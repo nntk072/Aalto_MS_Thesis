@@ -88,7 +88,7 @@ deps-check: lock-check
 DOCKER_COMPOSE ?= docker compose
 DOCKER_FILE = docker-compose.yml
 
-.PHONY: docker-build docker-build-dev docker-build-test docker-pipeline docker-parallel docker-clean docker-logs docker-shell
+.PHONY: docker-build docker-build-dev docker-build-test docker-build-test-gpu docker-pipeline docker-parallel docker-clean docker-logs docker-shell
 
 ## Build the runtime Docker image.
 docker-build:
@@ -98,9 +98,13 @@ docker-build:
 docker-build-dev:
 	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) build dev
 
-## Build test image.
+## Build test image (CPU torch).
 docker-build-test:
 	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) build test
+
+## Build test image (CUDA 13.0 torch).
+docker-build-test-gpu:
+	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) build test-gpu
 
 ## Build all Docker images.
 docker-build-all: docker-build docker-build-dev docker-build-test
@@ -117,6 +121,10 @@ docker-parallel:
 ## Run tests in Docker.
 docker-test:
 	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) run --rm test
+
+## Run tests in Docker with CUDA torch (requires NVIDIA Container Toolkit).
+docker-test-gpu:
+	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) run --rm test-gpu
 
 ## Run lint in Docker.
 docker-lint:
