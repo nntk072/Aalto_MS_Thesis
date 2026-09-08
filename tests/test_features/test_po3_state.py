@@ -23,7 +23,7 @@ def make_bars(rows: list[tuple[float, float, float]]) -> pd.DataFrame:
     return pd.DataFrame({"open": open_, "high": high, "low": low, "close": close}, index=idx)
 
 
-def empty_sweeps(index: pd.DatetimeIndex) -> pd.DataFrame:
+def empty_sweeps(index: pd.Index) -> pd.DataFrame:
     return pd.DataFrame(
         0.0,
         index=index,
@@ -40,11 +40,10 @@ def empty_sweeps(index: pd.DatetimeIndex) -> pd.DataFrame:
     )
 
 
-def flat_asian(index: pd.DatetimeIndex, high: float, low: float) -> pd.DataFrame:
+def flat_asian(index: pd.Index, high: float, low: float) -> pd.DataFrame:
     return pd.DataFrame({"asian_high": high, "asian_low": low}, index=index)
 
 
-# Sideways range, sweep low at bar 10, manipulation leg, rally.
 LONG_PATH = [(101.5, 100.5, 101.0)] * 10 + [
     (100.8, 98.0, 100.0),  # bar 10: sweep low wick
     (101.0, 97.5, 100.2),  # bar 11: manipulation low 97.5
@@ -55,7 +54,7 @@ LONG_PATH = [(101.5, 100.5, 101.0)] * 10 + [
 ]
 
 
-def long_sweeps(index: pd.DatetimeIndex) -> pd.DataFrame:
+def long_sweeps(index: pd.Index) -> pd.DataFrame:
     sw = empty_sweeps(index)
     sw.loc[index[10], "sweep_low"] = 1.0
     sw.loc[index[10], "sweep_low_level"] = 98.5
@@ -239,10 +238,12 @@ class TestBuildFeaturesIntegration:
 
     def _cfg(self, flag: bool) -> DictConfig:
         base = OmegaConf.load("quant_rl/config/default.yaml")
-        base.features.include_strategy_state = flag
-        base.features.htf_timeframes = []
-        base.features.zscore_window = 20
-        return base
+        raw = OmegaConf.merge(base, OmegaConf.create({"features": {}}))
+        cfg: DictConfig = OmegaConf.to_container(raw, resolve=True)  # type: ignore[assignment]
+        cfg.features.include_strategy_state = flag
+        cfg.features.htf_timeframes = []
+        cfg.features.zscore_window = 20
+        return cfg
 
     def test_strategy_block_added_when_enabled(self) -> None:
         bars = make_bars(LONG_PATH)

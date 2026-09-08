@@ -108,14 +108,14 @@ jobs:
       - name: Sync dependencies
         run: uv sync --extra dev
 
-      - name: Ruff check
-        run: uv run ruff check .
-
-      - name: Ruff format check
+      - name: Ruff format check (fast)
         run: uv run ruff format --check .
 
-      - name: mypy
-        run: uv run mypy quant_rl
+      - name: Ruff check (careful — rules format cannot fix)
+        run: uv run ruff check .
+
+      - name: mypy (strict — whole tree, ignores [tool.mypy].files)
+        run: uv run mypy .
 
   json-check:
     needs: check-uv
