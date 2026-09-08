@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Code Review Graph wrapper — build, update, and inspect the project's
+# persistent incremental knowledge graph.
+#
+# Usage:
+#   ./tools/crgraph            # incremental update (default)
+#   ./tools/crgraph build      # full rebuild
+#   ./tools/crgraph status     # graph stats
+#   ./tools/crgraph changes    # detect-changes against HEAD~1
+#   ./tools/crgraph flows      # list execution flows
+#   ./tools/crgraph wiki       # generate markdown wiki
+#   ./tools/crgraph watch      # watch for changes and auto-update
+
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$SCRIPT_DIR"
+
+if ! command -v code-review-graph >/dev/null 2>&1; then
+  echo "ERROR: code-review-graph is not installed." >&2
+  echo "  uv tool install code-review-graph" >&2
+  exit 1
+fi
+
+cmd="${1:-update}"
+shift || true
+
+case "$cmd" in
+  build|update|postprocess|embed|watch|status|forget|visualize|wiki|register|unregister|repos|eval|detect-changes|enrich|dead-code|query|impact|search|flows|flow|communities|community|architecture|large-functions|refactor|serve|mcp|daemon)
+    exec code-review-graph "$cmd" "$@"
+    ;;
+  -h|--help|help)
+    exec code-review-graph --help
+    ;;
+  *)
+    echo "Unknown command: $cmd" >&2
+    echo "Run ./tools/crgraph --help for available commands." >&2
+    exit 1
+    ;;
+esac
