@@ -55,6 +55,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "code-review-graph",
     "mypy>=1.11",
     "ruff>=0.7",
 ]
