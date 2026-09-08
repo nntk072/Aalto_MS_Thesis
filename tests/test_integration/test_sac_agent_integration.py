@@ -1,4 +1,4 @@
-"""Integration tests for plan 5 (SAC agent + auxiliary loss + env wiring)."""
+"""Integration tests for SAC agent wiring, time-decay sweep reward, and auxiliary loss."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 
-class TestPlan5SACIntegration:
+class TestSACAgentIntegration:
     """End-to-end SAC rollout against TradingEnv with time-decay reward."""
 
     @pytest.fixture
