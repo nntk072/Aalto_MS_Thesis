@@ -24,16 +24,16 @@ RUN python -m venv .venv
 
 RUN case "${TORCH_DEVICE}" in \
       cu130) \
-        curl -k -fsSL -o /tmp/torch.whl \
+        curl -k -fsSL -o /tmp/torch-2.13.0+cu130-cp312-cp312-manylinux_2_28_x86_64.whl \
           "https://download-r2.pytorch.org/whl/cu130/torch-2.13.0%2Bcu130-cp312-cp312-manylinux_2_28_x86_64.whl" \
         ;; \
       *) \
-        curl -k -fsSL -o /tmp/torch.whl \
+        curl -k -fsSL -o /tmp/torch-2.13.0+cpu-cp312-cp312-manylinux_2_28_x86_64.whl \
           "https://download-r2.pytorch.org/whl/cpu/torch-2.13.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl" \
         ;; \
     esac \
-    && uv pip install --python .venv /tmp/torch.whl \
-    && rm /tmp/torch.whl
+    && uv pip install --python .venv /tmp/torch-2.13.0+*.whl \
+    && rm /tmp/torch-2.13.0+*.whl
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
