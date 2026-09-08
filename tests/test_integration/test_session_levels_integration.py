@@ -1,4 +1,4 @@
-"""Integration tests for PLAN 1."""
+"""Integration tests for session levels and liquidity detection."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from quant_rl.features.indicators import atr, volume_spike
 from quant_rl.features.structure import detect_session_levels
 
 
-class TestPlan1Integration:
+class TestSessionLevelsIntegration:
     @pytest.fixture
     def full_day_data(self) -> pd.DataFrame:
         """Create sample full-day data with volume column."""
