@@ -66,8 +66,8 @@ dev = [
 # torch 2.13.0 is only published for cp312 linux on the cu130 index (cu128
 # stops at 2.11.0), hence cu130.
 [tool.uv.sources]
-torch = { index = "pytorch-cpu" }
-# torch = { index = "pytorch-gpu" }
+# torch = { index = "pytorch-cpu" }   # CPU default (CI); uncomment for CPU recon
+torch = { index = "pytorch-gpu" }
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
@@ -107,7 +107,6 @@ files = [
     "mt5_trading",
     "scripts",
     "tests",
-    "backtest",
     "demo_trading.py",
     "live_trading.py",
 ]
