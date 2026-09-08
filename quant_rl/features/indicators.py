@@ -131,8 +131,8 @@ def stochastic(df: pd.DataFrame, k_period: int = 14, d_period: int = 3) -> pd.Da
     return pd.DataFrame({"stoch_k": stoch_k, "stoch_d": stoch_d}, index=df.index)
 
 
-def vwap_from_session(df: pd.DataFrame) -> pd.Series:
-    """Session VWAP using ``session_id`` column."""
+def vwap_level(df: pd.DataFrame) -> pd.Series:
+    """Raw cumulative session VWAP price level (resets per ``session_id``)."""
     if "session_id" not in df.columns:
         raise ValueError("DataFrame must have 'session_id' column (see data.session)")
     typical = (df["high"] + df["low"] + df["close"]) / 3
@@ -142,6 +142,12 @@ def vwap_from_session(df: pd.DataFrame) -> pd.Series:
     cum_vol = vol.groupby(df["session_id"]).cumsum()
     vwap = cum_tp_vol / cum_vol
     vwap.name = "vwap"
+    return vwap
+
+
+def vwap_from_session(df: pd.DataFrame) -> pd.Series:
+    """Normalized (close - vwap) / vwap distance using ``session_id``."""
+    vwap = vwap_level(df)
     return (df["close"] - vwap) / vwap.replace(0, np.nan)
 
 

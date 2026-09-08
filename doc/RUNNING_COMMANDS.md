@@ -331,7 +331,7 @@ logged, nothing is sent to the broker. SMT/secondary-symbol data is wired
 automatically iff the deployed run was trained with it (`use_m1_only=false`
 and `primary_only=false`).
 
-### Go live (only after DEPLOYMENT.md criteria pass)
+### Go live (only after doc/DEPLOYMENT.md criteria pass)
 
 ```bash
 PAPER_TRADING=false RL_MODEL_PATH=outputs/<run>/model/ppo_final python live_trading_rl.py

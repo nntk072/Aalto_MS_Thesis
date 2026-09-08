@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -237,9 +239,8 @@ class TestBuildFeaturesIntegration:
     ]
 
     def _cfg(self, flag: bool) -> DictConfig:
-        base = OmegaConf.load("quant_rl/config/default.yaml")
-        raw = OmegaConf.merge(base, OmegaConf.create({"features": {}}))
-        cfg: DictConfig = OmegaConf.to_container(raw, resolve=True)  # type: ignore[assignment]
+        base = cast(DictConfig, OmegaConf.load("quant_rl/config/default.yaml"))
+        cfg = cast(DictConfig, OmegaConf.merge(base, OmegaConf.create({"features": {}})))
         cfg.features.include_strategy_state = flag
         cfg.features.htf_timeframes = []
         cfg.features.zscore_window = 20

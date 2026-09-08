@@ -101,6 +101,18 @@ features:
   include_strategy_state: false # Idea 1: sweeps + PO3 manip/distrib state + IFVG zones
   po3_htf: "M15"                # HTF for the full PO3 pipeline
   po3_ltf: "M5"                 # primary (LTF) for the full PO3 pipeline
+  # CT-anchored session levels (additive to the legacy broker-tz levels in
+  # structure.detect_session_levels; new columns carry a _ct suffix).
+  # Windows are resolved per bar in `tz` via tz-aware conversion, so US DST
+  # transitions are handled by the tz database (features/session_ohlc.py).
+  include_session_ohlc: false   # session OHLC + prior-period H/L + quadrants + vwap
+  sessions:
+    tz: "America/Chicago"       # CT — DST-aware session clock
+    asian: {start: "19:00", end: "23:00"}
+    london: {start: "02:00", end: "05:00"}
+    ny: {start: "08:30", end: "15:00"}
+    week_start: "MON"           # ISO weeks are Monday-based; kept explicit
+    quadrant_ranges: ["yesterday", "lastweek"]  # ranges that get q_* levels
 
 env:
   obs_window: 60                       # T in [T, F] obs

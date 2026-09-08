@@ -69,13 +69,14 @@ class TestDetectSessionLevels:
         levels = detect_session_levels(full_day_bars)
         assert "prev_day_high" in levels.columns
         assert "prev_day_low" in levels.columns
+        idx_dt = pd.DatetimeIndex(full_day_bars.index)
         # First day bars should have NaN prev_day_high/low (no prior completed day)
-        first_day_mask = full_day_bars.index.date == full_day_bars.index[0].date()
+        first_day_mask = idx_dt.date == idx_dt[0].date()
         assert levels.loc[first_day_mask, "prev_day_high"].isna().all()
         assert levels.loc[first_day_mask, "prev_day_low"].isna().all()
         # Second day bars should have finite values from day 1
-        second_day = full_day_bars.index[288].date()
-        second_day_mask = full_day_bars.index.date == second_day
+        second_day = idx_dt[288].date()
+        second_day_mask = idx_dt.date == second_day
         assert levels.loc[second_day_mask, "prev_day_high"].notna().any()
         assert levels.loc[second_day_mask, "prev_day_low"].notna().any()
 

@@ -18,7 +18,7 @@ from omegaconf import DictConfig, OmegaConf
 
 from ..data.align import align_timeframes
 from ..data.resample import resample
-from .indicators import atr, build_indicators, sweep_velocity, volume_spike, wick_ratio
+from .indicators import atr, build_indicators, sweep_velocity, volume_spike, vwap_level, wick_ratio
 from .liquidity import detect_bos, detect_liquidity_sweeps
 from .normalize import rolling_zscore
 from .po3_config import (
@@ -28,6 +28,7 @@ from .po3_config import (
     detect_po3_entries,
 )
 from .po3_state import build_ifvg_zone_features, build_po3_state
+from .session_ohlc import prior_period_high_low, range_quadrants, session_ohlc
 from .smt import smt_divergence
 from .structure import detect_session_levels, structure_levels
 
@@ -37,7 +38,9 @@ from .structure import detect_session_levels, structure_levels
 # signals one HTF/primary period forward (no within-period lookahead).
 # v5: Idea 1 strategy state — liquidity sweeps, PO3 manipulation/distribution
 # state and IFVG active zones (include_strategy_state opt-in block).
-FEATURE_CACHE_VERSION = "v5-idea1-strategy-state"
+# v6: CT-anchored session levels — session OHLC, yesterday/last-week H/L,
+# range quadrants and raw vwap (include_session_ohlc opt-in block).
+FEATURE_CACHE_VERSION = "v6-session-ohlc-quadrants-vwap"
 
 _DEFAULT_HTF_TIMEFRAMES = ("M5", "M15", "H1")
 # Capped normalised FVG distance: value used when no zone is active nearby.
@@ -316,6 +319,46 @@ def build_features(
         feat["manipulation_high_distance_atr"] = (
             feat["po3_manipulation_high"] - primary["close"]
         ) / atr5
+
+    # --- CT-anchored session levels (opt-in) ---
+    # Raw price levels like the structure block above, so added AFTER
+    # normalization. Windows are defined in America/Chicago wall-clock time
+    # and resolved per bar (DST-safe); columns are additive to the legacy
+    # broker-tz asian_*/london_* levels and carry a _ct suffix.
+    if feat_cfg is not None and bool(getattr(feat_cfg, "include_session_ohlc", False)):
+        sess_cfg = feat_cfg.sessions
+        sess_tz = str(sess_cfg.get("tz", "America/Chicago"))
+        for name in ("asian", "london", "ny"):
+            window = sess_cfg[name]
+            ohlc = session_ohlc(
+                primary,
+                str(window["start"]),
+                str(window["end"]),
+                session_tz=sess_tz,
+                prefix=f"{name}_ct",
+            )
+            feat = pd.concat([feat, ohlc], axis=1)
+
+        yday = prior_period_high_low(primary, freq="D", tz=sess_tz)
+        lweek = prior_period_high_low(primary, freq="W", tz=sess_tz)
+        feat = pd.concat([feat, yday, lweek], axis=1)
+
+        for range_name in list(sess_cfg.get("quadrant_ranges", ["yesterday", "lastweek"])):
+            feat = pd.concat(
+                [
+                    feat,
+                    range_quadrants(
+                        feat[f"{range_name}_high"],
+                        feat[f"{range_name}_low"],
+                        prefix=str(range_name),
+                    ),
+                ],
+                axis=1,
+            )
+
+        # Raw VWAP level; same tickvol/session_id contract as vwap_from_session.
+        if "tickvol" in primary.columns and "session_id" in primary.columns:
+            feat["vwap"] = vwap_level(primary)
 
     # Drop leading NaNs from warmup
     feat = feat.dropna(how="all")
