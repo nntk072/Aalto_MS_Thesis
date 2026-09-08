@@ -49,6 +49,8 @@ RUN curl -k -fsSL https://github.com/ta-lib/ta-lib/releases/download/v0.6.4/ta-l
 COPY . .
 RUN uv sync --frozen --no-dev
 
+RUN pip install rtk code-review-graph
+
 FROM python:3.12-slim AS runtime
 
 COPY zscaler.crt /usr/local/share/ca-certificates/zscaler.crt
