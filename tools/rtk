@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# RTK — Token-optimized CLI proxy for shell commands.
+#
+# Usage:
+#   ./tools/rtk git status
+#   ./tools/rtk ls quant_rl/
+#   ./tools/rtk grep "pattern" tests/
+#   ./tools/rtk docker ps
+#   ./tools/rtk gain
+
+if ! command -v rtk >/dev/null 2>&1; then
+  echo "ERROR: rtk is not installed." >&2
+  echo "  uv tool install code-review-graph" >&2
+  exit 1
+fi
+
+exec rtk "$@"
