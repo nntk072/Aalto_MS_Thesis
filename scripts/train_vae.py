@@ -28,6 +28,7 @@ from torch.utils.data import DataLoader, Dataset, Subset, random_split
 # Add project root to path before importing VAE
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from quant_rl.models.vae import VAE  # noqa: E402
+from quant_rl.utils.device import get_device  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -346,8 +347,8 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Set device
-    device = torch.device(config.get("device", "cuda" if torch.cuda.is_available() else "cpu"))
-    logger.info(f"Using device: {device}")
+    device = get_device(config.get("device"))
+    logger.info("Using device: %s", device)
 
     # Prepare data
     logger.info("Loading and preparing data...")

@@ -39,6 +39,7 @@ from quant_rl.baselines import (  # noqa: E402
 from quant_rl.data.split import split_train_test  # noqa: E402
 from quant_rl.envs.trading_env import TradingEnv  # noqa: E402
 from quant_rl.evaluation import build_run_report, run_episode  # noqa: E402
+from quant_rl.utils.device import get_device  # noqa: E402
 
 OBS_WINDOW = 60  # must match TradingEnv's default obs_window
 
@@ -77,6 +78,9 @@ def main() -> None:
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
+    device = get_device()
+    print(f"Using device: {device}")
+
     bars = _load_csv(args.bars_csv, getattr(args, "index_col", None))
     if args.features_csv:
         features = _load_csv(args.features_csv, getattr(args, "index_col", None))
@@ -100,27 +104,30 @@ def main() -> None:
     )
     print(f"sweep samples: train={len(x_train)} held-out={len(x_val)}")
 
-    model = LSTMSweepClassifier(x_train.shape[-1], hidden_size=args.hidden_size)
+    model = LSTMSweepClassifier(x_train.shape[-1], hidden_size=args.hidden_size).to(device)
     optimiser = torch.optim.Adam(model.parameters(), lr=args.lr)
     loss_fn = nn.CrossEntropyLoss(
-        weight=torch.tensor([1.0, 1.0, 1.0])  # classes: -1, 0, +1
+        weight=torch.tensor([1.0, 1.0, 1.0], device=device)  # classes: -1, 0, +1
     )
 
     for epoch in range(args.epochs):
         model.train()
-        perm = torch.randperm(len(x_train))
+        perm = torch.randperm(len(x_train), device=device)
         total = 0.0
         for start in range(0, len(x_train), args.batch_size):
             batch = perm[start : start + args.batch_size]
+            x_batch = torch.as_tensor(x_train[batch.cpu().numpy()], device=device)
+            y_batch = torch.as_tensor(y_train[batch.cpu().numpy()] + 1, device=device)
             optimiser.zero_grad()
-            loss = loss_fn(model(x_train[batch]), y_train[batch] + 1)  # map to {0,1,2}
+            loss = loss_fn(model(x_batch), y_batch)
             loss.backward()
             optimiser.step()
             total += float(loss) * len(batch)
 
         with torch.no_grad():
-            val_preds = model(x_val).argmax(dim=-1) - 1
-            val_acc = float((val_preds == y_val).float().mean())
+            x_val_t = torch.as_tensor(x_val, device=device)
+            val_preds = model(x_val_t).argmax(dim=-1).cpu() - 1
+            val_acc = float((val_preds == torch.as_tensor(y_val)).float().mean())
         print(
             f"epoch {epoch + 1}/{args.epochs} loss={total / len(x_train):.4f} val_acc={val_acc:.3f}"
         )

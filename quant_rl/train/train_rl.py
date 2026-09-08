@@ -48,6 +48,7 @@ from quant_rl.features.build import build_features
 from quant_rl.models.agent import build_agent
 from quant_rl.train.auxiliary_training import AuxiliaryTrainerCallback
 from quant_rl.train.callbacks import BestCheckpointEvalCallback
+from quant_rl.utils.device import get_device
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -204,6 +205,9 @@ def main() -> None:
     elif args.strategy != "baseline":
         raise ValueError(f"unknown strategy: {args.strategy}")
 
+    device = get_device(cfg.get("device"))
+    log.info("Using device: %s", device)
+
     # Override for MVP mode
     if args.mvp:
         log.info("MVP mode: using first 30 days of training data")
@@ -266,7 +270,7 @@ def main() -> None:
     timesteps = cfg.ppo.total_timesteps if not args.mvp else cfg.training.total_timesteps_mvp
     log.info("Training %s for %d timesteps...", args.algo.upper(), timesteps)
 
-    model = build_agent(train_env, cfg, arch=args.arch, algo=args.algo)
+    model = build_agent(train_env, cfg, arch=args.arch, algo=args.algo, device=device)
 
     aux_cb = None
     aux_cfg = getattr(cfg, "auxiliary", None)
@@ -449,7 +453,7 @@ def main() -> None:
             fold_env = make_env(
                 fold_train_bars, fold_train_feat, cfg, algo=args.algo, reward=args.reward
             )
-            fold_model = build_agent(fold_env, cfg, arch=args.arch, algo=args.algo)
+            fold_model = build_agent(fold_env, cfg, arch=args.arch, algo=args.algo, device=device)
             fold_model.learn(total_timesteps=wf_steps, callback=None, progress_bar=False)
 
             fold_result = evaluate_model(
