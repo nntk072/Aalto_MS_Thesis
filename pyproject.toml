@@ -59,15 +59,15 @@ dev = [
     "ruff>=0.7",
 ]
 
-# Torch source: CPU by default so `uv sync` / uv.lock stay small and match CI
-# (CI installs from the CPU lock). To use GPU/CUDA torch locally, swap the
-# active line in [tool.uv.sources] (comment/uncomment) and run `uv sync`.
+# Torch source: GPU by default so local training uses CUDA when available.
+# CI installs the CPU-only wheel in Dockerfile. To force CPU locally, swap
+# the active line below to the pytorch-cpu source and run `uv sync`.
 # NOTE: the RTX PRO 500 (Blackwell, sm_120) requires CUDA >= 12.8 kernels, and
 # torch 2.13.0 is only published for cp312 linux on the cu130 index (cu128
 # stops at 2.11.0), hence cu130.
 [tool.uv.sources]
-# torch = { index = "pytorch-cpu" }   # CPU default (CI); uncomment for CPU recon
 torch = { index = "pytorch-gpu" }
+# torch = { index = "pytorch-cpu" }   # CPU-only fallback; uncomment to force CPU
 
 [[tool.uv.index]]
 name = "pytorch-cpu"

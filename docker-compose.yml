@@ -51,6 +51,34 @@ services:
       - -v
       - --tb=short
 
+  test-gpu:
+    build:
+      context: .
+      target: test
+      args:
+        TORCH_DEVICE: cu130
+    image: quant-rl-thesis:test-gpu
+    volumes:
+      - ./outputs:/app/outputs
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./cache:/app/cache
+      - ./logs:/app/logs
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    command:
+      - tests/
+      - -v
+      - --tb=short
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
   # --- Pipeline stages ---
 
   prepare-data:

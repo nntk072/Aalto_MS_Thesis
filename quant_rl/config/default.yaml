@@ -149,6 +149,8 @@ agent:
   arch: "tcn"                 # "tcn" | "gru" | "transformer"
   use_narrative: false        # true to condition on the VAE narrative embedding
 
+device: "auto"
+
 output:
   dir: "outputs"                    # base directory for run artifacts
   save_plots: true                  # save static PNG figures

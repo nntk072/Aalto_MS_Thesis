@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import torch
 from gymnasium import spaces
 from omegaconf import DictConfig
 
@@ -33,6 +34,7 @@ def build_agent(
     algo: str = "ppo",
     use_vae: bool = False,
     vae: Any | None = None,
+    device: str | torch.device | None = None,
 ) -> Any:
     """Build an SB3 PPO or SAC agent wired to the sequence encoder.
 
@@ -51,6 +53,9 @@ def build_agent(
     vae:
         A trained :class:`quant_rl.models.vae.VAE` instance.  Required when
         ``use_vae`` is ``True``.
+    device:
+        Torch device to place the policy on (e.g. ``"cpu"``, ``"cuda"``).
+        ``None`` lets SB3 auto-detect.
 
     Returns
     -------
@@ -115,10 +120,7 @@ def build_agent(
             raise ValueError("SAC requires continuous action space (Box)")
 
         sac_cfg = cfg.get("sac", cfg.get("ppo", {}))
-        return SAC(
-            "MultiInputPolicy",
-            vec_env,
-            policy_kwargs=policy_kwargs,
+        sac_kwargs: dict[str, Any] = dict(
             learning_rate=sac_cfg.get("learning_rate", 3e-4),
             buffer_size=sac_cfg.get("buffer_size", 1_000_000),
             batch_size=sac_cfg.get("batch_size", 256),
@@ -130,12 +132,17 @@ def build_agent(
             learning_starts=sac_cfg.get("learning_starts", 500),
             verbose=1,
         )
+        if device is not None:
+            sac_kwargs["device"] = device
+        return SAC(
+            "MultiInputPolicy",
+            vec_env,
+            policy_kwargs=policy_kwargs,
+            **sac_kwargs,
+        )
 
     # Default to PPO
-    return PPO(
-        "MultiInputPolicy",
-        vec_env,
-        policy_kwargs=policy_kwargs,
+    ppo_kwargs: dict[str, Any] = dict(
         n_steps=cfg.ppo.n_steps,
         batch_size=cfg.ppo.batch_size,
         n_epochs=cfg.ppo.n_epochs,
@@ -145,4 +152,12 @@ def build_agent(
         clip_range=cfg.ppo.clip_range,
         ent_coef=cfg.ppo.ent_coef,
         verbose=1,
+    )
+    if device is not None:
+        ppo_kwargs["device"] = device
+    return PPO(
+        "MultiInputPolicy",
+        vec_env,
+        policy_kwargs=policy_kwargs,
+        **ppo_kwargs,
     )
