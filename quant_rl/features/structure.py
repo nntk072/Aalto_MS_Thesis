@@ -66,8 +66,8 @@ def structure_levels(
 
     # Running "current confirmed level": updates at each confirmation bar and
     # persists forward (equivalent to forward-fill from the flag position).
-    cur_hv, cur_ht = np.nan, np.datetime64("NaT")
-    cur_lv, cur_lt = np.nan, np.datetime64("NaT")
+    cur_hv, cur_ht = np.nan, np.datetime64("NaT", "ns")
+    cur_lv, cur_lt = np.nan, np.datetime64("NaT", "ns")
     for i in range(n):
         if conf_h[i]:
             cur_hv, cur_ht = price_h[i], times[i - swing_period]
@@ -127,6 +127,8 @@ def detect_session_levels(
         - london_high: Rolling swing high from London session
         - london_low: Rolling swing low from London session
         - prev_day_close: Previous day's close price
+        - prev_day_high: Previous calendar day's high price
+        - prev_day_low: Previous calendar day's low price
     """
     df = df.copy()
     idx = df.index
@@ -163,6 +165,15 @@ def detect_session_levels(
 
     prev_close = df["close"].shift(1)
     result["prev_day_close"] = prev_close
+
+    # Previous day's high/low (causal: only uses completed prior calendar days).
+    idx_dt = pd.DatetimeIndex(df.index)
+    daily_high = df["high"].groupby(idx_dt.date).max()
+    daily_low = df["low"].groupby(idx_dt.date).min()
+    prev_day_high = daily_high.shift(1).reindex(idx).ffill()
+    prev_day_low = daily_low.shift(1).reindex(idx).ffill()
+    result["prev_day_high"] = prev_day_high
+    result["prev_day_low"] = prev_day_low
 
     result = result.ffill()
 

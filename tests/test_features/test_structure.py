@@ -47,6 +47,8 @@ class TestDetectSessionLevels:
         assert "london_high" in levels.columns
         assert "london_low" in levels.columns
         assert "prev_day_close" in levels.columns
+        assert "prev_day_high" in levels.columns
+        assert "prev_day_low" in levels.columns
 
     def test_london_levels_detected(self, full_day_bars: pd.DataFrame) -> None:
         levels = detect_session_levels(full_day_bars)
@@ -62,6 +64,20 @@ class TestDetectSessionLevels:
         levels = detect_session_levels(full_day_bars)
         assert "prev_day_close" in levels.columns
         assert levels["prev_day_close"].isna().sum() > 0  # First bar has no prev close
+
+    def test_prev_day_high_low(self, full_day_bars: pd.DataFrame) -> None:
+        levels = detect_session_levels(full_day_bars)
+        assert "prev_day_high" in levels.columns
+        assert "prev_day_low" in levels.columns
+        # First day bars should have NaN prev_day_high/low (no prior completed day)
+        first_day_mask = full_day_bars.index.date == full_day_bars.index[0].date()
+        assert levels.loc[first_day_mask, "prev_day_high"].isna().all()
+        assert levels.loc[first_day_mask, "prev_day_low"].isna().all()
+        # Second day bars should have finite values from day 1
+        second_day = full_day_bars.index[288].date()
+        second_day_mask = full_day_bars.index.date == second_day
+        assert levels.loc[second_day_mask, "prev_day_high"].notna().any()
+        assert levels.loc[second_day_mask, "prev_day_low"].notna().any()
 
     def test_output_shape(self, full_day_bars: pd.DataFrame) -> None:
         levels = detect_session_levels(full_day_bars)
