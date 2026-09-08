@@ -224,11 +224,11 @@ scheduler = sched.scheduler(time.time, time.sleep)
 class TradingSystem:
     """Manages the trading system lifecycle."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.robot_instance = None
         self.scheduler = sched.scheduler(time.time, time.sleep)
 
-    def run_trading_cycle(self):
+    def run_trading_cycle(self) -> None:
         """Run a single trading cycle."""
         try:
             logger.info("=" * 80)
@@ -255,23 +255,23 @@ class TradingSystem:
         except Exception as e:
             logger.exception(f"Error in trading cycle: {e}")
 
-    def schedule_trading(self):
+    def schedule_trading(self) -> None:
         """Schedule the next trading cycle."""
         self.run_trading_cycle()
         self.scheduler.enter(TRADING_INTERVAL_MINUTES * 60, 1, self.schedule_trading)
 
-    def start_scheduler(self):
+    def start_scheduler(self) -> None:
         """Start the trading scheduler."""
         self.scheduler.enter(0, 1, self.schedule_trading)
         t = threading.Thread(target=self.scheduler.run, daemon=True)
         t.start()
-        return t
+        return t  # type: ignore[return-value]
 
-    def start(self):
+    def start(self) -> None:
         """Start the trading system."""
         try:
             # Initialize trading system
-            self.robot_instance = initialize_trading_system()
+            self.robot_instance = initialize_trading_system()  # type: ignore[assignment]
 
             # Run initial trading cycle
             logger.info("Running initial trading cycle...")
@@ -294,7 +294,7 @@ class TradingSystem:
             raise
 
 
-def main():
+def main() -> None:
     """Main function."""
     trading_system = TradingSystem()
     trading_system.start()

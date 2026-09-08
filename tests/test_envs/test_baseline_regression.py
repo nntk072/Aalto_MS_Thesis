@@ -9,6 +9,8 @@ dropped from the observation.
 
 from __future__ import annotations
 
+from typing import TypedDict
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -18,6 +20,11 @@ from quant_rl.envs.reward import DSRReward
 from quant_rl.envs.strategies import BaselineStrategy
 from quant_rl.envs.sweep_reward import CompositeReward
 from quant_rl.envs.trading_env import TradingEnv
+
+
+class _ValidateEntryKwargs(TypedDict, total=False):
+    direction: int
+    row: pd.Series
 
 
 @pytest.fixture
@@ -191,10 +198,10 @@ class TestBaselineEntryGate:
         called_strategy = False
         original = BaselineStrategy.validate_entry
 
-        def spy(self_bs: BaselineStrategy, **kwargs: object) -> bool:
+        def spy(self_bs: BaselineStrategy, *, direction: int, row: pd.Series) -> bool:
             nonlocal called_strategy
             called_strategy = True
-            return original(self_bs, **kwargs)
+            return original(self_bs, direction=direction, row=row)
 
         monkeypatch.setattr(BaselineStrategy, "validate_entry", spy)
         env._check_entry_gate(float(bars["close"].iloc[env.step_idx]), 1, feat_row)

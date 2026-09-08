@@ -75,26 +75,26 @@ def get_robot():
 scheduler = sched.scheduler(time.time, time.sleep)
 
 
-def run_job():
+def run_job() -> None:
     try:
         logger.info("Running scheduled trade cycle...")
-        robot = get_robot()
+        robot = get_robot()  # type: ignore[no-untyped-call]
         robot.trade()
         logger.info("Trade cycle completed.")
     except Exception as e:
         logger.exception(f"Scheduled job failed: {e}")
 
 
-def schedule_hourly():
+def schedule_hourly() -> None:
     run_job()
     scheduler.enter(60 * 60, 1, schedule_hourly)
 
 
-def start_scheduler():
+def start_scheduler() -> None:
     scheduler.enter(0, 1, schedule_hourly)
     t = threading.Thread(target=scheduler.run, daemon=True)
     t.start()
-    return t
+    return t  # type: ignore[return-value]
 
 
 if __name__ == "__main__":
