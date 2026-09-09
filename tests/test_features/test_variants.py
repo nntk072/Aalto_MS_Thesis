@@ -133,7 +133,122 @@ def test_variant_flags_additive(m1_bars):
     cfg_fvg = OmegaConf.merge(cfg_base, OmegaConf.create({"features": {"include_fvg_ifvg": True}}))
     fvg = build_features(m1_bars, cfg=cast(DictConfig, cfg_fvg))
     assert any(str(c).startswith("M5_fvg_") for c in fvg.columns)
+    # FVG full-ladder fix (plan §4.5): the M1 leg is included alongside HTFs.
+    assert any(str(c).startswith("M1_fvg_") for c in fvg.columns)
     assert set(map(str, base.columns)) < set(map(str, fvg.columns))
+
+
+def _mtf_cfg(**blocks: Any) -> DictConfig:
+    """Merge MTF opt-in blocks + flat feature flags (plan §5) over the base."""
+    return cast(
+        DictConfig,
+        OmegaConf.merge(OmegaConf.create(_base_cfg()), OmegaConf.create({"features": blocks})),
+    )
+
+
+def _mtf_secondary(m1_bars: pd.DataFrame) -> pd.DataFrame:
+    """Correlated secondary symbol bars for the SMT MTF block."""
+    sec = m1_bars.copy()
+    rng = np.random.default_rng(7)
+    sec["close"] = sec["close"] * 0.5 + rng.normal(0, 1, len(sec))
+    sec["high"] = sec["high"] * 0.5
+    sec["low"] = sec["low"] * 0.5
+    return sec
+
+
+def test_mtf_blocks_off_by_default(m1_bars):
+    """New MTF blocks must not change the base matrix unless enabled (plan §5)."""
+    from quant_rl.features.build import build_features
+
+    base = build_features(
+        m1_bars, secondary=_mtf_secondary(m1_bars), cfg=OmegaConf.create(_base_cfg())
+    )
+    for col in base.columns:
+        assert not str(col).startswith(("M5_smt_", "M15_smt_", "H1_smt_"))
+        assert not str(col).startswith(("M5_bos_", "M15_bos_", "H1_bos_"))
+        assert not str(col).startswith(("M5_sweep_", "M15_sweep_", "H1_sweep_"))
+        assert "_dist_to_swing_" not in str(col)
+
+
+def test_smt_mtf_additive_and_causal(m1_bars):
+    """SMT MTF (§4.1): per-TF divergence columns, causal under truncation."""
+    from quant_rl.features.build import build_features
+
+    sec = _mtf_secondary(m1_bars)
+    base = build_features(m1_bars, secondary=sec, cfg=OmegaConf.create(_base_cfg()))
+    cfg = _mtf_cfg(smt={"enabled": True, "timeframes": ["M5"]})
+    mtf = build_features(m1_bars, secondary=sec, cfg=cfg)
+    assert "M5_smt_bearish" in set(map(str, mtf.columns))
+    assert set(map(str, base.columns)) < set(map(str, mtf.columns))
+
+    trunc = build_features(m1_bars.iloc[:400], secondary=sec.iloc[:400], cfg=cfg)
+    overlap = trunc.index[:300]
+    cols = ["M5_smt_bearish", "M5_smt_bullish"]
+    pd.testing.assert_frame_equal(mtf.loc[overlap, cols], trunc.loc[overlap, cols], rtol=1e-9)
+
+
+def test_structure_bos_mtf_additive_and_causal(m1_bars):
+    """Structure/BOS MTF (§4.2): TF swings + close-through BOS + ATR distances."""
+    from quant_rl.features.build import build_features
+
+    base = build_features(m1_bars, cfg=OmegaConf.create(_base_cfg()))
+    cfg = _mtf_cfg(structure={"enabled": True, "timeframes": ["M5"]})
+    mtf = build_features(m1_bars, cfg=cfg)
+    cols = set(map(str, mtf.columns))
+    assert {"M5_last_swing_high", "M5_last_swing_low", "M5_bos_up", "M5_bos_down"} <= cols
+    assert {"M5_dist_to_swing_high_atr", "M5_dist_to_swing_low_atr"} <= cols
+    assert set(map(str, base.columns)) < cols
+
+    trunc = build_features(m1_bars.iloc[:400], cfg=cfg)
+    overlap = trunc.index[:300]
+    check = ["M5_last_swing_high", "M5_bos_up", "M5_dist_to_swing_high_atr"]
+    pd.testing.assert_frame_equal(mtf.loc[overlap, check], trunc.loc[overlap, check], rtol=1e-9)
+
+
+def test_liquidity_sweep_mtf_additive_and_causal(m1_bars):
+    """Sweep MTF (§4.3): true per-TF sweeps on resampled OHLC, causal."""
+    from quant_rl.features.build import build_features
+
+    base = build_features(m1_bars, cfg=OmegaConf.create(_base_cfg()))
+    cfg = _mtf_cfg(liquidity={"enabled": True, "timeframes": ["M5"]})
+    mtf = build_features(m1_bars, cfg=cfg)
+    assert {"M5_sweep_high", "M5_sweep_low"} <= set(map(str, mtf.columns))
+    assert set(map(str, base.columns)) < set(map(str, mtf.columns))
+
+    trunc = build_features(m1_bars.iloc[:400], cfg=cfg)
+    overlap = trunc.index[:300]
+    check = ["M5_sweep_high", "M5_sweep_low"]
+    pd.testing.assert_frame_equal(mtf.loc[overlap, check], trunc.loc[overlap, check], rtol=1e-9)
+
+
+def test_po3_state_mtf_behind_flag(m1_bars):
+    """PO3 state MTF (§4.4): per-TF state machines, causal, off by default."""
+    from quant_rl.features.build import build_features
+
+    cfg_on = _mtf_cfg(
+        include_strategy_state=True, po3_state_mtf={"enabled": True, "timeframes": ["M5"]}
+    )
+    mtf = build_features(m1_bars, cfg=cfg_on)
+    assert "M5_po3_manipulation_active" in set(map(str, mtf.columns))
+
+    trunc = build_features(m1_bars.iloc[:400], cfg=cfg_on)
+    overlap = trunc.index[:300]
+    check = ["M5_po3_manipulation_active", "M5_po3_distribution"]
+    pd.testing.assert_frame_equal(mtf.loc[overlap, check], trunc.loc[overlap, check], rtol=1e-9)
+
+
+def test_ifvg_mtf_behind_flag(m1_bars):
+    """IFVG zone MTF (§4.6): per-TF active zones, causal, off by default."""
+    from quant_rl.features.build import build_features
+
+    cfg_on = _mtf_cfg(include_strategy_state=True, ifvg_mtf={"enabled": True, "timeframes": ["M5"]})
+    mtf = build_features(m1_bars, cfg=cfg_on)
+    assert "M5_ifvg_bull_active" in set(map(str, mtf.columns))
+
+    trunc = build_features(m1_bars.iloc[:400], cfg=cfg_on)
+    overlap = trunc.index[:300]
+    check = ["M5_ifvg_bull_active", "M5_ifvg_bear_active"]
+    pd.testing.assert_frame_equal(mtf.loc[overlap, check], trunc.loc[overlap, check], rtol=1e-9)
 
 
 def test_variant_config_files_merge():

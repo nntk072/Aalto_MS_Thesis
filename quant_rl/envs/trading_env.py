@@ -32,6 +32,7 @@ from ..backtest.risk import (
 from ..envs.reward import DSRReward
 from ..envs.strategies import BaselineStrategy, TradingStrategy
 from ..envs.sweep_reward import CompositeReward, SweepConfirmationReward
+from ..features.build import MTF_RAW_SUFFIXES
 from ..models.vae import VAE
 
 
@@ -78,6 +79,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         sl_buffer_pts: float = 0.0,
         strategy_reward: Any = None,
         strategy_weight: float = 0.0,
+        block_overnight: bool = True,
     ):
         """Initialize trading environment.
 
@@ -178,6 +180,15 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         sl_buffer_pts : float
             Buffer in price points for the structural stop in strategy
             modes. ``0.0`` = ``sl_mode: exact``; positive = ``buffered``.
+        block_overnight : bool
+            If True (default), any position still open on the **last bar of
+            a session** (``session_id`` changes on the next step) is
+            force-closed at that bar's close quote — the position never
+            carries across the overnight gap. Mirrors
+            ``run_backtest``'s no-overnight contract (its ``eod_close``)
+            and keeps evaluation/training free of gap risk. Set ``False``
+            to restore gap-hold behaviour (mark-to-market across the
+            session boundary; SL/TP checked on the next session's bars).
         """
         self.bars = bars
         self.features = features
@@ -194,6 +205,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.max_lot = max_lot
         self.contract_size = contract_size
         self.max_loss_per_trade_usd = max_loss_per_trade_usd
+        self.block_overnight = bool(block_overnight)
         self.episodic = episodic
         self.use_sweep_reward = use_sweep_reward
 
@@ -229,9 +241,18 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         # Model-facing observation frame: the strategy's raw price-level
         # columns stay in ``features`` for execution/risk but must not enter
-        # the normalised ``seq`` tensor (Agent.md §11).
+        # the normalised ``seq`` tensor (Agent.md §11). MTF blocks reuse the
+        # same stems with a ``{TF}_`` prefix (e.g. ``M5_last_swing_high``),
+        # matched via MTF_RAW_SUFFIXES so unnormalised HTF price magnitudes
+        # never reach the encoder.
         drop_cols = [c for c in self.strategy.raw_columns if c in features.columns]
-        self._obs_features = features.drop(columns=drop_cols)
+        mtf_raw = {
+            c
+            for c in features.columns
+            if any(str(c).endswith(f"_{stem}") for stem in MTF_RAW_SUFFIXES)
+            and str(c) not in self.strategy.raw_columns
+        }
+        self._obs_features = features.drop(columns=drop_cols + sorted(mtf_raw))
 
         # Action space: strategy actions, continuous, or discrete
         self.continuous_actions = continuous_actions
@@ -484,6 +505,36 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             fill_bid, fill_ask = self._bar_quote(next_bar)
         else:
             fill_bid, fill_ask = bid, ask
+
+        # Overnight block: a position is never carried across the session
+        # gap. On the session's last bar (the next bar belongs to a new
+        # ``session_id``) it is force-closed at the session's last
+        # executable quote — mirrors ``run_backtest``'s ``eod_close``
+        # contract. Disable via ``block_overnight=False`` for the legacy
+        # gap-hold behaviour (mark-to-market resumes on the next session).
+        if self.block_overnight and self.position is not None:
+            next_sid = (
+                int(next_bar["session_id"])
+                if fill_idx < len(self.bars) and "session_id" in next_bar.index
+                else session_id
+            )
+            if next_sid != session_id:
+                pnl, fill_price = self.broker.close_position(
+                    self.account, self.position, (fill_bid, fill_ask)
+                )
+                self.trade_log.append(
+                    {
+                        "type": "eod_close",
+                        "pnl": pnl,
+                        "price": fill_price,
+                        "reason": "session_end",
+                        "bar": self.step_idx,
+                        "time": bar_time,
+                        "equity": self.account.equity,
+                    }
+                )
+                self.position = None
+                self.sessions_with_trades.add(session_id)
 
         # Decode action (discrete or continuous)
         discrete_action = 0  # default hold

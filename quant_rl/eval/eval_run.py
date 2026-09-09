@@ -46,7 +46,7 @@ from quant_rl.data.split import get_split_config, split_train_test
 from quant_rl.eval.export import save_run
 from quant_rl.eval.rollout import evaluate_model
 from quant_rl.evaluation import calculate_metrics
-from quant_rl.features.build import build_features
+from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -129,7 +129,7 @@ def main() -> None:
     secondary_m1 = data.get(cfg.data.secondary, {}).get("M1")
 
     cache_dir = Path(cfg.data.cache_dir)
-    feat_cache = cache_dir / f"{cfg.data.primary}_features_v4_po3causal.parquet"
+    feat_cache = cache_dir / f"{cfg.data.primary}_features_{FEATURE_CACHE_VERSION}.parquet"
     features = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
 
     train_end, test_start = get_split_config(cfg)
@@ -148,6 +148,7 @@ def main() -> None:
         contract_size=cfg.account.contract_size,
         max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
         dsr_eta=cfg.env.reward_dsr_eta,
+        block_overnight=bool(cfg.env.get("block_overnight", True)),
     )
     test_result["initial_balance"] = cfg.account.initial_balance
     test_m = calculate_metrics(

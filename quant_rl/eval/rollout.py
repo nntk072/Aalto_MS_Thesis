@@ -79,6 +79,7 @@ def evaluate_model(
     sweep_hold_bars: int = 3,
     dsr_weight: float = 0.3,
     sweep_weight: float = 0.7,
+    block_overnight: bool = True,
 ) -> dict[str, Any]:
     """Walk a trained RL ``model`` over *bars*/*features* and collect trades.
 
@@ -120,6 +121,7 @@ def evaluate_model(
         sweep_hold_bars=sweep_hold_bars,
         dsr_weight=dsr_weight,
         sweep_weight=sweep_weight,
+        block_overnight=block_overnight,
     )
 
     obs, _ = env.reset()
