@@ -158,9 +158,10 @@ class LSTMStrategy(BaseStrategy):
         values = np.nan_to_num(features.to_numpy(dtype=np.float32), nan=0.0)
         n = len(values)
         actions = np.zeros(n, dtype=float)
+        device = next(model.parameters()).device
         with torch.no_grad():
             for i in range(window, n):
-                seq = torch.from_numpy(values[i - window : i]).unsqueeze(0)
+                seq = torch.from_numpy(values[i - window : i]).unsqueeze(0).to(device)
                 probs = torch.softmax(model(seq), dim=-1)[0]
                 if probs[2] >= threshold:  # class index 2 == label +1
                     actions[i] = long_size
