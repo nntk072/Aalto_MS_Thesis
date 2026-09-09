@@ -44,7 +44,7 @@ from quant_rl.envs.trading_env import TradingEnv
 from quant_rl.eval.export import build_run_dir, save_run
 from quant_rl.eval.rollout import evaluate_model
 from quant_rl.evaluation import calculate_metrics
-from quant_rl.features.build import build_features
+from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features
 from quant_rl.models.agent import build_agent
 from quant_rl.train.auxiliary_training import AuxiliaryTrainerCallback
 from quant_rl.train.callbacks import BestCheckpointEvalCallback
@@ -131,6 +131,7 @@ def make_env(
         sl_buffer_pts=float(cfg.env.get("sl_buffer_pts", 0.0)),
         strategy_reward=strategy_reward,
         strategy_weight=strategy_weight,
+        block_overnight=bool(cfg.env.get("block_overnight", True)),
     )
 
 
@@ -222,12 +223,11 @@ def main() -> None:
     secondary_m1 = data.get(secondary_sym, {}).get("M1")
 
     cache_dir = Path(cfg.data.cache_dir)
-    # Feature cache is versioned by schema; the strategy-state block changes the
-    # schema, so Idea 1/2 runs use a distinct cache file (FEATURE_CACHE_VERSION).
-    cache_tag = (
-        "v5_idea1" if bool(cfg.features.get("include_strategy_state", False)) else "v4_po3causal"
-    )
-    feat_cache = cache_dir / f"{primary_sym}_features_{cache_tag}.parquet"
+    # Feature cache is versioned by schema (FEATURE_CACHE_VERSION in
+    # quant_rl.features.build): every schema change (v4 PO3-causal, v5
+    # strategy-state, v6 session-OHLC, v7 MTF expansion) needs a distinct
+    # cache file, otherwise a stale parquet silently reuses missing columns.
+    feat_cache = cache_dir / f"{primary_sym}_features_{FEATURE_CACHE_VERSION}.parquet"
     features = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
 
     # Split
@@ -336,6 +336,7 @@ def main() -> None:
         max_episode_steps=int(cfg.env.get("max_episode_steps", 1000)),
         continuous_actions=(args.algo == "sac"),
         use_sweep_reward=(args.reward == "sweep"),
+        block_overnight=bool(cfg.env.get("block_overnight", True)),
     )
     test_result["initial_balance"] = cfg.account.initial_balance
     test_m = calculate_metrics(
@@ -474,6 +475,7 @@ def main() -> None:
                 max_episode_steps=int(cfg.env.get("max_episode_steps", 1000)),
                 continuous_actions=(args.algo == "sac"),
                 use_sweep_reward=(args.reward == "sweep"),
+                block_overnight=bool(cfg.env.get("block_overnight", True)),
             )
             fold_m = calculate_metrics(
                 fold_result["equity"],

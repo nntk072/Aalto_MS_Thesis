@@ -29,7 +29,7 @@ from quant_rl.data.pipeline import build_tick_books, run_pipeline
 from quant_rl.data.split import get_split_config, split_train_test
 from quant_rl.eval.export import save_run
 from quant_rl.evaluation import PerformanceMetrics, calculate_metrics
-from quant_rl.features.build import build_features
+from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ def main() -> None:
     secondary_m1 = data.get(secondary_sym, {}).get("M1")
 
     cache_dir = Path(cfg.data.cache_dir)
-    feat_cache = cache_dir / f"{primary_sym}_features_v4_po3causal.parquet"
+    feat_cache = cache_dir / f"{primary_sym}_features_{FEATURE_CACHE_VERSION}.parquet"
     features = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
 
     # Date-based train / test split
