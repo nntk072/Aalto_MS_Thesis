@@ -101,6 +101,16 @@ features:
   include_strategy_state: false # Idea 1: sweeps + PO3 manip/distrib state + IFVG zones
   po3_htf: "M15"                # HTF for the full PO3 pipeline
   po3_ltf: "M5"                 # primary (LTF) for the full PO3 pipeline
+  # MTF expansion (mtf_feature_expansion_plan.md §§4-5). Each block is an
+  # opt-in nested mapping {enabled, timeframes}: off by default so the base
+  # matrix is unchanged; the FVG full-ladder fix (§4.5) rides on the
+  # existing include_fvg_ifvg flag with fvg_timeframes defaulting to
+  # ["M1"] + htf_timeframes (M1_fvg_* included).
+  smt: {enabled: false, timeframes: ["M5", "M15", "H1"]}
+  structure: {enabled: false, timeframes: ["M5", "M15", "H1"]}
+  liquidity: {enabled: false, timeframes: ["M5", "M15", "H1"]}
+  po3_state_mtf: {enabled: false, timeframes: ["M1", "M5", "M15"]}
+  ifvg_mtf: {enabled: false, timeframes: ["M1", "M5", "M15"]}
   # CT-anchored session levels (additive to the legacy broker-tz levels in
   # structure.detect_session_levels; new columns carry a _ct suffix).
   # Windows are resolved per bar in `tz` via tz-aware conversion, so US DST
@@ -121,6 +131,7 @@ env:
   reward_dsr_eta: 0.01                 # differential Sharpe damping
   strategy_actions: false              # Idea 1/2 4-D Box [dir, risk, rr, tp]
   sl_buffer_pts: 0.0                   # structural stop buffer (0 = exact)
+  block_overnight: true                # force-close positions at session end (no gap hold)
 
 ppo:
   n_steps: 2048

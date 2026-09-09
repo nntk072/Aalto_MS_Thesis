@@ -5,12 +5,18 @@ Chain A: per-timeframe technical features. For every timeframe listed in
 for M1 is run on that timeframe's own bars, then causally forward-filled
 onto the M1 spine via :func:`quant_rl.data.align.align_timeframes` with
 ``{TF}_{indicator}`` column names.
+
+MTF extensions (mtf_feature_expansion_plan.md §§4.1-4.6): SMT divergence
+(§4.1), structure levels + BOS (§4.2) and liquidity sweeps (§4.3) follow the
+same resample → per-TF compute → ``align_timeframes`` pattern; FVG zones
+(§4.5) run over the full ladder (M1 + HTFs); PO3 manipulation/distribution
+state (§4.4) and IFVG active zones (§4.6) are scoped to M1/M5/M15.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -40,7 +46,12 @@ from .structure import detect_session_levels, structure_levels
 # state and IFVG active zones (include_strategy_state opt-in block).
 # v6: CT-anchored session levels — session OHLC, yesterday/last-week H/L,
 # range quadrants and raw vwap (include_session_ohlc opt-in block).
-FEATURE_CACHE_VERSION = "v6-session-ohlc-quadrants-vwap"
+# v7: MTF expansion (plan §§4.1-4.6) — per-TF SMT divergence (§4.1),
+# structure/BOS (§4.2) and liquidity sweeps (§4.3) via the Chain-A
+# resample → per-TF compute → align_timeframes pattern; FVG zones over the
+# full M1+HTF ladder (§4.5); PO3 state (§4.4) and IFVG zones (§4.6) on
+# M1/M5/M15.
+FEATURE_CACHE_VERSION = "v7-mtf-smt-structure-sweep-fvg-po3-ifvg"
 
 _DEFAULT_HTF_TIMEFRAMES = ("M5", "M15", "H1")
 # Capped normalised FVG distance: value used when no zone is active nearby.
@@ -49,6 +60,97 @@ _FVG_DIST_CAP = 5.0
 # Numeric encoding of detect_po3_entries' entry_trigger_type string column so
 # the feature matrix stays homogeneous float (TradingEnv casts to float32).
 _PO3_TRIGGER_CODE = {"": 0, "retest": 1, "close_through": 2, "ltf_fvg": 3}
+
+# Raw price-level suffixes the environment must exclude from the model
+# sequence (Agent.md §11): the M1 convention is ``strategy.raw_columns``
+# (exact names, e.g. ``last_swing_high``). MTF blocks reuse the same stems
+# with a ``{TF}_`` prefix (``M5_last_swing_high``), so the env matches
+# ``{TF}_{stem}`` for every stem below. ATR-normalised distances
+# (``*_dist_to_swing_*_atr``, ``*_distance_atr``) and binary flags stay in.
+MTF_RAW_SUFFIXES = (
+    "last_swing_high",
+    "last_swing_low",
+    "sweep_high_level",
+    "sweep_low_level",
+    "bos_up_level",
+    "bos_down_level",
+    "po3_manipulation_high",
+    "po3_manipulation_low",
+    "ifvg_bull_low",
+    "ifvg_bull_high",
+    "ifvg_bear_low",
+    "ifvg_bear_high",
+    "asian_high",
+    "asian_low",
+    "london_high",
+    "london_low",
+    "prev_day_high",
+    "prev_day_low",
+    "prev_day_close",
+)
+
+# Scoped per-TF subsets for the state-heavy blocks (plan §8, option (b)):
+# PO3 (§4.4) and IFVG active-zones (§4.6) run only on M1/M5/M15 by default —
+# H1 rarely sweeps within one NY session and adds mostly-collinear columns.
+_MTF_STATE_TFS = ("M1", "M5", "M15")
+
+# MTF subset for the lightweight per-TF blocks (plan §3): SMT divergence
+# (§4.1), structure/BOS (§4.2) and liquidity sweeps (§4.3) run on M5/M15/H1
+# by default (M1 already has the unprefixed block). M30 stays excluded until
+# htf_timeframes gains it, keeping column growth bounded.
+_MTF_LIGHT_TFS = ("M5", "M15", "H1")
+
+
+def _htf_list(feat_cfg: object, key: str, default: tuple[str, ...]) -> list[str]:
+    """Read a TF subset list (plan §5 nested block) with a safe default.
+
+    Accepts ``features.<key>`` stored either as a nested block
+    (``features.smt: {timeframes: [...]}``) or as a flat key
+    (``features.smt_timeframes: [...]``); both merge cleanly through
+    OmegaConf. Falls back to ``default`` when unset/empty.
+    """
+    raw: object = None
+    if feat_cfg is not None:
+        block = getattr(feat_cfg, key, None)
+        if block is not None and hasattr(block, "timeframes"):
+            raw = getattr(block, "timeframes")
+        else:
+            raw = getattr(feat_cfg, f"{key}_timeframes", None)
+    if raw is None:
+        return list(default)
+    tfs = [str(t) for t in list(cast(Any, raw))]
+    return tfs or list(default)
+
+
+def _resample_pair(
+    primary: pd.DataFrame,
+    secondary: pd.DataFrame | None,
+    tf: str,
+) -> tuple[pd.DataFrame, pd.DataFrame | None]:
+    """Resample both symbols to ``tf`` (M1 = identity copy).
+
+    The secondary symbol is resampled from its own M1 bars (never from
+    primary's bars) so SMT divergence on TF compares like-for-like bars.
+    Returns ``(primary_tf, secondary_tf_or_None)``.
+    """
+    pri_tf = resample(primary, tf) if tf != "M1" else primary  # type: ignore[arg-type]
+    sec_tf: pd.DataFrame | None = None
+    if secondary is not None:
+        sec_tf = resample(secondary, tf) if tf != "M1" else secondary  # type: ignore[arg-type]
+    return pri_tf, sec_tf
+
+
+def _enabled(feat_cfg: object, key: str, default: bool) -> bool:
+    """Read ``features.<key>.enabled`` (plan §5 nested block) or flat key."""
+    if feat_cfg is None:
+        return default
+    block = getattr(feat_cfg, key, None)
+    if block is not None and hasattr(block, "enabled"):
+        return bool(getattr(block, "enabled"))
+    flat = getattr(feat_cfg, f"{key}_enabled", None)
+    if flat is not None:
+        return bool(flat)
+    return default
 
 
 def build_po3_phase_features(
@@ -189,6 +291,7 @@ def build_features(
         return pd.read_parquet(cache_path)
 
     feat_cfg = cfg.features if cfg is not None else None
+    secondary_m1: pd.DataFrame | None = secondary  # M1 copy kept for per-TF resampling
 
     # --- base indicators ---
     if feat_cfg is not None:
@@ -200,15 +303,35 @@ def build_features(
             index=primary.index,
         )
 
-    # --- SMT divergence ---
+    # --- SMT divergence (M1 always; MTF optional §4.1) ---
+    # M1 block is z-scored with the rest; per-TF blocks join before
+    # normalisation for the same treatment. Secondary is resampled from its
+    # own M1 bars so each TF compares like-for-like bars.
     if secondary is not None and feat_cfg is not None:
         smt = smt_divergence(
             primary,
             secondary,
-            swing_period=feat_cfg.smt_swing_period,
-            corr_window=feat_cfg.smt_corr_window,
+            swing_period=int(getattr(feat_cfg, "smt_swing_period", 5)),
+            corr_window=int(getattr(feat_cfg, "smt_corr_window", 20)),
         )
         feat = pd.concat([feat, smt], axis=1)
+        if _enabled(feat_cfg, "smt", False):
+            smt_tfs = _htf_list(feat_cfg, "smt", _MTF_LIGHT_TFS)
+            smt_blocks: dict[str, pd.DataFrame] = {}
+            for tf in smt_tfs:
+                if str(tf) == "M1":
+                    continue  # M1 already present unprefixed
+                pri_tf, sec_tf = _resample_pair(primary, secondary_m1, str(tf))
+                if sec_tf is None or pri_tf.empty or sec_tf.empty:
+                    continue
+                smt_blocks[str(tf)] = smt_divergence(
+                    pri_tf,
+                    sec_tf,
+                    swing_period=int(getattr(feat_cfg, "smt_swing_period", 5)),
+                    corr_window=int(getattr(feat_cfg, "smt_corr_window", 20)),
+                )
+            if smt_blocks:
+                feat = align_timeframes(feat, smt_blocks)
 
     # --- Higher-timeframe technical features (Chain A) ---
     # Run the same indicator build on each HTF's own bars, then causally
@@ -236,11 +359,19 @@ def build_features(
             )
             feat = pd.concat([feat, po3], axis=1)
 
-        # FVG zone features per timeframe (Chain A per-TF pattern).
+        # FVG zone features (plan §4.5): full M1+HTF ladder, not HTFs only.
+        # build_fvg_zone_features is TF-agnostic, so this is purely what goes
+        # into the loop: ["M1"] + htf_timeframes (config-overridable via
+        # fvg_timeframes), giving M1_fvg_*/M5_fvg_*/... columns.
         if bool(getattr(feat_cfg, "include_fvg_ifvg", False)):
+            fvg_cfg_tfs = getattr(feat_cfg, "fvg_timeframes", None)
+            if fvg_cfg_tfs is not None:
+                fvg_tfs = [str(t) for t in list(fvg_cfg_tfs)]
+            else:
+                fvg_tfs = ["M1", *[str(t) for t in htf_tfs]]
             fvg_blocks: dict[str, pd.DataFrame] = {}
-            for tf in htf_tfs or ["M5", "M15", "H1"]:
-                tf_bars = resample(primary, tf)  # type: ignore[arg-type]
+            for tf in fvg_tfs:
+                tf_bars = primary if str(tf) == "M1" else resample(primary, tf)  # type: ignore[arg-type]
                 fvg_blocks[str(tf)] = build_fvg_zone_features(tf_bars)
             feat = align_timeframes(feat, fvg_blocks)
 
@@ -248,12 +379,39 @@ def build_features(
     window = feat_cfg.zscore_window if feat_cfg is not None else 252
     feat = rolling_zscore(feat, window=window, train_mask=train_mask)
 
-    # --- Structure levels (swings) - add AFTER normalization to keep raw prices ---
+    # --- Structure levels (swings) + MTF structure/BOS (plan §4.2) ---
+    # Raw price levels after normalization (existing convention). M1 stays
+    # unprefixed; MTF variants add {TF}_last_swing_high/low + {TF}_bos_up/down
+    # (close-through flags) + ATR-normalized distances. Per-TF BOS uses the
+    # TF's own swings (detect_bos(tf_bars, structure_tf)), not M1 proxies.
+    structure = None
+    _mtf_struct_levels: dict[str, pd.DataFrame] = {}
     if feat_cfg is not None:
-        structure = structure_levels(primary, swing_period=feat_cfg.smt_swing_period)
+        structure = structure_levels(
+            primary, swing_period=int(getattr(feat_cfg, "smt_swing_period", 5))
+        )
         # Drop time columns (not needed in feature matrix)
         structure = structure[["last_swing_high", "last_swing_low"]]
         feat = pd.concat([feat, structure], axis=1)
+        if _enabled(feat_cfg, "structure", False):
+            swing = int(getattr(feat_cfg, "smt_swing_period", 5))
+            struct_blocks: dict[str, pd.DataFrame] = {}
+            struct_levels: dict[str, pd.DataFrame] = {}
+            for tf in _htf_list(feat_cfg, "structure", _MTF_LIGHT_TFS):
+                if str(tf) == "M1":
+                    continue
+                pri_tf, _ = _resample_pair(primary, None, str(tf))
+                if pri_tf.empty:
+                    continue
+                lv_tf = structure_levels(pri_tf, swing_period=swing)[
+                    ["last_swing_high", "last_swing_low"]
+                ]
+                struct_levels[str(tf)] = lv_tf
+                bos_tf = detect_bos(pri_tf, lv_tf)[["bos_up", "bos_down"]]
+                struct_blocks[str(tf)] = pd.concat([lv_tf, bos_tf], axis=1)
+            if struct_blocks:
+                feat = align_timeframes(feat, struct_blocks)
+                _mtf_struct_levels = struct_levels  # consumed by the distance block
 
     # --- Full PO3 pipeline (Chain F): HTF FVG -> LTF IFVG -> entry triggers ---
     # Added AFTER normalization so the 0/1 entry signals and the numeric
@@ -295,13 +453,51 @@ def build_features(
     # Add wick ratio
     feat["wick_ratio"] = wick_ratio(primary)
 
+    # --- Liquidity sweep MTF (plan §4.3) ---
+    # True per-TF sweeps on genuinely resampled OHLC (not M1 proxies with
+    # wider windows). Opt-in; follows the structure/BOS placement rule.
+    _mtf_sweep_levels: dict[str, pd.DataFrame] = {}
+    if feat_cfg is not None and _enabled(feat_cfg, "liquidity", False):
+        swing = int(getattr(feat_cfg, "smt_swing_period", 5))
+        sweep_blocks: dict[str, pd.DataFrame] = {}
+        for tf in _htf_list(feat_cfg, "liquidity", _MTF_LIGHT_TFS):
+            if str(tf) == "M1":
+                continue
+            pri_tf, _ = _resample_pair(primary, None, str(tf))
+            if pri_tf.empty:
+                continue
+            sweeps_tf = detect_liquidity_sweeps(pri_tf, swing_period=swing)
+            sweep_blocks[str(tf)] = sweeps_tf
+            _mtf_sweep_levels[str(tf)] = detect_session_levels(pri_tf)
+        if sweep_blocks:
+            feat = align_timeframes(feat, sweep_blocks)
+
+    # --- MTF structure/BOS ATR distances (plan §4.2, second half) ---
+    # Needs atr_5 (computed above) + aligned {TF}_swing levels via ffill.
+    if feat_cfg is not None and _enabled(feat_cfg, "structure", False) and _mtf_struct_levels:
+        atr5_m1 = feat["atr_5"].where(feat["atr_5"] > 0)
+        for tf, lv_tf in _mtf_struct_levels.items():
+            hi = lv_tf["last_swing_high"].reindex(feat.index, method="ffill")
+            lo = lv_tf["last_swing_low"].reindex(feat.index, method="ffill")
+            feat[f"{tf}_dist_to_swing_high_atr"] = (hi - primary["close"]) / atr5_m1
+            feat[f"{tf}_dist_to_swing_low_atr"] = (primary["close"] - lo) / atr5_m1
+
     # --- Idea 1 (PO3 + IFVG) strategy state features (opt-in) ---
     # Assembled after session levels and ATR so the state machine can consume
     # the causal Asian levels and the distance features can use atr_5.
     if feat_cfg is not None and bool(getattr(feat_cfg, "include_strategy_state", False)):
         swings = int(getattr(feat_cfg, "smt_swing_period", 5))
         sweeps = detect_liquidity_sweeps(primary, swing_period=swings)
-        bos = detect_bos(primary, structure)
+        bos = (
+            detect_bos(primary, structure)
+            if structure is not None
+            else detect_bos(
+                primary,
+                structure_levels(primary, swing_period=swings)[
+                    ["last_swing_high", "last_swing_low"]
+                ],
+            )
+        )
         po3_state = build_po3_state(primary, sweeps, levels)
         ifvg_zones = build_ifvg_zone_features(primary)
         feat = pd.concat([feat, sweeps, bos, po3_state, ifvg_zones], axis=1)
@@ -319,6 +515,49 @@ def build_features(
         feat["manipulation_high_distance_atr"] = (
             feat["po3_manipulation_high"] - primary["close"]
         ) / atr5
+
+        # --- PO3 state MTF (plan §4.4, opt-in, default off) ---
+        # One independent state machine per TF on that TF's own resampled
+        # bars (own sweeps + own Asian levels), prefixed {TF}_po3_*, aligned
+        # onto M1. Ships behind po3_state_mtf.enabled until causality tests
+        # (§6.1) and an ablation run justify it as default.
+        if _enabled(feat_cfg, "po3_state_mtf", False):
+            po3_mtf_blocks: dict[str, pd.DataFrame] = {}
+            for tf in _htf_list(feat_cfg, "po3_state_mtf", _MTF_STATE_TFS):
+                if str(tf) == "M1":
+                    continue  # M1 already present unprefixed
+                pri_tf, _ = _resample_pair(primary, None, str(tf))
+                if pri_tf.empty:
+                    continue
+                sweeps_tf = detect_liquidity_sweeps(pri_tf, swing_period=swings)
+                cached_lv = _mtf_sweep_levels.get(str(tf))
+                if cached_lv is not None and len(cached_lv) == len(pri_tf):
+                    po3_lv_tf: pd.DataFrame = cached_lv
+                else:
+                    po3_lv_tf = detect_session_levels(pri_tf)
+                po3_tf = build_po3_state(pri_tf, sweeps_tf, po3_lv_tf)
+                po3_mtf_blocks[str(tf)] = po3_tf
+            if po3_mtf_blocks:
+                # Rename AFTER align: align_timeframes prefixes every column
+                # with {TF}_ (e.g. M5_po3_manipulation_active), so renaming
+                # per-TF frames beforehand would double-prefix (M5_M5_po3_*).
+                feat = align_timeframes(feat, po3_mtf_blocks)
+
+        # --- IFVG active-zone MTF (plan §4.6, opt-in, default off) ---
+        # Same resample-loop treatment as FVG §4.5, scoped to M1/M5/M15
+        # (IFVG confirmation is a two-step causal sequence, unlike the
+        # memoryless FVG zone-distance features).
+        if _enabled(feat_cfg, "ifvg_mtf", False):
+            ifvg_blocks: dict[str, pd.DataFrame] = {}
+            for tf in _htf_list(feat_cfg, "ifvg_mtf", _MTF_STATE_TFS):
+                if str(tf) == "M1":
+                    continue  # M1 already present unprefixed
+                pri_tf, _ = _resample_pair(primary, None, str(tf))
+                if pri_tf.empty:
+                    continue
+                ifvg_blocks[str(tf)] = build_ifvg_zone_features(pri_tf)
+            if ifvg_blocks:
+                feat = align_timeframes(feat, ifvg_blocks)
 
     # --- CT-anchored session levels (opt-in) ---
     # Raw price levels like the structure block above, so added AFTER

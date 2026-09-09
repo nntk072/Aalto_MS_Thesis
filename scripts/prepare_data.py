@@ -20,7 +20,7 @@ import logging
 
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import run_pipeline
-from quant_rl.features.build import build_features
+from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ def main() -> None:
     secondary_m1 = data.get(secondary_sym, {}).get("M1")
 
     cache_dir = Path(cfg.data.cache_dir)
-    feat_cache = cache_dir / f"{primary_sym}_features_v4_po3causal.parquet"
+    feat_cache = cache_dir / f"{primary_sym}_features_{FEATURE_CACHE_VERSION}.parquet"
 
     log.info("Building features (cache=%s) …", feat_cache)
     features = build_features(
