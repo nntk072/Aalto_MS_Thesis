@@ -566,73 +566,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         bar_time = self.bars.index[self.step_idx]
         session_id = int(bar["session_id"]) if "session_id" in bar.index else 0
 
-        # Track first crossing of each liquidity level per session (for the
-        # Sweep Delay metric: time between level cross and agent entry).
-        price = float(bar["close"])
-        for level_name, level_value in (
-            ("london_high", feat_row.get("london_high", float("nan"))),
-            ("asian_high", feat_row.get("asian_high", float("nan"))),
-            ("london_low", feat_row.get("london_low", float("nan"))),
-            ("asian_low", feat_row.get("asian_low", float("nan"))),
-        ):
-            level_value = float(level_value)
-            key = (session_id, level_name)
-            if key in self._level_crosses or not np.isfinite(level_value):
-                continue
-            crossed = level_name.endswith("high") and price > level_value
-            crossed = crossed or (level_name.endswith("low") and price < level_value)
-            if crossed:
-                self._level_crosses[key] = bar_time
-
-        if not self.episodic:
-            self.all_sessions.add(session_id)
-            if session_id != self.prev_session:
-                self.account.reset_daily()
-                self.prev_session = session_id
-
-        # Mark-to-market
-        bid, ask = self._bar_quote(bar)
-        if self.position is not None:
-            self.broker.mark_to_market(self.account, self.position, (bid, ask))
-
         # Fill quote for next action (latency-shifted: decision at bar t
         # fills at the quote of bar t + fill_latency_bars, not t + 1)
         fill_idx = self.step_idx + 1 + self.fill_latency_bars
-        if fill_idx < len(self.bars):
-            next_bar = self.bars.iloc[fill_idx]
-            fill_bid, fill_ask = self._bar_quote(next_bar)
-        else:
-            fill_bid, fill_ask = bid, ask
-
-        # Overnight block: a position is never carried across the session
-        # gap. On the session's last bar (the next bar belongs to a new
-        # ``session_id``) it is force-closed at the session's last
-        # executable quote — mirrors ``run_backtest``'s ``eod_close``
-        # contract. Disable via ``block_overnight=False`` for the legacy
-        # gap-hold behaviour (mark-to-market resumes on the next session).
-        if self.block_overnight and self.position is not None:
-            next_sid = (
-                int(next_bar["session_id"])
-                if fill_idx < len(self.bars) and "session_id" in next_bar.index
-                else session_id
-            )
-            if next_sid != session_id:
-                pnl, fill_price = self.broker.close_position(
-                    self.account, self.position, (fill_bid, fill_ask)
-                )
-                self.trade_log.append(
-                    {
-                        "type": "eod_close",
-                        "pnl": pnl,
-                        "price": fill_price,
-                        "reason": "session_end",
-                        "bar": self.step_idx,
-                        "time": bar_time,
-                        "equity": self.account.equity,
-                    }
-                )
-                self.position = None
-                self.sessions_with_trades.add(session_id)
+        fill_bid, fill_ask, next_bar = self._progress_market(
+            bar, feat_row, bar_time, session_id, fill_idx
+        )
 
         # Decode action (discrete or continuous)
         discrete_action, risk_frac, rr_ratio, tp_mode = self._decode_action(action)
@@ -643,7 +582,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # just closed a position or would have if there was one).
         entering_new_session = (
             self.block_overnight
-            and fill_idx < len(self.bars)
+            and next_bar is not None
             and "session_id" in next_bar.index
             and int(next_bar["session_id"]) != session_id
         )
@@ -1064,6 +1003,83 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         else:
             bar_spread = None
         return self.cost_model.bar_quote(float(bar["close"]), bar_spread=bar_spread)
+
+    def _progress_market(
+        self,
+        bar: pd.Series,
+        feat_row: pd.Series,
+        bar_time: Any,
+        session_id: int,
+        fill_idx: int,
+    ) -> tuple[float, float, pd.DataFrame | None]:
+        """Advance market state for the current bar.
+
+        Tracks liquidity-level crossings, updates eval-mode session
+        bookkeeping, marks open positions to market, computes the latency-shifted
+        fill quote, and force-closes positions at session boundaries when
+        ``block_overnight`` is enabled.
+
+        Returns ``(fill_bid, fill_ask, next_bar)`` where ``next_bar`` is the
+        latency-shifted bar or ``None`` when ``fill_idx`` is past the data end.
+        """
+        price = float(bar["close"])
+        for level_name, level_value in (
+            ("london_high", feat_row.get("london_high", float("nan"))),
+            ("asian_high", feat_row.get("asian_high", float("nan"))),
+            ("london_low", feat_row.get("london_low", float("nan"))),
+            ("asian_low", feat_row.get("asian_low", float("nan"))),
+        ):
+            level_value = float(level_value)
+            key = (session_id, level_name)
+            if key in self._level_crosses or not np.isfinite(level_value):
+                continue
+            crossed = level_name.endswith("high") and price > level_value
+            crossed = crossed or (level_name.endswith("low") and price < level_value)
+            if crossed:
+                self._level_crosses[key] = bar_time
+
+        if not self.episodic:
+            self.all_sessions.add(session_id)
+            if session_id != self.prev_session:
+                self.account.reset_daily()
+                self.prev_session = session_id
+
+        bid, ask = self._bar_quote(bar)
+        if self.position is not None:
+            self.broker.mark_to_market(self.account, self.position, (bid, ask))
+
+        if fill_idx < len(self.bars):
+            next_bar = self.bars.iloc[fill_idx]
+            fill_bid, fill_ask = self._bar_quote(next_bar)
+        else:
+            next_bar = None
+            fill_bid, fill_ask = bid, ask
+
+        if self.block_overnight and self.position is not None:
+            next_sid = (
+                int(next_bar["session_id"])
+                if next_bar is not None and "session_id" in next_bar.index
+                else session_id
+            )
+            if next_sid != session_id:
+                pnl, fill_price = self.broker.close_position(
+                    self.account, self.position, (fill_bid, fill_ask)
+                )
+                self.trade_log.append(
+                    {
+                        "type": "eod_close",
+                        "pnl": pnl,
+                        "price": fill_price,
+                        "reason": "session_end",
+                        "bar": self.step_idx,
+                        "time": bar_time,
+                        "equity": self.account.equity,
+                    }
+                )
+                self.position = None
+                self.sessions_with_trades.add(session_id)
+
+        return fill_bid, fill_ask, next_bar
 
     def _calculate_reward(
         self,
