@@ -515,6 +515,80 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         return reason, session_blocked, done, truncated
 
+    def _check_sl_tp(self, bar: pd.Series, fill_bid: float, fill_ask: float) -> None:
+        """Check whether the open position hit its SL or TP on this bar.
+
+        If a stop-loss or take-profit level is triggered, the position is
+        closed at the current fill quote and recorded in the trade log.
+        """
+        if self.position is None:
+            return
+
+        sl_hit = False
+        if self.position.sl_price is not None:
+            if self.position.direction == 1 and float(bar["low"]) <= self.position.sl_price:
+                sl_hit = True
+            elif (
+                self.position.direction == -1
+                and float(bar["high"]) >= self.position.sl_price
+            ):
+                sl_hit = True
+
+        if sl_hit:
+            pnl, fill_price = self.broker.close_position(
+                self.account, self.position, (fill_bid, fill_ask)
+            )
+            self.trade_log.append(
+                {
+                    "type": "stop_close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "reason": "structure_sl",
+                    "bar": self.step_idx,
+                    "time": self.bars.index[self.step_idx],
+                    "equity": self.account.equity,
+                }
+            )
+            self.position = None
+            self.sessions_with_trades.add(self._current_session_id())
+            return
+
+        if self.position.tp_price is not None:
+            tp_hit = False
+            if (
+                self.position.direction == 1
+                and float(bar["high"]) >= self.position.tp_price
+            ):
+                tp_hit = True
+            elif (
+                self.position.direction == -1
+                and float(bar["low"]) <= self.position.tp_price
+            ):
+                tp_hit = True
+
+            if tp_hit:
+                pnl, fill_price = self.broker.close_position(
+                    self.account, self.position, (fill_bid, fill_ask)
+                )
+                self.trade_log.append(
+                    {
+                        "type": "tp_close",
+                        "pnl": pnl,
+                        "price": fill_price,
+                        "reason": "structure_tp",
+                        "bar": self.step_idx,
+                        "time": self.bars.index[self.step_idx],
+                        "equity": self.account.equity,
+                    }
+                )
+                self.position = None
+                self.sessions_with_trades.add(self._current_session_id())
+
+    def _current_session_id(self) -> int:
+        """Return the session_id for the current bar."""
+        bar = self.bars.iloc[self.step_idx]
+        return int(bar["session_id"]) if "session_id" in bar.index else 0
+
     def _decode_action(
         self, action: int | float | np.ndarray[Any, Any]
     ) -> tuple[int, float, float, str]:
@@ -675,65 +749,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         )
 
         if not reason and not session_blocked:
-            # Check SL/TP hits
-            if self.position is not None:
-                sl_hit = False
-                if self.position.sl_price is not None:
-                    if self.position.direction == 1 and float(bar["low"]) <= self.position.sl_price:
-                        sl_hit = True
-                    elif (
-                        self.position.direction == -1
-                        and float(bar["high"]) >= self.position.sl_price
-                    ):
-                        sl_hit = True
-
-                if sl_hit:
-                    pnl, fill_price = self.broker.close_position(
-                        self.account, self.position, (fill_bid, fill_ask)
-                    )
-                    self.trade_log.append(
-                        {
-                            "type": "stop_close",
-                            "pnl": pnl,
-                            "price": fill_price,
-                            "reason": "structure_sl",
-                            "bar": self.step_idx,
-                            "time": bar_time,
-                            "equity": self.account.equity,
-                        }
-                    )
-                    self.position = None
-                    self.sessions_with_trades.add(session_id)
-                elif self.position.tp_price is not None:
-                    tp_hit = False
-                    if (
-                        self.position.direction == 1
-                        and float(bar["high"]) >= self.position.tp_price
-                    ):
-                        tp_hit = True
-                    elif (
-                        self.position.direction == -1
-                        and float(bar["low"]) <= self.position.tp_price
-                    ):
-                        tp_hit = True
-
-                    if tp_hit:
-                        pnl, fill_price = self.broker.close_position(
-                            self.account, self.position, (fill_bid, fill_ask)
-                        )
-                        self.trade_log.append(
-                            {
-                                "type": "tp_close",
-                                "pnl": pnl,
-                                "price": fill_price,
-                                "reason": "structure_tp",
-                                "bar": self.step_idx,
-                                "time": bar_time,
-                                "equity": self.account.equity,
-                            }
-                        )
-                        self.position = None
-                        self.sessions_with_trades.add(session_id)
+            self._check_sl_tp(bar, fill_bid, fill_ask)
 
         # Action handling
         if not done:
