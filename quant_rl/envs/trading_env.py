@@ -446,6 +446,75 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         return True
 
+    def _check_guardrails(
+        self,
+        bar_time: Any,
+        session_id: int,
+        fill_bid: float,
+        fill_ask: float,
+    ) -> tuple[str | None, bool, bool, bool]:
+        """Check guardrail breaches and apply forced closes.
+
+        Returns ``(reason, session_blocked, done, truncated)`` where:
+
+        - ``reason`` is the breach reason string or ``None`` if no breach.
+        - ``session_blocked`` is ``True`` when the session is blocked in eval
+          mode (breach already occurred earlier this session).
+        - ``done`` / ``truncated`` follow the episode mode: in episodic mode
+          a breach ends the episode; in eval mode the rollout continues.
+
+        When a breach occurs, any open position is force-closed and the
+        breach is recorded in ``breach_log`` / ``breach_events``.
+        """
+        if self.episodic:
+            reason = self.guardrails.breach_reason(self.account)
+            session_blocked = False
+        else:
+            session_blocked = session_id in self.breached_sessions
+            reason = None if session_blocked else self.guardrails.breach_reason(self.account)
+            if reason:
+                self.breached_sessions.add(session_id)
+                session_blocked = True
+
+        if reason:
+            if self.position is not None:
+                pnl, fill_price = self.broker.close_position(
+                    self.account, self.position, (fill_bid, fill_ask)
+                )
+                self.trade_log.append(
+                    {
+                        "type": "forced_close",
+                        "pnl": pnl,
+                        "price": fill_price,
+                        "reason": reason,
+                        "bar": self.step_idx,
+                        "time": bar_time,
+                        "equity": self.account.equity,
+                    }
+                )
+                self.position = None
+                self.sessions_with_trades.add(session_id)
+            if not self.episodic:
+                self.breach_log.append(reason)
+                self.breach_events.append(
+                    {
+                        "time": bar_time,
+                        "session_id": session_id,
+                        "reason": reason,
+                        "equity": self.account.equity,
+                    }
+                )
+            done = self.episodic
+            truncated = self.episodic
+        elif session_blocked:
+            done = False
+            truncated = False
+        else:
+            done = False
+            truncated = False
+
+        return reason, session_blocked, done, truncated
+
     def _decode_action(
         self, action: int | float | np.ndarray[Any, Any]
     ) -> tuple[int, float, float, str]:
@@ -601,59 +670,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 risk_frac = 0.0
 
         # Check guardrails
-        if self.episodic:
-            reason = self.guardrails.breach_reason(self.account)
-            session_blocked = False
-        else:
-            # Eval mode: a breach blocks new trading for the rest of this
-            # session (calendar day) instead of ending the whole rollout —
-            # mirrors run_backtest's `breached_sessions` handling so a fresh
-            # breach is recorded/force-closed exactly once per session.
-            session_blocked = session_id in self.breached_sessions
-            reason = None if session_blocked else self.guardrails.breach_reason(self.account)
-            if reason:
-                self.breached_sessions.add(session_id)
-                session_blocked = True
+        reason, session_blocked, done, truncated = self._check_guardrails(
+            bar_time, session_id, fill_bid, fill_ask
+        )
 
-        if reason:
-            if self.position is not None:
-                pnl, fill_price = self.broker.close_position(
-                    self.account, self.position, (fill_bid, fill_ask)
-                )
-                self.trade_log.append(
-                    {
-                        "type": "forced_close",
-                        "pnl": pnl,
-                        "price": fill_price,
-                        "reason": reason,
-                        "bar": self.step_idx,
-                        "time": bar_time,
-                        "equity": self.account.equity,
-                    }
-                )
-                self.position = None
-                self.sessions_with_trades.add(session_id)
-            if not self.episodic:
-                self.breach_log.append(reason)
-                self.breach_events.append(
-                    {
-                        "time": bar_time,
-                        "session_id": session_id,
-                        "reason": reason,
-                        "equity": self.account.equity,
-                    }
-                )
-            done = self.episodic
-            truncated = self.episodic
-        elif session_blocked:
-            # Already breached earlier today (eval mode only): no new
-            # trading until the next session, but keep the rollout going.
-            done = False
-            truncated = False
-        else:
-            done = False
-            truncated = False
-
+        if not reason and not session_blocked:
             # Check SL/TP hits
             if self.position is not None:
                 sl_hit = False
@@ -714,8 +735,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                         self.position = None
                         self.sessions_with_trades.add(session_id)
 
-            # Action handling
-            if not done:
+        # Action handling
+        if not done:
                 if not self.strategy_actions and action == 19:  # exit action
                     if self.position is not None:
                         pnl, fill_price = self.broker.close_position(
