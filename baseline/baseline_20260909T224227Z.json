@@ -1,0 +1,94 @@
+{
+  "timestamp": "20260909T224227Z",
+  "git": {
+    "commit_sha": "a65ee3f165d162704ae14b414af644108979901b",
+    "branch": "main",
+    "remote": "origin/main",
+    "uncommitted_files": [
+      "pyproject.toml",
+      "quant_rl/baselines/lstm_classifier.py",
+      "scripts/train_lstm_baseline.py",
+      "tests/test_baselines/test_lstm_classifier.py"
+    ],
+    "uncommitted_diff_stat": "4 files changed, 81 insertions(+), 31 deletions(-)"
+  },
+  "environment": {
+    "python_executable": "/home/nguyenl37/Aalto_MS_Thesis/.venv/bin/python",
+    "python_version": "3.12.3",
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "processor": "x86_64",
+    "torch_version": "2.14.0+cu130",
+    "cuda_available": true,
+    "numpy_version": "2.2.6",
+    "pandas_version": "2.3.2",
+    "gymnasium_version": "1.3.0",
+    "stable_baselines3_version": "2.9.0"
+  },
+  "test_suite": {
+    "total_collected": 499,
+    "fast_tests_passed": 414,
+    "slow_or_hanging_tests": 85,
+    "notes": "pytest-cov plugin causes hangs; run with -p no:cov. CUDA init slow on some test modules. Fast tests (marked 'not slow') all pass when run with CUDA_VISIBLE_DEVICES='' and -p no:cov.",
+    "fast_test_breakdown": {
+      "test_features/": 120,
+      "test_reward.py": 5,
+      "test_structure.py": 5,
+      "test_envs/": 73,
+      "test_backtest/": 7,
+      "test_rollout.py": 2,
+      "test_causal_features.py": 8,
+      "test_data_split.py": 9,
+      "test_cost_model.py": 7,
+      "test_guardrails.py": 4,
+      "test_risk.py": 17,
+      "test_eval/": 14,
+      "test_evaluation/": 38,
+      "test_trade_metrics.py": 8,
+      "test_training_plots.py": 7,
+      "test_validation/": 24,
+      "test_live/": 12,
+      "test_ticks.py": 6,
+      "test_session_filter.py": 3,
+      "test_config_typo_safety.py": 8,
+      "test_report_g3.py": 4,
+      "test_integration/test_session_levels_integration.py": 6,
+      "test_integration/test_strategy_integration.py": 1,
+      "test_integration/test_evaluation_pipeline.py": 4,
+      "test_models/test_auxiliary.py": 11,
+      "test_models/test_vae.py": 13,
+      "test_train/test_baseline_policies.py": 4
+    },
+    "slow_or_problematic_modules": [
+      "test_models/test_encoders.py (CUDA forward passes)",
+      "test_models/test_sac_agent.py (SAC agent build)",
+      "test_train/test_auxiliary_training.py (torch training)",
+      "test_train/test_best_checkpoint_callback.py (marked slow)",
+      "test_baselines/test_lstm_classifier.py (torch training)",
+      "test_baselines/test_classical.py",
+      "test_integration/test_sac_agent_integration.py (SAC training)",
+      "test_integration/test_scripts_smoke.py (training scripts)",
+      "test_plots_export.py (plotting)",
+      "test_macd_baseline.py"
+    ]
+  },
+  "known_warnings": [
+    "UserWarning: Entry-gate features (london/asian levels, volume_spike) missing from feature matrix — gate falls back to allowing all entries (from TradingEnv._check_entry_gate when features don't include session-liquidity and volume-spike)",
+    "SyntaxWarning from backtrader (suppressed via pyproject.toml filterwarnings)"
+  ],
+  "code_review_graph": {
+    "total_nodes": 1493,
+    "total_edges": 12631,
+    "files": 193,
+    "nodes_by_kind": {"Class": 164, "File": 193, "Function": 646, "Test": 490},
+    "edges_by_kind": {"CALLS": 7945, "CONTAINS": 1308, "IMPORTS_FROM": 834, "INHERITS": 48, "REFERENCES": 12, "TESTED_BY": 2484}
+  },
+  "evaluation_smoke_test": {
+    "status": "complete",
+    "command": "python -m quant_rl.train.train_rl --seed 42 --mvp",
+    "device": "cuda",
+    "n_runs": 3,
+    "mean_sharpe": 10.453,
+    "std_sharpe": 2.928,
+    "note": "High variance between runs due to CUDA non-determinism. Full metrics in baseline/metrics_20260909T224227Z.json"
+  }
+}
