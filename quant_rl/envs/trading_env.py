@@ -446,6 +446,104 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         return True
 
+    def _decode_action(
+        self, action: int | float | np.ndarray[Any, Any]
+    ) -> tuple[int, float, float, str]:
+        """Decode an action into (discrete_action, risk_frac, rr_ratio, tp_mode).
+
+        Handles three action formats:
+        - Strategy (4-D Box): [direction, risk, rr, tp_mode]
+        - Continuous (Box(-1,1)): proportional position sizing
+        - Discrete (Discrete(20)): 0=hold, 1-9=long variants, 10-18=short variants, 19=exit
+        """
+        tp_mode = "rr"
+        risk_frac = self.risk_frac_range[0]
+        rr_ratio = self.rr_ratio_range[0]
+        if self.strategy_actions:
+            arr = np.asarray(action, dtype=np.float32).reshape(-1)
+            direction_val = float(arr[0]) if arr.size else 0.0
+            entry_threshold = 0.25
+            if direction_val > entry_threshold:
+                discrete_action = 1
+            elif direction_val < -entry_threshold:
+                discrete_action = -1
+            else:
+                discrete_action = 0
+            if arr.size >= 4:
+                r_lo, r_hi = self.risk_frac_range
+                rr_lo, rr_hi = self.rr_ratio_range
+                risk_frac = r_lo + float(arr[1]) * (r_hi - r_lo)
+                rr_ratio = rr_lo + float(arr[2]) * (rr_hi - rr_lo)
+                tp_modes = [
+                    "rr",
+                    "buyside_liquidity",
+                    "sellside_liquidity",
+                    "previous_day_high_low",
+                ]
+                tp_idx = min(int(round(float(arr[3]) * (len(tp_modes) - 1))), len(tp_modes) - 1)
+                tp_mode = tp_modes[tp_idx]
+            else:
+                risk_frac = self.risk_frac_range[0]
+                rr_ratio = self.rr_ratio_range[0]
+        elif self.continuous_actions:
+            if isinstance(action, np.ndarray):
+                action_value = float(action[0]) if action.size > 0 else 0.0
+            else:
+                action_value = float(action)
+            if action_value > 0:
+                discrete_action = 1
+                risk_frac = self.max_risk_frac * action_value
+            elif action_value < 0:
+                discrete_action = -1
+                risk_frac = self.max_risk_frac * abs(action_value)
+            else:
+                discrete_action = 0
+                risk_frac = 0.0
+            rr_ratio = self.rr_ratio_range[0]
+        else:
+            # Discrete actions
+            if action == 0:
+                discrete_action = 0
+            elif 1 <= action <= 9:
+                discrete_action = 1
+                idx = int(action) - 1
+                risk_variant = idx // 3
+                rr_variant = idx % 3
+                risk_levels = [
+                    self.risk_frac_range[0],
+                    (self.risk_frac_range[0] + self.risk_frac_range[1]) / 2,
+                    self.risk_frac_range[1],
+                ]
+                rr_levels = [
+                    self.rr_ratio_range[0],
+                    (self.rr_ratio_range[0] + self.rr_ratio_range[1]) / 2,
+                    self.rr_ratio_range[1],
+                ]
+                risk_frac = risk_levels[risk_variant]
+                rr_ratio = rr_levels[rr_variant]
+            elif 10 <= action <= 18:
+                discrete_action = -1
+                idx = int(action) - 10
+                risk_variant = idx // 3
+                rr_variant = idx % 3
+                risk_levels = [
+                    self.risk_frac_range[0],
+                    (self.risk_frac_range[0] + self.risk_frac_range[1]) / 2,
+                    self.risk_frac_range[1],
+                ]
+                rr_levels = [
+                    self.rr_ratio_range[0],
+                    (self.rr_ratio_range[0] + self.rr_ratio_range[1]) / 2,
+                    self.rr_ratio_range[1],
+                ]
+                risk_frac = risk_levels[risk_variant]
+                rr_ratio = rr_levels[rr_variant]
+            else:  # action == 19
+                discrete_action = 0
+                risk_frac = self.risk_frac_range[0]
+                rr_ratio = self.rr_ratio_range[0]
+        return discrete_action, risk_frac, rr_ratio, tp_mode
+
     def step(
         self,
         action: int | float | np.ndarray[Any, Any],
@@ -537,96 +635,20 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 self.sessions_with_trades.add(session_id)
 
         # Decode action (discrete or continuous)
-        discrete_action = 0  # default hold
-        risk_frac = self.risk_frac_range[0]  # default
-        rr_ratio = self.rr_ratio_range[0]  # default
+        discrete_action, risk_frac, rr_ratio, tp_mode = self._decode_action(action)
+        self._selected_tp_mode = tp_mode
 
-        # Handle strategy (4-D continuous) actions — Agent.md §12
-        if self.strategy_actions:
-            arr = np.asarray(action, dtype=np.float32).reshape(-1)
-            direction_val = float(arr[0]) if arr.size else 0.0
-            entry_threshold = 0.25
-            if direction_val > entry_threshold:
-                discrete_action = 1
-            elif direction_val < -entry_threshold:
-                discrete_action = -1
-            else:
-                discrete_action = 0
-            if arr.size >= 4:
-                r_lo, r_hi = self.risk_frac_range
-                rr_lo, rr_hi = self.rr_ratio_range
-                risk_frac = r_lo + float(arr[1]) * (r_hi - r_lo)
-                rr_ratio = rr_lo + float(arr[2]) * (rr_hi - rr_lo)
-                tp_modes = [
-                    "rr",
-                    "buyside_liquidity",
-                    "sellside_liquidity",
-                    "previous_day_high_low",
-                ]
-                tp_idx = min(int(round(float(arr[3]) * (len(tp_modes) - 1))), len(tp_modes) - 1)
-                self._selected_tp_mode = tp_modes[tp_idx]
-            else:
-                risk_frac = self.risk_frac_range[0]
-                rr_ratio = self.rr_ratio_range[0]
-                self._selected_tp_mode = "rr"
-        # Handle continuous actions
-        elif self.continuous_actions:
-            if isinstance(action, np.ndarray):
-                action_value = float(action[0]) if action.size > 0 else 0.0
-            else:
-                action_value = float(action)
-
-            # Map continuous action to discrete_action and risk_frac
-            if action_value > 0:
-                discrete_action = 1  # long
-                risk_frac = self.max_risk_frac * action_value
-            elif action_value < 0:
-                discrete_action = -1  # short
-                risk_frac = self.max_risk_frac * abs(action_value)
-            else:
-                discrete_action = 0  # hold
-                risk_frac = 0.0
-        else:
-            # Discrete actions
-            if action == 0:
-                discrete_action = 0  # hold
-            elif 1 <= action <= 9:
-                discrete_action = 1  # enter_long
-                # Map to risk/rr: low/med/high × low/med/high
-                idx = int(action) - 1
-                risk_variant = idx // 3  # 0, 1, 2
-                rr_variant = idx % 3  # 0, 1, 2
-                risk_levels = [
-                    self.risk_frac_range[0],
-                    (self.risk_frac_range[0] + self.risk_frac_range[1]) / 2,
-                    self.risk_frac_range[1],
-                ]
-                rr_levels = [
-                    self.rr_ratio_range[0],
-                    (self.rr_ratio_range[0] + self.rr_ratio_range[1]) / 2,
-                    self.rr_ratio_range[1],
-                ]
-                risk_frac = risk_levels[risk_variant]
-                rr_ratio = rr_levels[rr_variant]
-            elif 10 <= action <= 18:
-                discrete_action = -1  # enter_short
-                idx = int(action) - 10
-                risk_variant = idx // 3
-                rr_variant = idx % 3
-                risk_levels = [
-                    self.risk_frac_range[0],
-                    (self.risk_frac_range[0] + self.risk_frac_range[1]) / 2,
-                    self.risk_frac_range[1],
-                ]
-                rr_levels = [
-                    self.rr_ratio_range[0],
-                    (self.rr_ratio_range[0] + self.rr_ratio_range[1]) / 2,
-                    self.rr_ratio_range[1],
-                ]
-                risk_frac = risk_levels[risk_variant]
-                rr_ratio = rr_levels[rr_variant]
-            else:  # action == 19
-                discrete_action = 0  # exit action mapped to hold, exit handled below
+        # Check entry gate for new positions
+        # Suppress new entries on the last bar of a session (overnight block
+        # just closed a position or would have if there was one).
+        entering_new_session = (
+            self.block_overnight
+            and fill_idx < len(self.bars)
+            and "session_id" in next_bar.index
+            and int(next_bar["session_id"]) != session_id
+        )
+        if entering_new_session:
+            discrete_action = 0
 
         # Check entry gate for new positions
         if discrete_action != 0:  # Only check for long/short entries

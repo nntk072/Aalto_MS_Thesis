@@ -6,12 +6,14 @@ import numpy as np
 import pandas as pd
 import pytest
 import torch
+from omegaconf import OmegaConf
 
 from quant_rl.baselines import (
     LSTMStrategy,
     LSTMSweepClassifier,
     build_sweep_dataset,
 )
+from quant_rl.features.build import build_features
 
 # Real torch training inside these tests: minutes on CPU. Tagged slow so the
 # `-m 'not slow'` inner loop stays fast; CI runs the full suite.
@@ -40,6 +42,43 @@ def _make_bars_with_sweep(n: int = 200) -> pd.DataFrame:
     )
 
 
+def _build_test_features(bars: pd.DataFrame) -> pd.DataFrame:
+    """Build minimal feature set for testing with session levels and volume_spike."""
+    cfg = OmegaConf.create({
+        "features": {
+            "ema_periods": [10, 20, 50],
+            "macd_fast": 12,
+            "macd_slow": 26,
+            "macd_signal": 9,
+            "rsi_period": 14,
+            "atr_period": 14,
+            "adx_period": 14,
+            "bb_period": 20,
+            "bb_std": 2.0,
+            "stoch_k": 14,
+            "stoch_d": 3,
+            "return_horizons": [1, 5, 10],
+            "realized_vol_period": 20,
+            "smt_swing_period": 5,
+            "smt_corr_window": 20,
+            "zscore_window": 252,
+            "liquidity": {
+                "asian_start": "01:05",
+                "asian_end": "09:00",
+                "london_end": "16:30",
+                "swing_period": 5,
+                "min_bars_per_session": 10,
+            },
+            "htf_timeframes": [],
+            "include_po3": False,
+            "include_fvg_ifvg": False,
+            "include_po3_full": False,
+            "include_strategy_state": False,
+        }
+    })
+    return build_features(bars, secondary=None, cfg=cfg)
+
+
 @pytest.mark.unit
 class TestLSTMSweepClassifier:
     def test_forward_output_shape(self) -> None:
@@ -60,7 +99,7 @@ class TestLSTMSweepClassifier:
         optimiser = torch.optim.Adam(model.parameters(), lr=1e-2)
         loss_fn = torch.nn.CrossEntropyLoss()
         x, y = torch.randn(16, 30, 4), torch.randint(0, 3, (16,))
-        first_loss = float(loss_fn(model(x), y))
+        first_loss = loss_fn(model(x), y).item()
 
         # Act
         for _ in range(200):
@@ -70,8 +109,8 @@ class TestLSTMSweepClassifier:
             optimiser.step()
 
         # Assert
-        assert float(loss) < first_loss
-        assert float(loss) < 0.1
+        assert loss.item() < first_loss
+        assert loss.item() < 0.1
 
 
 @pytest.mark.unit
@@ -79,9 +118,7 @@ class TestBuildSweepDataset:
     def test_labels_are_in_valid_set(self) -> None:
         # Arrange
         bars = _make_bars_with_sweep()
-        features = pd.DataFrame(
-            {"ret_1": np.zeros(len(bars)), "atr_5": np.ones(len(bars))}, index=bars.index
-        )
+        features = _build_test_features(bars)
 
         # Act
         x, y = build_sweep_dataset(bars, features, window=20, horizon=12)
@@ -118,11 +155,8 @@ class TestLSTMStrategy:
         # Arrange
         torch.manual_seed(0)
         bars = _make_bars_with_sweep()
-        features = pd.DataFrame(
-            np.random.default_rng(1).normal(size=(len(bars), 4)).astype(np.float32),
-            index=bars.index,
-        )
-        model = LSTMSweepClassifier(n_features=4)
+        features = _build_test_features(bars)
+        model = LSTMSweepClassifier(n_features=features.shape[1])
         strategy = LSTMStrategy(model, features, window=30)
 
         # Act

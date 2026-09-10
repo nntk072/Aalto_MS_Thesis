@@ -84,6 +84,9 @@ explicit = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v"
+filterwarnings = [
+    "ignore::SyntaxWarning:backtrader.*",
+]
 markers = [
     "slow: torch/SB3 training tests (minutes on CPU); deselect with -m 'not slow'",
     "unit: fast unit tests",
