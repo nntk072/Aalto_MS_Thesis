@@ -1,0 +1,48 @@
+{
+  "command": "python -m quant_rl.train.train_rl --seed 42 --mvp",
+  "device": "cuda",
+  "runs": [
+    {
+      "timestamp": "2026-09-09T21:13:36",
+      "output_dir": "outputs/20260909_210145_rl_train_seed42",
+      "seed": 42, "mvp": true, "algo": "ppo", "arch": "tcn", "reward": "dsr",
+      "timesteps": 8192, "train_bars": 11700, "test_bars": 49925,
+      "test_sharpe": 8.187661688491444,
+      "test_max_dd": 0.005694247345501946,
+      "test_trades": 18,
+      "test_return": 0.5424573355124884,
+      "test_breaches": 0
+    },
+    {
+      "timestamp": "2026-09-10T02:28:56",
+      "output_dir": "outputs/20260910_022137_rl_train_seed42",
+      "seed": 42, "mvp": true, "algo": "ppo", "arch": "tcn", "reward": "dsr",
+      "timesteps": 8192, "train_bars": 11700, "test_bars": 49925,
+      "test_sharpe": 9.415025465662062,
+      "test_max_dd": 0.005615100806647955,
+      "test_trades": 15,
+      "test_return": 0.7735423577855254,
+      "test_breaches": 0
+    },
+    {
+      "timestamp": "2026-09-10T02:29:35",
+      "output_dir": "outputs/20260910_022225_rl_train_seed42",
+      "seed": 42, "mvp": true, "algo": "ppo", "arch": "tcn", "reward": "dsr",
+      "timesteps": 8192, "train_bars": 11700, "test_bars": 49925,
+      "test_sharpe": 13.758689793328443,
+      "test_max_dd": 0.0054498925474426585,
+      "test_trades": 15,
+      "test_return": 1.145984500483406,
+      "test_breaches": 0
+    }
+  ],
+  "summary": {
+    "n_runs": 3,
+    "mean_sharpe": 10.453,
+    "std_sharpe": 2.928,
+    "mean_max_dd": 0.00559,
+    "mean_trades": 16.0,
+    "mean_return": 0.821,
+    "note": "High variance between runs due to CUDA non-determinism. Sharpe ranges from 8.19 to 13.76 across 3 runs."
+  }
+}
