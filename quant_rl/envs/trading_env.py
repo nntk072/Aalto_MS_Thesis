@@ -528,10 +528,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         if self.position.sl_price is not None:
             if self.position.direction == 1 and float(bar["low"]) <= self.position.sl_price:
                 sl_hit = True
-            elif (
-                self.position.direction == -1
-                and float(bar["high"]) >= self.position.sl_price
-            ):
+            elif self.position.direction == -1 and float(bar["high"]) >= self.position.sl_price:
                 sl_hit = True
 
         if sl_hit:
@@ -555,15 +552,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         if self.position.tp_price is not None:
             tp_hit = False
-            if (
-                self.position.direction == 1
-                and float(bar["high"]) >= self.position.tp_price
-            ):
+            if self.position.direction == 1 and float(bar["high"]) >= self.position.tp_price:
                 tp_hit = True
-            elif (
-                self.position.direction == -1
-                and float(bar["low"]) <= self.position.tp_price
-            ):
+            elif self.position.direction == -1 and float(bar["low"]) <= self.position.tp_price:
                 tp_hit = True
 
             if tp_hit:
@@ -588,6 +579,213 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         """Return the session_id for the current bar."""
         bar = self.bars.iloc[self.step_idx]
         return int(bar["session_id"]) if "session_id" in bar.index else 0
+
+    def _try_enter_position(
+        self,
+        discrete_action: int,
+        risk_frac: float,
+        rr_ratio: float,
+        bar: pd.Series,
+        feat_row: pd.Series,
+        bar_time: Any,
+        session_id: int,
+        fill_bid: float,
+        fill_ask: float,
+    ) -> None:
+        """Attempt to open or flip a position for the current bar.
+
+        If an opposite-position is open, it is closed first. A new position
+        is opened only when structural or swing SL/TP levels are available
+        and geometrically valid; otherwise the entry is rejected to avoid
+        naked positions.
+        """
+        if self.position is not None and self.position.direction != discrete_action:
+            pnl, fill_price = self.broker.close_position(
+                self.account, self.position, (fill_bid, fill_ask)
+            )
+            self.trade_log.append(
+                {
+                    "type": "close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "bar": self.step_idx,
+                    "time": bar_time,
+                    "equity": self.account.equity,
+                }
+            )
+            self.position = None
+            self.sessions_with_trades.add(session_id)
+
+        if self.position is None and discrete_action in [1, -1]:
+            sl_price = None
+            tp_price = None
+
+            last_swing_low = (
+                float(feat_row["last_swing_low"])
+                if "last_swing_low" in feat_row.index and pd.notna(feat_row["last_swing_low"])
+                else np.nan
+            )
+            last_swing_high = (
+                float(feat_row["last_swing_high"])
+                if "last_swing_high" in feat_row.index and pd.notna(feat_row["last_swing_high"])
+                else np.nan
+            )
+
+            entry_price = float(fill_ask if discrete_action == 1 else fill_bid)
+
+            has_levels = False
+            if self.strategy_actions:
+                sl_ref = self.strategy.sl_reference(direction=discrete_action, row=feat_row)
+                if sl_ref is not None and np.isfinite(float(sl_ref)):
+                    try:
+                        sl_price, _tp_rr = compute_sl_tp_from_structure(
+                            direction=discrete_action,
+                            entry_price=entry_price,
+                            structure_level=float(sl_ref),
+                            rr_ratio=rr_ratio,
+                            buffer_pts=self.sl_buffer_pts,
+                        )
+                        tp_price = resolve_tp_target(
+                            direction=discrete_action,
+                            entry_price=entry_price,
+                            sl_price=sl_price,
+                            rr_ratio=rr_ratio,
+                            target_mode=getattr(self, "_selected_tp_mode", "rr"),
+                            row=feat_row,
+                        )
+                    except ValueError:
+                        sl_price, tp_price = None, None
+                if sl_price is not None and tp_price is not None:
+                    lots = compute_lots(
+                        self.account.equity,
+                        risk_frac,
+                        entry_price,
+                        sl_price,
+                        contract_size=self.contract_size,
+                        min_lot=self.min_lot,
+                        max_lot=self.max_lot,
+                        max_loss_cap=self.max_loss_per_trade_usd,
+                    )
+                    has_levels = True
+                else:
+                    lots = 0.0
+            elif (
+                discrete_action == 1
+                and not np.isnan(last_swing_low)
+                and last_swing_low < entry_price
+            ):
+                sl_price, tp_price = compute_sl_tp_long(
+                    entry_price,
+                    last_swing_low,
+                    buffer_pts=self.swing_buffer_pts,
+                    rr_ratio=rr_ratio,
+                )
+                lots = compute_lots(
+                    self.account.equity,
+                    risk_frac,
+                    entry_price,
+                    sl_price,
+                    contract_size=self.contract_size,
+                    min_lot=self.min_lot,
+                    max_lot=self.max_lot,
+                    max_loss_cap=self.max_loss_per_trade_usd,
+                )
+                has_levels = True
+            elif (
+                discrete_action == -1
+                and not np.isnan(last_swing_high)
+                and last_swing_high > entry_price
+            ):
+                sl_price, tp_price = compute_sl_tp_short(
+                    entry_price,
+                    last_swing_high,
+                    buffer_pts=self.swing_buffer_pts,
+                    rr_ratio=rr_ratio,
+                )
+                lots = compute_lots(
+                    self.account.equity,
+                    risk_frac,
+                    entry_price,
+                    sl_price,
+                    contract_size=self.contract_size,
+                    min_lot=self.min_lot,
+                    max_lot=self.max_lot,
+                    max_loss_cap=self.max_loss_per_trade_usd,
+                )
+                has_levels = True
+            else:
+                lots = 0.0
+
+            if has_levels:
+                sl_already_hit = False
+                if sl_price is not None:
+                    if discrete_action == 1 and fill_bid <= sl_price:
+                        sl_already_hit = True
+                    elif discrete_action == -1 and fill_ask >= sl_price:
+                        sl_already_hit = True
+                if not sl_already_hit:
+                    self.position = self.broker.open_position(
+                        self.account, (fill_bid, fill_ask), lots, discrete_action
+                    )
+                else:
+                    self.position = None
+            if self.position:
+                self.position.sl_price = sl_price
+                self.position.tp_price = tp_price
+                self.position.risk_frac = risk_frac
+                self.position.rr_ratio = rr_ratio
+                entry_level, cross_time = self._matched_entry_level(session_id, discrete_action)
+                sweep_delay = (
+                    float("nan")
+                    if cross_time is None
+                    else float((bar_time - cross_time).total_seconds())
+                )
+                self.trade_log.append(
+                    {
+                        "type": "open",
+                        "strategy": self.strategy.name,
+                        "direction": discrete_action,
+                        "price": self.position.entry_price,
+                        "lots": self.position.size,
+                        "sl_price": sl_price,
+                        "tp_price": tp_price,
+                        "risk_frac": risk_frac,
+                        "rr_ratio": rr_ratio,
+                        "bar": self.step_idx,
+                        "time": bar_time,
+                        "equity": self.account.equity,
+                        "level_type": entry_level,
+                        "sweep_delay_s": sweep_delay,
+                        "action_tp_mode": getattr(self, "_selected_tp_mode", "rr"),
+                        "asian_high": float(feat_row.get("asian_high", float("nan"))),
+                        "asian_low": float(feat_row.get("asian_low", float("nan"))),
+                        "sweep_high": float(feat_row.get("sweep_high", float("nan"))),
+                        "sweep_low": float(feat_row.get("sweep_low", float("nan"))),
+                        "manipulation_high": float(
+                            feat_row.get("po3_manipulation_high", float("nan"))
+                        ),
+                        "manipulation_low": float(
+                            feat_row.get("po3_manipulation_low", float("nan"))
+                        ),
+                        "manipulation_end": float(
+                            feat_row.get("po3_manipulation_end", float("nan"))
+                        ),
+                        "distribution_phase": float(feat_row.get("po3_distribution", float("nan"))),
+                        "ifvg_zone_low": float(
+                            feat_row.get(
+                                "ifvg_bull_low",
+                                feat_row.get("ifvg_bear_low", float("nan")),
+                            )
+                        ),
+                        "ifvg_zone_high": float(
+                            feat_row.get(
+                                "ifvg_bull_high",
+                                feat_row.get("ifvg_bear_high", float("nan")),
+                            )
+                        ),
+                    }
+                )
+                self.sessions_with_trades.add(session_id)
 
     def _decode_action(
         self, action: int | float | np.ndarray[Any, Any]
@@ -727,7 +925,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             self.block_overnight
             and next_bar is not None
             and "session_id" in next_bar.index
-            and int(next_bar["session_id"]) != session_id
+            and int(float(next_bar["session_id"])) != session_id
         )
         if entering_new_session:
             discrete_action = 0
@@ -753,232 +951,35 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         # Action handling
         if not done:
-                if not self.strategy_actions and action == 19:  # exit action
-                    if self.position is not None:
-                        pnl, fill_price = self.broker.close_position(
-                            self.account, self.position, (fill_bid, fill_ask)
-                        )
-                        self.trade_log.append(
-                            {
-                                "type": "close",
-                                "pnl": pnl,
-                                "price": fill_price,
-                                "bar": self.step_idx,
-                                "time": bar_time,
-                                "equity": self.account.equity,
-                            }
-                        )
-                        self.position = None
-                        self.sessions_with_trades.add(session_id)
-                elif discrete_action != 0:  # enter_long or enter_short
-                    if self.position is not None and self.position.direction != discrete_action:
-                        pnl, fill_price = self.broker.close_position(
-                            self.account, self.position, (fill_bid, fill_ask)
-                        )
-                        self.trade_log.append(
-                            {
-                                "type": "close",
-                                "pnl": pnl,
-                                "price": fill_price,
-                                "bar": self.step_idx,
-                                "time": bar_time,
-                                "equity": self.account.equity,
-                            }
-                        )
-                        self.position = None
-                        self.sessions_with_trades.add(session_id)
-
-                    if self.position is None and discrete_action in [1, -1]:
-                        # Try to compute structure SL/TP
-                        sl_price = None
-                        tp_price = None
-
-                        last_swing_low = (
-                            float(feat_row["last_swing_low"])
-                            if "last_swing_low" in feat_row.index
-                            and pd.notna(feat_row["last_swing_low"])
-                            else np.nan
-                        )
-                        last_swing_high = (
-                            float(feat_row["last_swing_high"])
-                            if "last_swing_high" in feat_row.index
-                            and pd.notna(feat_row["last_swing_high"])
-                            else np.nan
-                        )
-
-                        entry_price = float(fill_ask if discrete_action == 1 else fill_bid)
-
-                        # Track whether structural SL/TP levels were available
-                        # AND geometrically valid so we never open a naked
-                        # position (no SL/TP) as a fallback and never crash.
-                        has_levels = False
-                        if self.strategy_actions:
-                            # Structural SL from the strategy object
-                            # (manipulation extreme for Idea 1, swept level for
-                            # Idea 2 — Agent.md §14), TP from the resolver
-                            # (Agent.md §15). Never from the normalised obs.
-                            sl_ref = self.strategy.sl_reference(
-                                direction=discrete_action, row=feat_row
-                            )
-                            if sl_ref is not None and np.isfinite(float(sl_ref)):
-                                try:
-                                    sl_price, _tp_rr = compute_sl_tp_from_structure(
-                                        direction=discrete_action,
-                                        entry_price=entry_price,
-                                        structure_level=float(sl_ref),
-                                        rr_ratio=rr_ratio,
-                                        buffer_pts=self.sl_buffer_pts,
-                                    )
-                                    tp_price = resolve_tp_target(
-                                        direction=discrete_action,
-                                        entry_price=entry_price,
-                                        sl_price=sl_price,
-                                        rr_ratio=rr_ratio,
-                                        target_mode=getattr(self, "_selected_tp_mode", "rr"),
-                                        row=feat_row,
-                                    )
-                                except ValueError:
-                                    sl_price, tp_price = None, None
-                            if sl_price is not None and tp_price is not None:
-                                lots = compute_lots(
-                                    self.account.equity,
-                                    risk_frac,
-                                    entry_price,
-                                    sl_price,
-                                    contract_size=self.contract_size,
-                                    min_lot=self.min_lot,
-                                    max_lot=self.max_lot,
-                                    max_loss_cap=self.max_loss_per_trade_usd,
-                                )
-                                has_levels = True
-                            else:
-                                lots = 0.0
-                        # Long needs the swing low strictly below entry; short
-                        # needs the swing high strictly above entry. Stale/
-                        # equal levels would make compute_sl_tp_* raise.
-                        elif (
-                            discrete_action == 1
-                            and not np.isnan(last_swing_low)
-                            and last_swing_low < entry_price
-                        ):
-                            sl_price, tp_price = compute_sl_tp_long(
-                                entry_price,
-                                last_swing_low,
-                                buffer_pts=self.swing_buffer_pts,
-                                rr_ratio=rr_ratio,
-                            )
-                            lots = compute_lots(
-                                self.account.equity,
-                                risk_frac,
-                                entry_price,
-                                sl_price,
-                                contract_size=self.contract_size,
-                                min_lot=self.min_lot,
-                                max_lot=self.max_lot,
-                                max_loss_cap=self.max_loss_per_trade_usd,
-                            )
-                            has_levels = True
-                        elif (
-                            discrete_action == -1
-                            and not np.isnan(last_swing_high)
-                            and last_swing_high > entry_price
-                        ):
-                            sl_price, tp_price = compute_sl_tp_short(
-                                entry_price,
-                                last_swing_high,
-                                buffer_pts=self.swing_buffer_pts,
-                                rr_ratio=rr_ratio,
-                            )
-                            lots = compute_lots(
-                                self.account.equity,
-                                risk_frac,
-                                entry_price,
-                                sl_price,
-                                contract_size=self.contract_size,
-                                min_lot=self.min_lot,
-                                max_lot=self.max_lot,
-                                max_loss_cap=self.max_loss_per_trade_usd,
-                            )
-                            has_levels = True
-                        else:
-                            # No swing levels available: reject the entry
-                            # (treat as hold) rather than open a naked position.
-                            lots = 0.0
-
-                        if has_levels:
-                            sl_already_hit = False
-                            if sl_price is not None:
-                                if discrete_action == 1 and fill_bid <= sl_price:
-                                    sl_already_hit = True
-                                elif discrete_action == -1 and fill_ask >= sl_price:
-                                    sl_already_hit = True
-                            if not sl_already_hit:
-                                self.position = self.broker.open_position(
-                                    self.account, (fill_bid, fill_ask), lots, discrete_action
-                                )
-                            else:
-                                self.position = None
-                        if self.position:
-                            self.position.sl_price = sl_price
-                            self.position.tp_price = tp_price
-                            self.position.risk_frac = risk_frac
-                            self.position.rr_ratio = rr_ratio
-                            entry_level, cross_time = self._matched_entry_level(
-                                session_id, discrete_action
-                            )
-                            sweep_delay = (
-                                float("nan")
-                                if cross_time is None
-                                else float((bar_time - cross_time).total_seconds())
-                            )
-                            self.trade_log.append(
-                                {
-                                    "type": "open",
-                                    "strategy": self.strategy.name,
-                                    "direction": discrete_action,
-                                    "price": self.position.entry_price,
-                                    "lots": self.position.size,
-                                    "sl_price": sl_price,
-                                    "tp_price": tp_price,
-                                    "risk_frac": risk_frac,
-                                    "rr_ratio": rr_ratio,
-                                    "bar": self.step_idx,
-                                    "time": bar_time,
-                                    "equity": self.account.equity,
-                                    "level_type": entry_level,
-                                    "sweep_delay_s": sweep_delay,
-                                    "action_tp_mode": getattr(self, "_selected_tp_mode", "rr"),
-                                    "asian_high": float(feat_row.get("asian_high", float("nan"))),
-                                    "asian_low": float(feat_row.get("asian_low", float("nan"))),
-                                    "sweep_high": float(feat_row.get("sweep_high", float("nan"))),
-                                    "sweep_low": float(feat_row.get("sweep_low", float("nan"))),
-                                    "manipulation_high": float(
-                                        feat_row.get("po3_manipulation_high", float("nan"))
-                                    ),
-                                    "manipulation_low": float(
-                                        feat_row.get("po3_manipulation_low", float("nan"))
-                                    ),
-                                    "manipulation_end": float(
-                                        feat_row.get("po3_manipulation_end", float("nan"))
-                                    ),
-                                    "distribution_phase": float(
-                                        feat_row.get("po3_distribution", float("nan"))
-                                    ),
-                                    "ifvg_zone_low": float(
-                                        feat_row.get(
-                                            "ifvg_bull_low",
-                                            feat_row.get("ifvg_bear_low", float("nan")),
-                                        )
-                                    ),
-                                    "ifvg_zone_high": float(
-                                        feat_row.get(
-                                            "ifvg_bull_high",
-                                            feat_row.get("ifvg_bear_high", float("nan")),
-                                        )
-                                    ),
-                                }
-                            )
-                            self.sessions_with_trades.add(session_id)
+            if not self.strategy_actions and action == 19:  # exit action
+                if self.position is not None:
+                    pnl, fill_price = self.broker.close_position(
+                        self.account, self.position, (fill_bid, fill_ask)
+                    )
+                    self.trade_log.append(
+                        {
+                            "type": "close",
+                            "pnl": pnl,
+                            "price": fill_price,
+                            "bar": self.step_idx,
+                            "time": bar_time,
+                            "equity": self.account.equity,
+                        }
+                    )
+                    self.position = None
+                    self.sessions_with_trades.add(session_id)
+            elif discrete_action != 0:  # enter_long or enter_short
+                self._try_enter_position(
+                    discrete_action,
+                    risk_frac,
+                    rr_ratio,
+                    bar,
+                    feat_row,
+                    bar_time,
+                    session_id,
+                    fill_bid,
+                    fill_ask,
+                )
 
         self.equity_curve.append(self.account.equity)
         pnl_step = self.account.equity - self.equity_curve[-2]
@@ -1048,7 +1049,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         bar_time: Any,
         session_id: int,
         fill_idx: int,
-    ) -> tuple[float, float, pd.DataFrame | None]:
+    ) -> tuple[float, float, pd.Series | None]:
         """Advance market state for the current bar.
 
         Tracks liquidity-level crossings, updates eval-mode session
@@ -1094,7 +1095,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         if self.block_overnight and self.position is not None:
             next_sid = (
-                int(next_bar["session_id"])
+                int(float(next_bar["session_id"]))
                 if next_bar is not None and "session_id" in next_bar.index
                 else session_id
             )
