@@ -51,6 +51,7 @@ dependencies = [
     "pytest-xdist>=3.6",
     "mplfinance>=0.12",
     "pandas-stubs>=2.2.3",
+    "google-genai>=2.22.0",
 ]
 
 [project.optional-dependencies]

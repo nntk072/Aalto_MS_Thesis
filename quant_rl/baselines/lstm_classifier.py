@@ -10,6 +10,7 @@ actions compatible with ``TradingEnv``.
 from __future__ import annotations
 
 import warnings
+
 import numpy as np
 import pandas as pd
 import torch
@@ -47,7 +48,9 @@ def build_sweep_dataset(
     close = bars["close"].astype(float).to_numpy()
 
     asian_high = levels.get("asian_high", pd.Series(np.nan, index=bars.index)).to_numpy(dtype=float)
-    london_high = levels.get("london_high", pd.Series(np.nan, index=bars.index)).to_numpy(dtype=float)
+    london_high = levels.get("london_high", pd.Series(np.nan, index=bars.index)).to_numpy(
+        dtype=float
+    )
     asian_low = levels.get("asian_low", pd.Series(np.nan, index=bars.index)).to_numpy(dtype=float)
     london_low = levels.get("london_low", pd.Series(np.nan, index=bars.index)).to_numpy(dtype=float)
 
