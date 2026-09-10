@@ -44,38 +44,40 @@ def _make_bars_with_sweep(n: int = 200) -> pd.DataFrame:
 
 def _build_test_features(bars: pd.DataFrame) -> pd.DataFrame:
     """Build minimal feature set for testing with session levels and volume_spike."""
-    cfg = OmegaConf.create({
-        "features": {
-            "ema_periods": [10, 20, 50],
-            "macd_fast": 12,
-            "macd_slow": 26,
-            "macd_signal": 9,
-            "rsi_period": 14,
-            "atr_period": 14,
-            "adx_period": 14,
-            "bb_period": 20,
-            "bb_std": 2.0,
-            "stoch_k": 14,
-            "stoch_d": 3,
-            "return_horizons": [1, 5, 10],
-            "realized_vol_period": 20,
-            "smt_swing_period": 5,
-            "smt_corr_window": 20,
-            "zscore_window": 252,
-            "liquidity": {
-                "asian_start": "01:05",
-                "asian_end": "09:00",
-                "london_end": "16:30",
-                "swing_period": 5,
-                "min_bars_per_session": 10,
-            },
-            "htf_timeframes": [],
-            "include_po3": False,
-            "include_fvg_ifvg": False,
-            "include_po3_full": False,
-            "include_strategy_state": False,
+    cfg = OmegaConf.create(
+        {
+            "features": {
+                "ema_periods": [10, 20, 50],
+                "macd_fast": 12,
+                "macd_slow": 26,
+                "macd_signal": 9,
+                "rsi_period": 14,
+                "atr_period": 14,
+                "adx_period": 14,
+                "bb_period": 20,
+                "bb_std": 2.0,
+                "stoch_k": 14,
+                "stoch_d": 3,
+                "return_horizons": [1, 5, 10],
+                "realized_vol_period": 20,
+                "smt_swing_period": 5,
+                "smt_corr_window": 20,
+                "zscore_window": 252,
+                "liquidity": {
+                    "asian_start": "01:05",
+                    "asian_end": "09:00",
+                    "london_end": "16:30",
+                    "swing_period": 5,
+                    "min_bars_per_session": 10,
+                },
+                "htf_timeframes": [],
+                "include_po3": False,
+                "include_fvg_ifvg": False,
+                "include_po3_full": False,
+                "include_strategy_state": False,
+            }
         }
-    })
+    )
     return build_features(bars, secondary=None, cfg=cfg)
 
 

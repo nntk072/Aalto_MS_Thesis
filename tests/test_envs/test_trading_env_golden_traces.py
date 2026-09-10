@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import Any
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from quant_rl.envs.trading_env import TradingEnv
 
@@ -76,9 +76,9 @@ def _make_env(seed: int = 42) -> TradingEnv:
     return env
 
 
-def _trace_to_bytes(trace: dict) -> bytes:
+def _trace_to_bytes(trace: dict[str, Any]) -> bytes:
     """Serialize trace to a canonical byte string for hashing."""
-    canonical: dict = {
+    canonical: dict[str, Any] = {
         "rewards": [float(r) for r in trace["rewards"]],
         "dones": [bool(d) for d in trace["dones"]],
         "truncated": [bool(t) for t in trace["truncated"]],
@@ -93,14 +93,14 @@ def _trace_to_bytes(trace: dict) -> bytes:
     return raw.encode("utf-8")
 
 
-def _run_trace(env: TradingEnv, actions: list[int]) -> dict:
+def _run_trace(env: TradingEnv, actions: list[int]) -> dict[str, Any]:
     """Run env through fixed action list and collect trace."""
     obs, _ = env.reset(seed=42)
     rewards: list[float] = []
     dones: list[bool] = []
     truncateds: list[bool] = []
-    infos: list[dict] = []
-    trade_log: list[dict] = []
+    infos: list[dict[str, Any]] = []
+    trade_log: list[dict[str, Any]] = []
     equity_curve: list[float] = []
 
     for action in actions:
@@ -209,6 +209,4 @@ class TestTradingEnvGoldenTraces:
         )
 
 
-_GOLDEN_TRACE_HASH = (
-    "9b9ba26bcfe60bdc559b09a545fe146cea58b0d1027ac69069e41e0cc1efe583"
-)
+_GOLDEN_TRACE_HASH = "9b9ba26bcfe60bdc559b09a545fe146cea58b0d1027ac69069e41e0cc1efe583"
