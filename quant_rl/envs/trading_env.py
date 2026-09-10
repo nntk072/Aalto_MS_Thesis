@@ -1008,75 +1008,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         pnl_step = self.account.equity - self.equity_curve[-2]
         self.pnl_history.append(pnl_step)
 
-        # Compute reward
-        daily_loss = self.initial_balance - self.account.equity
-
-        # Minutes elapsed since the NY open (5-min bars) for time-decay penalty
-        minutes_since_open = max(0, (self.step_idx - self.ny_session_start_idx)) * 5.0 / 60.0
-
-        reward_kwargs: dict[str, Any] = {
-            "daily_loss": daily_loss,
-            "daily_loss_limit": self.guardrails.daily_loss_limit,
-            "initial_balance": self.initial_balance,
-            "breach": done and truncated,
-        }
-
-        # Add sweep parameters (incl. minutes since open for time decay)
-        # only when the composite reward is active; DSR ignores them.
-        if self.use_sweep_reward and isinstance(self.reward_fn, CompositeReward):
-            current_feat = self.features.iloc[self.step_idx]
-            position_changed = (
-                self.position is not None
-                and len(self.trade_log) > 0
-                and self.trade_log[-1].get("type") in ("open", "close")
-            )
-            reward_kwargs.update(
-                {
-                    "cost": 0.0,
-                    "price": float(bar["close"]),
-                    "london_high": float(current_feat.get("london_high", float("nan"))),
-                    "london_low": float(current_feat.get("london_low", float("nan"))),
-                    "asian_high": float(current_feat.get("asian_high", float("nan"))),
-                    "asian_low": float(current_feat.get("asian_low", float("nan"))),
-                    "minutes_since_open": float(minutes_since_open),
-                    "position_changed": bool(position_changed),
-                }
-            )
-
-        # Strategy-alignment reward context for Idea 1/Idea 2 (event-based,
-        # passed to the optional strategy_reward component — Agent.md §21/§22).
-        if self.strategy_actions and isinstance(self.reward_fn, CompositeReward):
-            if getattr(self.reward_fn, "strategy_reward", None) is not None:
-                current_feat = self.features.iloc[self.step_idx]
-                pos_dir = 0
-                in_ifvg = False
-                if self.position is not None:
-                    pos_dir = int(self.position.direction)
-                    in_ifvg = (
-                        float(current_feat.get("price_in_ifvg_bull", 0.0)) > 0
-                        if pos_dir == 1
-                        else float(current_feat.get("price_in_ifvg_bear", 0.0)) > 0
-                    )
-                reward_kwargs["strategy_context"] = {
-                    "position_changed": bool(
-                        self.position is not None
-                        and len(self.trade_log) > 0
-                        and self.trade_log[-1].get("type") in ("open", "close")
-                    ),
-                    "direction": pos_dir,
-                    "in_ifvg": in_ifvg,
-                    "manipulation_active": (
-                        float(current_feat.get("po3_manipulation_active", 0.0)) > 0
-                    ),
-                    "manipulation_end": (float(current_feat.get("po3_manipulation_end", 0.0)) > 0),
-                    "distribution_phase": (float(current_feat.get("po3_distribution", 0.0)) > 0),
-                    "sweep_high": float(current_feat.get("sweep_high", 0.0)) > 0,
-                    "sweep_low": float(current_feat.get("sweep_low", 0.0)) > 0,
-                    "bos_up": float(current_feat.get("bos_up", 0.0)) > 0,
-                    "bos_down": float(current_feat.get("bos_down", 0.0)) > 0,
-                }
-
-        reward = self.reward_fn(pnl_step, **reward_kwargs)
+        reward = self._calculate_reward(pnl_step, bar, feat_row, done, truncated)
 
         obs = self._get_observation()
         info = {"equity": self.account.equity, "position": self.position is not None}
@@ -1132,6 +1064,80 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         else:
             bar_spread = None
         return self.cost_model.bar_quote(float(bar["close"]), bar_spread=bar_spread)
+
+    def _calculate_reward(
+        self,
+        pnl_step: float,
+        bar: pd.Series,
+        feat_row: pd.Series,
+        done: bool,
+        truncated: bool,
+    ) -> float:
+        """Compute the step reward from PnL and market state.
+
+        Delegates to the active reward implementation (DSR or composite)
+        with the appropriate kwargs.
+        """
+        daily_loss = self.initial_balance - self.account.equity
+        minutes_since_open = max(0, (self.step_idx - self.ny_session_start_idx)) * 5.0 / 60.0
+
+        reward_kwargs: dict[str, Any] = {
+            "daily_loss": daily_loss,
+            "daily_loss_limit": self.guardrails.daily_loss_limit,
+            "initial_balance": self.initial_balance,
+            "breach": done and truncated,
+        }
+
+        if self.use_sweep_reward and isinstance(self.reward_fn, CompositeReward):
+            position_changed = (
+                self.position is not None
+                and len(self.trade_log) > 0
+                and self.trade_log[-1].get("type") in ("open", "close")
+            )
+            reward_kwargs.update(
+                {
+                    "cost": 0.0,
+                    "price": float(bar["close"]),
+                    "london_high": float(feat_row.get("london_high", float("nan"))),
+                    "london_low": float(feat_row.get("london_low", float("nan"))),
+                    "asian_high": float(feat_row.get("asian_high", float("nan"))),
+                    "asian_low": float(feat_row.get("asian_low", float("nan"))),
+                    "minutes_since_open": float(minutes_since_open),
+                    "position_changed": bool(position_changed),
+                }
+            )
+
+        if self.strategy_actions and isinstance(self.reward_fn, CompositeReward):
+            if getattr(self.reward_fn, "strategy_reward", None) is not None:
+                pos_dir = 0
+                in_ifvg = False
+                if self.position is not None:
+                    pos_dir = int(self.position.direction)
+                    in_ifvg = (
+                        float(feat_row.get("price_in_ifvg_bull", 0.0)) > 0
+                        if pos_dir == 1
+                        else float(feat_row.get("price_in_ifvg_bear", 0.0)) > 0
+                    )
+                reward_kwargs["strategy_context"] = {
+                    "position_changed": bool(
+                        self.position is not None
+                        and len(self.trade_log) > 0
+                        and self.trade_log[-1].get("type") in ("open", "close")
+                    ),
+                    "direction": pos_dir,
+                    "in_ifvg": in_ifvg,
+                    "manipulation_active": (
+                        float(feat_row.get("po3_manipulation_active", 0.0)) > 0
+                    ),
+                    "manipulation_end": (float(feat_row.get("po3_manipulation_end", 0.0)) > 0),
+                    "distribution_phase": (float(feat_row.get("po3_distribution", 0.0)) > 0),
+                    "sweep_high": float(feat_row.get("sweep_high", 0.0)) > 0,
+                    "sweep_low": float(feat_row.get("sweep_low", 0.0)) > 0,
+                    "bos_up": float(feat_row.get("bos_up", 0.0)) > 0,
+                    "bos_down": float(feat_row.get("bos_down", 0.0)) > 0,
+                }
+
+        return float(self.reward_fn(pnl_step, **reward_kwargs))
 
     def _get_observation(self) -> dict[str, np.ndarray[Any, Any]]:
         """Construct observation dict."""
