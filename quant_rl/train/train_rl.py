@@ -135,7 +135,8 @@ def make_env(
     )
 
 
-def main() -> None:
+def parse_train_args() -> argparse.Namespace:
+    """Parse CLI arguments for the RL training entrypoint."""
     parser = argparse.ArgumentParser(description="Train PPO/SAC on structure-aware trading.")
     parser.add_argument(
         "--config",
@@ -177,26 +178,24 @@ def main() -> None:
         default=None,
         help="Timesteps per WF fold (default: reuse main timesteps)",
     )
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    if args.use_vae:
-        raise NotImplementedError(
-            "VAE feature extractor exists in quant_rl/models/vae.py but is not wired "
-            "into this training entrypoint; out of scope for this thesis. "
-            "See scripts/train_vae.py to train it standalone."
-        )
 
-    np.random.seed(args.seed)
+def _setup_rngs(seed: int) -> None:
+    """Seed numpy, random, and torch for reproducible training."""
+    np.random.seed(seed)
     import random
 
-    random.seed(args.seed)
+    random.seed(seed)
     # SB3 seeds its own generator but does *not* seed torch.manual_seed — the
     # caller's responsibility. Network init/dropout draw from torch's global
     # RNG, so without this line two --seed 42 runs are not reproducible.
-    torch.manual_seed(args.seed)
+    torch.manual_seed(seed)
 
+
+def _load_merged_config(args: argparse.Namespace) -> DictConfig:
+    """Load base config and merge strategy variant if requested."""
     cfg = load_config(args.overrides, config_path=args.config)
-
     # Merge the strategy variant config (Idea 1/2) on top of the base config.
     # Baseline (Idea 3) leaves cfg untouched.
     if args.strategy in _STRATEGY_CONFIGS:
@@ -205,6 +204,56 @@ def main() -> None:
         log.info("Merged strategy config: %s", variant_path)
     elif args.strategy != "baseline":
         raise ValueError(f"unknown strategy: {args.strategy}")
+    return cfg
+
+
+def _build_training_log(
+    *,
+    seed: int,
+    mvp: bool,
+    algo: str,
+    arch: str,
+    reward: str,
+    timesteps: int,
+    train_bars: int,
+    test_bars: int,
+    test_m: Any,
+    test_result: dict[str, Any],
+) -> dict[str, Any]:
+    """Build the training_log.json dict from run results."""
+    return {
+        "seed": seed,
+        "mvp": mvp,
+        "algo": algo,
+        "arch": arch,
+        "reward": reward,
+        "timesteps": timesteps,
+        "train_bars": train_bars,
+        "test_bars": test_bars,
+        "test_sharpe": float(test_m.sharpe),
+        "test_max_dd": float(test_m.max_drawdown),
+        "test_trades": test_m.n_trades,
+        "test_return": float(test_m.total_return_pct),
+        # Gate G3 checks "zero kill-switch breaches"; the count is computed by
+        # evaluate_model but was not being written out.
+        "test_breaches": test_result.get("n_breach_sessions", 0),
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+def main() -> None:
+    args = parse_train_args()
+
+    if args.use_vae:
+        raise NotImplementedError(
+            "VAE feature extractor exists in quant_rl/models/vae.py but is not wired "
+            "into this training entrypoint; out of scope for this thesis. "
+            "See scripts/train_vae.py to train it standalone."
+        )
+
+    _setup_rngs(args.seed)
+
+    cfg = _load_merged_config(args)
 
     device = get_device(cfg.get("device"))
     log.info("Using device: %s", device)
@@ -374,24 +423,18 @@ def main() -> None:
             pass
 
     # Save training log
-    training_log = {
-        "seed": args.seed,
-        "mvp": args.mvp,
-        "algo": args.algo,
-        "arch": args.arch,
-        "reward": args.reward,
-        "timesteps": timesteps,
-        "train_bars": len(train_bars),
-        "test_bars": len(test_bars),
-        "test_sharpe": float(test_m.sharpe),
-        "test_max_dd": float(test_m.max_drawdown),
-        "test_trades": test_m.n_trades,
-        "test_return": float(test_m.total_return_pct),
-        # Gate G3 checks "zero kill-switch breaches"; the count is computed by
-        # evaluate_model but was not being written out.
-        "test_breaches": test_result.get("n_breach_sessions", 0),
-        "timestamp": datetime.now().isoformat(),
-    }
+    training_log = _build_training_log(
+        seed=args.seed,
+        mvp=args.mvp,
+        algo=args.algo,
+        arch=args.arch,
+        reward=args.reward,
+        timesteps=timesteps,
+        train_bars=len(train_bars),
+        test_bars=len(test_bars),
+        test_m=test_m,
+        test_result=test_result,
+    )
     (run_dir / "training_log.json").write_text(json.dumps(training_log, indent=2))
 
     # Optional wandb logging — the sweep (config/wandb_sweep.yaml) reads

@@ -27,6 +27,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+from omegaconf import OmegaConf
 from torch import nn
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -39,9 +40,11 @@ from quant_rl.baselines import (  # noqa: E402
 from quant_rl.data.split import split_train_test  # noqa: E402
 from quant_rl.envs.trading_env import TradingEnv  # noqa: E402
 from quant_rl.evaluation import build_run_report, run_episode  # noqa: E402
+from quant_rl.features.build import build_features  # noqa: E402
 from quant_rl.utils.device import get_device  # noqa: E402
 
 OBS_WINDOW = 60  # must match TradingEnv's default obs_window
+DEFAULT_CONFIG = str(Path(__file__).resolve().parents[1] / "quant_rl" / "config" / "default.yaml")
 
 
 def parse_args() -> argparse.Namespace:
@@ -49,6 +52,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bars-csv", required=True, help="OHLCV CSV with DatetimeIndex")
     parser.add_argument("--features-csv", help="Feature CSV; built from bars if omitted")
+    parser.add_argument("--config", default=DEFAULT_CONFIG, help="Config YAML for feature building")
     parser.add_argument("--index-col", default=argparse.SUPPRESS, help="Index column name")
     parser.add_argument("--window", type=int, default=60)
     parser.add_argument("--horizon", type=int, default=12)
@@ -85,7 +89,10 @@ def main() -> None:
     if args.features_csv:
         features = _load_csv(args.features_csv, getattr(args, "index_col", None))
     else:
-        features = bars.select_dtypes(include=[np.number])
+        # Build features from bars using the config
+        cfg = OmegaConf.load(args.config)
+        features = build_features(bars, secondary=None, cfg=cfg)
+        print(f"Built features: {features.shape[1]} columns")
 
     train_bars, test_bars, train_features, test_features = split_train_test(
         bars, features, args.train_end, args.test_start
@@ -122,7 +129,7 @@ def main() -> None:
             loss = loss_fn(model(x_batch), y_batch)
             loss.backward()
             optimiser.step()
-            total += float(loss) * len(batch)
+            total += loss.item() * len(batch)
 
         with torch.no_grad():
             x_val_t = torch.as_tensor(x_val, device=device)

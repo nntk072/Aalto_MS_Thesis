@@ -9,6 +9,7 @@ actions compatible with ``TradingEnv``.
 
 from __future__ import annotations
 
+import warnings
 import numpy as np
 import pandas as pd
 import torch
@@ -44,24 +45,29 @@ def build_sweep_dataset(
     """
     levels = detect_session_levels(bars)
     close = bars["close"].astype(float).to_numpy()
-    highs = np.nanmax(
-        np.column_stack(
-            [
-                levels.get("asian_high", pd.Series(np.nan, index=bars.index)),
-                levels.get("london_high", pd.Series(np.nan, index=bars.index)),
-            ]
-        ).astype(float),
-        axis=1,
-    )
-    lows = np.nanmin(
-        np.column_stack(
-            [
-                levels.get("asian_low", pd.Series(np.nan, index=bars.index)),
-                levels.get("london_low", pd.Series(np.nan, index=bars.index)),
-            ]
-        ).astype(float),
-        axis=1,
-    )
+
+    asian_high = levels.get("asian_high", pd.Series(np.nan, index=bars.index)).to_numpy(dtype=float)
+    london_high = levels.get("london_high", pd.Series(np.nan, index=bars.index)).to_numpy(dtype=float)
+    asian_low = levels.get("asian_low", pd.Series(np.nan, index=bars.index)).to_numpy(dtype=float)
+    london_low = levels.get("london_low", pd.Series(np.nan, index=bars.index)).to_numpy(dtype=float)
+
+    # Check if we have any valid session levels at all
+    has_any_high = np.isfinite(asian_high).any() or np.isfinite(london_high).any()
+    has_any_low = np.isfinite(asian_low).any() or np.isfinite(london_low).any()
+    if not (has_any_high or has_any_low):
+        raise ValueError(
+            "No valid session levels (asian/london high/low) found. "
+            "Check that data covers Asian (01:05-09:00) and London (09:00-16:30) sessions "
+            "with sufficient bars (min_bars_per_session=50 default)."
+        )
+
+    # Suppress "All-NaN slice encountered" RuntimeWarning from numpy when
+    # some rows lack valid session levels (expected for early bars before
+    # first session completes). We handle per-row validity in the loop below.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", "All-NaN slice encountered", RuntimeWarning)
+        highs = np.nanmax(np.column_stack([asian_high, london_high]), axis=1)
+        lows = np.nanmin(np.column_stack([asian_low, london_low]), axis=1)
 
     feat_values = features.to_numpy(dtype=np.float32)
     n = len(close)
