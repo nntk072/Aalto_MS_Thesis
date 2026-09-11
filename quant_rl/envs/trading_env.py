@@ -968,7 +968,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     )
                     self.position = None
                     self.sessions_with_trades.add(session_id)
-            elif discrete_action != 0:  # enter_long or enter_short
+            elif discrete_action != 0 and not session_blocked:  # enter_long or enter_short
                 self._try_enter_position(
                     discrete_action,
                     risk_frac,
