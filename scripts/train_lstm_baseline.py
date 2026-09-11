@@ -23,11 +23,12 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pandas as pd
 import torch
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 from torch import nn
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -90,7 +91,7 @@ def main() -> None:
         features = _load_csv(args.features_csv, getattr(args, "index_col", None))
     else:
         # Build features from bars using the config
-        cfg = OmegaConf.load(args.config)
+        cfg = cast(DictConfig, OmegaConf.load(args.config))
         features = build_features(bars, secondary=None, cfg=cfg)
         print(f"Built features: {features.shape[1]} columns")
 
