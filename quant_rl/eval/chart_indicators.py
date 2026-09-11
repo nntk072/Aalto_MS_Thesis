@@ -1,4 +1,4 @@
-"""Compute chart overlays: EMA50, MACD, signal, histogram."""
+"""Compute chart overlays: EMA50, MACD, RSI, VWAP."""
 
 from __future__ import annotations
 
@@ -43,8 +43,16 @@ def compute_macd_sma(
     )
 
 
+def _with_rsi_vwap(bars: pd.DataFrame, overlays: dict[str, pd.Series]) -> dict[str, pd.Series]:
+    from .chart_overlays import compute_vwap_for_chart, rsi_series
+
+    overlays["rsi"] = rsi_series(bars)
+    overlays["vwap"] = compute_vwap_for_chart(bars)
+    return overlays
+
+
 def compute_chart_overlays(window: pd.DataFrame) -> dict[str, pd.Series]:
-    """Compute EMA50 and MACD for a trade window.
+    """Compute EMA50, MACD, RSI and VWAP for a trade window.
 
     .. warning::
         This computes indicators **from scratch on just the window**, so
@@ -61,21 +69,23 @@ def compute_chart_overlays(window: pd.DataFrame) -> dict[str, pd.Series]:
 
     Returns
     -------
-    dict with keys: ema50, macd, signal, histogram (all aligned to window.index)
+    dict with keys: ema50, macd, signal, histogram, rsi, vwap
     """
     ema50 = compute_ema50(window)
     macd_df = compute_macd_sma(window)
-
-    return {
-        "ema50": ema50,
-        "macd": macd_df["macd"],
-        "signal": macd_df["signal"],
-        "histogram": macd_df["histogram"],
-    }
+    return _with_rsi_vwap(
+        window,
+        {
+            "ema50": ema50,
+            "macd": macd_df["macd"],
+            "signal": macd_df["signal"],
+            "histogram": macd_df["histogram"],
+        },
+    )
 
 
 def compute_chart_overlays_full(bars: pd.DataFrame) -> dict[str, pd.Series]:
-    """Compute EMA50 and MACD over the full bar history.
+    """Compute EMA50, MACD, RSI and VWAP over the full bar history.
 
     Use this once per backtest split, then slice the returned series by
     ``window.index`` for each trade's chart. This ensures the drawn
@@ -90,17 +100,19 @@ def compute_chart_overlays_full(bars: pd.DataFrame) -> dict[str, pd.Series]:
 
     Returns
     -------
-    dict with keys: ema50, macd, signal, histogram (all aligned to bars.index)
+    dict with keys: ema50, macd, signal, histogram, rsi, vwap
     """
     ema50 = compute_ema50(bars)
     macd_df = compute_macd_sma(bars)
-
-    return {
-        "ema50": ema50,
-        "macd": macd_df["macd"],
-        "signal": macd_df["signal"],
-        "histogram": macd_df["histogram"],
-    }
+    return _with_rsi_vwap(
+        bars,
+        {
+            "ema50": ema50,
+            "macd": macd_df["macd"],
+            "signal": macd_df["signal"],
+            "histogram": macd_df["histogram"],
+        },
+    )
 
 
 def slice_overlays(overlays: dict[str, pd.Series], index: pd.Index) -> dict[str, pd.Series]:

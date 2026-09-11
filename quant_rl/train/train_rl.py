@@ -31,7 +31,7 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import run_pipeline
-from quant_rl.data.split import get_split_config, split_train_test
+from quant_rl.data.split import get_split_config, split_bars, split_train_test
 from quant_rl.envs.distribution_reward import DistributionReward
 from quant_rl.envs.po3_reward import PO3Reward
 from quant_rl.envs.strategies import (
@@ -284,6 +284,9 @@ def main() -> None:
     train_bars, test_bars, train_feat, test_feat = split_train_test(
         primary_m1, features, train_end, test_start
     )
+    test_sec = None
+    if secondary_m1 is not None and not secondary_m1.empty:
+        _, test_sec = split_bars(secondary_m1, train_end, test_start)
     log.info(
         "Split: train=%d bars (<=%s)  test=%d bars (>=%s)",
         len(train_bars),
@@ -408,6 +411,7 @@ def main() -> None:
         test_result=test_result,
         test_metrics=test_m,
         test_bars=test_bars,
+        test_secondary=test_sec,
         cfg=cfg,
         save_plots=getattr(cfg.output, "save_plots", True),
         save_html=getattr(cfg.output, "save_html", True),

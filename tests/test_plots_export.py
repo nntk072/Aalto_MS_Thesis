@@ -261,8 +261,9 @@ def test_plot_equity_curve(synthetic_equity, tmp_path):
 def test_plot_drawdown(synthetic_equity, tmp_path):
     from quant_rl.eval.plots import plot_drawdown
 
-    plot_drawdown(synthetic_equity, out_path=tmp_path / "drawdown.png")
+    fig = plot_drawdown(synthetic_equity, out_path=tmp_path / "drawdown.png")
     assert (tmp_path / "drawdown.png").stat().st_size > 0
+    assert len(fig.axes) >= 2
 
 
 def test_plot_trade_pnl_hist(synthetic_trades, tmp_path):
@@ -519,6 +520,10 @@ def test_save_run_creates_files(synthetic_result, metrics, tmp_path):
     assert (run_dir / "training" / "metrics.json").stat().st_size > 0
     assert (run_dir / "training" / "equity.png").stat().st_size > 0
     assert (run_dir / "training" / "drawdown.png").stat().st_size > 0
+    assert (run_dir / "training" / "daily_pnl.png").stat().st_size > 0
+    assert (run_dir / "training" / "hold_time_pnl.png").stat().st_size > 0
+    assert (run_dir / "training" / "rolling_winrate.png").stat().st_size > 0
+    assert (run_dir / "training" / "tod_heatmap.png").stat().st_size > 0
     # Testing subfolder
     assert (run_dir / "testing" / "equity.csv").stat().st_size > 0
     assert (run_dir / "testing" / "metrics.json").stat().st_size > 0

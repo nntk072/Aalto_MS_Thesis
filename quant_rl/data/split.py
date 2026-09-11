@@ -64,6 +64,16 @@ def split_train_test(
     return b[train_mask], b[test_mask], f[train_mask], f[test_mask]
 
 
+def split_bars(
+    bars: pd.DataFrame,
+    train_end: str = "2025-12-31",
+    test_start: str = "2026-01-01",
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Split a single bar frame on the same date boundaries as ``split_train_test``."""
+    train, test, _, _ = split_train_test(bars, bars, train_end, test_start)
+    return train, test
+
+
 def get_split_config(cfg: Any) -> tuple[str, str]:
     """Extract *train_end* / *test_start* from config with fallback defaults."""
     try:

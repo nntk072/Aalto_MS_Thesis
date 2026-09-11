@@ -23,6 +23,15 @@ import pandas as pd
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 
+from .plot_series import (
+    apply_mpl_date_axis,
+    daily_drawdown_pct,
+    daily_loss_limit_series,
+    daily_pnl,
+    drawdown_ylim,
+    max_drawdown_pct,
+)
+
 log = logging.getLogger(__name__)
 
 
@@ -73,6 +82,7 @@ def plot_equity_curve(
     initial_balance: float = 100_000.0,
     daily_loss_limit: float | None = None,
     max_loss_limit: float | None = None,
+    profit_target: float | None = None,
     out_path: Path | str | None = None,
     dpi: int = 150,
 ) -> Figure:
@@ -96,12 +106,15 @@ def plot_equity_curve(
     )
 
     if daily_loss_limit is not None:
-        ax.axhline(
-            initial_balance - daily_loss_limit,
+        limit_s = daily_loss_limit_series(equity, daily_loss_limit)
+        ax.plot(
+            limit_s.index,
+            np.asarray(limit_s.values),
             color="#ff9800",
-            linewidth=0.9,
+            linewidth=1.1,
             linestyle=":",
-            label=f"Daily loss limit (${daily_loss_limit:,.0f})",
+            drawstyle="steps-post",
+            label=f"Daily loss limit (${daily_loss_limit:,.0f} from day open)",
         )
     if max_loss_limit is not None:
         ax.axhline(
@@ -111,11 +124,19 @@ def plot_equity_curve(
             linestyle=":",
             label=f"Max loss limit (${max_loss_limit:,.0f})",
         )
+    if profit_target is not None:
+        ax.axhline(
+            initial_balance + profit_target,
+            color=LONG_COLOR,
+            linewidth=1.0,
+            linestyle="--",
+            label=f"Profit target (${initial_balance + profit_target:,.0f})",
+        )
 
     # User preference: do not draw breach vertical lines on equity chart.
 
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"${x:,.0f}"))
-    ax.xaxis.set_major_formatter(mdates.AutoDateFormatter(mdates.AutoDateLocator()))
+    apply_mpl_date_axis(ax, tz=pd.DatetimeIndex(equity.index).tz)
     fig.autofmt_xdate()
     ax.set_title("Equity Curve", fontweight="bold")
     ax.set_xlabel("Date")
@@ -132,31 +153,98 @@ def plot_equity_curve(
 # ---------------------------------------------------------------------------
 # 2. Drawdown
 # ---------------------------------------------------------------------------
+def _draw_dd_panel(
+    ax: Any,
+    series: pd.Series,
+    *,
+    title: str,
+    floor: float,
+    color: str,
+    ylabel: str,
+) -> None:
+    ax.fill_between(series.index, series.to_numpy(), 0, color=color, alpha=0.55, label=title)
+    ax.plot(series.index, series.to_numpy(), color=color, linewidth=0.8)
+    ax.axhline(floor, color="#777777", linewidth=0.7, linestyle=":", alpha=0.8)
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{x:.1f}%"))
+    apply_mpl_date_axis(ax, tz=pd.DatetimeIndex(series.index).tz)
+    ax.set_ylim(*drawdown_ylim(series, floor))
+    ax.set_title(title, fontweight="bold")
+    ax.set_ylabel(ylabel)
+    ax.legend(fontsize=8, loc="lower left")
+    ax.grid(True)
+
+
 def plot_drawdown(
     equity: pd.Series,
     out_path: Path | str | None = None,
     dpi: int = 150,
 ) -> Figure:
-    """Underwater drawdown area chart."""
+    """Two-panel underwater chart: peak drawdown and daily drawdown."""
     _apply_style()
-    roll_max = equity.cummax()
-    dd = (equity - roll_max) / roll_max.replace(0, np.nan)
+    max_dd = max_drawdown_pct(equity)
+    day_dd = daily_drawdown_pct(equity)
+    tz = pd.DatetimeIndex(equity.index).tz
 
-    fig, ax = plt.subplots(figsize=(14, 3))
-    ax.fill_between(
-        dd.index, dd.to_numpy() * 100, 0, color=SHORT_COLOR, alpha=0.6, label="Drawdown"
+    fig, (ax_max, ax_day) = plt.subplots(2, 1, figsize=(14, 6), sharex=True)
+    _draw_dd_panel(
+        ax_max,
+        max_dd,
+        title="Maximum drawdown",
+        floor=-10.0,
+        color=SHORT_COLOR,
+        ylabel="Drawdown (%)",
     )
-    ax.plot(dd.index, dd.to_numpy() * 100, color=SHORT_COLOR, linewidth=0.8)
-    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{x:.1f}%"))
-    ax.xaxis.set_major_formatter(mdates.AutoDateFormatter(mdates.AutoDateLocator()))
+    _draw_dd_panel(
+        ax_day,
+        day_dd,
+        title="Daily drawdown",
+        floor=-5.0,
+        color="#ff9800",
+        ylabel="Drawdown (%)",
+    )
+    ax_day.set_xlabel("Date")
+    apply_mpl_date_axis(ax_day, tz=tz)
     fig.autofmt_xdate()
-    ax.set_title("Drawdown", fontweight="bold")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Drawdown (%)")
-    ax.legend(fontsize=8)
-    ax.grid(True)
     fig.tight_layout()
 
+    if out_path:
+        _save(fig, out_path, dpi)
+    return fig
+
+
+def plot_daily_pnl(
+    equity: pd.Series,
+    daily_loss_limit: float | None = None,
+    out_path: Path | str | None = None,
+    dpi: int = 150,
+) -> Figure:
+    """Per-session P&L bars with the FTMO daily-loss dollar cap."""
+    _apply_style()
+    pnl = daily_pnl(equity)
+    fig, ax = plt.subplots(figsize=(14, 4))
+    if pnl.empty:
+        ax.text(0.5, 0.5, "No daily P&L", ha="center", va="center", transform=ax.transAxes)
+    else:
+        colors = [LONG_COLOR if v >= 0 else SHORT_COLOR for v in pnl.to_numpy()]
+        ax.bar(pnl.index, pnl.to_numpy(), color=colors, width=0.8, align="center")
+        ax.axhline(0, color="#777777", linewidth=0.7)
+        if daily_loss_limit is not None:
+            ax.axhline(
+                -float(daily_loss_limit),
+                color="#ff9800",
+                linewidth=0.9,
+                linestyle=":",
+                label=f"Daily loss cap (−${daily_loss_limit:,.0f})",
+            )
+            ax.legend(fontsize=8, loc="upper left")
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"${x:,.0f}"))
+    apply_mpl_date_axis(ax, tz=pd.DatetimeIndex(equity.index).tz)
+    fig.autofmt_xdate()
+    ax.set_title("Daily P&L", fontweight="bold")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("P&L (USD)")
+    ax.grid(True, axis="y")
+    fig.tight_layout()
     if out_path:
         _save(fig, out_path, dpi)
     return fig
@@ -699,6 +787,7 @@ def plot_per_trade_orders(
     contract_size: float = 1.0,
     show_mae_mfe: bool = True,
     show_sl_tp: bool = True,
+    secondary_bars: pd.DataFrame | None = None,
 ) -> None:
     """Generate 2-panel PNG per trade with datetime axes, EMA50, MACD, and trade info.
 
@@ -721,10 +810,17 @@ def plot_per_trade_orders(
     contract_size : Contract size.
     show_mae_mfe : Whether to plot MAE/MFE lines.
     show_sl_tp : Whether to plot SL/TP lines.
+    secondary_bars : Optional US500 (or correlated) bars for SMT lines.
     """
     import matplotlib.dates as mdates
 
     from .chart_indicators import compute_chart_overlays_full, slice_overlays
+    from .chart_overlays import (
+        VWAP_COLOR,
+        build_overlay_events,
+        draw_macd_rsi_mpl,
+        draw_overlays_mpl,
+    )
     from .trade_metrics import compute_trade_metrics
 
     orders_dir = Path(orders_dir)
@@ -742,9 +838,10 @@ def plot_per_trade_orders(
     else:
         log.info("Per-trade PNG: %d charts → %s", total, orders_dir)
 
-    # Compute EMA50/MACD once on the full history so indicators are properly
+    # Compute EMA50/MACD/RSI/VWAP once on the full history so indicators are
     # warmed up and match the strategy's real signals, then slice per trade.
     full_overlays = compute_chart_overlays_full(bars)
+    overlay_events = build_overlay_events(bars, secondary=secondary_bars)
 
     for seq_i, (open_row, close_row) in enumerate(pairs):
         t_open = pd.Timestamp(open_row["time"])
@@ -769,8 +866,8 @@ def plot_per_trade_orders(
         )
         overlays = slice_overlays(full_overlays, window.index)
 
-        # Create 2-panel figure with datetime x-axis
-        fig, (ax_price, ax_macd) = plt.subplots(
+        # Create 2-panel figure: price + dual-axis MACD/RSI
+        fig, (ax_price, ax_osc) = plt.subplots(
             2,
             1,
             figsize=(14, 8),
@@ -815,6 +912,17 @@ def plot_per_trade_orders(
             label="EMA50",
             zorder=3,
         )
+        ax_price.plot(
+            window.index,
+            overlays["vwap"],
+            color=VWAP_COLOR,
+            linewidth=1.7,
+            linestyle="-.",
+            label="VWAP",
+            zorder=3,
+        )
+        events = overlay_events.clip(pd.Timestamp(window.index[0]), pd.Timestamp(window.index[-1]))
+        draw_overlays_mpl(ax_price, events)
 
         # Entry marker
         ep_entry = metrics.entry_price
@@ -893,39 +1001,12 @@ def plot_per_trade_orders(
         ax_price.xaxis.set_major_locator(mdates.MinuteLocator(interval=10, tz=axis_tz))
         plt.setp(ax_price.xaxis.get_majorticklabels(), rotation=45, ha="right")
 
-        # --- Bottom panel: MACD ---
-        ax_macd.plot(
-            window.index,
-            overlays["macd"],
-            color="#0066cc",
-            linewidth=1.5,
-            label="MACD",
-        )
-        ax_macd.plot(
-            window.index,
-            overlays["signal"],
-            color="#ff6600",
-            linewidth=1.5,
-            label="Signal",
-        )
-        ax_macd.bar(
-            window.index,
-            overlays["histogram"],
-            color=["#00cc00" if h > 0 else "#ff0000" for h in overlays["histogram"]],
-            alpha=0.3,
-            label="Histogram",
-            width=pd.Timedelta("0.8min"),
-        )
-        ax_macd.axhline(0, color="#000000", linewidth=0.5, linestyle="-", alpha=0.3)
-        ax_macd.set_ylabel("MACD")
-        ax_macd.set_xlabel("Time (M1)")
-        ax_macd.legend(loc="upper left", fontsize=8)
-        ax_macd.grid(True, alpha=0.3)
-
-        # Format x-axis as datetime (same tz-aware handling as top panel)
-        ax_macd.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M", tz=axis_tz))
-        ax_macd.xaxis.set_major_locator(mdates.MinuteLocator(interval=10, tz=axis_tz))
-        plt.setp(ax_macd.xaxis.get_majorticklabels(), rotation=45, ha="right")
+        # --- Bottom panel: MACD (left) + RSI (right) ---
+        draw_macd_rsi_mpl(ax_osc, window, overlays)
+        ax_osc.set_xlabel("Time (M1)")
+        ax_osc.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M", tz=axis_tz))
+        ax_osc.xaxis.set_major_locator(mdates.MinuteLocator(interval=10, tz=axis_tz))
+        plt.setp(ax_osc.xaxis.get_majorticklabels(), rotation=45, ha="right")
 
         # --- Trade info box ---
         duration_mins = int((t_close - t_open).total_seconds() / 60)

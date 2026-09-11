@@ -26,7 +26,7 @@ import pandas as pd
 from quant_rl.backtest.engine import run_backtest
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import build_tick_books, run_pipeline
-from quant_rl.data.split import get_split_config, split_train_test
+from quant_rl.data.split import get_split_config, split_bars, split_train_test
 from quant_rl.eval.export import save_run
 from quant_rl.evaluation import PerformanceMetrics, calculate_metrics
 from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features
@@ -68,6 +68,9 @@ def main() -> None:
     train_bars, test_bars, train_feat, test_feat = split_train_test(
         primary_m1, features, train_end, test_start
     )
+    train_sec = test_sec = None
+    if secondary_m1 is not None and not secondary_m1.empty:
+        train_sec, test_sec = split_bars(secondary_m1, train_end, test_start)
     log.info(
         "Split: train=%d bars (≤%s)  test=%d bars (≥%s)",
         len(train_bars),
@@ -153,6 +156,8 @@ def main() -> None:
             test_result=test_result,
             test_metrics=test_m,
             test_bars=test_bars,
+            train_secondary=train_sec,
+            test_secondary=test_sec,
             cfg=cfg,
         )
         log.info("Artifacts saved to %s", run_dir)

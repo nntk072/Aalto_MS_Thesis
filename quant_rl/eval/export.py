@@ -10,8 +10,9 @@ New layout (v2)
         training/            — in-sample  (≤ train_end)
             equity.csv, trades.csv, metrics.json
             breach_events.csv, session_activity.json
-            equity.png/html, drawdown.png/html
+            equity.png/html, drawdown.png/html, daily_pnl.png/html
             pnl_hist.png/html, returns_dist.png, monthly_heatmap.png/html
+            hold_time_pnl, rolling_winrate, tod_heatmap, mae_mfe (.png/.html)
             orders/          — one M1 candlestick per trade
                 trade_NNNN_YYYYMMDD_HHMMopen_HHMMclose_{L|S}_{p|m}PnL.png
                 trade_NNNN_…  .html
@@ -59,15 +60,16 @@ def build_run_dir(base: str | Path, name: str) -> Path:
     return Path(base) / f"{ts}_{name}"
 
 
-def _extract_ftmo_limits(cfg: Any) -> tuple[float | None, float | None]:
-    daily_loss_limit = max_loss_limit = None
+def _extract_ftmo_limits(cfg: Any) -> tuple[float | None, float | None, float | None]:
+    daily_loss_limit = max_loss_limit = profit_target = None
     if cfg is not None:
         try:
             daily_loss_limit = cfg.ftmo.daily_loss_limit
             max_loss_limit = cfg.ftmo.max_loss_limit
+            profit_target = cfg.ftmo.profit_target
         except Exception:
             pass
-    return daily_loss_limit, max_loss_limit
+    return daily_loss_limit, max_loss_limit, profit_target
 
 
 def _extract_trade_chart_config(cfg: Any) -> dict[str, Any]:
@@ -123,12 +125,14 @@ def _write_split(
     save_csv: bool,
     dpi: int,
     max_order_charts: int,
+    profit_target: float | None = None,
     max_loss_per_trade_usd: float | None = None,
     take_profit_per_trade_usd: float | None = None,
     lots: float = 1.0,
     contract_size: float = 1.0,
     show_mae_mfe: bool = True,
     show_sl_tp: bool = True,
+    secondary_bars: pd.DataFrame | None = None,
 ) -> None:
     """Write all data + charts for one split into *split_dir*."""
     split_dir.mkdir(parents=True, exist_ok=True)
@@ -174,10 +178,17 @@ def _write_split(
             initial_balance=initial_balance,
             daily_loss_limit=daily_loss_limit,
             max_loss_limit=max_loss_limit,
+            profit_target=profit_target,
             out_path=split_dir / "equity.png",
             dpi=dpi,
         )
         _plt.plot_drawdown(equity, out_path=split_dir / "drawdown.png", dpi=dpi)
+        _plt.plot_daily_pnl(
+            equity,
+            daily_loss_limit=daily_loss_limit,
+            out_path=split_dir / "daily_pnl.png",
+            dpi=dpi,
+        )
 
         if not trades.empty:
             _plt.plot_trade_pnl_hist(trades, out_path=split_dir / "pnl_hist.png", dpi=dpi)
@@ -200,6 +211,7 @@ def _write_split(
                 contract_size=contract_size,
                 show_mae_mfe=show_mae_mfe,
                 show_sl_tp=show_sl_tp,
+                secondary_bars=secondary_bars,
             )
 
     # ------------------------------------------------------------------
@@ -215,9 +227,15 @@ def _write_split(
                 initial_balance=initial_balance,
                 daily_loss_limit=daily_loss_limit,
                 max_loss_limit=max_loss_limit,
+                profit_target=profit_target,
                 out_path=split_dir / "equity.html",
             )
             _pi.plot_drawdown(equity, out_path=split_dir / "drawdown.html")
+            _pi.plot_daily_pnl(
+                equity,
+                daily_loss_limit=daily_loss_limit,
+                out_path=split_dir / "daily_pnl.html",
+            )
 
             if not trades.empty:
                 _pi.plot_trade_pnl_hist(trades, out_path=split_dir / "pnl_hist.html")
@@ -237,9 +255,26 @@ def _write_split(
                     contract_size=contract_size,
                     show_mae_mfe=show_mae_mfe,
                     show_sl_tp=show_sl_tp,
+                    secondary_bars=secondary_bars,
                 )
         except ImportError:
             log.warning("plotly not available — skipping interactive HTML charts")
+
+    if not trades.empty and (save_plots or save_html):
+        from .trade_plots import write_trade_diagnostics
+
+        write_trade_diagnostics(
+            split_dir,
+            trades,
+            bars,
+            dpi=dpi,
+            save_plots=save_plots,
+            save_html=save_html,
+            lots=lots,
+            contract_size=contract_size,
+            max_loss_per_trade_usd=max_loss_per_trade_usd,
+            take_profit_per_trade_usd=take_profit_per_trade_usd,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -257,6 +292,8 @@ def save_run(
     test_metrics: PerformanceMetrics | None = None,
     train_bars: pd.DataFrame | None = None,
     test_bars: pd.DataFrame | None = None,
+    train_secondary: pd.DataFrame | None = None,
+    test_secondary: pd.DataFrame | None = None,
     cfg: Any | None = None,
     save_plots: bool = True,
     save_html: bool = True,
@@ -274,9 +311,10 @@ def save_run(
         Explicit pre-created directory (overrides *out_dir* / *name* if set).
         Useful when the caller has already written model weights into the same
         directory (e.g. ``train_rl.py``).
-    train_result, train_metrics, train_bars:
-        In-sample backtest result dict, metrics, and price bars.
-    test_result, test_metrics, test_bars:
+    train_result, train_metrics, train_bars, train_secondary:
+        In-sample backtest result dict, metrics, primary bars, and optional
+        secondary-symbol bars (SMT overlays).
+    test_result, test_metrics, test_bars, test_secondary:
         Out-of-sample equivalents.  Either split may be ``None``.
 
     Returns
@@ -288,7 +326,7 @@ def save_run(
     run_dir.mkdir(parents=True, exist_ok=True)
     log.info("Saving run artifacts to %s", run_dir)
 
-    daily_loss_limit, max_loss_limit = _extract_ftmo_limits(cfg)
+    daily_loss_limit, max_loss_limit, profit_target = _extract_ftmo_limits(cfg)
 
     # Config snapshot at root only
     if cfg is not None:
@@ -302,6 +340,7 @@ def save_run(
     split_kwargs: dict[str, Any] = dict(
         daily_loss_limit=daily_loss_limit,
         max_loss_limit=max_loss_limit,
+        profit_target=profit_target,
         save_plots=save_plots,
         save_html=save_html,
         save_csv=save_csv,
@@ -314,10 +353,24 @@ def save_run(
     split_kwargs.update(trade_chart_config)
 
     if train_result is not None and train_metrics is not None:
-        _write_split(run_dir / "training", train_result, train_metrics, train_bars, **split_kwargs)
+        _write_split(
+            run_dir / "training",
+            train_result,
+            train_metrics,
+            train_bars,
+            secondary_bars=train_secondary,
+            **split_kwargs,
+        )
 
     if test_result is not None and test_metrics is not None:
-        _write_split(run_dir / "testing", test_result, test_metrics, test_bars, **split_kwargs)
+        _write_split(
+            run_dir / "testing",
+            test_result,
+            test_metrics,
+            test_bars,
+            secondary_bars=test_secondary,
+            **split_kwargs,
+        )
 
     # Comparison summary at root
     if train_metrics is not None:
