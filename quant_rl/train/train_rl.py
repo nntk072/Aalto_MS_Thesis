@@ -284,9 +284,9 @@ def main() -> None:
     train_bars, test_bars, train_feat, test_feat = split_train_test(
         primary_m1, features, train_end, test_start
     )
-    test_sec = None
+    train_sec = test_sec = None
     if secondary_m1 is not None and not secondary_m1.empty:
-        _, test_sec = split_bars(secondary_m1, train_end, test_start)
+        train_sec, test_sec = split_bars(secondary_m1, train_end, test_start)
     log.info(
         "Split: train=%d bars (<=%s)  test=%d bars (>=%s)",
         len(train_bars),
@@ -371,7 +371,7 @@ def main() -> None:
     model.save(model_path)
     log.info("Model saved: %s", model_path)
 
-    # Evaluate the trained model on the test set
+    # Evaluate the trained model on the held-out test set (out-of-sample).
     log.info("Evaluating trained model on test set...")
     test_result = evaluate_model(
         model,
@@ -405,9 +405,49 @@ def main() -> None:
         test_m.total_return_pct,
     )
 
-    # Export test artifacts so the RL run includes the same plots as other runners.
+    # In-sample evaluation on the training split so the run dir carries the same
+    # training/ + testing/ artifact layout as the baseline runners.
+    log.info("Evaluating trained model on training set (in-sample)...")
+    train_result = evaluate_model(
+        model,
+        bars=train_bars,
+        features=train_feat,
+        obs_window=cfg.env.obs_window,
+        initial_balance=cfg.account.initial_balance,
+        risk_frac_range=(cfg.risk.default_risk_frac * 0.5, cfg.risk.default_risk_frac * 2.0),
+        rr_ratio_range=(cfg.risk.rr_ratio_default * 0.5, cfg.risk.rr_ratio_default * 1.5),
+        swing_buffer_pts=cfg.risk.swing_buffer_pts,
+        contract_size=cfg.account.contract_size,
+        max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
+        dsr_eta=cfg.env.reward_dsr_eta,
+        max_episode_steps=int(cfg.env.get("max_episode_steps", 1000)),
+        continuous_actions=(args.algo == "sac"),
+        use_sweep_reward=(args.reward == "sweep"),
+        block_overnight=bool(cfg.env.get("block_overnight", True)),
+    )
+    train_result["initial_balance"] = cfg.account.initial_balance
+    train_m = calculate_metrics(
+        train_result["equity"],
+        trades=train_result["trades"],
+        n_sessions=train_result.get("n_sessions", 1),
+        n_breach_sessions=train_result.get("n_breach_sessions", 0),
+    )
+    log.info(
+        "[train] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%",
+        train_m.sharpe,
+        train_m.max_drawdown * 100,
+        train_m.n_trades,
+        train_m.total_return_pct,
+    )
+
+    # Export both splits so the RL run produces the same artifact layout as the
+    # other runners: training/ + testing/ trees with plots, CSVs, and metrics.
     save_run(
         run_dir=run_dir,
+        train_result=train_result,
+        train_metrics=train_m,
+        train_bars=train_bars,
+        train_secondary=train_sec,
         test_result=test_result,
         test_metrics=test_m,
         test_bars=test_bars,
