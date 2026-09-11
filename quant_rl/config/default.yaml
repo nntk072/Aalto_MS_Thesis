@@ -83,7 +83,7 @@ features:
   bb_std: 2.0
   stoch_k: 14
   stoch_d: 3
-  vwap_session: true
+  vwap_session: true                   # calendar-day VWAP on the full-day M1 spine
   return_horizons: [1, 5, 15, 30]
   realized_vol_period: 20
   smt_swing_period: 5                  # bars for swing high/low detection
@@ -131,7 +131,12 @@ env:
   reward_dsr_eta: 0.01                 # differential Sharpe damping
   strategy_actions: false              # Idea 1/2 4-D Box [dir, risk, rr, tp]
   sl_buffer_pts: 0.0                   # structural stop buffer (0 = exact)
-  block_overnight: true                # force-close positions at session end (no gap hold)
+  block_overnight: true                # force-close positions at last NY bar (no gap hold)
+  eod_risk:
+    max_loss_usd: 500.0
+    max_age_hours: 8
+    stale_bars: 60
+    progress_threshold_atr: 0.25
 
 ppo:
   n_steps: 2048

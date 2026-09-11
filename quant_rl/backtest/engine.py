@@ -110,6 +110,17 @@ def _fill_quote(
     return cost_model.bar_quote(float(row["close"]), bar_spread=bar_spread)
 
 
+def _is_last_ny_bar(bars: pd.DataFrame, i: int, is_ny: bool) -> bool:
+    """True on the last NY bar of a session (next bar is non-NY or a time jump)."""
+    if not is_ny or i + 1 >= len(bars):
+        return False
+    nxt = bars.iloc[i + 1]
+    next_ny = "session" not in nxt.index or str(nxt["session"]) == "ny"
+    if not next_ny:
+        return True
+    return pd.Timestamp(bars.index[i + 1]) - pd.Timestamp(bars.index[i]) > pd.Timedelta(minutes=1)
+
+
 def run_backtest(
     bars: pd.DataFrame,
     features: pd.DataFrame,
@@ -132,6 +143,7 @@ def run_backtest(
     contract_size: float = 1.0,
     hold_on_zero: bool = False,
     exit_action: int | None = None,
+    block_overnight: bool = True,
 ) -> dict[str, Any]:
     """Run a full backtest over aligned bars + features.
 
@@ -153,6 +165,9 @@ def run_backtest(
         If True, action=0 means hold current position (don't close).
     exit_action : int | None
         If set, policy returning this value closes position (e.g., 2 for MACD exit).
+    block_overnight : bool
+        If True (default), force-close on the last NY bar of a session so
+        positions do not carry the overnight gap. Matches ``TradingEnv``.
     """
     broker = Broker(cost_model=cost_model, **(broker_kwargs or {}))
     guardrails = FTMOGuardrails(**(guardrail_kwargs or {}))
@@ -183,9 +198,12 @@ def run_backtest(
         bar_time = bar_times[i]
         session = int(row["session_id"]) if "session_id" in row.index else 0
         session_set.add(session)
+        is_ny = "session" not in row.index or str(row["session"]) == "ny"
 
-        if session != prev_session:
+        if is_ny and session != prev_session:
             acc.reset_daily()
+            prev_session = session
+        elif prev_session is None:
             prev_session = session
 
         bq = _bar_quote(row, cost_model)
@@ -323,7 +341,24 @@ def run_backtest(
 
         equity_curve.append(acc.equity)
 
-        if session in breached_sessions:
+        last_ny = _is_last_ny_bar(bars, i, is_ny)
+        if block_overnight and last_ny and position is not None:
+            pnl, fill_price = broker.close_position(acc, position, fq)
+            trade_log.append(
+                {
+                    "type": "eod_close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "reason": "session_end",
+                    "bar": i,
+                    "time": bar_time,
+                    "equity": acc.equity,
+                }
+            )
+            sessions_with_trades.add(session)
+            position = None
+
+        if session in breached_sessions or not is_ny or (block_overnight and last_ny):
             continue
 
         obs = feat_array[i - obs_window : i].copy()

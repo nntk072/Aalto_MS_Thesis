@@ -97,6 +97,29 @@ def test_build_tick_book_chunked_matches_expected(tmp_path: Path):
     assert ask == pytest.approx(101.1)
 
 
+def test_ticks_available_outside_ny(tmp_path: Path):
+    csv_path = tmp_path / "ticks.csv"
+    _write_tick_csv(
+        csv_path,
+        [
+            ("2025.01.06", "10:00:00.000", 1.0, 1.1),
+            ("2025.01.06", "16:30:00.000", 100.0, 100.6),
+        ],
+    )
+    book = build_tick_book(
+        csv_path,
+        tz="Etc/GMT-3",
+        session_start=None,
+        session_end=None,
+        cache_path=None,
+        chunksize=10,
+    )
+    assert len(book) == 2
+    q = book.quote_at(pd.Timestamp("2025-01-06 10:00:00", tz="Etc/GMT-3"))
+    assert q is not None
+    assert q[0] == pytest.approx(1.0)
+
+
 def test_build_tick_book_uses_and_writes_cache(tmp_path: Path):
     csv_path = tmp_path / "ticks.csv"
     _write_tick_csv(
@@ -112,6 +135,5 @@ def test_build_tick_book_uses_and_writes_cache(tmp_path: Path):
     assert cache_path.exists()
     assert len(book1) == 2
 
-    # Second call should hit the cache path (force=False) — same result.
     book2 = build_tick_book(csv_path, cache_path=cache_path, chunksize=1)
     assert len(book2) == len(book1)

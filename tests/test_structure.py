@@ -74,8 +74,8 @@ def test_structure_levels_record_swing_extremum_price() -> None:
 
     sl_levels = result["last_swing_low"].dropna()
     assert len(sl_levels) > 0
-    assert sl_levels.iloc[0] == pytest.approx(99.5)
-    assert result["last_swing_low_time"].dropna().iloc[0] == idx[4]
+    assert sl_levels.iloc[0] == pytest.approx(99.9)
+    assert result["last_swing_low_time"].dropna().iloc[0] == idx[3]
 
 
 def test_structure_levels_are_causal() -> None:

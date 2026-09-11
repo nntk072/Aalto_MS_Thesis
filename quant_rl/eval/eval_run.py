@@ -152,6 +152,7 @@ def main() -> None:
         max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
         dsr_eta=cfg.env.reward_dsr_eta,
         block_overnight=bool(cfg.env.get("block_overnight", True)),
+        eod_risk=dict(cfg.env.get("eod_risk", {})),
     )
     test_result["initial_balance"] = cfg.account.initial_balance
     test_m = calculate_metrics(

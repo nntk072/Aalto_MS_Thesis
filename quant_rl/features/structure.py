@@ -1,87 +1,64 @@
-"""Causal swing high/low structure features for SL/TP pricing.
-
-Swing detection uses only past bars (causal), suitable for real-time trading.
-Extends the swing detection logic from smt.py with explicit price levels.
-"""
+"""Causal swing high/low structure features for SL/TP pricing."""
 
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
+from ..data.session import get_session
+from .swings import (
+    TIMEFRAME_CONFIG,
+    classify_structure,
+    detect_pivots,
+    detect_swings,
+    swing_features,
+)
 
-def _swing_highs(s: pd.Series, period: int) -> pd.Series:
-    """1 where s[t] is a local max over ±period bars (causal: look back only)."""
-    roll_max = s.rolling(2 * period + 1, center=False).max()
-    # Shift so we don't look forward
-    lag_max = roll_max.shift(period)
-    return (s.shift(period) == lag_max).astype(int)
-
-
-def _swing_lows(s: pd.Series, period: int) -> pd.Series:
-    """1 where s[t] is a local min over ±period bars (causal: look back only)."""
-    roll_min = s.rolling(2 * period + 1, center=False).min()
-    lag_min = roll_min.shift(period)
-    return (s.shift(period) == lag_min).astype(int)
+__all__ = [
+    "TIMEFRAME_CONFIG",
+    "classify_structure",
+    "detect_pivots",
+    "detect_session_levels",
+    "detect_swings",
+    "get_session",
+    "structure_levels",
+    "swing_features",
+]
 
 
 def structure_levels(
     bars: pd.DataFrame,
     swing_period: int = 5,
+    atr_mult: float = 0.0,
 ) -> pd.DataFrame:
     """Compute causal swing price levels for structure-based SL/TP.
 
-    Parameters
-    ----------
-    bars:
-        OHLC DataFrame with 'high', 'low' columns and DatetimeIndex.
-    swing_period:
-        Bars on each side to detect a swing high/low.
+    Thin wrapper over :func:`detect_pivots` / :func:`detect_swings`. Default
+    ``atr_mult=0`` accepts every confirmed fractal so SL/TP and liquidity
+    keep fractal timing; pass a positive multiplier for ATR zigzag filtering.
 
-    Returns
-    -------
-    DataFrame with columns:
-      - ``last_swing_high``: price of most recent confirmed swing high (NaN if none yet)
-      - ``last_swing_low``: price of most recent confirmed swing low (NaN if none yet)
-      - ``last_swing_high_time``: timestamp of last swing high
-      - ``last_swing_low_time``: timestamp of last swing low
+    Args:
+        bars: OHLC DataFrame with high/low/close and a DatetimeIndex.
+        swing_period: Bars on each side of the fractal (left = right).
+        atr_mult: Zigzag reversal in ATR units; 0 accepts on confirmation.
     """
-    sh = _swing_highs(bars["high"], swing_period)
-    sl = _swing_lows(bars["low"], swing_period)
-
-    # The swing flag fires ``swing_period`` bars AFTER the extremum bar, so the
-    # swing price is the raw series shifted back to the swing bar (using the
-    # flag bar's own price would record the wrong level).
-    conf_h = (sh == 1).to_numpy()
-    conf_l = (sl == 1).to_numpy()
-    price_h = bars["high"].shift(swing_period).to_numpy()
-    price_l = bars["low"].shift(swing_period).to_numpy()
+    pivots = detect_pivots(bars, left=swing_period, right=swing_period)
+    swings = detect_swings(bars, pivots, atr_mult=atr_mult)
     times = np.asarray(bars.index, dtype="datetime64[ns]")
-
-    n = len(bars)
-    sh_vals = np.full(n, np.nan)
-    sl_vals = np.full(n, np.nan)
-    sh_times = np.full(n, np.datetime64("NaT"), dtype="datetime64[ns]")
-    sl_times = np.full(n, np.datetime64("NaT"), dtype="datetime64[ns]")
-
-    # Running "current confirmed level": updates at each confirmation bar and
-    # persists forward (equivalent to forward-fill from the flag position).
-    cur_hv, cur_ht = np.nan, np.datetime64("NaT", "ns")
-    cur_lv, cur_lt = np.nan, np.datetime64("NaT", "ns")
-    for i in range(n):
-        if conf_h[i]:
-            cur_hv, cur_ht = price_h[i], times[i - swing_period]
-        if conf_l[i]:
-            cur_lv, cur_lt = price_l[i], times[i - swing_period]
-        sh_vals[i] = cur_hv
-        sl_vals[i] = cur_lv
-        sh_times[i] = cur_ht
-        sl_times[i] = cur_lt
-
+    loc_h = swings["swing_high_location"].to_numpy(dtype=float)
+    loc_l = swings["swing_low_location"].to_numpy(dtype=float)
+    sh_times = np.full(len(bars), np.datetime64("NaT"), dtype="datetime64[ns]")
+    sl_times = np.full(len(bars), np.datetime64("NaT"), dtype="datetime64[ns]")
+    for i, loc in enumerate(loc_h):
+        if np.isfinite(loc):
+            sh_times[i] = times[int(loc)]
+    for i, loc in enumerate(loc_l):
+        if np.isfinite(loc):
+            sl_times[i] = times[int(loc)]
     return pd.DataFrame(
         {
-            "last_swing_high": sh_vals,
-            "last_swing_low": sl_vals,
+            "last_swing_high": swings["swing_high_extreme"].to_numpy(dtype=float),
+            "last_swing_low": swings["swing_low_extreme"].to_numpy(dtype=float),
             "last_swing_high_time": pd.Series(sh_times, index=bars.index, dtype=bars.index.dtype),
             "last_swing_low_time": pd.Series(sl_times, index=bars.index, dtype=bars.index.dtype),
         },
@@ -178,56 +155,3 @@ def detect_session_levels(
     result = result.ffill()
 
     return result
-
-
-def get_session(
-    timestamp: pd.Timestamp | str,
-    tz: str = "Etc/GMT-3",
-) -> str:
-    """Determine trading session for a given timestamp.
-
-    Session times (UTC+3):
-    - Asia:   01:05 – 09:00
-    - London: 09:00 – 16:30
-    - NY:     16:30 – 23:50 (or next day 00:00)
-
-    Parameters
-    ----------
-    timestamp:
-        Timestamp to classify (timezone-aware or naive).
-    tz:
-        Timezone for session times (default: broker timezone UTC+3).
-
-    Returns
-    -------
-    Literal[\"asia\", \"london\", \"ny\"]
-        Session name for the timestamp.
-    """
-    if isinstance(timestamp, str):
-        ts = pd.Timestamp(timestamp)
-    else:
-        ts = timestamp
-
-    # Localize to session timezone if naive
-    if ts.tzinfo is None:
-        ts = ts.tz_localize(tz)
-    else:
-        ts = ts.tz_convert(tz)
-
-    t = ts.time()
-
-    # Session boundaries (UTC+3)
-    asia_start = pd.Timestamp("2000-01-01 01:05").time()
-    asia_end = pd.Timestamp("2000-01-01 09:00").time()
-    london_end = pd.Timestamp("2000-01-01 16:30").time()
-    ny_end = pd.Timestamp("2000-01-01 23:50").time()
-
-    if asia_start <= t < asia_end:
-        return "asia"
-    elif asia_end <= t < london_end:
-        return "london"
-    elif london_end <= t < ny_end:
-        return "ny"
-    else:
-        # Outside all sessions (e.g., 23:50-01:05)
-        return "ny"  # Still counts as NY session (overnight)
