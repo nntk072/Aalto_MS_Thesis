@@ -36,7 +36,15 @@ from .po3_config import (
 from .po3_state import build_ifvg_zone_features, build_po3_state
 from .session_ohlc import prior_period_high_low, range_quadrants, session_ohlc
 from .smt import smt_divergence
-from .structure import detect_session_levels, structure_levels
+from .structure import (
+    TIMEFRAME_CONFIG,
+    classify_structure,
+    detect_pivots,
+    detect_session_levels,
+    detect_swings,
+    structure_levels,
+    swing_features,
+)
 
 # Bump whenever build_features() output schema changes so stale caches are
 # not silently reused by the {symbol}_features.parquet call sites.
@@ -51,7 +59,8 @@ from .structure import detect_session_levels, structure_levels
 # resample → per-TF compute → align_timeframes pattern; FVG zones over the
 # full M1+HTF ladder (§4.5); PO3 state (§4.4) and IFVG zones (§4.6) on
 # M1/M5/M15.
-FEATURE_CACHE_VERSION = "v7-mtf-smt-structure-sweep-fvg-po3-ifvg"
+# v8: full-day M1 spine, completed-bar HTF ffill, confirmed ATR swings.
+FEATURE_CACHE_VERSION = "v8-full-day-completed-htf-swings"
 
 _DEFAULT_HTF_TIMEFRAMES = ("M5", "M15", "H1")
 # Capped normalised FVG distance: value used when no zone is active nearby.
@@ -387,14 +396,19 @@ def build_features(
     structure = None
     _mtf_struct_levels: dict[str, pd.DataFrame] = {}
     if feat_cfg is not None:
-        structure = structure_levels(
-            primary, swing_period=int(getattr(feat_cfg, "smt_swing_period", 5))
-        )
-        # Drop time columns (not needed in feature matrix)
+        m1_cfg = TIMEFRAME_CONFIG["M1"]
+        left = int(m1_cfg["left"])
+        atr_mult = float(m1_cfg["atr_mult"])
+        structure = structure_levels(primary, swing_period=left, atr_mult=atr_mult)
         structure = structure[["last_swing_high", "last_swing_low"]]
-        feat = pd.concat([feat, structure], axis=1)
+        pivots = detect_pivots(primary, left=left, right=int(m1_cfg["right"]))
+        swings_df = detect_swings(primary, pivots, atr_mult=atr_mult)
+        struct_cls = classify_structure(swings_df)
+        feat = pd.concat(
+            [feat, structure, swing_features(primary, swings_df, struct_cls)],
+            axis=1,
+        )
         if _enabled(feat_cfg, "structure", False):
-            swing = int(getattr(feat_cfg, "smt_swing_period", 5))
             struct_blocks: dict[str, pd.DataFrame] = {}
             struct_levels: dict[str, pd.DataFrame] = {}
             for tf in _htf_list(feat_cfg, "structure", _MTF_LIGHT_TFS):
@@ -403,15 +417,18 @@ def build_features(
                 pri_tf, _ = _resample_pair(primary, None, str(tf))
                 if pri_tf.empty:
                     continue
-                lv_tf = structure_levels(pri_tf, swing_period=swing)[
-                    ["last_swing_high", "last_swing_low"]
-                ]
+                tf_cfg = TIMEFRAME_CONFIG.get(str(tf), m1_cfg)
+                lv_tf = structure_levels(
+                    pri_tf,
+                    swing_period=int(tf_cfg["left"]),
+                    atr_mult=float(tf_cfg["atr_mult"]),
+                )[["last_swing_high", "last_swing_low"]]
                 struct_levels[str(tf)] = lv_tf
                 bos_tf = detect_bos(pri_tf, lv_tf)[["bos_up", "bos_down"]]
                 struct_blocks[str(tf)] = pd.concat([lv_tf, bos_tf], axis=1)
             if struct_blocks:
                 feat = align_timeframes(feat, struct_blocks)
-                _mtf_struct_levels = struct_levels  # consumed by the distance block
+                _mtf_struct_levels = struct_levels
 
     # --- Full PO3 pipeline (Chain F): HTF FVG -> LTF IFVG -> entry triggers ---
     # Added AFTER normalization so the 0/1 entry signals and the numeric
@@ -433,9 +450,13 @@ def build_features(
     # --- Liquidity Levels + Volume Spike + ATR - add AFTER normalization ---
     levels = detect_session_levels(primary)
     feat = pd.concat([feat, levels], axis=1)
-    # Only compute volume_spike if volume column exists
+    vol_s = None
     if "volume" in primary.columns:
-        feat["volume_spike"] = volume_spike(primary["volume"], window=20)
+        vol_s = primary["volume"]
+    elif "tickvol" in primary.columns:
+        vol_s = primary["tickvol"]
+    if vol_s is not None:
+        feat["volume_spike"] = volume_spike(vol_s, window=20)
     feat["atr_5"] = atr(primary, period=5)
 
     # --- Sweep Velocity and Wick Ratio - for PLAN 3 ---
@@ -601,6 +622,7 @@ def build_features(
 
     # Drop leading NaNs from warmup
     feat = feat.dropna(how="all")
+    feat.columns = feat.columns.map(str)
 
     if cache_path:
         Path(cache_path).parent.mkdir(parents=True, exist_ok=True)

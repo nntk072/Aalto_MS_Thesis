@@ -5,6 +5,10 @@ Usage
     from quant_rl.data.pipeline import run_pipeline, build_tick_books
     dfs   = run_pipeline(cfg)
     ticks = build_tick_books(cfg)   # {symbol: TickBook | None}
+
+Bar caches are versioned (``BAR_CACHE_VERSION``) so a full-day rebuild is not
+silently skipped in favour of a stale NY-only parquet. Session filtering is
+not applied to the feature dataset; ``session`` is an eligibility label.
 """
 
 from __future__ import annotations
@@ -18,18 +22,23 @@ from omegaconf import DictConfig
 from .clean import clean
 from .loader import load_bars
 from .resample import resample
-from .session import add_session_id, filter_session
+from .session import add_session_id, add_session_labels
 from .ticks import TickBook, build_tick_book
 
 log = logging.getLogger(__name__)
 
+# Busts unversioned ``{symbol}_{tf}.parquet`` NY-only caches.
+BAR_CACHE_VERSION = "v2-full-day"
+
 
 def _cache_path(cache_dir: Path, symbol: str, tf: str) -> Path:
-    return cache_dir / f"{symbol}_{tf}.parquet"
+    return cache_dir / f"{symbol}_{tf}_{BAR_CACHE_VERSION}.parquet"
 
 
 def run_pipeline(cfg: DictConfig, force: bool = False) -> dict[str, dict[str, pd.DataFrame]]:
-    """Load, resample, clean, filter and cache all symbols / timeframes.
+    """Load, resample, clean, label and cache all symbols / timeframes.
+
+    Full-day M1 is kept for every timeframe. ``filter_session`` is not applied.
 
     Parameters
     ----------
@@ -37,27 +46,24 @@ def run_pipeline(cfg: DictConfig, force: bool = False) -> dict[str, dict[str, pd
         OmegaConf config (quant_rl/config/default.yaml).
     force:
         If True, ignore existing parquet cache and reprocess from CSV.
-
-    Returns
-    -------
-    Nested dict: ``result[symbol][tf]`` → cleaned, session-filtered DataFrame.
     """
     root = Path(cfg.data.raw_dir)
     cache_dir = Path(cfg.data.cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
+    tz = str(cfg.data.tz)
+    ny_end = str(cfg.session.end)
 
     result: dict[str, dict[str, pd.DataFrame]] = {}
 
     for symbol in cfg.data.symbols:
         result[symbol] = {}
 
-        # --- load true M1 source ---
         m1_file = cfg.data.m1_files[symbol]
         m1_path = root / m1_file
         m1_raw = load_bars(m1_path)
-        m1_clean = clean(m1_raw, tz=cfg.data.tz)
-        m1_session = filter_session(m1_clean, start=cfg.session.start, end=cfg.session.end)
-        m1_session = add_session_id(m1_session)
+        m1_clean = clean(m1_raw, tz=tz)
+        m1_full = add_session_labels(m1_clean, tz=tz, ny_end=ny_end)
+        m1_full = add_session_id(m1_full)
 
         for tf in cfg.data.timeframes:
             cp = _cache_path(cache_dir, symbol, tf)
@@ -67,12 +73,11 @@ def run_pipeline(cfg: DictConfig, force: bool = False) -> dict[str, dict[str, pd
                 continue
 
             if tf == "M1":
-                df = m1_session.copy()
+                df = m1_full.copy()
             else:
-                # Resample *before* session filter so we don't lose partial bars
-                tf_bars = resample(m1_clean, tf)
-                tf_clean = clean(tf_bars, tz=cfg.data.tz)
-                df = filter_session(tf_clean, start=cfg.session.start, end=cfg.session.end)
+                tf_bars = resample(m1_full, tf)
+                tf_clean = clean(tf_bars, tz=tz)
+                df = add_session_labels(tf_clean, tz=tz, ny_end=ny_end)
                 df = add_session_id(df)
 
             df.to_parquet(cp)
@@ -88,18 +93,9 @@ def build_tick_books(
     """Build (or load from cache) a ``TickBook`` for each symbol.
 
     Returns a dict ``{symbol: TickBook | None}`` where ``None`` means the
-    tick file was not configured or does not exist.
-
-    Parameters
-    ----------
-    cfg:
-        OmegaConf config.  Reads ``data.tick_files``, ``data.raw_dir``,
-        ``data.tz``, ``session.*``, ``data.cache_dir``, and
-        ``costs.use_tick_execution``.
-    force:
-        Rebuild the tick parquet caches even if they already exist.
+    tick file was not configured or does not exist. Ticks are stored for the
+    full day so overnight replay can quote skipped bars.
     """
-    # Honour kill-switch
     try:
         use_ticks = bool(cfg.costs.use_tick_execution)
     except Exception:
@@ -136,13 +132,13 @@ def build_tick_books(
             result[sym] = None
             continue
 
-        cache_p = cache_dir / f"{sym}_ticks.parquet"
+        cache_p = cache_dir / f"{sym}_ticks_{BAR_CACHE_VERSION}.parquet"
         try:
             result[sym] = build_tick_book(
                 path=tick_path,
                 tz=cfg.data.tz,
-                session_start=cfg.session.start,
-                session_end=cfg.session.end,
+                session_start=None,
+                session_end=None,
                 cache_path=cache_p,
                 force=force,
             )

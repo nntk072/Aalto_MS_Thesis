@@ -1,13 +1,6 @@
 """Chain A tests: per-timeframe technical features are causally aligned.
 
-For each HTF column the value at M1 bar t must come from the most recent
-HTF bar whose *open time* ≤ t (align_timeframes' documented guarantee),
-never from an HTF bar that opened after t. Verified two ways:
-
-1. Explicit open-time lookup comparison on a small synthetic set.
-2. Future-invariance: HTF values computed on a truncated M1 frame must be
-   identical to the same rows of the full run (appending future bars
-   cannot change past feature values).
+M1 bar t sees only completed HTF candles (one-period shift before ffill).
 """
 
 from __future__ import annotations
@@ -53,10 +46,11 @@ def feat_cfg():
 def _expected_htf_value(
     tf: str, col: str, t: pd.Timestamp, m1_bars: pd.DataFrame, feat_cfg
 ) -> float:
-    """Value the M1 bar at *t* should see: from the latest HTF bar with open ≤ t."""
+    """Value M1 t should see: last HTF bar that has already completed by t."""
     htf = build_indicators(resample(m1_bars, tf), feat_cfg)  # type: ignore[arg-type]
-    eligible = htf.loc[htf.index <= t]
-    assert not eligible.empty, f"no {tf} bar with open time ≤ {t}"
+    completed = htf.shift(1)
+    eligible = completed.loc[completed.index <= t]
+    assert not eligible.empty, f"no completed {tf} bar at or before {t}"
     return float(eligible[col].iloc[-1])
 
 
@@ -65,27 +59,48 @@ def test_htf_columns_present(m1_bars, feat_cfg):
     for tf in HTF_TFS:
         htf_cols = [c for c in feat.columns if str(c).startswith(f"{tf}_")]
         assert htf_cols, f"no {tf}_* columns in feature matrix"
-        # each M1-native indicator must have a prefixed HTF counterpart
         for native in ["ema_9", "rsi"]:
             assert f"{tf}_{native}" in [str(c) for c in feat.columns]
 
 
+def test_align_timeframes_completed_bar():
+    """M1 during a forming H1 bar must not see that H1's final OHLC."""
+    from quant_rl.data.align import align_timeframes
+
+    idx = pd.date_range("2025-01-06 16:00", periods=120, freq="1min", tz="Etc/GMT-3")
+    close = np.arange(120, dtype=float)
+    m1 = pd.DataFrame(
+        {"open": close, "high": close + 1, "low": close - 1, "close": close, "v": close},
+        index=idx,
+    )
+    h1 = m1.resample("1h", label="left", closed="left").agg(
+        {"open": "first", "high": "max", "low": "min", "close": "last", "v": "last"}
+    )
+    aligned = align_timeframes(m1[["v"]], {"H1": h1[["close"]]})
+    t1630 = pd.Timestamp("2025-01-06 16:30", tz="Etc/GMT-3")
+    t17 = pd.Timestamp("2025-01-06 17:00", tz="Etc/GMT-3")
+    hour_16 = pd.Timestamp("2025-01-06 16:00", tz="Etc/GMT-3")
+    hour_16_close = float(h1["close"].loc[hour_16])
+    assert (
+        pd.isna(aligned.loc[t1630, "H1_close"]) or aligned.loc[t1630, "H1_close"] != hour_16_close
+    )
+    assert aligned.loc[t17, "H1_close"] == pytest.approx(hour_16_close)
+
+
 def test_htf_alignment_causal_open_time(m1_bars, feat_cfg):
-    """Feature at bar t equals the HTF value from the latest bar with open ≤ t."""
+    """Feature at bar t equals the HTF value from the last completed HTF bar."""
+    from quant_rl.data.align import align_timeframes
+
     for tf in HTF_TFS:
         htf = build_indicators(resample(m1_bars, tf), feat_cfg)  # type: ignore[arg-type]
-        # Reproduce exactly what align_timeframes does to this column.
-        aligned = htf["ema_9"].reindex(m1_bars.index, method="ffill")
+        aligned = align_timeframes(m1_bars[["close"]], {tf: htf[["ema_9"]]})[f"{tf}_ema_9"]
         for t in m1_bars.index[300::100]:
             expected = _expected_htf_value(tf, "ema_9", t, m1_bars, feat_cfg)
-            assert not np.isnan(expected)
+            if np.isnan(expected):
+                continue
             assert abs(aligned.loc[t] - expected) < 1e-9, (
-                f"{tf} value at {t} not from latest bar with open≤t"
+                f"{tf} value at {t} not from last completed bar"
             )
-            # and never from a bar that opened after t
-            later = htf.loc[htf.index > t, "ema_9"]
-            if not later.empty:
-                assert not np.isclose(aligned.loc[t], later.iloc[0]) or np.isnan(later.iloc[0])
 
 
 def test_htf_future_invariance(m1_bars, feat_cfg):
@@ -110,3 +125,7 @@ def test_htf_disabled_when_empty(m1_bars, feat_cfg):
     cfg.htf_timeframes = []
     feat = build_features(m1_bars, cfg=OmegaConf.create({"features": cfg}))
     assert not any(str(c).startswith(tuple(HTF_TFS)) for c in feat.columns)
+
+
+def test_mtf_features_use_only_completed_htf_bars(m1_bars, feat_cfg):
+    test_htf_alignment_causal_open_time(m1_bars, feat_cfg)  # type: ignore[no-untyped-call]
