@@ -79,7 +79,9 @@ def _load_equity(split_dir: Path) -> pd.Series | None:
     return equity
 
 
-def _replot_split_summary(split_dir: Path, cfg: Any, dpi: int) -> None:
+def _replot_split_summary(
+    split_dir: Path, cfg: Any, dpi: int, trades: pd.DataFrame | None = None
+) -> None:
     """Refresh equity / drawdown / daily-PnL charts from the saved equity.csv."""
     equity = _load_equity(split_dir)
     if equity is None or equity.empty:
@@ -98,6 +100,7 @@ def _replot_split_summary(split_dir: Path, cfg: Any, dpi: int) -> None:
         daily_loss_limit=daily_loss_limit,
         max_loss_limit=max_loss_limit,
         profit_target=profit_target,
+        trades=trades,
         out_path=split_dir / "equity.png",
         dpi=dpi,
     )
@@ -115,6 +118,7 @@ def _replot_split_summary(split_dir: Path, cfg: Any, dpi: int) -> None:
             daily_loss_limit=daily_loss_limit,
             max_loss_limit=max_loss_limit,
             profit_target=profit_target,
+            trades=trades,
             out_path=split_dir / "equity.html",
         )
         _pi.plot_drawdown(equity, out_path=split_dir / "drawdown.html")
@@ -129,13 +133,15 @@ def _replot_split_summary(split_dir: Path, cfg: Any, dpi: int) -> None:
 
 def _replot_split(run_dir: Path, cfg: Any, split: str, dpi: int, force: bool) -> None:
     split_dir = run_dir / split
-    _replot_split_summary(split_dir, cfg, dpi)
+    trades = None
     trades_path = split_dir / "trades.csv"
-    if not trades_path.exists():
+    if trades_path.exists():
+        trades = pd.read_csv(trades_path, parse_dates=["time"])
+    _replot_split_summary(split_dir, cfg, dpi, trades=trades)
+    if trades is None:
         log.warning("No trades.csv for split=%s in %s; skipping", split, run_dir)
         return
 
-    trades = pd.read_csv(trades_path, parse_dates=["time"])
     bars, secondary = _load_split_bars(cfg, split, force)
 
     bar_tz = pd.DatetimeIndex(bars.index).tz
@@ -158,12 +164,21 @@ def _replot_split(run_dir: Path, cfg: Any, split: str, dpi: int, force: bool) ->
         "Re-plotting PNG orders for split=%s (%d trade rows) → %s", split, len(trades), orders_dir
     )
     _plt.plot_per_trade_orders(
-        bars, trades, orders_dir=orders_dir, dpi=dpi, secondary_bars=secondary, **chart_cfg
+        bars,
+        trades,
+        orders_dir=orders_dir,
+        dpi=dpi,
+        secondary_bars=secondary,
+        **chart_cfg,
     )
 
     log.info("Re-plotting HTML orders for split=%s → %s", split, orders_dir)
     _pi.plot_per_trade_orders(
-        bars, trades, orders_dir=orders_dir, secondary_bars=secondary, **chart_cfg
+        bars,
+        trades,
+        orders_dir=orders_dir,
+        secondary_bars=secondary,
+        **chart_cfg,
     )
     from quant_rl.eval.trade_plots import write_trade_diagnostics
 
