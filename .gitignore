@@ -175,7 +175,6 @@ logs/
 # do NOT anchor-less match, or quant_rl/data, quant_rl/models etc. get swallowed)
 /cache/
 /models/
-/output/
 /outputs/
 
 # Docker pipeline logs
