@@ -156,7 +156,7 @@ def _sweep_lines(
 ) -> list[SweepLine]:
     col = "sweep_high" if side == "high" else "sweep_low"
     lvl_col = "sweep_high_level" if side == "high" else "sweep_low_level"
-    label = "Sweep High" if side == "high" else "Sweep Low"
+    label = "X"
     events = sweeps[col].to_numpy(dtype=float)
     levels = sweeps[lvl_col].to_numpy(dtype=float)
     lines: list[SweepLine] = []
@@ -186,7 +186,7 @@ def _smt_segments(
     side: Side,
 ) -> list[SmtSegment]:
     col = "smt_bearish" if side == "high" else "smt_bullish"
-    label = "SMT bearish" if side == "high" else "SMT bullish"
+    label = "SMT"
     flags = smt[col].to_numpy(dtype=float)
     segs: list[SmtSegment] = []
     origin_i_arr = np.array([o[0] for o in origins], dtype=int)
@@ -289,15 +289,15 @@ def _draw_sweeps_mpl(ax: Any, sweeps: list[SweepLine]) -> None:
             label=line.label if _first_legend(ax, line.label) else None,
             zorder=3,
         )
-        mid = line.t0 + (line.t1 - line.t0) * 0.65
+        mid = line.t0 + (line.t1 - line.t0) * 0.5
         ax.annotate(
             line.label,
             xy=(mid, line.price),
-            xytext=(4, 4),
+            xytext=(0, -3),
             textcoords="offset points",
-            ha="left",
-            va="bottom",
-            fontsize=7,
+            ha="center",
+            va="center",
+            fontsize=9,
             color=SWEEP_COLOR,
             fontweight="bold",
             zorder=6,
@@ -318,15 +318,13 @@ def _draw_smt_mpl(ax: Any, segments: list[SmtSegment]) -> None:
         )
         mid_t = seg.t0 + (seg.t1 - seg.t0) * 0.5
         mid_p = (seg.p0 + seg.p1) / 2.0
-        va = "bottom" if seg.side == "high" else "top"
-        dy = 8 if seg.side == "high" else -8
         ax.annotate(
             seg.label,
             xy=(mid_t, mid_p),
-            xytext=(0, dy),
+            xytext=(0, -3),
             textcoords="offset points",
             ha="center",
-            va=va,
+            va="center",
             fontsize=7,
             color=color,
             fontweight="bold",
@@ -377,15 +375,16 @@ def draw_overlays_plotly(fig: Any, events: OverlayEvents, *, row: int = 1, col: 
             row=row,
             col=col,
         )
-        mid = line.t0 + (line.t1 - line.t0) * 0.65
+        mid = line.t0 + (line.t1 - line.t0) * 0.5
         fig.add_annotation(
             x=mid,
             y=line.price,
             text=line.label,
             showarrow=False,
-            xanchor="left",
-            yanchor="bottom",
-            font=dict(size=10, color=SWEEP_COLOR),
+            xanchor="center",
+            yanchor="middle",
+            yshift=-4,
+            font=dict(size=11, color=SWEEP_COLOR),
             row=row,
             col=col,
         )
@@ -412,9 +411,9 @@ def draw_overlays_plotly(fig: Any, events: OverlayEvents, *, row: int = 1, col: 
             text=seg.label,
             showarrow=False,
             xanchor="center",
-            yanchor="bottom" if seg.side == "high" else "top",
-            yshift=10 if seg.side == "high" else -10,
-            font=dict(size=10, color=color),
+            yanchor="middle",
+            yshift=-4,
+            font=dict(size=8, color=color),
             row=row,
             col=col,
         )
