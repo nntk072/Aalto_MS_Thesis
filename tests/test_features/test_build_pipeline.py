@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -44,7 +45,7 @@ def deterministic_bars() -> pd.DataFrame:
     return df
 
 
-def _default_cfg() -> dict:
+def _default_cfg() -> dict[str, Any]:
     """Minimal default config matching quant_rl/config/default.yaml features block."""
     return {
         "features": {
@@ -145,7 +146,7 @@ class TestBuildFeaturesPipeline:
         hasher.update(json.dumps(list(map(str, feat.columns))).encode())
         hasher.update(str(feat.shape).encode())
         sample = feat.iloc[::10].round(6)
-        hasher.update(pd.util.hash_pandas_object(sample).values.tobytes())
+        hasher.update(np.asarray(pd.util.hash_pandas_object(sample).values).tobytes())
         golden = hasher.hexdigest()
         assert golden == _GOLDEN_HASH, (
             f"Feature golden hash mismatch.\n"
