@@ -36,6 +36,10 @@ _OHLCV_AGG = {
 def resample(m1: pd.DataFrame, tf: TF) -> pd.DataFrame:
     """Return *tf* bars built from *m1* (1-minute) bars.
 
+    D1 uses pandas ``1D`` with left labels / left closes, so daily bars align
+    to broker midnight of ``m1``'s timezone (typically ``Etc/GMT-3``), not
+    UTC midnight and not NY close.
+
     Parameters
     ----------
     m1:

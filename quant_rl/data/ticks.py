@@ -9,8 +9,7 @@ Typical use
 ::
 
     tick_book = build_tick_book(path, tz="Etc/GMT-3",
-                                session_start="16:30", session_end="23:00",
-                                cache_path="cache/US100.cash_ticks.parquet")
+                                cache_path="cache/US100.cash_ticks_v2-full-day.parquet")
     train_ticks = tick_book.slice(pd.Timestamp("2025-01-01", tz="Etc/GMT-3"),
                                   pd.Timestamp("2025-12-31 23:59", tz="Etc/GMT-3"))
 """
@@ -89,13 +88,16 @@ class TickBook:
 def build_tick_book(
     path: str | Path,
     tz: str = "Etc/GMT-3",
-    session_start: str = "16:30",
-    session_end: str = "23:00",
+    session_start: str | None = None,
+    session_end: str | None = None,
     cache_path: str | Path | None = None,
     force: bool = False,
     chunksize: int = 2_000_000,
 ) -> TickBook:
-    """Load an MT5 tick CSV, session-filter, forward-fill, and build a TickBook.
+    """Load an MT5 tick CSV, optionally session-filter, forward-fill, build a TickBook.
+
+    Pass ``session_start=None`` and ``session_end=None`` (the default) to keep
+    ticks outside NY so overnight replay can quote skipped bars.
 
     Memory-safe by design
     ----------------------
@@ -128,8 +130,10 @@ def build_tick_book(
 
     log.info("Building TickBook from %s (chunked, memory-safe) …", path)
 
-    start_t = pd.Timestamp(f"2000-01-01 {session_start}").time()
-    end_t = pd.Timestamp(f"2000-01-01 {session_end}").time()
+    start_t = (
+        pd.Timestamp(f"2000-01-01 {session_start}").time() if session_start is not None else None
+    )
+    end_t = pd.Timestamp(f"2000-01-01 {session_end}").time() if session_end is not None else None
 
     ts_chunks: list[np.ndarray[Any, Any]] = []
     bid_chunks: list[np.ndarray[Any, Any]] = []
@@ -153,11 +157,13 @@ def build_tick_book(
         )
         dt = dt.tz_localize(tz)
 
-        # Session filter FIRST — drops the majority of rows immediately.
-        t = dt.time
-        mask = (t >= start_t) & (t <= end_t)
-        if not mask.any():
-            continue
+        if start_t is not None and end_t is not None:
+            t = dt.time
+            mask = (t >= start_t) & (t <= end_t)
+            if not mask.any():
+                continue
+        else:
+            mask = np.ones(len(dt), dtype=bool)
 
         bid = raw_chunk["bid"].to_numpy(dtype=np.float32, copy=True)[mask]
         ask = raw_chunk["ask"].to_numpy(dtype=np.float32, copy=True)[mask]

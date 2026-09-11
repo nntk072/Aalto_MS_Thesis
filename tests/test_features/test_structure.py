@@ -87,6 +87,20 @@ class TestDetectSessionLevels:
         assert levels.index.equals(full_day_bars.index)
 
 
+def test_detect_session_levels_on_pipeline_output() -> None:
+    idx = pd.date_range("2025-01-06 01:05", periods=22 * 60, freq="1min", tz="Etc/GMT-3")
+    close = 20000.0 + np.arange(len(idx), dtype=float) * 0.01
+    df = pd.DataFrame(
+        {"open": close, "high": close + 1, "low": close - 1, "close": close, "volume": 1000},
+        index=idx,
+    )
+    levels = detect_session_levels(df)
+    ny = idx[idx.strftime("%H:%M") == "16:30"]
+    assert len(ny)
+    assert pd.notna(levels.loc[ny[0], "asian_high"])
+    assert pd.notna(levels.loc[ny[0], "london_high"])
+
+
 class TestGetSession:
     """Tests for session tagging function."""
 
@@ -106,16 +120,22 @@ class TestGetSession:
 
     def test_ny_session(self) -> None:
         """Test timestamps within NY session."""
-        # 16:30 to 23:49 should be NY
         assert get_session("2025-01-01 16:30:00+03:00") == "ny"
         assert get_session("2025-01-01 20:00:00+03:00") == "ny"
-        assert get_session("2025-01-01 23:49:00+03:00") == "ny"
+        assert get_session("2025-01-01 23:00:00+03:00") == "ny"
+
+    def test_get_session_closed_label(self) -> None:
+        """Broker gap is closed, not ny."""
+        assert get_session("2025-01-01 23:01:00+03:00") == "closed"
+        assert get_session("2025-01-01 23:50:00+03:00") == "closed"
+        assert get_session("2025-01-01 00:00:00+03:00") == "closed"
+        assert get_session("2025-01-01 01:00:00+03:00") == "closed"
 
     def test_ny_overnight(self) -> None:
-        """Test overnight hours (23:50-01:05) count as NY."""
-        assert get_session("2025-01-01 23:50:00+03:00") == "ny"
-        assert get_session("2025-01-01 00:00:00+03:00") == "ny"
-        assert get_session("2025-01-01 01:00:00+03:00") == "ny"
+        """Overnight hours (23:01-01:04) are closed."""
+        assert get_session("2025-01-01 23:50:00+03:00") == "closed"
+        assert get_session("2025-01-01 00:00:00+03:00") == "closed"
+        assert get_session("2025-01-01 01:00:00+03:00") == "closed"
 
     def test_naive_timestamp(self) -> None:
         """Test that naive timestamps are localized to default tz."""

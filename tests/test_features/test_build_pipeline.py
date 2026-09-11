@@ -106,6 +106,7 @@ class TestBuildFeaturesPipeline:
         assert "asian_low" in cols
         assert "volume_spike" in cols
         assert "atr_5" in cols
+        assert "vwap_dist" in cols
         # HTF blocks
         assert any(c.startswith("M5_") for c in cols)
         assert any(c.startswith("M15_") for c in cols)
@@ -156,4 +157,4 @@ class TestBuildFeaturesPipeline:
         )
 
 
-_GOLDEN_HASH = "97b3465f04ec3a781447e974822fb7f83a5a19a5209541c48a26449be88b2d62"
+_GOLDEN_HASH = "842d26b0223fd6249a42dd36808739afa45c3b5a369e588fcd33f5beb1edfcf7"

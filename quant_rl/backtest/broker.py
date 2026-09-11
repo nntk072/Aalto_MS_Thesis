@@ -35,6 +35,13 @@ class Position:
     tp_price: float | None = None  # take profit price level
     risk_frac: float | None = None  # risk fraction used for sizing
     rr_ratio: float | None = None  # reward/risk ratio
+    entry_timestamp: object | None = None
+    entry_atr: float | None = None
+    best_favorable: float = 0.0
+    last_progress_favorable: float = 0.0
+    stale_counter: int = 0
+    mfe: float = 0.0
+    mae: float = 0.0
 
 
 @dataclass

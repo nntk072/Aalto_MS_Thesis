@@ -752,3 +752,17 @@ class TestMTFCausality:
         # once the confirmation (00:20) is visible, a close at 00:21 retests the
         # zone [11, 12] -> long entry fires
         assert res.loc[pd.Timestamp("2025-01-01 00:21"), "entry_long"] == 1
+
+
+def test_po3_not_double_shifted() -> None:
+    """Chain F maps with its own shift(1); it must not call align_timeframes."""
+    import inspect
+
+    from quant_rl.features import po3_config
+
+    src = inspect.getsource(po3_config.detect_htf_fvg)
+    assert "shift(1)" in src
+    assert "align_timeframes" not in src
+    src_ltf = inspect.getsource(po3_config.detect_ltf_ifvg)
+    assert "shift(1)" in src_ltf
+    assert "align_timeframes" not in src_ltf

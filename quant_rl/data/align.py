@@ -1,7 +1,8 @@
 """Causal multi-TF alignment and US100/US500 join.
 
-All higher-timeframe data is *forward-filled* into the M1 spine so that
-features at bar t use only information available at or before t (causal).
+Higher-timeframe values are shifted by one HTF bar before forward-fill so M1
+bar t only sees a *completed* higher-TF candle. Left-labeled bars spanning
+``[T, T+period)`` become visible at ``T+period``.
 """
 
 from __future__ import annotations
@@ -19,12 +20,14 @@ def align_timeframes(
     m1: pd.DataFrame,
     higher: dict[str, pd.DataFrame],
     prefix: str = "",
+    completed_bars: bool = True,
 ) -> pd.DataFrame:
     """Merge higher-TF DataFrames into the M1 spine causally.
 
-    Each higher-TF bar value is forward-filled onto the M1 index so that
-    the M1 bar at time t only sees the most recent *completed* higher-TF bar
-    whose open-time ≤ t.
+    By default each higher-TF series is shifted one bar so M1 at time t sees
+    the last fully closed HTF candle, never the still-forming one. Callers
+    that already shift (Chain F FVG/IFVG) must pass ``completed_bars=False``
+    or align without this helper.
 
     Parameters
     ----------
@@ -35,6 +38,8 @@ def align_timeframes(
         bar DataFrame.
     prefix:
         Optional column prefix (e.g. symbol name).
+    completed_bars:
+        If True (default), ``shift(1)`` before ffill.
     """
     result = m1.copy()
     if prefix:
@@ -45,7 +50,8 @@ def align_timeframes(
             continue
         cols = {c: f"{prefix}_{tf}_{c}" if prefix else f"{tf}_{c}" for c in tf_df.columns}
         tf_renamed = tf_df.rename(columns=cols)
-        # reindex onto M1 spine, ffill (causal)
+        if completed_bars:
+            tf_renamed = tf_renamed.shift(1)
         tf_reindexed = tf_renamed.reindex(result.index, method="ffill")
         result = pd.concat([result, tf_reindexed], axis=1)
 

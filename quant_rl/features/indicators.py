@@ -148,7 +148,8 @@ def vwap_level(df: pd.DataFrame) -> pd.Series:
 def vwap_from_session(df: pd.DataFrame) -> pd.Series:
     """Normalized (close - vwap) / vwap distance using ``session_id``."""
     vwap = vwap_level(df)
-    return (df["close"] - vwap) / vwap.replace(0, np.nan)
+    dist = (df["close"] - vwap) / vwap.replace(0, np.nan)
+    return dist.rename("vwap_dist")
 
 
 def returns(close: pd.Series, horizons: list[int]) -> pd.DataFrame:

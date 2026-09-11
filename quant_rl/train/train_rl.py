@@ -132,6 +132,7 @@ def make_env(
         strategy_reward=strategy_reward,
         strategy_weight=strategy_weight,
         block_overnight=bool(cfg.env.get("block_overnight", True)),
+        eod_risk=dict(cfg.env.get("eod_risk", {})),
     )
 
 
@@ -295,11 +296,15 @@ def main() -> None:
         test_start,
     )
 
-    # Slice for MVP
-    if args.mvp and len(train_bars) > 30 * 390:
-        train_bars = train_bars.iloc[: 30 * 390]
-        train_feat = train_feat.iloc[: 30 * 390]
-        log.info("MVP: sliced training to %d bars", len(train_bars))
+    # Slice for MVP: ~30 calendar days of the train split (full-day M1, not
+    # the old 390 NY-only bars/day heuristic).
+    if args.mvp and len(train_bars) > 0:
+        cutoff = pd.Timestamp(train_bars.index[0]) + pd.Timedelta(days=30)
+        n_keep = int((train_bars.index < cutoff).sum())
+        if 0 < n_keep < len(train_bars):
+            train_bars = train_bars.iloc[:n_keep]
+            train_feat = train_feat.iloc[:n_keep]
+            log.info("MVP: sliced training to %d bars (~30 calendar days)", len(train_bars))
 
     # Create training environment
     log.info("Creating training environment...")
@@ -389,6 +394,7 @@ def main() -> None:
         continuous_actions=(args.algo == "sac"),
         use_sweep_reward=(args.reward == "sweep"),
         block_overnight=bool(cfg.env.get("block_overnight", True)),
+        eod_risk=dict(cfg.env.get("eod_risk", {})),
     )
     test_result["initial_balance"] = cfg.account.initial_balance
     test_m = calculate_metrics(
@@ -424,6 +430,7 @@ def main() -> None:
         continuous_actions=(args.algo == "sac"),
         use_sweep_reward=(args.reward == "sweep"),
         block_overnight=bool(cfg.env.get("block_overnight", True)),
+        eod_risk=dict(cfg.env.get("eod_risk", {})),
     )
     train_result["initial_balance"] = cfg.account.initial_balance
     train_m = calculate_metrics(
@@ -563,6 +570,7 @@ def main() -> None:
                 continuous_actions=(args.algo == "sac"),
                 use_sweep_reward=(args.reward == "sweep"),
                 block_overnight=bool(cfg.env.get("block_overnight", True)),
+                eod_risk=dict(cfg.env.get("eod_risk", {})),
             )
             fold_m = calculate_metrics(
                 fold_result["equity"],

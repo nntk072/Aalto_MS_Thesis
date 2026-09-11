@@ -29,6 +29,7 @@ from ..backtest.risk import (
     compute_sl_tp_short,
     resolve_tp_target,
 )
+from ..data.session import ny_session_mask
 from ..envs.reward import DSRReward
 from ..envs.strategies import BaselineStrategy, TradingStrategy
 from ..envs.sweep_reward import CompositeReward, SweepConfirmationReward
@@ -80,6 +81,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         strategy_reward: Any = None,
         strategy_weight: float = 0.0,
         block_overnight: bool = True,
+        eod_risk: dict[str, Any] | None = None,
     ):
         """Initialize trading environment.
 
@@ -206,6 +208,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.contract_size = contract_size
         self.max_loss_per_trade_usd = max_loss_per_trade_usd
         self.block_overnight = bool(block_overnight)
+        eod = dict(eod_risk or {})
+        self._eod_max_loss_usd = float(eod.get("max_loss_usd", 500.0))
+        self._eod_max_age_hours = float(eod.get("max_age_hours", 8.0))
+        self._eod_stale_bars = int(eod.get("stale_bars", 60))
+        self._eod_progress_atr = float(eod.get("progress_threshold_atr", 0.25))
+        self._ny_indices = self._resolve_ny_indices(bars)
+        self._ny_pos = 0
         self.episodic = episodic
         self.use_sweep_reward = use_sweep_reward
 
@@ -350,7 +359,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         """Reset environment to initial state."""
         super().reset(seed=seed, options=options)
 
-        self.step_idx = self.obs_window
+        self._ny_pos = int(np.searchsorted(self._ny_indices, self.obs_window, side="left"))
+        if self._ny_pos >= len(self._ny_indices):
+            self._ny_pos = max(0, len(self._ny_indices) - 1)
+        self.step_idx = int(self._ny_indices[self._ny_pos]) if len(self._ny_indices) else 0
         self.account = self._create_account()
         self.position: Position | None = None
         self.equity_curve = [self.initial_balance]
@@ -515,7 +527,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         return reason, session_blocked, done, truncated
 
-    def _check_sl_tp(self, bar: pd.Series, fill_bid: float, fill_ask: float) -> None:
+    def _check_sl_tp(
+        self,
+        bar: pd.Series,
+        fill_bid: float,
+        fill_ask: float,
+        bar_idx: int | None = None,
+    ) -> None:
         """Check whether the open position hit its SL or TP on this bar.
 
         If a stop-loss or take-profit level is triggered, the position is
@@ -523,6 +541,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         """
         if self.position is None:
             return
+        idx = self.step_idx if bar_idx is None else bar_idx
+        log_time = (
+            self.bars.index[idx] if 0 <= idx < len(self.bars) else self.bars.index[self.step_idx]
+        )
 
         sl_hit = False
         if self.position.sl_price is not None:
@@ -541,8 +563,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     "pnl": pnl,
                     "price": fill_price,
                     "reason": "structure_sl",
-                    "bar": self.step_idx,
-                    "time": self.bars.index[self.step_idx],
+                    "bar": idx,
+                    "time": log_time,
                     "equity": self.account.equity,
                 }
             )
@@ -567,8 +589,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                         "pnl": pnl,
                         "price": fill_price,
                         "reason": "structure_tp",
-                        "bar": self.step_idx,
-                        "time": self.bars.index[self.step_idx],
+                        "bar": idx,
+                        "time": log_time,
                         "equity": self.account.equity,
                     }
                 )
@@ -729,63 +751,75 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     )
                 else:
                     self.position = None
-            if self.position:
-                self.position.sl_price = sl_price
-                self.position.tp_price = tp_price
-                self.position.risk_frac = risk_frac
-                self.position.rr_ratio = rr_ratio
-                entry_level, cross_time = self._matched_entry_level(session_id, discrete_action)
-                sweep_delay = (
-                    float("nan")
-                    if cross_time is None
-                    else float((bar_time - cross_time).total_seconds())
-                )
-                self.trade_log.append(
-                    {
-                        "type": "open",
-                        "strategy": self.strategy.name,
-                        "direction": discrete_action,
-                        "price": self.position.entry_price,
-                        "lots": self.position.size,
-                        "sl_price": sl_price,
-                        "tp_price": tp_price,
-                        "risk_frac": risk_frac,
-                        "rr_ratio": rr_ratio,
-                        "bar": self.step_idx,
-                        "time": bar_time,
-                        "equity": self.account.equity,
-                        "level_type": entry_level,
-                        "sweep_delay_s": sweep_delay,
-                        "action_tp_mode": getattr(self, "_selected_tp_mode", "rr"),
-                        "asian_high": float(feat_row.get("asian_high", float("nan"))),
-                        "asian_low": float(feat_row.get("asian_low", float("nan"))),
-                        "sweep_high": float(feat_row.get("sweep_high", float("nan"))),
-                        "sweep_low": float(feat_row.get("sweep_low", float("nan"))),
-                        "manipulation_high": float(
-                            feat_row.get("po3_manipulation_high", float("nan"))
-                        ),
-                        "manipulation_low": float(
-                            feat_row.get("po3_manipulation_low", float("nan"))
-                        ),
-                        "manipulation_end": float(
-                            feat_row.get("po3_manipulation_end", float("nan"))
-                        ),
-                        "distribution_phase": float(feat_row.get("po3_distribution", float("nan"))),
-                        "ifvg_zone_low": float(
-                            feat_row.get(
-                                "ifvg_bull_low",
-                                feat_row.get("ifvg_bear_low", float("nan")),
-                            )
-                        ),
-                        "ifvg_zone_high": float(
-                            feat_row.get(
-                                "ifvg_bull_high",
-                                feat_row.get("ifvg_bear_high", float("nan")),
-                            )
-                        ),
-                    }
-                )
-                self.sessions_with_trades.add(session_id)
+                if self.position:
+                    self.position.sl_price = sl_price
+                    self.position.tp_price = tp_price
+                    self.position.risk_frac = risk_frac
+                    self.position.rr_ratio = rr_ratio
+                    self.position.entry_timestamp = bar_time
+                    atr_val = feat_row.get("atr_5", feat_row.get("atr", np.nan))
+                    self.position.entry_atr = (
+                        float(atr_val) if pd.notna(atr_val) and float(atr_val) > 0 else 1.0
+                    )
+                    self.position.best_favorable = 0.0
+                    self.position.last_progress_favorable = 0.0
+                    self.position.stale_counter = 0
+                    self.position.mfe = 0.0
+                    self.position.mae = 0.0
+                    entry_level, cross_time = self._matched_entry_level(session_id, discrete_action)
+                    sweep_delay = (
+                        float("nan")
+                        if cross_time is None
+                        else float((bar_time - cross_time).total_seconds())
+                    )
+                    self.trade_log.append(
+                        {
+                            "type": "open",
+                            "strategy": self.strategy.name,
+                            "direction": discrete_action,
+                            "price": self.position.entry_price,
+                            "lots": self.position.size,
+                            "sl_price": sl_price,
+                            "tp_price": tp_price,
+                            "risk_frac": risk_frac,
+                            "rr_ratio": rr_ratio,
+                            "bar": self.step_idx,
+                            "time": bar_time,
+                            "equity": self.account.equity,
+                            "level_type": entry_level,
+                            "sweep_delay_s": sweep_delay,
+                            "action_tp_mode": getattr(self, "_selected_tp_mode", "rr"),
+                            "asian_high": float(feat_row.get("asian_high", float("nan"))),
+                            "asian_low": float(feat_row.get("asian_low", float("nan"))),
+                            "sweep_high": float(feat_row.get("sweep_high", float("nan"))),
+                            "sweep_low": float(feat_row.get("sweep_low", float("nan"))),
+                            "manipulation_high": float(
+                                feat_row.get("po3_manipulation_high", float("nan"))
+                            ),
+                            "manipulation_low": float(
+                                feat_row.get("po3_manipulation_low", float("nan"))
+                            ),
+                            "manipulation_end": float(
+                                feat_row.get("po3_manipulation_end", float("nan"))
+                            ),
+                            "distribution_phase": float(
+                                feat_row.get("po3_distribution", float("nan"))
+                            ),
+                            "ifvg_zone_low": float(
+                                feat_row.get(
+                                    "ifvg_bull_low",
+                                    feat_row.get("ifvg_bear_low", float("nan")),
+                                )
+                            ),
+                            "ifvg_zone_high": float(
+                                feat_row.get(
+                                    "ifvg_bull_high",
+                                    feat_row.get("ifvg_bear_high", float("nan")),
+                                )
+                            ),
+                        }
+                    )
+                    self.sessions_with_trades.add(session_id)
 
     def _decode_action(
         self, action: int | float | np.ndarray[Any, Any]
@@ -921,12 +955,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # Check entry gate for new positions
         # Suppress new entries on the last bar of a session (overnight block
         # just closed a position or would have if there was one).
-        entering_new_session = (
-            self.block_overnight
-            and next_bar is not None
-            and "session_id" in next_bar.index
-            and int(float(next_bar["session_id"])) != session_id
-        )
+        entering_new_session = self.block_overnight and self._is_ny_session_boundary()
         if entering_new_session:
             discrete_action = 0
 
@@ -948,6 +977,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         if not reason and not session_blocked:
             self._check_sl_tp(bar, fill_bid, fill_ask)
+            self._apply_position_guards(bar, bar_time, fill_bid, fill_ask, eod=False)
 
         # Action handling
         if not done:
@@ -990,12 +1020,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         obs = self._get_observation()
         info = {"equity": self.account.equity, "position": self.position is not None}
 
-        # Increment step counters: ``step_idx`` is the absolute bar index into
-        # the data; ``episode_step_count`` is the within-episode counter used
-        # to enforce ``max_episode_steps``. Bumping the per-episode counter
-        # *before* the truncation check lets a configured cap of N allow
-        # exactly N step() returns.
-        self.step_idx += 1
+        self._advance_ny_step()
         self.episode_step_count += 1
 
         # Apply max_episode_steps truncation last so it overrides
@@ -1093,29 +1118,23 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             next_bar = None
             fill_bid, fill_ask = bid, ask
 
-        if self.block_overnight and self.position is not None:
-            next_sid = (
-                int(float(next_bar["session_id"]))
-                if next_bar is not None and "session_id" in next_bar.index
-                else session_id
+        if self.block_overnight and self.position is not None and self._is_ny_session_boundary():
+            pnl, fill_price = self.broker.close_position(
+                self.account, self.position, (fill_bid, fill_ask)
             )
-            if next_sid != session_id:
-                pnl, fill_price = self.broker.close_position(
-                    self.account, self.position, (fill_bid, fill_ask)
-                )
-                self.trade_log.append(
-                    {
-                        "type": "eod_close",
-                        "pnl": pnl,
-                        "price": fill_price,
-                        "reason": "session_end",
-                        "bar": self.step_idx,
-                        "time": bar_time,
-                        "equity": self.account.equity,
-                    }
-                )
-                self.position = None
-                self.sessions_with_trades.add(session_id)
+            self.trade_log.append(
+                {
+                    "type": "eod_close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "reason": "session_end",
+                    "bar": self.step_idx,
+                    "time": bar_time,
+                    "equity": self.account.equity,
+                }
+            )
+            self.position = None
+            self.sessions_with_trades.add(session_id)
 
         return fill_bid, fill_ask, next_bar
 
@@ -1192,6 +1211,117 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 }
 
         return float(self.reward_fn(pnl_step, **reward_kwargs))
+
+    @staticmethod
+    def _resolve_ny_indices(bars: pd.DataFrame) -> np.ndarray[Any, Any]:
+        """Absolute indices of NY tradable bars, or all bars if none match."""
+        if "session" in bars.columns:
+            mask = bars["session"].eq("ny").to_numpy()
+        else:
+            mask = ny_session_mask(pd.DatetimeIndex(bars.index)).to_numpy()
+        ny = np.flatnonzero(mask)
+        if ny.size == 0:
+            ny = np.arange(len(bars), dtype=int)
+        return ny
+
+    def _is_ny_session_boundary(self) -> bool:
+        """True on the last NY bar of a session (next NY index jumps)."""
+        if self._ny_pos + 1 >= len(self._ny_indices):
+            return False
+        return int(self._ny_indices[self._ny_pos + 1]) > int(self.step_idx) + 1
+
+    def _advance_ny_step(self) -> None:
+        """Move to the next NY bar, replaying skipped bars on an overnight hold."""
+        cur = int(self.step_idx)
+        if self._ny_pos + 1 >= len(self._ny_indices):
+            self.step_idx = cur + 1
+            self._ny_pos += 1
+            return
+        nxt = int(self._ny_indices[self._ny_pos + 1])
+        if nxt > cur + 1 and self.position is not None and not self.block_overnight:
+            bar = self.bars.iloc[cur]
+            bid, ask = self._bar_quote(bar)
+            self._apply_position_guards(bar, self.bars.index[cur], bid, ask, eod=True)
+            self._replay_skipped_bars(cur + 1, nxt)
+        self._ny_pos += 1
+        self.step_idx = nxt
+
+    def _replay_skipped_bars(self, start: int, end: int) -> None:
+        """Mark-to-market and check SL/TP/age on bars the agent does not step."""
+        for i in range(start, end):
+            if self.position is None:
+                break
+            bar = self.bars.iloc[i]
+            bid, ask = self._bar_quote(bar)
+            self._check_sl_tp(bar, bid, ask, bar_idx=i)
+            if self.position is None:
+                break
+            self.broker.mark_to_market(self.account, self.position, (bid, ask))
+            self._apply_position_guards(bar, self.bars.index[i], bid, ask, eod=False)
+
+    def _apply_position_guards(
+        self,
+        bar: pd.Series,
+        bar_time: Any,
+        fill_bid: float,
+        fill_ask: float,
+        *,
+        eod: bool,
+    ) -> None:
+        """Age, stale-progress, and max-loss guards for an open position."""
+        pos = self.position
+        if pos is None:
+            return
+        if pos.entry_timestamp is not None:
+            age_h = (
+                pd.Timestamp(cast(Any, bar_time)) - pd.Timestamp(cast(Any, pos.entry_timestamp))
+            ).total_seconds() / 3600.0
+            if age_h > self._eod_max_age_hours:
+                self._force_close_guard(fill_bid, fill_ask, "max_age", bar_time)
+                return
+        if pos.direction == 1:
+            favorable = float(bar["high"]) - pos.entry_price
+            adverse = pos.entry_price - float(bar["low"])
+        else:
+            favorable = pos.entry_price - float(bar["low"])
+            adverse = float(bar["high"]) - pos.entry_price
+        pos.mfe = max(pos.mfe, favorable)
+        pos.mae = max(pos.mae, adverse)
+        pos.best_favorable = max(pos.best_favorable, favorable)
+        thresh = self._eod_progress_atr * float(pos.entry_atr or 0.0)
+        if thresh > 0.0 and (favorable - pos.last_progress_favorable) >= thresh:
+            pos.last_progress_favorable = favorable
+            pos.stale_counter = 0
+        else:
+            pos.stale_counter += 1
+        notional_adverse = adverse * pos.size * self.contract_size
+        if notional_adverse >= self._eod_max_loss_usd:
+            self._force_close_guard(fill_bid, fill_ask, "eod_max_loss", bar_time)
+            return
+        if eod and pos.stale_counter >= self._eod_stale_bars:
+            self._force_close_guard(fill_bid, fill_ask, "stale", bar_time)
+
+    def _force_close_guard(
+        self, fill_bid: float, fill_ask: float, reason: str, bar_time: Any
+    ) -> None:
+        if self.position is None:
+            return
+        pnl, fill_price = self.broker.close_position(
+            self.account, self.position, (fill_bid, fill_ask)
+        )
+        self.trade_log.append(
+            {
+                "type": "eod_close",
+                "pnl": pnl,
+                "price": fill_price,
+                "reason": reason,
+                "bar": self.step_idx,
+                "time": bar_time,
+                "equity": self.account.equity,
+            }
+        )
+        self.position = None
+        self.sessions_with_trades.add(self._current_session_id())
 
     def _get_observation(self) -> dict[str, np.ndarray[Any, Any]]:
         """Construct observation dict."""
