@@ -179,6 +179,7 @@ def _write_split(
             daily_loss_limit=daily_loss_limit,
             max_loss_limit=max_loss_limit,
             profit_target=profit_target,
+            trades=trades,
             out_path=split_dir / "equity.png",
             dpi=dpi,
         )
@@ -228,6 +229,7 @@ def _write_split(
                 daily_loss_limit=daily_loss_limit,
                 max_loss_limit=max_loss_limit,
                 profit_target=profit_target,
+                trades=trades,
                 out_path=split_dir / "equity.html",
             )
             _pi.plot_drawdown(equity, out_path=split_dir / "drawdown.html")

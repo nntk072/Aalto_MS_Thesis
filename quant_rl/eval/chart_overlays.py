@@ -289,13 +289,13 @@ def _draw_sweeps_mpl(ax: Any, sweeps: list[SweepLine]) -> None:
             label=line.label if _first_legend(ax, line.label) else None,
             zorder=3,
         )
-        mid = line.t0 + (line.t1 - line.t0) * 0.5
+        mid = line.t0 + (line.t1 - line.t0) * 0.9
         ax.annotate(
             line.label,
             xy=(mid, line.price),
             xytext=(0, -3),
             textcoords="offset points",
-            ha="center",
+            ha="right",
             va="center",
             fontsize=9,
             color=SWEEP_COLOR,
@@ -375,13 +375,13 @@ def draw_overlays_plotly(fig: Any, events: OverlayEvents, *, row: int = 1, col: 
             row=row,
             col=col,
         )
-        mid = line.t0 + (line.t1 - line.t0) * 0.5
+        mid = line.t0 + (line.t1 - line.t0) * 0.9
         fig.add_annotation(
             x=mid,
             y=line.price,
             text=line.label,
             showarrow=False,
-            xanchor="center",
+            xanchor="right",
             yanchor="middle",
             yshift=-4,
             font=dict(size=11, color=SWEEP_COLOR),
