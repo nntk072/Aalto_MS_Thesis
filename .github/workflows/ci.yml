@@ -210,9 +210,6 @@ jobs:
   # ============================================================
   ut-venv:
     needs:
-      - code-formatting
-      - json-check
-      - markdown-formatting
       - uv-build
       - venv-build
     runs-on: ubuntu-latest
@@ -231,7 +228,6 @@ jobs:
 
   ut-docker:
     needs:
-      - code-formatting
       - docker-release-build
     runs-on: ubuntu-latest
     steps:
@@ -246,7 +242,6 @@ jobs:
 
   ut-uv:
     needs:
-      - code-formatting
       - uv-build
     runs-on: ubuntu-latest
     steps:
