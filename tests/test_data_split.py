@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from quant_rl.data.split import get_split_config, split_train_test
+from quant_rl.data.split import get_split_config, split_bars, split_train_test
 
 
 def _make_bars(start: str, end: str, freq: str = "1D", tz: str = "Etc/GMT-3") -> pd.DataFrame:
@@ -89,3 +89,16 @@ def test_m1_frequency():
     assert not tr_b.empty
     assert not te_b.empty
     assert len(tr_b.index.intersection(te_b.index)) == 0
+
+
+def test_split_bars_matches_split_train_test() -> None:
+    bars = pd.concat(
+        [
+            _make_bars("2025-12-30", "2025-12-31"),
+            _make_bars("2026-01-01", "2026-01-02"),
+        ]
+    )
+    tr, te = split_bars(bars, "2025-12-31", "2026-01-01")
+    tr_b, te_b, _, _ = split_train_test(bars, bars, "2025-12-31", "2026-01-01")
+    assert tr.index.equals(tr_b.index)
+    assert te.index.equals(te_b.index)

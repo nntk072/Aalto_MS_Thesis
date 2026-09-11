@@ -144,7 +144,18 @@ disallow_incomplete_defs = false
 # Plotting glue: matplotlib ships untyped helpers (AutoDateLocator, DateFormatter,
 # ...) in the pinned version; calling them is intentional.
 [[tool.mypy.overrides]]
-module = ["quant_rl.eval.plots", "quant_rl.eval.plots_interactive", "quant_rl.eval.replot_orders", "tests.test_plots_export", "tests.test_training_plots", "tests.test_eval.*"]
+module = [
+    "quant_rl.eval.plots",
+    "quant_rl.eval.plots_interactive",
+    "quant_rl.eval.plot_series",
+    "quant_rl.eval.chart_overlays",
+    "quant_rl.eval.trade_plots",
+    "quant_rl.eval.trade_diagnostics",
+    "quant_rl.eval.replot_orders",
+    "tests.test_plots_export",
+    "tests.test_training_plots",
+    "tests.test_eval.*",
+]
 disallow_untyped_calls = false
 
 # Legacy scaffold kept for reference (superseded by quant_rl + live_trading_rl):

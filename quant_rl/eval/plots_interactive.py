@@ -19,6 +19,14 @@ try:
 except ImportError:
     _PLOTLY_AVAILABLE = False
 
+from .plot_series import (
+    daily_drawdown_pct,
+    daily_loss_limit_series,
+    daily_pnl,
+    drawdown_ylim,
+    max_drawdown_pct,
+)
+
 log = logging.getLogger(__name__)
 
 _TEMPLATE = "plotly_white"
@@ -50,6 +58,7 @@ def plot_equity_curve(
     initial_balance: float = 100_000.0,
     daily_loss_limit: float | None = None,
     max_loss_limit: float | None = None,
+    profit_target: float | None = None,
     out_path: Path | str | None = None,
 ) -> go.Figure:
     _check()
@@ -77,13 +86,16 @@ def plot_equity_curve(
     )
 
     if daily_loss_limit is not None:
-        y_lim = initial_balance - daily_loss_limit
-        fig.add_hline(
-            y=y_lim,
-            line_color="#ff9800",
-            line_dash="dot",
-            annotation_text=f"Daily loss limit ${daily_loss_limit:,.0f}",
-            annotation_position="bottom right",
+        limit_s = daily_loss_limit_series(equity, daily_loss_limit)
+        fig.add_trace(
+            go.Scatter(
+                x=limit_s.index,
+                y=limit_s.values,
+                mode="lines",
+                name=f"Daily loss limit ${daily_loss_limit:,.0f} (from day open)",
+                line=dict(color="#ff9800", width=1.2, dash="dot"),
+                line_shape="hv",
+            )
         )
     if max_loss_limit is not None:
         y_lim = initial_balance - max_loss_limit
@@ -93,6 +105,14 @@ def plot_equity_curve(
             line_dash="dot",
             annotation_text=f"Max loss limit ${max_loss_limit:,.0f}",
             annotation_position="bottom right",
+        )
+    if profit_target is not None:
+        fig.add_hline(
+            y=initial_balance + profit_target,
+            line_color=_LONG_COLOR,
+            line_dash="dash",
+            annotation_text=f"Profit target ${initial_balance + profit_target:,.0f}",
+            annotation_position="top right",
         )
 
     # User preference: do not draw breach vertical lines on equity chart.
@@ -104,6 +124,7 @@ def plot_equity_curve(
         yaxis_title="Balance (USD)",
         yaxis_tickprefix="$",
         yaxis_tickformat=",.0f",
+        xaxis_tickformat="%Y-%m-%d",
         hovermode="x unified",
         height=450,
     )
@@ -121,31 +142,95 @@ def plot_drawdown(
     out_path: Path | str | None = None,
 ) -> go.Figure:
     _check()
-    roll_max = equity.cummax()
-    dd = (equity - roll_max) / roll_max.replace(0, np.nan) * 100
+    from plotly.subplots import make_subplots
 
-    fig = go.Figure()
+    max_dd = max_drawdown_pct(equity)
+    day_dd = daily_drawdown_pct(equity)
+    max_lo, _ = drawdown_ylim(max_dd, -10.0)
+    day_lo, _ = drawdown_ylim(day_dd, -5.0)
+
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.12,
+        subplot_titles=("Maximum drawdown", "Daily drawdown"),
+    )
     fig.add_trace(
         go.Scatter(
-            x=dd.index,
-            y=dd.values,
+            x=max_dd.index,
+            y=max_dd.values,
             mode="lines",
-            name="Drawdown",
+            name="Max drawdown",
             fill="tozeroy",
             line=dict(color=_SHORT_COLOR, width=0.8),
             fillcolor="rgba(239,83,80,0.25)",
-        )
+        ),
+        row=1,
+        col=1,
     )
+    fig.add_trace(
+        go.Scatter(
+            x=day_dd.index,
+            y=day_dd.values,
+            mode="lines",
+            name="Daily drawdown",
+            fill="tozeroy",
+            line=dict(color="#ff9800", width=0.8),
+            fillcolor="rgba(255,152,0,0.25)",
+        ),
+        row=2,
+        col=1,
+    )
+    fig.add_hline(y=-10.0, line_color="#777", line_dash="dot", row=1, col=1)
+    fig.add_hline(y=-5.0, line_color="#777", line_dash="dot", row=2, col=1)
+    fig.update_yaxes(title_text="Drawdown (%)", ticksuffix="%", range=[max_lo, 0], row=1, col=1)
+    fig.update_yaxes(title_text="Drawdown (%)", ticksuffix="%", range=[day_lo, 0], row=2, col=1)
+    fig.update_xaxes(title_text="Date", tickformat="%Y-%m-%d", row=2, col=1)
+    fig.update_xaxes(tickformat="%Y-%m-%d", row=1, col=1)
     fig.update_layout(
         template=_TEMPLATE,
         title="Drawdown",
-        xaxis_title="Date",
-        yaxis_title="Drawdown (%)",
-        yaxis_ticksuffix="%",
         hovermode="x unified",
-        height=300,
+        height=520,
     )
 
+    if out_path:
+        _save(fig, out_path)
+    return fig
+
+
+def plot_daily_pnl(
+    equity: pd.Series,
+    daily_loss_limit: float | None = None,
+    out_path: Path | str | None = None,
+) -> go.Figure:
+    _check()
+    pnl = daily_pnl(equity)
+    fig = go.Figure()
+    if pnl.empty:
+        fig.add_annotation(
+            text="No daily P&L", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False
+        )
+    else:
+        colors = [_LONG_COLOR if v >= 0 else _SHORT_COLOR for v in pnl.to_numpy()]
+        fig.add_trace(go.Bar(x=pnl.index, y=pnl.values, marker_color=colors, name="Daily P&L"))
+        if daily_loss_limit is not None:
+            fig.add_hline(
+                y=-float(daily_loss_limit),
+                line_color="#ff9800",
+                line_dash="dot",
+                annotation_text=f"Daily loss cap −${daily_loss_limit:,.0f}",
+            )
+    fig.update_layout(
+        template=_TEMPLATE,
+        title="Daily P&L",
+        xaxis_title="Date",
+        yaxis_title="P&L (USD)",
+        yaxis_tickprefix="$",
+        xaxis_tickformat="%Y-%m-%d",
+        height=400,
+    )
     if out_path:
         _save(fig, out_path)
     return fig
@@ -537,6 +622,7 @@ def plot_per_trade_orders(
     contract_size: float = 1.0,
     show_mae_mfe: bool = True,
     show_sl_tp: bool = True,
+    secondary_bars: pd.DataFrame | None = None,
 ) -> None:
     """Generate one M1 candlestick HTML per trade in *orders_dir* with MT5-style overlays.
 
@@ -557,9 +643,18 @@ def plot_per_trade_orders(
     contract_size : Contract size.
     show_mae_mfe : Whether to plot MAE/MFE lines.
     show_sl_tp : Whether to plot SL/TP lines.
+    secondary_bars : Optional US500 (or correlated) bars for SMT lines.
     """
     _check()
+    from plotly.subplots import make_subplots
+
     from .chart_indicators import compute_chart_overlays_full, slice_overlays
+    from .chart_overlays import (
+        VWAP_COLOR,
+        build_overlay_events,
+        draw_macd_rsi_plotly,
+        draw_overlays_plotly,
+    )
     from .plots import _extract_window, _pair_trades, _trade_filename
     from .trade_metrics import compute_trade_metrics
 
@@ -578,9 +673,10 @@ def plot_per_trade_orders(
     else:
         log.info("Per-trade HTML: %d charts → %s", total, orders_dir)
 
-    # Compute EMA50/MACD once on the full history so indicators are properly
+    # Compute EMA50/MACD/RSI/VWAP once on the full history so indicators are
     # warmed up and match the strategy's real signals, then slice per trade.
     full_overlays = compute_chart_overlays_full(bars)
+    overlay_events = build_overlay_events(bars, secondary=secondary_bars)
 
     for seq_i, (open_row, close_row) in enumerate(pairs):
         t_open = pd.Timestamp(open_row["time"])
@@ -604,11 +700,8 @@ def plot_per_trade_orders(
             contract_size=contract_size,
         )
 
-        # Compute chart overlays (EMA50, MACD), sliced from full-history calc
+        # Compute chart overlays (EMA50, MACD, RSI, VWAP), sliced from full-history calc
         overlays = slice_overlays(full_overlays, window.index)
-
-        # Use Plotly subplots (2 rows: price on top, MACD on bottom)
-        from plotly.subplots import make_subplots
 
         fig = make_subplots(
             rows=2,
@@ -616,6 +709,7 @@ def plot_per_trade_orders(
             row_heights=[0.7, 0.3],
             shared_xaxes=True,
             vertical_spacing=0.08,
+            specs=[[{"secondary_y": False}], [{"secondary_y": True}]],
         )
 
         # Top panel: candlestick
@@ -645,6 +739,18 @@ def plot_per_trade_orders(
             row=1,
             col=1,
         )
+        fig.add_trace(
+            go.Scatter(
+                x=window.index,
+                y=overlays["vwap"],
+                name="VWAP",
+                line=dict(color=VWAP_COLOR, width=1.8, dash="dashdot"),
+            ),
+            row=1,
+            col=1,
+        )
+        events = overlay_events.clip(pd.Timestamp(window.index[0]), pd.Timestamp(window.index[-1]))
+        draw_overlays_plotly(fig, events, row=1, col=1)
 
         # Entry marker: green arrow (triangle-up for long, triangle-down for short)
         i_o = int(window.index.get_indexer(pd.Index([t_open]), method="nearest")[0])
@@ -742,46 +848,8 @@ def plot_per_trade_orders(
                     col=1,
                 )
 
-        # Bottom panel: MACD
-        fig.add_trace(
-            go.Scatter(
-                x=window.index,
-                y=overlays["macd"],
-                name="MACD",
-                line=dict(color="#0066cc", width=2),
-            ),
-            row=2,
-            col=1,
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=window.index,
-                y=overlays["signal"],
-                name="Signal",
-                line=dict(color="#ff6600", width=2),
-            ),
-            row=2,
-            col=1,
-        )
-
-        # Histogram (colored bars: green if positive, red if negative)
-        colors = ["#00cc00" if h > 0 else "#ff0000" for h in overlays["histogram"]]
-        fig.add_trace(
-            go.Bar(
-                x=window.index,
-                y=overlays["histogram"],
-                name="Histogram",
-                marker=dict(color=colors),
-                opacity=0.3,
-                showlegend=True,
-            ),
-            row=2,
-            col=1,
-        )
-
-        # Add MACD=0 line
-        fig.add_hline(y=0, line_color="#000000", line_width=1, line_dash="solid", row=2, col=1)
+        # Bottom panel: MACD (left) + RSI (right)
+        draw_macd_rsi_plotly(fig, window, overlays, row=2)
 
         close_reason = close_type if close_type != "close" else "normal"
         dir_label = "Long" if direction == 1 else "Short"
@@ -818,7 +886,6 @@ def plot_per_trade_orders(
             title=title,
             xaxis2_title="Time (M1)",
             yaxis_title="Price",
-            yaxis2_title="MACD",
             xaxis_rangeslider_visible=False,
             hovermode="x unified",
             height=680,
