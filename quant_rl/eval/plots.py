@@ -83,6 +83,7 @@ def plot_equity_curve(
     daily_loss_limit: float | None = None,
     max_loss_limit: float | None = None,
     profit_target: float | None = None,
+    trades: pd.DataFrame | None = None,
     out_path: Path | str | None = None,
     dpi: int = 150,
 ) -> Figure:
@@ -90,32 +91,75 @@ def plot_equity_curve(
 
     Uses ``breach_events`` (list of dicts with 'time' key) for accurate vertical
     lines.  Falls back to legacy ``breaches`` count only when no events available.
+
+    When ``trades`` is given the x-axis is the trade order (each trade's close
+    time) so the chart reads as equity per order; otherwise it is a date axis.
     """
     _apply_style()
     fig, ax = plt.subplots(figsize=(14, 5))
 
-    peak = equity.cummax()
-    ax.plot(equity.index, np.asarray(equity.values), color=EQUITY_COLOR, label="Equity")
-    ax.plot(
-        equity.index,
-        np.asarray(peak.values),
-        color=PEAK_COLOR,
-        alpha=0.5,
-        linewidth=0.8,
-        label="Peak equity",
-    )
+    per_trade = False
+    times: Any = None
+    x: Any = None
+    peak: Any = None
+    if trades is not None and not trades.empty and "time" in trades.columns:
+        pairs = _pair_trades(trades)
+        if pairs:
+            times = pd.to_datetime([c["time"] for _, c in pairs])
+            per_trade = True
+            eq_at = equity.reindex(times).ffill().bfill()
+            eq_vals = np.asarray(eq_at.to_numpy(dtype=float))
+            x = np.arange(len(pairs), dtype=float)
+            ax.plot(x, eq_vals, color=EQUITY_COLOR, label="Equity")
+            peak = np.maximum.accumulate(eq_vals)
+            ax.plot(
+                x,
+                peak,
+                color=PEAK_COLOR,
+                alpha=0.5,
+                linewidth=0.8,
+                label="Peak equity",
+            )
+            step = max(1, len(x) // 12)
+            ax.set_xticks(x[::step])
+            ax.set_xticklabels([t.strftime("%m/%d %H:%M") for t in times[::step]], rotation=45)
+            ax.set_xlabel("Trade order")
+    if not per_trade:
+        ax.plot(equity.index, np.asarray(equity.values), color=EQUITY_COLOR, label="Equity")
+        peak = equity.cummax()
+        ax.plot(
+            equity.index,
+            np.asarray(peak.values),
+            color=PEAK_COLOR,
+            alpha=0.5,
+            linewidth=0.8,
+            label="Peak equity",
+        )
+        ax.set_xlabel("Date")
 
     if daily_loss_limit is not None:
         limit_s = daily_loss_limit_series(equity, daily_loss_limit)
-        ax.plot(
-            limit_s.index,
-            np.asarray(limit_s.values),
-            color="#ff9800",
-            linewidth=1.1,
-            linestyle=":",
-            drawstyle="steps-post",
-            label=f"Daily loss limit (${daily_loss_limit:,.0f} from day open)",
-        )
+        if per_trade:
+            limit_s = limit_s.reindex(times).ffill().bfill()
+            ax.plot(
+                x,
+                np.asarray(limit_s.values),
+                color="#ff9800",
+                linewidth=1.1,
+                linestyle=":",
+                drawstyle="steps-post",
+                label=f"Daily loss limit (${daily_loss_limit:,.0f} from day open)",
+            )
+        else:
+            ax.plot(
+                limit_s.index,
+                np.asarray(limit_s.values),
+                color="#ff9800",
+                linewidth=1.1,
+                linestyle=":",
+                drawstyle="steps-post",
+                label=f"Daily loss limit (${daily_loss_limit:,.0f} from day open)",
+            )
     if max_loss_limit is not None:
         ax.axhline(
             initial_balance - max_loss_limit,
@@ -136,10 +180,10 @@ def plot_equity_curve(
     # User preference: do not draw breach vertical lines on equity chart.
 
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"${x:,.0f}"))
-    apply_mpl_date_axis(ax, tz=pd.DatetimeIndex(equity.index).tz)
-    fig.autofmt_xdate()
+    if not per_trade:
+        apply_mpl_date_axis(ax, tz=pd.DatetimeIndex(equity.index).tz)
+        fig.autofmt_xdate()
     ax.set_title("Equity Curve", fontweight="bold")
-    ax.set_xlabel("Date")
     ax.set_ylabel("Balance (USD)")
     ax.legend(fontsize=8, loc="upper left")
     ax.grid(True)

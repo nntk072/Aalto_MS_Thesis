@@ -59,44 +59,104 @@ def plot_equity_curve(
     daily_loss_limit: float | None = None,
     max_loss_limit: float | None = None,
     profit_target: float | None = None,
+    trades: pd.DataFrame | None = None,
     out_path: Path | str | None = None,
 ) -> go.Figure:
     _check()
-    peak = equity.cummax()
+    from .plots import _pair_trades
 
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=equity.index,
-            y=equity.values,
-            mode="lines",
-            name="Equity",
-            line=dict(color=_EQUITY_COLOR, width=1.5),
+    per_trade = False
+    times: Any = None
+    x: Any = None
+    peak: Any = None
+    if trades is not None and not trades.empty and "time" in trades.columns:
+        pairs = _pair_trades(trades)
+        if pairs:
+            times = pd.to_datetime([c["time"] for _, c in pairs])
+            eq_at = equity.reindex(times).ffill().bfill()
+            eq_vals = np.asarray(eq_at.to_numpy(dtype=float))
+            x = np.arange(len(pairs))
+            per_trade = True
+
+    if per_trade:
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=eq_vals,
+                mode="lines",
+                name="Equity",
+                line=dict(color=_EQUITY_COLOR, width=1.5),
+            )
         )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=peak.index,
-            y=peak.values,
-            mode="lines",
-            name="Peak Equity",
-            line=dict(color=_PEAK_COLOR, width=0.8, dash="dot"),
-            opacity=0.6,
+        peak = np.maximum.accumulate(eq_vals)
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=peak,
+                mode="lines",
+                name="Peak Equity",
+                line=dict(color=_PEAK_COLOR, width=0.8, dash="dot"),
+                opacity=0.6,
+            )
         )
-    )
+        step = max(1, len(x) // 12)
+        tick_vals = x[::step].tolist()
+        tick_text = [t.strftime("%m/%d %H:%M") for t in times[::step]]
+        x_tick_format = None
+        x_title = "Trade order"
+    else:
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=equity.index,
+                y=equity.values,
+                mode="lines",
+                name="Equity",
+                line=dict(color=_EQUITY_COLOR, width=1.5),
+            )
+        )
+        peak = equity.cummax()
+        fig.add_trace(
+            go.Scatter(
+                x=peak.index,
+                y=peak.values,
+                mode="lines",
+                name="Peak Equity",
+                line=dict(color=_PEAK_COLOR, width=0.8, dash="dot"),
+                opacity=0.6,
+            )
+        )
+        tick_vals = None
+        tick_text = None
+        x_tick_format = "%Y-%m-%d"
+        x_title = "Date"
 
     if daily_loss_limit is not None:
         limit_s = daily_loss_limit_series(equity, daily_loss_limit)
-        fig.add_trace(
-            go.Scatter(
-                x=limit_s.index,
-                y=limit_s.values,
-                mode="lines",
-                name=f"Daily loss limit ${daily_loss_limit:,.0f} (from day open)",
-                line=dict(color="#ff9800", width=1.2, dash="dot"),
-                line_shape="hv",
+        if per_trade:
+            limit_s = limit_s.reindex(times).ffill().bfill()
+            fig.add_trace(
+                go.Scatter(
+                    x=x,
+                    y=limit_s.values,
+                    mode="lines",
+                    name=f"Daily loss limit ${daily_loss_limit:,.0f} (from day open)",
+                    line=dict(color="#ff9800", width=1.2, dash="dot"),
+                    line_shape="hv",
+                )
             )
-        )
+        else:
+            fig.add_trace(
+                go.Scatter(
+                    x=limit_s.index,
+                    y=limit_s.values,
+                    mode="lines",
+                    name=f"Daily loss limit ${daily_loss_limit:,.0f} (from day open)",
+                    line=dict(color="#ff9800", width=1.2, dash="dot"),
+                    line_shape="hv",
+                )
+            )
     if max_loss_limit is not None:
         y_lim = initial_balance - max_loss_limit
         fig.add_hline(
@@ -120,11 +180,13 @@ def plot_equity_curve(
     fig.update_layout(
         template=_TEMPLATE,
         title="Equity Curve",
-        xaxis_title="Date",
+        xaxis_title=x_title,
         yaxis_title="Balance (USD)",
         yaxis_tickprefix="$",
         yaxis_tickformat=",.0f",
-        xaxis_tickformat="%Y-%m-%d",
+        xaxis_tickformat=x_tick_format,
+        xaxis_tickvals=tick_vals,
+        xaxis_ticktext=tick_text,
         hovermode="x unified",
         height=450,
     )
