@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import Any
 
 from .state import TaskState
 
@@ -19,7 +20,7 @@ def _clip(text: object, limit: int = _CLIP) -> str:
     return raw[:limit] + "\n... [truncated]"
 
 
-def _agent_block(title: str, items: list, empty: str) -> list[str]:
+def _agent_block(title: str, items: list[Any], empty: str) -> list[str]:
     if not items:
         return [f"## {title}", empty, ""]
     lines = [f"## {title}", ""]

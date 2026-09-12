@@ -31,7 +31,7 @@ def test_spawn_writes_prompt_file_not_tmux_argv(tmp_path) -> None:
 
     def fake_run(
         cmd: list[str], capture: bool = True, timeout: float | None = None, heartbeat: float = 0
-    ) -> subprocess.CompletedProcess:
+    ) -> subprocess.CompletedProcess[str]:
         calls.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
@@ -53,7 +53,7 @@ def test_spawn_keep_alive_sets_remain_on_exit(tmp_path) -> None:
 
     def fake_run(
         cmd: list[str], capture: bool = True, timeout: float | None = None, heartbeat: float = 0
-    ) -> subprocess.CompletedProcess:
+    ) -> subprocess.CompletedProcess[str]:
         calls.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
@@ -66,7 +66,7 @@ def test_spawn_keep_alive_sets_remain_on_exit(tmp_path) -> None:
 
 def test_collect_raises_on_nonzero_exit(tmp_path) -> None:
     sm = SessionManager(workspace=tmp_path, dry_run=False)
-    sm._run = lambda cmd, capture=True, timeout=None, heartbeat=0: subprocess.CompletedProcess(  # type: ignore[method-assign]
+    sm._run = lambda cmd, capture=True, timeout=None, heartbeat=0: subprocess.CompletedProcess[str](  # type: ignore[method-assign]
         cmd, 0, stdout="", stderr=""
     )
     session = sm.spawn(_opencode(), "planner", "hi", task_id="t")
@@ -82,7 +82,7 @@ def test_collect_raises_on_nonzero_exit(tmp_path) -> None:
 
 def test_collect_raises_on_empty_output(tmp_path) -> None:
     sm = SessionManager(workspace=tmp_path, dry_run=False)
-    sm._run = lambda cmd, capture=True, timeout=None, heartbeat=0: subprocess.CompletedProcess(  # type: ignore[method-assign]
+    sm._run = lambda cmd, capture=True, timeout=None, heartbeat=0: subprocess.CompletedProcess[str](  # type: ignore[method-assign]
         cmd, 0, stdout="", stderr=""
     )
     session = sm.spawn(_opencode(), "planner", "hi", task_id="t")
@@ -98,7 +98,7 @@ def test_collect_raises_on_empty_output(tmp_path) -> None:
 
 def test_collect_raises_on_exec_header_only(tmp_path) -> None:
     sm = SessionManager(workspace=tmp_path, dry_run=False)
-    sm._run = lambda cmd, capture=True, timeout=None, heartbeat=0: subprocess.CompletedProcess(  # type: ignore[method-assign]
+    sm._run = lambda cmd, capture=True, timeout=None, heartbeat=0: subprocess.CompletedProcess[str](  # type: ignore[method-assign]
         cmd, 0, stdout="", stderr=""
     )
     session = sm.spawn(_opencode(), "planner", "hi", task_id="t")
@@ -140,13 +140,13 @@ def test_build_command_opencode_puts_flags_before_prompt() -> None:
 
 def test_collect_timeout_includes_log_tail(tmp_path) -> None:
     sm = SessionManager(workspace=tmp_path, dry_run=False)
-    sm._run = lambda cmd, capture=True, timeout=None, heartbeat=0: subprocess.CompletedProcess(  # type: ignore[method-assign]
+    sm._run = lambda cmd, capture=True, timeout=None, heartbeat=0: subprocess.CompletedProcess[str](  # type: ignore[method-assign]
         cmd, 0, stdout="", stderr=""
     )
     session = sm.spawn(_opencode(), "planner", "hi", task_id="t")
     run_dir = tmp_path / "orchestra" / "state" / "runs" / session
     (run_dir / "output.log").write_text("still grepping plots.py\n")
-    sm.is_running = lambda _name: True  # type: ignore[method-assign]
+    sm.is_running = lambda _name: True  # type: ignore[assignment]
     try:
         sm.collect(session, timeout=0, idle_timeout=0, lines=20)
         raise AssertionError("expected TimeoutError")
@@ -157,9 +157,9 @@ def test_collect_timeout_includes_log_tail(tmp_path) -> None:
 
 def test_wait_for_idle_vanished_session_fails(tmp_path) -> None:
     sm = SessionManager(workspace=tmp_path, dry_run=False)
-    sm.session_exists = lambda _n: False  # type: ignore[method-assign]
-    sm.exit_code = lambda _n: None  # type: ignore[method-assign]
-    sm.is_running = lambda _n: False  # type: ignore[method-assign]
+    sm.session_exists = lambda _n: False  # type: ignore[assignment]
+    sm.exit_code = lambda _n: None  # type: ignore[assignment]
+    sm.is_running = lambda _n: False  # type: ignore[assignment]
     assert sm.wait_for_idle("gone", timeout=20, poll_interval=1) is False
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 import time
+from typing import Any
 
 import click
 
@@ -15,7 +16,7 @@ from .state import Phase, TaskState, list_tasks
 
 
 @click.group()
-def main():
+def main() -> None:
     """Oasis Multi-Model Coding Orchestra."""
     pass
 
@@ -81,17 +82,17 @@ def main():
 )
 def run(
     task: str,
-    complexity,
-    planners,
-    reviewers,
-    critics,
-    dry_run,
-    escalate,
-    max_fixes,
-    keep_alive,
-    resume,
-    start_phase,
-):
+    complexity: str | None,
+    planners: int,
+    reviewers: int,
+    critics: int,
+    dry_run: bool,
+    escalate: bool,
+    max_fixes: int,
+    keep_alive: bool,
+    resume: str | None,
+    start_phase: str | None,
+) -> None:
     """Run a task through the full orchestra pipeline."""
     pipeline = Pipeline(
         planner_count=planners,
@@ -121,7 +122,7 @@ def run(
 
 
 @main.command()
-def stats():
+def stats() -> None:
     """Show model usage statistics."""
     pipeline = Pipeline()
     model_stats = pipeline.router.stats()
@@ -137,7 +138,7 @@ def stats():
 
 
 @main.command()
-def roster():
+def roster() -> None:
     """Show available models and their capabilities."""
     pipeline = Pipeline()
     click.echo("Model Roster")
@@ -161,7 +162,7 @@ def roster():
 
 
 @main.command()
-def tasks():
+def tasks() -> None:
     """List all orchestra tasks."""
     state_dir = WORKSPACE / "orchestra" / "state"
     all_tasks = list_tasks(state_dir)
@@ -178,7 +179,7 @@ def tasks():
 
 @main.command()
 @click.argument("task_id")
-def show(task_id):
+def show(task_id: str) -> None:
     """Show details of a specific task."""
     state_dir = WORKSPACE / "orchestra" / "state"
     try:
@@ -235,7 +236,7 @@ def show(task_id):
 @main.command()
 @click.argument("task_id")
 @click.option("--max-fixes", default=3, help="Maximum fix iterations.", type=int)
-def fix(task_id, max_fixes):
+def fix(task_id: str, max_fixes: int) -> None:
     """Run fix loop on an existing task."""
     state_dir = WORKSPACE / "orchestra" / "state"
     try:
@@ -260,7 +261,7 @@ def fix(task_id, max_fixes):
 
 @main.command()
 @click.option("--all", "kill_all", is_flag=True, help="Kill all orchestra sessions.")
-def cleanup(kill_all):
+def cleanup(kill_all: bool) -> None:
     """Clean up orchestra-managed tmux sessions."""
     pipeline = Pipeline()
     if kill_all:
@@ -281,7 +282,7 @@ def cleanup(kill_all):
 @click.argument("task")
 @click.option("--model", help="Specific model to use.")
 @click.option("--dry-run", is_flag=True, help="Show commands without executing.")
-def plan(task, model, dry_run):
+def plan(task: str, model: str | None, dry_run: bool) -> None:
     """Quick plan: triage + single planner. No implementation."""
     pipeline = Pipeline(dry_run=dry_run)
     router = pipeline.router
@@ -330,7 +331,7 @@ def plan(task, model, dry_run):
 @click.option(
     "--month", default=None, help="Month to report on (YYYY-MM). Defaults to current month."
 )
-def cost(date, month):
+def cost(date: str | None, month: str | None) -> None:
     """Show cost and token usage report."""
     state_dir = WORKSPACE / "orchestra" / "state"
     from .cost import CostTracker
@@ -376,7 +377,7 @@ def cost(date, month):
 
 @main.command()
 @click.argument("task_id")
-def cost_task(task_id):
+def cost_task(task_id: str) -> None:
     """Show cost breakdown for a specific task."""
     state_dir = WORKSPACE / "orchestra" / "state"
     from .cost import CostTracker
@@ -397,7 +398,7 @@ def cost_task(task_id):
 
 
 @main.command()
-def perf():
+def perf() -> None:
     """Show model performance statistics across all tasks."""
     state_dir = WORKSPACE / "orchestra" / "state"
     all_tasks = list_tasks(state_dir)
@@ -406,13 +407,14 @@ def perf():
         return
 
     # Aggregate performance across all tasks
-    perf_data = {}
+    perf_data: dict[str, dict[str, Any]] = {}
     for t in all_tasks:
         try:
             state = TaskState.load(t["task_id"], state_dir)
         except (FileNotFoundError, json.JSONDecodeError):
             continue
-        for model, data in state.data.get("performance", {}).items():
+        performance: dict[str, dict[str, Any]] = state.data.get("performance", {})
+        for model, data in performance.items():
             if model not in perf_data:
                 perf_data[model] = {"total_calls": 0, "successes": 0, "roles": {}, "tokens_used": 0}
             perf_data[model]["total_calls"] += data["total_calls"]

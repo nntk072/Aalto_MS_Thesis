@@ -4,19 +4,20 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any
 
 VALID_COMPLEXITY = frozenset({"trivial", "medium", "complex"})
 VALID_VERDICTS = frozenset({"pass", "conditional_pass", "fail"})
 
 
-def extract_json_objects(text: str) -> list[dict]:
+def extract_json_objects(text: str) -> list[dict[str, Any]]:
     """Return dicts decoded from JSON objects in ``text``.
 
     Uses ``JSONDecoder.raw_decode`` so a greedy ``{...}`` regex cannot swallow
     the whole pane (prompt template + model output).
     """
     decoder = json.JSONDecoder()
-    objects: list[dict] = []
+    objects: list[dict[str, Any]] = []
     i = 0
     while i < len(text):
         if text[i] != "{":

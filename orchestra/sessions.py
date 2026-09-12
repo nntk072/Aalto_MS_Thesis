@@ -12,6 +12,7 @@ import sys
 import time
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 from .models import Model
 
@@ -24,7 +25,7 @@ class SessionManager:
     def __init__(self, workspace: Path, dry_run: bool = False):
         self.workspace = workspace
         self.dry_run = dry_run
-        self.active_sessions: dict[str, dict] = {}
+        self.active_sessions: dict[str, dict[str, Any]] = {}
         self.runs_dir = workspace / "orchestra" / "state" / "runs"
 
     @staticmethod
@@ -47,7 +48,7 @@ class SessionManager:
         capture: bool = True,
         timeout: float | None = None,
         heartbeat: float = 0,
-    ) -> subprocess.CompletedProcess:
+    ) -> subprocess.CompletedProcess[str]:
         """Run a command as argv (never through a shell)."""
         if self.dry_run:
             print(f"[DRY RUN] {' '.join(cmd)}")
@@ -70,7 +71,7 @@ class SessionManager:
         cmd: list[str],
         timeout: float | None,
         heartbeat: float,
-    ) -> subprocess.CompletedProcess:
+    ) -> subprocess.CompletedProcess[str]:
         """Run ``cmd``, streaming stdout and printing a beat when it is silent."""
         proc = subprocess.Popen(
             cmd,

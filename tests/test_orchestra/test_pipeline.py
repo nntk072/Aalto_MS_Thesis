@@ -41,7 +41,9 @@ def test_dry_run_reaches_done(tmp_path, monkeypatch) -> None:
         critic_count=1,
         reviewer_count=1,
     )
-    pipeline.router.select = lambda role, count=1, **kw: [dummy] * count  # type: ignore[method-assign]
+    pipeline.router.select = lambda role, count=1, task_complexity="medium", escalate=False: (  # type: ignore[method-assign]
+        [dummy] * count
+    )
     state = pipeline.run("add a comment")
     assert state.phase == Phase.DONE
     report = Path(state.data["final_report"])
@@ -58,7 +60,12 @@ def test_complexity_override_applied_before_triage(tmp_path, monkeypatch) -> Non
     pipeline = Pipeline(workspace=tmp_path, dry_run=True, planner_count=1)
     seen: list[str] = []
 
-    def select(role, count=1, task_complexity="medium", **kw):
+    def select(
+        role: str,
+        count: int = 1,
+        task_complexity: str = "medium",
+        escalate: bool = False,
+    ) -> list[Model]:
         seen.append(task_complexity)
         return [dummy] * count
 
@@ -75,11 +82,13 @@ def test_verification_reenters_fixing(tmp_path) -> None:
 
     def fake_fix() -> None:
         calls.append("fix")
+        assert pipeline.state is not None
         pipeline.state.data["fix_loop_count"] = pipeline.state.data.get("fix_loop_count", 0) + 1
         pipeline.state.save()
 
     def fake_verify() -> None:
         calls.append("verify")
+        assert pipeline.state is not None
         if pipeline.state.data.get("fix_loop_count", 0) < 2:
             pipeline.state.set_phase(Phase.FIXING)
         else:
@@ -92,6 +101,7 @@ def test_verification_reenters_fixing(tmp_path) -> None:
     state.set_phase(Phase.FIXING)
     pipeline.run("fix me", resume_from=task_id)
     assert calls == ["fix", "verify", "fix", "verify"]
+    assert pipeline.state is not None
     assert pipeline.state.phase == Phase.DONE
 
 
@@ -122,7 +132,9 @@ def test_resume_failed_restarts_failed_step(tmp_path, monkeypatch) -> None:
     pipeline = Pipeline(
         workspace=tmp_path, dry_run=True, planner_count=1, critic_count=1, reviewer_count=1
     )
-    pipeline.router.select = lambda role, count=1, **kw: [dummy] * count  # type: ignore[method-assign]
+    pipeline.router.select = lambda role, count=1, task_complexity="medium", escalate=False: (  # type: ignore[method-assign]
+        [dummy] * count
+    )
     state = TaskState("task-r", "t", pipeline.state_dir)
     state.set_phase(Phase.VERIFICATION)
     state.set_phase(Phase.FAILED)
@@ -137,7 +149,9 @@ def test_resume_from_step_2(tmp_path, monkeypatch) -> None:
     pipeline = Pipeline(
         workspace=tmp_path, dry_run=True, planner_count=1, critic_count=1, reviewer_count=1
     )
-    pipeline.router.select = lambda role, count=1, **kw: [dummy] * count  # type: ignore[method-assign]
+    pipeline.router.select = lambda role, count=1, task_complexity="medium", escalate=False: (  # type: ignore[method-assign]
+        [dummy] * count
+    )
     state = TaskState("task-s2", "t", pipeline.state_dir)
     state.set_phase(Phase.CRITIQUE)
     result = pipeline.run("t", resume_from="task-s2", start_phase="2")
@@ -161,7 +175,7 @@ def test_run_verification_uses_interpreter_and_package_paths(tmp_path) -> None:
         capture: bool = True,
         timeout: float | None = None,
         heartbeat: float = 0,
-    ) -> subprocess.CompletedProcess:
+    ) -> subprocess.CompletedProcess[str]:
         recorded.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
@@ -194,8 +208,18 @@ def test_fixing_skips_when_review_passed_and_tests_not_run(tmp_path, monkeypatch
     dummy = _dummy()
     dummy.roles = [*dummy.roles, "fixer"]
     selected: list[str] = []
+
+    def select(
+        role: str,
+        count: int = 1,
+        task_complexity: str = "medium",
+        escalate: bool = False,
+    ) -> list[Model]:
+        selected.append(role)
+        return [dummy]
+
     pipeline = Pipeline(workspace=tmp_path, dry_run=True)
-    pipeline.router.select = lambda role, count=1, **kw: selected.append(role) or [dummy]  # type: ignore[method-assign]
+    pipeline.router.select = select  # type: ignore[method-assign]
     pipeline.state = TaskState("task-skipfix", "t", pipeline.state_dir)
     pipeline.state.data["review_verdict"] = "pass"
     pipeline.state.data["review_synthesis_output"] = "lgtm"
@@ -208,8 +232,18 @@ def test_fixing_runs_when_verification_already_failed(tmp_path, monkeypatch) -> 
     dummy = _dummy()
     dummy.roles = [*dummy.roles, "fixer"]
     selected: list[str] = []
+
+    def select(
+        role: str,
+        count: int = 1,
+        task_complexity: str = "medium",
+        escalate: bool = False,
+    ) -> list[Model]:
+        selected.append(role)
+        return [dummy]
+
     pipeline = Pipeline(workspace=tmp_path, dry_run=True)
-    pipeline.router.select = lambda role, count=1, **kw: selected.append(role) or [dummy]  # type: ignore[method-assign]
+    pipeline.router.select = select  # type: ignore[method-assign]
     pipeline.state = TaskState("task-dofix", "t", pipeline.state_dir)
     pipeline.state.data["review_verdict"] = "pass"
     pipeline.state.data["review_synthesis_output"] = "lgtm"

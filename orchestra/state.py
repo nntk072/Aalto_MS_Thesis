@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import time
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
-class Phase(str, Enum):
+class Phase(StrEnum):
     """Pipeline phases in order."""
+
     PENDING = "pending"
     TRIAGE = "triage"
     PLANNING = "planning"
@@ -83,9 +84,7 @@ class Phase(str, Enum):
             phase = cls(key)
         except ValueError as exc:
             names = ", ".join(p.value for p in cls.runnable())
-            raise ValueError(
-                f"Unknown phase {raw!r}. Use a name or step 1-10 ({names})"
-            ) from exc
+            raise ValueError(f"Unknown phase {raw!r}. Use a name or step 1-10 ({names})") from exc
         if phase not in cls.runnable():
             raise ValueError(f"Cannot start from {phase.value}")
         return phase
@@ -99,7 +98,7 @@ class TaskState:
         task_id: str,
         task_description: str,
         state_dir: Path,
-        data: Optional[dict] = None,
+        data: dict[str, Any] | None = None,
     ):
         self.task_id = task_id
         self.task_description = task_description
@@ -146,7 +145,7 @@ class TaskState:
         self.state_file.write_text(json.dumps(self.data, indent=2, default=str))
 
     @classmethod
-    def load(cls, task_id: str, state_dir: Path) -> "TaskState":
+    def load(cls, task_id: str, state_dir: Path) -> TaskState:
         """Load state from disk."""
         state_file = state_dir / f"{task_id}.json"
         if not state_file.exists():
@@ -173,33 +172,39 @@ class TaskState:
 
     def add_planner_output(self, model: str, output: str, session: str) -> None:
         """Record a planner's output."""
-        self.data["planner_outputs"].append({
-            "model": model,
-            "output": output,
-            "session": session,
-            "timestamp": time.time(),
-        })
+        self.data["planner_outputs"].append(
+            {
+                "model": model,
+                "output": output,
+                "session": session,
+                "timestamp": time.time(),
+            }
+        )
         self.data["planner_session_map"][session] = model
         self.save()
 
     def add_critic_output(self, model: str, output: str, session: str) -> None:
         """Record a critic's output."""
-        self.data["critic_outputs"].append({
-            "model": model,
-            "output": output,
-            "session": session,
-            "timestamp": time.time(),
-        })
+        self.data["critic_outputs"].append(
+            {
+                "model": model,
+                "output": output,
+                "session": session,
+                "timestamp": time.time(),
+            }
+        )
         self.save()
 
     def add_reviewer_output(self, model: str, output: str, session: str) -> None:
         """Record a reviewer's output."""
-        self.data["review_outputs"].append({
-            "model": model,
-            "output": output,
-            "session": session,
-            "timestamp": time.time(),
-        })
+        self.data["review_outputs"].append(
+            {
+                "model": model,
+                "output": output,
+                "session": session,
+                "timestamp": time.time(),
+            }
+        )
         self.save()
 
     def set_triage(self, output: str, model: str, complexity: str) -> None:
@@ -231,16 +236,20 @@ class TaskState:
 
     def add_fix_output(self, output: str, model: str) -> None:
         """Record a fix iteration output."""
-        self.data["fix_outputs"].append({
-            "model": model,
-            "output": output,
-            "loop": self.data["fix_loop_count"],
-            "timestamp": time.time(),
-        })
+        self.data["fix_outputs"].append(
+            {
+                "model": model,
+                "output": output,
+                "loop": self.data["fix_loop_count"],
+                "timestamp": time.time(),
+            }
+        )
         self.data["fix_loop_count"] += 1
         self.save()
 
-    def record_performance(self, model: str, role: str, success: bool, tokens_used: int = 0) -> None:
+    def record_performance(
+        self, model: str, role: str, success: bool, tokens_used: int = 0
+    ) -> None:
         """Record model performance for a role."""
         perf = self.data.setdefault("performance", {})
         if model not in perf:
@@ -256,18 +265,20 @@ class TaskState:
         perf[model]["tokens_used"] = perf[model].get("tokens_used", 0) + tokens_used
         self.save()
 
-    def set_verification(self, result: dict) -> None:
+    def set_verification(self, result: dict[str, Any]) -> None:
         """Store verification results."""
         self.data["verification_result"] = result
         self.save()
 
     def add_error(self, error: str) -> None:
         """Record an error."""
-        self.data["errors"].append({
-            "error": error,
-            "phase": self.data["phase"],
-            "timestamp": time.time(),
-        })
+        self.data["errors"].append(
+            {
+                "error": error,
+                "phase": self.data["phase"],
+                "timestamp": time.time(),
+            }
+        )
         self.save()
 
     def get_planner_outputs_text(self) -> str:
@@ -298,7 +309,7 @@ class TaskState:
         return "\n\n".join(parts)
 
 
-def list_tasks(state_dir: Path) -> list[dict]:
+def list_tasks(state_dir: Path) -> list[dict[str, Any]]:
     """List all tasks in the state directory."""
     if not state_dir.exists():
         return []
@@ -306,12 +317,14 @@ def list_tasks(state_dir: Path) -> list[dict]:
     for f in sorted(state_dir.glob("task-*.json")):
         try:
             data = json.loads(f.read_text())
-            tasks.append({
-                "task_id": data.get("task_id"),
-                "phase": data.get("phase"),
-                "description": data.get("task_description", "")[:60],
-                "updated_at": data.get("updated_at"),
-            })
+            tasks.append(
+                {
+                    "task_id": data.get("task_id"),
+                    "phase": data.get("phase"),
+                    "description": data.get("task_description", "")[:60],
+                    "updated_at": data.get("updated_at"),
+                }
+            )
         except (json.JSONDecodeError, KeyError):
             continue
     return tasks
@@ -320,4 +333,3 @@ def list_tasks(state_dir: Path) -> list[dict]:
 def generate_task_id() -> str:
     """Generate a unique task ID."""
     return f"task-{int(time.time())}"
-

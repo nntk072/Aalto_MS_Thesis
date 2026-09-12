@@ -6,6 +6,7 @@ import json
 import tarfile
 import time
 from pathlib import Path
+from typing import Any
 
 _SKIP_DIRS = {
     ".git",
@@ -49,7 +50,7 @@ def iter_backup_paths(workspace: Path) -> list[Path]:
     return found
 
 
-def create_snapshot(workspace: Path, dest: Path) -> dict:
+def create_snapshot(workspace: Path, dest: Path) -> dict[str, Any]:
     """Write a tar.gz of the workspace and return backup metadata."""
     dest.mkdir(parents=True, exist_ok=True)
     files = iter_backup_paths(workspace)
@@ -99,9 +100,7 @@ def list_slots(task_root: Path) -> list[str]:
         return ["start"]
     if not task_root.is_dir():
         return []
-    return sorted(
-        p.name for p in task_root.iterdir() if p.is_dir() and (p / _MANIFEST).is_file()
-    )
+    return sorted(p.name for p in task_root.iterdir() if p.is_dir() and (p / _MANIFEST).is_file())
 
 
 def resolve_slot(task_root: Path, step: str) -> Path:
