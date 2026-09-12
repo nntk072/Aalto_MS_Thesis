@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import json
-import os
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
-from .models import Model, DEFAULT_MODELS
+from .models import DEFAULT_MODELS, Model
 
 
 class QuotaTracker:
@@ -17,7 +16,7 @@ class QuotaTracker:
     def __init__(self, state_dir: Path):
         self.state_dir = state_dir
         self.usage_file = state_dir / "usage.json"
-        self._data: dict = {}
+        self._data: dict[str, Any] = {}
         self._load()
 
     def _load(self) -> None:
@@ -30,9 +29,10 @@ class QuotaTracker:
     def _today(self) -> str:
         return time.strftime("%Y-%m-%d")
 
-    def get_usage(self, model_name: str) -> dict:
+    def get_usage(self, model_name: str) -> dict[str, int]:
         today = self._today()
-        return self._data.get(today, {}).get(model_name, {"tokens": 0, "calls": 0})
+        entry = self._data.get(today, {}).get(model_name, {})
+        return {"tokens": int(entry.get("tokens", 0)), "calls": int(entry.get("calls", 0))}
 
     def record_usage(self, model_name: str, tokens: int) -> None:
         today = self._today()
@@ -64,8 +64,8 @@ class ModelRouter:
 
     def __init__(
         self,
-        models: Optional[list[Model]] = None,
-        state_dir: Optional[Path] = None,
+        models: list[Model] | None = None,
+        state_dir: Path | None = None,
     ):
         self.models = models or DEFAULT_MODELS
         state_dir = state_dir or Path(__file__).parent / "state"
@@ -108,9 +108,7 @@ class ModelRouter:
 
         # If nothing left and we filtered escalation models, re-add them
         if not within_quota and task_complexity == "medium" and not escalate:
-            within_quota = [
-                m for m in available if not self.quota.quota_exceeded(m)
-            ]
+            within_quota = [m for m in available if not self.quota.quota_exceeded(m)]
 
         # Last resort: return whatever is available even over quota
         if not within_quota:
@@ -135,7 +133,8 @@ class ModelRouter:
         for model in selected:
             # Fallback chain: other models of same role, different provider, by priority
             fallbacks = [
-                m for m in all_candidates
+                m
+                for m in all_candidates
                 if m.name != model.name
                 and m.provider != model.provider
                 and m.is_available()
@@ -144,7 +143,7 @@ class ModelRouter:
             result.append((model, fallbacks))
         return result
 
-    def stats(self) -> dict:
+    def stats(self) -> dict[str, Any]:
         """Return quota usage stats for all models."""
         stats = {}
         for model in self.models:

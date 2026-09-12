@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
+from typing import Any
 
 # Approximate cost per 1M tokens (USD) — update as pricing changes
 MODEL_COSTS: dict[str, dict[str, float]] = {
@@ -24,7 +25,7 @@ class CostTracker:
     def __init__(self, state_dir: Path):
         self.state_dir = state_dir
         self.cost_file = state_dir / "costs.json"
-        self._data: dict = {}
+        self._data: dict[str, Any] = {}
         self._load()
 
     def _load(self) -> None:
@@ -47,7 +48,7 @@ class CostTracker:
         prompt_tokens: int,
         completion_tokens: int,
         task_id: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Record token usage for a model call. Returns cost breakdown."""
         today = self._today()
 
@@ -86,7 +87,7 @@ class CostTracker:
         self._save()
         return record
 
-    def get_daily_summary(self, date: str | None = None) -> dict:
+    def get_daily_summary(self, date: str | None = None) -> dict[str, Any]:
         """Get cost summary for a specific date (defaults to today)."""
         date = date or self._today()
         day_data = self._data.get(date, {"calls": [], "totals": {}})
@@ -104,10 +105,15 @@ class CostTracker:
             },
         }
 
-    def get_monthly_summary(self, month: str | None = None) -> dict:
+    def get_monthly_summary(self, month: str | None = None) -> dict[str, Any]:
         """Get aggregated cost summary for a month."""
         month = month or time.strftime("%Y-%m")
-        monthly = {"prompt_tokens": 0, "completion_tokens": 0, "total_cost": 0.0, "calls": 0}
+        monthly: dict[str, Any] = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_cost": 0.0,
+            "calls": 0,
+        }
 
         for date, day_data in self._data.items():
             if date.startswith(month):
@@ -122,7 +128,7 @@ class CostTracker:
         monthly["month"] = month
         return monthly
 
-    def get_task_cost(self, task_id: str) -> dict | None:
+    def get_task_cost(self, task_id: str) -> dict[str, Any] | None:
         """Get total cost for a specific task across all days."""
         task_calls = []
         total_cost = 0.0
