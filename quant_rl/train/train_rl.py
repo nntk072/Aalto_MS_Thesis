@@ -49,7 +49,7 @@ from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features
 from quant_rl.models.agent import build_agent
 from quant_rl.train.auxiliary_training import AuxiliaryTrainerCallback
 from quant_rl.train.callbacks import BestCheckpointEvalCallback
-from quant_rl.utils.device import get_device
+from quant_rl.utils.device import get_device, scale_training_cfg
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -258,7 +258,15 @@ def main() -> None:
     cfg = _load_merged_config(args)
 
     device = get_device(cfg.get("device"))
-    log.info("Using device: %s", device)
+    scale_training_cfg(cfg, device, args.arch)
+    log.info(
+        "Using device: %s  n_envs=%s  ppo.batch_size=%s  ppo.n_steps=%s  n_epochs=%s",
+        device,
+        cfg.env.n_envs,
+        cfg.ppo.batch_size,
+        cfg.ppo.n_steps,
+        cfg.ppo.n_epochs,
+    )
 
     # Override for MVP mode
     if args.mvp:
