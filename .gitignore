@@ -188,3 +188,6 @@ zscaler.crt
 .vscode/
 # Added by code-review-graph
 .code-review-graph/
+
+# Orchestra runtime (task JSON, agent logs, backups, reports)
+orchestra/state/
