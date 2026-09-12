@@ -1,12 +1,69 @@
-# Agent instructions
+# Aalto_MS_Thesis — Agent Guide
 
-All agent rules for this repo live in **[.agents/rules/](.agents/rules/)**.
+Quantitative RL trading system. PPO/SAC agents learn entry/exit timing on US100/US500
+using structure-aware features (SMT divergence, PO3 state, liquidity sweeps, FVG zones).
 
-Start with the index and activation map: **[.agents/rules/README.md](.agents/rules/README.md)**
+## Build & Test
 
-It defines every per-topic rule file (RTK shell proxy, token efficiency,
-git commits, Python standards, testing, security, code review, workflow),
-when each activates, and their priority order.
+```bash
+uv sync                              # install deps
+python scripts/prepare_data.py       # raw CSV → parquet → features
+python -m quant_rl.train.train_rl --mvp   # smoke test (30 days)
+pytest                               # full test suite
+pytest -m "not slow"                 # skip slow torch/SB3 tests
+pytest --cov=quant_rl --cov-report=term-missing -q   # coverage
+ruff check quant_rl/ && ruff format quant_rl/
+mypy quant_rl/
+```
+
+## Architecture
+
+```
+data → features → envs → models → train → evaluation
+              ↕           ↕
+         backtest ←───────┘
+```
+
+| Domain | Entry File | Role |
+|--------|-----------|------|
+| data | `quant_rl/data/pipeline.py` | load → resample → clean → session → split |
+| features | `quant_rl/features/build.py` | indicators + SMT + structure + PO3 → matrix |
+| envs | `quant_rl/envs/trading_env.py` | Gymnasium env (obs, act, reward) |
+| backtest | `quant_rl/backtest/engine.py` | event-driven engine (fill, SL/TP, guardrails) |
+| models | `quant_rl/models/agent.py` | encoder + PPO/SAC wiring |
+| train | `quant_rl/train/train_rl.py` | full training loop |
+| evaluation | `quant_rl/evaluation/runner.py` | episode runner + metrics |
+| live | `quant_rl/live/rl_strategy.py` | MT5 bridge |
+
+Full architecture map: `.agents/architecture.md`
+Domain-level context: `.agents/domain_maps/*.md`
+
+## Critical Invariants (DO NOT VIOLATE)
+
+1. **Causal features only** — no future data in any indicator. All HTF features
+   use `align_timeframes` with forward-fill (never backward).
+2. **Train-only normalization** — `rolling_zscore` fits on train_mask only.
+   Test rows use last known training statistics.
+3. **Purged walk-forward** — `purged_walk_forward()` removes `purge_bars` from
+   train end and `embargo_bars` from test start.
+4. **Session labels are eligibility flags** — never drop bars from feature
+   dataset based on session. `filter_session` is mask-only.
+5. **Config is single source of truth** — `quant_rl/config/default.yaml`.
+   All YAML keys are read via `cfg.<path>`. Adding a feature flag? Add YAML key first.
+6. **Cache versioning** — `FEATURE_CACHE_VERSION` and `BAR_CACHE_VERSION` must
+   bump when output schema changes.
+7. **Live risk ≈ training risk** — `live_risk_overrides` must stay aligned with
+   `ftmo` dollar limits. Silent divergence is the failure mode.
+
+## Context Routing
+
+Task → read the matching domain map in `.agents/domain_maps/` first.
+Use code-review-graph MCP tools (`query_graph_tool`, `get_impact_radius_tool`)
+to narrow scope before reading source.
+
+## Rules
+
+All process rules: `.agents/rules/README.md`
 
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: code-review-graph
