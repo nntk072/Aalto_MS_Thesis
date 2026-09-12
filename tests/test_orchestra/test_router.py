@@ -1,0 +1,89 @@
+"""Tests for quota-aware model routing."""
+
+from __future__ import annotations
+
+from orchestra.models import Model
+from orchestra.router import ModelRouter
+
+
+def _model(**kwargs) -> Model:
+    defaults = {
+        "name": "m",
+        "provider": "p",
+        "cli": "opencode",
+        "roles": ["triage", "planner"],
+        "priority": 2,
+        "quota_daily": 1000,
+        "env_var": "ORCHESTRA_TEST_KEY",
+    }
+    defaults.update(kwargs)
+    return Model(**defaults)
+
+
+def test_select_skips_escalation_for_trivial(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ORCHESTRA_TEST_KEY", "1")
+    monkeypatch.setenv("GEMINI_TEST_KEY", "1")
+    gemini = _model(
+        name="gemini-3.1-pro-preview",
+        provider="gemini",
+        cli="gemini",
+        roles=["triage"],
+        priority=1,
+        escalation_only=True,
+        env_var="GEMINI_TEST_KEY",
+    )
+    local = _model(name="default", provider="opencode", priority=2)
+    router = ModelRouter(models=[gemini, local], state_dir=tmp_path)
+    selected = router.select("triage", count=1, task_complexity="trivial", escalate=False)
+    assert selected == [local]
+
+
+def test_select_uses_gemini_when_escalating(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ORCHESTRA_TEST_KEY", "1")
+    monkeypatch.setenv("GEMINI_TEST_KEY", "1")
+    gemini = _model(
+        name="g",
+        provider="gemini",
+        roles=["triage"],
+        priority=1,
+        escalation_only=True,
+        env_var="GEMINI_TEST_KEY",
+    )
+    local = _model(name="default", provider="opencode", priority=2)
+    router = ModelRouter(models=[gemini, local], state_dir=tmp_path)
+    selected = router.select("triage", count=1, task_complexity="trivial", escalate=True)
+    assert selected == [gemini]
+
+
+def test_quota_record_and_exceeded(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ORCHESTRA_TEST_KEY", "1")
+    model = _model(quota_daily=10)
+    router = ModelRouter(models=[model], state_dir=tmp_path)
+    assert not router.quota.quota_exceeded(model)
+    router.quota.record_usage(model.display_name, 10)
+    assert router.quota.quota_exceeded(model)
+    stats = router.stats()
+    assert stats[model.display_name]["tokens_used"] == 10
+    assert stats[model.display_name]["calls"] == 1
+
+
+def test_select_synthesizer_uses_opencode_not_gemini(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ORCHESTRA_TEST_KEY", "1")
+    monkeypatch.setenv("GEMINI_TEST_KEY", "1")
+    gemini = _model(
+        name="g",
+        provider="gemini",
+        roles=["synthesizer"],
+        priority=1,
+        escalation_only=True,
+        env_var="GEMINI_TEST_KEY",
+    )
+    local = _model(
+        name="default",
+        provider="opencode",
+        roles=["synthesizer"],
+        priority=2,
+    )
+    router = ModelRouter(models=[gemini, local], state_dir=tmp_path)
+    selected = router.select("synthesizer", count=1, task_complexity="medium", escalate=False)
+    assert selected == [local]
