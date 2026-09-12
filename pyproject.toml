@@ -58,6 +58,7 @@ dependencies = [
 dev = [
     "code-review-graph",
     "mypy>=1.11",
+    "pytest-timeout>=2.3",
     "ruff>=0.7",
 ]
 

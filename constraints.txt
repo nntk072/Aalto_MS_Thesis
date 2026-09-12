@@ -120,6 +120,7 @@ pyjwt==2.13.0
 pyparsing==3.2.5
 pyproject-hooks==1.2.0
 pytest-cov==7.1.0
+pytest-timeout==2.4.0
 pytest-xdist==3.8.0
 pytest==9.1.1
 python-dateutil==2.9.0.post0
