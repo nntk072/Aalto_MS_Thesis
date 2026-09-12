@@ -6,6 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from orchestra.models import Model
 from orchestra.pipeline import Pipeline
 from orchestra.state import Phase, TaskState, list_tasks
@@ -263,3 +264,124 @@ def test_list_tasks_ignores_costs_json(tmp_path) -> None:
     tasks = list_tasks(tmp_path)
     assert len(tasks) == 1
     assert tasks[0]["task_id"] == "task-1"
+
+
+def test_invoke_required_falls_back_when_primary_fails(tmp_path, monkeypatch) -> None:
+    pipeline = Pipeline(workspace=tmp_path, dry_run=False)
+    pipeline.state = TaskState("task-fb1", "t", pipeline.state_dir)
+    primary = _dummy()
+    fallback = Model(
+        name="backup",
+        provider="other",
+        cli="cli",
+        roles=["triage"],
+        priority=1,
+        quota_daily=0,
+        env_var="ORCHESTRA_TEST_KEY",
+    )
+    seen: dict[str, object] = {}
+
+    def fake_chain(
+        model: Model,
+        role: str,
+        task_complexity: str = "medium",
+        escalate: bool = False,
+    ) -> list[Model]:
+        seen["role"] = role
+        return [fallback]
+
+    pipeline.router.fallback_chain = fake_chain  # type: ignore[assignment]
+    attempts: list[str] = []
+
+    def fake_invoke(
+        model: Model, role: str, prompt: str, timeout: int, lines: int = 0
+    ) -> tuple[str, str]:
+        attempts.append(model.display_name)
+        if model is primary:
+            raise TimeoutError("primary timed out")
+        return "session-backup", "output from backup"
+
+    pipeline._invoke = fake_invoke  # type: ignore[method-assign]
+    session, output = pipeline._invoke_required(primary, "triage", "prompt", 600)
+    assert (session, output) == ("session-backup", "output from backup")
+    assert attempts == [primary.display_name, fallback.display_name]
+    assert seen["role"] == "triage"
+
+
+def test_invoke_required_uses_select_role_for_fallback(tmp_path, monkeypatch) -> None:
+    pipeline = Pipeline(workspace=tmp_path, dry_run=False)
+    pipeline.state = TaskState("task-fb3", "t", pipeline.state_dir)
+    primary = _dummy()
+    fallback = Model(
+        name="backup",
+        provider="other",
+        cli="cli",
+        roles=["implementer"],
+        priority=1,
+        quota_daily=0,
+        env_var="ORCHESTRA_TEST_KEY",
+    )
+    seen: dict[str, object] = {}
+
+    def fake_chain(
+        model: Model,
+        role: str,
+        task_complexity: str = "medium",
+        escalate: bool = False,
+    ) -> list[Model]:
+        seen["role"] = role
+        return [fallback]
+
+    pipeline.router.fallback_chain = fake_chain  # type: ignore[assignment]
+    attempts: list[str] = []
+
+    def fake_invoke(
+        model: Model, role: str, prompt: str, timeout: int, lines: int = 0
+    ) -> tuple[str, str]:
+        attempts.append(model.display_name)
+        assert role == "fixer"
+        if model is primary:
+            raise TimeoutError("primary timed out")
+        return "session-backup", "output from backup"
+
+    pipeline._invoke = fake_invoke  # type: ignore[method-assign]
+    session, output = pipeline._invoke_required(
+        primary, "fixer", "prompt", 600, select_role="implementer"
+    )
+    assert (session, output) == ("session-backup", "output from backup")
+    assert attempts == [primary.display_name, fallback.display_name]
+    assert seen["role"] == "implementer"
+
+
+def test_invoke_required_raises_when_all_models_fail(tmp_path, monkeypatch) -> None:
+    pipeline = Pipeline(workspace=tmp_path, dry_run=False)
+    pipeline.state = TaskState("task-fb2", "t", pipeline.state_dir)
+    primary = _dummy()
+    fallback = Model(
+        name="backup",
+        provider="other",
+        cli="cli",
+        roles=["triage"],
+        priority=1,
+        quota_daily=0,
+        env_var="ORCHESTRA_TEST_KEY",
+    )
+
+    def fake_chain(
+        model: Model,
+        role: str,
+        task_complexity: str = "medium",
+        escalate: bool = False,
+    ) -> list[Model]:
+        return [fallback]
+
+    pipeline.router.fallback_chain = fake_chain  # type: ignore[assignment]
+
+    def fake_invoke(
+        model: Model, role: str, prompt: str, timeout: int, lines: int = 0
+    ) -> tuple[str, str]:
+        raise RuntimeError("agent failed")
+
+    pipeline._invoke = fake_invoke  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError):
+        pipeline._invoke_required(primary, "triage", "prompt", 600)

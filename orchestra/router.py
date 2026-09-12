@@ -117,31 +117,48 @@ class ModelRouter:
         selected = within_quota[:count]
         return selected
 
+    def fallback_chain(
+        self,
+        primary: Model,
+        role: str,
+        task_complexity: str = "medium",
+        escalate: bool = False,
+    ) -> list[Model]:
+        """Other available models for ``role`` to try if ``primary`` fails.
+
+        Excludes the primary itself (matched by name + provider so distinct
+        same-named models can still fall back to each other) and models already
+        over quota. Escalation-only models are skipped for trivial/medium tasks
+        unless ``escalate`` is true. Ordered by priority.
+        """
+        candidates = [
+            m
+            for m in self.get_candidates(role)
+            if (m.name, m.provider) != (primary.name, primary.provider)
+            and m.is_available()
+            and not self.quota.quota_exceeded(m)
+        ]
+        if task_complexity in ("trivial", "medium") and not escalate:
+            candidates = [m for m in candidates if not m.escalation_only]
+        candidates.sort(key=lambda m: m.priority)
+        return candidates
+
     def select_with_fallback(
         self,
         role: str,
         count: int = 1,
         task_complexity: str = "medium",
+        escalate: bool = False,
     ) -> list[tuple[Model, list[Model]]]:
         """Select models with their fallback chains.
 
         Returns list of (primary_model, [fallback_models]) tuples.
         """
-        selected = self.select(role, count, task_complexity)
-        all_candidates = self.get_candidates(role)
-        result = []
-        for model in selected:
-            # Fallback chain: other models of same role, different provider, by priority
-            fallbacks = [
-                m
-                for m in all_candidates
-                if m.name != model.name
-                and m.provider != model.provider
-                and m.is_available()
-                and not self.quota.quota_exceeded(m)
-            ]
-            result.append((model, fallbacks))
-        return result
+        selected = self.select(role, count, task_complexity, escalate)
+        return [
+            (model, self.fallback_chain(model, role, task_complexity, escalate))
+            for model in selected
+        ]
 
     def stats(self) -> dict[str, Any]:
         """Return quota usage stats for all models."""

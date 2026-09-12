@@ -96,3 +96,40 @@ def test_select_synthesizer_uses_opencode_not_gemini(tmp_path, monkeypatch) -> N
     router = ModelRouter(models=[gemini, local], state_dir=tmp_path)
     selected = router.select("synthesizer", count=1, task_complexity="medium", escalate=False)
     assert selected == [local]
+
+
+def test_fallback_chain_excludes_primary_and_respects_escalation(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ORCHESTRA_TEST_KEY", "1")
+    monkeypatch.setenv("GEMINI_TEST_KEY", "1")
+    primary = _model(name="a", provider="opencode", roles=["triage"], priority=1)
+    backup = _model(
+        name="b",
+        provider="gemini",
+        roles=["triage"],
+        priority=2,
+        env_var="GEMINI_TEST_KEY",
+    )
+    escal = _model(
+        name="c",
+        provider="ollama",
+        roles=["triage"],
+        priority=3,
+        escalation_only=True,
+    )
+    router = ModelRouter(models=[primary, backup, escal], state_dir=tmp_path)
+
+    assert router.fallback_chain(primary, "triage", task_complexity="trivial") == [backup]
+    assert router.fallback_chain(primary, "triage", task_complexity="trivial", escalate=True) == [
+        backup,
+        escal,
+    ]
+    assert primary not in router.fallback_chain(primary, "triage")
+
+
+def test_fallback_chain_allows_same_name_different_provider(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ORCHESTRA_TEST_KEY", "1")
+    opencode_default = _model(name="default", provider="opencode", roles=["triage"], priority=1)
+    kilo_default = _model(name="default", provider="kilo", roles=["triage"], priority=2)
+    router = ModelRouter(models=[opencode_default, kilo_default], state_dir=tmp_path)
+    assert router.fallback_chain(opencode_default, "triage") == [kilo_default]
+    assert router.fallback_chain(kilo_default, "triage") == [opencode_default]
