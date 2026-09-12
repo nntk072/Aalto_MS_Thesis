@@ -262,6 +262,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             and str(c) not in self.strategy.raw_columns
         }
         self._obs_features = features.drop(columns=drop_cols + sorted(mtf_raw))
+        # Drop non-numeric columns (e.g. string ``session`` labels) — they cannot
+        # be cast to float32 and are not part of the model's normalized observation.
+        self._obs_features = self._obs_features.select_dtypes(include="number")
 
         # Cache numpy arrays for hot-path env stepping — avoids per-step pandas
         # iloc/Series-creation overhead that starves the GPU. Only cache arrays
@@ -272,8 +275,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # Bar *value* columns (close/high/low/spread) are NOT cached because tests
         # mutate env.bars in-place (e.g. SL/TP scenarios).
         self._obs_features_arr = self._obs_features.to_numpy(dtype=np.float32)
-        self._features_cols = list(self.features.columns)
-        self._features_arr = self.features.to_numpy()
+        _feat_numeric = self.features.select_dtypes(include="number")
+        self._features_cols = list(_feat_numeric.columns)
+        self._features_arr = _feat_numeric.to_numpy()
         self._bar_times = self.bars.index.to_numpy()
         self._session_ids_arr = (
             self.bars["session_id"].to_numpy(dtype=np.int64)
