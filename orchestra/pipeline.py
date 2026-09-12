@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from subprocess import CompletedProcess
+from typing import Any
 
 import click
 
@@ -73,7 +74,18 @@ class Pipeline:
             state_dir=self.state_dir,
         )
         self.sessions = SessionManager(workspace=workspace, dry_run=dry_run)
-        self.state: TaskState | None = None
+        self._state: TaskState | None = None
+
+    @property
+    def state(self) -> TaskState:
+        """The active task state; set once the pipeline begins running."""
+        if self._state is None:
+            raise RuntimeError("Pipeline has not loaded a task state")
+        return self._state
+
+    @state.setter
+    def state(self, value: TaskState) -> None:
+        self._state = value
 
     def _record_model_call(
         self,
@@ -89,8 +101,8 @@ class Pipeline:
         completion_tokens = self.cost_tracker.estimate_tokens(output)
         self.cost_tracker.record_usage(model_name, prompt_tokens, completion_tokens, task_id)
         self.router.quota.record_usage(model_name, prompt_tokens + completion_tokens)
-        if self.state:
-            self.state.record_performance(
+        if self._state is not None:
+            self._state.record_performance(
                 model_name, role, success, prompt_tokens + completion_tokens
             )
 
@@ -734,9 +746,9 @@ Focus on correctness and safety. Do not change code style unless it's part of th
         click.echo(f"\n[FAIL] Tests failed. Triggering fix loop ({fix_count + 1}/{max_fixes})...")
         self.state.set_phase(Phase.FIXING)
 
-    def _run_verification(self) -> dict:
+    def _run_verification(self) -> dict[str, Any]:
         """Run deterministic verification (tests + lint) on package code."""
-        results: dict = {}
+        results: dict[str, Any] = {}
         argv = _pytest_argv()
         click.echo(f"  Running: {' '.join(argv)}  (timeout={_PYTEST_TIMEOUT}s)")
         test_result = self.sessions._run(argv, capture=True, timeout=_PYTEST_TIMEOUT, heartbeat=15)

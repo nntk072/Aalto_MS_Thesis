@@ -215,10 +215,10 @@ def enable_extractor_autocast(extractor: nn.Module) -> None:
     def forward_amp(observations: dict[str, torch.Tensor]) -> torch.Tensor:
         with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
             out = orig(observations)
-        return out.float()
+        return out.float()  # type: ignore[no-any-return]
 
-    extractor.forward = forward_amp  # type: ignore[method-assign]
-    extractor._amp_wrapped = True  # type: ignore[attr-defined]
+    extractor.forward = forward_amp
+    setattr(extractor, "_amp_wrapped", True)
 
 
 def _gpu_n_envs_target(vram_bytes: int) -> int:

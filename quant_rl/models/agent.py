@@ -174,13 +174,13 @@ def build_agent(
     )
     if device is not None:
         ppo_kwargs["device"] = device
-    model = PPO(
+    ppo_model = PPO(
         "MultiInputPolicy",
         vec_env,
         policy_kwargs=policy_kwargs,
         **ppo_kwargs,
     )
-    return _finalize_cuda_policy(model, device)
+    return _finalize_cuda_policy(ppo_model, device)
 
 
 def _finalize_cuda_policy(model: Any, device: str | torch.device | None) -> Any:

@@ -6,8 +6,8 @@ from orchestra.models import Model
 from orchestra.router import ModelRouter
 
 
-def _model(**kwargs) -> Model:
-    defaults = {
+def _model(**kwargs: object) -> Model:
+    defaults: dict[str, object] = {
         "name": "m",
         "provider": "p",
         "cli": "opencode",
@@ -17,7 +17,16 @@ def _model(**kwargs) -> Model:
         "env_var": "ORCHESTRA_TEST_KEY",
     }
     defaults.update(kwargs)
-    return Model(**defaults)
+    return Model(
+        name=defaults["name"],  # type: ignore[arg-type]
+        provider=defaults["provider"],  # type: ignore[arg-type]
+        cli=defaults["cli"],  # type: ignore[arg-type]
+        roles=defaults["roles"],  # type: ignore[arg-type]
+        priority=defaults["priority"],  # type: ignore[arg-type]
+        quota_daily=defaults["quota_daily"],  # type: ignore[arg-type]
+        escalation_only=defaults.get("escalation_only", False),  # type: ignore[arg-type]
+        env_var=defaults["env_var"],  # type: ignore[arg-type]
+    )
 
 
 def test_select_skips_escalation_for_trivial(tmp_path, monkeypatch) -> None:

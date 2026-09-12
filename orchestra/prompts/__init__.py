@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 PROMPT_DIR = Path(__file__).parent
 
@@ -26,7 +27,7 @@ def load_prompt(role: str) -> str:
     return path.read_text()
 
 
-def render_prompt(role: str, **kwargs) -> str:
+def render_prompt(role: str, **kwargs: Any) -> str:
     """Load and render a prompt template with variables."""
     template = load_prompt(role)
     for key, value in kwargs.items():
