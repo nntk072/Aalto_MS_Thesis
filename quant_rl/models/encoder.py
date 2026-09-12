@@ -108,7 +108,7 @@ class TCNEncoder(BaseFeaturesExtractor):
         seq_len: int = 60,
         n_features: int = 64,
         latent_dim: int = 128,
-        channels: tuple[int, ...] = (64, 64, 128),
+        channels: tuple[int, ...] = (128, 128, 256),
         kernel_size: int = 3,
         dropout: float = 0.1,
     ) -> None:
