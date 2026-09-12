@@ -126,7 +126,7 @@ features:
 
 env:
   obs_window: 60                       # T in [T, F] obs
-  n_envs: 8                           # parallel envs for SubprocVecEnv (1 = DummyVecEnv, no parallelism)
+  n_envs: 4                           # parallel envs for SubprocVecEnv (1 = DummyVecEnv, no parallelism)
   action_type: "discrete"              # "discrete" | "continuous"
   max_episode_steps: 1000
   reward_dsr_eta: 0.01                 # differential Sharpe damping
