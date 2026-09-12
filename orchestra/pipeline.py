@@ -305,29 +305,55 @@ class Pipeline:
         prompt: str,
         timeout: int,
         lines: int = 0,
+        select_role: str | None = None,
     ) -> tuple[str, str]:
-        """Like ``_invoke`` but records cost; re-raises after recording failure."""
-        try:
-            session, output = self._invoke(model, role, prompt, timeout, lines)
-        except (RuntimeError, TimeoutError) as exc:
+        """Run a role with ``model``, retrying with alternate models on failure.
+
+        Records cost/performance under ``role``. ``select_role`` overrides the
+        roster role used to build the fallback chain (e.g. a fixer picked from
+        the implementer roster) and defaults to ``role``.
+        """
+        complexity = self.state.data.get("complexity") or "medium"
+        candidates = [
+            model,
+            *self.router.fallback_chain(
+                model,
+                select_role or role,
+                task_complexity=complexity,
+                escalate=self.escalate_mode,
+            ),
+        ]
+        last_error: BaseException | None = None
+        for candidate in candidates:
+            try:
+                session, output = self._invoke(candidate, role, prompt, timeout, lines)
+            except (RuntimeError, TimeoutError) as exc:
+                self._record_model_call(
+                    candidate.display_name,
+                    prompt,
+                    str(exc),
+                    self.state.task_id,
+                    success=False,
+                    role=role,
+                )
+                if candidate is not model:
+                    click.echo(
+                        f"  WARNING: {candidate.display_name} failed; trying fallback",
+                        err=True,
+                    )
+                last_error = exc
+                continue
             self._record_model_call(
-                model.display_name,
+                candidate.display_name,
                 prompt,
-                str(exc),
+                output,
                 self.state.task_id,
-                success=False,
+                success=True,
                 role=role,
             )
-            raise
-        self._record_model_call(
-            model.display_name,
-            prompt,
-            output,
-            self.state.task_id,
-            success=True,
-            role=role,
-        )
-        return session, output
+            return session, output
+        assert last_error is not None
+        raise last_error
 
     def _git_diff(self) -> str:
         """Return unstaged+staged diff, truncated for prompts."""
@@ -710,7 +736,9 @@ Focus on correctness and safety. Do not change code style unless it's part of th
             self._echo_cmd(model)
             return
 
-        _session, output = self._invoke_required(model, "fixer", prompt, timeout=600, lines=0)
+        _session, output = self._invoke_required(
+            model, "fixer", prompt, timeout=600, lines=0, select_role="implementer"
+        )
         self.state.add_fix_output(output, model.display_name)
         click.echo(f"  Fix applied: {len(output)} chars")
 
