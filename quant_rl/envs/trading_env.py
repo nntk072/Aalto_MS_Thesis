@@ -263,6 +263,24 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         }
         self._obs_features = features.drop(columns=drop_cols + sorted(mtf_raw))
 
+        # Cache numpy arrays for hot-path env stepping — avoids per-step pandas
+        # iloc/Series-creation overhead that starves the GPU. Only cache arrays
+        # for data that is never mutated after construction:
+        #   - _obs_features: derived via drop() (copy), never modified by tests
+        #   - _features_arr: the features DataFrame is immutable post-construction
+        #   - _bar_times / _session_ids_arr: index columns, not mutated by tests
+        # Bar *value* columns (close/high/low/spread) are NOT cached because tests
+        # mutate env.bars in-place (e.g. SL/TP scenarios).
+        self._obs_features_arr = self._obs_features.to_numpy(dtype=np.float32)
+        self._features_cols = list(self.features.columns)
+        self._features_arr = self.features.to_numpy()
+        self._bar_times = self.bars.index.to_numpy()
+        self._session_ids_arr = (
+            self.bars["session_id"].to_numpy(dtype=np.int64)
+            if "session_id" in self.bars.columns
+            else None
+        )
+
         # Action space: strategy actions, continuous, or discrete
         self.continuous_actions = continuous_actions
         self.max_risk_frac = max_risk_frac
@@ -543,7 +561,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             return
         idx = self.step_idx if bar_idx is None else bar_idx
         log_time = (
-            self.bars.index[idx] if 0 <= idx < len(self.bars) else self.bars.index[self.step_idx]
+            self._bar_times[idx]
+            if 0 <= idx < len(self._bar_times)
+            else self._bar_times[self.step_idx]
         )
 
         sl_hit = False
@@ -599,8 +619,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
     def _current_session_id(self) -> int:
         """Return the session_id for the current bar."""
-        bar = self.bars.iloc[self.step_idx]
-        return int(bar["session_id"]) if "session_id" in bar.index else 0
+        if self._session_ids_arr is not None and 0 <= self.step_idx < len(self._session_ids_arr):
+            return int(self._session_ids_arr[self.step_idx])
+        return 0
 
     def _try_enter_position(
         self,
@@ -937,9 +958,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             return self._get_observation(), 0.0, done, truncated, {}
 
         bar = self.bars.iloc[self.step_idx]
-        feat_row = self.features.iloc[self.step_idx]
-        bar_time = self.bars.index[self.step_idx]
-        session_id = int(bar["session_id"]) if "session_id" in bar.index else 0
+        feat_row = pd.Series(self._features_arr[self.step_idx], index=self._features_cols)
+        bar_time = self._bar_times[self.step_idx]
+        session_id = (
+            int(self._session_ids_arr[self.step_idx]) if self._session_ids_arr is not None else 0
+        )
 
         # Fill quote for next action (latency-shifted: decision at bar t
         # fills at the quote of bar t + fill_latency_bars, not t + 1)
@@ -1074,7 +1097,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         bar_time: Any,
         session_id: int,
         fill_idx: int,
-    ) -> tuple[float, float, pd.Series | None]:
+    ) -> tuple[float, float, None]:
         """Advance market state for the current bar.
 
         Tracks liquidity-level crossings, updates eval-mode session
@@ -1082,8 +1105,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         fill quote, and force-closes positions at session boundaries when
         ``block_overnight`` is enabled.
 
-        Returns ``(fill_bid, fill_ask, next_bar)`` where ``next_bar`` is the
-        latency-shifted bar or ``None`` when ``fill_idx`` is past the data end.
+        Returns ``(fill_bid, fill_ask, None)`` — ``None`` is retained for
+        API compatibility; the caller in :meth:`step` does not consume the
+        latency-shifted bar.
         """
         price = float(bar["close"])
         for level_name, level_value in (
@@ -1112,10 +1136,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             self.broker.mark_to_market(self.account, self.position, (bid, ask))
 
         if fill_idx < len(self.bars):
-            next_bar = self.bars.iloc[fill_idx]
-            fill_bid, fill_ask = self._bar_quote(next_bar)
+            fill_bid, fill_ask = self._bar_quote(self.bars.iloc[fill_idx])
         else:
-            next_bar = None
             fill_bid, fill_ask = bid, ask
 
         if self.block_overnight and self.position is not None and self._is_ny_session_boundary():
@@ -1136,7 +1158,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             self.position = None
             self.sessions_with_trades.add(session_id)
 
-        return fill_bid, fill_ask, next_bar
+        return fill_bid, fill_ask, None
 
     def _calculate_reward(
         self,
@@ -1241,7 +1263,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         if nxt > cur + 1 and self.position is not None and not self.block_overnight:
             bar = self.bars.iloc[cur]
             bid, ask = self._bar_quote(bar)
-            self._apply_position_guards(bar, self.bars.index[cur], bid, ask, eod=True)
+            self._apply_position_guards(bar, self._bar_times[cur], bid, ask, eod=True)
             self._replay_skipped_bars(cur + 1, nxt)
         self._ny_pos += 1
         self.step_idx = nxt
@@ -1257,7 +1279,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             if self.position is None:
                 break
             self.broker.mark_to_market(self.account, self.position, (bid, ask))
-            self._apply_position_guards(bar, self.bars.index[i], bid, ask, eod=False)
+            self._apply_position_guards(bar, self._bar_times[i], bid, ask, eod=False)
 
     def _apply_position_guards(
         self,
@@ -1327,9 +1349,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         """Construct observation dict."""
         # Time-series features (strategy raw price levels excluded — Agent.md §11)
         start_idx = max(0, self.step_idx - self.obs_window)
-        seq = np.asarray(
-            self._obs_features.iloc[start_idx : self.step_idx].values, dtype=np.float32
-        )
+        seq = self._obs_features_arr[start_idx : self.step_idx]
         seq = cast(np.ndarray[Any, Any], np.nan_to_num(seq, nan=0.0))
         # Pad if needed
         if len(seq) < self.obs_window:
@@ -1361,7 +1381,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             # fall back to the first bar of the obs window. Both are
             # O(1)-magnitude normalizers, so the choice barely matters.
             if 0 <= self.step_idx < len(self.bars):
-                current_close = float(self.bars.iloc[self.step_idx]["close"])
+                current_close = float(self.bars["close"].iloc[self.step_idx])
             else:
                 current_close = 1.0
             norm_dist = dist_to_sl / current_close if current_close > 0 else 0.0

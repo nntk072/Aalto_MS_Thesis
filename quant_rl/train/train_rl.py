@@ -21,6 +21,7 @@ import argparse
 import json
 import logging
 from datetime import datetime
+from functools import partial
 from typing import Any, cast
 
 import numpy as np
@@ -327,7 +328,21 @@ def main() -> None:
     timesteps = cfg.ppo.total_timesteps if not args.mvp else cfg.training.total_timesteps_mvp
     log.info("Training %s for %d timesteps...", args.algo.upper(), timesteps)
 
-    model = build_agent(train_env, cfg, arch=args.arch, algo=args.algo, device=device)
+    model = build_agent(
+        train_env,
+        cfg,
+        arch=args.arch,
+        algo=args.algo,
+        device=device,
+        env_fn=partial(
+            make_env,
+            train_bars,
+            train_feat,
+            cfg,
+            algo=args.algo,
+            reward=args.reward,
+        ),
+    )
 
     aux_cb = None
     aux_cfg = getattr(cfg, "auxiliary", None)
@@ -354,7 +369,7 @@ def main() -> None:
     # and save the best policy to model_dir/best_model. PPO's final save is
     # rarely the best one; this gives us a "best-so-far" snapshot for the
     # final test evaluation.
-    best_eval_freq = max(1, cfg.ppo.n_steps)
+    best_eval_freq = max(1, timesteps)  # eval once at end — avoids CPU-only stalls during training
     best_cb = BestCheckpointEvalCallback(
         eval_env_factory=lambda: make_env(
             train_bars,
@@ -548,7 +563,21 @@ def main() -> None:
             fold_env = make_env(
                 fold_train_bars, fold_train_feat, cfg, algo=args.algo, reward=args.reward
             )
-            fold_model = build_agent(fold_env, cfg, arch=args.arch, algo=args.algo, device=device)
+            fold_model = build_agent(
+                fold_env,
+                cfg,
+                arch=args.arch,
+                algo=args.algo,
+                device=device,
+                env_fn=partial(
+                    make_env,
+                    fold_train_bars,
+                    fold_train_feat,
+                    cfg,
+                    algo=args.algo,
+                    reward=args.reward,
+                ),
+            )
             fold_model.learn(total_timesteps=wf_steps, callback=None, progress_bar=False)
 
             fold_result = evaluate_model(

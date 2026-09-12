@@ -12,6 +12,7 @@ Usage
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import torch
@@ -20,7 +21,7 @@ from omegaconf import DictConfig
 
 try:
     from stable_baselines3 import PPO, SAC
-    from stable_baselines3.common.vec_env import DummyVecEnv
+    from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
     _SB3_AVAILABLE = True
 except ImportError:
@@ -35,6 +36,7 @@ def build_agent(
     use_vae: bool = False,
     vae: Any | None = None,
     device: str | torch.device | None = None,
+    env_fn: Callable[[], Any] | None = None,
 ) -> Any:
     """Build an SB3 PPO or SAC agent wired to the sequence encoder.
 
@@ -56,6 +58,11 @@ def build_agent(
     device:
         Torch device to place the policy on (e.g. ``"cpu"``, ``"cuda"``).
         ``None`` lets SB3 auto-detect.
+    env_fn:
+        Optional factory ``() -> TradingEnv`` used when ``cfg.env.n_envs > 1``
+        to spawn parallel environments via ``SubprocVecEnv``.  When omitted or
+        when ``n_envs == 1``, falls back to ``DummyVecEnv`` (sequential,
+        single-env — the original behaviour).
 
     Returns
     -------
@@ -112,7 +119,12 @@ def build_agent(
         net_arch=net_arch,
     )
 
-    vec_env = DummyVecEnv([lambda: env])
+    n_envs: int = int(getattr(cfg.get("env", {}), "n_envs", 1))
+    vec_env: Any
+    if n_envs > 1 and env_fn is not None:
+        vec_env = SubprocVecEnv([env_fn] * n_envs)
+    else:
+        vec_env = DummyVecEnv([lambda: env])
 
     if algo == "sac":
         # SAC requires continuous action space
@@ -142,8 +154,12 @@ def build_agent(
         )
 
     # Default to PPO
+    ppo_n_steps = cfg.ppo.n_steps
+    if n_envs > 1 and env_fn is not None:
+        ppo_n_steps = max(1, ppo_n_steps // n_envs)
+
     ppo_kwargs: dict[str, Any] = dict(
-        n_steps=cfg.ppo.n_steps,
+        n_steps=ppo_n_steps,
         batch_size=cfg.ppo.batch_size,
         n_epochs=cfg.ppo.n_epochs,
         learning_rate=cfg.ppo.learning_rate,
