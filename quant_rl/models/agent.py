@@ -19,6 +19,8 @@ import torch
 from gymnasium import spaces
 from omegaconf import DictConfig
 
+from quant_rl.utils.device import enable_extractor_autocast
+
 try:
     from stable_baselines3 import PPO, SAC
     from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
@@ -146,12 +148,13 @@ def build_agent(
         )
         if device is not None:
             sac_kwargs["device"] = device
-        return SAC(
+        model = SAC(
             "MultiInputPolicy",
             vec_env,
             policy_kwargs=policy_kwargs,
             **sac_kwargs,
         )
+        return _finalize_cuda_policy(model, device)
 
     # Default to PPO
     ppo_n_steps = cfg.ppo.n_steps
@@ -171,9 +174,21 @@ def build_agent(
     )
     if device is not None:
         ppo_kwargs["device"] = device
-    return PPO(
+    model = PPO(
         "MultiInputPolicy",
         vec_env,
         policy_kwargs=policy_kwargs,
         **ppo_kwargs,
     )
+    return _finalize_cuda_policy(model, device)
+
+
+def _finalize_cuda_policy(model: Any, device: str | torch.device | None) -> Any:
+    """Enable bf16 encoder autocast when the policy lives on CUDA."""
+    if device is None:
+        return model
+    dev = device if isinstance(device, torch.device) else torch.device(device)
+    if dev.type != "cuda":
+        return model
+    enable_extractor_autocast(model.policy.features_extractor)
+    return model
