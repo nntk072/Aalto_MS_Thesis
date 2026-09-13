@@ -1,6 +1,6 @@
 # Agent rules index & activation map (Aalto_MS_Thesis)
 
-Single source of truth for all coding agents in this repo (Cline, Windsurf, Kilo Code, Antigravity, Mistral Vibe). Each rule lives in its own file; this index explains when each activates and how they relate.
+Single source of truth for all coding agents in this repo (Cursor, Cline, Windsurf, Kilo Code, Antigravity, Mistral Vibe). Rules live here — not in `.cursor/` or `.kilocode/` (local IDE folders; gitignored). Entry point for Cursor: root `AGENTS.md` and `.cursorrules`.
 
 ## Rule files
 
@@ -15,7 +15,7 @@ Single source of truth for all coding agents in this repo (Cline, Windsurf, Kilo
 | [testing-rules.md](testing-rules.md) | TDD, AAA, coverage ≥80% | On feature/bugfix work |
 | [security-rules.md](security-rules.md) | Secret & input safety checklist | Always at commit; deep on sensitive code |
 | [development-workflow.md](development-workflow.md) | Research-first → plan → TDD → review → commit | On non-trivial features |
-| [ci-verification.md](ci-verification.md) | Standard CI gate (format, lint, mypy, full pytest) | Before done / commit; Cursor: `.cursor/rules/ci-verification.mdc` |
+| [ci-verification.md](ci-verification.md) | Standard CI gate (format, lint, mypy, full pytest) | Before done / commit |
 
 ## Activation flow
 

@@ -60,36 +60,48 @@ def _cap(text: str, limit: int) -> str:
 
 
 def git_diff_stat(workspace: Path) -> str:
-    result = subprocess.run(
-        ["git", "diff", "--stat", "HEAD"],
-        capture_output=True,
-        text=True,
-        cwd=str(workspace),
-    )
-    if result.returncode != 0:
+    try:
         result = subprocess.run(
-            ["git", "diff", "--stat"],
+            ["git", "diff", "--stat", "HEAD"],
             capture_output=True,
             text=True,
             cwd=str(workspace),
         )
+    except FileNotFoundError:
+        return ""
+    if result.returncode != 0:
+        try:
+            result = subprocess.run(
+                ["git", "diff", "--stat"],
+                capture_output=True,
+                text=True,
+                cwd=str(workspace),
+            )
+        except FileNotFoundError:
+            return ""
     return (result.stdout or "").strip()
 
 
 def git_diff_excerpt(workspace: Path, limit: int = _DIFF_CAP) -> str:
-    result = subprocess.run(
-        ["git", "diff", "HEAD"],
-        capture_output=True,
-        text=True,
-        cwd=str(workspace),
-    )
-    if result.returncode != 0 or not (result.stdout or "").strip():
+    try:
         result = subprocess.run(
-            ["git", "diff"],
+            ["git", "diff", "HEAD"],
             capture_output=True,
             text=True,
             cwd=str(workspace),
         )
+    except FileNotFoundError:
+        return ""
+    if result.returncode != 0 or not (result.stdout or "").strip():
+        try:
+            result = subprocess.run(
+                ["git", "diff"],
+                capture_output=True,
+                text=True,
+                cwd=str(workspace),
+            )
+        except FileNotFoundError:
+            return ""
     return _cap(result.stdout or "", limit)
 
 

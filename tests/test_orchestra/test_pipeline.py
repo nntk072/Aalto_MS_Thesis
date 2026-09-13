@@ -203,9 +203,7 @@ def test_run_verification_uses_ci_gate_commands(tmp_path, monkeypatch) -> None:
     ]
 
 
-def test_verification_failure_enters_fix_loop_even_if_review_passed(
-    tmp_path, monkeypatch
-) -> None:
+def test_verification_failure_enters_fix_loop_even_if_review_passed(tmp_path, monkeypatch) -> None:
     pipeline = Pipeline(workspace=tmp_path, dry_run=False, max_fixes=2)
     pipeline.state = TaskState("task-vfail", "t", pipeline.state_dir)
     pipeline.state.data["review_verdict"] = "pass"

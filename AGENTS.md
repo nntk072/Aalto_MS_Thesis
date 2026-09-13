@@ -24,7 +24,7 @@ pytest --cov=quant_rl --cov-report=term-missing -q
 ## Orchestra (`orchestra/`)
 
 Multi-model CLI pipeline (triage → plan → implement → verify). Verification phase runs the
-same CI gate as above (`orchestra/ci_gate.py`). Cursor rule: `.cursor/rules/ci-verification.mdc`.
+same CI gate as above (`orchestra/ci_gate.py`). Agent rules: `.agents/rules/ci-verification.md`.
 
 ```bash
 orchestra doctor          # Tier-0 health (no inference)
