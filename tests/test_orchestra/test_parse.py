@@ -57,6 +57,27 @@ def test_parse_verdict_conditional() -> None:
     assert parse_verdict(text) == "conditional_pass"
 
 
+def test_parse_tier_from_json() -> None:
+    text = '{"tier": "T3", "complexity": "complex"}'
+    from orchestra.parse import parse_tier
+
+    assert parse_tier(text) == "T3"
+
+
+def test_classify_failure_rate_limit() -> None:
+    from orchestra.failures import FailureKind, classify_failure
+
+    result = classify_failure("HTTP 429 rate limit exceeded", cli="gemini")
+    assert result.kind == FailureKind.TRANSIENT_RATE_LIMIT
+
+
+def test_static_tier_fast_path() -> None:
+    from orchestra.parse import static_tier_fast_path
+
+    assert static_tier_fast_path("hello world") == "T0"
+    assert static_tier_fast_path("refactor the entire architecture") is None
+
+
 def test_triage_prompt_file_exists() -> None:
     path = Path(__file__).resolve().parents[2] / "orchestra" / "prompts" / "triage.md"
     assert path.is_file()

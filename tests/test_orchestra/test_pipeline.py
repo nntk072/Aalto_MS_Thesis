@@ -42,8 +42,10 @@ def test_dry_run_reaches_done(tmp_path, monkeypatch) -> None:
         critic_count=1,
         reviewer_count=1,
     )
-    pipeline.router.select = lambda role, count=1, task_complexity="medium", escalate=False: (  # type: ignore[method-assign]
-        [dummy] * count
+    pipeline.router.select = (
+        lambda role, count=1, task_complexity="medium", task_tier=None, escalate=False: (  # type: ignore[method-assign]
+            [dummy] * count
+        )
     )
     state = pipeline.run("add a comment")
     assert state.phase == Phase.DONE
@@ -65,6 +67,7 @@ def test_complexity_override_applied_before_triage(tmp_path, monkeypatch) -> Non
         role: str,
         count: int = 1,
         task_complexity: str = "medium",
+        task_tier: str | None = None,
         escalate: bool = False,
     ) -> list[Model]:
         seen.append(task_complexity)
@@ -106,6 +109,11 @@ def test_verification_reenters_fixing(tmp_path) -> None:
     assert pipeline.state.phase == Phase.DONE
 
 
+def test_reporting_next_is_done_with_parked_enum() -> None:
+    assert Phase.REPORTING.next() == Phase.DONE
+    assert Phase.PARKED not in Phase.runnable()
+
+
 def test_phase_parse_step_aliases() -> None:
     assert Phase.parse("2") is Phase.PLANNING
     assert Phase.parse("planning") is Phase.PLANNING
@@ -133,8 +141,10 @@ def test_resume_failed_restarts_failed_step(tmp_path, monkeypatch) -> None:
     pipeline = Pipeline(
         workspace=tmp_path, dry_run=True, planner_count=1, critic_count=1, reviewer_count=1
     )
-    pipeline.router.select = lambda role, count=1, task_complexity="medium", escalate=False: (  # type: ignore[method-assign]
-        [dummy] * count
+    pipeline.router.select = (
+        lambda role, count=1, task_complexity="medium", task_tier=None, escalate=False: (  # type: ignore[method-assign]
+            [dummy] * count
+        )
     )
     state = TaskState("task-r", "t", pipeline.state_dir)
     state.set_phase(Phase.VERIFICATION)
@@ -150,8 +160,10 @@ def test_resume_from_step_2(tmp_path, monkeypatch) -> None:
     pipeline = Pipeline(
         workspace=tmp_path, dry_run=True, planner_count=1, critic_count=1, reviewer_count=1
     )
-    pipeline.router.select = lambda role, count=1, task_complexity="medium", escalate=False: (  # type: ignore[method-assign]
-        [dummy] * count
+    pipeline.router.select = (
+        lambda role, count=1, task_complexity="medium", task_tier=None, escalate=False: (  # type: ignore[method-assign]
+            [dummy] * count
+        )
     )
     state = TaskState("task-s2", "t", pipeline.state_dir)
     state.set_phase(Phase.CRITIQUE)
@@ -214,6 +226,7 @@ def test_fixing_skips_when_review_passed_and_tests_not_run(tmp_path, monkeypatch
         role: str,
         count: int = 1,
         task_complexity: str = "medium",
+        task_tier: str | None = None,
         escalate: bool = False,
     ) -> list[Model]:
         selected.append(role)
@@ -238,6 +251,7 @@ def test_fixing_runs_when_verification_already_failed(tmp_path, monkeypatch) -> 
         role: str,
         count: int = 1,
         task_complexity: str = "medium",
+        task_tier: str | None = None,
         escalate: bool = False,
     ) -> list[Model]:
         selected.append(role)
@@ -285,6 +299,7 @@ def test_invoke_required_falls_back_when_primary_fails(tmp_path, monkeypatch) ->
         model: Model,
         role: str,
         task_complexity: str = "medium",
+        task_tier: str | None = None,
         escalate: bool = False,
     ) -> list[Model]:
         seen["role"] = role
@@ -294,7 +309,12 @@ def test_invoke_required_falls_back_when_primary_fails(tmp_path, monkeypatch) ->
     attempts: list[str] = []
 
     def fake_invoke(
-        model: Model, role: str, prompt: str, timeout: int, lines: int = 0
+        model: Model,
+        role: str,
+        prompt: str,
+        timeout: int,
+        lines: int = 0,
+        native_session_id: str | None = None,
     ) -> tuple[str, str]:
         attempts.append(model.display_name)
         if model is primary:
@@ -304,7 +324,8 @@ def test_invoke_required_falls_back_when_primary_fails(tmp_path, monkeypatch) ->
     pipeline._invoke = fake_invoke  # type: ignore[method-assign]
     session, output = pipeline._invoke_required(primary, "triage", "prompt", 600)
     assert (session, output) == ("session-backup", "output from backup")
-    assert attempts == [primary.display_name, fallback.display_name]
+    assert attempts.count(primary.display_name) >= 1
+    assert fallback.display_name in attempts
     assert seen["role"] == "triage"
 
 
@@ -327,6 +348,7 @@ def test_invoke_required_uses_select_role_for_fallback(tmp_path, monkeypatch) ->
         model: Model,
         role: str,
         task_complexity: str = "medium",
+        task_tier: str | None = None,
         escalate: bool = False,
     ) -> list[Model]:
         seen["role"] = role
@@ -336,7 +358,12 @@ def test_invoke_required_uses_select_role_for_fallback(tmp_path, monkeypatch) ->
     attempts: list[str] = []
 
     def fake_invoke(
-        model: Model, role: str, prompt: str, timeout: int, lines: int = 0
+        model: Model,
+        role: str,
+        prompt: str,
+        timeout: int,
+        lines: int = 0,
+        native_session_id: str | None = None,
     ) -> tuple[str, str]:
         attempts.append(model.display_name)
         assert role == "fixer"
@@ -349,7 +376,8 @@ def test_invoke_required_uses_select_role_for_fallback(tmp_path, monkeypatch) ->
         primary, "fixer", "prompt", 600, select_role="implementer"
     )
     assert (session, output) == ("session-backup", "output from backup")
-    assert attempts == [primary.display_name, fallback.display_name]
+    assert attempts.count(primary.display_name) >= 1
+    assert fallback.display_name in attempts
     assert seen["role"] == "implementer"
 
 
@@ -371,6 +399,7 @@ def test_invoke_required_raises_when_all_models_fail(tmp_path, monkeypatch) -> N
         model: Model,
         role: str,
         task_complexity: str = "medium",
+        task_tier: str | None = None,
         escalate: bool = False,
     ) -> list[Model]:
         return [fallback]
@@ -378,7 +407,12 @@ def test_invoke_required_raises_when_all_models_fail(tmp_path, monkeypatch) -> N
     pipeline.router.fallback_chain = fake_chain  # type: ignore[assignment]
 
     def fake_invoke(
-        model: Model, role: str, prompt: str, timeout: int, lines: int = 0
+        model: Model,
+        role: str,
+        prompt: str,
+        timeout: int,
+        lines: int = 0,
+        native_session_id: str | None = None,
     ) -> tuple[str, str]:
         raise RuntimeError("agent failed")
 

@@ -112,6 +112,43 @@ def test_collect_raises_on_exec_header_only(tmp_path) -> None:
         assert "empty output" in str(exc)
 
 
+def test_build_command_vibe_uses_env_not_agent() -> None:
+    model = Model(
+        name="mistral-medium-3.5",
+        provider="mistral",
+        cli="vibe",
+        roles=["planner"],
+        priority=2,
+        quota_daily=0,
+        alias="mistral-medium-3.5",
+        extra_args=["--auto-approve"],
+    )
+    env = SessionManager.build_command_env(model)
+    assert env["VIBE_ACTIVE_MODEL"] == "mistral-medium-3.5"
+    cmd = SessionManager.build_command(model, "hello")
+    assert "--agent" not in cmd
+    assert "mistral-medium-3.5" not in cmd
+
+
+def test_build_command_cline_includes_thinking() -> None:
+    model = Model(
+        name="z-ai/glm-5.3-flash",
+        provider="cline",
+        cli="cline",
+        roles=["planner"],
+        priority=2,
+        quota_daily=0,
+        model_flag="-m",
+        effort_flag="cline_thinking",
+        extra_args=["--json"],
+    )
+    cmd = SessionManager.build_command(model, "plan this", effort="high")
+    assert "cline" in cmd
+    assert "--thinking" in cmd
+    assert "high" in cmd
+    assert "-m" in cmd
+
+
 def test_build_command_vibe_does_not_pass_model_as_agent() -> None:
     model = Model(
         name="devstral-local",
@@ -183,7 +220,13 @@ def test_agent_runner_execs_without_shell(tmp_path, monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "orchestra.sessions.SessionManager.build_command",
-        staticmethod(lambda _m, _p, prompt_file=None: [sys.executable, "-c", "print('ran-ok')"]),
+        staticmethod(
+            lambda _m, _p, prompt_file=None, effort=None, native_session_id=None: [
+                sys.executable,
+                "-c",
+                "print('ran-ok')",
+            ]
+        ),
     )
     before = os.getcwd()
     assert run_job(job_file) == 0
