@@ -1,13 +1,26 @@
-version: 3
+version: 4
 
 effort_map:
   T0: {cline: none, default: none}
   T1: {cline: low, default: none}
   T2: {cline: medium, default: none}
   T3: {cline: high, kilo: high, opencode: high, default: none}
-  T4: {cline: xhigh, kilo: max, opencode: max, default: none}
+  T4: {cline: high, kilo: high, opencode: high, default: high}
+
+codex_phase_effort:
+  triage: 4
+  planner: 6
+  critic: 6
+  synthesizer: 7
+  implementer: 8
+  reviewer: 7
+  review_synthesizer: 7
+  fixer: 8
 
 error_signatures:
+  codex:
+    rate_limit: ["429", "rate limit", "quota", "usage limit"]
+    auth: ["401", "403", "unauthorized", "not logged in", "authentication"]
   gemini:
     rate_limit: ["429", "RESOURCE_EXHAUSTED", "rate limit", "quota exceeded"]
     auth: ["401", "403", "PERMISSION_DENIED", "invalid api key"]
@@ -26,6 +39,7 @@ error_signatures:
 
 models:
   - id: gemini-3.1-pro-preview
+    enabled: false
     cli: gemini
     provider: gemini
     model_id: gemini-3.1-pro-preview
@@ -45,6 +59,7 @@ models:
     native_resume: false
 
   - id: vibe-mistral-medium-3.5
+    enabled: false
     cli: vibe
     provider: mistral
     model_id: mistral-medium-3.5
@@ -57,6 +72,7 @@ models:
     native_resume: false
 
   - id: vibe-devstral-local
+    enabled: false
     cli: vibe
     provider: ollama
     model_id: devstral-local
@@ -68,6 +84,7 @@ models:
     native_resume: false
 
   - id: opencode-default
+    enabled: false
     cli: opencode
     provider: opencode
     model_id: default
@@ -81,6 +98,7 @@ models:
     native_resume: false
 
   - id: kilo-default
+    enabled: false
     cli: kilo
     provider: kilo
     model_id: default
@@ -94,6 +112,7 @@ models:
     native_resume: false
 
   - id: cline-glm-5.3-flash
+    enabled: false
     cli: cline
     provider: cline
     model_id: z-ai/glm-5.3-flash
@@ -103,6 +122,20 @@ models:
     model_flag: "-m"
     extra_args: ["--json", "--auto-approve", "true"]
     effort_flag: cline_thinking
-    effort_support: [none, low, medium, high, xhigh]
+    effort_support: [none, low, medium, high]
+    cost_tier: low
+    native_resume: false
+
+  - id: openai-gpt-5.6-luna
+    cli: codex
+    provider: openai
+    model_id: gpt-5.6-luna
+    roles: [triage, planner, critic, synthesizer, implementer, reviewer, review_synthesizer]
+    priority: 1
+    quota_daily: 2000000
+    model_flag: "-m"
+    extra_args: ["--sandbox", "workspace-write", "--ask-for-approval", "never", "--ephemeral", "--no-alt-screen"]
+    effort_flag: codex_reasoning
+    effort_support: [none, low, medium, high]
     cost_tier: low
     native_resume: false

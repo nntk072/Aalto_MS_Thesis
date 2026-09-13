@@ -14,7 +14,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from .models import Model, get_effort_map
+from .models import Model, codex_effort_for_role, get_effort_map
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07")
 
@@ -147,10 +147,12 @@ class SessionManager:
         return None
 
     @staticmethod
-    def resolve_effort(model: Model, tier: str) -> str | None:
+    def resolve_effort(model: Model, tier: str, role: str | None = None) -> str | None:
         """Map task tier to CLI effort/variant for this model."""
         if not model.effort_flag:
             return None
+        if model.effort_flag == "codex_reasoning":
+            return codex_effort_for_role(role or "")
         tier_map = get_effort_map().get(tier.upper(), {})
         if model.effort_flag == "cline_thinking":
             return tier_map.get("cline", tier_map.get("default"))
@@ -187,6 +189,15 @@ class SessionManager:
             if model.native_resume and native_session_id:
                 cmd.extend(["--resume", native_session_id])
             cmd.extend(model.extra_args)
+        elif model.cli == "codex":
+            cmd = ["codex", "exec", *model.extra_args]
+            if model.name and model.model_flag:
+                cmd.extend([model.model_flag, model.name])
+            if effort and model.effort_flag == "codex_reasoning":
+                if effort not in model.effort_support:
+                    raise ValueError(f"Unsupported Codex reasoning effort: {effort}")
+                cmd.extend(["-c", f"model_reasoning_effort={effort}"])
+            cmd.append(prompt)
         elif model.cli == "vibe":
             cmd = ["vibe", *model.extra_args]
             if model.native_resume and native_session_id:
@@ -259,7 +270,7 @@ class SessionManager:
         exit_file = job_dir / "exit_code"
         job_file = job_dir / "job.json"
         prompt_file.write_text(prompt, encoding="utf-8")
-        resolved_effort = effort or self.resolve_effort(model, tier)
+        resolved_effort = effort or self.resolve_effort(model, tier, role=role)
         job_file.write_text(
             json.dumps(
                 {
