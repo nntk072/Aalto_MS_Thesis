@@ -28,9 +28,22 @@ def load_prompt(role: str) -> str:
     return path.read_text()
 
 
+def render_ci_verification(workspace: str) -> str:
+    """Shared CI gate block for agent prompts (matches orchestra/ci_gate.py)."""
+    from ..ci_gate import ci_command_lines
+
+    template = (PROMPT_DIR / "verification.md").read_text()
+    return template.replace("{{workspace}}", workspace).replace(
+        "{{ci_commands}}", ci_command_lines()
+    )
+
+
 def render_prompt(role: str, **kwargs: Any) -> str:
     """Load and render a prompt template with variables."""
     template = load_prompt(role)
+    workspace = str(kwargs.get("workspace", ""))
+    if "{{ci_verification}}" in template and workspace:
+        template = template.replace("{{ci_verification}}", render_ci_verification(workspace))
     for key, value in kwargs.items():
         template = template.replace("{{" + key + "}}", str(value))
     return template

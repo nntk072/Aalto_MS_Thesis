@@ -9,11 +9,26 @@ using structure-aware features (SMT divergence, PO3 state, liquidity sweeps, FVG
 uv sync                              # install deps
 python scripts/prepare_data.py       # raw CSV → parquet → features
 python -m quant_rl.train.train_rl --mvp   # smoke test (30 days)
-pytest                               # full test suite
-pytest -m "not slow"                 # skip slow torch/SB3 tests
-pytest --cov=quant_rl --cov-report=term-missing -q   # coverage
-ruff check quant_rl/ && ruff format quant_rl/
-mypy quant_rl/
+
+# CI gate (required before merge — see .agents/rules/ci-verification.md)
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy .
+uv run pytest tests/ -v
+
+# Optional local shortcuts (not the merge bar)
+pytest -m "not slow"                 # faster local loop
+pytest --cov=quant_rl --cov-report=term-missing -q
+```
+
+## Orchestra (`orchestra/`)
+
+Multi-model CLI pipeline (triage → plan → implement → verify). Verification phase runs the
+same CI gate as above (`orchestra/ci_gate.py`). Cursor rule: `.cursor/rules/ci-verification.mdc`.
+
+```bash
+orchestra doctor          # Tier-0 health (no inference)
+orchestra run "task"      # full pipeline
 ```
 
 ## Architecture
@@ -34,6 +49,7 @@ data → features → envs → models → train → evaluation
 | train | `quant_rl/train/train_rl.py` | full training loop |
 | evaluation | `quant_rl/evaluation/runner.py` | episode runner + metrics |
 | live | `quant_rl/live/rl_strategy.py` | MT5 bridge |
+| orchestra | `orchestra/pipeline.py` | multi-model task pipeline + CI verification |
 
 Full architecture map: `.agents/architecture.md`
 Domain-level context: `.agents/domain_maps/*.md`

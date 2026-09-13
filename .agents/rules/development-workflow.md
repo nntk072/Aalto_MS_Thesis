@@ -19,10 +19,9 @@ The full feature development process that happens before git operations: researc
 
 4. **Commit & push** — follow [git-commit-rules.md](git-commit-rules.md).
 
-5. **Pre-review checks**
-   - All automated checks pass (ruff, mypy, pytest).
+5. **Pre-review checks** — [ci-verification.md](ci-verification.md) (full CI gate, not nightly subsets).
    - Branch up to date with main; no merge conflicts.
-   - Only request review after these pass.
+   - Only request review after the gate passes.
 
 ## Knowledge capture
 
