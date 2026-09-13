@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 from subprocess import CompletedProcess
 from typing import Any
@@ -11,8 +12,10 @@ import click
 
 from .backup import create_snapshot
 from .cost import CostTracker
-from .models import DEFAULT_MODELS, Model
-from .parse import parse_complexity, parse_verdict
+from .failures import FailureKind, classify_failure
+from .handoff import build_handoff_bundle, render_handoff_prompt, save_handoff
+from .models import Model, complexity_to_tier, get_error_signatures, load_models
+from .parse import parse_complexity, parse_tier, parse_verdict, static_tier_fast_path
 from .prompts import render_prompt
 from .report import write_final_report
 from .router import ModelRouter
@@ -70,11 +73,13 @@ class Pipeline:
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.cost_tracker = CostTracker(state_dir=self.state_dir)
         self.router = ModelRouter(
-            models=DEFAULT_MODELS,
+            models=load_models(),
             state_dir=self.state_dir,
         )
+        self.router.health.probe_tier0(self.router.models, check_version=False)
         self.sessions = SessionManager(workspace=workspace, dry_run=dry_run)
         self._state: TaskState | None = None
+        self._tier_override: str | None = None
 
     @property
     def state(self) -> TaskState:
@@ -89,7 +94,7 @@ class Pipeline:
 
     def _record_model_call(
         self,
-        model_name: str,
+        model: Model,
         prompt: str,
         output: str,
         task_id: str | None = None,
@@ -97,14 +102,24 @@ class Pipeline:
         role: str = "general",
     ) -> None:
         """Estimate tokens and record cost + quota for a model call."""
+        model_name = model.display_name
         prompt_tokens = self.cost_tracker.estimate_tokens(prompt)
         completion_tokens = self.cost_tracker.estimate_tokens(output)
         self.cost_tracker.record_usage(model_name, prompt_tokens, completion_tokens, task_id)
-        self.router.quota.record_usage(model_name, prompt_tokens + completion_tokens)
+        self.router.quota.record_usage(model_name, prompt_tokens + completion_tokens, model=model)
         if self._state is not None:
             self._state.record_performance(
                 model_name, role, success, prompt_tokens + completion_tokens
             )
+
+    def _task_tier(self) -> str:
+        if self._tier_override:
+            return self._tier_override
+        tier = self.state.data.get("tier")
+        if tier:
+            return str(tier)
+        complexity = self.state.data.get("complexity") or "medium"
+        return complexity_to_tier(str(complexity))
 
     def _parse_complexity(self, triage_output: str) -> str:
         """Extract complexity from triage JSON output."""
@@ -120,6 +135,7 @@ class Pipeline:
         resume_from: str | None = None,
         complexity: str | None = None,
         start_phase: str | None = None,
+        tier: str | None = None,
     ) -> TaskState:
         """Run the full pipeline for a task.
 
@@ -132,9 +148,13 @@ class Pipeline:
         """
         if start_phase and not resume_from:
             raise ValueError("--from requires --resume <task-id>")
+        self._tier_override = tier
         if resume_from:
             self.state = TaskState.load(resume_from, self.state_dir)
             self.state.data["fix_loop_max"] = self.max_fixes
+            if self.state.phase == Phase.PARKED:
+                parked_at = self.state.data.get("parked_at", Phase.TRIAGE.value)
+                self.state.set_phase(Phase(parked_at))
             target = self._resume_phase(start_phase)
             if target is None:
                 click.echo(f"Task already in terminal phase: {self.state.phase.value}")
@@ -163,16 +183,27 @@ class Pipeline:
         if complexity:
             self.state.data["complexity"] = complexity
             self.state.data["complexity_override"] = True
+            if not tier:
+                self.state.data["tier"] = complexity_to_tier(complexity)
             self.state.save()
+        if tier:
+            self.state.data["tier"] = tier.upper()
+            self.state.save()
+        elif not resume_from and not self.state.data.get("tier"):
+            fast = static_tier_fast_path(task_description)
+            if fast:
+                self.state.data["tier"] = fast
+                self.state.data["complexity"] = "trivial"
+                self.state.save()
 
-        if self.state.phase in (Phase.DONE, Phase.FAILED):
+        if self.state.phase in (Phase.DONE, Phase.FAILED, Phase.PARKED):
             click.echo(f"Task already in terminal phase: {self.state.phase.value}")
             return self.state
         if self.state.phase == Phase.PENDING:
             self.state.set_phase(Phase.TRIAGE)
 
         steps = 0
-        while self.state.phase not in (Phase.DONE, Phase.FAILED):
+        while self.state.phase not in (Phase.DONE, Phase.FAILED, Phase.PARKED):
             steps += 1
             if steps > _MAX_PHASE_STEPS:
                 raise RuntimeError(
@@ -187,15 +218,19 @@ class Pipeline:
                 self.state.set_phase(Phase.FAILED)
                 click.echo(f"\nERROR in {phase.value}: {e}", err=True)
                 raise
-            if self.state.phase in (Phase.DONE, Phase.FAILED):
+            if self.state.phase in (Phase.DONE, Phase.FAILED, Phase.PARKED):
                 break
             if self.state.phase != phase:
                 continue
             nxt = phase.next()
             self.state.set_phase(nxt)
-            if nxt in (Phase.DONE, Phase.FAILED):
+            if nxt in (Phase.DONE, Phase.FAILED, Phase.PARKED):
                 break
 
+        if self.state.is_parked():
+            click.echo(
+                f"\nTask PARKED: {self.state.data.get('park_reason', 'no models available')}"
+            )
         return self.state
 
     def _resume_phase(self, start_phase: str | None) -> Phase | None:
@@ -285,6 +320,7 @@ class Pipeline:
         prompt: str,
         timeout: int,
         lines: int = 0,
+        native_session_id: str | None = None,
     ) -> tuple[str, str]:
         """Spawn an agent, wait, and return ``(session, output)``. Raises on failure."""
         session = self.sessions.spawn(
@@ -293,6 +329,8 @@ class Pipeline:
             prompt,
             task_id=self.state.task_id,
             keep_alive=self.keep_alive,
+            tier=self._task_tier(),
+            native_session_id=native_session_id,
         )
         click.echo(f"    Session: {session}")
         output = self.sessions.collect(session, timeout=timeout, lines=lines)
@@ -314,46 +352,137 @@ class Pipeline:
         the implementer roster) and defaults to ``role``.
         """
         complexity = self.state.data.get("complexity") or "medium"
+        task_tier = self._task_tier()
         candidates = [
             model,
             *self.router.fallback_chain(
                 model,
                 select_role or role,
                 task_complexity=complexity,
+                task_tier=task_tier,
                 escalate=self.escalate_mode,
             ),
         ]
+        if not candidates:
+            self.state.park("No models available for role")
+            raise RuntimeError("Task parked: no models available")
+
         last_error: BaseException | None = None
-        for candidate in candidates:
-            try:
-                session, output = self._invoke(candidate, role, prompt, timeout, lines)
-            except (RuntimeError, TimeoutError) as exc:
-                self._record_model_call(
-                    candidate.display_name,
-                    prompt,
-                    str(exc),
-                    self.state.task_id,
-                    success=False,
-                    role=role,
+        use_handoff = False
+        active_prompt = prompt
+        signatures = get_error_signatures()
+
+        prev_model = model
+        for idx, candidate in enumerate(candidates):
+            if use_handoff and idx > 0:
+                bundle = build_handoff_bundle(
+                    self.state.data,
+                    self.workspace,
+                    source_model=prev_model.display_name,
+                    resume_hint=f"Continue {role} after fallback from previous model.",
                 )
-                if candidate is not model:
-                    click.echo(
-                        f"  WARNING: {candidate.display_name} failed; trying fallback",
-                        err=True,
+                save_handoff(bundle, self.state_dir)
+                active_prompt = render_handoff_prompt(bundle)
+
+            native_id: str | None = None
+            if candidate.native_resume and candidate is model:
+                raw = self.state.data.get("native_session_id")
+                native_id = str(raw) if raw else None
+
+            retries = 0
+            max_retries = 2
+            while retries <= max_retries:
+                try:
+                    session, output = self._invoke(
+                        candidate,
+                        role,
+                        active_prompt,
+                        timeout,
+                        lines,
+                        native_session_id=native_id,
                     )
-                last_error = exc
+                except (RuntimeError, TimeoutError) as exc:
+                    text = str(exc)
+                    classified = classify_failure(
+                        text,
+                        exit_code=124 if isinstance(exc, TimeoutError) else None,
+                        cli=candidate.cli,
+                        signatures=signatures,
+                    )
+                    self._record_model_call(
+                        candidate,
+                        active_prompt,
+                        text,
+                        self.state.task_id,
+                        success=False,
+                        role=role,
+                    )
+                    self.router.health.record_failure(
+                        candidate,
+                        classified.kind.value,
+                        classified.message,
+                        throttled_until=classified.retry_after,
+                        exhausted_until=classified.exhausted_until,
+                    )
+                    if (
+                        classified.kind
+                        in (
+                            FailureKind.TIMEOUT,
+                            FailureKind.PROVIDER_ERROR,
+                            FailureKind.TRANSIENT_RATE_LIMIT,
+                            FailureKind.UNKNOWN,
+                        )
+                        and retries < max_retries
+                    ):
+                        retries += 1
+                        time.sleep(min(2**retries, 8))
+                        continue
+                    if candidate is not model:
+                        click.echo(
+                            f"  WARNING: {candidate.display_name} failed; trying fallback",
+                            err=True,
+                        )
+                    last_error = exc
+                    prev_model = candidate
+                    use_handoff = True
+                    break
+                else:
+                    self._record_model_call(
+                        candidate,
+                        active_prompt,
+                        output,
+                        self.state.task_id,
+                        success=True,
+                        role=role,
+                    )
+                    self.router.health.record_success(candidate)
+                    if candidate.native_resume:
+                        sid = self.sessions.extract_session_id(candidate.cli, output)
+                        if sid:
+                            self.state.data["native_session_id"] = sid
+                            self.state.save()
+                    return session, output
+            else:
                 continue
-            self._record_model_call(
-                candidate.display_name,
-                prompt,
-                output,
-                self.state.task_id,
-                success=True,
-                role=role,
-            )
-            return session, output
-        assert last_error is not None
-        raise last_error
+
+        self.state.park("All models failed or unavailable")
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Task parked: all models failed")
+
+    def _select_models(self, role: str, count: int = 1) -> list[Model]:
+        """Select models or park the task when none are available."""
+        complexity = self.state.data.get("complexity") or "medium"
+        models = self.router.select(
+            role,
+            count=count,
+            task_complexity=complexity,
+            task_tier=self._task_tier(),
+            escalate=self.escalate_mode,
+        )
+        if not models:
+            self.state.park(f"No {role} models available")
+        return models
 
     def _git_diff(self) -> str:
         """Return unstaged+staged diff, truncated for prompts."""
@@ -368,12 +497,9 @@ class Pipeline:
     def _phase_triage(self) -> None:
         """Phase 1: Triage the task."""
         click.echo("\n[1/10] TRIAGE")
-        complexity = self.state.data.get("complexity") or "medium"
-        models = self.router.select(
-            "triage", count=1, task_complexity=complexity, escalate=self.escalate_mode
-        )
+        models = self._select_models("triage", count=1)
         if not models:
-            raise RuntimeError("No triage model available")
+            return
         model = models[0]
         click.echo(f"  Model: {model.display_name}")
 
@@ -392,22 +518,17 @@ class Pipeline:
             detected_complexity = self.state.data["complexity"]
         else:
             detected_complexity = self._parse_complexity(output)
-        self.state.set_triage(output, model.display_name, detected_complexity)
-        click.echo(f"  Complexity: {detected_complexity}")
+        detected_tier = parse_tier(output)
+        self.state.set_triage(output, model.display_name, detected_complexity, tier=detected_tier)
+        click.echo(f"  Complexity: {detected_complexity}  Tier: {detected_tier}")
 
     def _phase_planning(self) -> None:
         """Phase 2: Parallel planning with multiple models."""
-        complexity = self.state.data.get("complexity") or "medium"
         click.echo(f"\n[2/10] PARALLEL PLANNING ({self.planner_count} planners)")
 
-        models = self.router.select(
-            "planner",
-            count=self.planner_count,
-            task_complexity=complexity,
-            escalate=self.escalate_mode,
-        )
+        models = self._select_models("planner", count=self.planner_count)
         if not models:
-            raise RuntimeError("No planner models available")
+            return
         if len(models) < self.planner_count:
             click.echo(f"  WARNING: requested {self.planner_count} planners, got {len(models)}")
 
@@ -415,7 +536,7 @@ class Pipeline:
         self.state.data["planner_session_map"] = {}
         self.state.save()
 
-        spawned: list[tuple[str, str, str]] = []
+        spawned: list[tuple[str, Model, str]] = []
         for i, model in enumerate(models):
             click.echo(f"  Planner {i + 1}: {model.display_name}")
             prompt = render_prompt(
@@ -433,8 +554,9 @@ class Pipeline:
                 prompt,
                 task_id=self.state.task_id,
                 keep_alive=self.keep_alive,
+                tier=self._task_tier(),
             )
-            spawned.append((session, model.display_name, prompt))
+            spawned.append((session, model, prompt))
             click.echo(f"    Session: {session}")
 
         if self.dry_run:
@@ -442,42 +564,35 @@ class Pipeline:
 
         click.echo("  Waiting for planners...")
         successes = 0
-        for session_name, model_name, prompt in spawned:
-            click.echo(f"  … {model_name}")
+        for session_name, model, prompt in spawned:
+            click.echo(f"  … {model.display_name}")
             try:
                 output = self.sessions.collect(session_name, timeout=600, lines=0)
             except (RuntimeError, TimeoutError) as exc:
-                click.echo(f"  WARNING: {model_name} failed: {exc}", err=True)
+                click.echo(f"  WARNING: {model.display_name} failed: {exc}", err=True)
                 self._record_model_call(
-                    model_name, prompt, str(exc), self.state.task_id, False, "planner"
+                    model, prompt, str(exc), self.state.task_id, False, "planner"
                 )
                 continue
-            self.state.add_planner_output(model_name, output, session_name)
-            self._record_model_call(model_name, prompt, output, self.state.task_id, True, "planner")
-            click.echo(f"  {model_name}: {len(output)} chars received")
+            self.state.add_planner_output(model.display_name, output, session_name)
+            self._record_model_call(model, prompt, output, self.state.task_id, True, "planner")
+            click.echo(f"  {model.display_name}: {len(output)} chars received")
             successes += 1
         if successes == 0:
             raise RuntimeError("All planners failed")
 
     def _phase_critique(self) -> None:
         """Phase 3: Critique each plan independently."""
-        complexity = self.state.data.get("complexity") or "medium"
         click.echo(f"\n[3/10] CRITIQUE ({self.critic_count} critics)")
 
-        models = self.router.select(
-            "critic",
-            count=self.critic_count,
-            task_complexity=complexity,
-            escalate=self.escalate_mode,
-        )
+        models = self._select_models("critic", count=self.critic_count)
         if not models:
-            click.echo("  WARNING: No critic models available, skipping.")
             return
         plans_text = self.state.get_planner_outputs_text()
         self.state.data["critic_outputs"] = []
         self.state.save()
 
-        spawned: list[tuple[str, str, str]] = []
+        spawned: list[tuple[str, Model, str]] = []
         for i, model in enumerate(models):
             click.echo(f"  Critic {i + 1}: {model.display_name}")
             prompt = render_prompt(
@@ -495,39 +610,37 @@ class Pipeline:
                 prompt,
                 task_id=self.state.task_id,
                 keep_alive=self.keep_alive,
+                tier=self._task_tier(),
             )
-            spawned.append((session, model.display_name, prompt))
+            spawned.append((session, model, prompt))
             click.echo(f"    Session: {session}")
 
         if self.dry_run:
             return
 
         successes = 0
-        for session_name, model_name, prompt in spawned:
+        for session_name, model, prompt in spawned:
             try:
                 output = self.sessions.collect(session_name, timeout=300, lines=0)
             except (RuntimeError, TimeoutError) as exc:
-                click.echo(f"  WARNING: {model_name} failed: {exc}", err=True)
+                click.echo(f"  WARNING: {model.display_name} failed: {exc}", err=True)
                 self._record_model_call(
-                    model_name, prompt, str(exc), self.state.task_id, False, "critic"
+                    model, prompt, str(exc), self.state.task_id, False, "critic"
                 )
                 continue
-            self.state.add_critic_output(model_name, output, session_name)
-            self._record_model_call(model_name, prompt, output, self.state.task_id, True, "critic")
+            self.state.add_critic_output(model.display_name, output, session_name)
+            self._record_model_call(model, prompt, output, self.state.task_id, True, "critic")
             successes += 1
         if successes == 0:
             raise RuntimeError("All critics failed")
 
     def _phase_synthesis(self) -> None:
         """Phase 4: Synthesize plans and critiques into final plan."""
-        complexity = self.state.data.get("complexity") or "medium"
         click.echo("\n[4/10] SYNTHESIS")
 
-        models = self.router.select(
-            "synthesizer", count=1, task_complexity=complexity, escalate=self.escalate_mode
-        )
+        models = self._select_models("synthesizer", count=1)
         if not models:
-            raise RuntimeError("No synthesizer model available")
+            return
         model = models[0]
         click.echo(f"  Model: {model.display_name}")
 
@@ -548,14 +661,11 @@ class Pipeline:
 
     def _phase_implementation(self) -> None:
         """Phase 5: Implement the final plan."""
-        complexity = self.state.data.get("complexity") or "medium"
         click.echo("\n[5/10] IMPLEMENTATION")
 
-        models = self.router.select(
-            "implementer", count=1, task_complexity=complexity, escalate=self.escalate_mode
-        )
+        models = self._select_models("implementer", count=1)
         if not models:
-            raise RuntimeError("No implementer model available")
+            return
         model = models[0]
         click.echo(f"  Model: {model.display_name}")
 
@@ -574,17 +684,10 @@ class Pipeline:
 
     def _phase_review(self) -> None:
         """Phase 6: Independent review of implementation."""
-        complexity = self.state.data.get("complexity") or "medium"
         click.echo(f"\n[6/10] REVIEW ({self.reviewer_count} reviewers)")
 
-        models = self.router.select(
-            "reviewer",
-            count=self.reviewer_count,
-            task_complexity=complexity,
-            escalate=self.escalate_mode,
-        )
+        models = self._select_models("reviewer", count=self.reviewer_count)
         if not models:
-            click.echo("  WARNING: No reviewer models available, skipping.")
             return
         if len(models) < self.reviewer_count:
             click.echo(f"  WARNING: requested {self.reviewer_count} reviewers, got {len(models)}")
@@ -597,7 +700,7 @@ class Pipeline:
         self.state.data["review_outputs"] = []
         self.state.save()
 
-        spawned: list[tuple[str, str, str]] = []
+        spawned: list[tuple[str, Model, str]] = []
         for i, model in enumerate(models):
             click.echo(f"  Reviewer {i + 1}: {model.display_name}")
             prompt = render_prompt(
@@ -615,40 +718,32 @@ class Pipeline:
                 prompt,
                 task_id=self.state.task_id,
                 keep_alive=self.keep_alive,
+                tier=self._task_tier(),
             )
-            spawned.append((session, model.display_name, prompt))
+            spawned.append((session, model, prompt))
             click.echo(f"    Session: {session}")
 
         if self.dry_run:
             return
 
-        for session_name, model_name, prompt in spawned:
+        for session_name, model, prompt in spawned:
             try:
                 output = self.sessions.collect(session_name, timeout=300, lines=0)
             except (RuntimeError, TimeoutError) as exc:
-                click.echo(f"  WARNING: {model_name} failed: {exc}", err=True)
+                click.echo(f"  WARNING: {model.display_name} failed: {exc}", err=True)
                 self._record_model_call(
-                    model_name, prompt, str(exc), self.state.task_id, False, "reviewer"
+                    model, prompt, str(exc), self.state.task_id, False, "reviewer"
                 )
                 continue
-            self.state.add_reviewer_output(model_name, output, session_name)
-            self._record_model_call(
-                model_name, prompt, output, self.state.task_id, True, "reviewer"
-            )
+            self.state.add_reviewer_output(model.display_name, output, session_name)
+            self._record_model_call(model, prompt, output, self.state.task_id, True, "reviewer")
 
     def _phase_review_synthesis(self) -> None:
         """Phase 7: Synthesize multiple reviews into actionable report."""
-        complexity = self.state.data.get("complexity") or "medium"
         click.echo("\n[7/10] REVIEW SYNTHESIS")
 
-        models = self.router.select(
-            "review_synthesizer",
-            count=1,
-            task_complexity=complexity,
-            escalate=self.escalate_mode,
-        )
+        models = self._select_models("review_synthesizer", count=1)
         if not models:
-            click.echo("  WARNING: No review synthesizer available, skipping.")
             return
         model = models[0]
         click.echo(f"  Model: {model.display_name}")
@@ -698,12 +793,9 @@ class Pipeline:
             click.echo(f"  Max fix iterations ({max_fixes}) reached. Giving up.")
             return
 
-        complexity = self.state.data.get("complexity") or "medium"
-        models = self.router.select(
-            "implementer", count=1, task_complexity=complexity, escalate=self.escalate_mode
-        )
+        models = self._select_models("implementer", count=1)
         if not models:
-            raise RuntimeError("No implementer model available for fixes")
+            return
         model = models[0]
         click.echo(f"  Model: {model.display_name}")
 

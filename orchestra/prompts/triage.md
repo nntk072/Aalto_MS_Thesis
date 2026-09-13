@@ -12,6 +12,7 @@ Produce a structured triage report in this exact format:
 ```json
 {
   "complexity": "trivial|medium|complex",
+  "tier": "T0|T1|T2|T3|T4",
   "domain": "feature|bugfix|refactor|test|config|docs|research",
   "scope": "single-file|module|cross-cutting",
   "risk": "low|medium|high",
@@ -24,6 +25,7 @@ Produce a structured triage report in this exact format:
 ```
 
 ## Classification Rules
+- **tier**: T0=trivial/hello-world, T1=single-file small, T2=multi-file moderate, T3=complex cross-module, T4=architecture/risky
 - **trivial**: Single-file change, no new dependencies, no API changes, obvious fix
 - **medium**: Multi-file change, possible new dependencies, requires some design
 - **complex**: Cross-cutting, architectural changes, new patterns, external integrations

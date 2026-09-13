@@ -1,0 +1,108 @@
+version: 3
+
+effort_map:
+  T0: {cline: none, default: none}
+  T1: {cline: low, default: none}
+  T2: {cline: medium, default: none}
+  T3: {cline: high, kilo: high, opencode: high, default: none}
+  T4: {cline: xhigh, kilo: max, opencode: max, default: none}
+
+error_signatures:
+  gemini:
+    rate_limit: ["429", "RESOURCE_EXHAUSTED", "rate limit", "quota exceeded"]
+    auth: ["401", "403", "PERMISSION_DENIED", "invalid api key"]
+  cline:
+    rate_limit: ["429", "rate limit", "quota"]
+    auth: ["401", "403", "unauthorized"]
+  kilo:
+    rate_limit: ["429", "rate limit"]
+    auth: ["401", "403"]
+  opencode:
+    rate_limit: ["429", "rate limit"]
+    auth: ["401", "403"]
+  vibe:
+    rate_limit: ["429", "rate limit"]
+    auth: ["401", "403"]
+
+models:
+  - id: gemini-3.1-pro-preview
+    cli: gemini
+    provider: gemini
+    model_id: gemini-3.1-pro-preview
+    roles: [triage, synthesizer, reviewer, critic, review_synthesizer]
+    priority: 1
+    quota_daily: 500000
+    escalation_only: true
+    min_tier: T3
+    probe_forbidden: true
+    probe_policy: tier0
+    cost_tier: high
+    rpd: 20
+    rpm: 5
+    model_flag: "-m"
+    env_var: GEMINI_API_KEY
+    extra_args: ["--approval-mode", "yolo"]
+    native_resume: false
+
+  - id: vibe-mistral-medium-3.5
+    cli: vibe
+    provider: mistral
+    model_id: mistral-medium-3.5
+    roles: [triage, planner, critic, reviewer, synthesizer, review_synthesizer]
+    priority: 2
+    quota_daily: 1000000
+    env_var: MISTRAL_API_KEY
+    extra_args: ["--auto-approve"]
+    cost_tier: low
+    native_resume: false
+
+  - id: vibe-devstral-local
+    cli: vibe
+    provider: ollama
+    model_id: devstral-local
+    roles: [implementer, planner, reviewer]
+    priority: 3
+    quota_daily: 0
+    extra_args: ["--auto-approve"]
+    cost_tier: free
+    native_resume: false
+
+  - id: opencode-default
+    cli: opencode
+    provider: opencode
+    model_id: default
+    roles: [triage, planner, reviewer, implementer, critic, synthesizer, review_synthesizer]
+    priority: 2
+    quota_daily: 2000000
+    model_flag: "--model"
+    extra_args: ["--auto"]
+    effort_flag: oc_variant
+    cost_tier: low
+    native_resume: false
+
+  - id: kilo-default
+    cli: kilo
+    provider: kilo
+    model_id: default
+    roles: [planner, reviewer, implementer, critic, synthesizer]
+    priority: 3
+    quota_daily: 2000000
+    model_flag: "--model"
+    extra_args: ["--auto"]
+    effort_flag: oc_variant
+    cost_tier: low
+    native_resume: false
+
+  - id: cline-glm-5.3-flash
+    cli: cline
+    provider: cline
+    model_id: z-ai/glm-5.3-flash
+    roles: [planner, implementer, reviewer, critic]
+    priority: 2
+    quota_daily: 2000000
+    model_flag: "-m"
+    extra_args: ["--json", "--auto-approve", "true"]
+    effort_flag: cline_thinking
+    effort_support: [none, low, medium, high, xhigh]
+    cost_tier: low
+    native_resume: false
