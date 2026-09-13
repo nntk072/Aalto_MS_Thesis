@@ -11,6 +11,19 @@ from orchestra.pipeline import Pipeline
 from orchestra.state import Phase, TaskState, list_tasks
 
 
+def _patch_select(monkeypatch: pytest.MonkeyPatch, pipeline: Pipeline, dummy: Model) -> None:
+    def select(
+        role: str,
+        count: int = 1,
+        task_complexity: str = "medium",
+        task_tier: str | None = None,
+        escalate: bool = False,
+    ) -> list[Model]:
+        return [dummy] * count
+
+    monkeypatch.setattr(pipeline.router, "select", select)
+
+
 def _dummy() -> Model:
     return Model(
         name="default",
@@ -41,11 +54,7 @@ def test_dry_run_reaches_done(tmp_path, monkeypatch) -> None:
         critic_count=1,
         reviewer_count=1,
     )
-    pipeline.router.select = (
-        lambda role, count=1, task_complexity="medium", task_tier=None, escalate=False: (  # type: ignore[method-assign]
-            [dummy] * count
-        )
-    )
+    _patch_select(monkeypatch, pipeline, dummy)
     state = pipeline.run("add a comment")
     assert state.phase == Phase.DONE
     report = Path(state.data["final_report"])
@@ -72,14 +81,14 @@ def test_complexity_override_applied_before_triage(tmp_path, monkeypatch) -> Non
         seen.append(task_complexity)
         return [dummy] * count
 
-    pipeline.router.select = select  # type: ignore[method-assign]
+    monkeypatch.setattr(pipeline.router, "select", select)
     state = pipeline.run("add a comment", complexity="trivial")
     assert state.data["complexity"] == "trivial"
     assert state.data["complexity_override"] is True
     assert "trivial" in seen
 
 
-def test_verification_reenters_fixing(tmp_path) -> None:
+def test_verification_reenters_fixing(tmp_path, monkeypatch) -> None:
     pipeline = Pipeline(workspace=tmp_path, dry_run=True, max_fixes=2)
     calls: list[str] = []
 
@@ -97,8 +106,8 @@ def test_verification_reenters_fixing(tmp_path) -> None:
         else:
             pipeline.state.set_phase(Phase.DONE)
 
-    pipeline._phase_fixing = fake_fix  # type: ignore[method-assign]
-    pipeline._phase_verification = fake_verify  # type: ignore[method-assign]
+    monkeypatch.setattr(pipeline, "_phase_fixing", fake_fix)
+    monkeypatch.setattr(pipeline, "_phase_verification", fake_verify)
     task_id = "task-test-fix-loop"
     state = TaskState(task_id, "fix me", pipeline.state_dir)
     state.set_phase(Phase.FIXING)
@@ -140,11 +149,7 @@ def test_resume_failed_restarts_failed_step(tmp_path, monkeypatch) -> None:
     pipeline = Pipeline(
         workspace=tmp_path, dry_run=True, planner_count=1, critic_count=1, reviewer_count=1
     )
-    pipeline.router.select = (
-        lambda role, count=1, task_complexity="medium", task_tier=None, escalate=False: (  # type: ignore[method-assign]
-            [dummy] * count
-        )
-    )
+    _patch_select(monkeypatch, pipeline, dummy)
     state = TaskState("task-r", "t", pipeline.state_dir)
     state.set_phase(Phase.VERIFICATION)
     state.set_phase(Phase.FAILED)
@@ -159,11 +164,7 @@ def test_resume_from_step_2(tmp_path, monkeypatch) -> None:
     pipeline = Pipeline(
         workspace=tmp_path, dry_run=True, planner_count=1, critic_count=1, reviewer_count=1
     )
-    pipeline.router.select = (
-        lambda role, count=1, task_complexity="medium", task_tier=None, escalate=False: (  # type: ignore[method-assign]
-            [dummy] * count
-        )
-    )
+    _patch_select(monkeypatch, pipeline, dummy)
     state = TaskState("task-s2", "t", pipeline.state_dir)
     state.set_phase(Phase.CRITIQUE)
     result = pipeline.run("t", resume_from="task-s2", start_phase="2")
@@ -178,7 +179,7 @@ def test_resume_done_without_from_stays_done(tmp_path) -> None:
     assert result.phase == Phase.DONE
 
 
-def test_run_verification_uses_ci_gate_commands(tmp_path) -> None:
+def test_run_verification_uses_ci_gate_commands(tmp_path, monkeypatch) -> None:
     pipeline = Pipeline(workspace=tmp_path, dry_run=False)
     recorded: list[list[str]] = []
 
@@ -191,7 +192,7 @@ def test_run_verification_uses_ci_gate_commands(tmp_path) -> None:
         recorded.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
-    pipeline.sessions._run = fake_run  # type: ignore[method-assign]
+    monkeypatch.setattr(pipeline.sessions, "_run", fake_run)
     pipeline.state = TaskState("task-v", "t", pipeline.state_dir)
     pipeline._run_verification()
     assert recorded == [
@@ -202,16 +203,22 @@ def test_run_verification_uses_ci_gate_commands(tmp_path) -> None:
     ]
 
 
-def test_verification_failure_enters_fix_loop_even_if_review_passed(tmp_path) -> None:
+def test_verification_failure_enters_fix_loop_even_if_review_passed(
+    tmp_path, monkeypatch
+) -> None:
     pipeline = Pipeline(workspace=tmp_path, dry_run=False, max_fixes=2)
     pipeline.state = TaskState("task-vfail", "t", pipeline.state_dir)
     pipeline.state.data["review_verdict"] = "pass"
-    pipeline._run_verification = lambda: {  # type: ignore[method-assign]
-        "format": {"success": True, "output": ""},
-        "lint": {"success": True, "output": ""},
-        "typecheck": {"success": True, "output": ""},
-        "tests": {"success": False, "output": "FAILED tests/foo.py::test_x"},
-    }
+
+    def fake_verify() -> dict[str, dict[str, object]]:
+        return {
+            "format": {"success": True, "output": ""},
+            "lint": {"success": True, "output": ""},
+            "typecheck": {"success": True, "output": ""},
+            "tests": {"success": False, "output": "FAILED tests/foo.py::test_x"},
+        }
+
+    monkeypatch.setattr(pipeline, "_run_verification", fake_verify)
     pipeline._phase_verification()
     assert pipeline.state.phase == Phase.FIXING
 
@@ -233,7 +240,7 @@ def test_fixing_skips_when_review_passed_and_tests_not_run(tmp_path, monkeypatch
         return [dummy]
 
     pipeline = Pipeline(workspace=tmp_path, dry_run=True)
-    pipeline.router.select = select  # type: ignore[method-assign]
+    monkeypatch.setattr(pipeline.router, "select", select)
     pipeline.state = TaskState("task-skipfix", "t", pipeline.state_dir)
     pipeline.state.data["review_verdict"] = "pass"
     pipeline.state.data["review_synthesis_output"] = "lgtm"
@@ -258,7 +265,7 @@ def test_fixing_runs_when_verification_already_failed(tmp_path, monkeypatch) -> 
         return [dummy]
 
     pipeline = Pipeline(workspace=tmp_path, dry_run=True)
-    pipeline.router.select = select  # type: ignore[method-assign]
+    monkeypatch.setattr(pipeline.router, "select", select)
     pipeline.state = TaskState("task-dofix", "t", pipeline.state_dir)
     pipeline.state.data["review_verdict"] = "pass"
     pipeline.state.data["review_synthesis_output"] = "lgtm"
@@ -308,7 +315,7 @@ def test_invoke_required_falls_back_when_primary_fails(tmp_path, monkeypatch) ->
         seen["role"] = role
         return [fallback]
 
-    pipeline.router.fallback_chain = fake_chain  # type: ignore[assignment]
+    monkeypatch.setattr(pipeline.router, "fallback_chain", fake_chain)
     attempts: list[str] = []
 
     def fake_invoke(
@@ -324,7 +331,7 @@ def test_invoke_required_falls_back_when_primary_fails(tmp_path, monkeypatch) ->
             raise TimeoutError("primary timed out")
         return "session-backup", "output from backup"
 
-    pipeline._invoke = fake_invoke  # type: ignore[method-assign]
+    monkeypatch.setattr(pipeline, "_invoke", fake_invoke)
     session, output = pipeline._invoke_required(primary, "triage", "prompt", 600)
     assert (session, output) == ("session-backup", "output from backup")
     assert attempts.count(primary.display_name) >= 1
@@ -357,7 +364,7 @@ def test_invoke_required_uses_select_role_for_fallback(tmp_path, monkeypatch) ->
         seen["role"] = role
         return [fallback]
 
-    pipeline.router.fallback_chain = fake_chain  # type: ignore[assignment]
+    monkeypatch.setattr(pipeline.router, "fallback_chain", fake_chain)
     attempts: list[str] = []
 
     def fake_invoke(
@@ -374,7 +381,7 @@ def test_invoke_required_uses_select_role_for_fallback(tmp_path, monkeypatch) ->
             raise TimeoutError("primary timed out")
         return "session-backup", "output from backup"
 
-    pipeline._invoke = fake_invoke  # type: ignore[method-assign]
+    monkeypatch.setattr(pipeline, "_invoke", fake_invoke)
     session, output = pipeline._invoke_required(
         primary, "fixer", "prompt", 600, select_role="implementer"
     )
@@ -407,7 +414,7 @@ def test_invoke_required_raises_when_all_models_fail(tmp_path, monkeypatch) -> N
     ) -> list[Model]:
         return [fallback]
 
-    pipeline.router.fallback_chain = fake_chain  # type: ignore[assignment]
+    monkeypatch.setattr(pipeline.router, "fallback_chain", fake_chain)
 
     def fake_invoke(
         model: Model,
@@ -419,6 +426,6 @@ def test_invoke_required_raises_when_all_models_fail(tmp_path, monkeypatch) -> N
     ) -> tuple[str, str]:
         raise RuntimeError("agent failed")
 
-    pipeline._invoke = fake_invoke  # type: ignore[method-assign]
+    monkeypatch.setattr(pipeline, "_invoke", fake_invoke)
     with pytest.raises(RuntimeError):
         pipeline._invoke_required(primary, "triage", "prompt", 600)
