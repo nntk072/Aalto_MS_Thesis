@@ -19,6 +19,17 @@ from .parse import parse_complexity, parse_tier, parse_verdict, static_tier_fast
 from .prompts import render_prompt
 from .report import write_final_report
 from .router import ModelRouter
+from .routing import (
+    apply_triage_bootstrap,
+    effective_critic_count,
+    effective_planner_count,
+    effective_reviewer_count,
+    merge_route,
+    parse_route_from_text,
+    record_phase_visit,
+    resolve_next_phase,
+    route_notes_for_role,
+)
 from .sessions import SessionManager
 from .state import Phase, TaskState, generate_task_id
 
@@ -181,6 +192,11 @@ class Pipeline:
                 state_dir=self.state_dir,
             )
             self.state.data["fix_loop_max"] = self.max_fixes
+            self.state.data.setdefault("route", {})
+            route = self.state.data["route"]
+            route.setdefault("planner_count", self.planner_count)
+            route.setdefault("critic_count", self.critic_count)
+            route.setdefault("reviewer_count", self.reviewer_count)
             self.state.save()
             click.echo(f"Task ID: {task_id}")
             click.echo(f"Task: {task_description}")
@@ -224,7 +240,7 @@ class Pipeline:
                 )
             phase = self.state.phase
             try:
-                self._execute_phase(phase)
+                verification_passed = self._execute_phase(phase)
             except Exception as e:
                 self.state.add_error(str(e))
                 self.state.set_phase(Phase.FAILED)
@@ -234,9 +250,11 @@ class Pipeline:
                 break
             if self.state.phase != phase:
                 continue
-            nxt = phase.next()
-            self.state.set_phase(nxt)
-            if nxt in (Phase.DONE, Phase.FAILED, Phase.PARKED):
+            if phase is Phase.REPORTING:
+                self.state.set_phase(Phase.DONE)
+                break
+            self._advance_after_phase(phase, verification_passed=verification_passed)
+            if self.state.phase in (Phase.DONE, Phase.FAILED, Phase.PARKED):
                 break
 
         if self.state.is_parked():
@@ -295,31 +313,98 @@ class Pipeline:
         self.state.save()
         click.echo(f"  Backup [{slot}]: {meta['files']} files")
 
-    def _execute_phase(self, phase: Phase) -> None:
-        """Execute a single pipeline phase."""
+    def _effective_planner_count(self) -> int:
+        return effective_planner_count(self.state.data, self.planner_count)
+
+    def _effective_critic_count(self) -> int:
+        return effective_critic_count(self.state.data, self.critic_count)
+
+    def _effective_reviewer_count(self) -> int:
+        return effective_reviewer_count(self.state.data, self.reviewer_count)
+
+    def _phase_agent_output(self, phase: Phase) -> str:
+        data = self.state.data
+        if phase is Phase.TRIAGE:
+            return str(data.get("triage_output") or "")
+        if phase is Phase.PLANNING:
+            outputs = data.get("planner_outputs") or []
+            return str(outputs[-1]["output"]) if outputs else ""
+        if phase is Phase.CRITIQUE:
+            outputs = data.get("critic_outputs") or []
+            return str(outputs[-1]["output"]) if outputs else ""
+        if phase is Phase.SYNTHESIS:
+            return str(data.get("synthesis_output") or "")
+        if phase is Phase.IMPLEMENTATION:
+            return str(data.get("implementer_output") or "")
+        if phase is Phase.REVIEW:
+            outputs = data.get("review_outputs") or []
+            return str(outputs[-1]["output"]) if outputs else ""
+        if phase is Phase.REVIEW_SYNTHESIS:
+            return str(data.get("review_synthesis_output") or "")
+        if phase is Phase.FIXING:
+            outputs = data.get("fix_outputs") or []
+            return str(outputs[-1]["output"]) if outputs else ""
+        return ""
+
+    def _advance_after_phase(
+        self,
+        completed: Phase,
+        *,
+        verification_passed: bool | None = None,
+    ) -> None:
+        output = self._phase_agent_output(completed)
+        update = parse_route_from_text(output) if output else None
+        merge_route(self.state.data, update)
+        next_phase, reason = resolve_next_phase(
+            completed,
+            self.state.data,
+            update,
+            planner_count=self.planner_count,
+            critic_count=self.critic_count,
+            reviewer_count=self.reviewer_count,
+            verification_passed=verification_passed,
+            tier=self._task_tier(),
+        )
+        record_phase_visit(self.state.data, next_phase)
+        self.state.save()
+        click.echo(f"  Route: {completed.value} → {next_phase.value} ({reason})")
+        self.state.set_phase(next_phase)
+
+    def _execute_phase(self, phase: Phase) -> bool | None:
+        """Execute a single pipeline phase. Returns verification pass/fail when applicable."""
         self.state.set_phase(phase)
         if phase is not Phase.REPORTING:
             self._snapshot(self._backup_slot(phase))
         if phase == Phase.TRIAGE:
             self._phase_triage()
-        elif phase == Phase.PLANNING:
+            return None
+        if phase == Phase.PLANNING:
             self._phase_planning()
-        elif phase == Phase.CRITIQUE:
+            return None
+        if phase == Phase.CRITIQUE:
             self._phase_critique()
-        elif phase == Phase.SYNTHESIS:
+            return None
+        if phase == Phase.SYNTHESIS:
             self._phase_synthesis()
-        elif phase == Phase.IMPLEMENTATION:
+            return None
+        if phase == Phase.IMPLEMENTATION:
             self._phase_implementation()
-        elif phase == Phase.REVIEW:
+            return None
+        if phase == Phase.REVIEW:
             self._phase_review()
-        elif phase == Phase.REVIEW_SYNTHESIS:
+            return None
+        if phase == Phase.REVIEW_SYNTHESIS:
             self._phase_review_synthesis()
-        elif phase == Phase.FIXING:
+            return None
+        if phase == Phase.FIXING:
             self._phase_fixing()
-        elif phase == Phase.VERIFICATION:
-            self._phase_verification()
-        elif phase == Phase.REPORTING:
+            return None
+        if phase == Phase.VERIFICATION:
+            return self._phase_verification()
+        if phase == Phase.REPORTING:
             self._phase_report()
+            return None
+        return None
 
     def _echo_cmd(self, model: Model, role: str | None = None) -> None:
         effort = self.sessions.resolve_effort(model, self._task_tier(), role=role)
@@ -523,7 +608,11 @@ class Pipeline:
         model = models[0]
         click.echo(f"  Model: {model.display_name}")
 
-        prompt = render_prompt("triage", task=self.state.task_description)
+        prompt = render_prompt(
+            "triage",
+            task=self.state.task_description,
+            route_notes=route_notes_for_role(self.state.data, "triage"),
+        )
         if self.dry_run:
             self._echo_cmd(model, "triage")
             if not self.state.data.get("complexity_override") and not self.state.data.get(
@@ -531,6 +620,8 @@ class Pipeline:
             ):
                 self.state.data["complexity"] = "medium"
                 self.state.save()
+            tier = self._task_tier()
+            apply_triage_bootstrap(self.state.data, tier=tier, had_explicit_goto=False)
             return
 
         _session, output = self._invoke_required(model, "triage", prompt, timeout=600, lines=0)
@@ -540,17 +631,28 @@ class Pipeline:
             detected_complexity = self._parse_complexity(output)
         detected_tier = parse_tier(output)
         self.state.set_triage(output, model.display_name, detected_complexity, tier=detected_tier)
+        route_update = parse_route_from_text(output)
+        apply_triage_bootstrap(
+            self.state.data,
+            tier=detected_tier,
+            had_explicit_goto=route_update is not None and route_update.goto is not None,
+        )
         click.echo(f"  Complexity: {detected_complexity}  Tier: {detected_tier}")
 
     def _phase_planning(self) -> None:
         """Phase 2: Parallel planning with multiple models."""
-        click.echo(f"\n[2/10] PARALLEL PLANNING ({self.planner_count} planners)")
+        planner_n = self._effective_planner_count()
+        click.echo(f"\n[2/10] PARALLEL PLANNING ({planner_n} planners)")
 
-        models = self._select_models("planner", count=self.planner_count)
+        if planner_n <= 0:
+            click.echo("  Skipping planning (planner_count=0).")
+            return
+
+        models = self._select_models("planner", count=planner_n)
         if not models:
             return
-        if len(models) < self.planner_count:
-            click.echo(f"  WARNING: requested {self.planner_count} planners, got {len(models)}")
+        if len(models) < planner_n:
+            click.echo(f"  WARNING: requested {planner_n} planners, got {len(models)}")
 
         self.state.data["planner_outputs"] = []
         self.state.data["planner_session_map"] = {}
@@ -564,6 +666,7 @@ class Pipeline:
                 task=self.state.task_description,
                 triage=self.state.data.get("triage_output", ""),
                 workspace=str(self.workspace),
+                route_notes=route_notes_for_role(self.state.data, "planner"),
             )
             if self.dry_run:
                 self._echo_cmd(model, "planner")
@@ -605,9 +708,14 @@ class Pipeline:
 
     def _phase_critique(self) -> None:
         """Phase 3: Critique each plan independently."""
-        click.echo(f"\n[3/10] CRITIQUE ({self.critic_count} critics)")
+        critic_n = self._effective_critic_count()
+        click.echo(f"\n[3/10] CRITIQUE ({critic_n} critics)")
 
-        models = self._select_models("critic", count=self.critic_count)
+        if critic_n <= 0:
+            click.echo("  Skipping critique (critic_count=0).")
+            return
+
+        models = self._select_models("critic", count=critic_n)
         if not models:
             return
         plans_text = self.state.get_planner_outputs_text()
@@ -622,6 +730,7 @@ class Pipeline:
                 plan=plans_text,
                 other_plans=plans_text,
                 triage=self.state.data.get("triage_output", ""),
+                route_notes=route_notes_for_role(self.state.data, "critic"),
             )
             if self.dry_run:
                 self._echo_cmd(model, "critic")
@@ -674,6 +783,7 @@ class Pipeline:
             critiques=self.state.get_critic_outputs_text(),
             triage=self.state.data.get("triage_output", ""),
             workspace=str(self.workspace),
+            route_notes=route_notes_for_role(self.state.data, "synthesizer"),
         )
         if self.dry_run:
             self._echo_cmd(model, "synthesizer")
@@ -698,9 +808,12 @@ class Pipeline:
             plan=self.state.data.get("final_plan", ""),
             triage=self.state.data.get("triage_output", ""),
             workspace=str(self.workspace),
+            route_notes=route_notes_for_role(self.state.data, "implementer"),
         )
         if self.dry_run:
             self._echo_cmd(model, "implementer")
+            self.state.data["implementation_succeeded"] = True
+            self.state.save()
             return
 
         _session, output = self._invoke_required(model, "implementer", prompt, timeout=900, lines=0)
@@ -708,13 +821,18 @@ class Pipeline:
 
     def _phase_review(self) -> None:
         """Phase 6: Independent review of implementation."""
-        click.echo(f"\n[6/10] REVIEW ({self.reviewer_count} reviewers)")
+        reviewer_n = self._effective_reviewer_count()
+        click.echo(f"\n[6/10] REVIEW ({reviewer_n} reviewers)")
 
-        models = self._select_models("reviewer", count=self.reviewer_count)
+        if reviewer_n <= 0:
+            click.echo("  Skipping review (reviewer_count=0).")
+            return
+
+        models = self._select_models("reviewer", count=reviewer_n)
         if not models:
             return
-        if len(models) < self.reviewer_count:
-            click.echo(f"  WARNING: requested {self.reviewer_count} reviewers, got {len(models)}")
+        if len(models) < reviewer_n:
+            click.echo(f"  WARNING: requested {reviewer_n} reviewers, got {len(models)}")
 
         diff_text = self._git_diff()
         test_results = "Not yet run (verification runs full CI gate: format, lint, mypy, pytest)."
@@ -732,6 +850,7 @@ class Pipeline:
                 plan=self.state.data.get("final_plan", ""),
                 diff=diff_text,
                 test_results=test_results,
+                route_notes=route_notes_for_role(self.state.data, "reviewer"),
             )
             if self.dry_run:
                 self._echo_cmd(model, "reviewer")
@@ -781,6 +900,7 @@ class Pipeline:
             diff=self._git_diff(),
             test_results=str(self.state.data.get("verification_result", "Not yet run")),
             reviews=self.state.get_review_outputs_text(),
+            route_notes=route_notes_for_role(self.state.data, "review_synthesizer"),
         )
         if self.dry_run:
             self._echo_cmd(model, "review_synthesizer")
@@ -852,7 +972,18 @@ class Pipeline:
 5. Re-run only the failing check(s); phase 9 will re-run the full CI gate
 6. Report what you fixed and command results
 
-Focus on correctness and safety. Do not change code style unless it's part of the fix."""
+Focus on correctness and safety. Do not change code style unless it's part of the fix.
+
+## Routing (phase 8 — fixing)
+
+| May goto | 1, 2, 5, 6, 9, 10 |
+| Must-not goto | 3, 4, 7 |
+
+Silent default: → **9**. Optional JSON tail:
+
+```json
+{{"route": {{"goto": 9}}}}
+```"""
 
         if self.dry_run:
             self._echo_cmd(model, "fixer")
@@ -864,16 +995,33 @@ Focus on correctness and safety. Do not change code style unless it's part of th
         self.state.add_fix_output(output, model.display_name)
         click.echo(f"  Fix applied: {len(output)} chars")
 
-    def _phase_verification(self) -> None:
-        """Phase 9: Deterministic verification with fix loop."""
+    def _phase_verification(self) -> bool:
+        """Phase 9: Deterministic verification with fix loop.
+
+        Returns True when the CI gate passes, False when fixes are needed.
+        """
         click.echo("\n[9/10] VERIFICATION")
+
+        route = self.state.data.get("route") or {}
+        verify_mode = route.get("verify_mode", "full")
 
         if self.dry_run:
             click.echo("  Would run CI gate (.github/workflows/ci.yml, not nightly):")
             for check in CI_CHECKS:
                 timeout = f" timeout={check.timeout}s" if check.timeout else ""
                 click.echo(f"    {' '.join(check.argv)}{timeout}")
-            return
+            if verify_mode == "skip":
+                click.echo("  verify_mode=skip (dry-run treats as pass)")
+            return True
+
+        if verify_mode == "skip":
+            click.echo("  verify_mode=skip — skipping CI gate")
+            skipped = {
+                check.name: {"success": True, "output": "skipped (verify_mode=skip)"}
+                for check in CI_CHECKS
+            }
+            self.state.set_verification(skipped)
+            return True
 
         results = self._run_verification()
         self.state.set_verification(results)
@@ -883,7 +1031,7 @@ Focus on correctness and safety. Do not change code style unless it's part of th
 
         if gate_passed(results):
             click.echo("  CI gate: PASS")
-            return
+            return True
 
         click.echo(self._format_ci_failure_output(results)[-1500:])
         if fix_count >= max_fixes:
@@ -893,10 +1041,10 @@ Focus on correctness and safety. Do not change code style unless it's part of th
             self.state.add_error(f"CI gate still failing after {max_fixes} fix attempts")
             self._phase_report()
             self.state.set_phase(Phase.FAILED)
-            return
+            return True
 
-        click.echo(f"\n[FAIL] CI gate failed. Triggering fix loop ({fix_count + 1}/{max_fixes})...")
-        self.state.set_phase(Phase.FIXING)
+        click.echo(f"\n[FAIL] CI gate failed. Routing to fix loop ({fix_count + 1}/{max_fixes})...")
+        return False
 
     def _format_ci_failure_output(self, results: dict[str, Any]) -> str:
         parts: list[str] = []

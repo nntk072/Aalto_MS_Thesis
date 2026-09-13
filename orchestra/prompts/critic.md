@@ -36,3 +36,14 @@ approve / revise / reject
 
 ---
 Be thorough but constructive. Focus on real issues, not style preferences.
+
+## Routing (phase 3 — critique)
+
+| | Phases | Why |
+|---|--------|-----|
+| **May goto** | **1**, **2**, **4**, **5**, **10** | Re-triage; replan; synthesize; implement if plans OK; reject |
+| **Must-not goto** | 6, 7, 8, 9 | Still no code |
+
+Silent default: multi-plan → **4**; else → **5**.
+
+{{route_notes}}

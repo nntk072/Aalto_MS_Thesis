@@ -14,6 +14,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from .agent_output import extract_usable_output
 from .failures import failure_excerpt, inspect_live_log
 from .models import Model, codex_effort_for_role, get_effort_map
 
@@ -336,6 +337,7 @@ class SessionManager:
 
         self.active_sessions[session_name] = {
             "model": model.display_name,
+            "cli": model.cli,
             "role": role,
             "started": time.time(),
             "log_file": str(log_file),
@@ -359,28 +361,45 @@ class SessionManager:
         except ValueError:
             return 1
 
+    def _session_cli(self, session_name: str) -> str:
+        info = self.active_sessions.get(session_name, {})
+        cli = info.get("cli")
+        if isinstance(cli, str) and cli:
+            return cli
+        job_path = info.get("job_file")
+        if job_path:
+            try:
+                job = json.loads(Path(job_path).read_text(encoding="utf-8"))
+                model = job.get("model") or {}
+                if isinstance(model, dict) and model.get("cli"):
+                    return str(model["cli"])
+            except (OSError, json.JSONDecodeError, TypeError):
+                pass
+        return ""
+
     def read_output(self, session_name: str, lines: int = 0) -> str:
-        """Read agent output from the log and/or tmux pane; keep the longer copy."""
-        chunks: list[str] = []
+        """Read agent output from the run log (tmux pane is fallback only)."""
         info = self.active_sessions.get(session_name, {})
         log_path = Path(info["log_file"]) if info.get("log_file") else None
         if log_path is None:
             candidate = self.runs_dir / session_name / "output.log"
             log_path = candidate if candidate.exists() else None
         if log_path is not None and log_path.exists():
-            text = log_path.read_text(encoding="utf-8", errors="replace")
-            chunks.append(_ANSI_RE.sub("", text))
+            text = _ANSI_RE.sub("", log_path.read_text(encoding="utf-8", errors="replace"))
+            if lines > 0:
+                text = "\n".join(text.splitlines()[-lines:])
+            return text
         start = f"-{lines}" if lines > 0 else "-10000"
         result = self._run(
             ["tmux", "capture-pane", "-t", session_name, "-p", "-S", start],
             timeout=10,
         )
         if result.returncode == 0 and result.stdout:
-            chunks.append(_ANSI_RE.sub("", result.stdout))
-        text = max(chunks, key=len, default="")
-        if lines > 0:
-            text = "\n".join(text.splitlines()[-lines:])
-        return text
+            text = _ANSI_RE.sub("", result.stdout)
+            if lines > 0:
+                text = "\n".join(text.splitlines()[-lines:])
+            return text
+        return ""
 
     def is_running(self, session_name: str) -> bool:
         """True while the agent runner is still the pane process."""
@@ -426,6 +445,7 @@ class SessionManager:
         last_beat = start
         last_size = -1
         log_path = self._log_path(session_name)
+        cli = self._session_cli(session_name)
         while time.time() - start < timeout:
             if self.exit_code(session_name) is not None:
                 return True
@@ -445,8 +465,15 @@ class SessionManager:
                 except OSError:
                     snippet = ""
                 if snippet:
-                    verdict = inspect_live_log(snippet)
+                    verdict = inspect_live_log(snippet, cli=cli)
                     if verdict == "complete":
+                        deadline = now + 15.0
+                        while time.time() < deadline:
+                            if self.exit_code(session_name) is not None:
+                                return True
+                            if not self.is_running(session_name):
+                                return self.exit_code(session_name) is not None
+                            time.sleep(0.5)
                         return True
                     if verdict == "abort":
                         return False
@@ -496,13 +523,12 @@ class SessionManager:
             if code is not None and code != 0:
                 tail = failure_excerpt(output) if output else ""
                 raise RuntimeError(f"Session {session_name} exited {code}\n{tail}")
-            usable = "\n".join(
-                ln for ln in output.splitlines() if not ln.startswith("[orchestra] exec")
-            ).strip()
-            if not usable:
+            cli = self._session_cli(session_name)
+            cleaned = extract_usable_output(output, cli=cli)
+            if not cleaned:
                 raise RuntimeError(f"Session {session_name} produced empty output")
             succeeded = True
-            return output
+            return cleaned
         finally:
             if not (keep_alive and succeeded):
                 self.kill(session_name)

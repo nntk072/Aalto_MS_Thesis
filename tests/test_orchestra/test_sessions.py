@@ -370,6 +370,35 @@ def test_inspect_live_log_ignores_quoted_transport_errors() -> None:
     assert inspect_live_log('{"type":"error","message":"ECONNRESET"}') == "abort"
 
 
+def test_collect_returns_sanitized_cline_output(tmp_path) -> None:
+    sm = SessionManager(workspace=tmp_path, dry_run=False)
+    sm._run = lambda cmd, capture=True, timeout=None, heartbeat=0: subprocess.CompletedProcess[str](  # type: ignore[method-assign]
+        cmd, 0, stdout="", stderr=""
+    )
+    model = Model(
+        name="z-ai/glm-5.3-flash",
+        provider="cline",
+        cli="cline",
+        roles=["implementer"],
+        priority=2,
+        quota_daily=0,
+        extra_args=["--json"],
+    )
+    session = sm.spawn(model, "implementer", "fix ci", task_id="t")
+    run_dir = tmp_path / "orchestra" / "state" / "runs" / session
+    (run_dir / "output.log").write_text(
+        "[orchestra] exec cline -p <prompt> --json\n"
+        '{"type":"agent_event","event":{"type":"content_end","contentType":"tool",'
+        '"toolName":"read_files","output":[{"result":"SECRET FILE BODY"}]}}\n'
+        '{"type":"agent_event","event":{"type":"done","reason":"completed",'
+        '"text":"Applied ruff fixes."}}\n'
+    )
+    (run_dir / "exit_code").write_text("0")
+    out = sm.collect(session, timeout=1, lines=0)
+    assert "SECRET FILE BODY" not in out
+    assert "Applied ruff fixes." in out
+
+
 def test_wait_for_idle_completes_on_cline_done_event(tmp_path) -> None:
     from orchestra.failures import agent_completed
 

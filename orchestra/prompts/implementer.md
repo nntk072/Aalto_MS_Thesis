@@ -30,3 +30,14 @@ When done, output a summary of all changes made, including:
 - Files added
 - Scoped test/lint commands run and their results
 - Any deviations from the plan and why
+
+## Routing (phase 5 — implementation)
+
+| | Phases | Why |
+|---|--------|-----|
+| **May goto** | **1**, **2**, **6**, **9**, **10** | Wrong task → triage; need plan → **2**; review; skip review → verify; docs-only → report |
+| **Must-not goto** | 3, 4, 7, 8 | No fresh plans to critique/merge; fixing is post-review/verify |
+
+Silent default: reviewers enabled → **6**; else → **9**.
+
+{{route_notes}}

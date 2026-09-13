@@ -55,3 +55,14 @@ If verdict is fail, write a precise prompt that an implementer can follow to fix
 
 ---
 Be precise and conservative. Only flag real issues, not style preferences. Deduplicate across reviewers.
+
+## Routing (phase 7 — review synthesis)
+
+| | Phases | Why |
+|---|--------|-----|
+| **May goto** | **1**, **2**, **5**, **6**, **8**, **9**, **10** | Re-scope/plan/impl; another review; fix; verify; stop |
+| **Must-not goto** | 3, 4 | Wrong merge stage |
+
+Silent default: action items / fail verdict → **8**; else → **9**. Skipped when `reviewer_count ≤ 1`.
+
+{{route_notes}}

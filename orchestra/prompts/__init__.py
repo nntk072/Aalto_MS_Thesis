@@ -44,6 +44,13 @@ def render_prompt(role: str, **kwargs: Any) -> str:
     workspace = str(kwargs.get("workspace", ""))
     if "{{ci_verification}}" in template and workspace:
         template = template.replace("{{ci_verification}}", render_ci_verification(workspace))
+    route_notes = str(kwargs.pop("route_notes", "") or "")
+    if "{{route_notes}}" in template:
+        block = route_notes.strip()
+        template = template.replace(
+            "{{route_notes}}",
+            f"\n{block}\n" if block else "",
+        )
     for key, value in kwargs.items():
         template = template.replace("{{" + key + "}}", str(value))
     return template
