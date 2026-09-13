@@ -1,0 +1,32 @@
+---
+description: CI verification gate — required before marking work done (matches GitHub CI and orchestra)
+alwaysApply: true
+---
+
+# CI verification (Cursor)
+
+Before finishing any code change, run the **standard CI gate** from repo root.
+Canonical list: `orchestra/ci_gate.py` (`CI_CHECKS`). Mirrors `.github/workflows/ci.yml`
+jobs `code-formatting` + `ut-venv` — **not** nightly workflows.
+
+```bash
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy .
+uv run pytest tests/ -v
+```
+
+## Not sufficient
+
+- `pytest -m "not slow"` — local shortcut only; CI runs the full suite
+- `mypy quant_rl/` or `ruff check quant_rl/` — CI checks the whole tree (`.`)
+
+## Test mocks
+
+Use `monkeypatch.setattr(obj, "method", fn)`. Do **not** assign to bound methods
+(`obj.method = fn`); `mypy .` fails with `method-assign`.
+
+## Orchestra / CI runners
+
+GitHub runners may lack agent CLIs (`opencode`, `vibe`, etc.). Orchestra tests must
+stub binaries via `stub_clis` in `tests/test_orchestra/conftest.py`.
