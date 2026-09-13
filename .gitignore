@@ -189,5 +189,9 @@ zscaler.crt
 # Added by code-review-graph
 .code-review-graph/
 
+# Local IDE agent config (rules live in .agents/rules/)
+.cursor/
+.kilocode/
+
 # Orchestra runtime (task JSON, agent logs, backups, reports)
 orchestra/state/

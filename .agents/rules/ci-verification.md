@@ -29,6 +29,6 @@ Orchestra phase 9 (verification) and the implementer prompt run this gate.
 
 ## Relations
 
-- Enforced in CI and Orchestra verification; Cursor rule: `.cursor/rules/ci-verification.mdc`
+- Enforced in CI and Orchestra verification; agent index: `.agents/rules/README.md`
 - Pre-commit checklist: [git-commit-rules.md](git-commit-rules.md)
 - Feature workflow: [development-workflow.md](development-workflow.md)
