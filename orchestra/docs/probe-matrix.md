@@ -2,7 +2,7 @@
 
 Evidence tags: **A** = verified locally, **B** = official docs, **C** = unproven assumption.
 
-CLI versions (**A**): Cline 3.0.61, Kilo 7.5.16, OpenCode 1.18.30, Vibe 2.25.2, Gemini CLI 0.59.0.
+CLI versions (**A**): Codex CLI 0.154.0, Cline 3.0.61, Kilo 7.5.16, OpenCode 1.18.30, Vibe 2.25.2, Gemini CLI 0.59.0.
 
 ## Tier-0 (local, no inference)
 
@@ -13,6 +13,7 @@ CLI versions (**A**): Cline 3.0.61, Kilo 7.5.16, OpenCode 1.18.30, Vibe 2.25.2, 
 | Kilo/OpenCode | binary present | CLI installed | A | Auth cache optional from prior doctor |
 | Vibe | `~/.vibe/config.toml` + `MISTRAL_API_KEY` or local Ollama | config readable | A | `--agent` is permission profile, not model (**A**) |
 | Gemini | `GEMINI_API_KEY` or `~/.gemini/settings.json` auth type | auth configured | A | |
+| Codex | `codex --version` and local Codex authentication | binary/configuration available | A | no generation probe |
 
 ## Tier-1 (doctor only, no generation)
 
@@ -45,6 +46,7 @@ CLI versions (**A**): Cline 3.0.61, Kilo 7.5.16, OpenCode 1.18.30, Vibe 2.25.2, 
 | Kilo/OpenCode | `--variant` (not `--thinking`) |
 | Vibe | per-model `thinking` in config; `VIBE_ACTIVE_MODEL` for model (**C** per-run override) |
 | Gemini | no native effort flag in CLI |
+| Codex | `-c model_reasoning_effort=none\|low\|medium\|high` |
 
 ## Phase 5 gate
 

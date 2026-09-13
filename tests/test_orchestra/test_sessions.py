@@ -9,6 +9,7 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
+import pytest
 from orchestra.agent_runner import run_job
 from orchestra.models import Model
 from orchestra.sessions import SessionManager
@@ -23,6 +24,47 @@ def _opencode() -> Model:
         priority=2,
         quota_daily=0,
     )
+
+
+def _codex() -> Model:
+    return Model(
+        name="gpt-5.6-luna",
+        provider="openai",
+        cli="codex",
+        roles=["planner"],
+        priority=1,
+        quota_daily=0,
+        model_flag="-m",
+        effort_flag="codex_reasoning",
+        effort_support=["none", "low", "medium", "high"],
+        extra_args=[
+            "--sandbox",
+            "workspace-write",
+            "--ask-for-approval",
+            "never",
+            "--ephemeral",
+            "--no-alt-screen",
+        ],
+    )
+
+
+def test_build_command_codex_uses_model_and_capped_reasoning() -> None:
+    cmd = SessionManager.build_command(_codex(), "plan this", effort="high")
+    assert cmd[:2] == ["codex", "exec"]
+    assert ["-m", "gpt-5.6-luna"] == cmd[8:10]
+    assert ["-c", "model_reasoning_effort=high"] == cmd[10:12]
+    assert cmd[-1] == "plan this"
+    assert "xhigh" not in cmd
+
+
+def test_build_command_codex_rejects_uncapped_reasoning() -> None:
+    with pytest.raises(ValueError, match="Unsupported Codex reasoning effort"):
+        SessionManager.build_command(_codex(), "plan this", effort="xhigh")
+
+
+def test_codex_effort_resolves_by_role() -> None:
+    assert SessionManager.resolve_effort(_codex(), "T2", role="planner") == "medium"
+    assert SessionManager.resolve_effort(_codex(), "T3", role="implementer") == "high"
 
 
 def test_spawn_writes_prompt_file_not_tmux_argv(tmp_path) -> None:

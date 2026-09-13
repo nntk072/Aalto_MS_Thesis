@@ -11,6 +11,7 @@ import yaml
 
 _TIER_ORDER = {"T0": 0, "T1": 1, "T2": 2, "T3": 3, "T4": 4}
 _COST_ORDER = {"free": 0, "low": 1, "medium": 2, "high": 3}
+_CODEX_EFFORTS = ("none", "low", "medium", "high")
 _CONFIG_PATH = Path(__file__).parent / "models.yaml"
 
 
@@ -122,80 +123,37 @@ def _model_from_yaml(entry: dict[str, Any]) -> Model:
     )
 
 
-# Default model roster — superseded by models.yaml when present
+# Default model roster — superseded by models.yaml when present.
 DEFAULT_MODELS: list[Model] = [
     Model(
-        name="gemini-3.1-pro-preview",
-        provider="gemini",
-        cli="gemini",
-        roles=["triage", "synthesizer", "reviewer", "critic", "review_synthesizer"],
-        priority=1,
-        quota_daily=500_000,
-        escalation_only=True,
-        model_flag="-m",
-        env_var="GEMINI_API_KEY",
-        extra_args=["--approval-mode", "yolo"],
-        registry_id="gemini-3.1-pro-preview",
-        min_tier="T3",
-        probe_forbidden=True,
-        cost_tier="high",
-        rpd=20,
-    ),
-    Model(
-        name="mistral-medium-3.5",
-        provider="mistral",
-        cli="vibe",
-        roles=["triage", "planner", "critic", "reviewer", "synthesizer", "review_synthesizer"],
-        priority=2,
-        quota_daily=1_000_000,
-        env_var="MISTRAL_API_KEY",
-        alias="mistral-medium-3.5",
-        extra_args=["--auto-approve"],
-        registry_id="vibe-mistral-medium-3.5",
-    ),
-    Model(
-        name="devstral-local",
-        provider="ollama",
-        cli="vibe",
-        roles=["implementer", "planner", "reviewer"],
-        priority=3,
-        quota_daily=0,
-        extra_args=["--auto-approve"],
-        registry_id="vibe-devstral-local",
-        cost_tier="free",
-    ),
-    Model(
-        name="default",
-        provider="opencode",
-        cli="opencode",
+        name="gpt-5.6-luna",
+        provider="openai",
+        cli="codex",
         roles=[
             "triage",
             "planner",
-            "reviewer",
-            "implementer",
             "critic",
             "synthesizer",
+            "implementer",
+            "reviewer",
             "review_synthesizer",
         ],
-        priority=2,
+        priority=1,
         quota_daily=2_000_000,
-        model_flag="--model",
-        extra_args=["--auto"],
-        registry_id="opencode-default",
-        effort_flag="oc_variant",
-    ),
-    Model(
-        name="default",
-        provider="kilo",
-        cli="kilo",
-        roles=["planner", "reviewer", "implementer", "critic", "synthesizer"],
-        priority=3,
-        quota_daily=2_000_000,
-        model_flag="--model",
-        extra_args=["--auto"],
-        registry_id="kilo-default",
-        effort_flag="oc_variant",
-    ),
+        model_flag="-m",
+        extra_args=[
+            "--sandbox",
+            "workspace-write",
+            "--ask-for-approval",
+            "never",
+            "--ephemeral",
+            "--no-alt-screen",
+        ],
+        registry_id="openai-gpt-5.6-luna",
+        effort_flag="codex_reasoning",
+        effort_support=list(_CODEX_EFFORTS),
+        cost_tier="low",
+    )
 ]
 
 
@@ -229,6 +187,31 @@ def load_models(path: Path | None = None) -> list[Model]:
 
 def get_effort_map() -> dict[str, dict[str, str]]:
     return load_orchestra_config().get("effort_map") or {}
+
+
+def codex_effort_for_level(level: int) -> str:
+    """Map Orchestra's 1–10 effort scale to Codex's capped effort levels."""
+    if not 1 <= level <= 10:
+        raise ValueError("Codex effort level must be between 1 and 10")
+    if level <= 2:
+        return "none"
+    if level <= 4:
+        return "low"
+    if level <= 6:
+        return "medium"
+    return "high"
+
+
+def codex_effort_for_role(role: str) -> str:
+    """Resolve the configured Codex effort level for an Orchestra role."""
+    config = load_orchestra_config()
+    levels = config.get("codex_phase_effort") or {}
+    raw_level = levels.get(role, 5)
+    try:
+        level = int(raw_level)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid Codex effort level for role {role!r}: {raw_level!r}") from exc
+    return codex_effort_for_level(level)
 
 
 def get_error_signatures() -> dict[str, Any]:

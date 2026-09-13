@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from orchestra.models import Model
+from orchestra.models import Model, codex_effort_for_level, load_models
 from orchestra.router import ModelRouter
 
 
@@ -163,3 +163,19 @@ def test_quota_requests_counter(tmp_path, monkeypatch) -> None:
     router.quota.record_usage(model.display_name, 1, model=model)
     usage = router.quota.get_usage(model.display_name, model)
     assert usage["requests"] == 1
+
+
+def test_codex_effort_policy_caps_at_high() -> None:
+    assert codex_effort_for_level(1) == "none"
+    assert codex_effort_for_level(4) == "low"
+    assert codex_effort_for_level(6) == "medium"
+    assert codex_effort_for_level(10) == "high"
+
+
+def test_codex_is_only_active_configured_model(monkeypatch, stub_clis) -> None:
+    monkeypatch.setattr("shutil.which", lambda cli: f"/usr/bin/{cli}")
+    models = load_models()
+    assert len(models) == 1
+    assert models[0].cli == "codex"
+    assert models[0].name == "gpt-5.6-luna"
+    assert models[0].roles
