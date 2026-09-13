@@ -2,14 +2,15 @@
 
 ## Primary Files
 
-| File | Role | Lines |
-|------|------|-------|
-| `quant_rl/backtest/engine.py` | Event-driven backtest engine | 549 |
-| `quant_rl/backtest/broker.py` | Broker: position open/close, fill logic | ~150 |
-| `quant_rl/backtest/account.py` | Account state tracking | ~80 |
-| `quant_rl/backtest/costs.py` | Cost model (spread, slippage, commission) | ~100 |
-| `quant_rl/backtest/guardrails.py` | FTMO guardrails (daily loss, max drawdown) | ~120 |
-| `quant_rl/backtest/risk.py` | Risk calculations (SL/TP, position sizing) | ~150 |
+| File | Role |
+|------|------|
+| `quant_rl/backtest/engine.py` | Event-driven backtest engine |
+| `quant_rl/backtest/broker.py` | Broker: position open/close, fill logic |
+| `quant_rl/backtest/account.py` | Account state tracking |
+| `quant_rl/backtest/costs.py` | Cost model (spread, slippage, commission) |
+| `quant_rl/backtest/guardrails.py` | FTMO guardrails (daily loss, max drawdown) |
+| `quant_rl/backtest/risk.py` | Risk calculations (SL/TP, position sizing) |
+| `quant_rl/backtest/cross_validation/` | Engine cross-validation against backtrader |
 
 ## Key Symbols
 
@@ -20,14 +21,9 @@
 | `Position` | `broker.py` | Position data container |
 | `AccountState` | `account.py` | Account equity, balance, margin |
 | `CostModel` | `costs.py` | Spread, slippage, commission model |
-| `COST_US100` | `costs.py` | Default US100 cost model |
 | `FTMOGuardrails` | `guardrails.py` | FTMO rule enforcement |
-| `compute_lots()` | `risk.py` | Position size calculation |
-| `compute_sl_tp_long()` | `risk.py` | SL/TP for long positions |
-| `compute_sl_tp_short()` | `risk.py` | SL/TP for short positions |
 | `compute_sl_tp_from_structure()` | `risk.py` | Structure-aware SL/TP |
 | `resolve_tp_target()` | `risk.py` | TP target resolution |
-| `ActionFn` | `engine.py` | Type alias: `Callable[[np.ndarray], int]` |
 
 ## Direct Dependencies
 
