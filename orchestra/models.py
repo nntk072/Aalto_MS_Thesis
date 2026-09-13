@@ -13,6 +13,13 @@ _TIER_ORDER = {"T0": 0, "T1": 1, "T2": 2, "T3": 3, "T4": 4}
 _COST_ORDER = {"free": 0, "low": 1, "medium": 2, "high": 3}
 _CODEX_EFFORTS = ("none", "low", "medium", "high")
 _CONFIG_PATH = Path(__file__).parent / "models.yaml"
+# Codex CLI 0.154 `codex exec`: `--approve-for-me` implies workspace-write
+# sandbox and conflicts with `--sandbox`. `--ask-for-approval` / `--no-alt-screen`
+# are not accepted. `--help` does not detect clap conflicts.
+CODEX_EXEC_EXTRA_ARGS = [
+    "--approve-for-me",
+    "--ephemeral",
+]
 
 
 @dataclass
@@ -138,17 +145,10 @@ DEFAULT_MODELS: list[Model] = [
             "reviewer",
             "review_synthesizer",
         ],
-        priority=1,
+        priority=2,
         quota_daily=2_000_000,
         model_flag="-m",
-        extra_args=[
-            "--sandbox",
-            "workspace-write",
-            "--ask-for-approval",
-            "never",
-            "--ephemeral",
-            "--no-alt-screen",
-        ],
+        extra_args=list(CODEX_EXEC_EXTRA_ARGS),
         registry_id="openai-gpt-5.6-luna",
         effort_flag="codex_reasoning",
         effort_support=list(_CODEX_EFFORTS),

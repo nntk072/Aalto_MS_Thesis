@@ -65,6 +65,28 @@ def test_dry_run_reaches_done(tmp_path, monkeypatch) -> None:
     assert "## 9. Verification" in text
 
 
+def test_run_closes_tmux_when_finished(tmp_path, monkeypatch) -> None:
+    pipeline = Pipeline(workspace=tmp_path, dry_run=False)
+    closed: list[str | None] = []
+
+    def fake_cleanup(
+        prefix: str = "orchestra-",
+        task_id: str | None = None,
+        role: str | None = None,
+    ) -> int:
+        closed.append(task_id)
+        return 2
+
+    monkeypatch.setattr(pipeline.sessions, "cleanup", fake_cleanup)
+    monkeypatch.setattr(pipeline, "_snapshot", lambda _slot: None)
+    monkeypatch.setattr(
+        pipeline, "_execute_phase", lambda _phase: pipeline.state.set_phase(Phase.DONE)
+    )
+    state = pipeline.run("x")
+    assert state.phase == Phase.DONE
+    assert closed == [state.task_id]
+
+
 def test_complexity_override_applied_before_triage(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("ORCHESTRA_TEST_KEY", "1")
     dummy = _dummy()
@@ -332,9 +354,177 @@ def test_invoke_required_falls_back_when_primary_fails(tmp_path, monkeypatch) ->
     monkeypatch.setattr(pipeline, "_invoke", fake_invoke)
     session, output = pipeline._invoke_required(primary, "triage", "prompt", 600)
     assert (session, output) == ("session-backup", "output from backup")
-    assert attempts.count(primary.display_name) >= 1
-    assert fallback.display_name in attempts
+    assert attempts == [primary.display_name, fallback.display_name]
     assert seen["role"] == "triage"
+
+
+def test_invoke_required_falls_back_on_codex_token_exhaustion(tmp_path, monkeypatch) -> None:
+    pipeline = Pipeline(workspace=tmp_path, dry_run=False)
+    pipeline.state = TaskState("task-quota", "t", pipeline.state_dir)
+    primary = Model(
+        name="gpt-5.6-luna",
+        provider="openai",
+        cli="codex",
+        roles=["review_synthesizer"],
+        priority=2,
+        quota_daily=0,
+    )
+    fallback = Model(
+        name="default",
+        provider="opencode",
+        cli="opencode",
+        roles=["review_synthesizer"],
+        priority=2,
+        quota_daily=0,
+        env_var="ORCHESTRA_TEST_KEY",
+    )
+
+    def fake_chain(
+        model: Model,
+        role: str,
+        task_complexity: str = "medium",
+        task_tier: str | None = None,
+        escalate: bool = False,
+    ) -> list[Model]:
+        return [fallback]
+
+    monkeypatch.setattr(pipeline.router, "fallback_chain", fake_chain)
+    attempts: list[str] = []
+
+    def fake_invoke(
+        model: Model,
+        role: str,
+        prompt: str,
+        timeout: int,
+        lines: int = 0,
+        native_session_id: str | None = None,
+    ) -> tuple[str, str]:
+        attempts.append(model.display_name)
+        if model.cli == "codex":
+            raise RuntimeError(
+                "Session x exited 1\n"
+                "failed to connect to websocket: HTTP error: 403 Forbidden, "
+                "url: wss://chatgpt.com/backend-api/codex/responses"
+            )
+        return "session-backup", "review synthesis from backup"
+
+    monkeypatch.setattr(pipeline, "_invoke", fake_invoke)
+    session, output = pipeline._invoke_required(primary, "review_synthesizer", "prompt", 300)
+    assert (session, output) == ("session-backup", "review synthesis from backup")
+    assert attempts == [primary.display_name, fallback.display_name]
+    facts = pipeline.router.health.get(primary)
+    assert facts.exhausted_until is not None
+
+
+def test_invoke_required_falls_back_on_codex_proxy_failure(tmp_path, monkeypatch) -> None:
+    pipeline = Pipeline(workspace=tmp_path, dry_run=False)
+    pipeline.state = TaskState("task-proxy", "t", pipeline.state_dir)
+    primary = Model(
+        name="gpt-5.6-luna",
+        provider="openai",
+        cli="codex",
+        roles=["triage"],
+        priority=2,
+        quota_daily=0,
+    )
+    fallback = Model(
+        name="default",
+        provider="opencode",
+        cli="opencode",
+        roles=["triage"],
+        priority=2,
+        quota_daily=0,
+        env_var="ORCHESTRA_TEST_KEY",
+    )
+
+    def fake_chain(
+        model: Model,
+        role: str,
+        task_complexity: str = "medium",
+        task_tier: str | None = None,
+        escalate: bool = False,
+    ) -> list[Model]:
+        return [fallback]
+
+    monkeypatch.setattr(pipeline.router, "fallback_chain", fake_chain)
+    attempts: list[str] = []
+
+    def fake_invoke(
+        model: Model,
+        role: str,
+        prompt: str,
+        timeout: int,
+        lines: int = 0,
+        native_session_id: str | None = None,
+    ) -> tuple[str, str]:
+        attempts.append(model.display_name)
+        if model.cli == "codex":
+            raise RuntimeError(
+                "Proxy connection failed: HTTP CONNECT response missing status line, "
+                "url: wss://chatgpt.com/backend-api/codex/responses"
+            )
+        return "session-backup", "ok"
+
+    monkeypatch.setattr(pipeline, "_invoke", fake_invoke)
+    session, output = pipeline._invoke_required(primary, "triage", "prompt", 300)
+    assert (session, output) == ("session-backup", "ok")
+    assert attempts == [primary.display_name, fallback.display_name]
+    facts = pipeline.router.health.get(primary)
+    assert facts.throttled_until is not None
+
+
+def test_invoke_required_falls_back_on_cline_econnreset(tmp_path, monkeypatch) -> None:
+    pipeline = Pipeline(workspace=tmp_path, dry_run=False)
+    pipeline.state = TaskState("task-econn", "t", pipeline.state_dir)
+    primary = Model(
+        name="z-ai/glm-5.3-flash",
+        provider="cline",
+        cli="cline",
+        roles=["triage"],
+        priority=2,
+        quota_daily=0,
+    )
+    fallback = Model(
+        name="default",
+        provider="opencode",
+        cli="opencode",
+        roles=["triage"],
+        priority=2,
+        quota_daily=0,
+        env_var="ORCHESTRA_TEST_KEY",
+    )
+
+    def fake_chain(
+        model: Model,
+        role: str,
+        task_complexity: str = "medium",
+        task_tier: str | None = None,
+        escalate: bool = False,
+    ) -> list[Model]:
+        return [fallback]
+
+    monkeypatch.setattr(pipeline.router, "fallback_chain", fake_chain)
+    attempts: list[str] = []
+
+    def fake_invoke(
+        model: Model,
+        role: str,
+        prompt: str,
+        timeout: int,
+        lines: int = 0,
+        native_session_id: str | None = None,
+    ) -> tuple[str, str]:
+        attempts.append(model.display_name)
+        if model.cli == "cline":
+            raise RuntimeError(
+                "Cannot connect to API: The socket connection was closed unexpectedly (ECONNRESET)"
+            )
+        return "session-backup", "ok"
+
+    monkeypatch.setattr(pipeline, "_invoke", fake_invoke)
+    session, output = pipeline._invoke_required(primary, "triage", "prompt", 300)
+    assert (session, output) == ("session-backup", "ok")
+    assert attempts == [primary.display_name, fallback.display_name]
 
 
 def test_invoke_required_uses_select_role_for_fallback(tmp_path, monkeypatch) -> None:

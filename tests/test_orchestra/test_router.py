@@ -172,10 +172,13 @@ def test_codex_effort_policy_caps_at_high() -> None:
     assert codex_effort_for_level(10) == "high"
 
 
-def test_codex_is_only_active_configured_model(monkeypatch, stub_clis) -> None:
+def test_codex_is_a_normal_configured_model(monkeypatch, stub_clis) -> None:
     monkeypatch.setattr("shutil.which", lambda cli: f"/usr/bin/{cli}")
     models = load_models()
-    assert len(models) == 1
-    assert models[0].cli == "codex"
-    assert models[0].name == "gpt-5.6-luna"
-    assert models[0].roles
+    clis = {m.cli for m in models}
+    assert "codex" in clis
+    assert len(clis) > 1
+    codex = next(m for m in models if m.cli == "codex")
+    assert codex.name == "gpt-5.6-luna"
+    assert codex.priority == 2
+    assert not any(m.cli == "codex" and m.priority == 1 for m in models)

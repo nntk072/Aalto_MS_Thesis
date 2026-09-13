@@ -17,9 +17,11 @@ The full feature development process that happens before git operations: researc
 
 3. **Review** — run [code-review-graph.md](code-review-graph.md) on your own diff; fix CRITICAL/HIGH findings.
 
-4. **Commit & push** — follow [git-commit-rules.md](git-commit-rules.md).
+4. **Local checks** — scoped ruff + pytest on touched paths only
+   ([ci-verification.md](ci-verification.md)). Do not run the full suite here.
 
-5. **Pre-review checks** — [ci-verification.md](ci-verification.md) (full CI gate, not nightly subsets).
+5. **Commit & push** — follow [git-commit-rules.md](git-commit-rules.md) and run the
+   full CI gate in [ci-verification.md](ci-verification.md).
    - Branch up to date with main; no merge conflicts.
    - Only request review after the gate passes.
 

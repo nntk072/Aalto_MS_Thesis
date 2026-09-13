@@ -14,9 +14,11 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from .failures import failure_excerpt, inspect_live_log
 from .models import Model, codex_effort_for_role, get_effort_map
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07")
+_OC_VARIANTS = frozenset({"low", "medium", "high"})
 
 
 class SessionManager:
@@ -207,7 +209,7 @@ class SessionManager:
             cmd = ["opencode", "run", *model.extra_args]
             if model.name and model.name != "default":
                 cmd.extend([model.model_flag or "--model", model.name])
-            if effort and model.effort_flag == "oc_variant":
+            if effort in _OC_VARIANTS:
                 cmd.extend(["--variant", effort])
             if model.native_resume and native_session_id:
                 cmd.extend(["-s", native_session_id])
@@ -216,7 +218,7 @@ class SessionManager:
             cmd = ["kilo", "run", *model.extra_args]
             if model.name and model.name != "default":
                 cmd.extend([model.model_flag or "--model", model.name])
-            if effort and model.effort_flag == "oc_variant":
+            if effort in _OC_VARIANTS:
                 cmd.extend(["--variant", effort])
             if model.native_resume and native_session_id:
                 cmd.extend(["-s", native_session_id])
@@ -437,6 +439,17 @@ class SessionManager:
             log_path = path
             size = path.stat().st_size if path is not None and path.exists() else 0
             now = time.time()
+            if path is not None and path.exists() and size > 0:
+                try:
+                    snippet = path.read_bytes()[-65536:].decode("utf-8", errors="replace")
+                except OSError:
+                    snippet = ""
+                if snippet:
+                    verdict = inspect_live_log(snippet)
+                    if verdict == "complete":
+                        return True
+                    if verdict == "abort":
+                        return False
             if size != last_size:
                 last_size = size
                 last_change = now
@@ -457,42 +470,74 @@ class SessionManager:
         timeout: int,
         lines: int = 0,
         idle_timeout: int = 120,
+        keep_alive: bool = False,
     ) -> str:
-        """Wait for an agent, then return its log. Raises on timeout/nonzero/empty."""
-        ok = self.wait_for_idle(session_name, timeout=timeout, idle_timeout=idle_timeout)
-        output = self.read_output(session_name, lines=lines)
-        if not ok:
-            self.kill(session_name)
-            tail = (
-                output[-1500:]
-                if output.strip()
-                else "(no output.log — runner may not have started)"
-            )
-            raise TimeoutError(
-                f"Session {session_name} timed out after {timeout}s "
-                f"(exit_code={'missing' if self.exit_code(session_name) is None else self.exit_code(session_name)})\n{tail}"
-            )
-        code = self.exit_code(session_name)
-        if code is not None and code != 0:
-            tail = output[-800:] if output else ""
-            raise RuntimeError(f"Session {session_name} exited {code}\n{tail}")
-        usable = "\n".join(
-            ln for ln in output.splitlines() if not ln.startswith("[orchestra] exec")
-        ).strip()
-        if not usable:
-            raise RuntimeError(f"Session {session_name} produced empty output")
-        return output
+        """Wait for an agent, then return its log. Raises on timeout/nonzero/empty.
+
+        Closes the tmux session afterwards unless ``keep_alive`` and the run
+        succeeded. Failures always tear the pane down so fallback cannot leave
+        stuck terminals.
+        """
+        succeeded = False
+        try:
+            ok = self.wait_for_idle(session_name, timeout=timeout, idle_timeout=idle_timeout)
+            output = self.read_output(session_name, lines=lines)
+            if not ok:
+                tail = (
+                    failure_excerpt(output)
+                    if output.strip()
+                    else "(no output.log — runner may not have started)"
+                )
+                raise TimeoutError(
+                    f"Session {session_name} timed out after {timeout}s "
+                    f"(exit_code={'missing' if self.exit_code(session_name) is None else self.exit_code(session_name)})\n{tail}"
+                )
+            code = self.exit_code(session_name)
+            if code is not None and code != 0:
+                tail = failure_excerpt(output) if output else ""
+                raise RuntimeError(f"Session {session_name} exited {code}\n{tail}")
+            usable = "\n".join(
+                ln for ln in output.splitlines() if not ln.startswith("[orchestra] exec")
+            ).strip()
+            if not usable:
+                raise RuntimeError(f"Session {session_name} produced empty output")
+            succeeded = True
+            return output
+        finally:
+            if not (keep_alive and succeeded):
+                self.kill(session_name)
 
     def kill(self, session_name: str) -> None:
-        """Kill a tmux session."""
+        """Tear down the tmux session and the agent_runner process tree."""
         self._run(["tmux", "kill-session", "-t", session_name], timeout=10)
+        pid_path = self.runs_dir / session_name / "pid"
+        if pid_path.exists():
+            try:
+                pid = int(pid_path.read_text(encoding="utf-8").strip())
+            except ValueError:
+                pid = 0
+            if pid > 0:
+                self._run(["pkill", "-TERM", "-P", str(pid)], timeout=5)
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
         self.active_sessions.pop(session_name, None)
 
-    def cleanup(self, prefix: str = "orchestra-") -> int:
-        """Kill all orchestra-managed sessions. Returns count killed."""
+    def cleanup(
+        self,
+        prefix: str = "orchestra-",
+        task_id: str | None = None,
+        role: str | None = None,
+    ) -> int:
+        """Kill orchestra tmux sessions. Optionally limit to a task and/or role."""
+        start = f"orchestra-{role}-" if role else prefix
         killed = 0
         for name in self.list_sessions():
-            if name.startswith(prefix):
-                self.kill(name)
-                killed += 1
+            if not name.startswith(start):
+                continue
+            if task_id is not None and f"-{task_id}-" not in name:
+                continue
+            self.kill(name)
+            killed += 1
         return killed

@@ -15,7 +15,7 @@ Single source of truth for all coding agents in this repo (Cursor, Cline, Windsu
 | [testing-rules.md](testing-rules.md) | TDD, AAA, coverage ≥80% | On feature/bugfix work |
 | [security-rules.md](security-rules.md) | Secret & input safety checklist | Always at commit; deep on sensitive code |
 | [development-workflow.md](development-workflow.md) | Research-first → plan → TDD → review → commit | On non-trivial features |
-| [ci-verification.md](ci-verification.md) | Standard CI gate (format, lint, mypy, full pytest) | Before done / commit |
+| [ci-verification.md](ci-verification.md) | Scoped tests while coding; full CI on commit/push | On commit/push |
 
 ## Activation flow
 
@@ -30,6 +30,7 @@ request
   │                             └─ self-review via code-review-graph
   ├─ editing .py files?       → python-coding-standards (via token-efficient reads)
   ├─ reviewing a diff >1 file → code-review-graph
+  ├─ editing code?            → scoped ruff + pytest on touched paths only
   └─ committing / PR          → git-commit-rules + ci-verification + security-rules
                                   └─ full CI gate (see ci-verification.md);
                                      after code-review-graph for multi-file changes
