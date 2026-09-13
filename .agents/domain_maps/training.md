@@ -2,13 +2,13 @@
 
 ## Primary Files
 
-| File | Role | Lines |
-|------|------|-------|
-| `quant_rl/train/train_rl.py` | Full RL training pipeline | 614 |
-| `quant_rl/train/run_backtest.py` | Backtest runner entry point | ~80 |
-| `quant_rl/train/run_baselines.py` | Baseline strategy runner | ~80 |
-| `quant_rl/train/callbacks.py` | Best checkpoint eval callback | ~100 |
-| `quant_rl/train/auxiliary_training.py` | Auxiliary prediction head training | ~100 |
+| File | Role |
+|------|------|
+| `quant_rl/train/train_rl.py` | Full RL training pipeline; `_STRATEGY_CONFIGS` registry |
+| `quant_rl/train/run_backtest.py` | Backtest runner entry point |
+| `quant_rl/train/run_baselines.py` | Baseline strategy runner |
+| `quant_rl/train/callbacks.py` | Best checkpoint eval callback |
+| `quant_rl/train/auxiliary_training.py` | Auxiliary prediction head training |
 
 ## Key Symbols
 
@@ -16,8 +16,25 @@
 |--------|------|---------|
 | `main()` | `train_rl.py` | Full training pipeline entry |
 | `make_env()` | `train_rl.py` | Create TradingEnv for training |
+| `_strategy_from_cfg()` | `train_rl.py` | Build (strategy, reward, weight) from config |
+| `_STRATEGY_CONFIGS` | `train_rl.py` | Maps `--strategy` to variant YAML |
 | `BestCheckpointEvalCallback` | `callbacks.py` | Eval-based checkpoint saving |
 | `AuxiliaryTrainerCallback` | `auxiliary_training.py` | Auxiliary head training callback |
+
+## CLI flags (`train_rl.py`)
+
+| Flag | Purpose |
+|------|---------|
+| `--mvp` | 30-day smoke test |
+| `--force` | Rebuild data/feature caches |
+| `--algo ppo\|sac` | RL algorithm |
+| `--arch tcn\|gru\|transformer` | Encoder architecture |
+| `--reward dsr\|sweep` | Reward function |
+| `--strategy baseline\|po3_ifvg\|distribution` | Strategy overlay |
+| `--config PATH` | Base or feature variant YAML |
+| `--walk-forward` | Purged walk-forward validation |
+| `--wf-splits`, `--purge-bars`, `--embargo-bars` | Walk-forward params |
+| `--wandb` | Weights & Biases logging |
 
 ## Direct Dependencies
 
@@ -44,18 +61,12 @@
 | `tests/test_train/test_auxiliary_training.py` | Auxiliary training |
 | `tests/test_train/test_seed_reproducibility.py` | Seed reproducibility |
 
-## Do NOT Read For Training Tasks
-
-- `quant_rl/features/indicators.py` (indicator detail — only if modifying features)
-- `quant_rl/models/encoder.py` (encoder detail — only if modifying architecture)
-- `mt5_trading/` (live trading — separate domain)
-
 ## Training Pipeline
 
 ```
 1. load_config() → cfg
 2. run_pipeline(cfg) → bars
-3. build_features(bars, cfg) → features
+3. build_features(bars, cfg) → features  (cached by FEATURE_CACHE_VERSION)
 4. split_train_test(bars, features, cfg) → train/test
 5. make_env(train_bars, train_feat, cfg) → env
 6. build_agent(env, cfg, arch, algo) → model
@@ -68,8 +79,9 @@
 ## Config Overrides
 
 ```bash
-python -m quant_rl.train.train_rl --mvp              # 30-day MVP
-python -m quant_rl.train.train_rl --algo sac         # SAC algorithm
-python -m quant_rl.train.train_rl --arch transformer # Transformer encoder
-python -m quant_rl.train.train_rl --seed 42          # reproducibility
+uv run python -m quant_rl.train.train_rl --mvp --seed=42
+uv run python -m quant_rl.train.train_rl --algo sac --arch gru
+uv run python -m quant_rl.train.train_rl --strategy po3_ifvg
+uv run python -m quant_rl.train.train_rl --config config/features_full_po3_mtf.yaml
+uv run python -m quant_rl.train.train_rl --walk-forward --wf-splits 5 --purge-bars 60
 ```

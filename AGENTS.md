@@ -47,7 +47,8 @@ data → features → envs → models → train → evaluation
 | backtest | `quant_rl/backtest/engine.py` | event-driven engine (fill, SL/TP, guardrails) |
 | models | `quant_rl/models/agent.py` | encoder + PPO/SAC wiring |
 | train | `quant_rl/train/train_rl.py` | full training loop |
-| evaluation | `quant_rl/evaluation/runner.py` | episode runner + metrics |
+| evaluation | `quant_rl/evaluation/runner.py` | metrics, walk-forward, bootstrap CIs |
+| eval | `quant_rl/eval/rollout.py` | rollout, plots, export, `eval_run` |
 | live | `quant_rl/live/rl_strategy.py` | MT5 bridge |
 | orchestra | `orchestra/pipeline.py` | multi-model task pipeline + CI verification |
 

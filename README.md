@@ -1,23 +1,22 @@
 # Aalto MS Thesis — Quantitative RL Trading System
 
 **Reinforcement learning trading agent** with multi-timeframe PO3/IFVG signal detection,
-built on top of cleaned US100 (Nasdaq-100) M1 data and trained with Stable-Baselines3 PPO/SAC.
+built on cleaned US100 (Nasdaq-100) M1 data and trained with Stable-Baselines3 PPO/SAC.
 
 This repository implements the full pipeline: data ingestion → multi-timeframe feature
 engineering → PO3 (Price Order Block 3) / FVG / IFVG signal detection → backtesting →
-RL training → out-of-sample evaluation → chart visualization.
+RL training → out-of-sample evaluation → chart visualization → optional live MT5 bridge.
 
 ---
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [Architecture](docs/architecture.md) — framework page: pipeline, contracts, invariants, adding a strategy
+- [Documentation](#documentation)
 - [Key Components](#key-components)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
-  - [5-Minute Demo](#-minute-demo)
 - [Project Structure](#project-structure)
 - [PO3 / FVG / IFVG Detection](#po3--fvg--ifvg-detection)
 - [RL Agent](#rl-agent)
@@ -43,18 +42,38 @@ PO3 (Price Order Block 3) signals** — a price-action methodology combining:
 
 The agent observes a 60-bar rolling window of technical + structure + PO3 features and
 learns position sizing, entry timing, and stop-loss/take-profit placement.
-   
+
+---
+
+## Documentation
+
+| Page | Purpose |
+|------|---------|
+| [docs/README.md](docs/README.md) | Documentation index |
+| [docs/architecture.md](docs/architecture.md) | Pipeline, contracts, invariants, adding a strategy |
+| [docs/config.md](docs/config.md) | YAML config catalog and cache versioning |
+| [docs/operations/RUNNING_COMMANDS.md](docs/operations/RUNNING_COMMANDS.md) | Command reference for research sessions |
+| [docs/operations/DEPLOYMENT.md](docs/operations/DEPLOYMENT.md) | Paper-to-live promotion protocol |
+| [AGENTS.md](AGENTS.md) | Agent guide for coding assistants |
+| [orchestra/README.md](orchestra/README.md) | Multi-model CLI pipeline |
+
+---
+
 ## Key Components
 
 | Module | Purpose |
 |--------|---------|
 | `quant_rl/data/` | Load and resample M1 → M5/M15/M30/H1/H4/D1 OHLCV bars |
-| `quant_rl/features/` | Feature engineering: indicators, structure levels, PO3/FVG/IFVG detection |
-| `quant_rl/envs/` | Gymnasium trading environment with structure-aware SL/TP |
+| `quant_rl/features/` | Feature engineering: indicators, structure, PO3/FVG/IFVG, liquidity |
+| `quant_rl/envs/` | Gymnasium trading environment with structure-aware SL/TP and strategy overlays |
 | `quant_rl/models/` | SB3 PPO/SAC agent with TCN/Transformer/GRU encoders |
 | `quant_rl/backtest/` | Event-driven backtest engine with realistic costs |
-| `quant_rl/eval/` | OOS evaluation, trade metrics, chart visualization |
+| `quant_rl/evaluation/` | Metrics, walk-forward splits, bootstrap CIs, episode runner |
+| `quant_rl/eval/` | Rollout, plots, export, `eval_run` checkpoint re-evaluation |
 | `quant_rl/train/` | Training scripts, baselines, callbacks |
+| `quant_rl/live/` | `RLStrategyAdapter` — MT5 live bridge |
+| `mt5_trading/` | Broker I/O: robots, risk manager, rule-based strategies |
+| `orchestra/` | Multi-model task pipeline (triage → plan → implement → verify) |
 
 ---
 
@@ -81,256 +100,115 @@ source .venv/bin/activate
 
 ---
 
-## Quick Start & Commands
+## Quick Start
 
-### 🚀 5-Minute Demo
-
-See a live signal in under 5 minutes with the quickstart demo (no credentials required beyond a demo MT5 account):
+### One-time setup
 
 ```bash
-# Paper trading mode (default) - logs signals only, no orders
-DEMO_SYMBOL=EURUSD PAPER_TRADING=true uv run python demo_trading.py
-
-# With custom parameters
-DEMO_SYMBOL=US100.cash DEMO_LOT_SIZE=0.5 PAPER_TRADING=true uv run python demo_trading.py
+cd Aalto_MS_Thesis
+uv sync
+source .venv/bin/activate
 ```
 
-This single-file demo uses cross-over strategy on a single symbol. Perfect for onboarding and quick validation.
+### Prepare data
 
-### One-Time Setup
 ```bash
-cd /home/nguyenl37/Aalto_MS_Thesis
-source .venv/bin/activate        # or: uv sync && source .venv/bin/activate
+python scripts/prepare_data.py
 ```
 
-### Run Tests (~1 minute)
-```bash
-# All tests
-.venv/bin/python -m pytest tests/ -v
+### Run tests
 
-# Specific modules
-.venv/bin/python -m pytest tests/test_features/ -v      # PO3 + structure
-.venv/bin/python -m pytest tests/test_eval/ -v          # Evaluation + plots
-.venv/bin/python -m pytest tests/test_integration/ -v   # Smoke tests
+```bash
+uv run pytest tests/ -v
 ```
 
-**Expected:** All tests passing ✅
+### Train RL agent — MVP (~1 minute)
 
-### Lint + Type Check (~1 minute)
 ```bash
-# Ruff linting
-uv run ruff check quant_rl
+uv run python -m quant_rl.train.train_rl --mvp --seed=42
 
-# Type checking
-uv run mypy quant_rl
+# Strategy overlay (Idea 1: PO3 + IFVG)
+uv run python -m quant_rl.train.train_rl --mvp --strategy po3_ifvg --seed=42
+
+# SAC + GRU encoder
+uv run python -m quant_rl.train.train_rl --mvp --algo sac --arch gru --seed=42
 ```
 
-**Expected:** All checks pass ✅
+### Evaluate a trained checkpoint
 
-### MACD Baseline Strategy (~10 seconds)
 ```bash
-# Quick run (no charts saved)
-.venv/bin/python -m quant_rl.train.run_baselines --strategy macd --no-save
-
-# Full run (with chart generation)
-.venv/bin/python -m quant_rl.train.run_baselines --strategy macd
-
-# View results
-ls outputs/baseline_macd_seed*/test/orders/trade_*.{png,html} | head -5
+uv run python -m quant_rl.eval.eval_run --run outputs/<run_dir>
 ```
 
-**Rules:** MACD (EMA12/26) + Signal (SMA9) + EMA50 trend filter. Long when `close > EMA50` + bullish cross. Cooldown ≥5 bars after exit.
-
-### Engine Validation
-
-Cross-validate the custom event-driven backtest engine against the well-known `backtrader` library on identical data and signals:
+### MACD baseline
 
 ```bash
-# Run cross-validation (default: US100 M1 data)
-uv run python -m quant_rl.backtest.cross_validation.run
-
-# With custom data path and tolerance
-uv run python -m quant_rl.backtest.cross_validation.run --data-path data/US100.cash_M1_*.csv --tolerance 0.01
+uv run python -m quant_rl.train.run_baselines --strategy macd --no-save
 ```
 
-**What this proves:** Both engines process the same OHLCV bars through the same MACD/EMA crossover logic and produce trade counts, PnL, and drawdown numbers that agree within the configured tolerance (default 1%). This validates that the custom engine's fill pricing, commission logic, and mark-to-market semantics are implemented correctly.
+### Demo trading (rule-based crossover, not the RL pipeline)
 
-**Under the hood:** The harness runs identical MACD-based strategies through both `backtrader` and the custom engine in `quant_rl.backtest.engine`, then compares trade counts (exact match) and PnL/drawdown (within tolerance). See `tests/test_backtest/test_engine_cross_validation.py` for unit tests.
-
-### Train RL Agent — MVP (~1 minute)
 ```bash
-# Quick training (8k timesteps, 30 days)
-.venv/bin/python -m quant_rl.train.train_rl --mvp --seed=42
-
-# Select algorithm / encoder / reward
-.venv/bin/python -m quant_rl.train.train_rl --mvp --algo ppo --arch gru --reward dsr
-
-# View model output
-ls outputs/ppo_model_seed42
+# Paper mode (default) — logs signals only, no orders
+DEMO_SYMBOL=EURUSD PAPER_TRADING=true uv run python demo_trading.py --once
 ```
 
-### Train RL Agent — Full (~10+ minutes)
+### Live / paper trading (RL)
+
 ```bash
-# Full training (500k timesteps, all data)
-.venv/bin/python -m quant_rl.train.train_rl --seed=42
-```
-
-### Purged Walk-Forward Validation
-```bash
-# 5 folds, 60-bar purge + 20-bar embargo between train/test windows
-.venv/bin/python -m quant_rl.train.train_rl --walk-forward --wf-splits 5 \
-    --purge-bars 60 --embargo-bars 20 --seed=42
-```
-
-### Live / Paper Trading
-
-**Two entrypoints are available:**
-
-#### RL Agent (`live_trading_rl.py`)
-```bash
-# Paper trade a trained checkpoint (PAPER_TRADING defaults to true — no orders placed)
+# Paper trade a trained checkpoint (PAPER_TRADING defaults to true)
 PAPER_TRADING=true RL_MODEL_PATH=outputs/<run>/model/ppo_final \
     python live_trading_rl.py --once
-
-# Continuous paper loop on the M1 cadence
-PAPER_TRADING=true RL_MODEL_PATH=outputs/<run>/model/ppo_final python live_trading_rl.py
-
-# REAL orders — only after the doc/DEPLOYMENT.md trial criteria are met
-PAPER_TRADING=false RL_MODEL_PATH=outputs/<run>/model/ppo_final python live_trading_rl.py
 ```
 
-#### Rule-based baseline (`live_trading.py`)
-```bash
-# Paper trading with combined strategy (PAPER_TRADING defaults to true)
-PAPER_TRADING=true STRATEGY_TYPE=combined python live_trading.py --once
+See [docs/operations/RUNNING_COMMANDS.md](docs/operations/RUNNING_COMMANDS.md) for the full command catalog and
+[docs/operations/DEPLOYMENT.md](docs/operations/DEPLOYMENT.md) for the paper-to-live promotion protocol.
 
-# Use specific strategy types: crossover, smc, trend_breakout, or combined
-PAPER_TRADING=true STRATEGY_TYPE=crossover python live_trading.py
-
-# REAL orders — only after the doc/DEPLOYMENT.md promotion criteria are met
-PAPER_TRADING=false STRATEGY_TYPE=combined python live_trading.py
-```
-
-See [DEPLOYMENT.md](doc/DEPLOYMENT.md) for the paper→live promotion protocol,
-trial-period pass/fail criteria, and model versioning. Live risk sizing comes
-from `live_risk_overrides:` in `quant_rl/config/default.yaml`, which is kept
-aligned with the `ftmo:` block used by training-time guardrails.
-
-### Run Backtest (~5 seconds)
-```bash
-# Quick backtest
-.venv/bin/python -m quant_rl.train.run_backtest --no-save
-
-# Full backtest with charts
-.venv/bin/python -m quant_rl.train.run_backtest --seed=42
-```
-
-### Evaluate OOS Performance
-```bash
-# Run OOS evaluation + generate charts
-.venv/bin/python -m quant_rl.eval.eval_run
-
-# View latest results
-LATEST=$(ls -d outputs/*/ | tail -1)
-cat $LATEST/test/metrics.json
-```
-
-### View Per-Trade Charts
-```bash
-# List charts
-ls outputs/$LATEST/test/orders/trade_*.png   # Static
-ls outputs/$LATEST/test/orders/trade_*.html  # Interactive
-```
-
-### Command Reference
-
-| Command | Purpose | Time | Output |
-|---------|---------|------|--------|
-| `pytest tests/` | Validate all modules | ~2 min | Pass/fail |
-| `ruff check quant_rl` | Lint check | <1s | Issues |
-| `mypy quant_rl` | Type check | ~30s | Issues |
-| `run_baselines --strategy macd` | Baseline backtest | 10s | PNG/HTML charts |
-| `train_rl --mvp` | Quick RL training | ~1 min | PPO model + charts |
-| `train_rl` (no --mvp) | Full RL training | 10+ min | Production model |
-| `run_backtest` | Random policy baseline | 5s | Baseline metrics |
-| `eval_run` | OOS evaluation | ~1 min | Metrics + charts |
-
-### Train/Test Split Configuration
-
-The project uses a **locked out-of-sample (OOS) split**:
-- **Training period:** ≤ 2025-12-31 (in-sample)
-- **Test period:** ≥ 2026-01-01 (out-of-sample)
-
-Defined in `quant_rl/config/default.yaml`, enforced by `quant_rl/data/split.py`.
-
-### Purged Walk-Forward Validation
-
-```python
-from quant_rl.evaluation.walkforward import purged_walk_forward
-
-for split in purged_walk_forward(n=len(data), n_splits=5, purge_bars=60, embargo_bars=20):
-    train_idx = split.train_idx
-    test_idx = split.test_idx
-```
-
-- `purge_bars=60`: Removes last 60 bars from training (prevents leakage)
-- `embargo_bars=20`: Removes first 20 bars from test (market reset)
-- `n_splits=5`: Number of folds
-
-Useful for hyperparameter tuning without touching the locked 2026 OOS set.
+---
 
 ## Project Structure
 
 ```
 Aalto_MS_Thesis/
 ├── quant_rl/                    # Core library
-│   ├── data/                    # Data loading & resampling (M1 → HTF)
+│   ├── data/                    # Data loading, resampling, split, ticks
 │   ├── features/                # Feature engineering
 │   │   ├── build.py             # Feature pipeline entry point
 │   │   ├── indicators.py        # Technical indicators (RSI, MACD, etc.)
 │   │   ├── structure.py         # Session/liquidity level detection
+│   │   ├── swings.py            # Fractal pivots and ATR-filtered swings
+│   │   ├── liquidity.py         # Liquidity sweeps and BOS
 │   │   ├── po3_config.py        # PO3/FVG/IFVG detection + zone builder
+│   │   ├── po3_state.py         # PO3 manipulation/distribution state
 │   │   ├── smt.py               # SMT divergence detection
+│   │   ├── session_ohlc.py      # CT-anchored session OHLC levels
 │   │   └── normalize.py         # Feature normalization
 │   ├── envs/                    # Gymnasium environments
 │   │   ├── trading_env.py       # Main RL trading environment
 │   │   ├── reward.py            # Differential Sharpe Ratio reward
-│   │   └── sweep_reward.py      # Sweep confirmation reward
+│   │   ├── sweep_reward.py      # Sweep confirmation reward
+│   │   ├── po3_reward.py        # PO3 alignment reward
+│   │   ├── distribution_reward.py
+│   │   └── strategies/          # Baseline, PO3IFVG, Distribution
 │   ├── models/                  # RL model architectures
-│   │   ├── agent.py             # SB3 PPO/SAC agent builder
-│   │   ├── encoder.py           # TCN/Transformer/GRU sequence encoders
-│   │   ├── base.py              # Base policy class
-│   │   ├── auxiliary.py         # Auxiliary task heads
-│   │   └── vae.py               # Variational autoencoder feature extractor
 │   ├── backtest/                # Event-driven backtest engine
-│   │   ├── engine.py            # Core matching/execution
-│   │   ├── account.py           # Account state tracking
-│   │   ├── broker.py            # Broker simulation
-│   │   ├── costs.py             # Spread + commission model
-│   │   ├── risk.py              # Position sizing & SL/TP
-│   │   └── guardrails.py        # Drawdown limits
-│   ├── eval/                    # Evaluation & visualization
-│   │   ├── eval_run.py          # OOS evaluation pipeline
-│   │   ├── rollout.py           # Policy rollout
-│   │   ├── trade_metrics.py     # Trade-level analytics
-│   │   ├── plots.py             # Static matplotlib charts
-│   │   ├── plots_interactive.py # Interactive Plotly charts
-│   │   ├── po3_plots.py         # PO3/FVG/IFVG signal charts
-│   │   ├── export.py            # Results export
-│   │   └── training_plots.py    # Training curve plots
-│   ├── train/                   # Training scripts
-│   │   ├── train_rl.py          # RL training entry point
-│   │   ├── run_backtest.py      # Backtest entry point
-│   │   ├── run_baselines.py     # Baseline strategy comparison
-│   │   └── callbacks.py         # Custom SB3 callbacks
-│   ├── config/                  # OmegaConf configurations
-│   ├── baselines/               # Baseline models (LSTM classifier)
-│   ├── validation/              # Cross-validation utilities
-│   └── evaluation/              # Evaluation orchestration
+│   ├── evaluation/              # Metrics, walk-forward, bootstrap CIs
+│   ├── eval/                    # Rollout, plots, export, eval_run
+│   ├── train/                   # train_rl, run_backtest, run_baselines
+│   ├── live/                    # RLStrategyAdapter (MT5 bridge)
+│   ├── config/                  # OmegaConf default.yaml
+│   └── utils/                   # Device helpers
+├── mt5_trading/                 # MT5 broker I/O and rule-based robots
+├── orchestra/                   # Multi-model CLI pipeline
+├── config/                      # Strategy and feature variant YAMLs
+├── scripts/                     # prepare_data, compare_encoders, report_g3, …
 ├── tests/                       # Test suite (pytest)
 ├── data/                        # Raw M1 CSV data (gitignored)
-├── configs/                     # YAML config files
+└── docs/                        # Documentation (architecture, config, operations)
+    └── operations/              # Running commands and deployment
 ```
+
+---
 
 ## PO3 / FVG / IFVG Detection
 
@@ -351,12 +229,13 @@ Located in `quant_rl/features/po3_config.py` — the single source of truth for 
 ### Session Tagging
 
 ```python
-from quant_rl.features.structure import get_session
+from quant_rl.data.session import get_session
 
-session = get_session(timestamp)  # Returns: "asia" | "london" | "ny"
+session = get_session(timestamp)  # "asia" | "london" | "ny" | "closed"
 ```
 
-Session boundaries (UTC+3): Asia 01:05–09:00, London 09:00–16:30, NY 16:30–23:50.
+Session boundaries (broker tz `Etc/GMT-3`, UTC+3): Asia 01:05–09:00, London 09:00–16:30,
+NY 16:30–23:00 (inclusive).
 
 ---
 
@@ -367,10 +246,7 @@ Built on **Stable-Baselines3** with custom sequence encoders.
 ```python
 from quant_rl.models.agent import build_agent
 
-# PPO with TCN encoder (default)
-model = build_agent(env, cfg)
-
-# SAC with Transformer encoder
+model = build_agent(env, cfg)  # PPO + TCN (default)
 model = build_agent(env, cfg, arch="transformer", algo="sac")
 
 model.learn(total_timesteps=1_000_000)
@@ -381,10 +257,11 @@ model.learn(total_timesteps=1_000_000)
 | **TCN** | Temporal Convolutional Network (default) |
 | **Transformer** | Multi-head self-attention encoder |
 | **GRU** | Gated Recurrent Unit encoder |
-| **VAE** | Variational autoencoder latent features |
+| **VAE** | Variational autoencoder latent features (standalone training only) |
 
 Observation: `Dict[seq: (60, F), account: (5,)]`
-Action: Discrete {0=hold, 1-9=long, 10-18=short, 19=exit} or Continuous Box(-1,1)
+Action: Discrete `{0=hold, 1-9=long, 10-18=short, 19=exit}` or Continuous `Box(-1,1)`.
+Strategy mode (`--strategy po3_ifvg|distribution`): 4-D `Box [direction, risk, rr, tp]`.
 
 ---
 
@@ -393,16 +270,29 @@ Action: Discrete {0=hold, 1-9=long, 10-18=short, 19=exit} or Continuous Box(-1,1
 Event-driven backtest engine with realistic execution:
 
 ```bash
-python -m quant_rl.train.run_backtest
+uv run python -m quant_rl.train.run_backtest
 ```
 
 Features structure-aware SL/TP, Differential Sharpe Ratio reward, configurable costs, and drawdown guardrails.
 
 ---
 
+## Engine Validation
+
+Cross-validate the custom event-driven backtest engine against `backtrader`:
+
+```bash
+uv run python -m quant_rl.backtest.cross_validation.run
+```
+
+See `tests/test_backtest/test_engine_cross_validation.py` for unit tests.
+
+---
+
 ## Visualization
 
 ### Static Charts (matplotlib)
+
 ```python
 from quant_rl.eval.po3_plots import plot_fvg_signals
 
@@ -410,43 +300,45 @@ fig = plot_fvg_signals(bars, signals, out_path="chart.png")
 ```
 
 ### Interactive Charts (Plotly)
+
 ```python
 from quant_rl.eval.plots_interactive import plot_fvg_signals_interactive
 
 plot_fvg_signals_interactive(bars, signals, out_path="chart.html")
 ```
 
-Renders candlesticks with HTF FVG zones, LTF IFVG confirmations, and entry markers.
-
 ---
 
 ## Testing
 
 ```bash
-pytest tests/                         # Full suite
-pytest tests/test_features/           # PO3 + structure tests
-pytest tests/test_eval/               # Evaluation + plot tests
-pytest tests/test_integration/        # End-to-end smoke tests
+uv run pytest tests/ -v                         # Full suite (CI merge bar)
+uv run pytest tests/test_features/ -v           # PO3 + structure
+uv run pytest tests/test_envs/ -v               # Environment + strategies
+uv run pytest tests/test_integration/ -v        # End-to-end smoke tests
+pytest -m "not slow"                            # Local shortcut only
 ```
 
 ---
 
 ## CI / Code Quality
 
-| Check | Tool |
-|-------|------|
-| Linting | `ruff check .` |
-| Formatting | `ruff format --check .` |
-| Type checking | `mypy quant_rl` |
-| Tests | `pytest tests/` |
+Standard merge bar (mirrors `.github/workflows/ci.yml` and `orchestra/ci_gate.py`):
+
+| Check | Command |
+|-------|---------|
+| Formatting | `uv run ruff format --check .` |
+| Linting | `uv run ruff check .` |
+| Type checking | `uv run mypy .` |
+| Tests | `uv run pytest tests/ -v` |
 
 ---
 
 ## Known Limitations / Future Work
 
-- **VAE feature extractor:** VAE feature extractor exists in `quant_rl/models/vae.py` but is not wired into the main training entrypoint. It is out of scope for this thesis. See `scripts/train_vae.py` to train it standalone.
-- **Rule-based live baseline (`live_trading.py`):** Uses simplified guardrail criteria (10-day paper trial, 20 trades, zero breaches) compared to the full RL promotion protocol. This reflects the different risk profile of rule-based vs learned strategies.
-- **Multi-timeframe alignment:** Some higher-timeframe feature alignment edge cases may benefit from additional validation.
+- **VAE feature extractor:** exists in `quant_rl/models/vae.py` but is not wired into the main training entrypoint. See `scripts/train_vae.py` to train it standalone.
+- **Rule-based live baseline (`live_trading.py`):** uses simplified guardrail criteria compared to the full RL promotion protocol.
+- **Multi-timeframe alignment:** some higher-timeframe feature alignment edge cases may benefit from additional validation.
 
 ## License
 
