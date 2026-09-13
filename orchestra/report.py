@@ -39,6 +39,7 @@ def build_final_report(state: TaskState) -> str:
     created = time.ctime(d.get("created_at") or 0)
     updated = time.ctime(d.get("updated_at") or 0)
     verify = d.get("verification_result") or {}
+    format_check = verify.get("format") or {}
     tests = verify.get("tests") or {}
     lint = verify.get("lint") or {}
     types = verify.get("typecheck") or {}
@@ -85,9 +86,10 @@ def build_final_report(state: TaskState) -> str:
         *_agent_block("8. Fixes", d.get("fix_outputs") or [], "_no fix iterations_"),
         "## 9. Verification",
         "",
+        f"- Format: {'PASS' if format_check.get('success') else 'FAIL'}",
+        f"- Lint: {'PASS' if lint.get('success') else 'FAIL'}",
+        f"- Types: {'PASS' if types.get('success') else 'FAIL'}",
         f"- Tests: {'PASS' if tests.get('success') else 'FAIL'}",
-        f"- Lint: {'PASS' if lint.get('success') else 'WARN/FAIL'}",
-        f"- Types: {'PASS' if types.get('success') else 'WARN/FAIL/SKIP'}",
         "",
         _clip(tests.get("output"), 2000),
         "",
