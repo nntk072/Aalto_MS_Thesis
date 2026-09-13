@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import time
 import tomllib
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from pathlib import Path
-from shutil import which
 from typing import Any, cast
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -161,7 +161,7 @@ class HealthRegistry:
         """Local-only health checks; never calls generation APIs."""
         for model in models:
             facts = self.get(model)
-            facts.binary_ok = bool(which(model.cli))
+            facts.binary_ok = bool(shutil.which(model.cli))
             facts.probe_tier = 0
             facts.checked_at = time.time()
             if check_version and facts.binary_ok:
