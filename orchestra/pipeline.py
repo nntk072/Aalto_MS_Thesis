@@ -293,9 +293,10 @@ class Pipeline:
         elif phase == Phase.REPORTING:
             self._phase_report()
 
-    def _echo_cmd(self, model: Model) -> None:
-        cmd = self.sessions.build_command(model, "<prompt>")
-        click.echo(f"    Command: {' '.join(cmd[:4])}...")
+    def _echo_cmd(self, model: Model, role: str | None = None) -> None:
+        effort = self.sessions.resolve_effort(model, self._task_tier(), role=role)
+        cmd = self.sessions.build_command(model, "<prompt>", effort=effort)
+        click.echo(f"    Command: {' '.join(cmd)}")
 
     def _invoke(
         self,
@@ -489,7 +490,7 @@ class Pipeline:
 
         prompt = render_prompt("triage", task=self.state.task_description)
         if self.dry_run:
-            self._echo_cmd(model)
+            self._echo_cmd(model, "triage")
             if not self.state.data.get("complexity_override") and not self.state.data.get(
                 "complexity"
             ):
@@ -530,7 +531,7 @@ class Pipeline:
                 workspace=str(self.workspace),
             )
             if self.dry_run:
-                self._echo_cmd(model)
+                self._echo_cmd(model, "planner")
                 continue
             session = self.sessions.spawn(
                 model,
@@ -586,7 +587,7 @@ class Pipeline:
                 triage=self.state.data.get("triage_output", ""),
             )
             if self.dry_run:
-                self._echo_cmd(model)
+                self._echo_cmd(model, "critic")
                 continue
             session = self.sessions.spawn(
                 model,
@@ -636,7 +637,7 @@ class Pipeline:
             workspace=str(self.workspace),
         )
         if self.dry_run:
-            self._echo_cmd(model)
+            self._echo_cmd(model, "synthesizer")
             return
 
         _session, output = self._invoke_required(model, "synthesizer", prompt, timeout=300, lines=0)
@@ -660,7 +661,7 @@ class Pipeline:
             workspace=str(self.workspace),
         )
         if self.dry_run:
-            self._echo_cmd(model)
+            self._echo_cmd(model, "implementer")
             return
 
         _session, output = self._invoke_required(model, "implementer", prompt, timeout=900, lines=0)
@@ -694,7 +695,7 @@ class Pipeline:
                 test_results=test_results,
             )
             if self.dry_run:
-                self._echo_cmd(model)
+                self._echo_cmd(model, "reviewer")
                 continue
             session = self.sessions.spawn(
                 model,
@@ -741,7 +742,7 @@ class Pipeline:
             reviews=self.state.get_review_outputs_text(),
         )
         if self.dry_run:
-            self._echo_cmd(model)
+            self._echo_cmd(model, "review_synthesizer")
             return
 
         _session, output = self._invoke_required(
@@ -813,7 +814,7 @@ class Pipeline:
 Focus on correctness and safety. Do not change code style unless it's part of the fix."""
 
         if self.dry_run:
-            self._echo_cmd(model)
+            self._echo_cmd(model, "fixer")
             return
 
         _session, output = self._invoke_required(

@@ -16,6 +16,7 @@ MODEL_COSTS: dict[str, dict[str, float]] = {
     "ollama/devstral-small": {"input": 0.0, "output": 0.0},
     "opencode/default": {"input": 0.10, "output": 0.30},
     "kilo/default": {"input": 0.10, "output": 0.30},
+    "openai/gpt-5.6-luna": {"input": 0.20, "output": 1.20},
 }
 
 
