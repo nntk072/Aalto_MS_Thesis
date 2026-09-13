@@ -52,3 +52,14 @@ Output MUST be a standalone implementation plan that an implementer can follow W
 
 ---
 The implementer has NOT seen the input plans. Your final plan must be complete and self-contained.
+
+## Routing (phase 4 — synthesis)
+
+| | Phases | Why |
+|---|--------|-----|
+| **May goto** | **1**, **2**, **3**, **5**, **10** | Bad merge → replan/critique/triage; good merge → **5**; abandon |
+| **Must-not goto** | 6, 7, 8, 9 | Still no code |
+
+Silent default: → **5**. Skipped automatically when `planner_count ≤ 1`.
+
+{{route_notes}}

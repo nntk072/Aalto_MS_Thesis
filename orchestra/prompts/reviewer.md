@@ -42,3 +42,14 @@ pass / conditional_pass / fail
 ---
 conditional_pass = minor issues that don't block merge but should be addressed
 fail = critical bugs or missing functionality that must be fixed
+
+## Routing (phase 6 — review)
+
+| | Phases | Why |
+|---|--------|-----|
+| **May goto** | **1**, **2**, **5**, **7**, **8**, **9**, **10** | Re-scope; redesign; re-impl; merge reviews; fix; verify if LGTM; stop |
+| **Must-not goto** | 3, 4 | Plan-merge stage is over |
+
+Silent default: multi-review → **7**; else → **9**.
+
+{{route_notes}}

@@ -55,3 +55,14 @@ trivial / medium / complex
 
 ---
 Important: Be concrete. Reference actual file paths and function names from the repository. Do not be vague.
+
+## Routing (phase 2 — planning)
+
+| | Phases | Why |
+|---|--------|-----|
+| **May goto** | **1**, **3**, **4**, **5**, **10** | Re-triage; critique; synthesize multi-plan; implement single plan; abandon |
+| **Must-not goto** | 6, 7, 8, 9 | No code yet |
+
+Silent default: critics enabled → **3**; one plan → **5**; multi-plan → **4**.
+
+{{route_notes}}

@@ -36,3 +36,23 @@ Produce a structured triage report in this exact format:
 Do **not** modify files or run tests. Read at most a few relevant files, then emit **only** the JSON object. Stop as soon as the JSON is complete.
 
 Be precise and conservative. When in doubt, escalate complexity and risk.
+
+## Routing (phase 1 — triage)
+
+You **must** run first. Pick the next hop in a nested `route` object (or omit for defaults).
+
+| | Phases | Why |
+|---|--------|-----|
+| **May goto** | **2**, **5**, **10** | Plan normal work; jump to implement for trivial (T0); exit via report |
+| **Must-not goto** | 3, 4, 6, 7, 8, 9 | No plans, code, or reviews exist yet |
+
+Silent default: T0 → **5**; otherwise → **2**. Example:
+
+```json
+{
+  "tier": "T0",
+  "route": { "goto": 5, "reviewer_count": 0, "verify_mode": "skip" }
+}
+```
+
+{{route_notes}}
