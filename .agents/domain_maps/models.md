@@ -2,13 +2,13 @@
 
 ## Primary Files
 
-| File | Role | Lines |
-|------|------|-------|
-| `quant_rl/models/agent.py` | Agent wiring: encoder + PPO/SAC construction | 163 |
-| `quant_rl/models/encoder.py` | TCN/GRU/Transformer encoder implementations | ~250 |
-| `quant_rl/models/vae.py` | Variational autoencoder for narrative embedding | ~150 |
-| `quant_rl/models/base.py` | Base classes for models | ~60 |
-| `quant_rl/models/auxiliary.py` | Auxiliary prediction head | ~80 |
+| File | Role |
+|------|------|
+| `quant_rl/models/agent.py` | Agent wiring: encoder + PPO/SAC construction |
+| `quant_rl/models/encoder.py` | TCN/GRU/Transformer encoder implementations |
+| `quant_rl/models/vae.py` | Variational autoencoder (standalone training only) |
+| `quant_rl/models/base.py` | Base classes for models |
+| `quant_rl/models/auxiliary.py` | Auxiliary prediction head |
 
 ## Key Symbols
 
@@ -29,8 +29,9 @@
 ## Consumers (Callers)
 
 - `quant_rl/train/train_rl.py` (calls `build_agent`)
-- `quant_rl/scripts/compare_encoders.py` (encoder comparison)
+- `scripts/compare_encoders.py` (encoder comparison)
 - `quant_rl/train/auxiliary_training.py` (auxiliary head training)
+- `quant_rl/live/rl_strategy.py` (model loading for live)
 
 ## Tests
 

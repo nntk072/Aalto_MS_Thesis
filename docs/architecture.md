@@ -36,9 +36,10 @@ one is plugged in.
 How-to material lives elsewhere and is not repeated:
 
 - [`README.md`](../README.md) — installation, quick start, project layout.
-- [`RUNNING_COMMANDS.md`](../doc/RUNNING_COMMANDS.md) — every command a typical
+- [`config.md`](config.md) — YAML config catalog and cache versioning.
+- [`RUNNING_COMMANDS.md`](operations/RUNNING_COMMANDS.md) — every command a typical
   research or evaluation session needs.
-- [`DEPLOYMENT.md`](../doc/DEPLOYMENT.md) — the paper-to-live promotion protocol.
+- [`DEPLOYMENT.md`](operations/DEPLOYMENT.md) — the paper-to-live promotion protocol.
 
 ## Terminology
 
@@ -124,13 +125,15 @@ How-to material lives elsewhere and is not repeated:
   fill pricing when `costs.use_tick_execution` is on.
 - **The feature cache is versioned.** Feature pipelines are cached as
   parquet keyed by `FEATURE_CACHE_VERSION` (currently
-  `v5-idea1-strategy-state` in `quant_rl/features/build.py`). A change to
-  the feature schema must bump the version; stale caches are otherwise
-  silently reused.
-- **Idea 1/2 runs use a distinct cache key.** `quant_rl/train/train_rl.py`
-  selects `v5_idea1` when `features.include_strategy_state` is on and
-  `v4_po3causal` otherwise, so overlay runs never poison the baseline
-  cache.
+  `v8-full-day-completed-htf-swings` in `quant_rl/features/build.py`).
+  Bar caches use `BAR_CACHE_VERSION` (`v2-full-day` in
+  `quant_rl/data/pipeline.py`). A schema change must bump the relevant
+  version; stale caches are otherwise silently reused.
+- **Opt-in feature blocks are config-driven.** Overlay columns
+  (`include_strategy_state`, `include_session_ohlc`, MTF expansion flags)
+  are toggled by variant YAMLs under `config/`. All runs share the same
+  cache key; changing flags requires `--force` or deleting the stale
+  parquet so columns are rebuilt.
 - **OOS dates are locked in `default.yaml`.** `data.split.train_end` /
   `test_start` are the single source of truth for the split; variant
   configs must not override them.
@@ -303,10 +306,10 @@ maps strategy names to variant YAMLs, `_strategy_from_cfg` builds
 `(strategy, strategy_reward, weight)`, and the merged config drives
 `make_env`, `build_agent` and learning.
 
-**Evaluation** — `quant_rl/eval/` produces run artifacts (rollouts,
-exports, metrics, bootstrap CIs, calibration, walk-forward); the
-directory `quant_rl/evaluation/` holds reporting helpers
-(`calculate_metrics`, plots, chart indicators). Checkpoints, trades and
+**Evaluation** — `quant_rl/evaluation/` holds the canonical metrics stack
+(`calculate_metrics`, `purged_walk_forward`, bootstrap CIs, calibration,
+`run_episode`). `quant_rl/eval/` owns rollout (`evaluate_model`), plot
+export, and `eval_run` checkpoint re-evaluation. Checkpoints, trades and
 plots land under `outputs/`.
 
 **Live** — `live_trading_rl.py` loads a checkpoint and runs
@@ -320,417 +323,82 @@ under `config/` are merged over it. A variant is opt-in end to end: it
 must flip `features.include_strategy_state`, `env.strategy_actions` and
 declare the `strategy:` block (see the two example files).
 
-Full-system class view. Packages are namespaces; `<<module>>` boxes group
-free functions of one file. Every name below exists at `main` (`3e56c5b`).
+### Core contracts
+
+Packages map 1:1 to directories. The cross-tree boundary is live:
+`RLStrategyAdapter` (in `quant_rl/live/`) bridges the trained model into
+`mt5_trading/`, which knows nothing about RL training.
 
 ```mermaid
 classDiagram
     direction TB
 
-    namespace data {
-        class loader {
-            <<module>>
-            +load_bars(path)
-            +load_ticks(path)
-            +iter_ticks_chunks(path, chunksize)
-        }
-        class clean_mod {
-            <<module>>
-            +clean(df, tz)
-        }
-        class resample_mod {
-            <<module>>
-            +resample(m1, tf)
-            +build_all_timeframes(m1)
-        }
-        class align_mod {
-            <<module>>
-            +align_timeframes()
-            +join_symbols()
-        }
-        class session_mod {
-            <<module>>
-            +filter_session()
-            +add_session_id(df)
-        }
-        class TickBook {
-            <<tick bid/ask store>>
-        }
-        class pipeline_mod {
-            <<module>>
-            +run_pipeline(cfg, force)
-            +build_tick_books(cfg)
-        }
-        class split_mod {
-            <<module>>
-            +split_train_test()
-            +get_split_config(cfg)
-        }
+    class TradingEnv {
+        +strategy: TradingStrategy
+        +reward_fn: DSRReward | CompositeReward
+        +strategy_actions: bool
+        +step(action)
+        +reset()
     }
 
-    namespace features {
-        class build_mod {
-            <<module>>
-            +build_features()
-            +FEATURE_CACHE_VERSION
-        }
-        class liquidity_mod {
-            <<module>>
-            +detect_liquidity_sweeps()
-            +detect_bos(bars, structure)
-        }
-        class po3_state_mod {
-            <<module>>
-            +build_po3_state()
-            +build_ifvg_zone_features()
-        }
+    class TradingStrategy {
+        <<abstract>>
+        +required_features
+        +raw_columns
+        +validate_entry()*
+        +sl_reference()*
+        +target_candidates()*
     }
 
-    namespace envs {
-        class TradingEnv {
-            +strategy: TradingStrategy
-            +reward_fn: DSRReward | CompositeReward
-            +strategy_actions: bool
-            +action_space
-            +observation_space
-            +step(action)
-            +reset()
-        }
-        class TradingStrategy {
-            <<abstract>>
-            +str name
-            +tuple~str~ required_features
-            +tuple~str~ raw_columns
-            +validate_entry(direction, row)* bool
-            +sl_reference(direction, row)* float
-            +target_candidates(direction, row)* dict
-        }
-        class BaselineStrategy
-        class PO3IFVGStrategy {
-            +enforce_gate: bool
-            +require_asian_context: bool
-        }
-        class DistributionStrategy {
-            +enforce_gate: bool
-        }
-        class DSRReward {
-            +eta: float
-            +reset()
-            +__call__(pnl_step)
-        }
-        class SweepConfirmationReward {
-            +alpha: float
-            +beta: float
-            +hold_bars: int
-        }
-        class CompositeReward {
-            +sweep_reward: SweepConfirmationReward
-            +_dsr_fn: DSRReward
-            +strategy_reward: PO3Reward | DistributionReward | None
-            +strategy_weight: float
-        }
-        class PO3Reward {
-            +required_inputs
-        }
-        class DistributionReward {
-            +required_inputs
-        }
+    class BaselineStrategy
+    class PO3IFVGStrategy
+    class DistributionStrategy
+
+    class CompositeReward {
+        +DSRReward
+        +SweepConfirmationReward
+        +strategy_reward
+        +strategy_weight
     }
 
-    namespace backtest {
-        class run_backtest_mod {
-            <<module>>
-            +run_backtest(bars, features, policy)
-        }
-        class AccountState {
-            +initial_balance: float
-            +balance: float
-            +equity: float
-            +peak_equity: float
-            +daily_loss: float
-            +max_drawdown: float
-            +update_equity(open_pnl)
-        }
-        class Broker {
-            +leverage: int
-            +margin_pct: float
-            +contract_size: float
-            +cost_model: CostModel
-            +required_margin(price, lots)
-            +open_position(acc, quote, lots, direction) Position
-        }
-        class Position {
-            +direction: int
-            +size: float
-            +entry_price: float
-            +sl_price: float
-            +tp_price: float
-        }
-        class CostModel {
-            +fill_price(bid, ask, direction)
-        }
-        class costs_mod {
-            <<module>>
-            +COST_US100
-        }
-        class TradingCostModel
-        class FTMOGuardrails {
-            +daily_loss_limit: float
-            +max_loss_limit: float
-            +risk_per_trade_limit: float
-            +check_daily(acc) bool
-            +check_max_drawdown(acc) bool
-            +check_trade_risk(risk) bool
-            +any_breach(acc) bool
-            +breach_reason(acc) str
-        }
-        class risk_mod {
-            <<module>>
-            +compute_sl_tp_from_structure()
-            +resolve_tp_target()
-        }
+    class Broker
+    class FTMOGuardrails
+    class build_agent {
+        +build_agent(env, cfg)
     }
 
-    pipeline_mod ..> loader : M1 CSVs
-    pipeline_mod ..> clean_mod
-    pipeline_mod ..> resample_mod
-    pipeline_mod ..> session_mod
-    pipeline_mod ..> TickBook : build_tick_books
-    pipeline_mod ..> split_mod : locked dates
-    split_mod ..> build_mod : feature frames
-    build_mod ..> liquidity_mod : include_strategy_state
-    build_mod ..> po3_state_mod : include_strategy_state
+    class RLStrategyAdapter {
+        +build_observation()
+        +predict_signal()
+    }
 
-    TradingEnv *-- TradingStrategy : semantics only
-    TradingEnv *-- CompositeReward : reward_fn (overlay)
-    TradingEnv ..> DSRReward : reward_fn (baseline)
-    TradingEnv ..> AccountState
-    TradingEnv ..> Broker
-    TradingEnv ..> CostModel
-    TradingEnv ..> FTMOGuardrails
-    TradingEnv ..> risk_mod : structural SL/TP
+    class RLRobot {
+        +trade()
+    }
+
     TradingStrategy <|-- BaselineStrategy
     TradingStrategy <|-- PO3IFVGStrategy
     TradingStrategy <|-- DistributionStrategy
-    CompositeReward *-- SweepConfirmationReward
-    CompositeReward *-- DSRReward
-    CompositeReward o-- PO3Reward : optional, entry transitions
-    CompositeReward o-- DistributionReward : optional, entry transitions
-
-    run_backtest_mod ..> Broker
-    run_backtest_mod ..> AccountState
-    run_backtest_mod ..> CostModel
-    run_backtest_mod ..> FTMOGuardrails
-    run_backtest_mod ..> TickBook : tick fills
-    Broker ..> Position : creates
-    Broker *-- CostModel
-
-    namespace models {
-        class build_agent_mod {
-            <<module>>
-            +build_agent()
-        }
-        class Encoder {
-            <<abstract>>
-            +obs_dim: int
-            +seq_len: int
-            +latent_dim: int
-            +forward(seq)
-        }
-        class Policy {
-            <<abstract>>
-            +forward(obs)
-        }
-        class TCNEncoder {
-            <<BaseFeaturesExtractor>>
-        }
-        class TransformerEncoder {
-            <<BaseFeaturesExtractor>>
-        }
-        class GRUEncoder {
-            <<BaseFeaturesExtractor>>
-        }
-        class VAE {
-            +VAEEncoder encoder
-            +VAEDecoder decoder
-        }
-        class VAEEncoder
-        class VAEDecoder
-        class VAEFeatureExtractor {
-            <<BaseFeaturesExtractor>>
-        }
-    }
-
-    namespace train {
-        class train_rl_mod {
-            <<module>>
-            +train_rl()
-            +make_env()
-            +_STRATEGY_CONFIGS
-        }
-        class ProgressLoggerCallback {
-            <<BaseCallback>>
-            +_on_rollout_end()
-            +_on_training_end()
-        }
-        class BestCheckpointEvalCallback {
-            <<BaseCallback>>
-            +eval_env_factory
-            +best_mean_reward: float
-            +_run_eval()
-        }
-        class AuxiliaryTrainerCallback {
-            <<BaseCallback>>
-        }
-        class auxiliary_mod {
-            <<module>>
-            +build_supervised_windows()
-        }
-    }
-
-    namespace eval {
-        class rollout_mod {
-            <<module>>
-            +evaluate_model()
-            +make_action_fn()
-        }
-        class export_mod {
-            <<module>>
-            +build_run_dir(base, name)
-            +save_run()
-        }
-    }
-
-    namespace evaluation {
-        class metrics_mod {
-            <<module>>
-            +calculate_metrics()
-        }
-        class runner_mod {
-            <<module>>
-            +run_episode()
-        }
-        class WFSplit {
-            <<walk-forward split>>
-        }
-        class walkforward_mod {
-            <<module>>
-            +purged_walk_forward()
-        }
-        class CI {
-            +as_tuple()
-        }
-        class bootstrap_mod {
-            <<module>>
-            +bootstrap_ci()
-            +metrics_with_ci()
-            +sharpe_stat()
-            +sortino_stat()
-            +max_drawdown_stat()
-            +win_rate_stat()
-        }
-        class CalibrationReport {
-            +summary() str
-        }
-        class calibration_mod {
-            <<module>>
-            +calibration_report()
-            +plot_reliability_diagram()
-        }
-    }
-
-    namespace live {
-        class live_entry_mod {
-            <<module>>
-            +PAPER_TRADING default true
-        }
-        class RLStrategyAdapter {
-            +update_bars(bars, secondary_bars)
-            +build_observation()
-            +predict_signal(account_state) int
-            +as_strategy()
-        }
-        class RLRobot {
-            +trade()
-            +calculate_position_size(symbol)
-            +check_risk_before_trade(symbol, position_size)
-        }
-    }
-
-    namespace mt5_trading {
-        class Trader {
-            <<abstract>>
-            +open_position()*
-            +close_positions()*
-            +get_opened_positions()*
-            +get_all_positions()*
-            +send_to_break_even()*
-            +calculate_position_size()*
-        }
-        class TradingData {
-            <<abstract>>
-            +get_data()*
-            +get_symbol()*
-        }
-        class MT5Strategy {
-            <<abstract mt5_trading.adapters.strategy.TradingStrategy>>
-            +signal()*
-        }
-        class RiskManager {
-            +calculate_position_size()
-            +check_risk_limits()
-            +get_total_exposure(symbols)
-            +get_volatility_multiplier(atr_pct, base_atr)
-        }
-    }
-
-    build_mod ..> VAE : optional latent
-    build_agent_mod ..> Encoder
-    build_agent_mod ..> Policy
-    build_agent_mod ..> TCNEncoder
-    build_agent_mod ..> TransformerEncoder
-    build_agent_mod ..> GRUEncoder
-    build_agent_mod ..> VAEFeatureExtractor
-    VAE *-- VAEEncoder
-    VAE *-- VAEDecoder
-    VAEFeatureExtractor ..> VAE
-
-    train_rl_mod ..> pipeline_mod : run_pipeline
-    train_rl_mod ..> build_mod : build_features
-    train_rl_mod ..> TradingEnv : make_env
-    train_rl_mod ..> envs.TradingStrategy : _strategy_from_cfg
-    train_rl_mod ..> envs.PO3Reward
-    train_rl_mod ..> envs.DistributionReward
-    train_rl_mod ..> build_agent_mod
-    train_rl_mod ..> ProgressLoggerCallback
-    train_rl_mod ..> BestCheckpointEvalCallback
-    train_rl_mod ..> AuxiliaryTrainerCallback
-    train_rl_mod ..> rollout_mod : evaluate_model
-    train_rl_mod ..> export_mod : save_run
-    BestCheckpointEvalCallback ..> TradingEnv : fresh eval env
-    AuxiliaryTrainerCallback ..> auxiliary_mod
-
-    rollout_mod ..> runner_mod
-    rollout_mod ..> metrics_mod
-    bootstrap_mod ..> CI : returns
-    calibration_mod ..> CalibrationReport : returns
-    walkforward_mod ..> WFSplit : returns
-
-    live_entry_mod ..> RLStrategyAdapter
-    live_entry_mod ..> RLRobot
-    RLStrategyAdapter ..> build_mod : _rebuild_features
-    RLStrategyAdapter ..> MT5Strategy : as_strategy
-    RLRobot ..> MT5Strategy : signal
-    RLRobot *-- Trader
-    RLRobot *-- RiskManager
-    RLRobot ..> TradingData : bars
+    TradingEnv *-- TradingStrategy
+    TradingEnv *-- CompositeReward
+    TradingEnv --> Broker
+    TradingEnv --> FTMOGuardrails
+    build_agent --> TradingEnv
+    RLRobot --> RLStrategyAdapter
 ```
 
-Packages map 1:1 to directories; the only cross-tree boundary is the
-`live` namespace: `RLStrategyAdapter` (in `quant_rl/live/`) bridges the
-model into `mt5_trading/`, which knows nothing about RL training. The
-`_strategy_from_cfg` helper lives in `quant_rl/train/train_rl.py` and
-builds the `envs` strategy/reward pair shown above.
+| Package | Entry point | Role |
+|---------|-------------|------|
+| `quant_rl/data/` | `run_pipeline`, `split_train_test` | M1 ingest, resample, cache, split |
+| `quant_rl/features/` | `build_features` | Feature matrix + `FEATURE_CACHE_VERSION` |
+| `quant_rl/envs/` | `TradingEnv` | Gym interface, mechanics, rewards |
+| `quant_rl/backtest/` | `engine`, `broker`, `guardrails` | Fills, costs, FTMO kill-switches |
+| `quant_rl/models/` | `build_agent` | PPO/SAC + encoder wiring |
+| `quant_rl/train/` | `train_rl` | Pipeline orchestration |
+| `quant_rl/evaluation/` | `calculate_metrics`, `purged_walk_forward` | Metrics and reporting |
+| `quant_rl/eval/` | `evaluate_model`, `eval_run` | Rollout and artifact export |
+| `quant_rl/live/` | `RLStrategyAdapter` | Live observation bridge |
+| `mt5_trading/` | `RLRobot`, `RiskManager` | Broker I/O only |
 
 ## Lifecycle of one cycle
 
@@ -745,19 +413,27 @@ recomputation; the key changes whenever the feature schema changes.
 
 ### Feature chains and strategy state
 
-`build_features` always builds the base technical and PO3/FVG columns.
-When `features.include_strategy_state` is on, it additionally runs the
-causal detectors and appends their columns:
+`build_features` always builds the base technical indicator block on the
+M1 spine and causally aligns per-TF indicators listed in
+`features.htf_timeframes`. Opt-in blocks (all off in `default.yaml`) add
+columns when their flags are enabled by a variant config:
 
-- `detect_liquidity_sweeps` — pushes through prior swing levels with
-  reclaim confirmation (`swing_period`, `require_reclaim`,
-  `max_age_bars`).
-- `detect_bos` — break-of-structure flags against confirmed swings.
-- `build_po3_state` — manipulation/distribution phase state for the
-  PO3 chain (`require_manipulation_sweep`,
-  `require_distribution_confirmation`).
-- `build_ifvg_zone_features` — inversion-FVG zones
-  (`max_age_bars`, `require_price_retest`).
+| Flag / block | Adds |
+|--------------|------|
+| `include_po3` | PO3 time-of-day phase tag |
+| `include_fvg_ifvg` | Per-TF FVG zone features |
+| `include_po3_full` | Full HTF-FVG → LTF-IFVG → entry-trigger pipeline |
+| `include_strategy_state` | Sweeps, BOS, PO3 state, IFVG zones (Idea 1/2 overlay) |
+| `include_session_ohlc` | CT-anchored session OHLC, prior-period H/L, quadrants |
+| `smt` / `structure` / `liquidity` / `po3_state_mtf` / `ifvg_mtf` | MTF expansion per `config/features_*_mtf.yaml` |
+
+When `include_strategy_state` is on, the overlay detectors are:
+
+- `detect_liquidity_sweeps` / `detect_bos` (`features/liquidity.py`)
+- `build_po3_state` / `build_ifvg_zone_features` (`features/po3_state.py`)
+
+Swing detection lives in `features/swings.py` (`detect_pivots`,
+`detect_swings`); `structure.py` wraps it for SL/TP pricing.
 
 Overlay columns are consumed two ways: strategy classes read them per
 bar (`required_features` plus execution-side `raw_columns`), and the
@@ -801,10 +477,10 @@ YAML selected from `_STRATEGY_CONFIGS`, builds the environment via
 `make_env` and `_strategy_from_cfg`, the agent via `build_agent`, and
 trains. `BestCheckpointEvalCallback` checkpoints during training;
 `quant_rl/eval/rollout.py` (`evaluate_model`) replays checkpoints on the
-locked OOS window, and `quant_rl/eval/` writes run artifacts
-(metrics, trades, bootstrap CIs, calibration, walk-forward reports) to
-`outputs/`. The cache key distinction (`v5_idea1` vs `v4_po3causal`)
-keeps overlay and baseline feature caches separate.
+locked OOS window; `quant_rl/evaluation/` computes metrics, bootstrap CIs,
+and walk-forward reports; `quant_rl/eval/export.py` writes artifacts to
+`outputs/`. Feature caches are keyed by `FEATURE_CACHE_VERSION` only —
+use `--force` or delete stale parquet when changing opt-in feature flags.
 
 ### Live: paper first, then promote
 
@@ -814,7 +490,7 @@ observation the environment produced during training. `RLRobot.trade()`
 derives the signal, sizes it via `RiskManager` (percent-of-balance under
 `live_risk_overrides:`), and either places orders through `Trader` or
 only logs them. Promotion from paper to live follows
-`doc/DEPLOYMENT.md`; a live adapter must be paper-first, and an SMT
+`docs/operations/DEPLOYMENT.md`; a live adapter must be paper-first, and an SMT
 secondary symbol is wired only when the checkpoint was trained with it.
 
 ## Budgets and constraints
@@ -943,14 +619,15 @@ Then:
   is diagnostic (default) or a hard veto for this strategy, and keep
   training and live modes identical.
 - **Paper first.** Any live adapter ships paper-mode only until it
-  passes the promotion criteria in `doc/DEPLOYMENT.md`.
+  passes the promotion criteria in `docs/operations/DEPLOYMENT.md`.
 
 ## References
 
 - [`README.md`](../README.md) — installation, quick start, project
   structure.
-- [`RUNNING_COMMANDS.md`](../doc/RUNNING_COMMANDS.md) — command reference.
-- [`DEPLOYMENT.md`](../doc/DEPLOYMENT.md) — paper-to-live promotion
+- [`config.md`](config.md) — YAML config catalog and cache versioning.
+- [`RUNNING_COMMANDS.md`](operations/RUNNING_COMMANDS.md) — command reference.
+- [`DEPLOYMENT.md`](operations/DEPLOYMENT.md) — paper-to-live promotion
   protocol.
 - [`quant_rl/config/default.yaml`](../quant_rl/config/default.yaml) —
   base configuration (split dates, FTMO limits, live risk overrides).

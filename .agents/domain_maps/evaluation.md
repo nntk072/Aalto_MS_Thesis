@@ -1,40 +1,36 @@
 # Evaluation Domain
 
+Two packages: `quant_rl/evaluation/` (metrics, walk-forward, reporting) and
+`quant_rl/eval/` (rollout, plots, export, `eval_run`).
+
 ## Primary Files
 
-| File | Role | Lines |
-|------|------|-------|
-| `quant_rl/evaluation/runner.py` | Policy-agnostic episode runner | 62 |
-| `quant_rl/evaluation/metrics.py` | Performance metrics (Sharpe, drawdown, etc.) | ~150 |
-| `quant_rl/evaluation/calibration.py` | Calibration analysis | ~100 |
-| `quant_rl/evaluation/bootstrap_ci.py` | Bootstrap confidence intervals | ~80 |
-| `quant_rl/evaluation/report.py` | Multi-seed report generation | ~100 |
-| `quant_rl/evaluation/walkforward.py` | Purged + embargoed walk-forward splits | 69 |
-| `quant_rl/eval/rollout.py` | RL model evaluation through TradingEnv | 152 |
-| `quant_rl/eval/export.py` | Run artifact saving | ~80 |
-| `quant_rl/eval/trade_metrics.py` | Trade-level metrics | ~80 |
-| `quant_rl/eval/plots.py` | Static matplotlib plots | ~200 |
-| `quant_rl/eval/plots_interactive.py` | Interactive plotly plots | ~150 |
-| `quant_rl/eval/chart_overlays.py` | Chart overlay visualizations | ~100 |
-| `quant_rl/eval/trade_plots.py` | Per-trade plots | ~100 |
-| `quant_rl/eval/trade_diagnostics.py` | Trade diagnostic plots | ~100 |
-| `quant_rl/eval/po3_plots.py` | PO3-specific plots | ~80 |
-| `quant_rl/eval/training_plots.py` | Training curve plots | ~80 |
-| `quant_rl/eval/replot_orders.py` | Order replotting utility | ~60 |
-| `quant_rl/eval/chart_indicators.py` | Chart indicator overlays | ~80 |
+| File | Role |
+|------|------|
+| `quant_rl/evaluation/runner.py` | Policy-agnostic episode runner |
+| `quant_rl/evaluation/metrics.py` | Performance metrics (Sharpe, drawdown, etc.) |
+| `quant_rl/evaluation/calibration.py` | Calibration analysis |
+| `quant_rl/evaluation/bootstrap_ci.py` | Bootstrap confidence intervals |
+| `quant_rl/evaluation/report.py` | Multi-seed report generation |
+| `quant_rl/evaluation/walkforward.py` | Purged + embargoed walk-forward splits |
+| `quant_rl/eval/rollout.py` | RL model evaluation through TradingEnv |
+| `quant_rl/eval/export.py` | Run artifact saving |
+| `quant_rl/eval/eval_run.py` | Re-evaluate existing checkpoint (no retraining) |
+| `quant_rl/eval/trade_metrics.py` | Trade-level metrics |
+| `quant_rl/eval/plots.py` | Static matplotlib plots |
+| `quant_rl/eval/plots_interactive.py` | Interactive plotly plots |
+| `quant_rl/eval/trade_plots.py` | Per-trade plots |
+| `quant_rl/eval/po3_plots.py` | PO3-specific plots |
 
 ## Key Symbols
 
 | Symbol | File | Purpose |
 |--------|------|---------|
-| `run_episode()` | `runner.py` | Run one full episode, return metrics |
-| `calculate_metrics()` | `metrics.py` | Compute performance metrics |
-| `PerformanceMetrics` | `metrics.py` | Metrics dataclass |
-| `purged_walk_forward()` | `walkforward.py` | Purged + embargoed WF splits |
-| `WFSplit` | `walkforward.py` | Walk-forward split dataclass |
-| `evaluate_model()` | `rollout.py` | Walk RL model through TradingEnv |
-| `make_action_fn()` | `rollout.py` | Create obs→action callable for model |
-| `save_run()` | `export.py` | Save run artifacts to disk |
+| `run_episode()` | `evaluation/runner.py` | Run one full episode, return metrics |
+| `calculate_metrics()` | `evaluation/metrics.py` | Compute performance metrics |
+| `purged_walk_forward()` | `evaluation/walkforward.py` | Purged + embargoed WF splits |
+| `evaluate_model()` | `eval/rollout.py` | Walk RL model through TradingEnv |
+| `save_run()` | `eval/export.py` | Save run artifacts to disk |
 
 ## Direct Dependencies
 
@@ -57,17 +53,14 @@
 | `tests/test_evaluation/test_report.py` | Report generation |
 | `tests/test_eval/test_walkforward.py` | Walk-forward splits |
 | `tests/test_eval/test_evaluate_metrics_contract.py` | Metrics contract |
-| `tests/test_eval/test_chart_overlays.py` | Chart overlays |
 | `tests/test_eval/test_trade_plots.py` | Trade plots |
 | `tests/test_eval/test_po3_plots.py` | PO3 plots |
 | `tests/test_rollout.py` | Model rollout |
 | `tests/test_trade_metrics.py` | Trade metrics |
-| `tests/test_training_plots.py` | Training plots |
-| `tests/test_plots_export.py` | Plot export |
 
 ## Do NOT Read For Evaluation Tasks
 
-- `quant_rl/features/` (feature engineering — separate domain)
+- `quant_rl/features/indicators.py` (feature implementation detail)
 - `quant_rl/models/encoder.py` (encoder detail — only if model loading fails)
 - `mt5_trading/` (live trading — separate domain)
 

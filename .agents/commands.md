@@ -7,6 +7,19 @@ uv sync                                    # install all deps
 uv sync --extra dev                        # include dev tooling
 ```
 
+## CI gate (merge bar)
+
+Mirrors `orchestra/ci_gate.py` and `.github/workflows/ci.yml`:
+
+```bash
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy .
+uv run pytest tests/ -v
+```
+
+Local shortcut (not merge bar): `pytest -m "not slow"`
+
 ## Data Pipeline
 
 ```bash
@@ -17,57 +30,75 @@ python scripts/prepare_data.py --force     # ignore cache, reprocess
 ## Training
 
 ```bash
-python -m quant_rl.train.train_rl --mvp    # MVP smoke test (30 days)
-python -m quant_rl.train.train_rl          # full training run
-python -m quant_rl.train.train_rl --algo sac --arch gru   # SAC with GRU encoder
-python -m quant_rl.train.run_backtest      # backtest with random policy
-python -m quant_rl.train.run_baselines     # run baseline strategies
-python scripts/compare_encoders.py         # compare encoder architectures
+uv run python -m quant_rl.train.train_rl --mvp              # MVP smoke test (30 days)
+uv run python -m quant_rl.train.train_rl                    # full training run
+uv run python -m quant_rl.train.train_rl --algo sac --arch gru
+uv run python -m quant_rl.train.train_rl --strategy po3_ifvg  # Idea 1 overlay
+uv run python -m quant_rl.train.train_rl --config config/features_full_po3_mtf.yaml
+uv run python -m quant_rl.train.train_rl --walk-forward --wf-splits 5 --purge-bars 60
+uv run python -m quant_rl.train.run_backtest                # random policy backtest
+uv run python -m quant_rl.train.run_baselines                 # baseline strategies
+uv run python scripts/compare_encoders.py                     # encoder comparison
+```
+
+## Evaluation
+
+```bash
+uv run python -m quant_rl.eval.eval_run --run outputs/<run_dir>
+uv run python scripts/report_g3.py --runs-dir outputs
 ```
 
 ## Testing
 
 ```bash
-pytest                                     # full test suite
-pytest -m "not slow"                       # skip slow torch/SB3 tests
-pytest -m unit                             # unit tests only
-pytest -m integration                      # integration tests only
-pytest -k "swing"                          # tests matching "swing"
-pytest tests/test_features/                # feature tests only
-pytest --cov=quant_rl --cov-report=term-missing -q   # coverage
+uv run pytest tests/ -v                      # full suite (CI merge bar)
+pytest -m "not slow"                         # local shortcut
+pytest -m unit                               # unit tests only
+pytest -m integration                        # integration tests only
+pytest tests/test_features/                  # feature tests only
+pytest tests/test_envs/                      # env tests only
+pytest tests/test_orchestra/                 # orchestra tests
+pytest --cov=quant_rl --cov-report=term-missing -q
 ```
 
 ## Linting & Type Checking
 
 ```bash
-ruff check quant_rl/                       # lint
-ruff format quant_rl/                      # format
-ruff check --fix quant_rl/                 # auto-fix lint issues
-mypy quant_rl/                             # type check
+uv run ruff check .                          # lint (whole tree)
+uv run ruff format .                         # format
+uv run ruff check --fix .                    # auto-fix
+uv run mypy .                                # type check (whole tree)
+```
+
+## Orchestra
+
+```bash
+orchestra doctor                             # Tier-0 health check
+orchestra run "task description"             # full pipeline (verify runs CI gate)
 ```
 
 ## Docker
 
 ```bash
-make docker-build                          # build runtime image
-make docker-build-test                     # build test image
-make docker-test                           # run tests in Docker
-make docker-lint                           # run lint in Docker
-make docker-pipeline                       # full pipeline (lint → typecheck → test)
+make docker-build
+make docker-build-test
+make docker-test
+make docker-lint
+make docker-pipeline
 ```
 
 ## Dependency Management
 
 ```bash
-make lock                                  # re-resolve uv.lock
-make lock-export                           # regenerate pip pin files
-make lock-check                            # verify uv.lock is current
-make deps-check                            # verify pip pins match uv.lock
+make lock
+make lock-export
+make lock-check
+make deps-check
 ```
 
 ## Config Overrides
 
 ```bash
 python scripts/prepare_data.py data.cache_dir=my_cache env.obs_window=30
-python -m quant_rl.train.train_rl training.max_days=60
+uv run python -m quant_rl.train.train_rl training.max_days=60
 ```

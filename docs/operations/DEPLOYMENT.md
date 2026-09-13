@@ -7,7 +7,7 @@ call made under the pressure of "the backtest looked good."
 
 ---
 
-## 1. Entrypoint and safeguards
+## 1. Entrypoint and safeguards (RL)
 
 - **Entrypoint:** `live_trading_rl.py` (repo root).
 - **Default is paper:** `PAPER_TRADING` defaults to `true` — signals and
@@ -25,6 +25,8 @@ call made under the pressure of "the backtest looked good."
   If you change one, keep the other aligned — silent divergence between the
   training risk budget and the live one is a behavior change, not a detail.
 
+---
+
 ## 2. Rule-based baseline (`live_trading.py`)
 
 - **Entrypoint:** `live_trading.py` (repo root).
@@ -33,7 +35,7 @@ call made under the pressure of "the backtest looked good."
   `PAPER_TRADING=false`.
 - **MT5 terminal:** Uses `MT5_TERMINAL_PATH` environment variable (defaults to
   standard MT5 install path).
-- **Strategy selection:** `STRATEGY_TYPE` env var: `crossover`, `smc`, 
+- **Strategy selection:** `STRATEGY_TYPE` env var: `crossover`, `smc`,
   `trend_breakout`, or `combined` (default).
 - **Symbol selection:** Reads `config/symbols_config.yaml` and uses
   `VolatilityAnalyzer` to pick the top volatile symbols (up to `MAX_SYMBOLS`).
@@ -41,6 +43,7 @@ call made under the pressure of "the backtest looked good."
 **Promotion criteria (to go live):** The rule-based baseline does NOT require the
 full Sharpe-parity protocol because there is no learned model to promote. Instead,
 the gating criteria are:
+
 - Minimum paper trial length: ≥ 10 trading days of continuous paper execution
 - Trade count: ≥ 20 closed paper trades across all selected symbols
 - Guardrails: Zero breach of `quant_rl/backtest/guardrails.py` logic (daily loss
@@ -49,9 +52,12 @@ the gating criteria are:
 
 Fail any one → investigate and fix, then restart the trial clock.
 
-## 4. Paper-trading trial period (pass/fail decided now)
+---
 
-Before flipping `PAPER_TRADING=false`, a run must satisfy **all** of:
+## 3. Paper-trading trial period (RL checkpoint)
+
+Before flipping `PAPER_TRADING=false` for an RL checkpoint, a run must satisfy
+**all** of:
 
 | Criterion | Threshold |
 |---|---|
@@ -64,7 +70,9 @@ Before flipping `PAPER_TRADING=false`, a run must satisfy **all** of:
 Fail any one → fix the cause, redeploy, restart the trial clock. Do not
 average across failed trials.
 
-## 5. Model versioning / promotion
+---
+
+## 4. Model versioning / promotion
 
 The checkpoint that `live_trading_rl.py` loads is **explicit, not tribal
 knowledge**:
@@ -85,9 +93,11 @@ knowledge**:
 4. Never overwrite an existing `models/production/<run>_*` directory;
    promote a retrained model under a new run id.
 
-## 6. Going live — final checklist
+---
 
-- [ ] Section 2 criteria all pass for the exact promoted checkpoint
+## 5. Going live — final checklist
+
+- [ ] Section 3 criteria all pass for the exact promoted checkpoint
 - [ ] `PAPER_TRADING=false` set deliberately, in the deployment env only
 - [ ] Live account balance matches the account size assumed by
       `live_risk_overrides` (defaults assume $100k)
