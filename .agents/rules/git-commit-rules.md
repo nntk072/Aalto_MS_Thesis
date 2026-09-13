@@ -29,11 +29,13 @@ Never add secrets or `Co-authored-by` (auto-added).
 ```bash
 git status -sb
 git diff --stat
-ruff check <changed_paths>
-ruff format --diff <changed_paths>
-mypy <changed_paths>
-pytest tests/ -v --tb=short
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy .
+uv run pytest tests/ -v
 ```
+
+See [ci-verification.md](ci-verification.md) — same gate as GitHub CI and Orchestra verification.
 
 Never force-push to main/master without explicit approval.
 

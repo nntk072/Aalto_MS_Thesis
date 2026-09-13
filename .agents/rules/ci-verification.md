@@ -1,0 +1,34 @@
+# CI verification gate
+
+Applies to **all agents** (Cursor, Orchestra pipeline, Cline, Vibe, etc.).
+
+## Standard gate (merge bar)
+
+Same as `.github/workflows/ci.yml` jobs `code-formatting` and `ut-venv`.
+Single source of truth in code: `orchestra/ci_gate.py` (`CI_CHECKS`).
+
+```bash
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy .
+uv run pytest tests/ -v
+```
+
+Orchestra phase 9 (verification) and the implementer prompt run this gate.
+
+## Out of scope unless explicitly requested
+
+- Nightly workflow subsets (`pytest -m slow`, integration-only paths)
+- `pytest -m "not slow"` as a substitute for the full suite
+- Scoped `mypy quant_rl/` when CI runs `mypy .`
+
+## Test discipline
+
+- Mock methods with `monkeypatch.setattr`, not `instance.method = ...` (mypy `method-assign`).
+- Orchestra router/health tests on CI: use `stub_clis` fixture (`tests/test_orchestra/conftest.py`).
+
+## Relations
+
+- Enforced in CI and Orchestra verification; Cursor rule: `.cursor/rules/ci-verification.mdc`
+- Pre-commit checklist: [git-commit-rules.md](git-commit-rules.md)
+- Feature workflow: [development-workflow.md](development-workflow.md)
