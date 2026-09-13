@@ -133,6 +133,34 @@ class Pipeline:
         if start_phase and not resume_from:
             raise ValueError("--from requires --resume <task-id>")
         self._tier_override = tier
+        try:
+            return self._run_phases(
+                task_description,
+                resume_from=resume_from,
+                complexity=complexity,
+                start_phase=start_phase,
+                tier=tier,
+            )
+        finally:
+            self._close_task_sessions()
+
+    def _close_task_sessions(self) -> None:
+        """Close leftover tmux panes for this task after fallback or finish."""
+        if self.dry_run or self._state is None:
+            return
+        n = self.sessions.cleanup(task_id=self._state.task_id)
+        if n:
+            click.echo(f"  Closed {n} tmux session(s)")
+
+    def _run_phases(
+        self,
+        task_description: str,
+        resume_from: str | None,
+        complexity: str | None,
+        start_phase: str | None,
+        tier: str | None,
+    ) -> TaskState:
+        """Execute phase loop; ``run`` always reaps tmux sessions after this."""
         if resume_from:
             self.state = TaskState.load(resume_from, self.state_dir)
             self.state.data["fix_loop_max"] = self.max_fixes
@@ -160,7 +188,7 @@ class Pipeline:
             if not self.dry_run:
                 self._snapshot("00-start")
             if self.keep_alive:
-                click.echo("  [KEEP-ALIVE] tmux panes stay visible after each agent exits.")
+                click.echo("  [KEEP-ALIVE] successful panes stay until the task finishes.")
                 click.echo(f"  Watch with: tmux ls | grep {task_id}")
                 click.echo("  Attach with: tmux attach -t <session>  (Ctrl-b d to detach)")
 
@@ -318,7 +346,13 @@ class Pipeline:
             native_session_id=native_session_id,
         )
         click.echo(f"    Session: {session}")
-        output = self.sessions.collect(session, timeout=timeout, lines=lines)
+        try:
+            output = self.sessions.collect(
+                session, timeout=timeout, lines=lines, keep_alive=self.keep_alive
+            )
+        except (RuntimeError, TimeoutError):
+            self.sessions.cleanup(task_id=self.state.task_id, role=role)
+            raise
         return session, output
 
     def _invoke_required(
@@ -412,21 +446,22 @@ class Pipeline:
                     if (
                         classified.kind
                         in (
-                            FailureKind.TIMEOUT,
                             FailureKind.PROVIDER_ERROR,
                             FailureKind.TRANSIENT_RATE_LIMIT,
                             FailureKind.UNKNOWN,
                         )
+                        and classified.retry_after is None
                         and retries < max_retries
                     ):
                         retries += 1
                         time.sleep(min(2**retries, 8))
                         continue
-                    if candidate is not model:
-                        click.echo(
-                            f"  WARNING: {candidate.display_name} failed; trying fallback",
-                            err=True,
-                        )
+                    click.echo(
+                        f"  WARNING: {candidate.display_name} failed "
+                        f"({classified.kind.value}); trying fallback",
+                        err=True,
+                    )
+                    self.sessions.cleanup(task_id=self.state.task_id, role=role)
                     last_error = exc
                     prev_model = candidate
                     use_handoff = True
@@ -552,7 +587,9 @@ class Pipeline:
         for session_name, model, prompt in spawned:
             click.echo(f"  … {model.display_name}")
             try:
-                output = self.sessions.collect(session_name, timeout=600, lines=0)
+                output = self.sessions.collect(
+                    session_name, timeout=600, lines=0, keep_alive=self.keep_alive
+                )
             except (RuntimeError, TimeoutError) as exc:
                 click.echo(f"  WARNING: {model.display_name} failed: {exc}", err=True)
                 self._record_model_call(
@@ -606,7 +643,9 @@ class Pipeline:
         successes = 0
         for session_name, model, prompt in spawned:
             try:
-                output = self.sessions.collect(session_name, timeout=300, lines=0)
+                output = self.sessions.collect(
+                    session_name, timeout=300, lines=0, keep_alive=self.keep_alive
+                )
             except (RuntimeError, TimeoutError) as exc:
                 click.echo(f"  WARNING: {model.display_name} failed: {exc}", err=True)
                 self._record_model_call(
@@ -713,7 +752,9 @@ class Pipeline:
 
         for session_name, model, prompt in spawned:
             try:
-                output = self.sessions.collect(session_name, timeout=300, lines=0)
+                output = self.sessions.collect(
+                    session_name, timeout=300, lines=0, keep_alive=self.keep_alive
+                )
             except (RuntimeError, TimeoutError) as exc:
                 click.echo(f"  WARNING: {model.display_name} failed: {exc}", err=True)
                 self._record_model_call(
@@ -746,7 +787,7 @@ class Pipeline:
             return
 
         _session, output = self._invoke_required(
-            model, "review_synthesizer", prompt, timeout=300, lines=0
+            model, "review_synthesizer", prompt, timeout=1800, lines=0
         )
         verdict = self._parse_verdict(output)
         self.state.set_review_synthesis(output, model.display_name, verdict)
@@ -808,7 +849,7 @@ class Pipeline:
 2. Do NOT refactor unrelated code
 3. Do NOT add new features
 4. Make minimal, targeted changes
-5. Re-run the full CI gate above until all four commands pass
+5. Re-run only the failing check(s); phase 9 will re-run the full CI gate
 6. Report what you fixed and command results
 
 Focus on correctness and safety. Do not change code style unless it's part of the fix."""

@@ -1,8 +1,8 @@
 # Orchestra — Multi-Model Coding Pipeline
 
 Orchestra coordinates multiple CLI-based coding agents through a structured
-workflow: triage → plan → implement → verify. The verification phase runs the
-same CI gate as GitHub Actions (`orchestra/ci_gate.py`).
+workflow: triage → plan → implement → verify. Implementers run scoped tests only.
+Phase 9 (verification) runs the same CI gate as GitHub Actions (`orchestra/ci_gate.py`).
 
 ## Quick start
 

@@ -72,7 +72,8 @@ def main() -> None:
 @click.option(
     "--keep-alive",
     is_flag=True,
-    help="Keep tmux panes visible after each agent exits (remain-on-exit). "
+    help="Keep tmux panes visible after a successful agent exit until the "
+    "task finishes. Failed/fallback panes are always closed. "
     "Watch with 'tmux ls', attach with 'tmux attach -t <session>'.",
 )
 @click.option(

@@ -28,7 +28,7 @@ Usage
     PAPER_TRADING=false RL_MODEL_PATH=outputs/.../model/ppo_final \\
         python live_trading_rl.py
 
-See DEPLOYMENT.md for the paper->live promotion protocol and model versioning.
+See docs/operations/DEPLOYMENT.md for the paper->live promotion protocol and model versioning.
 """
 
 from __future__ import annotations
@@ -191,7 +191,7 @@ def build_robot(model_path: Path, run_config: Path, args: argparse.Namespace) ->
         if getattr(exc, "name", "") == "MetaTrader5":
             raise SystemExit(
                 "MetaTrader5 is not available on this machine — run "
-                "live_trading_rl.py on the Windows MT5 host (see DEPLOYMENT.md)."
+                "live_trading_rl.py on the Windows MT5 host (see docs/operations/DEPLOYMENT.md)."
             ) from None
         raise
     from omegaconf import OmegaConf

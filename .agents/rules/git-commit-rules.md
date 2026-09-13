@@ -35,7 +35,8 @@ uv run mypy .
 uv run pytest tests/ -v
 ```
 
-See [ci-verification.md](ci-verification.md) — same gate as GitHub CI and Orchestra verification.
+See [ci-verification.md](ci-verification.md) — full gate on commit/push only (same as
+GitHub CI and Orchestra phase 9). Do not require this suite after every local edit.
 
 Never force-push to main/master without explicit approval.
 

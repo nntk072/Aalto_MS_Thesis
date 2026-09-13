@@ -7,9 +7,10 @@ uv sync                                    # install all deps
 uv sync --extra dev                        # include dev tooling
 ```
 
-## CI gate (merge bar)
+## CI gate (commit / push)
 
-Mirrors `orchestra/ci_gate.py` and `.github/workflows/ci.yml`:
+Mirrors `orchestra/ci_gate.py` and `.github/workflows/ci.yml`. Run on commit/push
+only; while coding, use scoped ruff + pytest on touched paths.
 
 ```bash
 uv run ruff format --check .
@@ -51,7 +52,7 @@ uv run python scripts/report_g3.py --runs-dir outputs
 ## Testing
 
 ```bash
-uv run pytest tests/ -v                      # full suite (CI merge bar)
+uv run pytest tests/ -v                      # full suite (commit / push)
 pytest -m "not slow"                         # local shortcut
 pytest -m unit                               # unit tests only
 pytest -m integration                        # integration tests only

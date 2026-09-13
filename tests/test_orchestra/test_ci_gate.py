@@ -20,6 +20,8 @@ def test_render_ci_verification_includes_all_commands() -> None:
     assert "/tmp/ws" in block
     assert "uv run mypy ." in block
     assert "uv run pytest tests/ -v" in block
+    assert "Do not run the full CI gate during implementation" in block
+    assert "commit" in block.lower()
     assert '-m "not slow"' not in block.split("Do not")[0]
 
 

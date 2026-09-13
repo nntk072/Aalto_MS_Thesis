@@ -55,6 +55,8 @@ def run_job(job_path: Path) -> int:
     exit_file = Path(job["exit_file"])
     cwd = job.get("cwd") or None
     log_file.parent.mkdir(parents=True, exist_ok=True)
+    pid_file = log_file.parent / "pid"
+    pid_file.write_text(str(os.getpid()), encoding="utf-8")
     for key, value in (job.get("env") or {}).items():
         os.environ[str(key)] = str(value)
     cmd = SessionManager.build_command(

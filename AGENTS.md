@@ -10,21 +10,23 @@ uv sync                              # install deps
 python scripts/prepare_data.py       # raw CSV → parquet → features
 python -m quant_rl.train.train_rl --mvp   # smoke test (30 days)
 
-# CI gate (required before merge — see .agents/rules/ci-verification.md)
+# Local (implementation): scoped checks only
+uv run ruff format --check <touched paths>
+uv run ruff check <touched paths>
+uv run pytest <relevant test files> -q
+
+# CI gate (required on commit / push — see .agents/rules/ci-verification.md)
 uv run ruff format --check .
 uv run ruff check .
 uv run mypy .
 uv run pytest tests/ -v
-
-# Optional local shortcuts (not the merge bar)
-pytest -m "not slow"                 # faster local loop
-pytest --cov=quant_rl --cov-report=term-missing -q
 ```
 
 ## Orchestra (`orchestra/`)
 
-Multi-model CLI pipeline (triage → plan → implement → verify). Verification phase runs the
-same CI gate as above (`orchestra/ci_gate.py`). Agent rules: `.agents/rules/ci-verification.md`.
+Multi-model CLI pipeline (triage → plan → implement → verify). Implementer agents run
+scoped tests only. Phase 9 (verification) runs the full CI gate (`orchestra/ci_gate.py`).
+Agent rules: `.agents/rules/ci-verification.md`.
 
 ```bash
 orchestra doctor          # Tier-0 health (no inference)

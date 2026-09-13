@@ -20,7 +20,7 @@ codex_phase_effort:
 error_signatures:
   codex:
     rate_limit: ["429", "rate limit", "quota", "usage limit"]
-    auth: ["401", "403", "unauthorized", "not logged in", "authentication"]
+    auth: ["401", "unauthorized", "not logged in", "authentication"]
   gemini:
     rate_limit: ["429", "RESOURCE_EXHAUSTED", "rate limit", "quota exceeded"]
     auth: ["401", "403", "PERMISSION_DENIED", "invalid api key"]
@@ -39,7 +39,6 @@ error_signatures:
 
 models:
   - id: gemini-3.1-pro-preview
-    enabled: false
     cli: gemini
     provider: gemini
     model_id: gemini-3.1-pro-preview
@@ -59,7 +58,6 @@ models:
     native_resume: false
 
   - id: vibe-mistral-medium-3.5
-    enabled: false
     cli: vibe
     provider: mistral
     model_id: mistral-medium-3.5
@@ -72,7 +70,6 @@ models:
     native_resume: false
 
   - id: vibe-devstral-local
-    enabled: false
     cli: vibe
     provider: ollama
     model_id: devstral-local
@@ -84,7 +81,6 @@ models:
     native_resume: false
 
   - id: opencode-default
-    enabled: false
     cli: opencode
     provider: opencode
     model_id: default
@@ -98,11 +94,10 @@ models:
     native_resume: false
 
   - id: kilo-default
-    enabled: false
     cli: kilo
     provider: kilo
     model_id: default
-    roles: [planner, reviewer, implementer, critic, synthesizer]
+    roles: [planner, reviewer, implementer, critic, synthesizer, review_synthesizer]
     priority: 3
     quota_daily: 2000000
     model_flag: "--model"
@@ -112,11 +107,10 @@ models:
     native_resume: false
 
   - id: cline-glm-5.3-flash
-    enabled: false
     cli: cline
     provider: cline
     model_id: z-ai/glm-5.3-flash
-    roles: [planner, implementer, reviewer, critic]
+    roles: [planner, implementer, reviewer, critic, synthesizer, review_synthesizer]
     priority: 2
     quota_daily: 2000000
     model_flag: "-m"
@@ -131,10 +125,10 @@ models:
     provider: openai
     model_id: gpt-5.6-luna
     roles: [triage, planner, critic, synthesizer, implementer, reviewer, review_synthesizer]
-    priority: 1
+    priority: 2
     quota_daily: 2000000
     model_flag: "-m"
-    extra_args: ["--sandbox", "workspace-write", "--ask-for-approval", "never", "--ephemeral", "--no-alt-screen"]
+    extra_args: ["--approve-for-me", "--ephemeral"]
     effort_flag: codex_reasoning
     effort_support: [none, low, medium, high]
     cost_tier: low
