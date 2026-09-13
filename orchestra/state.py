@@ -142,6 +142,10 @@ class TaskState:
             "verification_result": None,
             "errors": [],
             "metadata": {},
+            "route": {},
+            "hop_count": 0,
+            "phase_visit_counts": {},
+            "implementation_succeeded": False,
         }
 
     def save(self) -> None:
@@ -160,6 +164,10 @@ class TaskState:
         data.setdefault("tier", None)
         data.setdefault("native_session_id", None)
         data.setdefault("open_items", [])
+        data.setdefault("route", {})
+        data.setdefault("hop_count", 0)
+        data.setdefault("phase_visit_counts", {})
+        data.setdefault("implementation_succeeded", False)
         if data.get("complexity") and not data.get("tier"):
             from .models import complexity_to_tier
 
@@ -257,6 +265,7 @@ class TaskState:
         """Store implementation results."""
         self.data["implementer_output"] = output
         self.data["implementer_model"] = model
+        self.data["implementation_succeeded"] = True
         self.save()
 
     def set_review_synthesis(self, output: str, model: str, verdict: str) -> None:

@@ -239,7 +239,9 @@ def test_verification_failure_enters_fix_loop_even_if_review_passed(tmp_path, mo
         }
 
     monkeypatch.setattr(pipeline, "_run_verification", fake_verify)
-    pipeline._phase_verification()
+    passed = pipeline._phase_verification()
+    assert passed is False
+    pipeline._advance_after_phase(Phase.VERIFICATION, verification_passed=passed)
     assert pipeline.state.phase == Phase.FIXING
 
 

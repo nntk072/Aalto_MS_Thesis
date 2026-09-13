@@ -14,6 +14,10 @@ from zoneinfo import ZoneInfo
 _PACIFIC = ZoneInfo("America/Los_Angeles")
 _TRANSPORT_BLOCK_S = 3600.0
 _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07")
+_DONE_RE = re.compile(
+    r'"type"\s*:\s*"done"[^}]*"reason"\s*:\s*"completed"',
+    re.IGNORECASE,
+)
 
 
 class FailureKind(StrEnum):
@@ -124,12 +128,17 @@ def abort_dead_session(combined: str, cli: str = "") -> bool:
     return _quota_exhausted(combined, cli) or _hard_transport(combined)
 
 
-def inspect_live_log(snippet: str) -> str | None:
+def inspect_live_log(snippet: str, cli: str = "") -> str | None:
     """Classify only top-level CLI lines, not errors quoted in prompts/tools.
 
     Returns ``complete``, ``abort``, or None.
     """
-    for raw in snippet.splitlines():
+    tail = _ANSI_RE.sub("", snippet)[-65536:]
+    if _DONE_RE.search(tail):
+        return "complete"
+
+    lines = [ln for ln in tail.splitlines() if ln.strip()]
+    for raw in reversed(lines[-120:]):
         line = _ANSI_RE.sub("", raw).strip()
         if not line:
             continue
