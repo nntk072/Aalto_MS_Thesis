@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -179,7 +178,7 @@ def test_resume_done_without_from_stays_done(tmp_path) -> None:
     assert result.phase == Phase.DONE
 
 
-def test_run_verification_uses_interpreter_and_package_paths(tmp_path) -> None:
+def test_run_verification_uses_ci_gate_commands(tmp_path) -> None:
     pipeline = Pipeline(workspace=tmp_path, dry_run=False)
     recorded: list[list[str]] = []
 
@@ -195,14 +194,12 @@ def test_run_verification_uses_interpreter_and_package_paths(tmp_path) -> None:
     pipeline.sessions._run = fake_run  # type: ignore[method-assign]
     pipeline.state = TaskState("task-v", "t", pipeline.state_dir)
     pipeline._run_verification()
-    pytest_cmd = recorded[0]
-    assert pytest_cmd[0] == sys.executable
-    assert pytest_cmd[1:4] == ["-m", "pytest", "tests/"]
-    assert pytest_cmd[-2:] == ["-m", "not slow"]
-    lint_cmd = recorded[1]
-    assert lint_cmd[0] == "ruff"
-    assert "quant_rl" in lint_cmd
-    assert lint_cmd[-1] != "."
+    assert recorded == [
+        ["uv", "run", "ruff", "format", "--check", "."],
+        ["uv", "run", "ruff", "check", "."],
+        ["uv", "run", "mypy", "."],
+        ["uv", "run", "pytest", "tests/", "-v"],
+    ]
 
 
 def test_verification_failure_enters_fix_loop_even_if_review_passed(tmp_path) -> None:
@@ -210,7 +207,10 @@ def test_verification_failure_enters_fix_loop_even_if_review_passed(tmp_path) ->
     pipeline.state = TaskState("task-vfail", "t", pipeline.state_dir)
     pipeline.state.data["review_verdict"] = "pass"
     pipeline._run_verification = lambda: {  # type: ignore[method-assign]
-        "tests": {"success": False, "output": "FAILED tests/foo.py::test_x"}
+        "format": {"success": True, "output": ""},
+        "lint": {"success": True, "output": ""},
+        "typecheck": {"success": True, "output": ""},
+        "tests": {"success": False, "output": "FAILED tests/foo.py::test_x"},
     }
     pipeline._phase_verification()
     assert pipeline.state.phase == Phase.FIXING
@@ -263,7 +263,10 @@ def test_fixing_runs_when_verification_already_failed(tmp_path, monkeypatch) -> 
     pipeline.state.data["review_verdict"] = "pass"
     pipeline.state.data["review_synthesis_output"] = "lgtm"
     pipeline.state.data["verification_result"] = {
-        "tests": {"success": False, "output": "FAILED tests/foo.py::test_x"}
+        "format": {"success": True, "output": ""},
+        "lint": {"success": True, "output": ""},
+        "typecheck": {"success": True, "output": ""},
+        "tests": {"success": False, "output": "FAILED tests/foo.py::test_x"},
     }
     pipeline._phase_fixing()
     assert selected == ["implementer"]

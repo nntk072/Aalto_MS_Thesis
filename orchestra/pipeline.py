@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 import time
 from pathlib import Path
 from subprocess import CompletedProcess
@@ -11,6 +10,7 @@ from typing import Any
 import click
 
 from .backup import create_snapshot
+from .ci_gate import CI_CHECKS, ci_command_lines, gate_passed
 from .cost import CostTracker
 from .failures import FailureKind, classify_failure
 from .handoff import build_handoff_bundle, render_handoff_prompt, save_handoff
@@ -25,22 +25,6 @@ from .state import Phase, TaskState, generate_task_id
 WORKSPACE = Path(__file__).resolve().parent.parent
 _DIFF_CHARS = 50_000
 _MAX_PHASE_STEPS = 40
-_PYTEST_TIMEOUT = 600
-
-
-def _pytest_argv() -> list[str]:
-    """Fast gate used by review/verify; skips torch/SB3 tests marked ``slow``."""
-    return [
-        sys.executable,
-        "-m",
-        "pytest",
-        "tests/",
-        "-x",
-        "-q",
-        "--tb=short",
-        "-m",
-        "not slow",
-    ]
 
 
 def _cmd_tail(result: CompletedProcess[str], limit: int = 1000) -> str:
@@ -693,7 +677,7 @@ class Pipeline:
             click.echo(f"  WARNING: requested {self.reviewer_count} reviewers, got {len(models)}")
 
         diff_text = self._git_diff()
-        test_results = "Not yet run (verification runs pytest -m 'not slow')."
+        test_results = "Not yet run (verification runs full CI gate: format, lint, mypy, pytest)."
         if not self.dry_run:
             click.echo("  Skipping pre-review pytest; verification is the test gate.")
 
@@ -767,9 +751,11 @@ class Pipeline:
         self.state.set_review_synthesis(output, model.display_name, verdict)
         click.echo(f"  Verdict: {verdict}")
 
-    def _verification_tests_failed(self) -> bool:
-        tests = (self.state.data.get("verification_result") or {}).get("tests") or {}
-        return tests.get("success") is False
+    def _verification_gate_failed(self) -> bool:
+        result = self.state.data.get("verification_result")
+        if not result:
+            return False
+        return not gate_passed(result)
 
     def _phase_fixing(self) -> None:
         """Phase 8: Apply targeted fixes based on review synthesis."""
@@ -780,7 +766,7 @@ class Pipeline:
 
         click.echo(f"\n[8/10] FIX LOOP (iteration {fix_count + 1}/{max_fixes})")
 
-        tests_failed = self._verification_tests_failed()
+        tests_failed = self._verification_gate_failed()
         if not tests_failed and (not synthesis or not verdict):
             click.echo("  No review synthesis available. Skipping fixes.")
             return
@@ -800,10 +786,9 @@ class Pipeline:
         click.echo(f"  Model: {model.display_name}")
 
         synthesis = self.state.data.get("review_synthesis_output", "") or ""
-        pytest_out = ((self.state.data.get("verification_result") or {}).get("tests") or {}).get(
-            "output", ""
-        )
-        prompt = f"""You are fixing specific issues found during code review or verification.
+        verify = self.state.data.get("verification_result") or {}
+        ci_failures = self._format_ci_failure_output(verify)
+        prompt = f"""You are fixing specific issues found during code review or CI verification.
 
 ## Original Task
 {self.state.task_description}
@@ -811,16 +796,19 @@ class Pipeline:
 ## Review Synthesis
 {synthesis or "(none)"}
 
-## Pytest output (if verification already ran)
-{pytest_out or "(not yet run)"}
+## CI verification failures (if already ran)
+{ci_failures or "(not yet run)"}
+
+## Required CI gate (same as GitHub CI — not nightly)
+{ci_command_lines()}
 
 ## Instructions
-1. Fix ONLY the failing tests / critical issues listed above
+1. Fix ONLY the failing checks / critical issues listed above
 2. Do NOT refactor unrelated code
 3. Do NOT add new features
 4. Make minimal, targeted changes
-5. After fixing, run: {sys.executable} -m pytest tests/ -x -q -m "not slow"
-6. Report what you fixed and test results
+5. Re-run the full CI gate above until all four commands pass
+6. Report what you fixed and command results
 
 Focus on correctness and safety. Do not change code style unless it's part of the fix."""
 
@@ -839,64 +827,67 @@ Focus on correctness and safety. Do not change code style unless it's part of th
         click.echo("\n[9/10] VERIFICATION")
 
         if self.dry_run:
-            click.echo(f"  Would run: {' '.join(_pytest_argv())}")
+            click.echo("  Would run CI gate (.github/workflows/ci.yml, not nightly):")
+            for check in CI_CHECKS:
+                timeout = f" timeout={check.timeout}s" if check.timeout else ""
+                click.echo(f"    {' '.join(check.argv)}{timeout}")
             return
 
         results = self._run_verification()
         self.state.set_verification(results)
 
-        tests_pass = results["tests"]["success"]
         fix_count = self.state.data.get("fix_loop_count", 0)
         max_fixes = self.state.data.get("fix_loop_max", 3)
 
-        if tests_pass:
-            click.echo("  Tests passed.")
+        if gate_passed(results):
+            click.echo("  CI gate: PASS")
             return
 
-        click.echo(results["tests"]["output"][-500:])
+        click.echo(self._format_ci_failure_output(results)[-1500:])
         if fix_count >= max_fixes:
             click.echo(
                 f"\n[FAIL] Max fix iterations ({max_fixes}) reached. Manual intervention needed."
             )
-            self.state.add_error(f"Tests still failing after {max_fixes} fix attempts")
+            self.state.add_error(f"CI gate still failing after {max_fixes} fix attempts")
             self._phase_report()
             self.state.set_phase(Phase.FAILED)
             return
 
-        click.echo(f"\n[FAIL] Tests failed. Triggering fix loop ({fix_count + 1}/{max_fixes})...")
+        click.echo(f"\n[FAIL] CI gate failed. Triggering fix loop ({fix_count + 1}/{max_fixes})...")
         self.state.set_phase(Phase.FIXING)
 
+    def _format_ci_failure_output(self, results: dict[str, Any]) -> str:
+        parts: list[str] = []
+        for check in CI_CHECKS:
+            entry = results.get(check.name) or {}
+            if entry.get("success"):
+                continue
+            label = check.name.upper()
+            output = str(entry.get("output") or "(no output)")
+            parts.append(f"### {label}\n{output[-800:]}")
+        return "\n\n".join(parts) if parts else ""
+
     def _run_verification(self) -> dict[str, Any]:
-        """Run deterministic verification (tests + lint) on package code."""
+        """Run the same checks as GitHub CI (format, lint, mypy, full pytest)."""
         results: dict[str, Any] = {}
-        argv = _pytest_argv()
-        click.echo(f"  Running: {' '.join(argv)}  (timeout={_PYTEST_TIMEOUT}s)")
-        test_result = self.sessions._run(argv, capture=True, timeout=_PYTEST_TIMEOUT, heartbeat=15)
-        results["tests"] = {
-            "success": test_result.returncode == 0,
-            "output": _cmd_tail(test_result),
-        }
-        click.echo(f"  Tests: {'PASS' if test_result.returncode == 0 else 'FAIL'}")
-
-        lint_result = self.sessions._run(
-            ["ruff", "check", "quant_rl", "orchestra"],
-            capture=True,
-        )
-        results["lint"] = {
-            "success": lint_result.returncode == 0,
-            "output": _cmd_tail(lint_result, 500),
-        }
-        click.echo(f"  Lint: {'PASS' if lint_result.returncode == 0 else 'WARN'}")
-
-        type_result = self.sessions._run(["mypy", "--version"], capture=True)
-        if type_result.returncode == 0:
-            mypy_result = self.sessions._run(["mypy", "quant_rl"], capture=True)
-            results["typecheck"] = {
-                "success": mypy_result.returncode == 0,
-                "output": _cmd_tail(mypy_result, 500),
+        for check in CI_CHECKS:
+            argv = check.argv
+            timeout = check.timeout
+            timeout_note = f" (timeout={timeout}s)" if timeout else ""
+            click.echo(f"  Running: {' '.join(argv)}{timeout_note}")
+            heartbeat = 15.0 if check.name == "tests" else 0.0
+            result = self.sessions._run(
+                argv,
+                capture=True,
+                timeout=timeout,
+                heartbeat=heartbeat,
+            )
+            ok = result.returncode == 0
+            results[check.name] = {
+                "success": ok,
+                "output": _cmd_tail(result, limit=2000 if check.name == "tests" else 500),
             }
-            click.echo(f"  Type check: {'PASS' if mypy_result.returncode == 0 else 'WARN'}")
-
+            click.echo(f"  {check.name}: {'PASS' if ok else 'FAIL'}")
         return results
 
     def _phase_report(self) -> None:
