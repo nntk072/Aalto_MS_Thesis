@@ -29,7 +29,7 @@ def _model(**kwargs: object) -> Model:
     )
 
 
-def test_select_skips_escalation_for_trivial(tmp_path, monkeypatch) -> None:
+def test_select_skips_escalation_for_trivial(tmp_path, monkeypatch, stub_clis) -> None:
     monkeypatch.setenv("ORCHESTRA_TEST_KEY", "1")
     monkeypatch.setenv("GEMINI_TEST_KEY", "1")
     gemini = _model(
@@ -47,7 +47,7 @@ def test_select_skips_escalation_for_trivial(tmp_path, monkeypatch) -> None:
     assert selected == [local]
 
 
-def test_select_uses_gemini_when_escalating(tmp_path, monkeypatch) -> None:
+def test_select_uses_gemini_when_escalating(tmp_path, monkeypatch, stub_clis) -> None:
     monkeypatch.setenv("ORCHESTRA_TEST_KEY", "1")
     monkeypatch.setenv("GEMINI_TEST_KEY", "1")
     gemini = _model(
@@ -76,7 +76,7 @@ def test_quota_record_and_exceeded(tmp_path, monkeypatch) -> None:
     assert stats[model.display_name]["calls"] == 1
 
 
-def test_select_synthesizer_uses_opencode_not_gemini(tmp_path, monkeypatch) -> None:
+def test_select_synthesizer_uses_opencode_not_gemini(tmp_path, monkeypatch, stub_clis) -> None:
     monkeypatch.setenv("ORCHESTRA_TEST_KEY", "1")
     monkeypatch.setenv("GEMINI_TEST_KEY", "1")
     gemini = _model(
@@ -98,7 +98,9 @@ def test_select_synthesizer_uses_opencode_not_gemini(tmp_path, monkeypatch) -> N
     assert selected == [local]
 
 
-def test_fallback_chain_excludes_primary_and_respects_escalation(tmp_path, monkeypatch) -> None:
+def test_fallback_chain_excludes_primary_and_respects_escalation(
+    tmp_path, monkeypatch, stub_clis
+) -> None:
     monkeypatch.setenv("ORCHESTRA_TEST_KEY", "1")
     monkeypatch.setenv("GEMINI_TEST_KEY", "1")
     primary = _model(name="a", provider="opencode", roles=["triage"], priority=1)
@@ -126,7 +128,9 @@ def test_fallback_chain_excludes_primary_and_respects_escalation(tmp_path, monke
     assert primary not in router.fallback_chain(primary, "triage")
 
 
-def test_fallback_chain_allows_same_name_different_provider(tmp_path, monkeypatch) -> None:
+def test_fallback_chain_allows_same_name_different_provider(
+    tmp_path, monkeypatch, stub_clis
+) -> None:
     monkeypatch.setenv("ORCHESTRA_TEST_KEY", "1")
     opencode_default = _model(name="default", provider="opencode", roles=["triage"], priority=1)
     kilo_default = _model(name="default", provider="kilo", roles=["triage"], priority=2)
