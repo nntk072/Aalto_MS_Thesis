@@ -25,6 +25,7 @@ class Phase(StrEnum):
     REPORTING = "reporting"
     DONE = "done"
     FAILED = "failed"
+    PARKED = "parked"
 
     def next(self) -> Phase:
         """Get the next phase in the pipeline."""
@@ -36,7 +37,7 @@ class Phase(StrEnum):
 
     @classmethod
     def runnable(cls) -> tuple[Phase, ...]:
-        return tuple(p for p in cls if p not in (cls.PENDING, cls.DONE, cls.FAILED))
+        return tuple(p for p in cls if p not in (cls.PENDING, cls.DONE, cls.FAILED, cls.PARKED))
 
     @classmethod
     def parse(cls, raw: str) -> Phase:
@@ -110,12 +111,16 @@ class TaskState:
 
     def _default_data(self) -> dict[str, Any]:
         return {
+            "schema_version": 2,
             "task_id": self.task_id,
             "task_description": self.task_description,
             "phase": Phase.PENDING.value,
             "created_at": time.time(),
             "updated_at": time.time(),
             "complexity": None,
+            "tier": None,
+            "native_session_id": None,
+            "open_items": [],
             "triage_output": None,
             "triage_model": None,
             "planner_outputs": [],
@@ -151,6 +156,14 @@ class TaskState:
         if not state_file.exists():
             raise FileNotFoundError(f"No state for task {task_id}")
         data = json.loads(state_file.read_text())
+        data.setdefault("schema_version", 1)
+        data.setdefault("tier", None)
+        data.setdefault("native_session_id", None)
+        data.setdefault("open_items", [])
+        if data.get("complexity") and not data.get("tier"):
+            from .models import complexity_to_tier
+
+            data["tier"] = complexity_to_tier(str(data["complexity"]))
         return cls(
             task_id=data["task_id"],
             task_description=data["task_description"],
@@ -161,6 +174,9 @@ class TaskState:
     @property
     def phase(self) -> Phase:
         return Phase(self.data["phase"])
+
+    def is_parked(self) -> bool:
+        return self.data.get("phase") == Phase.PARKED.value
 
     def set_phase(self, phase: Phase) -> None:
         """Transition to a new phase."""
@@ -207,11 +223,27 @@ class TaskState:
         )
         self.save()
 
-    def set_triage(self, output: str, model: str, complexity: str) -> None:
+    def set_triage(
+        self,
+        output: str,
+        model: str,
+        complexity: str,
+        tier: str | None = None,
+    ) -> None:
         """Store triage results."""
         self.data["triage_output"] = output
         self.data["triage_model"] = model
         self.data["complexity"] = complexity
+        if tier:
+            self.data["tier"] = tier
+        self.save()
+
+    def park(self, reason: str) -> None:
+        """Park task until models become available."""
+        if self.phase in Phase.runnable():
+            self.data["parked_at"] = self.data["phase"]
+        self.data["park_reason"] = reason
+        self.data["phase"] = Phase.PARKED.value
         self.save()
 
     def set_synthesis(self, output: str, model: str) -> None:

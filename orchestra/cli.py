@@ -30,6 +30,12 @@ def main() -> None:
     help="Override task complexity (auto-detected if not set).",
 )
 @click.option(
+    "--tier",
+    type=click.Choice(["T0", "T1", "T2", "T3", "T4"]),
+    default=None,
+    help="Override task tier (T0..T4). Takes precedence over --complexity.",
+)
+@click.option(
     "--planners",
     default=3,
     help="Number of parallel planners.",
@@ -83,6 +89,7 @@ def main() -> None:
 def run(
     task: str,
     complexity: str | None,
+    tier: str | None,
     planners: int,
     reviewers: int,
     critics: int,
@@ -108,7 +115,11 @@ def run(
 
     try:
         state = pipeline.run(
-            task, resume_from=resume, complexity=complexity, start_phase=start_phase
+            task,
+            resume_from=resume,
+            complexity=complexity,
+            start_phase=start_phase,
+            tier=tier,
         )
     except ValueError as exc:
         raise click.UsageError(str(exc)) from exc
@@ -119,6 +130,35 @@ def run(
         click.echo(f"\nTask FAILED in phase {state.phase.value}. Resume with:")
         click.echo(f'  orchestra run "{task}" --resume {state.task_id}')
         click.echo(f'  orchestra run "{task}" --resume {state.task_id} --from 10')
+    elif state.phase == Phase.PARKED:
+        click.echo(f"\nTask PARKED: {state.data.get('park_reason', 'no models')}")
+        click.echo("  Run: orchestra doctor")
+        click.echo(f'  Then: orchestra run "{task}" --resume {state.task_id}')
+
+
+@main.command()
+@click.option("--tier1", is_flag=True, help="Run Tier-1 network catalog probes (no generation).")
+def doctor(tier1: bool) -> None:
+    """Check model health (Tier-0 local; optional Tier-1 catalog)."""
+    from .health import derive_status
+    from .models import load_models
+
+    pipeline = Pipeline(dry_run=True)
+    models = load_models()
+    registry = pipeline.router.health
+    registry.probe_tier0(models, check_version=True)
+    if tier1:
+        registry.probe_tier1(models)
+    click.echo("Orchestra Doctor")
+    click.echo("=" * 72)
+    click.echo(f"  {'Model':28s}  {'Status':12s}  {'Auth':5s}  {'CLI':8s}")
+    click.echo("-" * 72)
+    for model in models:
+        facts = registry.get(model)
+        status = derive_status(facts)
+        auth = "?" if facts.auth_ok is None else ("yes" if facts.auth_ok else "no")
+        click.echo(f"  {model.registry_id:28s}  {status.value:12s}  {auth:5s}  {model.cli:8s}")
+    click.echo("\nNo inference calls were made.")
 
 
 @main.command()

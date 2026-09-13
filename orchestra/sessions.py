@@ -14,7 +14,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from .models import Model
+from .models import Model, get_effort_map
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07")
 
@@ -132,10 +132,47 @@ class SessionManager:
         return result.stdout.strip().splitlines()
 
     @staticmethod
+    def extract_session_id(cli: str, log_text: str) -> str | None:
+        """Best-effort native session id from agent output (Phase 5)."""
+        if cli in ("opencode", "kilo"):
+            match = re.search(r'"sessionID"\s*:\s*"([^"]+)"', log_text)
+            if match:
+                return match.group(1)
+        if cli == "cline":
+            match = re.search(
+                r"session[_-]?id[\"']?\s*[:=]\s*[\"']?([0-9_]+[a-z0-9]+)", log_text, re.I
+            )
+            if match:
+                return match.group(1)
+        return None
+
+    @staticmethod
+    def resolve_effort(model: Model, tier: str) -> str | None:
+        """Map task tier to CLI effort/variant for this model."""
+        if not model.effort_flag:
+            return None
+        tier_map = get_effort_map().get(tier.upper(), {})
+        if model.effort_flag == "cline_thinking":
+            return tier_map.get("cline", tier_map.get("default"))
+        if model.effort_flag == "oc_variant":
+            return tier_map.get(model.cli, tier_map.get("default"))
+        return None
+
+    @staticmethod
+    def build_command_env(model: Model) -> dict[str, str]:
+        """Extra environment variables for the agent subprocess."""
+        env: dict[str, str] = {}
+        if model.cli == "vibe" and model.name:
+            env["VIBE_ACTIVE_MODEL"] = model.vibe_model_env()
+        return env
+
+    @staticmethod
     def build_command(
         model: Model,
         prompt: str,
         prompt_file: str | None = None,
+        effort: str | None = None,
+        native_session_id: str | None = None,
     ) -> list[str]:
         """Build the CLI argv for a model (prompt is one argv token, no shell).
 
@@ -147,27 +184,42 @@ class SessionManager:
             cmd = ["gemini", "-p", prompt]
             if model.name and model.model_flag:
                 cmd.extend([model.model_flag, model.name])
+            if model.native_resume and native_session_id:
+                cmd.extend(["--resume", native_session_id])
             cmd.extend(model.extra_args)
         elif model.cli == "vibe":
-            # `--agent` is a vibe permission profile (ask/plan/auto-approve),
-            # not an Ollama model name. Flags before `-p` so `-p` always
-            # consumes the prompt text.
             cmd = ["vibe", *model.extra_args]
-            if model.alias:
-                cmd.extend(["--agent", model.alias])
+            if model.native_resume and native_session_id:
+                cmd.extend(["--resume", native_session_id])
             cmd.extend(["-p", prompt])
         elif model.cli == "opencode":
-            # Flags before the message: `--file` is a greedy yargs array and
-            # would swallow the prompt text as extra filenames.
             cmd = ["opencode", "run", *model.extra_args]
             if model.name and model.name != "default":
                 cmd.extend([model.model_flag or "--model", model.name])
+            if effort and model.effort_flag == "oc_variant":
+                cmd.extend(["--variant", effort])
+            if model.native_resume and native_session_id:
+                cmd.extend(["-s", native_session_id])
             cmd.append(prompt)
         elif model.cli == "kilo":
             cmd = ["kilo", "run", *model.extra_args]
             if model.name and model.name != "default":
                 cmd.extend([model.model_flag or "--model", model.name])
+            if effort and model.effort_flag == "oc_variant":
+                cmd.extend(["--variant", effort])
+            if model.native_resume and native_session_id:
+                cmd.extend(["-s", native_session_id])
             cmd.append(prompt)
+        elif model.cli == "cline":
+            cmd = ["cline", "-p", prompt, *model.extra_args]
+            if model.provider:
+                cmd.extend(["-P", model.provider])
+            if model.name and model.model_flag:
+                cmd.extend([model.model_flag, model.name])
+            if effort and model.effort_flag == "cline_thinking":
+                cmd.extend(["--thinking", effort])
+            if model.native_resume and native_session_id:
+                cmd.extend(["--id", native_session_id])
         else:
             raise ValueError(f"Unknown CLI: {model.cli}")
         return cmd
@@ -185,6 +237,9 @@ class SessionManager:
         session_name: str | None = None,
         task_id: str = "",
         keep_alive: bool = False,
+        effort: str | None = None,
+        native_session_id: str | None = None,
+        tier: str = "T2",
     ) -> str:
         """Spawn a tmux session that runs ``orchestra.agent_runner`` on a job file.
 
@@ -204,6 +259,7 @@ class SessionManager:
         exit_file = job_dir / "exit_code"
         job_file = job_dir / "job.json"
         prompt_file.write_text(prompt, encoding="utf-8")
+        resolved_effort = effort or self.resolve_effort(model, tier)
         job_file.write_text(
             json.dumps(
                 {
@@ -212,6 +268,9 @@ class SessionManager:
                     "log_file": str(log_file),
                     "exit_file": str(exit_file),
                     "cwd": str(self.workspace),
+                    "effort": resolved_effort,
+                    "native_session_id": native_session_id,
+                    "env": self.build_command_env(model),
                 },
                 indent=2,
             ),

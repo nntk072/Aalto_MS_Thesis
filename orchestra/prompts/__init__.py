@@ -15,6 +15,7 @@ _ROLE_FILES = {
     "implementer": "implementer.md",
     "reviewer": "reviewer.md",
     "review_synthesizer": "review_synthesizer.md",
+    "handoff_continuation": "handoff_continuation.md",
 }
 
 

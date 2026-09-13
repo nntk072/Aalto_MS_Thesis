@@ -69,7 +69,7 @@ def test_quota_record_and_exceeded(tmp_path, monkeypatch) -> None:
     model = _model(quota_daily=10)
     router = ModelRouter(models=[model], state_dir=tmp_path)
     assert not router.quota.quota_exceeded(model)
-    router.quota.record_usage(model.display_name, 10)
+    router.quota.record_usage(model.display_name, 10, model=model)
     assert router.quota.quota_exceeded(model)
     stats = router.stats()
     assert stats[model.display_name]["tokens_used"] == 10
@@ -133,3 +133,29 @@ def test_fallback_chain_allows_same_name_different_provider(tmp_path, monkeypatc
     router = ModelRouter(models=[opencode_default, kilo_default], state_dir=tmp_path)
     assert router.fallback_chain(opencode_default, "triage") == [kilo_default]
     assert router.fallback_chain(kilo_default, "triage") == [opencode_default]
+
+
+def test_t0_returns_empty_when_only_gemini(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("GEMINI_TEST_KEY", "1")
+    gemini = _model(
+        name="gemini-3.1-pro-preview",
+        provider="gemini",
+        cli="gemini",
+        roles=["triage"],
+        priority=1,
+        escalation_only=True,
+        min_tier="T3",
+        env_var="GEMINI_TEST_KEY",
+        registry_id="gemini-3.1-pro-preview",
+    )
+    router = ModelRouter(models=[gemini], state_dir=tmp_path)
+    assert router.select("triage", count=1, task_tier="T0", escalate=False) == []
+
+
+def test_quota_requests_counter(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ORCHESTRA_TEST_KEY", "1")
+    model = _model(rpd=5, registry_id="rpd-model")
+    router = ModelRouter(models=[model], state_dir=tmp_path)
+    router.quota.record_usage(model.display_name, 1, model=model)
+    usage = router.quota.get_usage(model.display_name, model)
+    assert usage["requests"] == 1

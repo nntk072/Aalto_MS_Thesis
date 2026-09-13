@@ -55,7 +55,15 @@ def run_job(job_path: Path) -> int:
     exit_file = Path(job["exit_file"])
     cwd = job.get("cwd") or None
     log_file.parent.mkdir(parents=True, exist_ok=True)
-    cmd = SessionManager.build_command(model, prompt, prompt_file=job.get("prompt_file"))
+    for key, value in (job.get("env") or {}).items():
+        os.environ[str(key)] = str(value)
+    cmd = SessionManager.build_command(
+        model,
+        prompt,
+        prompt_file=job.get("prompt_file"),
+        effort=job.get("effort"),
+        native_session_id=job.get("native_session_id"),
+    )
     log_file.write_text(_preview_cmd(cmd, prompt) + "\n", encoding="utf-8")
     code = 1
     try:
@@ -67,7 +75,13 @@ def run_job(job_path: Path) -> int:
                     "Read the full prompt from this file and follow it exactly:\n"
                     f"{job['prompt_file']}\n"
                 )
-                cmd = SessionManager.build_command(model, short, prompt_file=job.get("prompt_file"))
+                cmd = SessionManager.build_command(
+                    model,
+                    short,
+                    prompt_file=job.get("prompt_file"),
+                    effort=job.get("effort"),
+                    native_session_id=job.get("native_session_id"),
+                )
                 code = _run_with_pty(cmd, log_file, cwd)
             else:
                 with log_file.open("a", encoding="utf-8") as log:
