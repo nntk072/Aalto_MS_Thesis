@@ -66,6 +66,13 @@ class SessionManager:
                 cwd=str(self.workspace),
                 timeout=timeout,
             )
+        except FileNotFoundError as exc:
+            return subprocess.CompletedProcess(
+                cmd,
+                127,
+                stdout="",
+                stderr=str(exc),
+            )
         except subprocess.TimeoutExpired:
             return subprocess.CompletedProcess(cmd, 124, stdout="", stderr="timeout")
 
