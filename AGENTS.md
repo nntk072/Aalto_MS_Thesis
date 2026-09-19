@@ -15,12 +15,16 @@ uv run ruff format --check <touched paths>
 uv run ruff check <touched paths>
 uv run pytest <relevant test files> -q
 
-# CI gate (required on commit / push — see .agents/rules/ci-verification.md)
-uv run ruff format --check .
+# CI gate — REQUIRED before every commit / push (do not skip)
+# Same as .github/workflows/ci.yml and orchestra/ci_gate.py
+uv run ruff format --check .    # if fails: uv run ruff format . then re-check
 uv run ruff check .
 uv run mypy .
 uv run pytest tests/ -v
 ```
+
+Full rule: `.agents/rules/ci-verification.md` (all agents). Commit checklist:
+`.agents/rules/git-commit-rules.md`.
 
 ## Orchestra (`orchestra/`)
 

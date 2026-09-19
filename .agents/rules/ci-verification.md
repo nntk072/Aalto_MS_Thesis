@@ -1,31 +1,55 @@
 # CI verification gate
 
-Applies to **all agents** (Cursor, Orchestra pipeline, Cline, Vibe, etc.).
+Applies to **all agents** (Cursor, Orchestra, Cline, Windsurf, Kilo, Vibe, etc.).
+Canonical commands match `.github/workflows/ci.yml` and `orchestra/ci_gate.py`
+(`CI_CHECKS`).
 
-## Local work (implementation)
+## Hard rule — commit / push / open PR
 
-Run only checks that cover the changed behavior. Do not run the full suite,
-`mypy .`, or `ruff` on `.` after every edit.
-
-```bash
-uv run ruff format --check <touched paths>
-uv run ruff check <touched paths>
-uv run pytest <relevant test files> -q
-```
-
-## Standard gate (commit / push)
-
-Same as `.github/workflows/ci.yml` jobs `code-formatting` and `ut-venv`.
-Single source of truth in code: `orchestra/ci_gate.py` (`CI_CHECKS`).
-
-Run this **on commit/push**. Orchestra phase 9 (verification) runs the same gate
-after implementation; implementer/fixer agents must not duplicate it.
+**Do not** `git commit`, `git push`, or open a PR until this gate passes locally.
+If any step fails, fix and re-run; do not skip with `--no-verify` unless the user
+explicitly requests it.
 
 ```bash
 uv run ruff format --check .
 uv run ruff check .
 uv run mypy .
 uv run pytest tests/ -v
+```
+
+### Format failures (common CI red)
+
+If `ruff format --check .` reports files that would be reformatted:
+
+1. Run `uv run ruff format .` (or only the listed paths).
+2. Re-run `uv run ruff format --check .` until it exits 0.
+3. Include the formatting diff in the commit (do not push unformatted code).
+
+Never treat “lint already passed earlier in the chat” as a substitute — re-run the
+gate on the **final** tree you are about to commit.
+
+### Minimal gate when the user asks only for lint/types
+
+When the user asks to verify before commit/push but not to run the full suite:
+
+```bash
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy .
+```
+
+Still run full `pytest tests/ -v` when opening a PR or when `ci-verification` /
+Orchestra phase 9 applies.
+
+## Local work (implementation)
+
+While editing, prefer scoped checks only — do **not** run the full gate after every
+edit:
+
+```bash
+uv run ruff format --check <touched paths>
+uv run ruff check <touched paths>
+uv run pytest <relevant test files> -q
 ```
 
 ## Out of scope unless explicitly requested
@@ -36,11 +60,14 @@ uv run pytest tests/ -v
 
 ## Test discipline
 
-- Mock methods with `monkeypatch.setattr`, not `instance.method = ...` (mypy `method-assign`).
-- Orchestra router/health tests on CI: use `stub_clis` fixture (`tests/test_orchestra/conftest.py`).
+- Mock methods with `monkeypatch.setattr`, not `instance.method = ...` (mypy
+  `method-assign`).
+- Orchestra router/health tests on CI: use `stub_clis` fixture
+  (`tests/test_orchestra/conftest.py`).
 
 ## Relations
 
-- Enforced in GitHub CI, on commit/push, and Orchestra phase 9; agent index: `.agents/rules/README.md`
 - Pre-commit checklist: [git-commit-rules.md](git-commit-rules.md)
 - Feature workflow: [development-workflow.md](development-workflow.md)
+- Agent index: [README.md](README.md)
+- Enforced in GitHub CI and Orchestra phase 9 (`orchestra/ci_gate.py`)
