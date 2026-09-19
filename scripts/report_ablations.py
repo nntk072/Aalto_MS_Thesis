@@ -58,7 +58,11 @@ def load_ablation_reports(ablations_dir: Path) -> list[dict[str, Any]]:
             "path": str(path),
         }
         for key, val in merged.items():
-            if isinstance(key, str) and key.startswith("pnl_dist_") and isinstance(val, (int, float)):
+            if (
+                isinstance(key, str)
+                and key.startswith("pnl_dist_")
+                and isinstance(val, (int, float))
+            ):
                 row[key] = val
         rows.append(row)
     return rows

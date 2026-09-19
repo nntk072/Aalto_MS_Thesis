@@ -43,8 +43,20 @@ class TestAblationHelpers:
 
     def test_average_seed_reports_means_and_skips(self) -> None:
         seeds: list[dict[str, Any]] = [
-            {"status": "ok", "sharpe": 1.0, "max_drawdown": 0.1, "n_trades": 2, "pnl_dist_mean": 1.0},
-            {"status": "ok", "sharpe": 3.0, "max_drawdown": 0.3, "n_trades": 4, "pnl_dist_mean": 3.0},
+            {
+                "status": "ok",
+                "sharpe": 1.0,
+                "max_drawdown": 0.1,
+                "n_trades": 2,
+                "pnl_dist_mean": 1.0,
+            },
+            {
+                "status": "ok",
+                "sharpe": 3.0,
+                "max_drawdown": 0.3,
+                "n_trades": 4,
+                "pnl_dist_mean": 3.0,
+            },
             {"status": "skipped", "reason": "vae"},
         ]
         avg = _average_seed_reports(seeds)
