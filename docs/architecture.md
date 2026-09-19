@@ -308,9 +308,13 @@ maps strategy names to variant YAMLs, `_strategy_from_cfg` builds
 
 **Evaluation** — `quant_rl/evaluation/` holds the canonical metrics stack
 (`calculate_metrics`, `purged_walk_forward`, bootstrap CIs, calibration,
-`run_episode`). `quant_rl/eval/` owns rollout (`evaluate_model`), plot
-export, and `eval_run` checkpoint re-evaluation. Checkpoints, trades and
-plots land under `outputs/`.
+`run_episode`, distributional extras). `quant_rl/eval/` owns rollout
+(`evaluate_model`), plot export, and `eval_run` checkpoint re-evaluation.
+Thesis ablation / OOS cost harnesses live as scripts only:
+`scripts/ablation_runner.py` (+ `config/experiments.yaml`),
+`scripts/test_oos.py`, `scripts/report_ablations.py`. There is no parallel
+`quant_rl/validation/` package. Checkpoints, trades and plots land under
+`outputs/`.
 
 **Live** — `live_trading_rl.py` loads a checkpoint and runs
 `quant_rl/live/rl_strategy.py` (`RLStrategyAdapter`) inside
