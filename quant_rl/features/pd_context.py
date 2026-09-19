@@ -128,13 +128,13 @@ def _session_completed_and_running(
         s = sess[i]
 
         if s == "asia":
-            h, l = high[i], low[i]
+            h, lo_i = high[i], low[i]
             if d not in day_asia_hi:
                 day_asia_hi[d] = h
-                day_asia_lo[d] = l
+                day_asia_lo[d] = lo_i
             else:
                 day_asia_hi[d] = max(day_asia_hi[d], h)
-                day_asia_lo[d] = min(day_asia_lo[d], l)
+                day_asia_lo[d] = min(day_asia_lo[d], lo_i)
             # Same-day Asia context is masked by the caller; leave NaN here.
         elif s == "london":
             # Asia is finished once London starts.
@@ -145,13 +145,13 @@ def _session_completed_and_running(
                 asia_c_hi[i] = day_asia_hi[d]
                 asia_c_lo[i] = day_asia_lo[d]
 
-            h, l = high[i], low[i]
+            h, lo_i = high[i], low[i]
             if d not in day_lon_hi:
                 day_lon_hi[d] = h
-                day_lon_lo[d] = l
+                day_lon_lo[d] = lo_i
             else:
                 day_lon_hi[d] = max(day_lon_hi[d], h)
-                day_lon_lo[d] = min(day_lon_lo[d], l)
+                day_lon_lo[d] = min(day_lon_lo[d], lo_i)
             # Live/running London range during London.
             lon_hi[i] = day_lon_hi[d]
             lon_lo[i] = day_lon_lo[d]
@@ -203,7 +203,9 @@ def build_pd_context_features(
     ny_end:
         Inclusive NY end HH:MM forwarded to session labelling.
     """
-    labeled = add_session_labels(bars[["open", "high", "low", "close"]].copy(), tz=tz, ny_end=ny_end)
+    labeled = add_session_labels(
+        bars[["open", "high", "low", "close"]].copy(), tz=tz, ny_end=ny_end
+    )
     session = labeled["session"]
     close = bars["close"]
     atr_s = atr.reindex(bars.index)

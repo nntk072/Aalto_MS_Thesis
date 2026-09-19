@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 
 from quant_rl.data.session import add_session_labels
 from quant_rl.features.build import OBS_RAW_PRICE_COLUMNS, build_features
@@ -17,6 +17,11 @@ from quant_rl.features.pd_context import (
     build_pd_context_features,
 )
 from quant_rl.features.structure import structure_levels
+
+
+def _index_dates(idx: pd.Index) -> np.ndarray[Any, Any]:
+    """Calendar dates from a DatetimeIndex (mypy-safe)."""
+    return np.asarray(pd.DatetimeIndex(idx).date)
 
 
 def _two_day_bars() -> pd.DataFrame:
@@ -79,7 +84,7 @@ class TestPdContextRouting:
         assert (ctx.loc[asia, "ctx_asia_high_dist_atr"] == 0.0).all()
         assert (ctx.loc[asia, "ctx_london_high_dist_atr"] == 0.0).all()
         # Prev-day summaries remain available (NaN only on first calendar day).
-        day2_asia = asia & (bars.index.date == pd.Timestamp("2025-01-07").date())
+        day2_asia = asia & (_index_dates(bars.index) == pd.Timestamp("2025-01-07").date())
         assert day2_asia.any()
         assert ctx.loc[day2_asia, "ctx_prev_day_high"].notna().all()
 
@@ -91,7 +96,7 @@ class TestPdContextRouting:
         assert (ctx.loc[london, "ctx_asia_active"] == 1.0).all()
         assert (ctx.loc[london, "ctx_london_active"] == 1.0).all()
         # Completed Asia for day 1 should equal planted asia extreme 105.
-        d1_lon = london & (bars.index.date == pd.Timestamp("2025-01-06").date())
+        d1_lon = london & (_index_dates(bars.index) == pd.Timestamp("2025-01-06").date())
         assert np.allclose(ctx.loc[d1_lon, "ctx_asia_high"].to_numpy(), 105.0)
         # London high is live/running — first London bar cannot yet see the mid-session plant.
         first_lon = ctx.loc[d1_lon].iloc[0]
@@ -103,7 +108,7 @@ class TestPdContextRouting:
         atr = pd.Series(1.0, index=bars.index)
         ctx = build_pd_context_features(bars, atr)
         ny = add_session_labels(bars)["session"] == "ny"
-        d1_ny = ny & (bars.index.date == pd.Timestamp("2025-01-06").date())
+        d1_ny = ny & (_index_dates(bars.index) == pd.Timestamp("2025-01-06").date())
         assert d1_ny.any()
         assert (ctx.loc[d1_ny, "ctx_asia_active"] == 1.0).all()
         assert (ctx.loc[d1_ny, "ctx_london_active"] == 1.0).all()
@@ -114,7 +119,7 @@ class TestPdContextRouting:
         """First London bar must not see London's eventual session high."""
         atr = pd.Series(1.0, index=bars.index)
         ctx = build_pd_context_features(bars, atr)
-        d1 = bars.index.date == pd.Timestamp("2025-01-06").date()
+        d1 = _index_dates(bars.index) == pd.Timestamp("2025-01-06").date()
         london = (add_session_labels(bars)["session"] == "london") & d1
         ny = (add_session_labels(bars)["session"] == "ny") & d1
         first_lon_hi = float(ctx.loc[london, "ctx_london_high"].iloc[0])
@@ -136,10 +141,10 @@ class TestMssCausal:
         idx = pd.date_range("2025-01-06 16:30", periods=40, freq="1min", tz="Etc/GMT-3")
         close = np.concatenate(
             [
-                np.linspace(100, 90, 10),   # down
-                np.linspace(90, 95, 10),    # bounce
-                np.linspace(95, 85, 10),    # continue down → bos_down likely
-                np.linspace(85, 100, 10),   # reverse up → bos_up / mss_up
+                np.linspace(100, 90, 10),  # down
+                np.linspace(90, 95, 10),  # bounce
+                np.linspace(95, 85, 10),  # continue down → bos_down likely
+                np.linspace(85, 100, 10),  # reverse up → bos_up / mss_up
             ]
         )
         bars = pd.DataFrame(
@@ -163,7 +168,7 @@ class TestMssCausal:
             assert bos.loc[t, "bos_down"] == 1
 
 
-def _pd_cfg(**overrides: Any) -> OmegaConf:
+def _pd_cfg(**overrides: Any) -> DictConfig:
     base: dict[str, Any] = {
         "features": {
             "ema_periods": [9, 21],
@@ -195,7 +200,9 @@ def _pd_cfg(**overrides: Any) -> OmegaConf:
         "session": {"timezone": "Etc/GMT-3"},
     }
     base["features"].update(overrides)
-    return OmegaConf.create(base)
+    cfg = OmegaConf.create(base)
+    assert isinstance(cfg, DictConfig)
+    return cfg
 
 
 class TestBuildFeaturesPdContext:
@@ -216,7 +223,7 @@ class TestBuildFeaturesPdContext:
         asia = asia.reindex(feat.index).fillna(False).astype(bool)
         assert (feat.loc[asia, "ctx_london_high_dist_atr"] == 0.0).all()
         # NY bars on day 2 should have non-zero asia active + filled levels.
-        d2_ny = ny & (feat.index.date == pd.Timestamp("2025-01-07").date())
+        d2_ny = ny & (_index_dates(feat.index) == pd.Timestamp("2025-01-07").date())
         assert d2_ny.any()
         assert (feat.loc[d2_ny, "ctx_asia_active"] == 1.0).all()
         assert (feat.loc[d2_ny, "ctx_asia_high"] != 0.0).any()

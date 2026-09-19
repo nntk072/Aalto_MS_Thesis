@@ -796,7 +796,7 @@ def _ny_session_positions(
     index: pd.DatetimeIndex,
     t_open: pd.Timestamp,
     t_close: pd.Timestamp,
-) -> np.ndarray:
+) -> np.ndarray[Any, Any]:
     """Integer positions of NY bars on calendar days spanned by the trade."""
     from quant_rl.data.session import ny_session_mask
 
