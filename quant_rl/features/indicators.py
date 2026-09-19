@@ -302,7 +302,9 @@ def build_indicators(df: pd.DataFrame, cfg: Any) -> pd.DataFrame:
     parts.append(adx(df, cfg.adx_period))
     parts.append(bollinger(close, cfg.bb_period, cfg.bb_std))
     parts.append(stochastic(df, cfg.stoch_k, cfg.stoch_d))
-    if "session_id" in df.columns:
+    # Session VWAP needs reliable tick volume; disabled when data lacks it
+    # (``features.vwap_session: false``).
+    if bool(getattr(cfg, "vwap_session", False)) and "session_id" in df.columns:
         parts.append(vwap_from_session(df))
     parts.append(returns(close, list(cfg.return_horizons)))
     parts.append(realized_vol(close, cfg.realized_vol_period))

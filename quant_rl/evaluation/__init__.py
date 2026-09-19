@@ -8,6 +8,7 @@ reporting all live here.
 
 from .bootstrap_ci import CI, bootstrap_ci, sharpe_stat
 from .calibration import CalibrationReport, calibration_report, plot_reliability_diagram
+from .distributions import DistributionMetrics, compute_distribution_metrics
 from .metrics import (
     DEFAULT_PERIODS_PER_YEAR,
     LEGACY_M1_PERIODS_PER_YEAR,
@@ -26,6 +27,12 @@ from .report import (
     save_metrics_json,
 )
 from .runner import run_episode
+from .temporal import (
+    conditional_pnl_distributions,
+    conditional_pnl_groups,
+    holding_time_distribution,
+    sweep_delay_distribution,
+)
 from .walkforward import WFSplit, purged_walk_forward
 
 __all__ = [
@@ -33,6 +40,7 @@ __all__ = [
     "LEGACY_M1_PERIODS_PER_YEAR",
     "CI",
     "CalibrationReport",
+    "DistributionMetrics",
     "PerformanceMetrics",
     "WFSplit",
     "aggregate_seeds",
@@ -42,7 +50,11 @@ __all__ = [
     "build_summary_table",
     "calibration_report",
     "calculate_metrics",
+    "compute_distribution_metrics",
     "compute_metrics",
+    "conditional_pnl_distributions",
+    "conditional_pnl_groups",
+    "holding_time_distribution",
     "max_drawdown",
     "plot_reliability_diagram",
     "print_report",
@@ -51,4 +63,5 @@ __all__ = [
     "save_metrics_json",
     "sharpe_stat",
     "sweep_delay_breakdown",
+    "sweep_delay_distribution",
 ]

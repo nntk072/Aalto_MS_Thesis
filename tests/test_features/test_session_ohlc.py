@@ -451,15 +451,15 @@ def test_build_features_session_ohlc_additive() -> None:
         "lastweek_q_upper_inner",
         "lastweek_q_lower_inner",
         "lastweek_q_lower_outer",
-        "vwap",
     }
     assert expected <= set(map(str, sess.columns))
     assert set(map(str, base.columns)) < set(map(str, sess.columns))
     assert all(pd.api.types.is_numeric_dtype(sess[c]) for c in sess.columns)
+    assert "vwap" not in sess.columns  # vwap_session off by default
 
     # Levels are finite from day 3 onward (prior day/week exist by then).
     day3 = sess.loc[sess.index >= pd.Timestamp("2026-03-09 00:00", tz=DATA_TZ)]
-    for col in ("yesterday_high", "lastweek_high", "ny_ct_high", "vwap"):
+    for col in ("yesterday_high", "lastweek_high", "ny_ct_high"):
         assert day3[col].notna().any(), col
 
     # Legacy broker-tz levels are untouched (additive block).

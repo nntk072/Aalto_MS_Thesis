@@ -230,6 +230,95 @@ def test_pair_trades_unclosed_open_is_dropped():
     assert _pair_trades(trades) == []
 
 
+def test_extract_window_eod_close_excludes_next_session():
+    """Context after an NY eod_close must not pull the next session's bars."""
+    from quant_rl.eval.plots import _extract_window
+
+    # Full-day spine: NY session day1, overnight/gap, then next NY open.
+    day1 = pd.date_range("2024-12-30 16:30", "2024-12-30 23:00", freq="1min")
+    overnight = pd.date_range("2024-12-30 23:01", "2024-12-31 16:29", freq="1min")
+    day2 = pd.date_range("2024-12-31 16:30", "2024-12-31 17:30", freq="1min")
+    idx = day1.union(overnight).union(day2).sort_values()
+    bars = pd.DataFrame(
+        {
+            "open": 100.0,
+            "high": 101.0,
+            "low": 99.0,
+            "close": 100.5,
+        },
+        index=idx,
+    )
+    t_open = pd.Timestamp("2024-12-30 18:18")
+    t_close = pd.Timestamp("2024-12-30 23:00")
+    window = _extract_window(bars, t_open, t_close, context=60)
+
+    assert not window.empty
+    assert window.index.max() <= pd.Timestamp("2024-12-30 23:00")
+    assert window.index.min() >= pd.Timestamp("2024-12-30 16:30")
+    # Must not include the next NY open (the original bug).
+    assert not any(ts.normalize() == pd.Timestamp("2024-12-31") for ts in window.index)
+
+
+def test_extract_window_pre_entry_stays_in_session():
+    """Pre-entry context must not reach into the prior calendar day's NY bars."""
+    from quant_rl.eval.plots import _extract_window
+
+    day0 = pd.date_range("2024-12-29 16:30", "2024-12-29 23:00", freq="1min")
+    day1 = pd.date_range("2024-12-30 16:30", "2024-12-30 18:00", freq="1min")
+    idx = day0.union(day1).sort_values()
+    bars = pd.DataFrame(
+        {"open": 1.0, "high": 2.0, "low": 0.5, "close": 1.5},
+        index=idx,
+    )
+    t_open = pd.Timestamp("2024-12-30 16:35")
+    t_close = pd.Timestamp("2024-12-30 16:50")
+    window = _extract_window(bars, t_open, t_close, context=60)
+    assert window.index.min() >= pd.Timestamp("2024-12-30 16:30")
+    assert all(ts.normalize() == pd.Timestamp("2024-12-30") for ts in window.index)
+
+
+def test_close_time_label_includes_date_across_days():
+    from quant_rl.eval.plots import _close_time_label
+
+    assert (
+        _close_time_label(pd.Timestamp("2024-12-30 18:00"), pd.Timestamp("2024-12-30 23:00"))
+        == "23:00"
+    )
+    assert (
+        _close_time_label(pd.Timestamp("2024-12-30 22:00"), pd.Timestamp("2024-12-31 16:40"))
+        == "2024-12-31 16:40"
+    )
+
+
+def test_plot_price_with_orders_includes_tp_close(synthetic_bars, tmp_path):
+    """Overview charts must mark tp_close exits (not only stop/eod/close)."""
+    from quant_rl.eval.plots import plot_price_with_orders
+
+    idx = synthetic_bars.index
+    trades = pd.DataFrame(
+        [
+            {
+                "type": "open",
+                "direction": 1,
+                "price": float(synthetic_bars["close"].iloc[10]),
+                "time": idx[10],
+            },
+            {
+                "type": "tp_close",
+                "direction": 1,
+                "price": float(synthetic_bars["close"].iloc[40]),
+                "pnl": 12.0,
+                "time": idx[40],
+            },
+        ]
+    )
+    fig = plot_price_with_orders(
+        synthetic_bars, trades, out_path=tmp_path / "orders_overview.png", dpi=72
+    )
+    assert fig is not None
+    assert (tmp_path / "orders_overview.png").stat().st_size > 0
+
+
 # ---------------------------------------------------------------------------
 # Plot smoke tests (static PNG)
 # ---------------------------------------------------------------------------

@@ -13,11 +13,14 @@ New layout (v2)
             equity.png/html, drawdown.png/html, daily_pnl.png/html
             pnl_hist.png/html, returns_dist.png, monthly_heatmap.png/html
             hold_time_pnl, rolling_winrate, tod_heatmap, mae_mfe (.png/.html)
+            pnl_distribution.json, pnl_dist_var.png, pnl_regime_box.png
+            bootstrap_ci.json, calibration.json, reliability.png
             orders/          — one M1 candlestick per trade
                 trade_NNNN_YYYYMMDD_HHMMopen_HHMMclose_{L|S}_{p|m}PnL.png
                 trade_NNNN_…  .html
         testing/             — out-of-sample (≥ test_start)
             (same set)
+        data/                — coverage, returns, session, features, PO3 sample
         model/               — RL runs only (populated by train_rl.py)
             ppo_*.zip, training_log.csv
             learning_curve.png/html, losses.png/html …
@@ -277,6 +280,26 @@ def _write_split(
             max_loss_per_trade_usd=max_loss_per_trade_usd,
             take_profit_per_trade_usd=take_profit_per_trade_usd,
         )
+
+    if not trades.empty:
+        from .distribution_plots import write_distribution_artifacts
+        from .eval_diagnostics import write_bootstrap_cis, write_calibration_artifacts
+
+        write_distribution_artifacts(
+            split_dir,
+            trades,
+            dpi=dpi,
+            save_plots=save_plots,
+        )
+        if not equity.empty:
+            try:
+                write_bootstrap_cis(split_dir, equity, trades)
+            except Exception as exc:
+                log.warning("Bootstrap CIs skipped: %s", exc)
+            try:
+                write_calibration_artifacts(split_dir, trades, dpi=dpi, save_plots=save_plots)
+            except Exception as exc:
+                log.warning("Calibration diagram skipped: %s", exc)
 
 
 # ---------------------------------------------------------------------------
