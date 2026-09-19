@@ -1,0 +1,49 @@
+# Ablation experiment matrix (thesis PLAN 6 + PD-context extensions).
+# Each variant trains with the given hyperparameters and is scored OOS through
+# the shared evaluation pipeline (build_run_report). Override `steps` / `seeds`
+# on the CLI for smoke runs.
+#
+# Feature-flag variants assume the --features-csv was built with matching
+# build_features flags (e.g. include_pd_context). Strategy variants merge the
+# Idea 1/2 YAML overlays when constructing the env.
+defaults:
+  algo: ppo
+  arch: gru
+  use_vae: 0
+  strategy: baseline
+  include_pd_context: false
+  steps: 100000
+  seeds: [42, 43, 44, 45, 46]
+  train_end: "2025-12-31"
+  test_start: "2026-01-01"
+
+variants:
+  - name: ablation_baseline_unconditional
+    use_vae: 0
+
+  - name: ablation_conditional_narrative
+    use_vae: 1
+
+  - name: ablation_transformer_encoder
+    arch: transformer
+
+  - name: ablation_sac_agent
+    algo: sac
+
+  - name: ablation_discrete_actions
+    algo: ppo
+    arch: tcn
+
+  - name: ablation_pd_context
+    include_pd_context: true
+    arch: tcn
+
+  - name: ablation_po3_ifvg
+    strategy: po3_ifvg
+    include_pd_context: true
+    arch: tcn
+
+  - name: ablation_distribution
+    strategy: distribution
+    include_pd_context: true
+    arch: tcn
