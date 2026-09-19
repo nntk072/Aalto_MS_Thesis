@@ -9,6 +9,7 @@
 | [thesis/threats_to_validity.md](thesis/threats_to_validity.md) | Examiner-facing threats to validity |
 | [thesis/validation_protocol.md](thesis/validation_protocol.md) | Nested selection vs locked OOS |
 | [thesis/eval_pack.md](thesis/eval_pack.md) | Frozen thesis table commands |
+| [thesis/weekly_agent_protocol.md](thesis/weekly_agent_protocol.md) | Reusable weekly agent workflow and supervisor report |
 | [operations/RUNNING_COMMANDS.md](operations/RUNNING_COMMANDS.md) | Command reference for research sessions |
 | [operations/DEPLOYMENT.md](operations/DEPLOYMENT.md) | Paper-to-live promotion protocol |
 | [../README.md](../README.md) | Project overview and quick start |
