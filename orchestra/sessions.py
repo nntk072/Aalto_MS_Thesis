@@ -83,14 +83,17 @@ class SessionManager:
         heartbeat: float,
     ) -> subprocess.CompletedProcess[str]:
         """Run ``cmd``, streaming stdout and printing a beat when it is silent."""
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            cwd=str(self.workspace),
-            start_new_session=True,
-        )
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                cwd=str(self.workspace),
+                start_new_session=True,
+            )
+        except FileNotFoundError as exc:
+            return subprocess.CompletedProcess(cmd, 127, stdout="", stderr=str(exc))
         assert proc.stdout is not None
         chunks: list[str] = []
         start = time.time()
