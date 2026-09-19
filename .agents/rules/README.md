@@ -33,9 +33,11 @@ request
   ├─ editing code?            → scoped ruff + pytest on touched paths only
   └─ committing / push / PR   → git-commit-rules + ci-verification + security-rules
                                   └─ BLOCKING: ruff format --check . → ruff check .
-                                     → mypy . → pytest <relevant paths> -q
+                                     → mypy . (FULL TREE — never path-scoped mypy)
+                                     → pytest <relevant paths> -q
                                      (NOT full tests/ -v; that is CI/Orchestra);
-                                     fix format drift with `ruff format .` first
+                                     fix format drift with `ruff format .` first;
+                                     scoped ruff/mypy while editing ≠ commit gate
 ```
 
 ## Priority
