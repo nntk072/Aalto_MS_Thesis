@@ -1453,9 +1453,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     fixed[-t:, :f] = pre_ny_seq[-t:, :f]
                     pre_ny_seq = fixed
                 pre_ny_tensor = torch.from_numpy(pre_ny_seq).unsqueeze(0).float()
+                vae_device = next(self.vae.parameters()).device
+                pre_ny_tensor = pre_ny_tensor.to(vae_device)
                 with torch.no_grad():
                     mu, _ = self.vae.encode(pre_ny_tensor)
-                vae_z = mu.numpy().astype(np.float32).reshape(-1)
+                vae_z = mu.detach().cpu().numpy().astype(np.float32).reshape(-1)
 
             obs["vae_z"] = vae_z
 

@@ -29,6 +29,7 @@ _OHLCV_AGG = {
     "close": "last",
     "tickvol": "sum",
     "vol": "sum",
+    "volume": "sum",  # alias used by VAE pre-NY builder after tickvol→volume
     "spread": "mean",
 }
 

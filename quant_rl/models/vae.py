@@ -431,7 +431,10 @@ class VAEFeatureExtractor(BaseFeaturesExtractor):
             z = observations["vae_z"]
         else:
             pre_ny_seq = observations["pre_ny_seq"]  # [B, T, F]
+            device = next(self.vae.parameters()).device
             mu: torch.Tensor
-            mu, _ = self.vae.encode(pre_ny_seq)
+            mu, _ = self.vae.encode(pre_ny_seq.to(device))
             z = mu
+        if z.device != account.device:
+            z = z.to(account.device)
         return torch.cat([z, account], dim=1)  # [B, latent_dim + A]

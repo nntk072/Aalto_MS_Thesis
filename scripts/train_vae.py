@@ -290,7 +290,7 @@ def train_vae(
         # Save best model
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            torch.save(model.state_dict(), config["output_dir"] / "vae_best.pth")
+            torch.save(model.state_dict(), Path(config["output_dir"]) / "vae_best.pth")
             logger.info(f"New best model saved with val_loss={val_loss:.4f}")
 
     return model

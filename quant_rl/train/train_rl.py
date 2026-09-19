@@ -18,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import argparse
+import copy
 import json
 import logging
 from datetime import datetime
@@ -338,11 +339,14 @@ def main() -> None:
             log.info("MVP: sliced training to %d bars (~30 calendar days)", len(train_bars))
 
     vae_model = None
+    env_vae = None
     pre_ny_by_date = None
     if args.use_vae:
         from quant_rl.models.vae_pre_ny import build_pre_ny_by_date, load_vae_from_checkpoint
 
         vae_model = load_vae_from_checkpoint(args.vae_path, config_path=args.vae_config)
+        # Env keeps a CPU copy so SB3 moving the policy VAE to CUDA cannot break encode().
+        env_vae = copy.deepcopy(vae_model).cpu().eval()
         pre_ny_by_date = build_pre_ny_by_date(
             primary_m1,
             seq_len=int(vae_model.encoder.seq_len),
@@ -363,7 +367,7 @@ def main() -> None:
         algo=args.algo,
         reward=args.reward,
         use_vae=args.use_vae,
-        vae=vae_model,
+        vae=env_vae,
         pre_ny_by_date=pre_ny_by_date,
     )
 
@@ -400,7 +404,7 @@ def main() -> None:
             algo=args.algo,
             reward=args.reward,
             use_vae=args.use_vae,
-            vae=vae_model,
+            vae=env_vae,
             pre_ny_by_date=pre_ny_by_date,
         ),
     )
@@ -443,7 +447,7 @@ def main() -> None:
             reward=args.reward,
             episodic=False,
             use_vae=args.use_vae,
-            vae=vae_model,
+            vae=env_vae,
             pre_ny_by_date=pre_ny_by_date,
         ),
         eval_freq=best_eval_freq,
@@ -494,7 +498,7 @@ def main() -> None:
         block_overnight=bool(cfg.env.get("block_overnight", True)),
         eod_risk=dict(cfg.env.get("eod_risk", {})),
         use_vae=args.use_vae,
-        vae=vae_model,
+        vae=env_vae,
         pre_ny_by_date=pre_ny_by_date,
     )
     test_result["initial_balance"] = cfg.account.initial_balance
@@ -533,7 +537,7 @@ def main() -> None:
         block_overnight=bool(cfg.env.get("block_overnight", True)),
         eod_risk=dict(cfg.env.get("eod_risk", {})),
         use_vae=args.use_vae,
-        vae=vae_model,
+        vae=env_vae,
         pre_ny_by_date=pre_ny_by_date,
     )
     train_result["initial_balance"] = cfg.account.initial_balance
@@ -671,7 +675,7 @@ def main() -> None:
                 algo=args.algo,
                 reward=args.reward,
                 use_vae=args.use_vae,
-                vae=vae_model,
+                vae=env_vae,
                 pre_ny_by_date=pre_ny_by_date,
             )
             fold_model = build_agent(
@@ -690,7 +694,7 @@ def main() -> None:
                     algo=args.algo,
                     reward=args.reward,
                     use_vae=args.use_vae,
-                    vae=vae_model,
+                    vae=env_vae,
                     pre_ny_by_date=pre_ny_by_date,
                 ),
             )
@@ -717,7 +721,7 @@ def main() -> None:
                 block_overnight=bool(cfg.env.get("block_overnight", True)),
                 eod_risk=dict(cfg.env.get("eod_risk", {})),
                 use_vae=args.use_vae,
-                vae=vae_model,
+                vae=env_vae,
                 pre_ny_by_date=pre_ny_by_date,
             )
             fold_m = calculate_metrics(
