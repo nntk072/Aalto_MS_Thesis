@@ -15,12 +15,14 @@ uv run ruff format --check <touched paths>
 uv run ruff check <touched paths>
 uv run pytest <relevant test files> -q
 
-# CI gate — REQUIRED before every commit / push (do not skip)
-# Same as .github/workflows/ci.yml and orchestra/ci_gate.py
+# Agent commit/push gate — REQUIRED (do not skip)
 uv run ruff format --check .    # if fails: uv run ruff format . then re-check
 uv run ruff check .
 uv run mypy .
-uv run pytest tests/ -v
+uv run pytest <relevant test paths> -q   # NOT tests/ -v — keep scoped
+
+# Full suite: GitHub CI / Orchestra phase 9 only (not agent default)
+# uv run pytest tests/ -v
 ```
 
 Full rule: `.agents/rules/ci-verification.md` (all agents). Commit checklist:
