@@ -1,21 +1,39 @@
 # CI verification gate
 
 Applies to **all agents** (Cursor, Orchestra, Cline, Windsurf, Kilo, Vibe, etc.).
-Canonical commands match `.github/workflows/ci.yml` and `orchestra/ci_gate.py`
-(`CI_CHECKS`).
 
-## Hard rule — commit / push / open PR
+Two layers:
 
-**Do not** `git commit`, `git push`, or open a PR until this gate passes locally.
-If any step fails, fix and re-run; do not skip with `--no-verify` unless the user
-explicitly requests it.
+| Layer | Who | Commands |
+|-------|-----|----------|
+| **Agent commit/push gate** | Any coding agent before `git commit` / `git push` | format + lint + mypy (full tree) + **scoped** pytest |
+| **Merge CI bar** | GitHub Actions + Orchestra phase 9 (`orchestra/ci_gate.py`) | same + `pytest tests/ -v` |
+
+Agents must **not** run `pytest tests/ -v` by default — it is too heavy. Prefer the
+smallest relevant test set for the change.
+
+## Hard rule — agent commit / push
+
+**Do not** `git commit` or `git push` until this gate passes. If any step fails,
+fix and re-run; do not skip with `--no-verify` unless the user explicitly requests it.
 
 ```bash
 uv run ruff format --check .
 uv run ruff check .
 uv run mypy .
-uv run pytest tests/ -v
+uv run pytest <relevant test paths> -q
 ```
+
+### Choosing relevant tests
+
+- Prefer tests that cover the modules you touched (same package / mirror path under
+  `tests/`, plus any smoke tests you added).
+- Use graph/`tests_for` when available; otherwise grep or path convention
+  (`quant_rl/foo.py` → `tests/**/test_*foo*`).
+- Cap to a small set (typically 1–few files). Do **not** expand to the whole tree
+  “to be safe.”
+- Run `pytest tests/ -v` only when the user explicitly asks, or when you are the
+  Orchestra verification phase / reproducing a CI failure.
 
 ### Format failures (common CI red)
 
@@ -28,9 +46,9 @@ If `ruff format --check .` reports files that would be reformatted:
 Never treat “lint already passed earlier in the chat” as a substitute — re-run the
 gate on the **final** tree you are about to commit.
 
-### Minimal gate when the user asks only for lint/types
+### Lint/types only
 
-When the user asks to verify before commit/push but not to run the full suite:
+When the user asks only for format/lint/types before commit:
 
 ```bash
 uv run ruff format --check .
@@ -38,13 +56,10 @@ uv run ruff check .
 uv run mypy .
 ```
 
-Still run full `pytest tests/ -v` when opening a PR or when `ci-verification` /
-Orchestra phase 9 applies.
-
 ## Local work (implementation)
 
-While editing, prefer scoped checks only — do **not** run the full gate after every
-edit:
+While editing, prefer scoped checks only — do **not** run full-tree ruff/mypy after
+every edit:
 
 ```bash
 uv run ruff format --check <touched paths>
@@ -52,11 +67,22 @@ uv run ruff check <touched paths>
 uv run pytest <relevant test files> -q
 ```
 
+## Merge CI bar (not the agent default)
+
+GitHub CI and Orchestra phase 9 still run the full suite:
+
+```bash
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy .
+uv run pytest tests/ -v
+```
+
 ## Out of scope unless explicitly requested
 
 - Nightly workflow subsets (`pytest -m slow`, integration-only paths)
 - `pytest -m "not slow"` as a substitute for the merge-bar suite
-- Treating scoped `mypy`/`pytest` as the GitHub CI bar
+- Agents substituting scoped pytest for GitHub’s full suite when debugging CI
 
 ## Test discipline
 
@@ -70,4 +96,4 @@ uv run pytest <relevant test files> -q
 - Pre-commit checklist: [git-commit-rules.md](git-commit-rules.md)
 - Feature workflow: [development-workflow.md](development-workflow.md)
 - Agent index: [README.md](README.md)
-- Enforced in GitHub CI and Orchestra phase 9 (`orchestra/ci_gate.py`)
+- Full suite: `.github/workflows/ci.yml`, `orchestra/ci_gate.py`

@@ -15,7 +15,7 @@ Single source of truth for all coding agents in this repo (Cursor, Cline, Windsu
 | [testing-rules.md](testing-rules.md) | TDD, AAA, coverage ≥80% | On feature/bugfix work |
 | [security-rules.md](security-rules.md) | Secret & input safety checklist | Always at commit; deep on sensitive code |
 | [development-workflow.md](development-workflow.md) | Research-first → plan → TDD → review → commit | On non-trivial features |
-| [ci-verification.md](ci-verification.md) | **Blocking** ruff format/check + mypy (+ pytest) before commit/push | On commit/push |
+| [ci-verification.md](ci-verification.md) | **Blocking** ruff format/check + mypy; scoped pytest before commit/push | On commit/push |
 
 ## Activation flow
 
@@ -33,9 +33,9 @@ request
   ├─ editing code?            → scoped ruff + pytest on touched paths only
   └─ committing / push / PR   → git-commit-rules + ci-verification + security-rules
                                   └─ BLOCKING: ruff format --check . → ruff check .
-                                     → mypy . → pytest tests/ -v
-                                     (fix format drift with `ruff format .` first);
-                                     after code-review-graph for multi-file changes
+                                     → mypy . → pytest <relevant paths> -q
+                                     (NOT full tests/ -v; that is CI/Orchestra);
+                                     fix format drift with `ruff format .` first
 ```
 
 ## Priority
