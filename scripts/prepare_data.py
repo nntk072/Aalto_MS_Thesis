@@ -61,6 +61,24 @@ def main() -> None:
         force=args.force,
     )
     log.info("Features shape: %s", features.shape)
+
+    # Thesis data/EDA figure pack (coverage, returns, session, features, signals).
+    try:
+        from quant_rl.data.split import get_split_config
+        from quant_rl.eval.data_plots import write_data_eda
+
+        train_end, test_start = get_split_config(cfg)
+        eda_dir = Path(cfg.data.cache_dir) / "eda"
+        write_data_eda(
+            eda_dir,
+            primary_m1,
+            features,
+            train_end=train_end,
+            test_start=test_start,
+        )
+    except Exception as exc:
+        log.warning("Data EDA charts skipped: %s", exc)
+
     log.info("Done. Run 'python -m quant_rl.train.run_baselines' to test baselines.")
 
 

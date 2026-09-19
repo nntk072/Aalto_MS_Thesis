@@ -343,7 +343,7 @@ def plot_price_with_orders(
     if trades is not None and not trades.empty and "time" in trades.columns:
         opens = trades[trades["type"] == "open"].copy()
         closes = trades[
-            trades["type"].isin(["close", "forced_close", "eod_close", "stop_close"])
+            trades["type"].isin(["close", "forced_close", "eod_close", "stop_close", "tp_close"])
         ].copy()
 
         min_ts = ohlcv.index.min()
@@ -489,7 +489,9 @@ def _plot_price_line_fallback(
             if "direction" in opens.columns
             else pd.DataFrame()
         )
-        closes = trades[trades["type"].isin(["close", "forced_close", "eod_close"])]
+        closes = trades[
+            trades["type"].isin(["close", "forced_close", "eod_close", "stop_close", "tp_close"])
+        ]
 
         if not long_opens.empty:
             ax.scatter(
@@ -780,21 +782,86 @@ def _pair_trades(trades: pd.DataFrame) -> list[tuple[pd.Series, pd.Series]]:
     return pairs
 
 
+def _align_ts(ts: pd.Timestamp, index: pd.DatetimeIndex) -> pd.Timestamp:
+    """Localize/convert ``ts`` to match ``index`` timezone."""
+    out = pd.Timestamp(ts)
+    if index.tz is None:
+        return out.tz_localize(None) if out.tzinfo is not None else out
+    if out.tzinfo is None:
+        return out.tz_localize(index.tz)
+    return out.tz_convert(index.tz)
+
+
+def _ny_session_positions(
+    index: pd.DatetimeIndex,
+    t_open: pd.Timestamp,
+    t_close: pd.Timestamp,
+) -> np.ndarray:
+    """Integer positions of NY bars on calendar days spanned by the trade."""
+    from quant_rl.data.session import ny_session_mask
+
+    t0 = _align_ts(t_open, index)
+    t1 = _align_ts(t_close, index)
+    day0 = t0.normalize()
+    day1 = t1.normalize()
+    ny = ny_session_mask(index).to_numpy()
+    norms = pd.DatetimeIndex(index).normalize()
+    same_days = (norms == day0) | (norms == day1)
+    return np.flatnonzero(ny & np.asarray(same_days))
+
+
 def _extract_window(
     bars: pd.DataFrame,
     t_open: pd.Timestamp,
     t_close: pd.Timestamp,
     context: int,
 ) -> pd.DataFrame:
-    """Return bars[t_open − context : t_close + context] by integer position."""
-    idx = bars.index
-    i_o = int(idx.get_indexer(pd.Index([t_open]), method="nearest")[0])
-    i_c = int(idx.get_indexer(pd.Index([t_close]), method="nearest")[0])
+    """Return M1 bars around a trade, capped to the trade's NY session(s).
+
+    Context bars before entry / after exit never cross into the next (or
+    previous) NY session. When the spine holds full-day bars, overnight and
+    next-session candles are excluded so a ``%H:%M`` axis cannot paint two
+    days on top of each other after an ``eod_close``.
+    """
+    idx = pd.DatetimeIndex(bars.index)
+    i_o = int(idx.get_indexer(pd.Index([_align_ts(t_open, idx)]), method="nearest")[0])
+    i_c = int(idx.get_indexer(pd.Index([_align_ts(t_close, idx)]), method="nearest")[0])
     if i_o < 0 or i_c < 0:
         return pd.DataFrame(columns=bars.columns)
-    i_s = max(0, i_o - context)
-    i_e = min(len(bars) - 1, i_c + context)
-    return bars.iloc[i_s : i_e + 1]
+
+    session_pos = _ny_session_positions(idx, t_open, t_close)
+    if session_pos.size == 0:
+        i_s = max(0, min(i_o, i_c) - context)
+        i_e = min(len(bars) - 1, max(i_o, i_c) + context)
+        return bars.iloc[i_s : i_e + 1]
+
+    sess_start = int(session_pos[0])
+    sess_end = int(session_pos[-1])
+    i_o = min(max(i_o, sess_start), sess_end)
+    i_c = min(max(i_c, sess_start), sess_end)
+    i_s = max(sess_start, min(i_o, i_c) - context)
+    i_e = min(sess_end, max(i_o, i_c) + context)
+
+    # Keep only NY bars inside the window so overnight holes never appear.
+    window = bars.iloc[i_s : i_e + 1]
+    keep = np.isin(np.arange(i_s, i_e + 1), session_pos)
+    return window.iloc[keep]
+
+
+def _axis_date_format(window: pd.DataFrame) -> str:
+    """``%H:%M`` for a single calendar day; include month/day otherwise."""
+    idx = pd.DatetimeIndex(window.index)
+    if len(idx) == 0:
+        return "%H:%M"
+    days = idx.normalize().unique()
+    return "%H:%M" if len(days) == 1 else "%m/%d %H:%M"
+
+
+def _close_time_label(t_open: pd.Timestamp, t_close: pd.Timestamp) -> str:
+    """Close time for chart titles; include the date when it differs from open."""
+    if pd.Timestamp(t_open).normalize() == pd.Timestamp(t_close).normalize():
+        return pd.Timestamp(t_close).strftime("%H:%M")
+    return pd.Timestamp(t_close).strftime("%Y-%m-%d %H:%M")
 
 
 def _trade_filename(idx: int, open_row: pd.Series, close_row: pd.Series, ext: str) -> str:
@@ -1037,19 +1104,19 @@ def plot_per_trade_orders(
         ax_price.legend(loc="upper left", fontsize=8)
         ax_price.grid(True, alpha=0.3)
 
-        # Format x-axis as datetime in the bars' own timezone (matplotlib
-        # otherwise renders tz-aware datetimes in UTC, which would show
-        # tick labels several hours off from the title's local time).
+        # Format x-axis in the bars' own timezone. Use month/day when the
+        # window spans multiple calendar days so labels cannot collide.
         axis_tz = pd.DatetimeIndex(window.index).tz
-        ax_price.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M", tz=axis_tz))
-        ax_price.xaxis.set_major_locator(mdates.MinuteLocator(interval=10, tz=axis_tz))
+        date_fmt = _axis_date_format(window)
+        ax_price.xaxis.set_major_formatter(mdates.DateFormatter(date_fmt, tz=axis_tz))
+        ax_price.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=4, maxticks=12))
         plt.setp(ax_price.xaxis.get_majorticklabels(), rotation=45, ha="right")
 
         # --- Bottom panel: MACD (left) + RSI (right) ---
         draw_macd_rsi_mpl(ax_osc, window, overlays)
         ax_osc.set_xlabel("Time (M1)")
-        ax_osc.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M", tz=axis_tz))
-        ax_osc.xaxis.set_major_locator(mdates.MinuteLocator(interval=10, tz=axis_tz))
+        ax_osc.xaxis.set_major_formatter(mdates.DateFormatter(date_fmt, tz=axis_tz))
+        ax_osc.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=4, maxticks=12))
         plt.setp(ax_osc.xaxis.get_majorticklabels(), rotation=45, ha="right")
 
         # --- Trade info box ---
@@ -1094,7 +1161,7 @@ def plot_per_trade_orders(
         close_reason = close_type if close_type != "close" else "normal"
         title = (
             f"{dir_label} | Open {t_open.strftime('%Y-%m-%d %H:%M')} "
-            f"→ Close {t_close.strftime('%H:%M')} | "
+            f"→ Close {_close_time_label(t_open, t_close)} | "
             f"PnL: {pnl:+.2f} | {close_reason}"
         )
         fig.suptitle(title, fontsize=11, fontweight="bold")

@@ -187,3 +187,57 @@ def detect_bos(bars: pd.DataFrame, structure: pd.DataFrame) -> pd.DataFrame:
         },
         index=bars.index,
     )
+
+
+def detect_mss(
+    bars: pd.DataFrame,
+    structure: pd.DataFrame,
+    bos: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Detect a causal market-structure shift (MSS) after an opposite BOS.
+
+    Minimal LTF decision feature: an MSS fires when a BOS flips the prior BOS
+    direction (structure shift against the previous swing break). Wick-only
+    penetration does not count — MSS inherits BOS close-through semantics.
+
+    - ``mss_up = 1``: ``bos_up`` while the last completed BOS was ``bos_down``
+    - ``mss_down = 1``: ``bos_down`` while the last completed BOS was ``bos_up``
+
+    Levels are the swing level crossed on the MSS bar (same as the BOS level).
+    """
+    if bos is None:
+        bos = detect_bos(bars, structure)
+
+    n = len(bars)
+    bos_up = bos["bos_up"].to_numpy(dtype=float)
+    bos_down = bos["bos_down"].to_numpy(dtype=float)
+    bos_up_lv = bos["bos_up_level"].to_numpy(dtype=float)
+    bos_down_lv = bos["bos_down_level"].to_numpy(dtype=float)
+
+    mss_up = np.zeros(n)
+    mss_down = np.zeros(n)
+    mss_up_level = np.full(n, np.nan)
+    mss_down_level = np.full(n, np.nan)
+
+    last_dir = 0  # +1 last bos_up, -1 last bos_down
+    for t in range(n):
+        if bos_up[t] > 0:
+            if last_dir == -1:
+                mss_up[t] = 1.0
+                mss_up_level[t] = bos_up_lv[t]
+            last_dir = 1
+        elif bos_down[t] > 0:
+            if last_dir == 1:
+                mss_down[t] = 1.0
+                mss_down_level[t] = bos_down_lv[t]
+            last_dir = -1
+
+    return pd.DataFrame(
+        {
+            "mss_up": mss_up.astype(int),
+            "mss_down": mss_down.astype(int),
+            "mss_up_level": mss_up_level,
+            "mss_down_level": mss_down_level,
+        },
+        index=bars.index,
+    )

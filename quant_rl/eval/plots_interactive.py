@@ -341,7 +341,7 @@ def plot_price_with_orders(
 
     if trades is not None and not trades.empty and "time" in trades.columns:
         opens = trades[trades["type"] == "open"]
-        normal_closes = trades[trades["type"].isin(["close", "eod_close"])]
+        normal_closes = trades[trades["type"].isin(["close", "eod_close", "tp_close"])]
         forced_closes = trades[trades["type"].isin(["forced_close", "stop_close"])]
 
         if "direction" in opens.columns:
@@ -931,10 +931,12 @@ def plot_per_trade_orders(
             str(close_row.get("reason")) if pd.notna(close_row.get("reason")) else close_type
         )
 
+        from .plots import _close_time_label
+
         # Create extended title with trade info
         title = (
             f"{dir_label} | Open {t_open.strftime('%Y-%m-%d %H:%M')} "
-            f"→ Close {t_close.strftime('%H:%M')} | "
+            f"→ Close {_close_time_label(t_open, t_close)} | "
             f"PnL: {pnl:+.2f} | {close_reason}<br>"
             f"<sub>Direction: {'Buy' if direction == 1 else 'Sell'} | "
             f"Open: {metrics.entry_price:.2f} | Close: {metrics.exit_price:.2f} | "
@@ -942,6 +944,14 @@ def plot_per_trade_orders(
             f"PnL (logged): {pnl:+.2f} | PnL (calc): {pnl_calc:+.2f} | "
             f"Reason: {close_reason_detail}</sub>"
         )
+
+        # Hide overnight / weekend gaps when a multi-day window slips through.
+        days = pd.DatetimeIndex(window.index).normalize().unique()
+        rangebreaks: list[dict[str, Any]] = [
+            dict(bounds=["sat", "mon"]),
+            dict(bounds=[23.01, 16.5], pattern="hour"),
+        ]
+        tickformat = "%H:%M" if len(days) == 1 else "%m/%d %H:%M"
 
         fig.update_layout(
             template=_TEMPLATE,
@@ -951,6 +961,8 @@ def plot_per_trade_orders(
             xaxis_rangeslider_visible=False,
             hovermode="x unified",
             height=680,
+            xaxis=dict(rangebreaks=rangebreaks, tickformat=tickformat),
+            xaxis2=dict(rangebreaks=rangebreaks, tickformat=tickformat),
         )
 
         fname = _trade_filename(seq_i + 1, open_row, close_row, "html")
