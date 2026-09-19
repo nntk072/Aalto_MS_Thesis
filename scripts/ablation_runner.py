@@ -136,9 +136,7 @@ def train_and_score_variant(
     arch = str(variant.get("arch", defaults.get("arch", "gru")))
     use_vae = bool(int(variant.get("use_vae", defaults.get("use_vae", 0))))
     strategy = str(variant.get("strategy", defaults.get("strategy", "baseline")))
-    include_pd = bool(
-        variant.get("include_pd_context", defaults.get("include_pd_context", False))
-    )
+    include_pd = bool(variant.get("include_pd_context", defaults.get("include_pd_context", False)))
 
     if use_vae:
         return {
