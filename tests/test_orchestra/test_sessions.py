@@ -87,6 +87,15 @@ def test_build_command_codex_rejects_uncapped_reasoning() -> None:
         SessionManager.build_command(_codex(), "plan this", effort="xhigh")
 
 
+def test_run_returns_failure_when_command_is_missing(tmp_path) -> None:
+    sm = SessionManager(workspace=tmp_path)
+
+    result = sm._run(["command-that-does-not-exist"])
+
+    assert result.returncode == 127
+    assert "No such file or directory" in result.stderr
+
+
 def test_codex_effort_resolves_by_role() -> None:
     assert SessionManager.resolve_effort(_codex(), "T2", role="planner") == "medium"
     assert SessionManager.resolve_effort(_codex(), "T3", role="implementer") == "high"
