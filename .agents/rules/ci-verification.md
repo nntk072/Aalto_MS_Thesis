@@ -24,6 +24,23 @@ uv run mypy .
 uv run pytest <relevant test paths> -q
 ```
 
+**Full tree is mandatory for format / lint / types.** At commit/push you MUST run
+exactly `ruff format --check .`, `ruff check .`, and `mypy .` (the trailing `.`
+means the whole project). These are **not** optional and **must not** be replaced by
+path-scoped commands.
+
+| Forbidden at commit/push | Required instead |
+|--------------------------|------------------|
+| `uv run mypy quant_rl/...` or `mypy <touched files>` | `uv run mypy .` |
+| `uv run ruff check <touched paths>` only | `uv run ruff check .` |
+| `uv run ruff format --check <touched paths>` only | `uv run ruff format --check .` |
+
+Scoped ruff/mypy is allowed **only while editing** (see Local work below). A scoped
+pass earlier in the chat does **not** satisfy the commit gate — re-run the full-tree
+commands on the final tree, including new/edited `tests/` files (CI typechecks them).
+
+Only **pytest** stays scoped at commit time.
+
 ### Choosing relevant tests
 
 - Prefer tests that cover the modules you touched (same package / mirror path under
@@ -66,6 +83,9 @@ uv run ruff format --check <touched paths>
 uv run ruff check <touched paths>
 uv run pytest <relevant test files> -q
 ```
+
+When you are about to commit or push, stop using this section and switch to the
+**Hard rule** full-tree gate (`mypy .`, not path-scoped mypy).
 
 ## Merge CI bar (not the agent default)
 

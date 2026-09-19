@@ -16,9 +16,10 @@ uv run ruff check <touched paths>
 uv run pytest <relevant test files> -q
 
 # Agent commit/push gate — REQUIRED (do not skip)
+# Format/lint/types MUST be full-tree (`.`). Never substitute path-scoped mypy/ruff.
 uv run ruff format --check .    # if fails: uv run ruff format . then re-check
 uv run ruff check .
-uv run mypy .
+uv run mypy .                   # REQUIRED full tree — not mypy <touched paths>
 uv run pytest <relevant test paths> -q   # NOT tests/ -v — keep scoped
 
 # Full suite: GitHub CI / Orchestra phase 9 only (not agent default)
