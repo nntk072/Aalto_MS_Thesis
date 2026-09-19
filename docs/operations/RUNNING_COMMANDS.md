@@ -163,6 +163,42 @@ uv run python scripts/compare_encoders.py
 
 ---
 
+## Ablation matrix + OOS cost sensitivity
+
+```bash
+# Declarative variant matrix (algo / arch / VAE / PD-context / strategy).
+# Features CSV must match the variant flags (e.g. include_pd_context).
+uv run python scripts/ablation_runner.py \
+    --bars-csv data/us100_2025.csv \
+    --features-csv data/us100_feat.csv \
+    --experiments config/experiments.yaml \
+    --steps 8192 --seeds 42 \
+    --variants ablation_baseline_unconditional ablation_pd_context
+
+uv run python scripts/report_ablations.py --ablations-dir results/ablations
+
+# Cost-sensitivity grid on a saved SB3 zip (CostModel spread_points + slippage).
+uv run python scripts/test_oos.py \
+    --model-path outputs/<run>/model/ppo_final.zip \
+    --bars-csv data/us100_2025.csv \
+    --features-csv data/us100_feat.csv \
+    --algo ppo \
+    --spreads 0.6 1.0 1.5 \
+    --slippages 0.0 0.1 0.2 \
+    --out results/oos_report.json
+
+# Thin orchestration (ablation smoke → walk-forward → optional OOS)
+BARS_CSV=data/us100_2025.csv STEPS=8192 SEEDS=42 \
+  MODEL_PATH=outputs/<run>/model/ppo_final.zip \
+  bash scripts/run_all_experiments.sh
+```
+
+Do **not** use the retired `quant_rl/validation/` package or
+`scripts/run_walk_forward.py` from old feature branches — walk-forward lives on
+`python -m quant_rl.train.train_rl --walk-forward`.
+
+---
+
 ## Run-report gate (G3)
 
 ```bash
