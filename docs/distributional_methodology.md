@@ -48,3 +48,8 @@ Superiority claims must reference the full distribution, e.g. higher
 *median* profitability with a narrower downside tail, or an edge that
 persists across the central 90% of outcomes instead of being driven by a
 few extreme winners.
+
+Also apply **TI-7**: do not claim superiority on default transaction costs
+alone — cite the cost-stress grid (`scripts/test_oos.py --cost-multipliers`).
+When many variants share the locked OOS, state the trial count; full DSR/PBO
+is out of scope for Thesis_plan (see Integrated_startup_plan plan 09).

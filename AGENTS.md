@@ -69,16 +69,19 @@ Domain-level context: `.agents/domain_maps/*.md`
    use `align_timeframes` with forward-fill (never backward).
 2. **Train-only normalization** — `rolling_zscore` fits on train_mask only.
    Test rows use last known training statistics.
-3. **Purged walk-forward** — `purged_walk_forward()` removes `purge_bars` from
-   train end and `embargo_bars` from test start.
+3. **Purged walk-forward** — `purged_walk_forward()` yields **non-overlapping**
+   test folds; purge = `purge_bars + label_horizon`, embargo before each test.
+   Legacy overlapping stepper is `purged_walk_forward_legacy` (deprecated).
 4. **Session labels are eligibility flags** — never drop bars from feature
    dataset based on session. `filter_session` is mask-only.
 5. **Config is single source of truth** — `quant_rl/config/default.yaml`.
    All YAML keys are read via `cfg.<path>`. Adding a feature flag? Add YAML key first.
-6. **Cache versioning** — `FEATURE_CACHE_VERSION` and `BAR_CACHE_VERSION` must
-   bump when output schema changes.
+6. **Cache versioning** — `FEATURE_CACHE_VERSION` plus **content hash**
+   (`feature_cache_path` / `.hash` sidecar). Hand-bump alone is not enough.
 7. **Live risk ≈ training risk** — `live_risk_overrides` must stay aligned with
    `ftmo` dollar limits. Silent divergence is the failure mode.
+8. **Locked OOS is final report** — do not select architectures on the locked
+   holdout; see `docs/thesis/validation_protocol.md`.
 
 ## Context Routing
 

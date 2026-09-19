@@ -165,6 +165,11 @@ uv run python scripts/compare_encoders.py
 
 ## Ablation matrix + OOS cost sensitivity
 
+Locked OOS dates are **final report only** for architecture selection
+([validation_protocol.md](../thesis/validation_protocol.md)). Ablation JSON
+includes `oos_role: final_report_only` unless
+`--allow-locked-oos-for-selection` is passed.
+
 ```bash
 # Declarative variant matrix (algo / arch / VAE / PD-context / strategy).
 # Features CSV must match the variant flags (e.g. include_pd_context).
@@ -178,6 +183,7 @@ uv run python scripts/ablation_runner.py \
 uv run python scripts/report_ablations.py --ablations-dir results/ablations
 
 # Cost-sensitivity grid on a saved SB3 zip (CostModel spread_points + slippage).
+# --cost-multipliers scales both (TI-7); default 0.5 1 2 3.
 uv run python scripts/test_oos.py \
     --model-path outputs/<run>/model/ppo_final.zip \
     --bars-csv data/us100_2025.csv \
@@ -185,7 +191,14 @@ uv run python scripts/test_oos.py \
     --algo ppo \
     --spreads 0.6 1.0 1.5 \
     --slippages 0.0 0.1 0.2 \
+    --cost-multipliers 0.5 1.0 2.0 3.0 \
     --out results/oos_report.json
+
+# Leak detectors (label-shuffle + time-shift)
+uv run python scripts/leak_detectors.py \
+    --features-csv data/us100_feat.csv \
+    --target-col ret_1 --feature-col rsi \
+    --out results/leak_detectors.json
 
 # Thin orchestration (ablation smoke → walk-forward → optional OOS)
 BARS_CSV=data/us100_2025.csv STEPS=8192 SEEDS=42 \

@@ -17,10 +17,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import argparse
 import logging
+from typing import cast
+
+import pandas as pd
 
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import run_pipeline
-from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features
+from quant_rl.data.split import get_split_config, make_train_mask
+from quant_rl.features.build import build_features, feature_cache_path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -50,13 +54,16 @@ def main() -> None:
     secondary_m1 = data.get(secondary_sym, {}).get("M1")
 
     cache_dir = Path(cfg.data.cache_dir)
-    feat_cache = cache_dir / f"{primary_sym}_features_{FEATURE_CACHE_VERSION}.parquet"
+    train_end, test_start = get_split_config(cfg)
+    train_mask = make_train_mask(cast(pd.DatetimeIndex, primary_m1.index), train_end)
+    feat_cache = feature_cache_path(cache_dir, primary_sym, cfg, primary_m1, train_mask=train_mask)
 
     log.info("Building features (cache=%s) …", feat_cache)
     features = build_features(
         primary_m1,
         secondary=secondary_m1,
         cfg=cfg,
+        train_mask=train_mask,
         cache_path=feat_cache,
         force=args.force,
     )
@@ -64,10 +71,8 @@ def main() -> None:
 
     # Thesis data/EDA figure pack (coverage, returns, session, features, signals).
     try:
-        from quant_rl.data.split import get_split_config
         from quant_rl.eval.data_plots import write_data_eda
 
-        train_end, test_start = get_split_config(cfg)
         eda_dir = Path(cfg.data.cache_dir) / "eda"
         write_data_eda(
             eda_dir,

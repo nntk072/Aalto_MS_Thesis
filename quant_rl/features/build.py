@@ -15,6 +15,8 @@ state (§4.4) and IFVG active zones (§4.6) are scoped to M1/M5/M15.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 from typing import Any, cast
 
@@ -61,7 +63,65 @@ from .structure import (
 # full M1+HTF ladder (§4.5); PO3 state (§4.4) and IFVG zones (§4.6) on
 # M1/M5/M15.
 # v8: full-day M1 spine, completed-bar HTF ffill, confirmed ATR swings.
-FEATURE_CACHE_VERSION = "v10-pd-context-no-vwap"
+# v10: PD context, VWAP off.
+# v11: content-hash cache key (config + data identity + optional train_mask).
+FEATURE_CACHE_VERSION = "v11-content-hash"
+
+
+def feature_cache_content_hash(
+    cfg: DictConfig | None,
+    primary: pd.DataFrame,
+    train_mask: pd.Series | None = None,
+) -> str:
+    """Stable short hash for feature-cache invalidation (TI-3).
+
+    Inputs: ``FEATURE_CACHE_VERSION``, resolved ``cfg.features`` (plus tz keys
+    that affect PD/session), primary length / index bounds / close endpoints,
+    and optional ``train_mask`` summary.
+    """
+    h = hashlib.sha256()
+    h.update(FEATURE_CACHE_VERSION.encode())
+    if cfg is not None:
+        payload: dict[str, Any] = {}
+        if hasattr(cfg, "features"):
+            payload["features"] = OmegaConf.to_container(cfg.features, resolve=True)
+        for path in ("data.tz", "session.tz", "strategy.session.timezone"):
+            node: Any = cfg
+            ok = True
+            for part in path.split("."):
+                if not hasattr(node, part):
+                    ok = False
+                    break
+                node = getattr(node, part)
+            if ok:
+                payload[path] = str(node)
+        h.update(json.dumps(payload, sort_keys=True, default=str).encode())
+    h.update(str(len(primary)).encode())
+    if len(primary) > 0:
+        h.update(str(primary.index[0]).encode())
+        h.update(str(primary.index[-1]).encode())
+        closes = primary["close"].to_numpy(dtype=np.float64, copy=False)
+        h.update(closes[:64].tobytes())
+        h.update(closes[-64:].tobytes())
+    if train_mask is not None:
+        mask_arr = np.asarray(train_mask, dtype=bool)
+        h.update(str(int(mask_arr.sum())).encode())
+        h.update(mask_arr[:64].tobytes())
+        h.update(mask_arr[-64:].tobytes())
+    return h.hexdigest()[:16]
+
+
+def feature_cache_path(
+    cache_dir: Path | str,
+    symbol: str,
+    cfg: DictConfig | None,
+    primary: pd.DataFrame,
+    train_mask: pd.Series | None = None,
+) -> Path:
+    """Build ``{symbol}_features_{version}_{hash}.parquet`` under ``cache_dir``."""
+    digest = feature_cache_content_hash(cfg, primary, train_mask=train_mask)
+    return Path(cache_dir) / f"{symbol}_features_{FEATURE_CACHE_VERSION}_{digest}.parquet"
+
 
 _DEFAULT_HTF_TIMEFRAMES = ("M5", "M15", "H1")
 # Capped normalised FVG distance: value used when no zone is active nearby.
@@ -310,8 +370,12 @@ def build_features(
     force:
         Ignore existing cache.
     """
+    expected_hash = feature_cache_content_hash(cfg, primary, train_mask=train_mask)
     if cache_path and Path(cache_path).exists() and not force:
-        return pd.read_parquet(cache_path)
+        meta_path = Path(str(cache_path) + ".hash")
+        if meta_path.exists() and meta_path.read_text(encoding="utf-8").strip() == expected_hash:
+            return pd.read_parquet(cache_path)
+        # Stale or pre-hash cache: rebuild rather than silently reuse.
 
     feat_cfg = cfg.features if cfg is not None else None
     secondary_m1: pd.DataFrame | None = secondary  # M1 copy kept for per-TF resampling
@@ -699,7 +763,9 @@ def build_features(
     feat.columns = feat.columns.map(str)
 
     if cache_path:
-        Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
-        feat.to_parquet(cache_path)
+        path = Path(cache_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        feat.to_parquet(path)
+        path.with_name(path.name + ".hash").write_text(expected_hash + "\n", encoding="utf-8")
 
     return feat

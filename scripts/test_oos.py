@@ -59,6 +59,16 @@ def parse_args() -> argparse.Namespace:
         default=[0.0, 0.1, 0.2],
         help="CostModel.slippage_points values (added into effective spread)",
     )
+    parser.add_argument(
+        "--cost-multipliers",
+        nargs="+",
+        type=float,
+        default=[0.5, 1.0, 2.0, 3.0],
+        help=(
+            "Scale both spread and slippage by each factor (T-03.3 / TI-7). "
+            "Emitted as spread*m_slip*m keys alongside the base grid."
+        ),
+    )
     parser.add_argument("--out", default="results/oos_report.json")
     return parser.parse_args()
 
@@ -138,20 +148,27 @@ def run_cost_grid(
     features: pd.DataFrame,
     spreads: list[float],
     slippages: list[float],
+    cost_multipliers: list[float] | None = None,
 ) -> dict[str, Any]:
-    """Evaluate every (spread, slippage) pair and return the scenarios map."""
+    """Evaluate every (spread, slippage[, multiplier]) and return scenarios."""
+    multipliers = cost_multipliers if cost_multipliers is not None else [1.0]
     scenarios: dict[str, Any] = {}
-    for spread in spreads:
-        for slippage in slippages:
-            key = f"spread{spread}_slip{slippage}"
-            cost = make_cost_model(spread, slippage)
-            scenarios[key] = eval_scenario(
-                model,
-                algo=algo,
-                bars=bars,
-                features=features,
-                cost_model=cost,
-            )
+    for mult in multipliers:
+        for spread in spreads:
+            for slippage in slippages:
+                s = float(spread) * float(mult)
+                slip = float(slippage) * float(mult)
+                key = f"x{mult}_spread{spread}_slip{slippage}"
+                cost = make_cost_model(s, slip)
+                report = eval_scenario(
+                    model,
+                    algo=algo,
+                    bars=bars,
+                    features=features,
+                    cost_model=cost,
+                )
+                report["cost"]["multiplier"] = float(mult)
+                scenarios[key] = report
     return scenarios
 
 
@@ -187,12 +204,15 @@ def main() -> None:
         features=oos_feat,
         spreads=list(args.spreads),
         slippages=list(args.slippages),
+        cost_multipliers=list(args.cost_multipliers),
     )
 
     report: dict[str, Any] = {
         "model": args.model_path,
         "algo": args.algo,
         "bars": len(oos_bars),
+        "oos_role": "final_report_only",
+        "cost_multipliers": list(args.cost_multipliers),
         "scenarios": scenarios,
         "summary": {
             key: {
@@ -200,6 +220,7 @@ def main() -> None:
                 "max_drawdown": sc.get("max_drawdown"),
                 "n_trades": sc.get("n_trades"),
                 "total_return_pct": sc.get("total_return_pct"),
+                "multiplier": (sc.get("cost") or {}).get("multiplier"),
             }
             for key, sc in scenarios.items()
         },
