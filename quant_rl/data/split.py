@@ -1,9 +1,9 @@
 """Train / test date-based split for bars and features.
 
-Slicing *after* ``build_features`` is safe because all indicators use only
-causal (past-only) look-back windows.  The full history is used for computing
-rolling statistics so there is no look-ahead bias when slicing at inference
-time.
+Prefer passing ``train_mask`` into ``build_features`` so rolling z-score is
+fit-scoped (TI-4). Slicing after a fully causal build remains OK for indicators
+with short windows; it is not a substitute for train-scoped normalisation under
+walk-forward.
 """
 
 from __future__ import annotations
@@ -83,3 +83,19 @@ def get_split_config(cfg: Any) -> tuple[str, str]:
         train_end = "2025-12-31"
         test_start = "2026-01-01"
     return train_end, test_start
+
+
+def make_train_mask(
+    index: pd.DatetimeIndex,
+    train_end: str,
+) -> pd.Series:
+    """Boolean mask of bars on or before the inclusive ``train_end`` calendar day."""
+    tz = index.tz
+    train_end_ts = pd.Timestamp(train_end)
+    if tz is not None:
+        if train_end_ts.tzinfo is None:
+            train_end_ts = train_end_ts.tz_localize(tz)
+        else:
+            train_end_ts = train_end_ts.tz_convert(tz)
+    train_end_ts = train_end_ts + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+    return pd.Series(index <= train_end_ts, index=index)

@@ -32,7 +32,7 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import run_pipeline
-from quant_rl.data.split import get_split_config, split_bars, split_train_test
+from quant_rl.data.split import get_split_config, make_train_mask, split_bars, split_train_test
 from quant_rl.envs.distribution_reward import DistributionReward
 from quant_rl.envs.po3_reward import PO3Reward
 from quant_rl.envs.strategies import (
@@ -45,7 +45,7 @@ from quant_rl.envs.trading_env import TradingEnv
 from quant_rl.eval.export import build_run_dir, save_run
 from quant_rl.eval.rollout import evaluate_model
 from quant_rl.evaluation import calculate_metrics
-from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features
+from quant_rl.features.build import build_features, feature_cache_path
 from quant_rl.models.agent import build_agent
 from quant_rl.train.auxiliary_training import AuxiliaryTrainerCallback
 from quant_rl.train.callbacks import BestCheckpointEvalCallback, ProgressLoggerCallback
@@ -282,15 +282,23 @@ def main() -> None:
     secondary_m1 = data.get(secondary_sym, {}).get("M1")
 
     cache_dir = Path(cfg.data.cache_dir)
-    # Feature cache is versioned by schema (FEATURE_CACHE_VERSION in
-    # quant_rl.features.build): every schema change (v4 PO3-causal, v5
-    # strategy-state, v6 session-OHLC, v7 MTF expansion) needs a distinct
-    # cache file, otherwise a stale parquet silently reuses missing columns.
-    feat_cache = cache_dir / f"{primary_sym}_features_{FEATURE_CACHE_VERSION}.parquet"
-    features = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
+    # Split dates first so z-score fit can be train-scoped (TI-4) and the
+    # content-hash cache key includes that mask (TI-3).
+    train_end, test_start = get_split_config(cfg)
+    train_mask = make_train_mask(
+        cast(pd.DatetimeIndex, primary_m1.index),
+        train_end,
+    )
+    feat_cache = feature_cache_path(cache_dir, primary_sym, cfg, primary_m1, train_mask=train_mask)
+    features = build_features(
+        primary_m1,
+        secondary=secondary_m1,
+        cfg=cfg,
+        train_mask=train_mask,
+        cache_path=feat_cache,
+    )
 
     # Split
-    train_end, test_start = get_split_config(cfg)
     train_bars, test_bars, train_feat, test_feat = split_train_test(
         primary_m1, features, train_end, test_start
     )

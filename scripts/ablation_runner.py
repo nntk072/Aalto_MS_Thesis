@@ -76,6 +76,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--reward", choices=["dsr", "sweep"], default="dsr")
     parser.add_argument("--out-dir", default="results/ablations")
+    parser.add_argument(
+        "--allow-locked-oos-for-selection",
+        action="store_true",
+        help=(
+            "Acknowledge that locked OOS scores may be used for ranking variants. "
+            "Default treats OOS as final_report_only (T-03.2)."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -249,6 +257,15 @@ def main() -> None:
     seeds = list(args.seeds) if args.seeds is not None else list(defaults.get("seeds", [42]))
     train_end = str(defaults.get("train_end", "2025-12-31"))
     test_start = str(defaults.get("test_start", "2026-01-01"))
+    oos_role = (
+        "selection_acknowledged" if args.allow_locked_oos_for_selection else "final_report_only"
+    )
+    if oos_role == "final_report_only":
+        print(
+            "NOTE (T-03.2): locked OOS is final_report_only. "
+            "Use walk-forward / validation for architecture selection; "
+            "pass --allow-locked-oos-for-selection only if you knowingly rank on OOS."
+        )
 
     variants = list(spec.get("variants", []))
     if args.variants:
@@ -283,6 +300,9 @@ def main() -> None:
                 "name": name,
                 "n_seeds": len(seeds),
                 "steps": steps,
+                "oos_role": oos_role,
+                "train_end": train_end,
+                "test_start": test_start,
                 "per_seed": seed_reports,
             }
         )
