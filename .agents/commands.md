@@ -9,8 +9,9 @@ uv sync --extra dev                        # include dev tooling
 
 ## Agent commit/push gate — blocking
 
-**Required** before commit/push. Full-tree format/lint/types; **scoped** pytest only
-(see `.agents/rules/ci-verification.md`). Do not run `pytest tests/ -v` unless asked.
+**Required** before commit/push. Full-tree format/lint/types (`mypy .` — never
+path-scoped mypy); **scoped** pytest only (see `.agents/rules/ci-verification.md`).
+Do not run `pytest tests/ -v` unless asked.
 
 ```bash
 uv run ruff format --check .    # if fails: uv run ruff format . && re-check
