@@ -336,7 +336,8 @@ Standard merge bar (mirrors `.github/workflows/ci.yml` and `orchestra/ci_gate.py
 
 ## Known Limitations / Future Work
 
-- **VAE feature extractor:** exists in `quant_rl/models/vae.py` but is not wired into the main training entrypoint. See `scripts/train_vae.py` to train it standalone.
+- **VAE feature extractor:** optional via `--use-vae --vae-path <checkpoint.pth>`
+  (train the VAE first with `scripts/train_vae.py`). Default training path leaves VAE off.
 - **Rule-based live baseline (`live_trading.py`):** uses simplified guardrail criteria compared to the full RL promotion protocol.
 - **Multi-timeframe alignment:** some higher-timeframe feature alignment edge cases may benefit from additional validation.
 

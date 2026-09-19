@@ -108,6 +108,9 @@ def make_env(
     algo: str,
     reward: str,
     episodic: bool = True,
+    use_vae: bool = False,
+    vae: Any | None = None,
+    pre_ny_by_date: dict[Any, Any] | None = None,
 ) -> TradingEnv:
     continuous_actions = algo == "sac"
     use_sweep_reward = reward == "sweep"
@@ -134,6 +137,9 @@ def make_env(
         strategy_weight=strategy_weight,
         block_overnight=bool(cfg.env.get("block_overnight", True)),
         eod_risk=dict(cfg.env.get("eod_risk", {})),
+        use_vae=use_vae,
+        vae=vae,
+        pre_ny_by_date=pre_ny_by_date,
     )
 
 
@@ -163,7 +169,19 @@ def parse_train_args() -> argparse.Namespace:
         help="RL strategy variant (Agent.md: Idea 1 = po3_ifvg, Idea 2 = distribution, Idea 3 = baseline).",
     )
     parser.add_argument(
-        "--use-vae", action="store_true", help="Use VAE feature extractor (not yet implemented)"
+        "--use-vae",
+        action="store_true",
+        help="Condition the policy on a frozen VAE narrative latent (requires --vae-path)",
+    )
+    parser.add_argument(
+        "--vae-path",
+        default=None,
+        help="Path to a trained VAE state_dict (.pth from scripts/train_vae.py)",
+    )
+    parser.add_argument(
+        "--vae-config",
+        default="config/vae.yaml",
+        help="VAE architecture YAML (must match the checkpoint)",
     )
     parser.add_argument("--wandb", action="store_true", help="Log run metrics to Weights & Biases")
     parser.add_argument(
@@ -246,12 +264,8 @@ def _build_training_log(
 def main() -> None:
     args = parse_train_args()
 
-    if args.use_vae:
-        raise NotImplementedError(
-            "VAE feature extractor exists in quant_rl/models/vae.py but is not wired "
-            "into this training entrypoint; out of scope for this thesis. "
-            "See scripts/train_vae.py to train it standalone."
-        )
+    if args.use_vae and not args.vae_path:
+        raise SystemExit("--use-vae requires --vae-path pointing at a trained VAE .pth")
 
     _setup_rngs(args.seed)
 
@@ -323,9 +337,35 @@ def main() -> None:
             train_feat = train_feat.iloc[:n_keep]
             log.info("MVP: sliced training to %d bars (~30 calendar days)", len(train_bars))
 
+    vae_model = None
+    pre_ny_by_date = None
+    if args.use_vae:
+        from quant_rl.models.vae_pre_ny import build_pre_ny_by_date, load_vae_from_checkpoint
+
+        vae_model = load_vae_from_checkpoint(args.vae_path, config_path=args.vae_config)
+        pre_ny_by_date = build_pre_ny_by_date(
+            primary_m1,
+            seq_len=int(vae_model.encoder.seq_len),
+            n_features=int(vae_model.encoder.n_features),
+        )
+        log.info(
+            "VAE loaded from %s (%d pre-NY day sequences)",
+            args.vae_path,
+            len(pre_ny_by_date),
+        )
+
     # Create training environment
     log.info("Creating training environment...")
-    train_env = make_env(train_bars, train_feat, cfg, algo=args.algo, reward=args.reward)
+    train_env = make_env(
+        train_bars,
+        train_feat,
+        cfg,
+        algo=args.algo,
+        reward=args.reward,
+        use_vae=args.use_vae,
+        vae=vae_model,
+        pre_ny_by_date=pre_ny_by_date,
+    )
 
     # Setup output directory for model
     run_dir = build_run_dir(args.out, f"rl_train_seed{args.seed}")
@@ -350,6 +390,8 @@ def main() -> None:
         arch=args.arch,
         algo=args.algo,
         device=device,
+        use_vae=args.use_vae,
+        vae=vae_model,
         env_fn=partial(
             make_env,
             train_bars,
@@ -357,6 +399,9 @@ def main() -> None:
             cfg,
             algo=args.algo,
             reward=args.reward,
+            use_vae=args.use_vae,
+            vae=vae_model,
+            pre_ny_by_date=pre_ny_by_date,
         ),
     )
 
@@ -397,6 +442,9 @@ def main() -> None:
             algo=args.algo,
             reward=args.reward,
             episodic=False,
+            use_vae=args.use_vae,
+            vae=vae_model,
+            pre_ny_by_date=pre_ny_by_date,
         ),
         eval_freq=best_eval_freq,
         best_model_path=model_dir / "ppo_best",
@@ -445,6 +493,9 @@ def main() -> None:
         use_sweep_reward=(args.reward == "sweep"),
         block_overnight=bool(cfg.env.get("block_overnight", True)),
         eod_risk=dict(cfg.env.get("eod_risk", {})),
+        use_vae=args.use_vae,
+        vae=vae_model,
+        pre_ny_by_date=pre_ny_by_date,
     )
     test_result["initial_balance"] = cfg.account.initial_balance
     test_m = calculate_metrics(
@@ -481,6 +532,9 @@ def main() -> None:
         use_sweep_reward=(args.reward == "sweep"),
         block_overnight=bool(cfg.env.get("block_overnight", True)),
         eod_risk=dict(cfg.env.get("eod_risk", {})),
+        use_vae=args.use_vae,
+        vae=vae_model,
+        pre_ny_by_date=pre_ny_by_date,
     )
     train_result["initial_balance"] = cfg.account.initial_balance
     train_m = calculate_metrics(
@@ -611,7 +665,14 @@ def main() -> None:
             )
 
             fold_env = make_env(
-                fold_train_bars, fold_train_feat, cfg, algo=args.algo, reward=args.reward
+                fold_train_bars,
+                fold_train_feat,
+                cfg,
+                algo=args.algo,
+                reward=args.reward,
+                use_vae=args.use_vae,
+                vae=vae_model,
+                pre_ny_by_date=pre_ny_by_date,
             )
             fold_model = build_agent(
                 fold_env,
@@ -619,6 +680,8 @@ def main() -> None:
                 arch=args.arch,
                 algo=args.algo,
                 device=device,
+                use_vae=args.use_vae,
+                vae=vae_model,
                 env_fn=partial(
                     make_env,
                     fold_train_bars,
@@ -626,6 +689,9 @@ def main() -> None:
                     cfg,
                     algo=args.algo,
                     reward=args.reward,
+                    use_vae=args.use_vae,
+                    vae=vae_model,
+                    pre_ny_by_date=pre_ny_by_date,
                 ),
             )
             fold_model.learn(total_timesteps=wf_steps, callback=None, progress_bar=False)
@@ -650,6 +716,9 @@ def main() -> None:
                 use_sweep_reward=(args.reward == "sweep"),
                 block_overnight=bool(cfg.env.get("block_overnight", True)),
                 eod_risk=dict(cfg.env.get("eod_risk", {})),
+                use_vae=args.use_vae,
+                vae=vae_model,
+                pre_ny_by_date=pre_ny_by_date,
             )
             fold_m = calculate_metrics(
                 fold_result["equity"],

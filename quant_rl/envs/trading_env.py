@@ -71,6 +71,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         use_vae: bool = False,
         vae: VAE | None = None,
         pre_ny_data: pd.DataFrame | None = None,
+        pre_ny_by_date: dict[Any, np.ndarray[Any, Any]] | None = None,
         ny_session_start_idx: int | None = None,
         fill_latency_bars: int = 0,
         max_episode_steps: int | None = None,
@@ -144,8 +145,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             If True, use VAE to extract latent narrative embedding from pre-NY sequence.
         vae : VAE | None
             Pre-trained VAE model for narrative embedding. Required if use_vae=True.
+        pre_ny_by_date : dict | None
+            Map of calendar ``date`` → ``(seq_len, n_features)`` float32 array
+            (M5 OHLCV for 01:05–16:29). Preferred when ``use_vae=True``.
         pre_ny_data : pd.DataFrame | None
-            Pre-NY session data (01:05-16:29 UTC+3) for VAE input. Required if use_vae=True.
+            Deprecated legacy table; ignored when ``pre_ny_by_date`` is set.
         ny_session_start_idx : int | None
             Index of the first NY session bar (16:30 UTC+3). Used to compute
             minutes_since_open for the sweep time-decay penalty. If None, the
@@ -292,7 +296,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # VAE for narrative embedding
         self.use_vae = use_vae
         self.vae = vae
-        self.pre_ny_data = pre_ny_data
+        self.pre_ny_by_date: dict[Any, np.ndarray[Any, Any]] = (
+            dict(pre_ny_by_date) if pre_ny_by_date is not None else {}
+        )
+        self.pre_ny_data = pre_ny_data  # legacy; prefer pre_ny_by_date
         # Chain C: decision-to-fill latency, expressed in whole M1 bars.
         # 0 = idealised next-bar fill (previous behaviour); 1 = 1-bar delay, etc.
         self.fill_latency_bars = max(0, int(fill_latency_bars))
@@ -309,8 +316,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         if use_vae:
             if vae is None:
                 raise ValueError("vae must be provided when use_vae=True")
-            if pre_ny_data is None:
-                raise ValueError("pre_ny_data must be provided when use_vae=True")
+            if not self.pre_ny_by_date and pre_ny_data is None:
+                raise ValueError(
+                    "pre_ny_by_date (or legacy pre_ny_data) must be provided when use_vae=True"
+                )
             # Freeze VAE encoder
             for param in vae.parameters():
                 param.requires_grad = False
@@ -1408,21 +1417,45 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         obs: dict[str, np.ndarray[Any, Any]] = {"seq": seq, "account": account_state}
 
         # Add VAE latent embedding if enabled
-        if self.use_vae and self.vae is not None and self.pre_ny_data is not None:
-            # Get the current day's pre-NY sequence
-            # Assuming pre_ny_data is aligned with bars and features
-            # and contains the full pre-NY sequence for each day
-            current_idx = min(self.step_idx, len(self.pre_ny_data) - 1)
-            pre_ny_seq = np.asarray(self.pre_ny_data.iloc[current_idx].values, dtype=np.float32)
-            pre_ny_seq = np.nan_to_num(pre_ny_seq, nan=0.0)
-
-            # Get VAE latent embedding (mu)
+        if self.use_vae and self.vae is not None:
             import torch
 
-            pre_ny_tensor = torch.from_numpy(pre_ny_seq).unsqueeze(0).float()
-            with torch.no_grad():
-                mu, _ = self.vae.encode(pre_ny_tensor)
-            vae_z = mu.numpy().astype(np.float32)
+            latent_dim = int(self.vae.encoder.latent_dim)
+            seq_len = int(self.vae.encoder.seq_len)
+            n_feat = int(self.vae.encoder.n_features)
+            pre_ny_seq: np.ndarray[Any, Any] | None = None
+
+            if self.pre_ny_by_date:
+                bar_ts = pd.Timestamp(self.bars.index[self.step_idx])
+                day_key = bar_ts.date()
+                pre_ny_seq = self.pre_ny_by_date.get(day_key)
+            elif self.pre_ny_data is not None and len(self.pre_ny_data) > 0:
+                # Legacy: each row is a flattened (seq_len * n_features) vector
+                current_idx = min(self.step_idx, len(self.pre_ny_data) - 1)
+                flat = np.asarray(self.pre_ny_data.iloc[current_idx].values, dtype=np.float32)
+                flat = np.nan_to_num(flat, nan=0.0)
+                if flat.size == seq_len * n_feat:
+                    pre_ny_seq = flat.reshape(seq_len, n_feat)
+                elif flat.ndim == 2:
+                    pre_ny_seq = flat.astype(np.float32, copy=False)
+
+            if pre_ny_seq is None:
+                vae_z = np.zeros(latent_dim, dtype=np.float32)
+            else:
+                pre_ny_seq = np.nan_to_num(np.asarray(pre_ny_seq, dtype=np.float32), nan=0.0)
+                if pre_ny_seq.shape != (seq_len, n_feat):
+                    # Pad / truncate to the encoder contract
+                    fixed = np.zeros((seq_len, n_feat), dtype=np.float32)
+                    t = min(seq_len, pre_ny_seq.shape[0])
+                    f = min(n_feat, pre_ny_seq.shape[1] if pre_ny_seq.ndim == 2 else n_feat)
+                    if pre_ny_seq.ndim == 1:
+                        pre_ny_seq = pre_ny_seq.reshape(-1, n_feat)[:t, :f]
+                    fixed[-t:, :f] = pre_ny_seq[-t:, :f]
+                    pre_ny_seq = fixed
+                pre_ny_tensor = torch.from_numpy(pre_ny_seq).unsqueeze(0).float()
+                with torch.no_grad():
+                    mu, _ = self.vae.encode(pre_ny_tensor)
+                vae_z = mu.numpy().astype(np.float32).reshape(-1)
 
             obs["vae_z"] = vae_z
 

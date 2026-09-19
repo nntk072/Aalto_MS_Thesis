@@ -81,6 +81,9 @@ def evaluate_model(
     sweep_weight: float = 0.7,
     block_overnight: bool = True,
     eod_risk: dict[str, Any] | None = None,
+    use_vae: bool = False,
+    vae: Any | None = None,
+    pre_ny_by_date: dict[Any, Any] | None = None,
 ) -> dict[str, Any]:
     """Walk a trained RL ``model`` over *bars*/*features* and collect trades.
 
@@ -124,6 +127,9 @@ def evaluate_model(
         sweep_weight=sweep_weight,
         block_overnight=block_overnight,
         eod_risk=eod_risk,
+        use_vae=use_vae,
+        vae=vae,
+        pre_ny_by_date=pre_ny_by_date,
     )
 
     obs, _ = env.reset()

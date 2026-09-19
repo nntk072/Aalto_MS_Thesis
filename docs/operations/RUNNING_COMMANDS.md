@@ -107,6 +107,10 @@ uv run python -m quant_rl.train.train_rl --mvp --algo sac --arch gru --reward sw
 uv run python -m quant_rl.train.train_rl --mvp --strategy po3_ifvg --seed=42
 uv run python -m quant_rl.train.train_rl --mvp --strategy distribution --seed=42
 
+# Optional frozen VAE narrative latent (train checkpoint first via scripts/train_vae.py)
+uv run python -m quant_rl.train.train_rl --mvp --use-vae \
+    --vae-path output/vae/vae_best.pth --vae-config config/vae.yaml --seed=42
+
 # Feature variant config (MTF expansion)
 uv run python -m quant_rl.train.train_rl --mvp \
     --config config/features_full_po3_mtf.yaml --seed=42

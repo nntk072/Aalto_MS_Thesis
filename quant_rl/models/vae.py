@@ -423,19 +423,15 @@ class VAEFeatureExtractor(BaseFeaturesExtractor):
     def forward(self, observations: dict[str, torch.Tensor]) -> torch.Tensor:
         """Extract features from observations.
 
-        Parameters
-        ----------
-        observations : dict[str, torch.Tensor]
-            Dictionary containing 'pre_ny_seq' and 'account' keys
-
-        Returns
-        -------
-        features : torch.Tensor
-            Latent vector z concatenated with account state:
-            (batch_size, latent_dim + ACCOUNT_DIM)
+        Prefers a precomputed ``vae_z`` from the env; otherwise encodes
+        ``pre_ny_seq``. Result is concatenated with ``account``.
         """
-        pre_ny_seq = observations["pre_ny_seq"]  # [B, T, F]
         account = observations["account"]  # [B, A]
-        mu: torch.Tensor
-        mu, _ = self.vae.encode(pre_ny_seq)
-        return torch.cat([mu, account], dim=1)  # [B, latent_dim + A]
+        if "vae_z" in observations:
+            z = observations["vae_z"]
+        else:
+            pre_ny_seq = observations["pre_ny_seq"]  # [B, T, F]
+            mu: torch.Tensor
+            mu, _ = self.vae.encode(pre_ny_seq)
+            z = mu
+        return torch.cat([z, account], dim=1)  # [B, latent_dim + A]
