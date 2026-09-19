@@ -15,7 +15,7 @@ Single source of truth for all coding agents in this repo (Cursor, Cline, Windsu
 | [testing-rules.md](testing-rules.md) | TDD, AAA, coverage ≥80% | On feature/bugfix work |
 | [security-rules.md](security-rules.md) | Secret & input safety checklist | Always at commit; deep on sensitive code |
 | [development-workflow.md](development-workflow.md) | Research-first → plan → TDD → review → commit | On non-trivial features |
-| [ci-verification.md](ci-verification.md) | **Blocking** ruff format/check + mypy; scoped pytest before commit/push | On commit/push |
+| [ci-verification.md](ci-verification.md) | **Blocking** full-tree `ruff` + `mypy .` (not path-scoped); scoped pytest before commit/push | On commit/push |
 
 ## Activation flow
 

@@ -41,6 +41,9 @@ uv run pytest <relevant test paths> -q
 If `ruff format --check .` fails: run `uv run ruff format .`, stage the
 reformats, then re-run the gate. Do not push with format drift.
 
+**Do not** substitute path-scoped mypy/ruff for the full-tree commands above.
+`uv run mypy .` is required (same as CI). Scoped checks while editing do not count.
+
 Do **not** run `pytest tests/ -v` before every commit — only the tests that cover
 this change. Full-suite pytest is GitHub CI / Orchestra phase 9.
 
