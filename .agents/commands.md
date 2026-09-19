@@ -7,17 +7,19 @@ uv sync                                    # install all deps
 uv sync --extra dev                        # include dev tooling
 ```
 
-## CI gate (commit / push)
+## CI gate (commit / push) — blocking
 
-Mirrors `orchestra/ci_gate.py` and `.github/workflows/ci.yml`. Run on commit/push
-only; while coding, use scoped ruff + pytest on touched paths.
+Mirrors `orchestra/ci_gate.py` and `.github/workflows/ci.yml`. **Required** before
+commit/push; while coding, use scoped ruff + pytest on touched paths.
 
 ```bash
-uv run ruff format --check .
+uv run ruff format --check .    # if fails: uv run ruff format . && re-check
 uv run ruff check .
 uv run mypy .
 uv run pytest tests/ -v
 ```
+
+See `.agents/rules/ci-verification.md`.
 
 Local shortcut (not merge bar): `pytest -m "not slow"`
 
