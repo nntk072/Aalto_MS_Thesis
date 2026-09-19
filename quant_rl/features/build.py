@@ -25,8 +25,9 @@ from omegaconf import DictConfig, OmegaConf
 from ..data.align import align_timeframes
 from ..data.resample import resample
 from .indicators import atr, build_indicators, sweep_velocity, volume_spike, vwap_level, wick_ratio
-from .liquidity import detect_bos, detect_liquidity_sweeps
+from .liquidity import detect_bos, detect_liquidity_sweeps, detect_mss
 from .normalize import rolling_zscore
+from .pd_context import build_htf_pd_distance_features, build_pd_context_features
 from .po3_config import (
     FVGConfig,
     build_fvg_zones,
@@ -60,7 +61,7 @@ from .structure import (
 # full M1+HTF ladder (§4.5); PO3 state (§4.4) and IFVG zones (§4.6) on
 # M1/M5/M15.
 # v8: full-day M1 spine, completed-bar HTF ffill, confirmed ATR swings.
-FEATURE_CACHE_VERSION = "v8-full-day-completed-htf-swings"
+FEATURE_CACHE_VERSION = "v10-pd-context-no-vwap"
 
 _DEFAULT_HTF_TIMEFRAMES = ("M5", "M15", "H1")
 # Capped normalised FVG distance: value used when no zone is active nearby.
@@ -83,6 +84,8 @@ MTF_RAW_SUFFIXES = (
     "sweep_low_level",
     "bos_up_level",
     "bos_down_level",
+    "mss_up_level",
+    "mss_down_level",
     "po3_manipulation_high",
     "po3_manipulation_low",
     "ifvg_bull_low",
@@ -96,7 +99,18 @@ MTF_RAW_SUFFIXES = (
     "prev_day_high",
     "prev_day_low",
     "prev_day_close",
+    "ctx_asia_high",
+    "ctx_asia_low",
+    "ctx_london_high",
+    "ctx_london_low",
+    "ctx_prev_day_high",
+    "ctx_prev_day_low",
+    "ctx_prev_week_high",
+    "ctx_prev_week_low",
 )
+
+# Unprefixed raw price stems always dropped from model ``seq`` (baseline included).
+OBS_RAW_PRICE_COLUMNS = MTF_RAW_SUFFIXES
 
 # Scoped per-TF subsets for the state-heavy blocks (plan §8, option (b)):
 # PO3 (§4.4) and IFVG active-zones (§4.6) run only on M1/M5/M15 by default —
@@ -459,6 +473,38 @@ def build_features(
         feat["volume_spike"] = volume_spike(vol_s, window=20)
     feat["atr_5"] = atr(primary, period=5)
 
+    # --- Session-conditional PD context (opt-in) ---
+    include_pd = feat_cfg is not None and bool(getattr(feat_cfg, "include_pd_context", False))
+    if include_pd:
+        sess_tz = "Etc/GMT-3"
+        if cfg is not None:
+            sess_tz = str(
+                OmegaConf.select(cfg, "strategy.session.timezone")
+                or OmegaConf.select(cfg, "session.tz")
+                or OmegaConf.select(cfg, "data.tz")
+                or sess_tz
+            )
+        pd_ctx = build_pd_context_features(primary, feat["atr_5"], tz=sess_tz)
+        feat = pd.concat([feat, pd_ctx], axis=1)
+
+        # HTF swing / session-range PD distances onto M1 (beyond indicator copies).
+        htf_cfg_tfs = getattr(feat_cfg, "htf_timeframes", None)
+        htf_tfs = list(htf_cfg_tfs) if htf_cfg_tfs is not None else list(_DEFAULT_HTF_TIMEFRAMES)
+        pd_htf_blocks: dict[str, pd.DataFrame] = {}
+        for tf in htf_tfs:
+            pri_tf, _ = _resample_pair(primary, None, str(tf))
+            if pri_tf.empty:
+                continue
+            tf_cfg = TIMEFRAME_CONFIG.get(str(tf), TIMEFRAME_CONFIG["M1"])
+            pd_htf_blocks[str(tf)] = build_htf_pd_distance_features(
+                pri_tf,
+                feat["atr_5"],
+                swing_period=int(tf_cfg["left"]),
+                atr_mult=float(tf_cfg["atr_mult"]),
+            )
+        if pd_htf_blocks:
+            feat = align_timeframes(feat, pd_htf_blocks)
+
     # --- Sweep Velocity and Wick Ratio - for PLAN 3 ---
     # Add sweep velocity (uses liquidity levels from levels)
     sweep_vel = sweep_velocity(
@@ -580,6 +626,29 @@ def build_features(
             if ifvg_blocks:
                 feat = align_timeframes(feat, ifvg_blocks)
 
+    # --- LTF BOS + MSS decision stack ---
+    # With include_strategy_state, BOS is already present; with include_pd_context
+    # alone we add BOS here. MSS is always paired when either flag is on.
+    need_ltf_stack = feat_cfg is not None and (
+        bool(getattr(feat_cfg, "include_strategy_state", False))
+        or bool(getattr(feat_cfg, "include_pd_context", False))
+    )
+    if need_ltf_stack and structure is not None:
+        atr5_ltf = feat["atr_5"].where(feat["atr_5"] > 0)
+        if "bos_up" not in feat.columns:
+            bos_m1 = detect_bos(primary, structure)
+            feat = pd.concat([feat, bos_m1], axis=1)
+        if "bos_up_dist_atr" not in feat.columns:
+            feat["bos_up_dist_atr"] = (feat["bos_up_level"] - primary["close"]) / atr5_ltf
+            feat["bos_down_dist_atr"] = (primary["close"] - feat["bos_down_level"]) / atr5_ltf
+        if "mss_up" not in feat.columns:
+            bos_for_mss = feat[["bos_up", "bos_down", "bos_up_level", "bos_down_level"]]
+            mss_m1 = detect_mss(primary, structure, bos_for_mss)
+            feat = pd.concat([feat, mss_m1], axis=1)
+        if "mss_up_dist_atr" not in feat.columns:
+            feat["mss_up_dist_atr"] = (feat["mss_up_level"] - primary["close"]) / atr5_ltf
+            feat["mss_down_dist_atr"] = (primary["close"] - feat["mss_down_level"]) / atr5_ltf
+
     # --- CT-anchored session levels (opt-in) ---
     # Raw price levels like the structure block above, so added AFTER
     # normalization. Windows are defined in America/Chicago wall-clock time
@@ -617,7 +686,12 @@ def build_features(
             )
 
         # Raw VWAP level; same tickvol/session_id contract as vwap_from_session.
-        if "tickvol" in primary.columns and "session_id" in primary.columns:
+        # Gated by vwap_session — tick volume in this dataset does not support it.
+        if (
+            bool(getattr(feat_cfg, "vwap_session", False))
+            and "tickvol" in primary.columns
+            and "session_id" in primary.columns
+        ):
             feat["vwap"] = vwap_level(primary)
 
     # Drop leading NaNs from warmup

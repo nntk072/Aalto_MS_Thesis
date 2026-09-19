@@ -51,6 +51,9 @@ def bootstrap_ci(
     if n == 1 or n_boot <= 0:
         return CI(estimate, estimate, estimate, level)
 
+    # Moving-block starts require ``n - block_len + 1 > 0``; shrink the block
+    # (down to i.i.d. resampling) when the sample is shorter than ``block_len``.
+    block_len = max(1, min(int(block_len), n))
     rng = np.random.default_rng(rng_seed)
     n_blocks = int(np.ceil(n / block_len))
     starts = rng.integers(0, n - block_len + 1, size=(n_boot, n_blocks))

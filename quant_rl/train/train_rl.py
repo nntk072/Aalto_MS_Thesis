@@ -48,7 +48,7 @@ from quant_rl.evaluation import calculate_metrics
 from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features
 from quant_rl.models.agent import build_agent
 from quant_rl.train.auxiliary_training import AuxiliaryTrainerCallback
-from quant_rl.train.callbacks import BestCheckpointEvalCallback
+from quant_rl.train.callbacks import BestCheckpointEvalCallback, ProgressLoggerCallback
 from quant_rl.utils.device import get_device, scale_training_cfg
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -368,9 +368,12 @@ def main() -> None:
             aux_cb.prediction_horizon,
         )
 
-    callbacks: list[CheckpointCallback | AuxiliaryTrainerCallback | BestCheckpointEvalCallback] = [
-        c for c in (checkpoint_callback, aux_cb) if c is not None
-    ]
+    callbacks: list[
+        CheckpointCallback
+        | AuxiliaryTrainerCallback
+        | BestCheckpointEvalCallback
+        | ProgressLoggerCallback
+    ] = [c for c in (checkpoint_callback, aux_cb) if c is not None]
 
     # Best-checkpoint eval: every N rollouts, evaluate on a fresh copy of the
     # training env (episodic=False so guardrail breaches don't kill the run)
@@ -392,12 +395,28 @@ def main() -> None:
     )
     callbacks.append(best_cb)
 
+    progress_log = model_dir / "training_log.csv"
+    callbacks.append(ProgressLoggerCallback(log_path=progress_log))
+
     model.learn(total_timesteps=timesteps, callback=callbacks)
 
     # Save final model
     model_path = model_dir / "ppo_final"
     model.save(model_path)
     log.info("Model saved: %s", model_path)
+
+    # Learning-curve / loss charts from the SB3 progress CSV.
+    try:
+        from quant_rl.eval.training_plots import save_training_plots
+
+        save_training_plots(
+            progress_log,
+            out_dir=model_dir,
+            dpi=getattr(cfg.output, "dpi", 150),
+            save_html=getattr(cfg.output, "save_html", True),
+        )
+    except Exception as exc:
+        log.warning("Training progress plots skipped: %s", exc)
 
     # Evaluate the trained model on the held-out test set (out-of-sample).
     log.info("Evaluating trained model on test set...")
@@ -488,6 +507,21 @@ def main() -> None:
         save_csv=getattr(cfg.output, "save_csv", True),
         dpi=getattr(cfg.output, "dpi", 150),
     )
+
+    # Thesis data/EDA pack at the run root (coverage, returns, features, PO3).
+    try:
+        from quant_rl.eval.data_plots import write_data_eda
+
+        write_data_eda(
+            run_dir / "data",
+            primary_m1,
+            features,
+            train_end=train_end,
+            test_start=test_start,
+            dpi=getattr(cfg.output, "dpi", 150),
+        )
+    except Exception as exc:
+        log.warning("Run data EDA skipped: %s", exc)
 
     # Save config
     if cfg is not None:

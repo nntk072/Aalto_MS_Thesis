@@ -60,7 +60,7 @@ def _default_cfg() -> dict[str, Any]:
             "bb_std": 2.0,
             "stoch_k": 14,
             "stoch_d": 3,
-            "vwap_session": True,
+            "vwap_session": False,
             "return_horizons": [1, 5, 15, 30],
             "realized_vol_period": 20,
             "smt_swing_period": 5,
@@ -106,7 +106,7 @@ class TestBuildFeaturesPipeline:
         assert "asian_low" in cols
         assert "volume_spike" in cols
         assert "atr_5" in cols
-        assert "vwap_dist" in cols
+        assert "vwap_dist" not in cols
         # HTF blocks
         assert any(c.startswith("M5_") for c in cols)
         assert any(c.startswith("M15_") for c in cols)
@@ -157,4 +157,4 @@ class TestBuildFeaturesPipeline:
         )
 
 
-_GOLDEN_HASH = "842d26b0223fd6249a42dd36808739afa45c3b5a369e588fcd33f5beb1edfcf7"
+_GOLDEN_HASH = "2843d0ca645f44ab451b4699b459140cee9bfd8e58ed18b91d6453225d321f29"

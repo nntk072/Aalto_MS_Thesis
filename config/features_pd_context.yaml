@@ -1,0 +1,7 @@
+# Session-conditional PD context pack for thesis full trains.
+# Merge over default.yaml (or idea1_po3_ifvg.yaml):
+#   python -m quant_rl.train.train_rl --config config/features_pd_context.yaml
+features:
+  include_pd_context: true
+  # LTF confluence: M5/M15/H1 structure + BOS flags aligned onto M1.
+  structure: {enabled: true, timeframes: ["M5", "M15", "H1"]}
