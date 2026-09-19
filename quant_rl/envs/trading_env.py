@@ -33,7 +33,7 @@ from ..data.session import ny_session_mask
 from ..envs.reward import DSRReward
 from ..envs.strategies import BaselineStrategy, TradingStrategy
 from ..envs.sweep_reward import CompositeReward, SweepConfirmationReward
-from ..features.build import MTF_RAW_SUFFIXES, OBS_RAW_PRICE_COLUMNS
+from ..features.build import MTF_RAW_SUFFIXES
 from ..models.vae import VAE
 
 
@@ -250,20 +250,18 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         # Model-facing observation frame: the strategy's raw price-level
         # columns stay in ``features`` for execution/risk but must not enter
-        # the normalised ``seq`` tensor (Agent.md §11). Unprefixed stems in
-        # OBS_RAW_PRICE_COLUMNS (asian_high, ctx_asia_high, last_swing_*, …)
-        # are always dropped — including baseline — so absolute prices never
-        # reach the encoder across 21k→25k regimes. MTF blocks reuse the same
-        # stems with a ``{TF}_`` prefix (e.g. ``M5_last_swing_high``).
+        # the normalised ``seq`` tensor (Agent.md §11). MTF blocks reuse the
+        # same stems with a ``{TF}_`` prefix (e.g. ``M5_last_swing_high``),
+        # matched via MTF_RAW_SUFFIXES so unnormalised HTF price magnitudes
+        # never reach the encoder.
         drop_cols = [c for c in self.strategy.raw_columns if c in features.columns]
-        always_raw = {
+        mtf_raw = {
             c
             for c in features.columns
-            if str(c) in OBS_RAW_PRICE_COLUMNS
-            or any(str(c).endswith(f"_{stem}") for stem in MTF_RAW_SUFFIXES)
+            if any(str(c).endswith(f"_{stem}") for stem in MTF_RAW_SUFFIXES)
+            and str(c) not in self.strategy.raw_columns
         }
-        drop_set = set(drop_cols) | always_raw
-        self._obs_features = features.drop(columns=sorted(drop_set), errors="ignore")
+        self._obs_features = features.drop(columns=drop_cols + sorted(mtf_raw))
         # Drop non-numeric columns (e.g. string ``session`` labels) — they cannot
         # be cast to float32 and are not part of the model's normalized observation.
         self._obs_features = self._obs_features.select_dtypes(include="number")
