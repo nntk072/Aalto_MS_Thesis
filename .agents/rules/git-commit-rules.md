@@ -26,8 +26,8 @@ Never add secrets or `Co-authored-by` (auto-added).
 
 ## Before committing
 
-**Blocking.** Do not commit or push until these exit 0 (same as
-[ci-verification.md](ci-verification.md) / GitHub CI / Orchestra phase 9):
+**Blocking.** Do not commit or push until these exit 0 (see
+[ci-verification.md](ci-verification.md)):
 
 ```bash
 git status -sb
@@ -35,14 +35,14 @@ git diff --stat
 uv run ruff format --check .
 uv run ruff check .
 uv run mypy .
-uv run pytest tests/ -v
+uv run pytest <relevant test paths> -q
 ```
 
 If `ruff format --check .` fails: run `uv run ruff format .`, stage the
 reformats, then re-run the gate. Do not push with format drift.
 
-While coding (not committing), scoped ruff/pytest on touched paths is enough —
-see [ci-verification.md](ci-verification.md).
+Do **not** run `pytest tests/ -v` before every commit — only the tests that cover
+this change. Full-suite pytest is GitHub CI / Orchestra phase 9.
 
 Never force-push to main/master without explicit approval.
 
