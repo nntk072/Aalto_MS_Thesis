@@ -19,6 +19,7 @@ matplotlib.use("Agg")
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
@@ -26,7 +27,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 
 from quant_rl.eval.plots import LONG_COLOR, SHORT_COLOR, _apply_style, _save
-from quant_rl.features.po3_config import FVGZone, build_fvg_zones
+from quant_rl.features.po3_config import FVGZone, build_fvg_zones_for_plot
 
 log = logging.getLogger(__name__)
 
@@ -56,8 +57,19 @@ def _resample_ohlc(bars: pd.DataFrame, candle_tf: str) -> pd.DataFrame:
 
 
 def _draw_candles(ax: Axes, ohlcv: pd.DataFrame) -> None:
-    """Draw simple OHLC candlesticks on ``ax`` using date-num x positions."""
-    xs = mdates.date2num(ohlcv.index)  # type: ignore[no-untyped-call]
+    """Draw simple OHLC candlesticks on ``ax`` using date-num x positions.
+
+    Body width is a fraction of the median bar spacing in matplotlib date
+    units (days). A fixed width of 0.7 days is ~200× a 5-minute bar and
+    paints the chart as solid blobs.
+    """
+    xs = np.asarray(mdates.date2num(ohlcv.index), dtype=float)  # type: ignore[no-untyped-call,type-var]
+    if len(xs) >= 2:
+        spacing = float(np.median(np.diff(xs)))
+    else:
+        spacing = 1.0 / (24.0 * 60.0)  # 1 minute fallback
+    half = 0.3 * max(spacing, 1e-9)
+    width = 2.0 * half
     for i, (_, row) in enumerate(ohlcv.iterrows()):
         x = float(xs[i])
         color = LONG_COLOR if row["close"] >= row["open"] else SHORT_COLOR
@@ -67,12 +79,12 @@ def _draw_candles(ax: Axes, ohlcv: pd.DataFrame) -> None:
         y_low = min(row["open"], row["close"])
         height = abs(row["close"] - row["open"])
         if height < 1e-12:
-            ax.plot([x - 0.35, x + 0.35], [row["close"], row["close"]], color=color, linewidth=1.0)
+            ax.plot([x - half, x + half], [row["close"], row["close"]], color=color, linewidth=1.0)
         else:
             ax.add_patch(
                 Rectangle(
-                    (x - 0.35, y_low),
-                    0.7,
+                    (x - half, y_low),
+                    width,
                     height,
                     facecolor=color,
                     edgecolor=color,
@@ -87,39 +99,66 @@ def _zone_color(zone: FVGZone) -> str:
     return LTF_IFVG_BULL_COLOR if zone.side == "bullish" else LTF_IFVG_BEAR_COLOR
 
 
+def _candle_half_width(ohlcv: pd.DataFrame) -> float:
+    """Half candle body width in matplotlib date units (matches ``_draw_candles``)."""
+    xs = np.asarray(mdates.date2num(ohlcv.index), dtype=float)  # type: ignore[no-untyped-call,type-var]
+    if len(xs) >= 2:
+        spacing = float(np.median(np.diff(xs)))
+    else:
+        spacing = 1.0 / (24.0 * 60.0)
+    return 0.3 * max(spacing, 1e-9)
+
+
+def _snap_ts_to_candle_x(ts: pd.Timestamp, ohlcv: pd.DataFrame, *, side: str) -> float:
+    """Map a zone timestamp to the left (``side='left'``) or right candle edge."""
+    idx = ohlcv.index
+    loc = int(idx.searchsorted(ts, side="left"))
+    if loc >= len(idx):
+        loc = len(idx) - 1
+    elif loc > 0 and abs(idx[loc] - ts) > abs(idx[loc - 1] - ts):
+        loc = loc - 1
+    half = _candle_half_width(ohlcv)
+    x = float(mdates.date2num(idx[loc]))  # type: ignore[no-untyped-call]
+    return x - half if side == "left" else x + half
+
+
 def _draw_zones(ax: Axes, zones: list[FVGZone], ohlcv: pd.DataFrame) -> None:
-    """Overlay translucent zone rectangles for every zone overlapping the window."""
+    """Overlay translucent zone rectangles snapped to displayed candle edges."""
     if not zones:
         return
     x_min = float(mdates.date2num(ohlcv.index.min()))  # type: ignore[no-untyped-call]
     x_max = float(mdates.date2num(ohlcv.index.max()))  # type: ignore[no-untyped-call]
+    half = _candle_half_width(ohlcv)
+    x_min -= half
+    x_max += half
     for zone in zones:
         if zone.end_ts < ohlcv.index.min() or zone.start_ts > ohlcv.index.max():
             continue
-        x0 = max(float(mdates.date2num(zone.start_ts)), x_min)  # type: ignore[no-untyped-call]
-        x1 = min(float(mdates.date2num(zone.end_ts)), x_max)  # type: ignore[no-untyped-call]
+        x0 = max(_snap_ts_to_candle_x(zone.start_ts, ohlcv, side="left"), x_min)
+        x1 = min(_snap_ts_to_candle_x(zone.end_ts, ohlcv, side="right"), x_max)
         if x1 <= x0:
             continue
         # Filled (invalidated) zones are faded more than active ones.
         alpha = 0.28 if zone.invalidated else 0.40
+        color = _zone_color(zone)
         ax.add_patch(
             Rectangle(
                 (x0, zone.zone_low),
                 x1 - x0,
                 zone.zone_high - zone.zone_low,
-                facecolor=_zone_color(zone),
-                edgecolor=_zone_color(zone),
+                facecolor=color,
+                edgecolor=color,
                 alpha=alpha,
-                linewidth=0.0,
+                linewidth=0.6,
             )
         )
 
 
 def _draw_entries(ax: Axes, signals: pd.DataFrame, ohlcv: pd.DataFrame) -> None:
-    """Scatter entry markers at the top/bottom of the matching candles."""
-    for col, marker, color, dy in (
-        ("entry_long", "^", ENTRY_LONG_COLOR, 1.004),
-        ("entry_short", "v", ENTRY_SHORT_COLOR, 0.996),
+    """Scatter entry markers at the containing candle's close."""
+    for col, marker, color in (
+        ("entry_long", "^", ENTRY_LONG_COLOR),
+        ("entry_short", "v", ENTRY_SHORT_COLOR),
     ):
         if col not in signals.columns:
             continue
@@ -134,10 +173,12 @@ def _draw_entries(ax: Axes, signals: pd.DataFrame, ohlcv: pd.DataFrame) -> None:
             loc = ohlcv.index.searchsorted(ts, side="left")
             if loc >= len(ohlcv):
                 continue
+            # Prefer the candle that contains ts when resampling coarsens bars.
+            if loc > 0 and ohlcv.index[loc] > ts:
+                loc = loc - 1
             x = float(mdates.date2num(ohlcv.index[loc]))  # type: ignore[no-untyped-call]
-            base = ohlcv["high"].iloc[loc] if dy > 1 else ohlcv["low"].iloc[loc]
+            ys.append(float(ohlcv["close"].iloc[loc]))
             xs.append(x)
-            ys.append(base * dy)
         if xs:
             ax.scatter(xs, ys, marker=marker, s=55, color=color, zorder=5, label=col)
 
@@ -156,18 +197,26 @@ def plot_fvg_signals(
     show_entries: bool = True,
     out_path: Path | str | None = None,
     dpi: int = 150,
+    *,
+    htf: str = "M15",
+    ltf: str = "M5",
 ) -> Figure:
     """Render PO3/IFVG signals on a candlestick chart.
+
+    Zone geometry uses native HTF/LTF detection via
+    :func:`~quant_rl.features.po3_config.build_fvg_zones_for_plot` (plot-only;
+    agent causality unchanged).  Pass lookback in ``bars`` and set ``window``
+    to the NY session so pre-session formations still define box starts.
 
     Parameters
     ----------
     bars : pd.DataFrame
-        M1 OHLC bars (DatetimeIndex) used to compute ``signals``.
+        M1 OHLC bars (DatetimeIndex). May include lookback before ``window``.
     signals : pd.DataFrame
-        Output of :func:`~quant_rl.features.po3_config.detect_po3_entries`
-        (or any of its sub-detectors).  Shares the index of ``bars``.
+        Entry columns (``entry_long`` / ``entry_short``) for markers; zones
+        are built from OHLC, not from these signal columns.
     window : tuple[Timestamp, Timestamp], optional
-        Slice of the data to display (inclusive).  Defaults to the full range.
+        Slice of the data to display (inclusive).  Zones still use full ``bars``.
     candle_tf : str
         Pandas resample rule for the candles, e.g. ``'1min'``, ``'5min'``, ``'15min'``.
     max_points : int
@@ -178,23 +227,25 @@ def plot_fvg_signals(
         If given, the PNG is written here (parents created).
     dpi : int
         PNG resolution.
-
-    Returns
-    -------
-    plt.Figure
-        The rendered figure (axes already closed).
+    htf, ltf : str
+        Native timeframes for plot-only FVG / IFVG zone detection.
     """
     _apply_style()
-
-    if window is not None:
-        start, end = window
-        bars = bars.loc[start:end]
 
     if not len(bars):
         raise ValueError("No bars to plot after applying window.")
 
-    zones = build_fvg_zones(bars, signals)
-    ohlcv = _resample_ohlc(bars, candle_tf)
+    # Zones from full spine (incl. lookback); candles/markers from display window.
+    zones = build_fvg_zones_for_plot(bars, htf=htf, ltf=ltf)
+
+    plot_bars = bars
+    if window is not None:
+        start, end = window
+        plot_bars = bars.loc[start:end]
+    if not len(plot_bars):
+        raise ValueError("No bars to plot after applying window.")
+
+    ohlcv = _resample_ohlc(plot_bars, candle_tf)
     if len(ohlcv) > max_points:
         ohlcv = ohlcv.iloc[-max_points:]
     if ohlcv.empty:
@@ -242,8 +293,10 @@ def plot_fvg_signals(
     ax.set_title("PO3 (AMD) + HTF/LTF IFVG Signals")
     ax.set_ylabel("Price")
     ax.xaxis.set_major_locator(mdates.AutoDateLocator())  # type: ignore[no-untyped-call]
+    # Format in the bars' timezone (broker Etc/GMT-3), not forced UTC.
+    tz = getattr(ohlcv.index, "tz", None)
     ax.xaxis.set_major_formatter(
-        mdates.ConciseDateFormatter(ax.xaxis.get_major_locator())  # type: ignore[no-untyped-call]
+        mdates.ConciseDateFormatter(ax.xaxis.get_major_locator(), tz=tz)  # type: ignore[no-untyped-call]
     )
     ax.grid(True, which="both", alpha=0.2)
 

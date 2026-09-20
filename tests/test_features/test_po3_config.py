@@ -13,6 +13,7 @@ from quant_rl.features.po3_config import (
     FVGConfig,
     IFVGConfig,
     build_fvg_zones,
+    build_fvg_zones_for_plot,
     detect_entry_trigger,
     detect_fvg,
     detect_htf_fvg,
@@ -766,3 +767,72 @@ def test_po3_not_double_shifted() -> None:
     src_ltf = inspect.getsource(po3_config.detect_ltf_ifvg)
     assert "shift(1)" in src_ltf
     assert "align_timeframes" not in src_ltf
+
+
+class TestBuildFVGZonesForPlot:
+    """Plot-only zones: native HTF start at bar2 open, end at fill (no M1 cap)."""
+
+    def _m15_bullish_gap_m1(self) -> pd.DataFrame:
+        """Three M15 bars: bar1 high=100, bar3 low=110 → bullish FVG [100, 110].
+
+        M1 spine covers 16:00–17:44 so the gap can later fill on a later M15 bar.
+        """
+        idx = pd.date_range("2025-01-02 16:00", periods=105, freq="1min", tz="Etc/GMT-3")
+        open_ = np.full(105, 105.0)
+        high = np.full(105, 106.0)
+        low = np.full(105, 104.0)
+        close = np.full(105, 105.0)
+        # bar1 M15 (16:00–16:14): high capped at 100
+        high[0:15] = 100.0
+        low[0:15] = 95.0
+        close[0:15] = 98.0
+        open_[0:15] = 97.0
+        # bar2 (16:15–16:29): middle of the gap
+        high[15:30] = 108.0
+        low[15:30] = 101.0
+        close[15:30] = 107.0
+        open_[15:30] = 100.0
+        # bar3 (16:30–16:44): low = 110 → imbalance vs bar1 high
+        high[30:45] = 115.0
+        low[30:45] = 110.0
+        close[30:45] = 112.0
+        open_[30:45] = 111.0
+        # later fill: dip through zone_low=100 on M15 starting 17:00
+        high[60:75] = 105.0
+        low[60:75] = 99.0
+        close[60:75] = 100.0
+        open_[60:75] = 104.0
+        return pd.DataFrame(
+            {"open": open_, "high": high, "low": low, "close": close},
+            index=idx,
+        )
+
+    def test_plot_zone_starts_at_bar2_open(self) -> None:
+        bars = self._m15_bullish_gap_m1()
+        zones = build_fvg_zones_for_plot(bars, htf="M15", ltf="M5")
+        bull = [z for z in zones if z.kind == "htf_fvg" and z.side == "bullish"]
+        assert bull, "expected at least one HTF bullish plot zone"
+        z = bull[0]
+        assert z.start_ts == pd.Timestamp("2025-01-02 16:15", tz="Etc/GMT-3")
+        assert z.zone_low == pytest.approx(100.0)
+        assert z.zone_high == pytest.approx(110.0)
+
+    def test_plot_zone_ends_at_fill_not_m1_cap(self) -> None:
+        bars = self._m15_bullish_gap_m1()
+        zones = build_fvg_zones_for_plot(bars, htf="M15", ltf="M5")
+        bull = [z for z in zones if z.kind == "htf_fvg" and z.side == "bullish"]
+        z = bull[0]
+        assert z.invalidated is True
+        # Fill on the M15 bar that dips to 99 (17:00), not an arbitrary M1 horizon.
+        assert z.end_ts == pd.Timestamp("2025-01-02 17:00", tz="Etc/GMT-3")
+        assert (z.end_ts - z.start_ts) == pd.Timedelta(minutes=45)
+
+    def test_causal_agent_zones_still_delayed(self) -> None:
+        """Agent ``build_fvg_zones`` remains on causal M1 edge (next HTF open)."""
+        bars = self._m15_bullish_gap_m1()
+        signals = detect_htf_fvg(bars, htf="M15")
+        causal = build_fvg_zones(bars, signals, max_zone_bars=50)
+        bull = [z for z in causal if z.side == "bullish"]
+        assert bull
+        # Causal start is after the forming HTF closes + shift → 16:45.
+        assert bull[0].start_ts == pd.Timestamp("2025-01-02 16:45", tz="Etc/GMT-3")

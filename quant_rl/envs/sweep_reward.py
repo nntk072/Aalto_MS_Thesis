@@ -257,6 +257,7 @@ class CompositeReward:
         dsr_eta: float = 0.01,
         strategy_reward: Any = None,
         strategy_weight: float = 0.0,
+        base_reward: Any = None,
     ):
         self.sweep_reward = sweep_reward
         self.dsr_weight = dsr_weight
@@ -266,12 +267,10 @@ class CompositeReward:
         # the baseline (Idea 3) is never affected (Agent.md §23, §36).
         self.strategy_reward = strategy_reward
         self.strategy_weight = strategy_weight
-        # Persist DSR state across steps so the EMA Sharpe estimate
-        # actually accumulates. A fresh DSRReward() per call would reset
-        # _A/_B every step and kill the signal.
+        # Persist DSR/PnL state across steps so EMA estimates accumulate.
         from ..envs.reward import DSRReward
 
-        self._dsr_fn = DSRReward(eta=dsr_eta)
+        self._dsr_fn = base_reward if base_reward is not None else DSRReward(eta=dsr_eta)
 
     def reset(self) -> None:
         """Reset all component reward functions."""
@@ -289,6 +288,10 @@ class CompositeReward:
         *,
         daily_loss: float = 0.0,
         daily_loss_limit: float = 5_000.0,
+        soft_daily_loss_limit: float | None = 2_000.0,
+        loss_from_initial: float = 0.0,
+        soft_max_loss_limit: float | None = 5_000.0,
+        max_loss_limit: float = 10_000.0,
         initial_balance: float = 100_000.0,
         breach: bool = False,
         # Additional parameters for sweep reward (optional)
@@ -302,6 +305,8 @@ class CompositeReward:
         position_changed: bool = False,
         dsr_reward: float | None = None,
         strategy_context: dict[str, Any] | None = None,
+        realized_close_pnl: float | None = None,
+        equity: float | None = None,
     ) -> float:
         """Compute composite reward.
 
@@ -309,14 +314,20 @@ class CompositeReward:
         For backward compatibility, accepts DSR arguments and uses sweep
         reward only when sweep parameters are provided.
         """
-        # Compute DSR reward if not provided (reuses persistent state)
+        # Compute base (DSR or PnL) reward if not provided (reuses persistent state)
         if dsr_reward is None:
             dsr_reward = self._dsr_fn(
                 pnl_step,
                 daily_loss=daily_loss,
                 daily_loss_limit=daily_loss_limit,
+                soft_daily_loss_limit=soft_daily_loss_limit,
+                loss_from_initial=loss_from_initial,
+                soft_max_loss_limit=soft_max_loss_limit,
+                max_loss_limit=max_loss_limit,
                 initial_balance=initial_balance,
                 breach=breach,
+                realized_close_pnl=realized_close_pnl,
+                equity=equity,
             )
 
         # If sweep parameters are provided, compute sweep reward

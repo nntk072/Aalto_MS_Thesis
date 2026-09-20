@@ -30,12 +30,35 @@ def test_daily_loss_breach():
 
 def test_max_drawdown_breach():
     g = FTMOGuardrails(max_loss_limit=10_000.0)
-    acc = _make(max_dd=10_000.0)
+    acc = _make()
+    acc.equity = 90_000.0  # $10k below initial — absolute max loss, not trailing
     assert g.check_max_drawdown(acc)
     assert g.breach_reason(acc) == "max_drawdown"
+
+
+def test_max_loss_not_trailing_hwm():
+    """Profits raise equity; max-loss still measured from initial, not peak."""
+    g = FTMOGuardrails(max_loss_limit=10_000.0)
+    acc = AccountState(initial_balance=100_000.0)
+    acc.update_equity(8_000.0)  # peak 108k
+    acc.balance = 100_000.0
+    acc.update_equity(-5_000.0)  # equity 95k — only $5k from initial
+    assert not g.check_max_drawdown(acc)
+    acc.balance = 100_000.0
+    acc.update_equity(-10_000.0)  # equity 90k
+    assert g.check_max_drawdown(acc)
 
 
 def test_trade_risk_check():
     g = FTMOGuardrails(risk_per_trade_limit=1000.0)
     assert g.check_trade_risk(999.0) is False
     assert g.check_trade_risk(1001.0) is True
+
+
+def test_soft_daily_does_not_hard_breach():
+    g = FTMOGuardrails(daily_loss_limit=5000.0, soft_daily_loss_limit=2000.0)
+    acc = _make(daily_loss=2500.0)
+    assert g.check_soft_daily(acc)
+    assert not g.check_daily(acc)
+    assert not g.any_breach(acc)
+    assert g.breach_reason(acc) is None

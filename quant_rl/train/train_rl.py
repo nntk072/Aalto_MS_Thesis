@@ -61,6 +61,62 @@ _STRATEGY_CONFIGS = {
 }
 
 
+def _strategy_risk_ranges(cfg: Any) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Risk/RR ranges for TradingEnv; strategy_actions uses strategy.risk YAML."""
+    if bool(cfg.env.get("strategy_actions", False)):
+        risk_cfg = getattr(cfg, "strategy", None)
+        risk_block = risk_cfg.get("risk", {}) if risk_cfg is not None else {}
+        rfr = list(risk_block.get("risk_frac_range", [0.005, 0.01]))
+        rr = list(risk_block.get("rr_range", [1.5, 5.0]))
+        return (float(rfr[0]), float(rfr[1])), (float(rr[0]), float(rr[1]))
+    return (
+        (cfg.risk.default_risk_frac * 0.5, cfg.risk.default_risk_frac * 2.0),
+        (cfg.risk.rr_ratio_default * 0.5, cfg.risk.rr_ratio_default * 1.5),
+    )
+
+
+def _max_loss_per_trade(cfg: Any) -> float:
+    """Per-trade USD cap: FTMO risk_per_trade when strategy_actions, else backtest."""
+    if bool(cfg.env.get("strategy_actions", False)):
+        return float(cfg.ftmo.risk_per_trade_limit)
+    return float(cfg.backtest.validation.max_loss_per_trade_usd)
+
+
+def _guardrail_kwargs(cfg: Any) -> dict[str, float]:
+    return {
+        "daily_loss_limit": float(cfg.ftmo.daily_loss_limit),
+        "max_loss_limit": float(cfg.ftmo.max_loss_limit),
+        "risk_per_trade_limit": float(cfg.ftmo.risk_per_trade_limit),
+        "soft_daily_loss_limit": float(cfg.ftmo.get("soft_daily_loss_limit", 2000.0)),
+        "soft_max_loss_limit": float(cfg.ftmo.get("soft_max_loss_limit", 5000.0)),
+    }
+
+
+def _max_episode_steps(cfg: Any) -> int | None:
+    """Parse ``env.max_episode_steps``; YAML ``null`` → full-year episode."""
+    raw = cfg.env.get("max_episode_steps", None)
+    if raw is None:
+        return None
+    if isinstance(raw, str) and raw.strip().lower() in ("", "null", "none"):
+        return None
+    return int(raw)
+
+
+def _direction_summary(trades: Any) -> dict[str, int]:
+    """Count open directions from an evaluate_model trade log."""
+    if trades is None or getattr(trades, "empty", True):
+        return {"long": 0, "short": 0, "opens": 0}
+    opens = trades[trades["type"] == "open"] if "type" in trades.columns else trades
+    if opens.empty or "direction" not in opens.columns:
+        return {"long": 0, "short": 0, "opens": 0}
+    dirs = opens["direction"].astype(int)
+    return {
+        "long": int((dirs == 1).sum()),
+        "short": int((dirs == -1).sum()),
+        "opens": int(len(opens)),
+    }
+
+
 def _strategy_from_cfg(cfg: Any) -> tuple[Any, Any, float]:
     """Build (strategy, strategy_reward, strategy_weight) from merged config.
 
@@ -116,18 +172,20 @@ def make_env(
     continuous_actions = algo == "sac"
     use_sweep_reward = reward == "sweep"
     strategy, strategy_reward, strategy_weight = _strategy_from_cfg(cfg)
+    risk_frac_range, rr_ratio_range = _strategy_risk_ranges(cfg)
     return TradingEnv(
         bars=bars,
         features=features,
         obs_window=cfg.env.obs_window,
         initial_balance=cfg.account.initial_balance,
-        risk_frac_range=(cfg.risk.default_risk_frac * 0.5, cfg.risk.default_risk_frac * 2.0),
-        rr_ratio_range=(cfg.risk.rr_ratio_default * 0.5, cfg.risk.rr_ratio_default * 1.5),
+        guardrail_kwargs=_guardrail_kwargs(cfg),
+        risk_frac_range=risk_frac_range,
+        rr_ratio_range=rr_ratio_range,
         swing_buffer_pts=cfg.risk.swing_buffer_pts,
         contract_size=cfg.account.contract_size,
-        max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
+        max_loss_per_trade_usd=_max_loss_per_trade(cfg),
         dsr_eta=cfg.env.reward_dsr_eta,
-        max_episode_steps=int(cfg.env.get("max_episode_steps", 1000)),
+        max_episode_steps=_max_episode_steps(cfg),
         episodic=episodic,
         continuous_actions=continuous_actions,
         use_sweep_reward=use_sweep_reward,
@@ -138,6 +196,12 @@ def make_env(
         strategy_weight=strategy_weight,
         block_overnight=bool(cfg.env.get("block_overnight", True)),
         eod_risk=dict(cfg.env.get("eod_risk", {})),
+        min_sl_atr_mult=float(cfg.risk.get("min_sl_atr_mult", 0.5)),
+        min_sl_points=float(cfg.risk.get("min_sl_points", 0.0)),
+        max_entries_per_session=int(cfg.env.get("max_entries_per_session", 0)),
+        entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
+        reward_mode=str(cfg.env.get("reward_mode", "dsr")),
+        entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.1)),
         use_vae=use_vae,
         vae=vae,
         pre_ny_by_date=pre_ny_by_date,
@@ -258,6 +322,12 @@ def _build_training_log(
         # Gate G3 checks "zero kill-switch breaches"; the count is computed by
         # evaluate_model but was not being written out.
         "test_breaches": test_result.get("n_breach_sessions", 0),
+        "test_n_sessions": int(test_result.get("n_sessions", 0)),
+        "test_days_traded": int(test_result.get("days_traded", 0)),
+        "test_survived_full_year": bool(test_result.get("survived_full_year", False)),
+        "test_fail_time": (
+            str(test_result["fail_time"]) if test_result.get("fail_time") is not None else None
+        ),
         "timestamp": datetime.now().isoformat(),
     }
 
@@ -479,27 +549,46 @@ def main() -> None:
         log.warning("Training progress plots skipped: %s", exc)
 
     # Evaluate the trained model on the held-out test set (out-of-sample).
-    log.info("Evaluating trained model on test set...")
-    test_result = evaluate_model(
-        model,
-        bars=test_bars,
-        features=test_feat,
+    strategy, strategy_reward, strategy_weight = _strategy_from_cfg(cfg)
+    strategy_actions = bool(cfg.env.get("strategy_actions", False))
+    sl_buffer_pts = float(cfg.env.get("sl_buffer_pts", 0.0))
+    risk_frac_range, rr_ratio_range = _strategy_risk_ranges(cfg)
+    eval_common = dict(
         obs_window=cfg.env.obs_window,
         initial_balance=cfg.account.initial_balance,
-        risk_frac_range=(cfg.risk.default_risk_frac * 0.5, cfg.risk.default_risk_frac * 2.0),
-        rr_ratio_range=(cfg.risk.rr_ratio_default * 0.5, cfg.risk.rr_ratio_default * 1.5),
+        guardrail_kwargs=_guardrail_kwargs(cfg),
+        risk_frac_range=risk_frac_range,
+        rr_ratio_range=rr_ratio_range,
         swing_buffer_pts=cfg.risk.swing_buffer_pts,
         contract_size=cfg.account.contract_size,
-        max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
+        max_loss_per_trade_usd=_max_loss_per_trade(cfg),
         dsr_eta=cfg.env.reward_dsr_eta,
-        max_episode_steps=int(cfg.env.get("max_episode_steps", 1000)),
         continuous_actions=(args.algo == "sac"),
         use_sweep_reward=(args.reward == "sweep"),
         block_overnight=bool(cfg.env.get("block_overnight", True)),
         eod_risk=dict(cfg.env.get("eod_risk", {})),
         use_vae=args.use_vae,
         vae=env_vae,
+        strategy=strategy,
+        strategy_actions=strategy_actions,
+        strategy_reward=strategy_reward,
+        strategy_weight=strategy_weight,
+        sl_buffer_pts=sl_buffer_pts,
         pre_ny_by_date=pre_ny_by_date,
+        min_sl_atr_mult=float(cfg.risk.get("min_sl_atr_mult", 0.5)),
+        min_sl_points=float(cfg.risk.get("min_sl_points", 0.0)),
+        max_entries_per_session=int(cfg.env.get("max_entries_per_session", 0)),
+        entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
+        reward_mode=str(cfg.env.get("reward_mode", "dsr")),
+        entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.1)),
+    )
+    log.info("Evaluating trained model on test set...")
+    test_result = evaluate_model(
+        model,
+        bars=test_bars,
+        features=test_feat,
+        max_episode_steps=None,
+        **eval_common,
     )
     test_result["initial_balance"] = cfg.account.initial_balance
     test_m = calculate_metrics(
@@ -508,12 +597,20 @@ def main() -> None:
         n_sessions=test_result.get("n_sessions", 1),
         n_breach_sessions=test_result.get("n_breach_sessions", 0),
     )
+    test_dir_sum = _direction_summary(test_result["trades"])
     log.info(
-        "[test] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%",
+        "[test] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%  "
+        "survived=%s  days=%d/%d  fail_time=%s  direction=%s  entry_diag=%s",
         test_m.sharpe,
         test_m.max_drawdown * 100,
         test_m.n_trades,
         test_m.total_return_pct,
+        test_result.get("survived_full_year"),
+        test_result.get("days_traded", 0),
+        test_result.get("n_sessions", 0),
+        test_result.get("fail_time"),
+        test_dir_sum,
+        test_result.get("entry_diag", {}),
     )
 
     # In-sample evaluation on the training split so the run dir carries the same
@@ -523,22 +620,8 @@ def main() -> None:
         model,
         bars=train_bars,
         features=train_feat,
-        obs_window=cfg.env.obs_window,
-        initial_balance=cfg.account.initial_balance,
-        risk_frac_range=(cfg.risk.default_risk_frac * 0.5, cfg.risk.default_risk_frac * 2.0),
-        rr_ratio_range=(cfg.risk.rr_ratio_default * 0.5, cfg.risk.rr_ratio_default * 1.5),
-        swing_buffer_pts=cfg.risk.swing_buffer_pts,
-        contract_size=cfg.account.contract_size,
-        max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
-        dsr_eta=cfg.env.reward_dsr_eta,
-        max_episode_steps=int(cfg.env.get("max_episode_steps", 1000)),
-        continuous_actions=(args.algo == "sac"),
-        use_sweep_reward=(args.reward == "sweep"),
-        block_overnight=bool(cfg.env.get("block_overnight", True)),
-        eod_risk=dict(cfg.env.get("eod_risk", {})),
-        use_vae=args.use_vae,
-        vae=env_vae,
-        pre_ny_by_date=pre_ny_by_date,
+        max_episode_steps=None,
+        **eval_common,
     )
     train_result["initial_balance"] = cfg.account.initial_balance
     train_m = calculate_metrics(
@@ -547,12 +630,23 @@ def main() -> None:
         n_sessions=train_result.get("n_sessions", 1),
         n_breach_sessions=train_result.get("n_breach_sessions", 0),
     )
+    train_dir_sum = _direction_summary(train_result["trades"])
     log.info(
-        "[train] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%",
+        "[train] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%  "
+        "survived=%s  days=%d/%d  fail_time=%s  direction=%s  entry_diag=%s",
         train_m.sharpe,
         train_m.max_drawdown * 100,
         train_m.n_trades,
         train_m.total_return_pct,
+        train_result.get("survived_full_year"),
+        train_result.get("days_traded", 0),
+        train_result.get("n_sessions", 0),
+        train_result.get("fail_time"),
+        train_dir_sum,
+        train_result.get("entry_diag", {}),
+    )
+    (run_dir / "direction_summary.json").write_text(
+        json.dumps({"train": train_dir_sum, "test": test_dir_sum}, indent=2)
     )
 
     # Export both splits so the RL run produces the same artifact layout as the
@@ -706,16 +800,14 @@ def main() -> None:
                 features=fold_test_feat,
                 obs_window=cfg.env.obs_window,
                 initial_balance=cfg.account.initial_balance,
-                risk_frac_range=(
-                    cfg.risk.default_risk_frac * 0.5,
-                    cfg.risk.default_risk_frac * 2.0,
-                ),
-                rr_ratio_range=(cfg.risk.rr_ratio_default * 0.5, cfg.risk.rr_ratio_default * 1.5),
+                guardrail_kwargs=_guardrail_kwargs(cfg),
+                risk_frac_range=_strategy_risk_ranges(cfg)[0],
+                rr_ratio_range=_strategy_risk_ranges(cfg)[1],
                 swing_buffer_pts=cfg.risk.swing_buffer_pts,
                 contract_size=cfg.account.contract_size,
-                max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
+                max_loss_per_trade_usd=_max_loss_per_trade(cfg),
                 dsr_eta=cfg.env.reward_dsr_eta,
-                max_episode_steps=int(cfg.env.get("max_episode_steps", 1000)),
+                max_episode_steps=_max_episode_steps(cfg),
                 continuous_actions=(args.algo == "sac"),
                 use_sweep_reward=(args.reward == "sweep"),
                 block_overnight=bool(cfg.env.get("block_overnight", True)),
@@ -723,6 +815,12 @@ def main() -> None:
                 use_vae=args.use_vae,
                 vae=env_vae,
                 pre_ny_by_date=pre_ny_by_date,
+                min_sl_atr_mult=float(cfg.risk.get("min_sl_atr_mult", 0.5)),
+                min_sl_points=float(cfg.risk.get("min_sl_points", 0.0)),
+                max_entries_per_session=int(cfg.env.get("max_entries_per_session", 0)),
+                entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
+                reward_mode=str(cfg.env.get("reward_mode", "dsr")),
+                entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.1)),
             )
             fold_m = calculate_metrics(
                 fold_result["equity"],

@@ -34,3 +34,17 @@ class TradingStrategy(ABC):
     @abstractmethod
     def target_candidates(self, *, direction: int, row: pd.Series) -> dict[str, float]:
         """Named take-profit candidate levels for the TP-target resolver."""
+
+    def context_direction(self, row: pd.Series) -> int:  # noqa: ARG002
+        """Intended trade side from HTF/PO3 context: -1, 0, or +1.
+
+        Default is flat (hold). Strategy overlays override for trader actions.
+        """
+        return 0
+
+    def sl_candidates(self, *, direction: int, row: pd.Series) -> list[tuple[str, float]]:  # noqa: ARG002
+        """Named SL levels for the trader action ``sl_anchor`` picker.
+
+        Default empty — baseline / non-trader modes keep ``sl_reference``.
+        """
+        return []

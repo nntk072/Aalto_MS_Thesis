@@ -248,6 +248,8 @@ def test_ppo_smoke_with_sweep_reward() -> None:
 
 
 def test_default_config_exposes_max_episode_steps() -> None:
-    """The config knob the env needs must be present in default.yaml."""
+    """Year-episode default: null means no hard step cap (full split)."""
     cfg = OmegaConf.load("quant_rl/config/default.yaml")
-    assert int(cfg.env.max_episode_steps) > 0
+    assert cfg.env.max_episode_steps is None
+    assert int(cfg.ppo.total_timesteps) >= 20_000_000
+    assert float(cfg.ftmo.soft_max_loss_limit) == 5000.0

@@ -29,7 +29,11 @@ from ..data.resample import resample
 from .indicators import atr, build_indicators, sweep_velocity, volume_spike, vwap_level, wick_ratio
 from .liquidity import detect_bos, detect_liquidity_sweeps, detect_mss
 from .normalize import rolling_zscore
-from .pd_context import build_htf_pd_distance_features, build_pd_context_features
+from .pd_context import (
+    build_htf_pd_distance_features,
+    build_pd_context_features,
+    build_trader_context_features,
+)
 from .po3_config import (
     FVGConfig,
     build_fvg_zones,
@@ -65,7 +69,8 @@ from .structure import (
 # v8: full-day M1 spine, completed-bar HTF ffill, confirmed ATR swings.
 # v10: PD context, VWAP off.
 # v11: content-hash cache key (config + data identity + optional train_mask).
-FEATURE_CACHE_VERSION = "v11-content-hash"
+# v12: trader-context columns (htf_day_bias, manip_reverses_htf, context_trade_direction).
+FEATURE_CACHE_VERSION = "v12-trader-context"
 
 
 def feature_cache_content_hash(
@@ -757,6 +762,17 @@ def build_features(
             and "session_id" in primary.columns
         ):
             feat["vwap"] = vwap_level(primary)
+
+    # --- Trader-context HTF bias / manip reverse / trade direction ---
+    # Wired when PD context or strategy state is on (Idea 1/2).
+    need_trader_ctx = feat_cfg is not None and (
+        bool(getattr(feat_cfg, "include_strategy_state", False))
+        or bool(getattr(feat_cfg, "include_pd_context", False))
+    )
+    if need_trader_ctx:
+        trader_ctx = build_trader_context_features(feat)
+        for col in trader_ctx.columns:
+            feat[col] = trader_ctx[col]
 
     # Drop leading NaNs from warmup
     feat = feat.dropna(how="all")

@@ -162,12 +162,34 @@ def _write_split(
             "n_sessions_skipped": result.get("n_sessions_skipped", 0),
         }
         (split_dir / "session_activity.json").write_text(json.dumps(session_diag, indent=2))
+        direction_diagnostics = result.get("direction_diagnostics")
+        if direction_diagnostics:
+            (split_dir / "direction_diagnostics.json").write_text(
+                json.dumps(direction_diagnostics, indent=2)
+            )
 
     # ------------------------------------------------------------------
     # Metrics
     # ------------------------------------------------------------------
     save_metrics_json(metrics, split_dir / "metrics.json")
     (split_dir / "summary.txt").write_text(build_summary_table(metrics))
+    if not trades.empty:
+        opens = trades[trades.get("type", pd.Series(dtype=str)) == "open"]
+        closes = trades[trades.get("type", pd.Series(dtype=str)).astype(str).str.contains("close")]
+        direction_summary = {
+            "long_trades": int((opens.get("direction", pd.Series(dtype=float)) == 1).sum()),
+            "short_trades": int((opens.get("direction", pd.Series(dtype=float)) == -1).sum()),
+            "long_pnl": 0.0,
+            "short_pnl": 0.0,
+        }
+        if not closes.empty and not opens.empty:
+            from .plots import _pair_trades
+
+            pairs = _pair_trades(trades)
+            for open_row, close_row in pairs:
+                key = "long_pnl" if int(open_row.get("direction", 0)) == 1 else "short_pnl"
+                direction_summary[key] += float(close_row.get("pnl", 0.0) or 0.0)
+        (split_dir / "direction_summary.json").write_text(json.dumps(direction_summary, indent=2))
 
     # ------------------------------------------------------------------
     # Static PNG charts
@@ -196,6 +218,9 @@ def _write_split(
 
         if not trades.empty:
             _plt.plot_trade_pnl_hist(trades, out_path=split_dir / "pnl_hist.png", dpi=dpi)
+            _plt.plot_direction_summary(
+                trades, out_path=split_dir / "direction_summary.png", dpi=dpi
+            )
 
         _plt.plot_returns_dist(equity, out_path=split_dir / "returns_dist.png", dpi=dpi)
         _plt.plot_monthly_returns_heatmap(

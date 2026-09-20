@@ -56,6 +56,12 @@ def _features(bars: pd.DataFrame) -> pd.DataFrame:
             "ifvg_bear_active": np.zeros(n),
             "last_swing_high": np.full(n, float(high.max()) + 1.0),
             "last_swing_low": np.full(n, float(low.min()) - 1.0),
+            "london_high": np.full(n, float(high.max()) + 2.0),
+            "london_low": np.full(n, float(low.min()) - 2.0),
+            "htf_day_bias": np.ones(n),
+            "context_trade_direction": np.ones(n),
+            "manip_reverses_htf": np.zeros(n),
+            "atr_5": np.ones(n),
         },
         index=bars.index,
     )
@@ -74,7 +80,7 @@ class TestStrategyActionSpace:
         )
         assert isinstance(env.action_space, Box)
         assert env.action_space.shape == (4,)
-        np.testing.assert_array_equal(env.action_space.low, [-1.0, 0.0, 0.0, 0.0])
+        np.testing.assert_array_equal(env.action_space.low, [-1.0, -1.0, -1.0, -1.0])
         np.testing.assert_array_equal(env.action_space.high, [1.0, 1.0, 1.0, 1.0])
 
     def test_action_contains_valid_4d(self) -> None:
@@ -87,7 +93,7 @@ class TestStrategyActionSpace:
             strategy=PO3IFVGStrategy(enforce_gate=False),
             obs_window=10,
         )
-        action = np.array([0.8, 0.5, 0.7, 0.0], dtype=np.float32)
+        action = np.array([0.0, 0.5, 0.7, 0.0], dtype=np.float32)
         assert env.action_space.contains(action)
 
     def test_baseline_keeps_legacy_space(self) -> None:
@@ -122,8 +128,11 @@ class TestStrategyStructuralSL:
         """Idea 1 long: SL = manipulation_low (exact mode, Agent.md §27)."""
         bars = _bars()
         feats = _features(bars)
-        feats["po3_manipulation_low"] = np.full(len(bars), 100.0)
+        feats["po3_manipulation_low"] = np.full(len(bars), 95.0)
         feats["po3_manipulation_high"] = np.full(len(bars), 110.0)
+        feats["last_swing_low"] = np.nan
+        feats["asian_low"] = np.nan
+        feats["london_low"] = np.nan
         env = TradingEnv(
             bars,
             feats,
@@ -134,28 +143,31 @@ class TestStrategyStructuralSL:
             initial_balance=100_000.0,
             risk_frac_range=(0.01, 0.01),
             rr_ratio_range=(2.0, 2.0),
+            min_sl_points=0.0,
+            min_sl_atr_mult=0.0,
         )
         env.reset()
-        # Step until a long entry is filled: strong long action each bar.
         obs, _ = env.reset()
         filled = False
         for _ in range(len(bars) - 5):
-            action = np.array([0.9, 0.5, 0.5, 0.0], dtype=np.float32)
+            action = np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32)
             obs, reward, done, truncated, info = env.step(action)
             if env.position is not None:
-                assert env.position.sl_price == pytest.approx(100.0)
+                assert env.position.sl_price == pytest.approx(95.0)
                 filled = True
                 break
             if done or truncated:
                 break
-        assert filled, "expected a long position to be opened with SL=100.0"
+        assert filled, "expected a long position to be opened with SL=95.0"
 
     def test_invalid_geometry_rejected(self) -> None:
         """Manipulation_low >= entry must reject, not create a backwards SL."""
         bars = _bars()
         feats = _features(bars)
-        # Set the manipulation low above every price -> invalid long geometry.
         feats["po3_manipulation_low"] = np.full(len(bars), 999.0)
+        feats["last_swing_low"] = np.nan
+        feats["asian_low"] = np.nan
+        feats["london_low"] = np.nan
         env = TradingEnv(
             bars,
             feats,
@@ -163,11 +175,13 @@ class TestStrategyStructuralSL:
             strategy=PO3IFVGStrategy(enforce_gate=False),
             sl_buffer_pts=0.0,
             obs_window=10,
+            min_sl_points=0.0,
+            min_sl_atr_mult=0.0,
         )
         env.reset()
         opened = False
         for _ in range(20):
-            action = np.array([0.9, 0.5, 0.5, 0.0], dtype=np.float32)
+            action = np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32)
             obs, reward, done, truncated, info = env.step(action)
             if env.position is not None:
                 opened = True

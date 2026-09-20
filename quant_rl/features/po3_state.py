@@ -80,6 +80,7 @@ def build_po3_state(
     end = np.zeros(n)
     dist = np.zeros(n)
     direction = np.zeros(n)
+    manip_direction = np.zeros(n)
 
     state = _IDLE
     run_h = np.nan
@@ -121,16 +122,20 @@ def build_po3_state(
             manip_active[t] = 1.0
             manip_h[t] = run_h
             manip_l[t] = run_l
+            # Impulse sign: sell-side manip = down (-1), buy-side = up (+1).
+            manip_direction[t] = -1.0 if state == _MANIP_LONG else 1.0
         elif state == _DIST_LONG:
             manip_h[t] = run_h
             manip_l[t] = run_l
             dist[t] = 1.0
             direction[t] = 1.0
+            manip_direction[t] = -1.0
         elif state == _DIST_SHORT:
             manip_h[t] = run_h
             manip_l[t] = run_l
             dist[t] = 1.0
             direction[t] = -1.0
+            manip_direction[t] = 1.0
 
     return pd.DataFrame(
         {
@@ -138,6 +143,7 @@ def build_po3_state(
             "po3_manipulation_high": manip_h,
             "po3_manipulation_low": manip_l,
             "po3_manipulation_end": end,
+            "po3_manipulation_direction": manip_direction,
             "po3_distribution": dist,
             "po3_distribution_direction": direction,
         },

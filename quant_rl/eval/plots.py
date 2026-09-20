@@ -105,10 +105,8 @@ def plot_equity_curve(
     if trades is not None and not trades.empty and "time" in trades.columns:
         pairs = _pair_trades(trades)
         if pairs:
-            times = pd.to_datetime([c["time"] for _, c in pairs])
+            times, eq_vals = _per_trade_equity(pairs, equity)
             per_trade = True
-            eq_at = equity.reindex(times).ffill().bfill()
-            eq_vals = np.asarray(eq_at.to_numpy(dtype=float))
             x = np.arange(len(pairs), dtype=float)
             ax.plot(x, eq_vals, color=EQUITY_COLOR, label="Equity")
             peak = np.maximum.accumulate(eq_vals)
@@ -138,9 +136,9 @@ def plot_equity_curve(
         ax.set_xlabel("Date")
 
     if daily_loss_limit is not None:
-        limit_s = daily_loss_limit_series(equity, daily_loss_limit)
         if per_trade:
-            limit_s = limit_s.reindex(times).ffill().bfill()
+            eq_trade = pd.Series(eq_vals, index=times)
+            limit_s = daily_loss_limit_series(eq_trade, daily_loss_limit)
             ax.plot(
                 x,
                 np.asarray(limit_s.values),
@@ -151,6 +149,7 @@ def plot_equity_curve(
                 label=f"Daily loss limit (${daily_loss_limit:,.0f} from day open)",
             )
         else:
+            limit_s = daily_loss_limit_series(equity, daily_loss_limit)
             ax.plot(
                 limit_s.index,
                 np.asarray(limit_s.values),
@@ -591,6 +590,71 @@ def plot_trade_pnl_hist(
     return fig
 
 
+def plot_direction_summary(
+    trades: pd.DataFrame,
+    out_path: Path | str | None = None,
+    dpi: int = 150,
+) -> Figure:
+    """Plot completed-trade counts and PnL distributions by direction."""
+    _apply_style()
+    pairs = _pair_trades(trades)
+    rows = [
+        {
+            "direction": "Long" if int(open_row.get("direction", 0)) == 1 else "Short",
+            "pnl": float(close_row.get("pnl", 0.0) or 0.0),
+        }
+        for open_row, close_row in pairs
+    ]
+    closed = pd.DataFrame(rows)
+    fig, (ax_count, ax_pnl) = plt.subplots(1, 2, figsize=(11, 4))
+    if closed.empty:
+        for ax in (ax_count, ax_pnl):
+            ax.text(0.5, 0.5, "No completed trades", ha="center", va="center")
+            ax.set_axis_off()
+    else:
+        order = ["Long", "Short"]
+        counts = closed["direction"].value_counts().reindex(order, fill_value=0)
+        sums = closed.groupby("direction")["pnl"].sum().reindex(order, fill_value=0.0)
+        colors = [LONG_COLOR, SHORT_COLOR]
+        ax_count.bar(order, counts.to_numpy(), color=colors)
+        ax_count.set_title("Completed Orders by Direction", fontweight="bold")
+        ax_count.set_ylabel("Trade count")
+        for i, value in enumerate(counts):
+            ax_count.text(i, float(value), str(int(value)), ha="center", va="bottom")
+        for label, color in zip(order, colors, strict=True):
+            values = closed.loc[closed["direction"] == label, "pnl"]
+            if not values.empty:
+                ax_pnl.hist(
+                    values.to_numpy(),
+                    bins=max(5, min(30, len(values))),
+                    alpha=0.65,
+                    color=color,
+                    label=f"{label} (n={len(values)})",
+                )
+        ax_pnl.axvline(0.0, color="#555", linewidth=0.8)
+        ax_pnl.set_title("PnL Distribution by Direction", fontweight="bold")
+        ax_pnl.set_xlabel("PnL (USD)")
+        ax_pnl.set_ylabel("Count")
+        ax_pnl.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"${x:,.0f}"))
+        ax_pnl.legend(fontsize=8)
+        ax_pnl.text(
+            0.98,
+            0.98,
+            "\n".join(f"{label}: ${sums[label]:,.2f}" for label in order),
+            transform=ax_pnl.transAxes,
+            ha="right",
+            va="top",
+            fontsize=8,
+            bbox={"facecolor": "white", "alpha": 0.8, "edgecolor": "#999"},
+        )
+    for ax in (ax_count, ax_pnl):
+        ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    if out_path:
+        _save(fig, out_path, dpi)
+    return fig
+
+
 # ---------------------------------------------------------------------------
 # 5. Bar-return distribution
 # ---------------------------------------------------------------------------
@@ -780,6 +844,32 @@ def _pair_trades(trades: pd.DataFrame) -> list[tuple[pd.Series, pd.Series]]:
             pairs.append((pending_open, row))
             pending_open = None
     return pairs
+
+
+def _per_trade_equity(
+    pairs: list[tuple[pd.Series, pd.Series]],
+    equity: pd.Series,
+) -> tuple[pd.DatetimeIndex, np.ndarray[Any, Any]]:
+    """Equity after each completed trade.
+
+    Prefer the close-row ``equity`` from the trade log (authoritative). Only
+    fall back to reindexing the continuous equity series when that column is
+    missing — reindex is unsafe when equity timestamps were misaligned.
+    """
+    times = pd.to_datetime([c["time"] for _, c in pairs])
+    vals = np.empty(len(pairs), dtype=float)
+    need_fallback = False
+    for i, (_, close_row) in enumerate(pairs):
+        if "equity" in close_row.index and pd.notna(close_row["equity"]):
+            vals[i] = float(close_row["equity"])
+        else:
+            vals[i] = np.nan
+            need_fallback = True
+    if need_fallback:
+        filled = equity.reindex(times).ffill().bfill()
+        miss = np.isnan(vals)
+        vals[miss] = np.asarray(filled.to_numpy(dtype=float))[miss]
+    return pd.DatetimeIndex(times), vals
 
 
 def _align_ts(ts: pd.Timestamp, index: pd.DatetimeIndex) -> pd.Timestamp:

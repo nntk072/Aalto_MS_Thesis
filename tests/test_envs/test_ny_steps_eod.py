@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -175,6 +175,7 @@ def test_skipped_bars_replay_hits_sl() -> None:
     env._ny_pos = int(np.where(env._ny_indices == last_d1)[0][0])
     skip = int(last_d1) + 1
     env.bars.loc[env.bars.index[skip], "low"] = 100.0
+    env._sync_bar_arrays()
     pos = env.broker.open_position(env.account, (20000.0, 20000.6), 0.1, 1)
     assert pos is not None
     pos.sl_price = 150.0
@@ -267,3 +268,44 @@ def test_engine_force_closes_last_ny_bar() -> None:
     assert len(trades) > 0
     assert (trades["type"] == "eod_close").any()
     assert (trades["reason"] == "session_end").any()
+
+
+@pytest.mark.unit
+def test_step_uses_feature_row_not_series() -> None:
+    """Hot-path step must not construct pd.Series for feature rows."""
+    from quant_rl.envs.feature_row import FeatureRow
+
+    env = _make_env(block_overnight=True)
+    env.reset()
+    row = env._feature_row_at(env.step_idx)
+    assert isinstance(row, FeatureRow)
+    assert not isinstance(row, pd.Series)
+
+    called: list[str] = []
+    real_series = pd.Series
+
+    def _guard(*args: Any, **kwargs: Any) -> pd.Series:
+        # Allow Series elsewhere; fail if step builds a feature-matrix Series.
+        if args and isinstance(args[0], np.ndarray) and kwargs.get("index") is not None:
+            called.append("feat")
+            raise AssertionError("step must not wrap feature rows in pd.Series")
+        return cast(pd.Series, real_series(*args, **kwargs))
+
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(pd, "Series", _guard)
+    try:
+        env.step(0)
+    finally:
+        monkey.undo()
+    assert called == []
+
+
+@pytest.mark.unit
+def test_sync_bar_arrays_picks_up_mutated_low() -> None:
+    env = _make_env(block_overnight=False)
+    env.reset()
+    i = int(env.step_idx)
+    env.bars.loc[env.bars.index[i], "low"] = 12.0
+    assert float(env._low_arr[i]) != 12.0
+    env._sync_bar_arrays()
+    assert float(env._low_arr[i]) == pytest.approx(12.0)

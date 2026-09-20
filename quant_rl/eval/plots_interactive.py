@@ -72,9 +72,9 @@ def plot_equity_curve(
     if trades is not None and not trades.empty and "time" in trades.columns:
         pairs = _pair_trades(trades)
         if pairs:
-            times = pd.to_datetime([c["time"] for _, c in pairs])
-            eq_at = equity.reindex(times).ffill().bfill()
-            eq_vals = np.asarray(eq_at.to_numpy(dtype=float))
+            from .plots import _per_trade_equity
+
+            times, eq_vals = _per_trade_equity(pairs, equity)
             x = np.arange(len(pairs))
             per_trade = True
 
@@ -133,9 +133,9 @@ def plot_equity_curve(
         x_title = "Date"
 
     if daily_loss_limit is not None:
-        limit_s = daily_loss_limit_series(equity, daily_loss_limit)
         if per_trade:
-            limit_s = limit_s.reindex(times).ffill().bfill()
+            eq_trade = pd.Series(eq_vals, index=times)
+            limit_s = daily_loss_limit_series(eq_trade, daily_loss_limit)
             fig.add_trace(
                 go.Scatter(
                     x=x,
@@ -147,6 +147,7 @@ def plot_equity_curve(
                 )
             )
         else:
+            limit_s = daily_loss_limit_series(equity, daily_loss_limit)
             fig.add_trace(
                 go.Scatter(
                     x=limit_s.index,
@@ -1013,16 +1014,20 @@ def plot_fvg_signals_interactive(
     """
     _check()
     from quant_rl.eval.po3_plots import _resample_ohlc
-    from quant_rl.features.po3_config import build_fvg_zones
+    from quant_rl.features.po3_config import build_fvg_zones_for_plot
 
-    if window is not None:
-        start, end = window
-        bars = bars.loc[start:end]
     if not len(bars):
         raise ValueError("No bars to plot after applying window.")
 
-    zones = build_fvg_zones(bars, signals)
-    ohlcv = _resample_ohlc(bars, candle_tf)
+    zones = build_fvg_zones_for_plot(bars)
+    plot_bars = bars
+    if window is not None:
+        start, end = window
+        plot_bars = bars.loc[start:end]
+    if not len(plot_bars):
+        raise ValueError("No bars to plot after applying window.")
+
+    ohlcv = _resample_ohlc(plot_bars, candle_tf)
     if len(ohlcv) > max_points:
         ohlcv = ohlcv.iloc[-max_points:]
     if ohlcv.empty:
@@ -1059,15 +1064,15 @@ def plot_fvg_signals_interactive(
             y0=z.zone_low,
             y1=z.zone_high,
             fillcolor=zone_colors[(z.kind, z.side)],
-            line=dict(width=0),
+            line=dict(width=0.6, color=zone_colors[(z.kind, z.side)]),
             layer="below",
         )
 
-    # Entry markers.
+    # Entry markers at candle close.
     if show_entries:
-        for col, marker, color, dy in (
-            ("entry_long", "triangle-up", _LONG_COLOR, 1.004),
-            ("entry_short", "triangle-down", _SHORT_COLOR, 0.996),
+        for col, marker, color in (
+            ("entry_long", "triangle-up", _LONG_COLOR),
+            ("entry_short", "triangle-down", _SHORT_COLOR),
         ):
             if col not in signals.columns:
                 continue
@@ -1082,9 +1087,10 @@ def plot_fvg_signals_interactive(
                 loc = int(ohlcv.index.searchsorted(ts, side="left"))
                 if loc >= len(ohlcv):
                     continue
-                base = ohlcv["high"].iloc[loc] if dy > 1 else ohlcv["low"].iloc[loc]
+                if loc > 0 and ohlcv.index[loc] > ts:
+                    loc = loc - 1
                 xs.append(ohlcv.index[loc])
-                ys.append(base * dy)
+                ys.append(float(ohlcv["close"].iloc[loc]))
             if xs:
                 fig.add_trace(
                     go.Scatter(

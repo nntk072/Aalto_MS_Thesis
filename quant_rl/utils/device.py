@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 import torch
 import torch.nn as nn
 
 _GiB = 1024**3
-# SubprocVecEnv workers each import torch + copy env arrays (~0.75 GiB observed).
-_WORKER_RAM_BYTES = int(0.75 * _GiB)
+# SubprocVecEnv workers import torch and copy the full feature/environment
+# state. Steady-state 32-worker RSS was ~2.4 GiB/worker, but forkserver pickle
+# spawn peaks higher: 64 workers @ 256G Slurm OOM'd mid-unpickle on the PO3
+# full feature matrix. Plan at 4 GiB/worker so 256G caps at 32 and 512G fits 64.
+_WORKER_RAM_BYTES = 4 * _GiB
 _RAM_HEADROOM_BYTES = int(1.5 * _GiB)
 # Main process holds the policy, Adam states, and the source env (~3 GiB observed).
 _PARENT_RAM_BYTES = 3 * _GiB
@@ -62,8 +66,11 @@ def suggest_n_envs(
     """Pick a SubprocVecEnv width that fits RAM (power of two).
 
     ``requested <= 1`` is left as DummyVecEnv. Otherwise the value is scaled
-    up toward the GPU target, then capped by free RAM, 40% of total RAM, and
-    ``cpu_count - 1``.
+    up toward the GPU target, then capped by the effective allocation's free
+    RAM after headroom.
+    ``cpu_count`` is retained for API compatibility, but CPU allocation is not
+    used as a hard worker cap because environment workers can safely share the
+    allocated CPUs while the memory cap remains the OOM safeguard.
 
     Parameters
     ----------
@@ -85,14 +92,14 @@ def suggest_n_envs(
     if requested <= 1:
         return 1
 
+    # Required allocation ~= parent + headroom + (workers * worker estimate).
+    # The power-of-two result is the largest rollout width that satisfies it.
     max_from_avail = max(
         1,
         (available_ram_bytes - _RAM_HEADROOM_BYTES - _PARENT_RAM_BYTES) // _WORKER_RAM_BYTES,
     )
-    max_from_total = max(1, int(0.40 * total_ram_bytes) // _WORKER_RAM_BYTES)
-    cpu_cap = max(1, cpu_count)
     gpu_target = requested if vram_bytes is None else _gpu_n_envs_target(vram_bytes)
-    cap = min(max_from_avail, max_from_total, cpu_cap, gpu_target)
+    cap = min(max_from_avail, gpu_target)
     target = min(max(requested, gpu_target), cap)
     return _floor_power_of_two(max(1, target))
 
@@ -166,6 +173,16 @@ def scale_training_cfg(cfg: Any, device: torch.device, arch: str) -> None:
     """Mutate ``cfg`` in place with RAM/VRAM-aware PPO/SAC throughput settings."""
     configure_cuda()
     total_ram, avail_ram = _read_meminfo()
+    cgroup_memory = _read_cgroup_memory_limit()
+    if cgroup_memory is not None:
+        limit, current = cgroup_memory
+        total_ram = min(total_ram, limit)
+        avail_ram = min(avail_ram, max(0, limit - current))
+    slurm_memory = _read_slurm_memory_limit()
+    if slurm_memory is not None:
+        total_ram = min(total_ram, slurm_memory)
+        avail_ram = min(avail_ram, slurm_memory)
+    cpu_count = _read_cgroup_cpu_count() or _read_slurm_cpu_limit() or os.cpu_count() or 1
     vram: int | None = None
     if device.type == "cuda" and torch.cuda.is_available():
         idx = device.index if device.index is not None else 0
@@ -176,9 +193,13 @@ def scale_training_cfg(cfg: Any, device: torch.device, arch: str) -> None:
         requested=requested,
         total_ram_bytes=total_ram,
         available_ram_bytes=avail_ram,
-        cpu_count=os.cpu_count() or 1,
+        cpu_count=cpu_count,
         vram_bytes=vram,
     )
+    max_envs_env = os.environ.get("QUANT_RL_MAX_N_ENVS")
+    if max_envs_env is not None:
+        n_envs = min(n_envs, max(1, int(max_envs_env)))
+        n_envs = _floor_power_of_two(max(1, n_envs))
     cfg.env.n_envs = n_envs
 
     n_steps = suggest_n_steps(current=int(cfg.ppo.n_steps), vram_bytes=vram)
@@ -223,7 +244,7 @@ def enable_extractor_autocast(extractor: nn.Module) -> None:
 
 def _gpu_n_envs_target(vram_bytes: int) -> int:
     if vram_bytes >= 70 * _GiB:
-        return 32
+        return 64
     if vram_bytes >= 35 * _GiB:
         return 16
     if vram_bytes >= 8 * _GiB:
@@ -261,3 +282,104 @@ def _read_meminfo() -> tuple[int, int]:
     except OSError:
         pass
     return total, available
+
+
+def _read_cgroup_memory_limit() -> tuple[int, int] | None:
+    """Return the current cgroup memory limit and usage, when constrained.
+
+    Slurm jobs are commonly constrained by cgroup v2 while ``/proc/meminfo``
+    still exposes the whole node.  Prefer the cgroup limit so worker scaling
+    cannot exceed the job allocation.
+    """
+    candidates = [
+        (Path("/sys/fs/cgroup/memory.max"), Path("/sys/fs/cgroup/memory.current")),
+        (
+            Path("/sys/fs/cgroup/memory/memory.limit_in_bytes"),
+            Path("/sys/fs/cgroup/memory/memory.usage_in_bytes"),
+        ),
+    ]
+    cgroup_dir = _current_cgroup_dir()
+    if cgroup_dir is not None:
+        candidates.insert(
+            0,
+            (cgroup_dir / "memory.max", cgroup_dir / "memory.current"),
+        )
+        candidates.append(
+            (
+                cgroup_dir / "memory.limit_in_bytes",
+                cgroup_dir / "memory.usage_in_bytes",
+            )
+        )
+    for limit_path, current_path in candidates:
+        try:
+            limit_text = limit_path.read_text(encoding="utf-8").strip()
+            current_text = current_path.read_text(encoding="utf-8").strip()
+            if not limit_text or limit_text == "max":
+                continue
+            limit = int(limit_text)
+            current = max(0, int(current_text))
+        except (OSError, ValueError):
+            continue
+        if limit > 0:
+            return limit, current
+    return None
+
+
+def _read_cgroup_cpu_count() -> int | None:
+    """Return the CPU quota as a worker cap, when a quota is configured."""
+    paths = [Path("/sys/fs/cgroup/cpu.max")]
+    cgroup_dir = _current_cgroup_dir()
+    if cgroup_dir is not None:
+        paths.insert(0, cgroup_dir / "cpu.max")
+    for path in paths:
+        try:
+            quota, period = path.read_text(encoding="utf-8").split()
+        except (OSError, ValueError):
+            continue
+        if quota == "max":
+            continue
+        try:
+            return max(1, int(int(quota) / int(period)))
+        except (ValueError, ZeroDivisionError):
+            continue
+    return None
+
+
+def _current_cgroup_dir() -> Path | None:
+    """Resolve this process's cgroup v2 directory, if available."""
+    try:
+        for line in Path("/proc/self/cgroup").read_text(encoding="utf-8").splitlines():
+            hierarchy, _, relative = line.partition("::")
+            if not hierarchy and relative:
+                return Path("/sys/fs/cgroup") / relative.lstrip("/")
+    except OSError:
+        pass
+    return None
+
+
+def _read_slurm_memory_limit() -> int | None:
+    """Return a Slurm memory allocation in bytes, when exported by Slurm."""
+    value = os.environ.get("SLURM_MEM_PER_NODE") or os.environ.get("SLURM_MEM_PER_CPU")
+    if not value:
+        return None
+    try:
+        suffix = value[-1].upper()
+        if suffix in "KMGT":
+            multiplier = {"K": 1024, "M": 1024**2, "G": 1024**3, "T": 1024**4}[suffix]
+            number = float(value[:-1])
+        else:
+            # Slurm reports SLURM_MEM_PER_NODE/CPU in megabytes by default.
+            multiplier = 1024**2
+            number = float(value)
+        return max(1, int(number * multiplier))
+    except ValueError:
+        return None
+
+
+def _read_slurm_cpu_limit() -> int | None:
+    """Return Slurm's allocated CPU count, when exported by Slurm."""
+    value = os.environ.get("SLURM_CPUS_PER_TASK")
+    try:
+        return max(1, int(value)) if value else None
+    except ValueError:
+        return None

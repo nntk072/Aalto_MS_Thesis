@@ -7,10 +7,10 @@ import pytest
 from quant_rl.envs.reward import DSRReward
 
 
-def test_breach_returns_minus_one():
+def test_breach_returns_strong_terminal():
     r = DSRReward()
     val = r(0.0, breach=True)
-    assert val == pytest.approx(-1.0)
+    assert val == pytest.approx(-10.0)
 
 
 def test_positive_pnl_eventually_positive():
@@ -28,11 +28,49 @@ def test_negative_pnl_eventually_negative():
 
 def test_soft_penalty_near_daily_limit():
     r = DSRReward(eta=0.01)
-    # No penalty far from limit
     val_safe = r(0.0, daily_loss=100.0, daily_loss_limit=5000.0, initial_balance=100_000.0)
     r.reset()
-    # Close to limit should be more penalised
     val_near = r(0.0, daily_loss=4999.0, daily_loss_limit=5000.0, initial_balance=100_000.0)
+    assert val_near < val_safe
+
+
+def test_soft_penalty_uses_soft_brick_band():
+    r = DSRReward(eta=0.01)
+    val_below = r(
+        0.0,
+        daily_loss=1500.0,
+        daily_loss_limit=5000.0,
+        soft_daily_loss_limit=2000.0,
+        initial_balance=100_000.0,
+    )
+    r.reset()
+    val_in_band = r(
+        0.0,
+        daily_loss=3500.0,
+        daily_loss_limit=5000.0,
+        soft_daily_loss_limit=2000.0,
+        initial_balance=100_000.0,
+    )
+    assert val_in_band < val_below
+
+
+def test_soft_max_loss_shaping_band():
+    r = DSRReward(eta=0.01)
+    val_safe = r(
+        0.0,
+        loss_from_initial=1000.0,
+        soft_max_loss_limit=5000.0,
+        max_loss_limit=10000.0,
+        initial_balance=100_000.0,
+    )
+    r.reset()
+    val_near = r(
+        0.0,
+        loss_from_initial=8000.0,
+        soft_max_loss_limit=5000.0,
+        max_loss_limit=10000.0,
+        initial_balance=100_000.0,
+    )
     assert val_near < val_safe
 
 

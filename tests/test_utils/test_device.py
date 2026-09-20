@@ -53,7 +53,7 @@ class TestSuggestNEnvs:
         )
         assert n <= 2
 
-    def test_16gb_laptop_stays_at_four_when_avail_is_typical(self) -> None:
+    def test_16gb_laptop_stays_at_one_when_avail_is_typical(self) -> None:
         n = suggest_n_envs(
             requested=8,
             total_ram_bytes=16 * _GiB,
@@ -61,7 +61,8 @@ class TestSuggestNEnvs:
             cpu_count=8,
             vram_bytes=6 * _GiB,
         )
-        assert n == 4
+        # 4 GiB/worker planning: 9G avail → 1 worker after parent/headroom.
+        assert n == 1
 
     def test_a100_scales_up_when_ram_allows(self) -> None:
         n = suggest_n_envs(
@@ -74,6 +75,26 @@ class TestSuggestNEnvs:
         assert n >= 8
         assert n <= 16
         assert n & (n - 1) == 0
+
+    def test_gh200_caps_at_32_on_256g_budget(self) -> None:
+        n = suggest_n_envs(
+            requested=8,
+            total_ram_bytes=256 * _GiB,
+            available_ram_bytes=256 * _GiB,
+            cpu_count=48,
+            vram_bytes=142 * _GiB,
+        )
+        assert n == 32
+
+    def test_gh200_allows_64_for_512g_allocation(self) -> None:
+        n = suggest_n_envs(
+            requested=8,
+            total_ram_bytes=512 * _GiB,
+            available_ram_bytes=512 * _GiB,
+            cpu_count=48,
+            vram_bytes=142 * _GiB,
+        )
+        assert n == 64
 
     def test_cpu_does_not_scale_up(self) -> None:
         n = suggest_n_envs(

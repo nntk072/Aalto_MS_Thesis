@@ -14,6 +14,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from quant_rl.envs.trading_env import TradingEnv
 
@@ -162,27 +163,35 @@ class TestTradingEnvGoldenTraces:
         assert len(opens) == 0, "No position should open without valid swing levels"
 
     def test_episodic_breach_ends_episode(self) -> None:
-        """In episodic mode, a guardrail breach sets done=True."""
+        """In episodic mode, a guardrail breach sets terminated=True, truncated=False."""
         bars = _make_deterministic_bars(n=200)
         features = _make_features(bars)
         env = TradingEnv(
             bars=bars,
             features=features,
             obs_window=10,
-            initial_balance=100.0,
+            initial_balance=100_000.0,
             episodic=True,
             use_sweep_reward=False,
-            guardrail_kwargs={"daily_loss_limit": 50.0},
+            max_episode_steps=None,
+            guardrail_kwargs={
+                "daily_loss_limit": 5_000.0,
+                "max_loss_limit": 10_000.0,
+            },
         )
         env.reset(seed=42)
-        actions = [1, 0, 0, 10, 0, 0, 10, 0, 0, 0] * 20
-        trace = _run_trace(env, actions)
-        assert any(trace["dones"]), "Episode should terminate on guardrail breach"
+        env.account.equity = 89_000.0
+        env.account.balance = 89_000.0
+        env.account._update_loss_from_initial()
+        _, reward, done, truncated, _ = env.step(0)
+        assert done is True
+        assert truncated is False
+        assert reward == pytest.approx(-10.0)
+        assert env.breach_events and env.breach_events[0]["reason"] == "max_drawdown"
 
     def test_eval_mode_continues_after_breach(self) -> None:
         """In eval mode (episodic=False), a breach blocks the session but
-        the rollout continues. We verify this by checking that after a
-        breach, subsequent steps still return done=False (until data end).
+        the rollout continues without terminated=True.
         """
         bars = _make_deterministic_bars(n=300)
         features = _make_features(bars)
@@ -190,23 +199,29 @@ class TestTradingEnvGoldenTraces:
             bars=bars,
             features=features,
             obs_window=10,
-            initial_balance=100.0,
+            initial_balance=100_000.0,
             episodic=False,
             use_sweep_reward=False,
-            guardrail_kwargs={"daily_loss_limit": 50.0},
+            max_episode_steps=None,
+            guardrail_kwargs={
+                "daily_loss_limit": 5_000.0,
+                "max_loss_limit": 10_000.0,
+            },
         )
         env.reset(seed=42)
-        actions = [1, 0, 0, 10, 0, 0, 10, 0, 0, 0] * 30
-        trace = _run_trace(env, actions)
-        breach_idx = None
-        for i, d in enumerate(trace["dones"]):
-            if d:
-                breach_idx = i
+        env.account.equity = 89_000.0
+        env.account.balance = 89_000.0
+        env.account._update_loss_from_initial()
+        _, _, done, truncated, _ = env.step(0)
+        assert done is False
+        assert truncated is False
+        assert len(env.breach_events) >= 1
+        # Subsequent steps still run (latch, not year-terminate).
+        for _ in range(5):
+            _, _, done, truncated, _ = env.step(0)
+            assert done is False
+            if truncated:
                 break
-        assert breach_idx is not None, "Expected a guardrail breach"
-        assert breach_idx < len(trace["dones"]) - 1, (
-            "Breach should not be the very last step unless data ended"
-        )
 
 
 _GOLDEN_TRACE_HASH = "9b9ba26bcfe60bdc559b09a545fe146cea58b0d1027ac69069e41e0cc1efe583"

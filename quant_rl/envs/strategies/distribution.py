@@ -80,3 +80,42 @@ class DistributionStrategy(TradingStrategy):
             "sellside_liquidity": _get("sweep_low_level"),
             "previous_day_high_low": _get("prev_day_low"),
         }
+
+    def context_direction(self, row: pd.Series) -> int:
+        """Prefer distribution / context_trade_direction, else HTF day bias."""
+        if float(row.get("po3_distribution", 0.0)) > 0:
+            dist = float(row.get("po3_distribution_direction", 0.0))
+            if dist != 0.0 and np.isfinite(dist):
+                return int(np.sign(dist))
+        for col in ("context_trade_direction", "htf_day_bias"):
+            val = float(row.get(col, 0.0))
+            if val != 0.0 and np.isfinite(val):
+                return int(np.sign(val))
+        return 0
+
+    def sl_candidates(self, *, direction: int, row: pd.Series) -> list[tuple[str, float]]:
+        """Structural SL ladder (sweep extremes instead of manip)."""
+        if direction == 1:
+            cols = (
+                "last_swing_low",
+                "sweep_low_level",
+                "asian_low",
+                "london_low",
+            )
+        elif direction == -1:
+            cols = (
+                "last_swing_high",
+                "sweep_high_level",
+                "asian_high",
+                "london_high",
+            )
+        else:
+            return []
+        out: list[tuple[str, float]] = []
+        for col in cols:
+            if col not in row.index:
+                continue
+            level = float(row.get(col, np.nan))
+            if np.isfinite(level):
+                out.append((col, level))
+        return out

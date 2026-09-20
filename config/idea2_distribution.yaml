@@ -7,6 +7,7 @@ features:
 
 env:
   strategy_actions: true
+  reward_mode: pnl
   sl_buffer_pts: 0.0           # exact-mode structural stops
 
 strategy:
@@ -20,8 +21,8 @@ strategy:
   risk:
     sl_mode: "exact"
     sl_buffer_pts: 1.0
-    risk_frac_range: [0.005, 0.02]
-    rr_range: [1.0, 3.0]
+    risk_frac_range: [0.005, 0.01]
+    rr_range: [1.5, 5.0]
   tp:
     mode: "agent"
     allowed_targets:

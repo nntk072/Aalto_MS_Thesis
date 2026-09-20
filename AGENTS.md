@@ -139,3 +139,21 @@ gives you structural context (callers, dependents, test coverage) that file sear
 3. Use `get_affected_flows_tool` to understand impact.
 4. Use `query_graph_tool` pattern="tests_for" to check coverage.
 <!-- /code-review-graph MCP tools -->
+## Triton (Aalto HPC)
+
+GPU training on Triton: see [`.agents/rules/triton-slurm.md`](.agents/rules/triton-slurm.md).
+Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh`, `attach_or_alloc.sh`).
+
+- **Reuse first:** if a GPU tmux/`srun` already exists, run train/eval/tests
+  there (`tmux send-keys`).
+- **`srun` needs confirmation:** agents may allocate only after you explicitly
+  OK it in-chat. No self-started short diagnostic jobs (&lt;~120s).
+- **Before alloc:** check `sinfo`/`squeue` for free GPU/CPU/RAM. Prefer
+  **H200** (`gpu-h200-141g-short`, `--gpus=h200:1`) when available; else
+  **GH200** (`gpu-grace-h200-141g`, `--gpus=gh200:1`). Always **1 GPU**.
+  Time **12h** if `MaxTime` allows, else **6h**. Start mem 128G / 8 CPUs.
+  Match venv arch (H200=x86, GH200=aarch64).
+- **Do not `scancel`** when a train finishes — keep the GPU bash + tmux for
+  the next run (unless you ask, or replacing an OOM).
+- Login SSH for `ls` / `squeue` / `sinfo` / `tmux capture-pane` / inspect-only
+  `scripts/triton/*.sh`; never `srun` for those checks.

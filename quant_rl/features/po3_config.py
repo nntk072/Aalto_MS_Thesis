@@ -798,3 +798,139 @@ def build_fvg_zones(
 
     zones.sort(key=lambda z: z.start_ts)
     return zones
+
+
+def _invalidate_zone_on_tf(
+    bars: pd.DataFrame,
+    *,
+    side: str,
+    start_i: int,
+    zone_low: float,
+    zone_high: float,
+) -> tuple[pd.Timestamp, bool]:
+    """Scan ``bars`` after ``start_i`` for gap fill; return (end_ts, invalidated)."""
+    n = len(bars)
+    end_ts = bars.index[n - 1]
+    invalidated = False
+    for j in range(start_i + 1, n):
+        if side == "bullish" and float(bars["low"].iloc[j]) <= zone_low:
+            return bars.index[j], True
+        if side == "bearish" and float(bars["high"].iloc[j]) >= zone_high:
+            return bars.index[j], True
+    return end_ts, invalidated
+
+
+def build_fvg_zones_for_plot(
+    m1_bars: pd.DataFrame,
+    *,
+    htf: str = "M15",
+    ltf: str = "M5",
+    fvg_config: FVGConfig | None = None,
+    ifvg_config: IFVGConfig | None = None,
+) -> list[FVGZone]:
+    """Build drawable FVG/IFVG zones from native HTF/LTF candles (plot-only).
+
+    Unlike :func:`build_fvg_zones`, which starts boxes at the causally delayed
+    M1 0→1 edge (next HTF open), this places the left edge on the imbalance
+    candle between bar1 and bar3 (bar2 open) and ends at true gap fill with
+    no M1 ``max_zone_bars`` cap. Agent feature causality is unchanged.
+    """
+    from quant_rl.data.resample import resample
+
+    zones: list[FVGZone] = []
+    if m1_bars.empty:
+        return zones
+
+    if fvg_config is None:
+        fvg_config = FVGConfig()
+    if ifvg_config is None:
+        ifvg_config = IFVGConfig()
+
+    # --- HTF FVG: start at bar2 open (gap between bar1 and bar3) ---
+    htf_bars = resample(m1_bars, htf)  # type: ignore[arg-type]
+    if len(htf_bars) >= 3:
+        htf_fvg = detect_fvg(htf_bars, config=fvg_config)
+        for side, flag_col, low_col, high_col in (
+            ("bullish", "fvg_bullish", "fvg_bullish_low", "fvg_bullish_high"),
+            ("bearish", "fvg_bearish", "fvg_bearish_low", "fvg_bearish_high"),
+        ):
+            flags = htf_fvg[flag_col].to_numpy(dtype=int)
+            for i in range(2, len(htf_bars)):
+                if flags[i] != 1:
+                    continue
+                # Pulse only: skip forward-filled runs if any (detect_fvg is per-bar).
+                zone_low = float(htf_fvg[low_col].iloc[i])
+                zone_high = float(htf_fvg[high_col].iloc[i])
+                if not np.isfinite(zone_low) or not np.isfinite(zone_high) or zone_high <= zone_low:
+                    continue
+                start_ts = htf_bars.index[i - 1]  # bar2 = edge between candles
+                end_ts, invalidated = _invalidate_zone_on_tf(
+                    htf_bars,
+                    side=side,
+                    start_i=i,
+                    zone_low=zone_low,
+                    zone_high=zone_high,
+                )
+                zones.append(
+                    FVGZone(
+                        kind="htf_fvg",
+                        side=side,
+                        start_ts=start_ts,
+                        end_ts=end_ts,
+                        zone_low=zone_low,
+                        zone_high=zone_high,
+                        confirmed=False,
+                        invalidated=invalidated,
+                    )
+                )
+
+    # --- LTF IFVG: start at confirmation candle on LTF ---
+    ltf_bars = resample(m1_bars, ltf)  # type: ignore[arg-type]
+    if len(ltf_bars) >= 3:
+        ltf_fvg = detect_fvg(ltf_bars, config=fvg_config)
+        ltf_ifvg = detect_ifvg_confirmation(ltf_bars, ltf_fvg, config=ifvg_config)
+        for side, flag_col, low_col, high_col in (
+            (
+                "bullish",
+                "ifvg_bullish_confirmed",
+                "ifvg_bullish_low",
+                "ifvg_bullish_high",
+            ),
+            (
+                "bearish",
+                "ifvg_bearish_confirmed",
+                "ifvg_bearish_low",
+                "ifvg_bearish_high",
+            ),
+        ):
+            flags = ltf_ifvg[flag_col].to_numpy(dtype=int)
+            for i in range(len(ltf_bars)):
+                if flags[i] != 1:
+                    continue
+                zone_low = float(ltf_ifvg[low_col].iloc[i])
+                zone_high = float(ltf_ifvg[high_col].iloc[i])
+                if not np.isfinite(zone_low) or not np.isfinite(zone_high) or zone_high <= zone_low:
+                    continue
+                start_ts = ltf_bars.index[i]
+                end_ts, invalidated = _invalidate_zone_on_tf(
+                    ltf_bars,
+                    side=side,
+                    start_i=i,
+                    zone_low=zone_low,
+                    zone_high=zone_high,
+                )
+                zones.append(
+                    FVGZone(
+                        kind="ltf_ifvg",
+                        side=side,
+                        start_ts=start_ts,
+                        end_ts=end_ts,
+                        zone_low=zone_low,
+                        zone_high=zone_high,
+                        confirmed=True,
+                        invalidated=invalidated,
+                    )
+                )
+
+    zones.sort(key=lambda z: z.start_ts)
+    return zones

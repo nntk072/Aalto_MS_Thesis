@@ -21,6 +21,7 @@ passed straight into ``quant_rl.evaluation.calculate_metrics`` and
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
 
 import numpy as np
@@ -34,12 +35,15 @@ def make_action_fn(
     model: Any,
     continuous_actions: bool = False,
     deterministic: bool = True,
+    strategy_actions: bool = False,
 ) -> Any:
     """Return an observation → action callable with explicit action typing.
 
     PPO trains on ``TradingEnv``'s discrete action space, so the policy's
     integer action id is passed through unchanged; SAC trains on the
     continuous Box space and yields a float position-sizing fraction.
+    When ``strategy_actions`` is set (Idea 1 PO3 Box(4)), the full float32
+    vector is returned so eval matches training.
 
     This is the single shared implementation — ``scripts/train_rl.py`` and
     ``scripts/compare_encoders.py`` used to each carry private copies.
@@ -47,7 +51,10 @@ def make_action_fn(
 
     def action_fn(obs: dict[str, Any]) -> Any:
         action = model.predict(obs, deterministic=deterministic)[0]
-        scalar = np.asarray(action).reshape(-1)[0]
+        arr = np.asarray(action, dtype=np.float32).reshape(-1)
+        if strategy_actions:
+            return arr.astype(np.float32, copy=False)
+        scalar = arr[0]
         return float(scalar) if continuous_actions else int(scalar)
 
     return action_fn
@@ -83,7 +90,18 @@ def evaluate_model(
     eod_risk: dict[str, Any] | None = None,
     use_vae: bool = False,
     vae: Any | None = None,
+    strategy: Any = None,
+    strategy_actions: bool = False,
+    strategy_reward: Any = None,
+    strategy_weight: float = 0.0,
+    sl_buffer_pts: float = 0.0,
     pre_ny_by_date: dict[Any, Any] | None = None,
+    min_sl_atr_mult: float = 0.5,
+    min_sl_points: float = 0.0,
+    max_entries_per_session: int = 0,
+    entry_cooldown_bars: int = 0,
+    reward_mode: str = "dsr",
+    entry_intensity_threshold: float = 0.1,
 ) -> dict[str, Any]:
     """Walk a trained RL ``model`` over *bars*/*features* and collect trades.
 
@@ -129,21 +147,46 @@ def evaluate_model(
         eod_risk=eod_risk,
         use_vae=use_vae,
         vae=vae,
+        strategy=strategy,
+        strategy_actions=strategy_actions,
+        strategy_reward=strategy_reward,
+        strategy_weight=strategy_weight,
+        sl_buffer_pts=sl_buffer_pts,
         pre_ny_by_date=pre_ny_by_date,
+        min_sl_atr_mult=min_sl_atr_mult,
+        min_sl_points=min_sl_points,
+        max_entries_per_session=max_entries_per_session,
+        entry_cooldown_bars=entry_cooldown_bars,
+        reward_mode=reward_mode,
+        entry_intensity_threshold=entry_intensity_threshold,
     )
 
     obs, _ = env.reset()
     done = False
     truncated = False
-    action_fn = make_action_fn(model, continuous_actions, deterministic)
+    action_fn = make_action_fn(
+        model, continuous_actions, deterministic, strategy_actions=strategy_actions
+    )
+    action_counts: Counter[str] = Counter()
     while not (done or truncated):
-        obs, _, done, truncated, _ = env.step(action_fn(obs))
+        action = action_fn(obs)
+        if strategy_actions:
+            action_key = str(tuple(np.round(np.asarray(action).reshape(-1), 4)))
+        else:
+            action_key = str(action)
+        action_counts[action_key] += 1
+        obs, _, done, truncated, _ = env.step(action)
 
     equity_series = pd.Series(
         env.equity_curve,
-        index=env.bars.index[env.obs_window - 1 : env.obs_window - 1 + len(env.equity_curve)],
+        index=pd.DatetimeIndex(env.equity_times),
     )
     trades_df = pd.DataFrame(env.trade_log)
+
+    n_sessions = len(env.all_sessions)
+    days_traded = len(env.sessions_with_trades)
+    fail_time = env.breach_events[0]["time"] if env.breach_events else None
+    survived_full_year = len(env.breach_events) == 0
 
     return {
         "equity": equity_series,
@@ -151,8 +194,13 @@ def evaluate_model(
         "account": env.account,
         "breaches": env.breach_log,
         "breach_events": env.breach_events,
-        "n_sessions": len(env.all_sessions),
+        "n_sessions": n_sessions,
         "n_breach_sessions": len(env.breached_sessions),
-        "n_sessions_with_trades": len(env.sessions_with_trades),
-        "n_sessions_skipped": len(env.all_sessions) - len(env.sessions_with_trades),
+        "n_sessions_with_trades": days_traded,
+        "n_sessions_skipped": n_sessions - days_traded,
+        "days_traded": days_traded,
+        "survived_full_year": survived_full_year,
+        "fail_time": fail_time,
+        "action_counts": dict(action_counts),
+        "entry_diag": dict(env._entry_diag),
     }

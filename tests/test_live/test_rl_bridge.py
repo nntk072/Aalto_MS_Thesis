@@ -112,7 +112,7 @@ def test_zero_latency_matches_legacy_default(trending_bars):
     """fill_latency_bars=0 keeps the previous next-bar fill behaviour."""
     env = _make_env(trending_bars, 0)
     env.reset(seed=42)
-    bid, ask = env._bar_quote(env.bars.iloc[env.step_idx + 1])
+    bid, ask = env._bar_quote(env._bar_at(env.step_idx + 1))
     # step once with hold; the internal fill quote must equal bar t+1 quote
     env.step(0)
     assert env.fill_latency_bars == 0

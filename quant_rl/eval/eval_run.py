@@ -151,8 +151,10 @@ def main() -> None:
         contract_size=cfg.account.contract_size,
         max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
         dsr_eta=cfg.env.reward_dsr_eta,
+        reward_mode=str(cfg.env.get("reward_mode", "dsr")),
         block_overnight=bool(cfg.env.get("block_overnight", True)),
         eod_risk=dict(cfg.env.get("eod_risk", {})),
+        entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.1)),
     )
     test_result["initial_balance"] = cfg.account.initial_balance
     test_m = calculate_metrics(
@@ -168,6 +170,12 @@ def main() -> None:
         test_m.n_trades,
         test_m.total_return_pct,
     )
+    log.info("Test action counts: %s", test_result.get("action_counts", {}))
+    if test_m.n_trades == 0:
+        log.error(
+            "Experiment failure: evaluation produced zero trades; "
+            "metrics are not meaningful until action behavior is diagnosed."
+        )
 
     testing_dir = run_dir / "testing"
     if testing_dir.exists():

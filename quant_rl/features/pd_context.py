@@ -13,6 +13,8 @@ but should be stripped from the model ``seq`` via ``MTF_RAW_SUFFIXES``.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 
@@ -41,6 +43,10 @@ PD_CONTEXT_FEATURE_COLUMNS = (
     "ctx_prev_week_low_dist_atr",
     "ctx_prev_week_in_premium",
     "ctx_prev_week_in_discount",
+    # Trader-context bias (model-facing floats; no raw price levels).
+    "htf_day_bias",
+    "manip_reverses_htf",
+    "context_trade_direction",
 )
 
 PD_CONTEXT_RAW_COLUMNS = (
@@ -279,6 +285,16 @@ def build_pd_context_features(
     out["ctx_in_premium"] = in_prem.astype(float)
     out["ctx_in_discount"] = in_disc.astype(float)
 
+    # Same-day HTF bias from Asia+London composite mid vs close (causal).
+    # +1 discount/long, -1 premium/short, 0 chop / unavailable.
+    htf_bias: np.ndarray[Any, Any] = np.zeros(len(bars), dtype=float)
+    htf_bias = np.where(in_disc.to_numpy(), 1.0, htf_bias)
+    htf_bias = np.where(in_prem.to_numpy(), -1.0, htf_bias)
+    out["htf_day_bias"] = htf_bias
+    # Filled later when PO3 state is available; default 0 here.
+    out["manip_reverses_htf"] = 0.0
+    out["context_trade_direction"] = htf_bias
+
     for block, prefix in ((prev_day, "ctx_prev_day"), (prev_week, "ctx_prev_week")):
         hi = block[f"{prefix}_high"]
         lo = block[f"{prefix}_low"]
@@ -332,3 +348,77 @@ def build_htf_pd_distance_features(
     # Unused here but keeps signature compatible with callers that pass M1 ATR.
     _ = atr_m1
     return out
+
+
+def build_trader_context_features(feat: pd.DataFrame) -> pd.DataFrame:
+    """Causal trader-context columns from PD bias + optional PO3 state.
+
+    Expects ``htf_day_bias`` (from PD context) and, when present, PO3
+    manipulation / distribution columns. Safe to call when only PD context
+    is on (manip/context columns fall back to HTF bias).
+    """
+    n = len(feat)
+    idx = feat.index
+    htf: np.ndarray[Any, Any]
+    if "htf_day_bias" in feat.columns:
+        htf = feat["htf_day_bias"].to_numpy(dtype=float)
+    elif "ctx_in_discount" in feat.columns and "ctx_in_premium" in feat.columns:
+        htf = np.where(
+            feat["ctx_in_discount"].to_numpy(dtype=float) > 0,
+            1.0,
+            np.where(feat["ctx_in_premium"].to_numpy(dtype=float) > 0, -1.0, 0.0),
+        )
+    else:
+        htf = np.zeros(n, dtype=float)
+    htf = np.clip(htf, -1.0, 1.0)
+
+    manip_active = (
+        feat["po3_manipulation_active"].to_numpy(dtype=float)
+        if "po3_manipulation_active" in feat.columns
+        else np.zeros(n)
+    )
+    manip_dir = (
+        feat["po3_manipulation_direction"].to_numpy(dtype=float)
+        if "po3_manipulation_direction" in feat.columns
+        else np.zeros(n)
+    )
+    dist = (
+        feat["po3_distribution"].to_numpy(dtype=float)
+        if "po3_distribution" in feat.columns
+        else np.zeros(n)
+    )
+    dist_dir = (
+        feat["po3_distribution_direction"].to_numpy(dtype=float)
+        if "po3_distribution_direction" in feat.columns
+        else np.zeros(n)
+    )
+    manip_end = (
+        feat["po3_manipulation_end"].to_numpy(dtype=float)
+        if "po3_manipulation_end" in feat.columns
+        else np.zeros(n)
+    )
+
+    # Impulse opposes HTF bias (both nonzero and opposite signs).
+    reverses = ((manip_active > 0) & (htf != 0) & (manip_dir != 0) & (manip_dir * htf < 0)).astype(
+        float
+    )
+
+    ctx: np.ndarray[Any, Any] = np.zeros(n, dtype=float)
+    in_dist = (dist > 0) | (manip_end > 0)
+    ctx = np.where(in_dist & (dist_dir != 0), dist_dir, ctx)
+    # Intended reversal side while manip is active and reverses HTF.
+    rev_side = np.where(htf != 0, -np.sign(htf), 0.0)
+    use_rev = (~in_dist) & (manip_active > 0) & (reverses > 0)
+    ctx = np.where(use_rev, rev_side, ctx)
+    # Otherwise follow HTF bias when still unset.
+    unset = ctx == 0
+    ctx = np.where(unset & (htf != 0), htf, ctx)
+
+    return pd.DataFrame(
+        {
+            "htf_day_bias": htf,
+            "manip_reverses_htf": reverses,
+            "context_trade_direction": ctx,
+        },
+        index=idx,
+    )
