@@ -261,6 +261,7 @@ def swing_features(
     swings: pd.DataFrame,
     structure: pd.DataFrame,
     atr: pd.Series | None = None,
+    obs_window: int = 60,
 ) -> pd.DataFrame:
     """Causal continuous swing features for the agent.
 
@@ -290,7 +291,9 @@ def swing_features(
     size = (last_h - last_l).abs() / atr_safe
     since_h = _bars_since(swings["swing_high_event"].to_numpy(dtype=bool))
     since_l = _bars_since(swings["swing_low_event"].to_numpy(dtype=bool))
-    since = np.minimum(since_h, since_l)
+    since_raw = np.fmin(since_h, since_l)
+    window = max(int(obs_window), 1)
+    since = np.minimum(since_raw, float(window)) / float(window)
     return pd.DataFrame(
         {
             "dist_to_last_high_atr": dist_h,

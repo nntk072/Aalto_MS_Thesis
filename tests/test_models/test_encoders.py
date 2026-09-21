@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import torch
 from gymnasium import spaces
@@ -28,7 +30,9 @@ class TestTCNEncoder:
             latent_dim=128,
         )
 
-        assert encoder.features_dim == 128 + 6  # latent_dim + ACCOUNT_DIM
+        assert encoder.features_dim == 128 + 32  # latent_dim + account embedding
+        assert encoder.dilations == (1, 2, 4, 8)
+        assert encoder.receptive_field == 61
 
     def test_tcn_forward(self) -> None:
         """Test TCNEncoder forward pass."""
@@ -55,7 +59,7 @@ class TestTCNEncoder:
 
         output = encoder(obs)
 
-        assert output.shape == (batch_size, 128 + 6)
+        assert output.shape == (batch_size, 128 + 32)
 
 
 class TestTransformerEncoder:
@@ -77,7 +81,7 @@ class TestTransformerEncoder:
             latent_dim=128,
         )
 
-        assert encoder.features_dim == 128 + 6
+        assert encoder.features_dim == 128 + 32
 
     def test_transformer_forward(self) -> None:
         """Test TransformerEncoder forward pass."""
@@ -102,7 +106,7 @@ class TestTransformerEncoder:
 
         output = encoder(obs)
 
-        assert output.shape == (8, 128 + 6)
+        assert output.shape == (8, 128 + 32)
 
 
 class TestGRUEncoder:
@@ -124,7 +128,7 @@ class TestGRUEncoder:
             latent_dim=128,
         )
 
-        assert encoder.features_dim == 128 + 6
+        assert encoder.features_dim == 128 + 32
 
     def test_gru_forward(self) -> None:
         """Test GRUEncoder forward pass."""
@@ -149,7 +153,7 @@ class TestGRUEncoder:
 
         output = encoder(obs)
 
-        assert output.shape == (8, 128 + 6)
+        assert output.shape == (8, 128 + 32)
 
     def test_gru_parameters(self) -> None:
         """Test GRUEncoder has trainable parameters."""
@@ -215,9 +219,9 @@ class TestEncoderComparison:
         transformer_out = transformer(obs)
         gru_out = gru(obs)
 
-        assert tcn_out.shape == (8, 128 + 6)
-        assert transformer_out.shape == (8, 128 + 6)
-        assert gru_out.shape == (8, 128 + 6)
+        assert tcn_out.shape == (8, 128 + 32)
+        assert transformer_out.shape == (8, 128 + 32)
+        assert gru_out.shape == (8, 128 + 32)
 
     def test_encoders_accept_dict_input(self) -> None:
         """Test that all encoders accept dict input."""
@@ -327,3 +331,93 @@ class TestEncoderComparison:
             out1 = encoder(obs)
             out2 = encoder(obs)
         assert torch.allclose(out1, out2)
+
+
+def _small_encoder(kind: str, timesteps: int = 12, n_features: int = 4) -> Any:
+    observation_space = spaces.Dict(
+        {
+            "seq": spaces.Box(
+                low=-np.inf, high=np.inf, shape=(timesteps, n_features), dtype=np.float32
+            ),
+            "account": spaces.Box(low=-np.inf, high=np.inf, shape=(6,), dtype=np.float32),
+        }
+    )
+    if kind == "tcn":
+        model: Any = TCNEncoder(
+            observation_space,
+            seq_len=timesteps,
+            n_features=n_features,
+            latent_dim=8,
+            channels=(8, 8),
+            kernel_size=3,
+            dropout=0.0,
+        )
+    elif kind == "gru":
+        model = GRUEncoder(
+            observation_space,
+            seq_len=timesteps,
+            n_features=n_features,
+            latent_dim=8,
+            hidden_size=8,
+            num_layers=1,
+            dropout=0.0,
+        )
+    else:
+        model = TransformerEncoder(
+            observation_space,
+            seq_len=timesteps,
+            n_features=n_features,
+            latent_dim=8,
+            d_model=8,
+            nhead=2,
+            num_layers=1,
+            dim_feedforward=16,
+            dropout=0.0,
+        )
+    model.eval()
+    return model
+
+
+def test_valid_suffix_ignores_left_pad_values() -> None:
+    """Same valid suffix, pad 0 versus 9/-3/100. First real bar is position 0."""
+    torch.manual_seed(0)
+    timesteps, length, n_features = 12, 5, 4
+    suffix = torch.randn(2, length, n_features)
+    account = torch.randn(2, 6)
+    zeros = torch.zeros(2, timesteps, n_features)
+    zeros[:, -length:] = suffix
+    poison = zeros.clone()
+    poison[:, :-length] = torch.tensor([9.0, -3.0, 100.0, 0.0])
+    mask = torch.zeros(2, timesteps)
+    mask[:, -length:] = 1.0
+    for kind in ("tcn", "gru", "transformer"):
+        model = _small_encoder(kind, timesteps, n_features)
+        with torch.no_grad():
+            padded = model({"seq": zeros, "seq_mask": mask, "account": account})
+            poisoned = model({"seq": poison, "seq_mask": mask, "account": account})
+            short = model({"seq": suffix, "account": account})
+        assert torch.allclose(padded, poisoned, atol=1e-5), kind
+        assert torch.allclose(padded, short, atol=1e-5), kind
+
+
+def test_mixed_valid_lengths_match_rowwise_suffix() -> None:
+    torch.manual_seed(1)
+    timesteps, n_features = 10, 4
+    seq = torch.randn(2, timesteps, n_features)
+    account = torch.randn(2, 6)
+    lengths = (7, 4)
+    mask = torch.zeros(2, timesteps)
+    for row, length in enumerate(lengths):
+        mask[row, -length:] = 1.0
+    for kind in ("tcn", "gru", "transformer"):
+        model = _small_encoder(kind, timesteps, n_features)
+        with torch.no_grad():
+            mixed = model({"seq": seq, "seq_mask": mask, "account": account})
+            for row, length in enumerate(lengths):
+                alone = model(
+                    {
+                        "seq": seq[row : row + 1, -length:],
+                        "account": account[row : row + 1],
+                    }
+                )
+                assert torch.allclose(mixed[row : row + 1], alone, atol=1e-5), kind

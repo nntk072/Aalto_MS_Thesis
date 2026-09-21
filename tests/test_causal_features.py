@@ -84,7 +84,7 @@ def test_tcn_encoder_output_shape(dict_obs_space):
     )
     obs = _make_obs(B=4, T=T, F=F)
     out = model(obs)
-    assert out.shape == (4, 32 + 6), f"Expected (4, 38), got {out.shape}"
+    assert out.shape == (4, 32 + 32), f"Expected (4, 64), got {out.shape}"
 
 
 def test_transformer_encoder_output_shape(dict_obs_space):
@@ -103,7 +103,7 @@ def test_transformer_encoder_output_shape(dict_obs_space):
     )
     obs = _make_obs(B=4, T=T, F=F)
     out = model(obs)
-    assert out.shape == (4, 32 + 6), f"Expected (4, 38), got {out.shape}"
+    assert out.shape == (4, 32 + 32), f"Expected (4, 64), got {out.shape}"
 
 
 def test_tcn_encoder_batch_size_1(dict_obs_space):
@@ -114,7 +114,7 @@ def test_tcn_encoder_batch_size_1(dict_obs_space):
     )
     obs = _make_obs(B=1, T=10, F=8)
     out = model(obs)
-    assert out.shape == (1, 16 + 6)
+    assert out.shape == (1, 16 + 32)
 
 
 def test_transformer_causal_mask_consistency(dict_obs_space):

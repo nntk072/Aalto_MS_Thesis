@@ -177,6 +177,41 @@ def realized_vol(close: pd.Series, period: int = 20) -> pd.Series:
     return pd.Series(vol, index=close.index, name="realized_vol")
 
 
+def ny_session_clock(
+    index: pd.DatetimeIndex,
+    start: str = "16:30",
+    end: str = "23:00",
+) -> pd.DataFrame:
+    """NY-session sin/cos and minutes-to-close, clipped to the session.
+
+    ``session_duration`` is ``end - start`` in minutes. Bars outside the
+    session clip onto the endpoints, so the sin/cos stay in ``[-1, 1]`` and
+    minutes-to-close stays in ``[0, 1]``. These columns are concatenated
+    after the z-score and must not be rescaled.
+    """
+    start_h, start_m = (int(part) for part in start.split(":"))
+    end_h, end_m = (int(part) for part in end.split(":"))
+    start_min = start_h * 60 + start_m
+    end_min = end_h * 60 + end_m
+    duration = end_min - start_min
+    if duration <= 0:
+        duration += 24 * 60
+    minute_of_day = np.asarray(index.hour * 60 + index.minute, dtype=float)
+    minute_idx = minute_of_day - start_min
+    if end_min <= start_min:
+        minute_idx = np.where(minute_of_day < start_min, minute_idx + 24 * 60, minute_idx)
+    minute_idx = np.clip(minute_idx, 0.0, float(duration))
+    angle = 2.0 * np.pi * minute_idx / float(duration)
+    return pd.DataFrame(
+        {
+            "ny_session_sin": np.sin(angle),
+            "ny_session_cos": np.cos(angle),
+            "ny_minutes_to_close": (float(duration) - minute_idx) / float(duration),
+        },
+        index=index,
+    )
+
+
 def time_features(index: pd.DatetimeIndex) -> pd.DataFrame:
     """Cyclical sin/cos encoding of time-of-day and day-of-week."""
     hour_min = index.hour + index.minute / 60.0

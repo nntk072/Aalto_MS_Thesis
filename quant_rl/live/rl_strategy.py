@@ -10,7 +10,8 @@ Contract:
   via :func:`quant_rl.features.build.build_features` (same config file),
   so train/live feature parity holds by construction.
 - Observations are built with the same dict contract as
-  ``TradingEnv._get_observation``: ``{"seq": (T, F), "account": (6,)}``.
+  ``TradingEnv._get_observation``:
+  ``{"seq": (T, F), "seq_mask": (T,), "account": (6,)}``.
 - Output: ``Signal.BUY/SELL/HOLD`` mapped from the policy's action
   (discrete PPO action ids or continuous SAC sizing fraction).
 
@@ -27,6 +28,9 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pandas as pd
 from omegaconf import OmegaConf
+
+from ..envs.observation import normalized_account_vector, pad_observation_window
+from ..features.build import select_obs_columns
 
 if TYPE_CHECKING:  # pragma: no cover
     from mt5_trading.adapters import TradingData
@@ -56,7 +60,10 @@ class RLStrategyAdapter:
         self.cfg = cfg
         env_cfg = getattr(self.cfg, "env", None)
         self.obs_window = int(getattr(env_cfg, "obs_window", obs_window))
+        account_cfg = getattr(self.cfg, "account", None)
+        self._initial_balance = float(getattr(account_cfg, "initial_balance", 100_000.0))
         self._features: pd.DataFrame | None = None
+        self._last_close = 1.0
         self._feature_lock = threading.Lock()
         self._secondary_bars: pd.DataFrame | None = None
 
@@ -93,7 +100,24 @@ class RLStrategyAdapter:
     def update_bars(self, bars: pd.DataFrame, secondary_bars: pd.DataFrame | None = None) -> None:
         """Feed the latest M1 bars; rebuilds features (call once per new bar)."""
         self._secondary_bars = secondary_bars
+        if "close" in bars.columns and len(bars):
+            self._last_close = float(bars["close"].iloc[-1])
         self._rebuild_features(bars)
+
+    def _raw_columns(self) -> tuple[str, ...]:
+        env_cfg = getattr(self.cfg, "env", None)
+        if not bool(getattr(env_cfg, "strategy_actions", False)):
+            return ()
+        name = str(getattr(getattr(self.cfg, "strategy", None), "name", "baseline"))
+        if name == "po3_ifvg":
+            from ..envs.strategies import PO3IFVGStrategy
+
+            return tuple(PO3IFVGStrategy.raw_columns)
+        if name == "distribution":
+            from ..envs.strategies import DistributionStrategy
+
+            return tuple(DistributionStrategy.raw_columns)
+        return ()
 
     def build_observation(
         self, account_state: dict[str, float] | None = None
@@ -102,30 +126,34 @@ class RLStrategyAdapter:
         if self._features is None:
             raise RuntimeError("update_bars() must be called before build_observation()")
 
-        feats = self._features
-        seq = np.asarray(feats.iloc[-self.obs_window :].values, dtype=np.float32)
-        seq = np.nan_to_num(seq, nan=0.0)
-        if len(seq) < self.obs_window:
-            pad = ((self.obs_window - len(seq), 0), (0, 0))
-            seq = np.pad(seq, pad, mode="constant", constant_values=0.0)
+        feats = select_obs_columns(self._features, self._raw_columns())
+        window = feats.iloc[-self.obs_window :]
+        seq = np.nan_to_num(np.asarray(window.values, dtype=np.float32), nan=0.0)
+        seq, seq_mask = pad_observation_window(seq, self.obs_window)
 
         st = account_state or {}
-        equity = float(st.get("equity", 1.0))
+        equity = float(st.get("equity", self._initial_balance))
         pos_dir = float(st.get("position_direction", 0.0))
         open_pnl = float(st.get("open_pnl", 0.0))
-        unrealised_r = (open_pnl / equity * 100) if equity > 0 else 0.0
         dist_to_sl = float(st.get("dist_to_sl", 0.0))
         trailing_dd = float(st.get("trailing_dd", 0.0))
-        account = np.array(
-            [equity, pos_dir, open_pnl, unrealised_r, dist_to_sl, trailing_dd],
-            dtype=np.float32,
+        close = float(st.get("close", self._last_close))
+        account = normalized_account_vector(
+            equity=equity,
+            initial_balance=self._initial_balance,
+            pos_dir=pos_dir,
+            open_pnl=open_pnl,
+            dist_to_sl=dist_to_sl,
+            trailing_dd=trailing_dd,
+            close=close,
         )
-        return {"seq": seq[np.newaxis, ...], "account": account[np.newaxis, ...]}
+        return {"seq": seq, "seq_mask": seq_mask, "account": account}
 
     def predict_signal(self, account_state: dict[str, float] | None = None) -> int:
         """Run the policy on the current observation; returns the raw action id."""
         obs = self.build_observation(account_state)
-        action = self.model.predict(obs, deterministic=True)[0]
+        batched = {key: np.asarray(value)[np.newaxis, ...] for key, value in obs.items()}
+        action = self.model.predict(batched, deterministic=True)[0]
         return int(np.asarray(action).reshape(-1)[0])
 
     # ------------------------------------------------------------------

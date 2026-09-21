@@ -33,8 +33,9 @@ from ..envs.feature_row import BarView, FeatureRow
 from ..envs.reward import DSRReward, PnLReward
 from ..envs.strategies import BaselineStrategy, TradingStrategy
 from ..envs.sweep_reward import CompositeReward, SweepConfirmationReward
-from ..features.build import MTF_RAW_SUFFIXES
+from ..features.build import select_obs_columns
 from ..models.vae import VAE
+from .observation import normalized_account_vector, pad_observation_window
 
 
 class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, Any]]):
@@ -305,17 +306,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # same stems with a ``{TF}_`` prefix (e.g. ``M5_last_swing_high``),
         # matched via MTF_RAW_SUFFIXES so unnormalised HTF price magnitudes
         # never reach the encoder.
-        drop_cols = [c for c in self.strategy.raw_columns if c in features.columns]
-        mtf_raw = {
-            c
-            for c in features.columns
-            if any(str(c).endswith(f"_{stem}") for stem in MTF_RAW_SUFFIXES)
-            and str(c) not in self.strategy.raw_columns
-        }
-        self._obs_features = features.drop(columns=drop_cols + sorted(mtf_raw))
         # Drop non-numeric columns (e.g. string ``session`` labels) — they cannot
         # be cast to float32 and are not part of the model's normalized observation.
-        self._obs_features = self._obs_features.select_dtypes(include="number")
+        self._obs_features = select_obs_columns(features, self.strategy.raw_columns)
 
         # Cache numpy arrays for hot-path env stepping — avoids per-step pandas
         # iloc/Series-creation overhead that starves the GPU.
@@ -428,6 +421,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     low=-np.inf,
                     high=np.inf,
                     shape=(6,),
+                    dtype=np.float32,
+                ),
+                "seq_mask": spaces.Box(
+                    low=0.0,
+                    high=1.0,
+                    shape=(obs_window,),
                     dtype=np.float32,
                 ),
             }
@@ -1641,12 +1640,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         start_idx = self._session_seq_start()
         seq = self._obs_features_arr[start_idx : self.step_idx]
         seq = cast(np.ndarray[Any, Any], np.nan_to_num(seq, nan=0.0))
-        # Pad if needed
-        if len(seq) < self.obs_window:
-            pad_width = ((self.obs_window - len(seq), 0), (0, 0))
-            seq = cast(
-                np.ndarray[Any, Any], np.pad(seq, pad_width, mode="constant", constant_values=0.0)
-            )
+        seq, seq_mask = pad_observation_window(seq, self.obs_window)
 
         # Account state
         pos_dir = float(self.position.direction) if self.position is not None else 0.0
@@ -1660,31 +1654,23 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 else self.position.sl_price - self.position.entry_price
             )
 
+        if 0 <= self.step_idx < len(self.bars):
+            current_close = float(self.bars["close"].iloc[self.step_idx])
+        else:
+            current_close = 1.0
+        trailing_dd = float(self.account.trailing_drawdown_pct())
         if self.normalize_account:
             # Rescale so the account vector matches the ~O(1) magnitude of
             # the z-scored seq features. Without this, equity (1e5) and
             # raw open_pnl dwarf the time-series signal.
-            init_bal = self.initial_balance
-            norm_equity = float(np.log(self.account.equity / init_bal)) if init_bal > 0 else 0.0
-            norm_pnl = open_pnl / init_bal if init_bal > 0 else 0.0
-            # The current bar is only known inside step(); in reset() we
-            # fall back to the first bar of the obs window. Both are
-            # O(1)-magnitude normalizers, so the choice barely matters.
-            if 0 <= self.step_idx < len(self.bars):
-                current_close = float(self.bars["close"].iloc[self.step_idx])
-            else:
-                current_close = 1.0
-            norm_dist = dist_to_sl / current_close if current_close > 0 else 0.0
-            account_state = np.array(
-                [
-                    norm_equity,
-                    pos_dir,
-                    norm_pnl,
-                    unrealised_r,
-                    norm_dist,
-                    float(self.account.trailing_drawdown_pct()),
-                ],
-                dtype=np.float32,
+            account_state = normalized_account_vector(
+                equity=float(self.account.equity),
+                initial_balance=float(self.initial_balance),
+                pos_dir=pos_dir,
+                open_pnl=open_pnl,
+                dist_to_sl=dist_to_sl,
+                trailing_dd=trailing_dd,
+                close=current_close,
             )
         else:
             account_state = np.array(
@@ -1699,7 +1685,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 dtype=np.float32,
             )
 
-        obs: dict[str, np.ndarray[Any, Any]] = {"seq": seq, "account": account_state}
+        obs: dict[str, np.ndarray[Any, Any]] = {
+            "seq": seq,
+            "seq_mask": seq_mask,
+            "account": account_state,
+        }
 
         # Add VAE latent embedding if enabled
         if self.use_vae and self.vae is not None:

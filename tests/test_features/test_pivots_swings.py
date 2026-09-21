@@ -74,3 +74,38 @@ def test_features_invariant_to_future_data() -> None:
         trunc["last_swing_high"].iloc[:6],
         check_names=False,
     )
+
+
+def test_bars_since_last_swing_scales_by_obs_window() -> None:
+    n = 61
+    idx = pd.date_range("2025-01-06 16:30", periods=n, freq="1min")
+    close = np.full(n, 100.0)
+    bars = pd.DataFrame(
+        {"open": close, "high": close + 1, "low": close - 1, "close": close},
+        index=idx,
+    )
+    high_event = np.zeros(n, dtype=bool)
+    high_event[0] = True
+    swings = pd.DataFrame(
+        {
+            "swing_high_event": high_event,
+            "swing_low_event": np.zeros(n, dtype=bool),
+            "swing_high_extreme": close,
+            "swing_low_extreme": close,
+            "swing_high_price": close,
+            "swing_low_price": close,
+        },
+        index=idx,
+    )
+    feat = swing_features(
+        bars,
+        swings,
+        classify_structure(swings),
+        atr=pd.Series(1.0, index=idx),
+        obs_window=60,
+    )
+    since = feat["bars_since_last_swing"]
+    assert since.iloc[0] == pytest.approx(0.0)
+    assert since.iloc[30] == pytest.approx(0.5)
+    assert since.iloc[60] == pytest.approx(1.0)
+    assert float(since.max()) <= 1.0

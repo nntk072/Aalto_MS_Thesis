@@ -26,7 +26,15 @@ from omegaconf import DictConfig, OmegaConf
 
 from ..data.align import align_timeframes
 from ..data.resample import resample
-from .indicators import atr, build_indicators, sweep_velocity, volume_spike, vwap_level, wick_ratio
+from .indicators import (
+    atr,
+    build_indicators,
+    ny_session_clock,
+    sweep_velocity,
+    volume_spike,
+    vwap_level,
+    wick_ratio,
+)
 from .liquidity import detect_bos, detect_liquidity_sweeps, detect_mss
 from .normalize import rolling_zscore
 from .pd_context import (
@@ -71,7 +79,8 @@ from .structure import (
 # v11: content-hash cache key (config + data identity + optional train_mask).
 # v12: trader-context columns (htf_day_bias, manip_reverses_htf, context_trade_direction).
 # v13: tick-count VWAP / activity (ignore CFD vol=0).
-FEATURE_CACHE_VERSION = "v13-tickcount-vwap"
+# v14: swing age in [0, 1], London ATR distances, NY session clock.
+FEATURE_CACHE_VERSION = "v14-session-clock"
 
 
 def feature_cache_content_hash(
@@ -240,6 +249,41 @@ def _enabled(feat_cfg: object, key: str, default: bool) -> bool:
     if flat is not None:
         return bool(flat)
     return default
+
+
+def select_obs_columns(
+    features: pd.DataFrame,
+    raw_columns: tuple[str, ...] | list[str] = (),
+) -> pd.DataFrame:
+    """Numeric model columns: drop raw price levels, keep ATR distances."""
+    drop_cols = [c for c in raw_columns if c in features.columns]
+    mtf_raw = {
+        c
+        for c in features.columns
+        if any(str(c).endswith(f"_{stem}") for stem in MTF_RAW_SUFFIXES)
+        and str(c) not in raw_columns
+    }
+    kept = features.drop(columns=drop_cols + sorted(mtf_raw))
+    return kept.select_dtypes(include="number")
+
+
+def ensure_london_atr_distances(feat: pd.DataFrame, close: pd.Series) -> pd.DataFrame:
+    """Add London ATR distances when the PD-context pair is absent.
+
+    ``price_to_london_high_atr = (london_high - close) / atr_5``
+    ``price_to_london_low_atr = (close - london_low) / atr_5``
+    """
+    if "ctx_london_high_dist_atr" in feat.columns and "ctx_london_low_dist_atr" in feat.columns:
+        return feat
+    needed = ("london_high", "london_low", "atr_5")
+    if any(col not in feat.columns for col in needed):
+        return feat
+    atr5 = feat["atr_5"].where(feat["atr_5"] > 0)
+    aligned_close = close.reindex(feat.index)
+    feat = feat.copy()
+    feat["price_to_london_high_atr"] = (feat["london_high"] - aligned_close) / atr5
+    feat["price_to_london_low_atr"] = (aligned_close - feat["london_low"]) / atr5
+    return feat
 
 
 def build_po3_phase_features(
@@ -488,8 +532,17 @@ def build_features(
         pivots = detect_pivots(primary, left=left, right=int(m1_cfg["right"]))
         swings_df = detect_swings(primary, pivots, atr_mult=atr_mult)
         struct_cls = classify_structure(swings_df)
+        obs_window = 60
+        if cfg is not None:
+            selected = OmegaConf.select(cfg, "env.obs_window")
+            if selected is not None:
+                obs_window = int(selected)
         feat = pd.concat(
-            [feat, structure, swing_features(primary, swings_df, struct_cls)],
+            [
+                feat,
+                structure,
+                swing_features(primary, swings_df, struct_cls, obs_window=obs_window),
+            ],
             axis=1,
         )
         if _enabled(feat_cfg, "structure", False):
@@ -773,6 +826,13 @@ def build_features(
         trader_ctx = build_trader_context_features(feat)
         for col in trader_ctx.columns:
             feat[col] = trader_ctx[col]
+
+    feat = ensure_london_atr_distances(feat, primary["close"])
+    session = OmegaConf.select(cfg, "session") if cfg is not None else None
+    session_start = str(session.get("start", "16:30")) if session else "16:30"
+    session_end = str(session.get("end", "23:00")) if session else "23:00"
+    clock = ny_session_clock(pd.DatetimeIndex(feat.index), session_start, session_end)
+    feat = pd.concat([feat, clock], axis=1)
 
     # Drop leading NaNs from warmup
     feat = feat.dropna(how="all")

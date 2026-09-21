@@ -145,9 +145,10 @@ def test_rl_bridge_observation_contract(trending_bars):
     adapter = RLStrategyAdapter(model=_StubModel(), config_path="quant_rl/config/default.yaml")
     adapter.update_bars(trending_bars)
     obs = adapter.build_observation({"equity": 100_000.0})
-    assert set(obs) == {"seq", "account"}
+    assert set(obs) == {"seq", "seq_mask", "account"}
     assert obs["seq"].dtype == np.float32
-    assert obs["account"].shape == (1, 6)
+    assert obs["account"].shape == (6,)
+    assert obs["seq_mask"].shape == (obs["seq"].shape[0],)
     action = adapter.predict_signal()
     assert action == 1
 
