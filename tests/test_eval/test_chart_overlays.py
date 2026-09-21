@@ -14,6 +14,7 @@ from quant_rl.eval.chart_indicators import compute_chart_overlays_full
 from quant_rl.eval.chart_overlays import OverlayEvents, build_overlay_events, compute_vwap_for_chart
 from quant_rl.eval.plot_series import (
     daily_drawdown_pct,
+    daily_drawdown_usd,
     daily_loss_limit_series,
     daily_pnl,
     drawdown_ylim,
@@ -81,6 +82,14 @@ def test_max_and_daily_drawdown_scales() -> None:
     lo, hi = drawdown_ylim(max_dd, -10.0)
     assert hi == 0.0
     assert lo <= -10.0
+
+
+def test_daily_drawdown_usd_is_fixed_dollars() -> None:
+    idx = pd.date_range("2026-01-02 16:30", periods=4, freq="1h")
+    eq = pd.Series([110_000.0, 108_000.0, 104_500.0, 106_000.0], index=idx)
+    dd = daily_drawdown_usd(eq)
+    assert dd.iloc[0] == pytest.approx(0.0)
+    assert dd.min() == pytest.approx(-5_500.0)
 
 
 def test_daily_pnl_is_last_minus_first() -> None:
@@ -195,6 +204,26 @@ def test_plot_drawdown_two_panels_and_dates(tmp_path) -> None:
     assert (tmp_path / "drawdown.png").stat().st_size > 0
     # Two stacked axes (plus any colorbars — expect at least 2).
     assert len(fig.axes) >= 2
+
+
+def test_plot_drawdown_daily_cap_not_trailing_pct(tmp_path) -> None:
+    idx = pd.date_range("2026-03-02 16:30", periods=8, freq="1h")
+    eq = pd.Series(
+        [100_000.0, 99_500.0, 98_000.0, 99_000.0, 101_000.0, 100_200.0, 97_800.0, 98_500.0],
+        index=idx,
+    )
+    fig = plot_drawdown(eq, daily_loss_limit=5_000.0, out_path=tmp_path / "dd.png", dpi=72)
+    ax_max, ax_day = fig.axes[0], fig.axes[1]
+    lo, _hi = ax_day.get_ylim()
+    assert lo <= -5_000.0
+    hline_ys: list[float] = []
+    for ax in (ax_max, ax_day):
+        for line in ax.lines:
+            yd = np.asarray(line.get_ydata(), dtype=float)
+            if len(yd) >= 2 and np.nanmax(yd) - np.nanmin(yd) < 1e-9:
+                hline_ys.append(float(yd[0]))
+    assert any(abs(y + 5_000.0) < 1.0 for y in hline_ys)
+    assert not any(abs(abs(y) - 7.0) < 0.05 for y in hline_ys)
 
 
 def test_plot_daily_pnl_writes(tmp_path) -> None:

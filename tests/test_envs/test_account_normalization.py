@@ -89,7 +89,7 @@ def test_unnormalized_account_carries_raw_equity() -> None:
     # Raw equity is 1e5, which would dominate the z-scored seq features.
     assert acc[0] == 100_000.0
     # The vector must still carry raw values (no silent normalization).
-    assert acc.shape == (5,)
+    assert acc.shape == (6,)
 
 
 def test_normalization_default_is_on() -> None:

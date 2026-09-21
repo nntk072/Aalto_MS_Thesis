@@ -70,6 +70,12 @@ class AccountState:
         """Peak loss from initial as a fraction of initial balance."""
         return self.max_drawdown / self.initial_balance if self.initial_balance else 0.0
 
+    def trailing_drawdown_pct(self) -> float:
+        """Current drawdown from peak equity (HWM) as a fraction of peak."""
+        if self.peak_equity <= 0:
+            return 0.0
+        return max(0.0, (self.peak_equity - self.equity) / self.peak_equity)
+
     def to_array(self) -> list[float]:
         """Return a fixed-length array for the env observation."""
         return [

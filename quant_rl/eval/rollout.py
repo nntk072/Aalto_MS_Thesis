@@ -29,6 +29,7 @@ import pandas as pd
 
 from ..backtest.costs import COST_US100, CostModel
 from ..envs.trading_env import TradingEnv
+from ..evaluation.metrics import max_drawdown
 
 
 def make_action_fn(
@@ -201,6 +202,7 @@ def evaluate_model(
         "days_traded": days_traded,
         "survived_full_year": survived_full_year,
         "fail_time": fail_time,
+        "max_trailing_dd": float(max_drawdown(env.equity_curve)),
         "action_counts": dict(action_counts),
         "entry_diag": dict(env._entry_diag),
     }

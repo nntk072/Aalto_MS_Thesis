@@ -147,7 +147,7 @@ def test_rl_bridge_observation_contract(trending_bars):
     obs = adapter.build_observation({"equity": 100_000.0})
     assert set(obs) == {"seq", "account"}
     assert obs["seq"].dtype == np.float32
-    assert obs["account"].shape == (1, 5)
+    assert obs["account"].shape == (1, 6)
     action = adapter.predict_signal()
     assert action == 1
 

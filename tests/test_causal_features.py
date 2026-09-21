@@ -65,7 +65,7 @@ def test_returns_causal(m1_bars):
 def _make_obs(B: int, T: int, F: int) -> dict[str, torch.Tensor]:
     return {
         "seq": torch.randn(B, T, F),
-        "account": torch.randn(B, 5),
+        "account": torch.randn(B, 6),
     }
 
 
@@ -84,7 +84,7 @@ def test_tcn_encoder_output_shape(dict_obs_space):
     )
     obs = _make_obs(B=4, T=T, F=F)
     out = model(obs)
-    assert out.shape == (4, 32 + 5), f"Expected (4, 37), got {out.shape}"
+    assert out.shape == (4, 32 + 6), f"Expected (4, 38), got {out.shape}"
 
 
 def test_transformer_encoder_output_shape(dict_obs_space):
@@ -103,7 +103,7 @@ def test_transformer_encoder_output_shape(dict_obs_space):
     )
     obs = _make_obs(B=4, T=T, F=F)
     out = model(obs)
-    assert out.shape == (4, 32 + 5), f"Expected (4, 37), got {out.shape}"
+    assert out.shape == (4, 32 + 6), f"Expected (4, 38), got {out.shape}"
 
 
 def test_tcn_encoder_batch_size_1(dict_obs_space):
@@ -114,7 +114,7 @@ def test_tcn_encoder_batch_size_1(dict_obs_space):
     )
     obs = _make_obs(B=1, T=10, F=8)
     out = model(obs)
-    assert out.shape == (1, 16 + 5)
+    assert out.shape == (1, 16 + 6)
 
 
 def test_transformer_causal_mask_consistency(dict_obs_space):
@@ -135,7 +135,7 @@ def test_transformer_causal_mask_consistency(dict_obs_space):
     model.eval()
     torch.manual_seed(0)
     seq_full = torch.randn(1, T, F)
-    account = torch.randn(1, 5)
+    account = torch.randn(1, 6)
 
     with torch.no_grad():
         out_full = model({"seq": seq_full, "account": account})

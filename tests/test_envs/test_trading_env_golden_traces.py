@@ -177,6 +177,7 @@ class TestTradingEnvGoldenTraces:
             guardrail_kwargs={
                 "daily_loss_limit": 5_000.0,
                 "max_loss_limit": 10_000.0,
+                "trailing_dd_limit": 0.0,
             },
         )
         env.reset(seed=42)
@@ -206,6 +207,7 @@ class TestTradingEnvGoldenTraces:
             guardrail_kwargs={
                 "daily_loss_limit": 5_000.0,
                 "max_loss_limit": 10_000.0,
+                "trailing_dd_limit": 0.0,
             },
         )
         env.reset(seed=42)

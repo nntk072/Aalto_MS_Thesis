@@ -17,7 +17,7 @@ class TestTCNEncoder:
         observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
             }
         )
 
@@ -28,14 +28,14 @@ class TestTCNEncoder:
             latent_dim=128,
         )
 
-        assert encoder.features_dim == 128 + 5  # latent_dim + ACCOUNT_DIM
+        assert encoder.features_dim == 128 + 6  # latent_dim + ACCOUNT_DIM
 
     def test_tcn_forward(self) -> None:
         """Test TCNEncoder forward pass."""
         observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
             }
         )
 
@@ -50,12 +50,12 @@ class TestTCNEncoder:
         batch_size = 8
         obs = {
             "seq": torch.randn(batch_size, 60, 64),
-            "account": torch.randn(batch_size, 5),
+            "account": torch.randn(batch_size, 6),
         }
 
         output = encoder(obs)
 
-        assert output.shape == (batch_size, 128 + 5)
+        assert output.shape == (batch_size, 128 + 6)
 
 
 class TestTransformerEncoder:
@@ -66,7 +66,7 @@ class TestTransformerEncoder:
         observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
             }
         )
 
@@ -77,14 +77,14 @@ class TestTransformerEncoder:
             latent_dim=128,
         )
 
-        assert encoder.features_dim == 128 + 5
+        assert encoder.features_dim == 128 + 6
 
     def test_transformer_forward(self) -> None:
         """Test TransformerEncoder forward pass."""
         observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
             }
         )
 
@@ -97,12 +97,12 @@ class TestTransformerEncoder:
 
         obs = {
             "seq": torch.randn(8, 60, 64),
-            "account": torch.randn(8, 5),
+            "account": torch.randn(8, 6),
         }
 
         output = encoder(obs)
 
-        assert output.shape == (8, 128 + 5)
+        assert output.shape == (8, 128 + 6)
 
 
 class TestGRUEncoder:
@@ -113,7 +113,7 @@ class TestGRUEncoder:
         observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(low=-1.0, high=1.0, shape=(128, 64), dtype=np.float32),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
             }
         )
 
@@ -124,14 +124,14 @@ class TestGRUEncoder:
             latent_dim=128,
         )
 
-        assert encoder.features_dim == 128 + 5
+        assert encoder.features_dim == 128 + 6
 
     def test_gru_forward(self) -> None:
         """Test GRUEncoder forward pass."""
         observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(low=-1.0, high=1.0, shape=(128, 64), dtype=np.float32),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
             }
         )
 
@@ -144,19 +144,19 @@ class TestGRUEncoder:
 
         obs = {
             "seq": torch.randn(8, 128, 64),
-            "account": torch.randn(8, 5),
+            "account": torch.randn(8, 6),
         }
 
         output = encoder(obs)
 
-        assert output.shape == (8, 128 + 5)
+        assert output.shape == (8, 128 + 6)
 
     def test_gru_parameters(self) -> None:
         """Test GRUEncoder has trainable parameters."""
         observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(low=-1.0, high=1.0, shape=(128, 64), dtype=np.float32),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
             }
         )
 
@@ -170,7 +170,7 @@ class TestGRUEncoder:
         observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(low=-1.0, high=1.0, shape=(128, 64), dtype=np.float32),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
             }
         )
 
@@ -192,7 +192,7 @@ class TestEncoderComparison:
         observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
             }
         )
 
@@ -208,23 +208,23 @@ class TestEncoderComparison:
 
         obs = {
             "seq": torch.randn(8, 60, 64),
-            "account": torch.randn(8, 5),
+            "account": torch.randn(8, 6),
         }
 
         tcn_out = tcn(obs)
         transformer_out = transformer(obs)
         gru_out = gru(obs)
 
-        assert tcn_out.shape == (8, 128 + 5)
-        assert transformer_out.shape == (8, 128 + 5)
-        assert gru_out.shape == (8, 128 + 5)
+        assert tcn_out.shape == (8, 128 + 6)
+        assert transformer_out.shape == (8, 128 + 6)
+        assert gru_out.shape == (8, 128 + 6)
 
     def test_encoders_accept_dict_input(self) -> None:
         """Test that all encoders accept dict input."""
         observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
             }
         )
 
@@ -235,7 +235,7 @@ class TestEncoderComparison:
 
             obs = {
                 "seq": torch.randn(4, 60, 64),
-                "account": torch.randn(4, 5),
+                "account": torch.randn(4, 6),
             }
 
             # Should not raise an error
@@ -247,7 +247,7 @@ class TestEncoderComparison:
         observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
             }
         )
         encoder = TCNEncoder(
@@ -255,7 +255,7 @@ class TestEncoderComparison:
         )
         obs1 = {
             "seq": torch.randn(2, 60, 64),
-            "account": torch.randn(2, 5),
+            "account": torch.randn(2, 6),
         }
         obs2 = {
             "seq": torch.randn(2, 60, 64),
@@ -270,7 +270,7 @@ class TestEncoderComparison:
         observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
             }
         )
         encoder = TransformerEncoder(
@@ -278,11 +278,11 @@ class TestEncoderComparison:
         )
         obs1 = {
             "seq": torch.randn(2, 60, 64),
-            "account": torch.randn(2, 5),
+            "account": torch.randn(2, 6),
         }
         obs2 = {
             "seq": obs1["seq"],
-            "account": torch.randn(2, 5),
+            "account": torch.randn(2, 6),
         }
         out1 = encoder(obs1)
         out2 = encoder(obs2)
@@ -293,7 +293,7 @@ class TestEncoderComparison:
         observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
             }
         )
         encoder = TCNEncoder(
@@ -301,7 +301,7 @@ class TestEncoderComparison:
         )
         encoder.eval()
         seq = torch.randn(2, 60, 64)
-        account = torch.randn(2, 5)
+        account = torch.randn(2, 6)
         obs = {"seq": seq, "account": account}
         with torch.no_grad():
             out1 = encoder(obs)
@@ -313,7 +313,7 @@ class TestEncoderComparison:
         observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 64), dtype=np.float32),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
             }
         )
         encoder = TransformerEncoder(
@@ -321,7 +321,7 @@ class TestEncoderComparison:
         )
         encoder.eval()
         seq = torch.randn(2, 60, 64)
-        account = torch.randn(2, 5)
+        account = torch.randn(2, 6)
         obs = {"seq": seq, "account": account}
         with torch.no_grad():
             out1 = encoder(obs)

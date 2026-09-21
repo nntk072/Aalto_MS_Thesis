@@ -10,7 +10,7 @@ Contract:
   via :func:`quant_rl.features.build.build_features` (same config file),
   so train/live feature parity holds by construction.
 - Observations are built with the same dict contract as
-  ``TradingEnv._get_observation``: ``{"seq": (T, F), "account": (5,)}``.
+  ``TradingEnv._get_observation``: ``{"seq": (T, F), "account": (6,)}``.
 - Output: ``Signal.BUY/SELL/HOLD`` mapped from the policy's action
   (discrete PPO action ids or continuous SAC sizing fraction).
 
@@ -115,7 +115,11 @@ class RLStrategyAdapter:
         open_pnl = float(st.get("open_pnl", 0.0))
         unrealised_r = (open_pnl / equity * 100) if equity > 0 else 0.0
         dist_to_sl = float(st.get("dist_to_sl", 0.0))
-        account = np.array([equity, pos_dir, open_pnl, unrealised_r, dist_to_sl], dtype=np.float32)
+        trailing_dd = float(st.get("trailing_dd", 0.0))
+        account = np.array(
+            [equity, pos_dir, open_pnl, unrealised_r, dist_to_sl, trailing_dd],
+            dtype=np.float32,
+        )
         return {"seq": seq[np.newaxis, ...], "account": account[np.newaxis, ...]}
 
     def predict_signal(self, account_state: dict[str, float] | None = None) -> int:

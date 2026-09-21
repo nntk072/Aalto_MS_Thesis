@@ -253,3 +253,5 @@ def test_default_config_exposes_max_episode_steps() -> None:
     assert cfg.env.max_episode_steps is None
     assert int(cfg.ppo.total_timesteps) >= 20_000_000
     assert float(cfg.ftmo.soft_max_loss_limit) == 5000.0
+    assert float(cfg.ftmo.trailing_dd_limit) == 0.07
+    assert float(cfg.ftmo.soft_trailing_dd_limit) == 0.04

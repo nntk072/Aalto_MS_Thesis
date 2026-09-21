@@ -89,6 +89,8 @@ def _guardrail_kwargs(cfg: Any) -> dict[str, float]:
         "risk_per_trade_limit": float(cfg.ftmo.risk_per_trade_limit),
         "soft_daily_loss_limit": float(cfg.ftmo.get("soft_daily_loss_limit", 2000.0)),
         "soft_max_loss_limit": float(cfg.ftmo.get("soft_max_loss_limit", 5000.0)),
+        "trailing_dd_limit": float(cfg.ftmo.get("trailing_dd_limit", 0.07)),
+        "soft_trailing_dd_limit": float(cfg.ftmo.get("soft_trailing_dd_limit", 0.04)),
     }
 
 
@@ -325,6 +327,7 @@ def _build_training_log(
         "test_n_sessions": int(test_result.get("n_sessions", 0)),
         "test_days_traded": int(test_result.get("days_traded", 0)),
         "test_survived_full_year": bool(test_result.get("survived_full_year", False)),
+        "test_max_trailing_dd": float(test_result.get("max_trailing_dd", test_m.max_drawdown)),
         "test_fail_time": (
             str(test_result["fail_time"]) if test_result.get("fail_time") is not None else None
         ),
@@ -600,7 +603,7 @@ def main() -> None:
     test_dir_sum = _direction_summary(test_result["trades"])
     log.info(
         "[test] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%  "
-        "survived=%s  days=%d/%d  fail_time=%s  direction=%s  entry_diag=%s",
+        "survived=%s  days=%d/%d  fail_time=%s  max_trailing_dd=%.2f%%  direction=%s  entry_diag=%s",
         test_m.sharpe,
         test_m.max_drawdown * 100,
         test_m.n_trades,
@@ -609,6 +612,7 @@ def main() -> None:
         test_result.get("days_traded", 0),
         test_result.get("n_sessions", 0),
         test_result.get("fail_time"),
+        test_m.max_drawdown * 100,
         test_dir_sum,
         test_result.get("entry_diag", {}),
     )
@@ -633,7 +637,7 @@ def main() -> None:
     train_dir_sum = _direction_summary(train_result["trades"])
     log.info(
         "[train] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%  "
-        "survived=%s  days=%d/%d  fail_time=%s  direction=%s  entry_diag=%s",
+        "survived=%s  days=%d/%d  fail_time=%s  max_trailing_dd=%.2f%%  direction=%s  entry_diag=%s",
         train_m.sharpe,
         train_m.max_drawdown * 100,
         train_m.n_trades,
@@ -642,6 +646,7 @@ def main() -> None:
         train_result.get("days_traded", 0),
         train_result.get("n_sessions", 0),
         train_result.get("fail_time"),
+        train_m.max_drawdown * 100,
         train_dir_sum,
         train_result.get("entry_diag", {}),
     )

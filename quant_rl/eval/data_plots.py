@@ -139,11 +139,10 @@ def plot_log_return_dist(
 
 
 def _volume_series(df: pd.DataFrame) -> pd.Series | None:
-    """Return a volume-like series: ``volume``, else ``tickvol``, else ``vol``."""
-    for col in ("volume", "tickvol", "vol"):
-        if col in df.columns:
-            return df[col].astype(float)
-    return None
+    """Tick-count activity; ignores all-zero CFD ``vol`` / ``volume``."""
+    from quant_rl.data.activity import activity_series
+
+    return activity_series(df)
 
 
 def _minute_to_hhmm(minute: float) -> str:

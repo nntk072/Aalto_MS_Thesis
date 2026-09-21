@@ -134,7 +134,7 @@ class TestSACAgentAct:
         observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(low=-1.0, high=1.0, shape=(10, 64), dtype=np.float32),
-                "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
             }
         )
         encoder = TCNEncoder(
@@ -144,11 +144,11 @@ class TestSACAgentAct:
 
         obs1 = {
             "seq": np.zeros((1, 10, 64), dtype=np.float32),
-            "account": np.zeros((1, 5), dtype=np.float32),
+            "account": np.zeros((1, 6), dtype=np.float32),
         }
         obs2 = {
             "seq": np.ones((1, 10, 64), dtype=np.float32),
-            "account": np.ones((1, 5), dtype=np.float32),
+            "account": np.ones((1, 6), dtype=np.float32),
         }
 
         import torch

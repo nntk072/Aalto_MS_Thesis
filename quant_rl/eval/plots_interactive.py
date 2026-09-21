@@ -20,7 +20,7 @@ except ImportError:
     _PLOTLY_AVAILABLE = False
 
 from .plot_series import (
-    daily_drawdown_pct,
+    daily_drawdown_usd,
     daily_loss_limit_series,
     daily_pnl,
     drawdown_ylim,
@@ -203,14 +203,19 @@ def plot_equity_curve(
 def plot_drawdown(
     equity: pd.Series,
     out_path: Path | str | None = None,
+    daily_loss_limit: float | None = 5_000.0,
 ) -> go.Figure:
     _check()
     from plotly.subplots import make_subplots
 
     max_dd = max_drawdown_pct(equity)
-    day_dd = daily_drawdown_pct(equity)
-    max_lo, _ = drawdown_ylim(max_dd, -10.0)
-    day_lo, _ = drawdown_ylim(day_dd, -5.0)
+    day_dd = daily_drawdown_usd(equity)
+    max_floor = float(np.nanmin(np.asarray(max_dd, dtype=float))) if len(max_dd) else -1.0
+    if np.isnan(max_floor):
+        max_floor = -1.0
+    max_lo, _ = drawdown_ylim(max_dd, min(max_floor, -1.0))
+    daily_floor = -float(daily_loss_limit) if daily_loss_limit else 0.0
+    day_lo, _ = drawdown_ylim(day_dd, daily_floor)
 
     fig = make_subplots(
         rows=2,
@@ -245,10 +250,18 @@ def plot_drawdown(
         row=2,
         col=1,
     )
-    fig.add_hline(y=-10.0, line_color="#777", line_dash="dot", row=1, col=1)
-    fig.add_hline(y=-5.0, line_color="#777", line_dash="dot", row=2, col=1)
+    # Daily FTMO cap is $5,000. Trailing 7% is training-only — not plotted.
+    if daily_loss_limit:
+        fig.add_hline(
+            y=-float(daily_loss_limit),
+            line_color="#ff9800",
+            line_dash="dot",
+            annotation_text=f"Daily loss cap −${daily_loss_limit:,.0f}",
+            row=2,
+            col=1,
+        )
     fig.update_yaxes(title_text="Drawdown (%)", ticksuffix="%", range=[max_lo, 0], row=1, col=1)
-    fig.update_yaxes(title_text="Drawdown (%)", ticksuffix="%", range=[day_lo, 0], row=2, col=1)
+    fig.update_yaxes(title_text="Drawdown (USD)", tickprefix="$", range=[day_lo, 0], row=2, col=1)
     fig.update_xaxes(title_text="Date", tickformat="%Y-%m-%d", row=2, col=1)
     fig.update_xaxes(tickformat="%Y-%m-%d", row=1, col=1)
     fig.update_layout(

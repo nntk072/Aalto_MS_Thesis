@@ -76,6 +76,13 @@ def test_session_profile_no_volume_single_panel(tmp_path):
     assert len(fig.axes) == 1
 
 
+def test_session_profile_zero_volume_uses_tickvol(tmp_path):
+    bars = _ny_bars(volume=True, tickvol=True)
+    bars["volume"] = 0
+    fig = plot_session_profile(bars, out_path=tmp_path / "sess.png", dpi=72)
+    assert len(fig.axes) == 2
+
+
 def test_write_data_eda_po3_by_day(tmp_path):
     # Two NY sessions on consecutive days so by-day folders get multiple files.
     # Include pre-session bars so full-day PO3 charts have off-session candles.

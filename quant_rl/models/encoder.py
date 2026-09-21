@@ -10,7 +10,7 @@ vector that SB3 feeds directly to the PPO policy/value MLP heads.
 Shape contract
 --------------
 Input  : obs["seq"]     float32  [batch, T, F]
-         obs["account"] float32  [batch, A]   (A = ACCOUNT_DIM = 5)
+         obs["account"] float32  [batch, A]   (A = ACCOUNT_DIM = 6)
 Output : float32  [batch, latent_dim + A]
 
 Switch architecture via ``agent.build_agent(env, cfg, arch="transformer")``.
@@ -26,7 +26,7 @@ import torch.nn as nn
 from gymnasium import spaces
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
-ACCOUNT_DIM = 5
+ACCOUNT_DIM = 6
 
 
 # ---------------------------------------------------------------------------

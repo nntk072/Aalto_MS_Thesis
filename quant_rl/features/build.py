@@ -70,7 +70,8 @@ from .structure import (
 # v10: PD context, VWAP off.
 # v11: content-hash cache key (config + data identity + optional train_mask).
 # v12: trader-context columns (htf_day_bias, manip_reverses_htf, context_trade_direction).
-FEATURE_CACHE_VERSION = "v12-trader-context"
+# v13: tick-count VWAP / activity (ignore CFD vol=0).
+FEATURE_CACHE_VERSION = "v13-tickcount-vwap"
 
 
 def feature_cache_content_hash(
@@ -533,11 +534,9 @@ def build_features(
     # --- Liquidity Levels + Volume Spike + ATR - add AFTER normalization ---
     levels = detect_session_levels(primary)
     feat = pd.concat([feat, levels], axis=1)
-    vol_s = None
-    if "volume" in primary.columns:
-        vol_s = primary["volume"]
-    elif "tickvol" in primary.columns:
-        vol_s = primary["tickvol"]
+    from quant_rl.data.activity import activity_series
+
+    vol_s = activity_series(primary)
     if vol_s is not None:
         feat["volume_spike"] = volume_spike(vol_s, window=20)
     feat["atr_5"] = atr(primary, period=5)
@@ -754,11 +753,12 @@ def build_features(
                 axis=1,
             )
 
-        # Raw VWAP level; same tickvol/session_id contract as vwap_from_session.
-        # Gated by vwap_session — tick volume in this dataset does not support it.
+        # Raw VWAP level; tick-count weights via activity_series.
+        from quant_rl.data.activity import activity_series
+
         if (
             bool(getattr(feat_cfg, "vwap_session", False))
-            and "tickvol" in primary.columns
+            and activity_series(primary) is not None
             and "session_id" in primary.columns
         ):
             feat["vwap"] = vwap_level(primary)

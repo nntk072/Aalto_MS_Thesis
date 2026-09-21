@@ -157,6 +157,7 @@ def test_hard_max_loss_terminates_not_truncates() -> None:
             "max_loss_limit": 10_000.0,
             "soft_daily_loss_limit": 2_000.0,
             "soft_max_loss_limit": 5_000.0,
+            "trailing_dd_limit": 0.0,
         },
     )
     env.reset()
@@ -195,6 +196,34 @@ def test_hard_daily_terminates_year_episode() -> None:
     assert truncated is False
     assert reward == pytest.approx(-10.0)
     assert env.breach_events[0]["reason"] == "daily_loss"
+
+
+@pytest.mark.unit
+def test_trailing_dd_terminates_year_episode() -> None:
+    env = _multi_day_env(
+        n_days=2,
+        bars_per_day=80,
+        obs_window=10,
+        episodic=True,
+        max_episode_steps=None,
+        guardrail_kwargs={
+            "daily_loss_limit": 5_000.0,
+            "max_loss_limit": 10_000.0,
+            "trailing_dd_limit": 0.07,
+            "soft_trailing_dd_limit": 0.04,
+        },
+    )
+    obs, _ = env.reset()
+    assert obs["account"].shape == (6,)
+    env.account.update_equity(10_000.0)
+    env.account.balance = 102_300.0
+    env.account.update_equity(0.0)
+    assert env.account.trailing_drawdown_pct() >= 0.07
+    _, reward, done, truncated, _ = env.step(0)
+    assert done is True
+    assert truncated is False
+    assert reward == pytest.approx(-10.0)
+    assert env.breach_events[0]["reason"] == "trailing_dd"
 
 
 @pytest.mark.unit

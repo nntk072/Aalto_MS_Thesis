@@ -412,7 +412,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         # Observation space: dict with time-series + account state (+ VAE latent if enabled)
         # features: (obs_window, n_features)
-        # account: [equity, position_direction, open_pnl, unrealised_r, dist_to_sl]
+        # account: [equity, position_direction, open_pnl, unrealised_r, dist_to_sl, trailing_dd]
         # vae_z: latent embedding from VAE (if use_vae=True)
         n_features = self._obs_features.shape[1] if len(self._obs_features) > 0 else 1
         vae_latent_dim = vae.encoder.latent_dim if use_vae and vae is not None else 0
@@ -428,7 +428,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 "account": spaces.Box(
                     low=-np.inf,
                     high=np.inf,
-                    shape=(5,),
+                    shape=(6,),
                     dtype=np.float32,
                 ),
             }
@@ -1261,9 +1261,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     self.sessions_with_trades.add(session_id)
                     self._note_close(pnl)
             elif discrete_action != 0 and not session_blocked:  # enter_long or enter_short
-                # Soft brick: stop new entries once session daily loss hits the
-                # soft limit; hard daily/max-DD breaches still use session_blocked.
-                if self.guardrails.check_soft_daily(self.account):
+                # Soft brick: stop new entries on daily-loss or trailing-DD
+                # soft limits; hard breaches still use session_blocked.
+                if self.guardrails.check_soft_daily(
+                    self.account
+                ) or self.guardrails.check_soft_trailing_dd(self.account):
                     self._entry_diag["soft_brick"] += 1
                 else:
                     self._try_enter_position(
@@ -1435,6 +1437,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             "loss_from_initial": float(self.account.loss_from_initial()),
             "soft_max_loss_limit": self.guardrails.soft_max_loss_limit,
             "max_loss_limit": self.guardrails.max_loss_limit,
+            "trailing_dd": float(self.account.trailing_drawdown_pct()),
+            "soft_trailing_dd_limit": self.guardrails.soft_trailing_dd_limit,
+            "trailing_dd_limit": self.guardrails.trailing_dd_limit,
             "initial_balance": self.initial_balance,
             # Year-fail is terminated (done) with truncated=False.
             "breach": bool(done and not truncated),
@@ -1665,7 +1670,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 current_close = 1.0
             norm_dist = dist_to_sl / current_close if current_close > 0 else 0.0
             account_state = np.array(
-                [norm_equity, pos_dir, norm_pnl, unrealised_r, norm_dist],
+                [
+                    norm_equity,
+                    pos_dir,
+                    norm_pnl,
+                    unrealised_r,
+                    norm_dist,
+                    float(self.account.trailing_drawdown_pct()),
+                ],
                 dtype=np.float32,
             )
         else:
@@ -1676,6 +1688,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     open_pnl,
                     unrealised_r,
                     dist_to_sl,
+                    float(self.account.trailing_drawdown_pct()),
                 ],
                 dtype=np.float32,
             )

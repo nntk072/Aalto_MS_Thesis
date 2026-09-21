@@ -43,6 +43,15 @@ def daily_drawdown_pct(equity: pd.Series) -> pd.Series:
     return (equity - start) / start * 100.0
 
 
+def daily_drawdown_usd(equity: pd.Series) -> pd.Series:
+    """Intraday drawdown from that day's opening equity, in dollars.
+
+    FTMO daily loss is a fixed dollar cap ($5,000), not a percent of equity
+    and not the 7% trailing training constraint.
+    """
+    return equity - session_start_equity(equity)
+
+
 def daily_pnl(equity: pd.Series) -> pd.Series:
     """Closed-bar session P&L: last equity of the day minus first."""
     if equity.empty:

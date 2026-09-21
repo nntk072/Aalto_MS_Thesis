@@ -208,7 +208,12 @@ def _write_split(
             out_path=split_dir / "equity.png",
             dpi=dpi,
         )
-        _plt.plot_drawdown(equity, out_path=split_dir / "drawdown.png", dpi=dpi)
+        _plt.plot_drawdown(
+            equity,
+            out_path=split_dir / "drawdown.png",
+            dpi=dpi,
+            daily_loss_limit=daily_loss_limit,
+        )
         _plt.plot_daily_pnl(
             equity,
             daily_loss_limit=daily_loss_limit,
@@ -260,7 +265,11 @@ def _write_split(
                 trades=trades,
                 out_path=split_dir / "equity.html",
             )
-            _pi.plot_drawdown(equity, out_path=split_dir / "drawdown.html")
+            _pi.plot_drawdown(
+                equity,
+                out_path=split_dir / "drawdown.html",
+                daily_loss_limit=daily_loss_limit,
+            )
             _pi.plot_daily_pnl(
                 equity,
                 daily_loss_limit=daily_loss_limit,

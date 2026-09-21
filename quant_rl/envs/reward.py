@@ -52,6 +52,9 @@ class DSRReward:
         loss_from_initial: float = 0.0,
         soft_max_loss_limit: float | None = 5_000.0,
         max_loss_limit: float = 10_000.0,
+        trailing_dd: float = 0.0,
+        soft_trailing_dd_limit: float | None = 0.04,
+        trailing_dd_limit: float = 0.07,
         initial_balance: float = 100_000.0,
         breach: bool = False,
         realized_close_pnl: float | None = None,  # noqa: ARG002
@@ -67,6 +70,8 @@ class DSRReward:
             Soft FTMO penalty ramps from the soft brick toward the hard limit.
         loss_from_initial, soft_max_loss_limit, max_loss_limit:
             Soft year-loss shaping from soft floor toward absolute max loss.
+        trailing_dd, soft_trailing_dd_limit, trailing_dd_limit:
+            Soft trailing (peak-to-trough) drawdown band toward the 7% hard cap.
         initial_balance:
             For normalisation.
         breach:
@@ -98,6 +103,7 @@ class DSRReward:
         )
         dsr -= _soft_band_penalty(daily_loss, soft, daily_loss_limit)
         dsr -= _soft_band_penalty(loss_from_initial, soft_max_loss_limit, max_loss_limit)
+        dsr -= _soft_band_penalty(trailing_dd, soft_trailing_dd_limit, trailing_dd_limit)
 
         return float(np.clip(dsr, -10.0, 10.0))
 
@@ -128,6 +134,9 @@ class PnLReward:
         loss_from_initial: float = 0.0,
         soft_max_loss_limit: float | None = 5_000.0,
         max_loss_limit: float = 10_000.0,
+        trailing_dd: float = 0.0,
+        soft_trailing_dd_limit: float | None = 0.04,
+        trailing_dd_limit: float = 0.07,
         initial_balance: float = 100_000.0,
         breach: bool = False,
         realized_close_pnl: float | None = None,
@@ -148,6 +157,7 @@ class PnLReward:
         )
         reward -= _soft_band_penalty(daily_loss, soft_start, daily_loss_limit)
         reward -= _soft_band_penalty(loss_from_initial, soft_max_loss_limit, max_loss_limit)
+        reward -= _soft_band_penalty(trailing_dd, soft_trailing_dd_limit, trailing_dd_limit)
 
         if self._dsr is not None:
             dsr = self._dsr(
@@ -158,6 +168,9 @@ class PnLReward:
                 loss_from_initial=loss_from_initial,
                 soft_max_loss_limit=soft_max_loss_limit,
                 max_loss_limit=max_loss_limit,
+                trailing_dd=trailing_dd,
+                soft_trailing_dd_limit=soft_trailing_dd_limit,
+                trailing_dd_limit=trailing_dd_limit,
                 initial_balance=initial_balance,
                 breach=False,
             )

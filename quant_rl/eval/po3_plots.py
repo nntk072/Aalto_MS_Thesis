@@ -200,6 +200,8 @@ def plot_fvg_signals(
     *,
     htf: str = "M15",
     ltf: str = "M5",
+    zone_kinds: tuple[str, ...] | None = None,
+    max_zones: int | None = None,
 ) -> Figure:
     """Render PO3/IFVG signals on a candlestick chart.
 
@@ -237,6 +239,13 @@ def plot_fvg_signals(
 
     # Zones from full spine (incl. lookback); candles/markers from display window.
     zones = build_fvg_zones_for_plot(bars, htf=htf, ltf=ltf)
+    if zone_kinds is not None:
+        zones = [z for z in zones if z.kind in zone_kinds]
+    if window is not None:
+        w0, w1 = window
+        zones = [z for z in zones if z.end_ts >= w0 and z.start_ts <= w1]
+    if max_zones is not None and len(zones) > max_zones:
+        zones = sorted(zones, key=lambda z: z.end_ts - z.start_ts)[:max_zones]
 
     plot_bars = bars
     if window is not None:
@@ -301,6 +310,76 @@ def plot_fvg_signals(
     ax.grid(True, which="both", alpha=0.2)
 
     fig.tight_layout()
+    if out_path:
+        _save(fig, out_path, dpi)
+    return fig
+
+
+def plot_annotated_ny_session(
+    bars: pd.DataFrame,
+    features: pd.DataFrame,
+    day: pd.Timestamp,
+    *,
+    rr_ratio: float = 2.0,
+    candle_tf: str = "5min",
+    out_path: Path | str | None = None,
+    dpi: int = 150,
+) -> Figure:
+    """NY-window pedagogy chart: Asian range, IFVG, entry, structural SL, RR TP.
+
+    Does not draw scaled 3-TP. Zones are clipped to the NY window.
+    """
+    from quant_rl.data.session import ny_session_mask
+    from quant_rl.eval.data_plots import _slice_ny_day
+
+    plot_bars, lookback = _slice_ny_day(bars, day, lookback_bars=200)
+    if plot_bars.empty:
+        raise ValueError(f"No NY bars on {day}")
+    day_feat = features.reindex(plot_bars.index)
+    signals = pd.DataFrame(index=lookback.index)
+    for col in ("entry_long", "entry_short"):
+        if col in features.columns:
+            signals[col] = features[col].reindex(lookback.index).fillna(0)
+    fig = plot_fvg_signals(
+        lookback,
+        signals,
+        window=(plot_bars.index[0], plot_bars.index[-1]),
+        candle_tf=candle_tf,
+        max_points=400,
+        show_entries=True,
+        dpi=dpi,
+        zone_kinds=("ltf_ifvg",),
+        max_zones=6,
+    )
+    ax = fig.axes[0]
+    # Asian range + first entry SL/TP (RR, not 3-scale).
+    for col, style in (("asian_high", "--"), ("asian_low", "--")):
+        if col in features.columns:
+            val = features[col].reindex(plot_bars.index).dropna()
+            if not val.empty and np.isfinite(val.iloc[-1]):
+                ax.axhline(float(val.iloc[-1]), color="#6a1b9a", linestyle=style, linewidth=0.9)
+    ny_mask = ny_session_mask(pd.DatetimeIndex(plot_bars.index)).to_numpy()
+    entry_idx = None
+    side = 0
+    for col, sgn in (("entry_long", 1), ("entry_short", -1)):
+        if col not in day_feat.columns:
+            continue
+        hits = day_feat[col].fillna(0).astype(float).gt(0) & ny_mask
+        if hits.any():
+            entry_idx = plot_bars.index[hits.to_numpy()][0]
+            side = sgn
+            break
+    if entry_idx is not None and side != 0:
+        row = features.loc[entry_idx] if entry_idx in features.index else None
+        px = float(plot_bars.loc[entry_idx, "close"])
+        sl_col = "po3_manipulation_low" if side == 1 else "po3_manipulation_high"
+        sl = float(row[sl_col]) if row is not None and sl_col in features.columns else np.nan
+        if np.isfinite(sl) and sl != px:
+            risk = abs(px - sl)
+            tp = px + side * rr_ratio * risk
+            ax.axhline(sl, color=SHORT_COLOR, linewidth=1.0, label="SL (manip)")
+            ax.axhline(tp, color=LONG_COLOR, linewidth=1.0, label="TP (RR, not 3-scale)")
+    ax.set_title(f"NY PO3/IFVG — {pd.Timestamp(day).date()} (gate diagnostic; RR TP)")
     if out_path:
         _save(fig, out_path, dpi)
     return fig

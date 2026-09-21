@@ -40,6 +40,6 @@ def dict_obs_space():
     return spaces.Dict(
         {
             "seq": spaces.Box(low=-10.0, high=10.0, shape=(10, 8), dtype=np.float32),
-            "account": spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32),
+            "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
         }
     )

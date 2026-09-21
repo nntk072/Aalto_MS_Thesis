@@ -7,7 +7,7 @@ YOU implement:
 Observation contract
 --------------------
 ``obs["seq"]``:     float32 tensor of shape ``[batch, T, F]``
-``obs["account"]``: float32 tensor of shape ``[batch, A]``  (A = 5)
+``obs["account"]``: float32 tensor of shape ``[batch, A]``  (A = 6)
 
 The encoder maps ``[batch, T, F]`` → ``[batch, D]`` (latent dim D is yours to choose).
 The flattened input to the PPO policy head is ``[batch, D + A]``.

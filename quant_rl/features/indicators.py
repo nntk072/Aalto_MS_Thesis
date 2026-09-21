@@ -132,11 +132,20 @@ def stochastic(df: pd.DataFrame, k_period: int = 14, d_period: int = 3) -> pd.Da
 
 
 def vwap_level(df: pd.DataFrame) -> pd.Series:
-    """Raw cumulative session VWAP price level (resets per ``session_id``)."""
+    """Tick-count session VWAP (resets per ``session_id``).
+
+    Weights typical price by :func:`~quant_rl.data.activity.activity_series`
+    (MT5 tick count). This is not exchange volume; CFD ``<VOL>`` is unused.
+    """
+    from quant_rl.data.activity import activity_series
+
     if "session_id" not in df.columns:
         raise ValueError("DataFrame must have 'session_id' column (see data.session)")
+    act = activity_series(df)
+    if act is None:
+        raise ValueError("DataFrame needs tickvol/tick_count activity for VWAP")
     typical = (df["high"] + df["low"] + df["close"]) / 3
-    vol = df["tickvol"].replace(0, np.nan)
+    vol = act.reindex(df.index).replace(0, np.nan)
     tp_vol = typical * vol
     cum_tp_vol = tp_vol.groupby(df["session_id"]).cumsum()
     cum_vol = vol.groupby(df["session_id"]).cumsum()
@@ -302,8 +311,7 @@ def build_indicators(df: pd.DataFrame, cfg: Any) -> pd.DataFrame:
     parts.append(adx(df, cfg.adx_period))
     parts.append(bollinger(close, cfg.bb_period, cfg.bb_std))
     parts.append(stochastic(df, cfg.stoch_k, cfg.stoch_d))
-    # Session VWAP needs reliable tick volume; disabled when data lacks it
-    # (``features.vwap_session: false``).
+    # Session VWAP weights typical price by tick-count activity.
     if bool(getattr(cfg, "vwap_session", False)) and "session_id" in df.columns:
         parts.append(vwap_from_session(df))
     parts.append(returns(close, list(cfg.return_horizons)))

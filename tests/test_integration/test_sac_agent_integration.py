@@ -122,7 +122,7 @@ class TestSACAgentIntegration:
 
         from quant_rl.models.auxiliary import AuxiliaryLoss, ReturnPredictionHead
 
-        latent_dim, account_dim = 128, 5
+        latent_dim, account_dim = 128, 6
         features_dim = latent_dim + account_dim
 
         head = ReturnPredictionHead(latent_dim=features_dim, prediction_horizon=5)

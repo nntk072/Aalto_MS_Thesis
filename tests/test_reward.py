@@ -74,6 +74,26 @@ def test_soft_max_loss_shaping_band():
     assert val_near < val_safe
 
 
+def test_soft_trailing_dd_shaping_band():
+    r = DSRReward(eta=0.01)
+    val_safe = r(
+        0.0,
+        trailing_dd=0.02,
+        soft_trailing_dd_limit=0.04,
+        trailing_dd_limit=0.07,
+        initial_balance=100_000.0,
+    )
+    r.reset()
+    val_near = r(
+        0.0,
+        trailing_dd=0.06,
+        soft_trailing_dd_limit=0.04,
+        trailing_dd_limit=0.07,
+        initial_balance=100_000.0,
+    )
+    assert val_near < val_safe
+
+
 def test_reward_clipped():
     r = DSRReward(eta=0.5)
     # Extreme gains

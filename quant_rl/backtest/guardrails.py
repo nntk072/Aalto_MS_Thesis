@@ -1,8 +1,9 @@
 """FTMO guardrail checks.
 
-Hard limits (``daily_loss_limit``, ``max_loss_limit``) are kill-switches.
-``soft_daily_loss_limit`` is a soft brick: block new entries / reward pressure
-only — it does **not** force-close or end the day.
+Hard limits (``daily_loss_limit``, ``max_loss_limit``, ``trailing_dd_limit``)
+are kill-switches. Soft bricks (``soft_daily_loss_limit``,
+``soft_trailing_dd_limit``) block new entries / add reward pressure only —
+they do **not** force-close or end the day.
 """
 
 from __future__ import annotations
@@ -20,6 +21,9 @@ class FTMOGuardrails:
     soft_daily_loss_limit: float = 2_000.0
     # Reward-only year-loss shaping floor (not a hard kill-switch).
     soft_max_loss_limit: float = 5_000.0
+    # Trailing (peak-to-trough) drawdown as a fraction of peak equity.
+    trailing_dd_limit: float = 0.07
+    soft_trailing_dd_limit: float = 0.04
 
     # ------------------------------------------------------------------
 
@@ -42,14 +46,30 @@ class FTMOGuardrails:
         """
         return acc.loss_from_initial() >= self.max_loss_limit
 
+    def check_trailing_dd(self, acc: AccountState) -> bool:
+        """Return True if trailing drawdown from peak ≥ ``trailing_dd_limit``."""
+        hard = float(self.trailing_dd_limit)
+        if hard <= 0.0:
+            return False
+        return acc.trailing_drawdown_pct() >= hard
+
+    def check_soft_trailing_dd(self, acc: AccountState) -> bool:
+        """Return True when the trailing-DD soft brick is active."""
+        soft = float(self.soft_trailing_dd_limit)
+        if soft <= 0.0:
+            return False
+        return acc.trailing_drawdown_pct() >= soft
+
     def check_trade_risk(self, risk: float) -> bool:
         """Return True (breached) if *risk* $ per trade exceeds the limit."""
         return risk > self.risk_per_trade_limit
 
     def any_breach(self, acc: AccountState) -> bool:
-        return self.check_daily(acc) or self.check_max_drawdown(acc)
+        return self.check_trailing_dd(acc) or self.check_daily(acc) or self.check_max_drawdown(acc)
 
     def breach_reason(self, acc: AccountState) -> str | None:
+        if self.check_trailing_dd(acc):
+            return "trailing_dd"
         if self.check_max_drawdown(acc):
             return "max_drawdown"
         if self.check_daily(acc):

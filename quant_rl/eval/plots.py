@@ -25,7 +25,7 @@ from matplotlib.patches import Rectangle
 
 from .plot_series import (
     apply_mpl_date_axis,
-    daily_drawdown_pct,
+    daily_drawdown_usd,
     daily_loss_limit_series,
     daily_pnl,
     drawdown_ylim,
@@ -204,11 +204,24 @@ def _draw_dd_panel(
     floor: float,
     color: str,
     ylabel: str,
+    y_formatter: Any,
+    constraint: float | None = None,
+    constraint_label: str | None = None,
+    y_locator: Any | None = None,
 ) -> None:
     ax.fill_between(series.index, series.to_numpy(), 0, color=color, alpha=0.55, label=title)
     ax.plot(series.index, series.to_numpy(), color=color, linewidth=0.8)
-    ax.axhline(floor, color="#777777", linewidth=0.7, linestyle=":", alpha=0.8)
-    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{x:.1f}%"))
+    if constraint is not None:
+        ax.axhline(
+            constraint,
+            color="#ff9800",
+            linewidth=0.9,
+            linestyle=":",
+            label=constraint_label,
+        )
+    ax.yaxis.set_major_formatter(y_formatter)
+    if y_locator is not None:
+        ax.yaxis.set_major_locator(y_locator)
     apply_mpl_date_axis(ax, tz=pd.DatetimeIndex(series.index).tz)
     ax.set_ylim(*drawdown_ylim(series, floor))
     ax.set_title(title, fontweight="bold")
@@ -221,29 +234,47 @@ def plot_drawdown(
     equity: pd.Series,
     out_path: Path | str | None = None,
     dpi: int = 150,
+    daily_loss_limit: float | None = 5_000.0,
 ) -> Figure:
-    """Two-panel underwater chart: peak drawdown and daily drawdown."""
+    """Two-panel chart: peak-to-trough DD (%) and daily DD (USD).
+
+    Daily constraint is the FTMO **$5,000** cap (independent of equity).
+    Trailing 7% DD is a training policy only — it is not drawn.
+    """
     _apply_style()
     max_dd = max_drawdown_pct(equity)
-    day_dd = daily_drawdown_pct(equity)
+    day_dd = daily_drawdown_usd(equity)
     tz = pd.DatetimeIndex(equity.index).tz
+    daily_floor = -float(daily_loss_limit) if daily_loss_limit else 0.0
+    max_floor = float(np.nanmin(np.asarray(max_dd, dtype=float))) if len(max_dd) else -1.0
+    if np.isnan(max_floor):
+        max_floor = -1.0
 
     fig, (ax_max, ax_day) = plt.subplots(2, 1, figsize=(14, 6), sharex=True)
     _draw_dd_panel(
         ax_max,
         max_dd,
         title="Maximum drawdown",
-        floor=-10.0,
+        floor=min(max_floor, -1.0),
         color=SHORT_COLOR,
         ylabel="Drawdown (%)",
+        y_formatter=mticker.FuncFormatter(lambda x, _: f"{x:.0f}%"),
+        y_locator=mticker.MultipleLocator(5.0),
     )
     _draw_dd_panel(
         ax_day,
         day_dd,
         title="Daily drawdown",
-        floor=-5.0,
+        floor=daily_floor
+        if daily_loss_limit
+        else (float(np.nanmin(day_dd.to_numpy())) if len(day_dd) else 0.0),
         color="#ff9800",
-        ylabel="Drawdown (%)",
+        ylabel="Drawdown (USD)",
+        y_formatter=mticker.FuncFormatter(lambda x, _: f"${x:,.0f}"),
+        constraint=(-float(daily_loss_limit) if daily_loss_limit else None),
+        constraint_label=(
+            f"Daily loss cap (−${daily_loss_limit:,.0f})" if daily_loss_limit else None
+        ),
     )
     ax_day.set_xlabel("Date")
     apply_mpl_date_axis(ax_day, tz=tz)

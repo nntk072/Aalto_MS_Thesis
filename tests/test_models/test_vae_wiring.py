@@ -54,15 +54,15 @@ def test_vae_feature_extractor_accepts_vae_z() -> None:
     obs_space = spaces.Dict(
         {
             "vae_z": spaces.Box(-np.inf, np.inf, shape=(16,), dtype=np.float32),
-            "account": spaces.Box(-np.inf, np.inf, shape=(5,), dtype=np.float32),
+            "account": spaces.Box(-np.inf, np.inf, shape=(6,), dtype=np.float32),
             "seq": spaces.Box(-np.inf, np.inf, shape=(60, 8), dtype=np.float32),
         }
     )
     extractor = VAEFeatureExtractor(obs_space, vae=vae, freeze=True)
     batch = {
         "vae_z": torch.randn(4, 16),
-        "account": torch.randn(4, 5),
+        "account": torch.randn(4, 6),
         "seq": torch.randn(4, 60, 8),
     }
     out = extractor(batch)
-    assert out.shape == (4, 16 + 5)
+    assert out.shape == (4, 16 + 6)
