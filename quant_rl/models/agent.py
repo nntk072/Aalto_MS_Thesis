@@ -174,13 +174,34 @@ def build_agent(
     )
     if device is not None:
         ppo_kwargs["device"] = device
+    policy, policy_kwargs, ppo_kwargs["ent_coef"] = _ppo_policy_and_ent_coef(
+        cfg, policy_kwargs, env.action_space
+    )
     ppo_model = PPO(
-        "MultiInputPolicy",
+        policy,
         vec_env,
         policy_kwargs=policy_kwargs,
         **ppo_kwargs,
     )
     return _finalize_cuda_policy(ppo_model, device)
+
+
+def _ppo_policy_and_ent_coef(
+    cfg: DictConfig,
+    policy_kwargs: dict[str, Any],
+    action_space: spaces.Space[Any],
+) -> tuple[Any, dict[str, Any], float]:
+    """Box overlay: clamp Gaussian std. Discrete: keep categorical entropy coef."""
+    ent_coef = float(cfg.ppo.ent_coef)
+    if not isinstance(action_space, spaces.Box):
+        return "MultiInputPolicy", policy_kwargs, ent_coef
+    from .ppo_policy import ClampedStdMultiInputPolicy
+
+    kwargs = dict(policy_kwargs)
+    kwargs["log_std_init"] = float(cfg.ppo.get("log_std_init", 0.0))
+    kwargs["log_std_min"] = float(cfg.ppo.get("log_std_min", -2.0))
+    kwargs["log_std_max"] = float(cfg.ppo.get("log_std_max", 0.0))
+    return ClampedStdMultiInputPolicy, kwargs, float(cfg.ppo.get("ent_coef_continuous", 0.001))
 
 
 def _finalize_cuda_policy(model: Any, device: str | torch.device | None) -> Any:

@@ -8,6 +8,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from quant_rl.models.ppo_policy import clip_policy_log_std
+
 try:
     from stable_baselines3.common.callbacks import BaseCallback as _Base
 
@@ -124,6 +126,76 @@ if _SB3_AVAILABLE:
                         f"timestep={self.num_timesteps} → saved {self._best_model_path}"
                     )
 
+    class ClipLogStdCallback(_Base):
+        """Clamp PPO Gaussian ``log_std`` after updates (no-op on Discrete)."""
+
+        def __init__(
+            self,
+            log_std_min: float = -2.0,
+            log_std_max: float = 0.0,
+            verbose: int = 0,
+        ) -> None:
+            super().__init__(verbose=verbose)
+            self.log_std_min = float(log_std_min)
+            self.log_std_max = float(log_std_max)
+
+        def _clip(self) -> None:
+            clip_policy_log_std(self.model.policy, self.log_std_min, self.log_std_max)
+
+        def _on_training_start(self) -> None:
+            self._clip()
+
+        def _on_rollout_start(self) -> None:
+            self._clip()
+
+        def _on_step(self) -> bool:
+            return True
+
+        def _on_training_end(self) -> None:
+            self._clip()
+
+    class PeriodicCheckpointCallback(_Base):
+        """Save the policy every ``save_freq`` environment timesteps.
+
+        SB3 ``CheckpointCallback`` counts VecEnv calls, so ``n_envs=64`` made
+        bar-length intervals skip most of a 20M run. This uses
+        ``model.num_timesteps`` and also refreshes ``ppo_latest.zip``.
+        """
+
+        def __init__(
+            self,
+            save_freq: int,
+            save_path: str | Path,
+            name_prefix: str = "ppo_ckpt",
+            latest_name: str = "ppo_latest",
+            verbose: int = 1,
+        ) -> None:
+            super().__init__(verbose=verbose)
+            self.save_freq = int(save_freq)
+            self.save_path = Path(save_path)
+            self.name_prefix = name_prefix
+            self.latest_name = latest_name
+            self._next_save = self.save_freq if self.save_freq > 0 else None
+
+        def _init_callback(self) -> None:
+            self.save_path.mkdir(parents=True, exist_ok=True)
+
+        def _save(self) -> None:
+            ckpt = self.save_path / f"{self.name_prefix}_{self.num_timesteps}_steps"
+            self.model.save(ckpt)
+            self.model.save(self.save_path / self.latest_name)
+            if self.verbose:
+                print(f"[PeriodicCheckpoint] timestep={self.num_timesteps} → {ckpt}.zip")
+
+        def _on_step(self) -> bool:
+            if self._next_save is None or self.save_freq <= 0:
+                return True
+            if self.num_timesteps >= self._next_save:
+                self._save()
+                crossed = 1 + (self.num_timesteps - self._next_save) // self.save_freq
+                self._next_save += self.save_freq * crossed
+            return True
+
 else:
 
     class ProgressLoggerCallback:  # type: ignore[no-redef]
@@ -141,5 +213,23 @@ else:
         def __init__(self, *args: object, **kwargs: object) -> None:
             raise ImportError(
                 "stable-baselines3 is required for BestCheckpointEvalCallback. "
+                "Install it with: pip install stable-baselines3"
+            )
+
+    class ClipLogStdCallback:  # type: ignore[no-redef]
+        """Stub — stable-baselines3 is not installed."""
+
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            raise ImportError(
+                "stable-baselines3 is required for ClipLogStdCallback. "
+                "Install it with: pip install stable-baselines3"
+            )
+
+    class PeriodicCheckpointCallback:  # type: ignore[no-redef]
+        """Stub — stable-baselines3 is not installed."""
+
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            raise ImportError(
+                "stable-baselines3 is required for PeriodicCheckpointCallback. "
                 "Install it with: pip install stable-baselines3"
             )

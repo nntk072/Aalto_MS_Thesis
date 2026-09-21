@@ -165,6 +165,12 @@ ppo:
   gae_lambda: 0.95
   clip_range: 0.2
   ent_coef: 0.01
+  # Box overlay only. Discrete Idea 3 keeps ent_coef. Caps std in [e^min, e^max].
+  ent_coef_continuous: 0.001
+  log_std_init: 0.0
+  log_std_min: -2.0
+  log_std_max: 0.0
+  checkpoint_freq: 1000000
   total_timesteps: 20000000
 
 sac:

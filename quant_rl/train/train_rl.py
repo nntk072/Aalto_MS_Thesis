@@ -28,8 +28,8 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 import torch
+from gymnasium import spaces
 from omegaconf import DictConfig, OmegaConf
-from stable_baselines3.common.callbacks import CheckpointCallback
 
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import run_pipeline
@@ -49,7 +49,12 @@ from quant_rl.evaluation import calculate_metrics
 from quant_rl.features.build import build_features, feature_cache_path
 from quant_rl.models.agent import build_agent
 from quant_rl.train.auxiliary_training import AuxiliaryTrainerCallback
-from quant_rl.train.callbacks import BestCheckpointEvalCallback, ProgressLoggerCallback
+from quant_rl.train.callbacks import (
+    BestCheckpointEvalCallback,
+    ClipLogStdCallback,
+    PeriodicCheckpointCallback,
+    ProgressLoggerCallback,
+)
 from quant_rl.utils.device import get_device, scale_training_cfg
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -92,6 +97,18 @@ def _guardrail_kwargs(cfg: Any) -> dict[str, float]:
         "trailing_dd_limit": float(cfg.ftmo.get("trailing_dd_limit", 0.07)),
         "soft_trailing_dd_limit": float(cfg.ftmo.get("soft_trailing_dd_limit", 0.04)),
     }
+
+
+def _periodic_checkpoint_callback(
+    cfg: DictConfig, model_dir: Path
+) -> PeriodicCheckpointCallback | None:
+    """Save numbered + latest zips every ``ppo.checkpoint_freq`` env steps."""
+    freq = int(cfg.ppo.get("checkpoint_freq", 1_000_000))
+    if freq <= 0:
+        log.info("Periodic checkpoints disabled (checkpoint_freq=%s)", freq)
+        return None
+    log.info("Periodic checkpoints every %d env steps → %s", freq, model_dir)
+    return PeriodicCheckpointCallback(save_freq=freq, save_path=model_dir)
 
 
 def _max_episode_steps(cfg: Any) -> int | None:
@@ -449,13 +466,7 @@ def main() -> None:
     model_dir = run_dir / "model"
     model_dir.mkdir(parents=True, exist_ok=True)
 
-    # Checkpoint callback
-    checkpoint_callback = CheckpointCallback(
-        save_freq=max(1000, len(train_bars) // 10),
-        save_path=str(model_dir),
-        name_prefix="ppo_ckpt",
-        save_replay_buffer=False,
-    )
+    checkpoint_callback = _periodic_checkpoint_callback(cfg, model_dir)
 
     # Train agent
     timesteps = cfg.ppo.total_timesteps if not args.mvp else cfg.training.total_timesteps_mvp
@@ -499,10 +510,11 @@ def main() -> None:
         )
 
     callbacks: list[
-        CheckpointCallback
+        PeriodicCheckpointCallback
         | AuxiliaryTrainerCallback
         | BestCheckpointEvalCallback
         | ProgressLoggerCallback
+        | ClipLogStdCallback
     ] = [c for c in (checkpoint_callback, aux_cb) if c is not None]
 
     # Best-checkpoint eval: every N rollouts, evaluate on a fresh copy of the
@@ -530,6 +542,13 @@ def main() -> None:
 
     progress_log = model_dir / "training_log.csv"
     callbacks.append(ProgressLoggerCallback(log_path=progress_log))
+    if isinstance(train_env.action_space, spaces.Box):
+        callbacks.append(
+            ClipLogStdCallback(
+                log_std_min=float(cfg.ppo.get("log_std_min", -2.0)),
+                log_std_max=float(cfg.ppo.get("log_std_max", 0.0)),
+            )
+        )
 
     model.learn(total_timesteps=timesteps, callback=callbacks)
 
