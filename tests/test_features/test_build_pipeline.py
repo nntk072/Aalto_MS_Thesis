@@ -157,4 +157,5 @@ class TestBuildFeaturesPipeline:
         )
 
 
-_GOLDEN_HASH = "2843d0ca645f44ab451b4699b459140cee9bfd8e58ed18b91d6453225d321f29"
+# v13: volume_spike uses tickvol/activity, not always-zero CFD volume.
+_GOLDEN_HASH = "1855b9624f493b82d37d7cdb0892be8fbf78a9c7e2fa8bef03c3af74ed4f567f"
