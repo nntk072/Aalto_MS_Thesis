@@ -131,7 +131,7 @@ if _SB3_AVAILABLE:
 
         def __init__(
             self,
-            log_std_min: float = -2.0,
+            log_std_min: float = -0.7,
             log_std_max: float = 0.0,
             verbose: int = 0,
         ) -> None:

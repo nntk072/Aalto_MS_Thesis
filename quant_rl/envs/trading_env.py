@@ -89,7 +89,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         max_entries_per_session: int = 0,
         entry_cooldown_bars: int = 0,
         reward_mode: str = "dsr",
-        entry_intensity_threshold: float = 0.1,
+        entry_intensity_threshold: float = 0.0,
     ):
         """Initialize trading environment.
 
@@ -247,8 +247,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.max_entries_per_session = int(max_entries_per_session)
         self.entry_cooldown_bars = int(entry_cooldown_bars)
         self.reward_mode = str(reward_mode or "dsr").lower()
-        # Hold band on affine intensity u∈[0,1]. Narrow default (0.1) so PPO
-        # means that drift slightly below 0.5 still enter on deterministic eval.
+        # 0 = intensity never holds; entry follows context_direction.
         self.entry_intensity_threshold = float(entry_intensity_threshold)
         # Resolve trader/strategy action flag early (needed for reward + spaces).
         _strategy_actions = (
@@ -378,8 +377,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             # PPO's unsquashed Gaussian mean sits near 0; a [0,1] box clipped
             # deterministic mean to 0 (always hold). Affine-map to unit interval
             # at decode: u = 0.5 * (clip(a, -1, 1) + 1).
-            #   [0] entry intensity (u[0] < entry_intensity_threshold hold;
-            #       else context_direction)
+            #   [0] entry intensity (hold only if threshold > 0 and u[0] < it;
+            #       default 0 → context_direction decides enter vs hold)
             #   [1] sl_anchor among valid structural SL candidates
             #   [2] risk_frac -> risk_frac_range
             #   [3] rr -> rr_ratio_range
@@ -483,6 +482,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.all_sessions: set[int] = set()
         self.breach_log: list[str] = []
         self.breach_events: list[dict[str, Any]] = []
+        self._year_failed = False
         self._level_crosses: dict[tuple[int, str], Any] = {}
         self._session_entry_counts = {}
         self._cooldown_until_bar = -1
@@ -618,12 +618,17 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         if self.episodic:
             reason = self.guardrails.breach_reason(self.account)
             session_blocked = False
+        elif self._year_failed:
+            session_blocked = True
+            reason = None
         else:
             session_blocked = session_id in self.breached_sessions
             reason = None if session_blocked else self.guardrails.breach_reason(self.account)
             if reason:
                 self.breached_sessions.add(session_id)
                 session_blocked = True
+                if reason in ("trailing_dd", "max_drawdown"):
+                    self._year_failed = True
 
         if reason:
             if self.position is not None:
@@ -1083,10 +1088,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             u = 0.5 * (np.clip(arr, -1.0, 1.0) + 1.0)
             intensity = float(u[0]) if u.size else 0.0
             entry_threshold = self.entry_intensity_threshold
-            if intensity < entry_threshold or feat_row is None:
+            if feat_row is None:
                 discrete_action = 0
-                if feat_row is not None and intensity < entry_threshold:
-                    self._entry_diag["hold_low_intensity"] += 1
+            elif entry_threshold > 0.0 and intensity < entry_threshold:
+                discrete_action = 0
+                self._entry_diag["hold_low_intensity"] += 1
             else:
                 ctx = int(self.strategy.context_direction(feat_row))  # type: ignore[arg-type]
                 if ctx in (-1, 1):

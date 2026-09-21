@@ -11,7 +11,7 @@ TIME="${TIME:-12:00:00}"
 MEM="${MEM:-512G}"
 CPUS="${CPUS:-48}"
 TRAIN="$REPO/scripts/train_idea123_20m.sh"
-LOG="$REPO/outputs/idea123_20m_tmux.log"
+LOG="${LOG:-$REPO/outputs/idea123_20m_final_tmux.log}"
 
 cd "$REPO"
 mkdir -p outputs
@@ -32,7 +32,7 @@ echo "ALLOC: tmux $SESSION + srun partition=$PARTITION gpus=$GPUS time=$TIME mem
 echo "Log: $LOG"
 
 tmux new-session -d -s "$SESSION" -c "$REPO" \
-  "srun --partition=$PARTITION --gpus=$GPUS --time=$TIME --mem=$MEM --ntasks=1 --cpus-per-task=$CPUS --chdir=$REPO bash $TRAIN 2>&1 | tee $LOG; echo DONE exit=\$?; exec bash"
+  "export SKIP_IDEA3=${SKIP_IDEA3:-0}; srun --partition=$PARTITION --gpus=$GPUS --time=$TIME --mem=$MEM --ntasks=1 --cpus-per-task=$CPUS --chdir=$REPO bash $TRAIN 2>&1 | tee $LOG; echo DONE exit=\$?; exec bash"
 
 echo "Started tmux session $SESSION (detached)."
 echo "Attach: tmux attach -t $SESSION"

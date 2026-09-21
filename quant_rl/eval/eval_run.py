@@ -1,25 +1,10 @@
-"""Evaluate a trained PPO checkpoint and (re)write a run's ``testing/`` artifacts.
+"""Evaluate a trained PPO checkpoint and rewrite ``training/`` + ``testing/``.
 
 Loads an existing RL run's ``config.yaml`` snapshot and a saved model
 checkpoint, rolls it through ``TradingEnv`` via
-``quant_rl.eval.rollout.evaluate_model``, and overwrites just the
-``testing/`` split (equity/trades/metrics/charts) — no retraining, no
-re-running the data pipeline's PPO loop.
-
-Use this to:
-  * Finish evaluation for a run whose training completed (checkpoints
-    exist) but which never produced ``testing/`` artifacts — e.g. because
-    evaluation previously used a hardcoded hold-forever stub instead of the
-    trained model.
-  * Re-evaluate an existing run after a fix to ``TradingEnv``/
-    ``evaluate_model`` using an already-trained checkpoint.
-
-Usage
------
-    cd Aalto_MS_Thesis
-    uv run python -m quant_rl.eval.eval_run --run outputs/20260719_014725_rl_train_seed42
-    uv run python -m quant_rl.eval.eval_run --run outputs/... \\
-        --checkpoint model/ppo_ckpt_328350_steps.zip
+``quant_rl.eval.rollout.evaluate_model``, and overwrites both split
+trees — no retraining. Eval uses FTMO daily $5k / max $10k from initial
+(the PPO $7k trailing cap is training-only).
 """
 
 from __future__ import annotations
@@ -47,6 +32,13 @@ from quant_rl.eval.export import save_run
 from quant_rl.eval.rollout import evaluate_model
 from quant_rl.evaluation import calculate_metrics
 from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features
+from quant_rl.models.ppo_policy import ClampedStdMultiInputPolicy
+from quant_rl.train.train_rl import (
+    _eval_guardrail_kwargs,
+    _max_loss_per_trade,
+    _strategy_from_cfg,
+    _strategy_risk_ranges,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -101,7 +93,7 @@ def _resolve_checkpoint(run_dir: Path, checkpoint: str | None) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Evaluate a trained PPO checkpoint and rewrite a run's testing/ artifacts."
+        description="Evaluate a trained PPO checkpoint and rewrite training/ + testing/ artifacts."
     )
     parser.add_argument("--run", required=True, help="Path to an existing RL run directory")
     parser.add_argument(
@@ -122,6 +114,7 @@ def main() -> None:
     cfg = _load_run_config(run_dir)
     ckpt_path = _resolve_checkpoint(run_dir, args.checkpoint)
     log.info("Loading model: %s", ckpt_path)
+    _ = ClampedStdMultiInputPolicy
     model = PPO.load(ckpt_path)
 
     data = run_pipeline(cfg, force=args.force)
@@ -133,29 +126,50 @@ def main() -> None:
     features = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
 
     train_end, test_start = get_split_config(cfg)
-    _, test_bars, _, test_feat = split_train_test(primary_m1, features, train_end, test_start)
-    test_sec = None
+    train_bars, test_bars, train_feat, test_feat = split_train_test(
+        primary_m1, features, train_end, test_start
+    )
+    train_sec = test_sec = None
     if secondary_m1 is not None and not secondary_m1.empty:
-        _, test_sec = split_bars(secondary_m1, train_end, test_start)
-    log.info("Evaluating on %d test bars (≥%s)…", len(test_bars), test_start)
+        train_sec, test_sec = split_bars(secondary_m1, train_end, test_start)
+    log.info(
+        "Evaluating train=%d bars (≤%s)  test=%d bars (≥%s) under FTMO eval guardrails",
+        len(train_bars),
+        train_end,
+        len(test_bars),
+        test_start,
+    )
 
-    test_result = evaluate_model(
-        model,
-        bars=test_bars,
-        features=test_feat,
+    strategy, strategy_reward, strategy_weight = _strategy_from_cfg(cfg)
+    risk_frac_range, rr_ratio_range = _strategy_risk_ranges(cfg)
+    eval_common = dict(
         obs_window=cfg.env.obs_window,
         initial_balance=cfg.account.initial_balance,
-        risk_frac_range=(cfg.risk.default_risk_frac * 0.5, cfg.risk.default_risk_frac * 2.0),
-        rr_ratio_range=(cfg.risk.rr_ratio_default * 0.5, cfg.risk.rr_ratio_default * 1.5),
+        guardrail_kwargs=_eval_guardrail_kwargs(cfg),
+        risk_frac_range=risk_frac_range,
+        rr_ratio_range=rr_ratio_range,
         swing_buffer_pts=cfg.risk.swing_buffer_pts,
         contract_size=cfg.account.contract_size,
-        max_loss_per_trade_usd=cfg.backtest.validation.max_loss_per_trade_usd,
+        max_loss_per_trade_usd=_max_loss_per_trade(cfg),
         dsr_eta=cfg.env.reward_dsr_eta,
-        reward_mode=str(cfg.env.get("reward_mode", "dsr")),
+        continuous_actions=False,
         block_overnight=bool(cfg.env.get("block_overnight", True)),
         eod_risk=dict(cfg.env.get("eod_risk", {})),
-        entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.1)),
+        strategy=strategy,
+        strategy_actions=bool(cfg.env.get("strategy_actions", False)),
+        strategy_reward=strategy_reward,
+        strategy_weight=strategy_weight,
+        sl_buffer_pts=float(cfg.env.get("sl_buffer_pts", 0.0)),
+        min_sl_atr_mult=float(cfg.risk.get("min_sl_atr_mult", 0.5)),
+        min_sl_points=float(cfg.risk.get("min_sl_points", 0.0)),
+        max_entries_per_session=int(cfg.env.get("max_entries_per_session", 0)),
+        entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
+        reward_mode=str(cfg.env.get("reward_mode", "dsr")),
+        entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
+        max_episode_steps=None,
     )
+
+    test_result = evaluate_model(model, bars=test_bars, features=test_feat, **eval_common)
     test_result["initial_balance"] = cfg.account.initial_balance
     test_m = calculate_metrics(
         test_result["equity"],
@@ -164,26 +178,48 @@ def main() -> None:
         n_breach_sessions=test_result.get("n_breach_sessions", 0),
     )
     log.info(
-        "[test] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%",
+        "[test] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%  fail_time=%s",
         test_m.sharpe,
         test_m.max_drawdown * 100,
         test_m.n_trades,
         test_m.total_return_pct,
+        test_result.get("fail_time"),
     )
-    log.info("Test action counts: %s", test_result.get("action_counts", {}))
+
+    train_result = evaluate_model(model, bars=train_bars, features=train_feat, **eval_common)
+    train_result["initial_balance"] = cfg.account.initial_balance
+    train_m = calculate_metrics(
+        train_result["equity"],
+        trades=train_result["trades"],
+        n_sessions=train_result.get("n_sessions", 1),
+        n_breach_sessions=train_result.get("n_breach_sessions", 0),
+    )
+    log.info(
+        "[train] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%  fail_time=%s",
+        train_m.sharpe,
+        train_m.max_drawdown * 100,
+        train_m.n_trades,
+        train_m.total_return_pct,
+        train_result.get("fail_time"),
+    )
     if test_m.n_trades == 0:
         log.error(
             "Experiment failure: evaluation produced zero trades; "
             "metrics are not meaningful until action behavior is diagnosed."
         )
 
-    testing_dir = run_dir / "testing"
-    if testing_dir.exists():
-        log.info("Clearing stale testing/ artifacts: %s", testing_dir)
-        shutil.rmtree(testing_dir)
+    for name in ("training", "testing"):
+        split_dir = run_dir / name
+        if split_dir.exists():
+            log.info("Clearing stale %s/ artifacts: %s", name, split_dir)
+            shutil.rmtree(split_dir)
 
     save_run(
         run_dir=run_dir,
+        train_result=train_result,
+        train_metrics=train_m,
+        train_bars=train_bars,
+        train_secondary=train_sec,
         test_result=test_result,
         test_metrics=test_m,
         test_bars=test_bars,
@@ -203,13 +239,19 @@ def main() -> None:
             "test_max_dd": float(test_m.max_drawdown),
             "test_trades": test_m.n_trades,
             "test_return": float(test_m.total_return_pct),
+            "test_breaches": test_result.get("n_breach_sessions", 0),
+            "test_survived_full_year": bool(test_result.get("survived_full_year", False)),
+            "test_fail_time": (
+                str(test_result["fail_time"]) if test_result.get("fail_time") is not None else None
+            ),
             "eval_checkpoint": ckpt_path.name,
             "eval_timestamp": datetime.now().isoformat(),
+            "eval_ftmo": True,
         }
     )
     training_log_path.write_text(json.dumps(training_log, indent=2))
 
-    log.info("Done. Evaluation artifacts written to: %s", testing_dir)
+    log.info("Done. Evaluation artifacts written to: %s", run_dir)
 
 
 if __name__ == "__main__":

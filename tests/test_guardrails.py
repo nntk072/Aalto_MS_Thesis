@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from quant_rl.backtest.account import AccountState
 from quant_rl.backtest.guardrails import FTMOGuardrails
 
@@ -66,19 +64,20 @@ def test_soft_daily_does_not_hard_breach():
     assert g.breach_reason(acc) is None
 
 
-def test_trailing_dd_from_peak_not_initial():
+def test_trailing_dd_is_dollar_from_peak_not_pct_of_peak():
+    """PPO cap is 7% of *initial* ($7k) from peak, not 7% of current peak."""
     g = FTMOGuardrails(trailing_dd_limit=0.07, max_loss_limit=10_000.0)
     acc = AccountState(initial_balance=100_000.0)
-    acc.update_equity(10_000.0)  # peak 110k
-    acc.balance = 104_500.0
-    acc.update_equity(0.0)  # 5% off peak — below hard 7%
-    assert acc.trailing_drawdown_pct() == pytest.approx(0.05)
+    acc.update_equity(30_000.0)  # peak 130k
+    acc.balance = 123_500.0
+    acc.update_equity(0.0)  # $6.5k off peak — under $7k train cap
     assert not g.check_trailing_dd(acc)
-    acc.balance = 102_300.0
-    acc.update_equity(0.0)  # 7% off peak
+    acc.balance = 122_000.0
+    acc.update_equity(0.0)  # $8k off peak — over $7k train cap
     assert g.check_trailing_dd(acc)
     assert g.breach_reason(acc) == "trailing_dd"
-    # Still above FTMO $90k floor.
+    # 7% of $130k peak would wait until ~$120.9k; still above that here.
+    assert acc.equity > 0.93 * acc.peak_equity
     assert not g.check_max_drawdown(acc)
 
 
@@ -86,7 +85,7 @@ def test_soft_trailing_dd_does_not_hard_breach():
     g = FTMOGuardrails(trailing_dd_limit=0.07, soft_trailing_dd_limit=0.04)
     acc = AccountState(initial_balance=100_000.0)
     acc.update_equity(10_000.0)
-    acc.balance = 104_500.0  # 5% off 110k peak
+    acc.balance = 105_500.0  # $4.5k off 110k peak: above $4k soft, under $7k hard
     acc.update_equity(0.0)
     assert g.check_soft_trailing_dd(acc)
     assert not g.check_trailing_dd(acc)

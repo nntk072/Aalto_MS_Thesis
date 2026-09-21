@@ -1,5 +1,7 @@
 #!/bin/bash
-# Sequential Idea 1 / 2 / 3 year-episode 20M trains (trailing 7% DD).
+# Sequential Idea 1 / 2 / 3 year-episode 20M trains.
+# PPO uses trailing $7k-from-peak as a training-only fail; reported train/test
+# eval follows FTMO (daily $5k, max $10k from initial).
 # Run on the GPU node after srun (see scripts/run_idea123_20m_tmux.sh).
 # Do not pass --mvp. Do not scancel.
 set -euo pipefail
@@ -30,15 +32,24 @@ from quant_rl.config import load_config
 
 cfg = load_config()
 td = float(cfg.ftmo.trailing_dd_limit)
+soft = float(cfg.ftmo.soft_trailing_dd_limit)
 if abs(td - 0.07) > 1e-12:
     raise SystemExit(f"trailing_dd_limit={td}, expected 0.07")
+if abs(soft) > 1e-12:
+    raise SystemExit(f"soft_trailing_dd_limit={soft}, expected 0 (hard peak DD only)")
+ith = float(cfg.env.entry_intensity_threshold)
+if abs(ith) > 1e-12:
+    raise SystemExit(f"entry_intensity_threshold={ith}, expected 0 (no intensity hold band)")
 print(
-    "ftmo trailing_dd_limit=%.2f soft=%.2f daily_loss_limit=%.0f max_loss_limit=%.0f"
+    "ftmo trailing_dd_limit=%.2f soft=%.2f daily_loss_limit=%.0f max_loss_limit=%.0f "
+    "log_std_min=%.2f entry_intensity_threshold=%.3f"
     % (
         td,
-        float(cfg.ftmo.soft_trailing_dd_limit),
+        soft,
         float(cfg.ftmo.daily_loss_limit),
         float(cfg.ftmo.max_loss_limit),
+        float(cfg.ppo.log_std_min),
+        float(cfg.env.entry_intensity_threshold),
     )
 )
 PY
@@ -54,7 +65,7 @@ python -u -m quant_rl.train.train_rl \
   features.po3_state_mtf.enabled=true \
   features.ifvg_mtf.enabled=true \
   env.n_envs=64 \
-  2>&1 | tee outputs/idea1_20m_trailing_dd.log
+  2>&1 | tee outputs/idea1_20m_final.log
 
 echo "=== Idea 2 distribution 20M ==="
 python -u -m quant_rl.train.train_rl \
@@ -63,14 +74,18 @@ python -u -m quant_rl.train.train_rl \
   --seed 50 \
   --out outputs \
   env.n_envs=64 \
-  2>&1 | tee outputs/idea2_20m_trailing_dd.log
+  2>&1 | tee outputs/idea2_20m_final.log
 
-echo "=== Idea 3 unconstrained baseline 20M ==="
-python -u -m quant_rl.train.train_rl \
-  --config quant_rl/config/default.yaml \
-  --seed 50 \
-  --out outputs \
-  env.n_envs=64 \
-  2>&1 | tee outputs/idea3_20m_trailing_dd.log
+if [[ "${SKIP_IDEA3:-0}" != "1" ]]; then
+  echo "=== Idea 3 unconstrained baseline 20M ==="
+  python -u -m quant_rl.train.train_rl \
+    --config quant_rl/config/default.yaml \
+    --seed 50 \
+    --out outputs \
+    env.n_envs=64 \
+    2>&1 | tee outputs/idea3_20m_final.log
+else
+  echo "=== skip Idea 3 (SKIP_IDEA3=1) ==="
+fi
 
 echo "=== all three arms finished ==="

@@ -199,7 +199,7 @@ def _ppo_policy_and_ent_coef(
 
     kwargs = dict(policy_kwargs)
     kwargs["log_std_init"] = float(cfg.ppo.get("log_std_init", 0.0))
-    kwargs["log_std_min"] = float(cfg.ppo.get("log_std_min", -2.0))
+    kwargs["log_std_min"] = float(cfg.ppo.get("log_std_min", -0.7))
     kwargs["log_std_max"] = float(cfg.ppo.get("log_std_max", 0.0))
     return ClampedStdMultiInputPolicy, kwargs, float(cfg.ppo.get("ent_coef_continuous", 0.001))
 

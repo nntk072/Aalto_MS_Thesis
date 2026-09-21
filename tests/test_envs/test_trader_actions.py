@@ -172,7 +172,8 @@ class TestContextDirectionForcesSide:
             min_sl_atr_mult=0.0,
         )
         env.reset()
-        # Intensity in Box[-1,1]: a=-0.9 → u=0.05 < 0.1 hold threshold.
+        # Intensity in Box[-1,1]: a=-0.9 → u=0.05; explicit 0.1 band still holds.
+        env.entry_intensity_threshold = 0.1
         for _ in range(20):
             obs, _, done, truncated, _ = env.step(np.array([-0.9, 0.0, 0.5, 0.0], dtype=np.float32))
             assert env.position is None  # hold (intensity < entry_intensity_threshold)

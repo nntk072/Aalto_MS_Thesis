@@ -1,9 +1,10 @@
 """FTMO guardrail checks.
 
-Hard limits (``daily_loss_limit``, ``max_loss_limit``, ``trailing_dd_limit``)
-are kill-switches. Soft bricks (``soft_daily_loss_limit``,
-``soft_trailing_dd_limit``) block new entries / add reward pressure only —
-they do **not** force-close or end the day.
+Hard limits (``daily_loss_limit``, ``max_loss_limit``) are FTMO kill-switches.
+``trailing_dd_limit`` is a PPO-only dollar cap from peak (7% of initial → $7k);
+eval sets it to 0 and uses FTMO $10k from initial. Soft bricks
+(``soft_daily_loss_limit``, ``soft_trailing_dd_limit``) block new entries /
+add reward pressure only — they do **not** force-close or end the day.
 """
 
 from __future__ import annotations
@@ -21,9 +22,9 @@ class FTMOGuardrails:
     soft_daily_loss_limit: float = 2_000.0
     # Reward-only year-loss shaping floor (not a hard kill-switch).
     soft_max_loss_limit: float = 5_000.0
-    # Trailing (peak-to-trough) drawdown as a fraction of peak equity.
-    trailing_dd_limit: float = 0.07
-    soft_trailing_dd_limit: float = 0.04
+    # PPO-only: fraction of *initial* balance as a dollar cap from peak (0 = off).
+    trailing_dd_limit: float = 0.0
+    soft_trailing_dd_limit: float = 0.0
 
     # ------------------------------------------------------------------
 
@@ -47,18 +48,24 @@ class FTMOGuardrails:
         return acc.loss_from_initial() >= self.max_loss_limit
 
     def check_trailing_dd(self, acc: AccountState) -> bool:
-        """Return True if trailing drawdown from peak ≥ ``trailing_dd_limit``."""
+        """Return True if peak-to-trough $ DD ≥ ``trailing_dd_limit`` × initial.
+
+        Training uses 0.07 → $7,000 from peak. This is not 7% of current peak
+        and is not the FTMO $10k-from-initial rule used at eval.
+        """
         hard = float(self.trailing_dd_limit)
         if hard <= 0.0:
             return False
-        return acc.trailing_drawdown_pct() >= hard
+        cap = hard * float(acc.initial_balance)
+        return (acc.peak_equity - acc.equity) >= cap
 
     def check_soft_trailing_dd(self, acc: AccountState) -> bool:
         """Return True when the trailing-DD soft brick is active."""
         soft = float(self.soft_trailing_dd_limit)
         if soft <= 0.0:
             return False
-        return acc.trailing_drawdown_pct() >= soft
+        cap = soft * float(acc.initial_balance)
+        return (acc.peak_equity - acc.equity) >= cap
 
     def check_trade_risk(self, risk: float) -> bool:
         """Return True (breached) if *risk* $ per trade exceeds the limit."""

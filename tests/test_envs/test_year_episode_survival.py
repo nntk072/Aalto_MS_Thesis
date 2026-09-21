@@ -218,7 +218,6 @@ def test_trailing_dd_terminates_year_episode() -> None:
     env.account.update_equity(10_000.0)
     env.account.balance = 102_300.0
     env.account.update_equity(0.0)
-    assert env.account.trailing_drawdown_pct() >= 0.07
     _, reward, done, truncated, _ = env.step(0)
     assert done is True
     assert truncated is False
@@ -236,3 +235,34 @@ def test_max_episode_steps_parser_none() -> None:
         env = _E()
 
     assert _max_episode_steps(_C()) is None
+
+
+@pytest.mark.unit
+def test_eval_year_fail_latches_once() -> None:
+    """FTMO max-loss in eval blocks the rest of the year without re-logging."""
+    env = _multi_day_env(
+        n_days=3,
+        bars_per_day=80,
+        obs_window=10,
+        episodic=False,
+        max_episode_steps=None,
+        guardrail_kwargs={
+            "daily_loss_limit": 5_000.0,
+            "max_loss_limit": 10_000.0,
+            "trailing_dd_limit": 0.0,
+        },
+    )
+    env.reset()
+    env.account.balance = 89_000.0
+    env.account.update_equity(0.0)
+    _, _, done, truncated, _ = env.step(0)
+    assert done is False
+    assert truncated is False
+    assert env.breach_events[0]["reason"] == "max_drawdown"
+    n_first = len(env.breach_events)
+    for _ in range(120):
+        _, _, done, truncated, _ = env.step(0)
+        if done or truncated:
+            break
+    assert len(env.breach_events) == n_first
+    assert env._year_failed is True

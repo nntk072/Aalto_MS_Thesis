@@ -254,8 +254,17 @@ def test_default_config_exposes_max_episode_steps() -> None:
     assert int(cfg.ppo.total_timesteps) >= 20_000_000
     assert float(cfg.ftmo.soft_max_loss_limit) == 5000.0
     assert float(cfg.ftmo.trailing_dd_limit) == 0.07
-    assert float(cfg.ftmo.soft_trailing_dd_limit) == 0.04
+    assert float(cfg.ftmo.soft_trailing_dd_limit) == 0.0
     assert float(cfg.ppo.ent_coef_continuous) == 0.001
-    assert float(cfg.ppo.log_std_min) == -2.0
+    assert float(cfg.ppo.log_std_min) == -0.7
     assert float(cfg.ppo.log_std_max) == 0.0
     assert int(cfg.ppo.checkpoint_freq) == 1_000_000
+    assert float(cfg.env.entry_intensity_threshold) == 0.0
+    from quant_rl.train.train_rl import _eval_guardrail_kwargs, _guardrail_kwargs
+
+    train_g = _guardrail_kwargs(cfg)
+    eval_g = _eval_guardrail_kwargs(cfg)
+    assert train_g["trailing_dd_limit"] == 0.07
+    assert eval_g["trailing_dd_limit"] == 0.0
+    assert eval_g["max_loss_limit"] == 10_000.0
+    assert eval_g["daily_loss_limit"] == 5_000.0

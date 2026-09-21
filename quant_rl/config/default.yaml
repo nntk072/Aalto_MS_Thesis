@@ -54,11 +54,11 @@ ftmo:
   soft_daily_loss_limit: 2000.0
   # Soft year-loss shaping: reward pressure from this floor toward max_loss_limit.
   soft_max_loss_limit: 5000.0
-  max_loss_limit: 10000.0              # absolute max loss from initial (NOT trailing HWM)
-  # Trailing peak-to-trough DD: hard year-fail / eval latch at 7% of peak.
+  max_loss_limit: 10000.0              # FTMO max loss from initial (eval train/test)
+  # PPO-only year-fail: $7k from peak (7% of $100k). Eval does not use this —
+  # reported training/ and testing/ follow FTMO $10k from initial + $5k daily.
   trailing_dd_limit: 0.07
-  # Soft brick + reward from 4% of peak toward trailing_dd_limit.
-  soft_trailing_dd_limit: 0.04
+  soft_trailing_dd_limit: 0.0
   risk_per_trade_limit: 1000.0         # per-trade risk kill-switch
   profit_target: 10000.0               # not enforced in env, only reported
 
@@ -141,10 +141,9 @@ env:
   max_episode_steps: null
   reward_dsr_eta: 0.01                 # differential Sharpe damping
   strategy_actions: false              # Idea 1/2 trader Box[-1,1]^4 [intensity, sl, risk, rr]
-  # Affine intensity u in [0,1]; hold only if u < threshold. Was 0.25; full PPO
-  # runs drift mean u≈0.22 and deterministic eval always held. 0.1 keeps a
-  # narrow hold band (strong "don't trade") while mean≈0 (u=0.5) still enters.
-  entry_intensity_threshold: 0.1
+  # Overlay: intensity does not gate entry (0 = follow context_direction).
+  # A positive band lets PPO park at "never trade"; seed-50 20M did that at 0.1.
+  entry_intensity_threshold: 0.0
   reward_mode: dsr                     # baseline stays dsr; idea configs set pnl
   max_entries_per_session: 3
   entry_cooldown_bars: 15
@@ -168,7 +167,7 @@ ppo:
   # Box overlay only. Discrete Idea 3 keeps ent_coef. Caps std in [e^min, e^max].
   ent_coef_continuous: 0.001
   log_std_init: 0.0
-  log_std_min: -2.0
+  log_std_min: -0.7
   log_std_max: 0.0
   checkpoint_freq: 1000000
   total_timesteps: 20000000

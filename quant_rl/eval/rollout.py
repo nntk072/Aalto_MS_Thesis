@@ -102,7 +102,7 @@ def evaluate_model(
     max_entries_per_session: int = 0,
     entry_cooldown_bars: int = 0,
     reward_mode: str = "dsr",
-    entry_intensity_threshold: float = 0.1,
+    entry_intensity_threshold: float = 0.0,
 ) -> dict[str, Any]:
     """Walk a trained RL ``model`` over *bars*/*features* and collect trades.
 

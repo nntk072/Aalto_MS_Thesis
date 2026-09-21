@@ -35,7 +35,7 @@ class ClampedStdMultiInputPolicy(MultiInputActorCriticPolicy):
     def __init__(
         self,
         *args: Any,
-        log_std_min: float = -2.0,
+        log_std_min: float = -0.7,
         log_std_max: float = 0.0,
         **kwargs: Any,
     ) -> None:

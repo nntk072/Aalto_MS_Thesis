@@ -88,6 +88,7 @@ def _max_loss_per_trade(cfg: Any) -> float:
 
 
 def _guardrail_kwargs(cfg: Any) -> dict[str, float]:
+    """PPO training kill-switches, including the $7k-from-peak training cap."""
     return {
         "daily_loss_limit": float(cfg.ftmo.daily_loss_limit),
         "max_loss_limit": float(cfg.ftmo.max_loss_limit),
@@ -95,8 +96,16 @@ def _guardrail_kwargs(cfg: Any) -> dict[str, float]:
         "soft_daily_loss_limit": float(cfg.ftmo.get("soft_daily_loss_limit", 2000.0)),
         "soft_max_loss_limit": float(cfg.ftmo.get("soft_max_loss_limit", 5000.0)),
         "trailing_dd_limit": float(cfg.ftmo.get("trailing_dd_limit", 0.07)),
-        "soft_trailing_dd_limit": float(cfg.ftmo.get("soft_trailing_dd_limit", 0.04)),
+        "soft_trailing_dd_limit": float(cfg.ftmo.get("soft_trailing_dd_limit", 0.0)),
     }
+
+
+def _eval_guardrail_kwargs(cfg: Any) -> dict[str, float]:
+    """FTMO rules for train/test rollouts: daily $5k + max $10k from initial."""
+    kwargs = _guardrail_kwargs(cfg)
+    kwargs["trailing_dd_limit"] = 0.0
+    kwargs["soft_trailing_dd_limit"] = 0.0
+    return kwargs
 
 
 def _periodic_checkpoint_callback(
@@ -220,7 +229,7 @@ def make_env(
         max_entries_per_session=int(cfg.env.get("max_entries_per_session", 0)),
         entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
         reward_mode=str(cfg.env.get("reward_mode", "dsr")),
-        entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.1)),
+        entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
         use_vae=use_vae,
         vae=vae,
         pre_ny_by_date=pre_ny_by_date,
@@ -323,6 +332,8 @@ def _build_training_log(
     test_bars: int,
     test_m: Any,
     test_result: dict[str, Any],
+    strategy: str = "baseline",
+    strategy_actions: bool = False,
 ) -> dict[str, Any]:
     """Build the training_log.json dict from run results."""
     return {
@@ -331,6 +342,8 @@ def _build_training_log(
         "algo": algo,
         "arch": arch,
         "reward": reward,
+        "strategy": strategy,
+        "strategy_actions": strategy_actions,
         "timesteps": timesteps,
         "train_bars": train_bars,
         "test_bars": test_bars,
@@ -545,7 +558,7 @@ def main() -> None:
     if isinstance(train_env.action_space, spaces.Box):
         callbacks.append(
             ClipLogStdCallback(
-                log_std_min=float(cfg.ppo.get("log_std_min", -2.0)),
+                log_std_min=float(cfg.ppo.get("log_std_min", -0.7)),
                 log_std_max=float(cfg.ppo.get("log_std_max", 0.0)),
             )
         )
@@ -578,7 +591,7 @@ def main() -> None:
     eval_common = dict(
         obs_window=cfg.env.obs_window,
         initial_balance=cfg.account.initial_balance,
-        guardrail_kwargs=_guardrail_kwargs(cfg),
+        guardrail_kwargs=_eval_guardrail_kwargs(cfg),
         risk_frac_range=risk_frac_range,
         rr_ratio_range=rr_ratio_range,
         swing_buffer_pts=cfg.risk.swing_buffer_pts,
@@ -602,7 +615,7 @@ def main() -> None:
         max_entries_per_session=int(cfg.env.get("max_entries_per_session", 0)),
         entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
         reward_mode=str(cfg.env.get("reward_mode", "dsr")),
-        entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.1)),
+        entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
     )
     log.info("Evaluating trained model on test set...")
     test_result = evaluate_model(
@@ -726,6 +739,10 @@ def main() -> None:
         test_bars=len(test_bars),
         test_m=test_m,
         test_result=test_result,
+        strategy="baseline"
+        if not strategy_actions
+        else str(cfg.strategy.get("name", args.strategy)),
+        strategy_actions=strategy_actions,
     )
     (run_dir / "training_log.json").write_text(json.dumps(training_log, indent=2))
 
@@ -824,7 +841,7 @@ def main() -> None:
                 features=fold_test_feat,
                 obs_window=cfg.env.obs_window,
                 initial_balance=cfg.account.initial_balance,
-                guardrail_kwargs=_guardrail_kwargs(cfg),
+                guardrail_kwargs=_eval_guardrail_kwargs(cfg),
                 risk_frac_range=_strategy_risk_ranges(cfg)[0],
                 rr_ratio_range=_strategy_risk_ranges(cfg)[1],
                 swing_buffer_pts=cfg.risk.swing_buffer_pts,
@@ -844,7 +861,7 @@ def main() -> None:
                 max_entries_per_session=int(cfg.env.get("max_entries_per_session", 0)),
                 entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
                 reward_mode=str(cfg.env.get("reward_mode", "dsr")),
-                entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.1)),
+                entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
             )
             fold_m = calculate_metrics(
                 fold_result["equity"],

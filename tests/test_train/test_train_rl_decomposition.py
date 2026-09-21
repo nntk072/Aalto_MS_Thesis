@@ -109,6 +109,8 @@ class TestBuildTrainingLog:
         assert log["test_trades"] == 10
         assert log["test_return"] == 0.02
         assert log["test_breaches"] == 0
+        assert log["strategy"] == "baseline"
+        assert log["strategy_actions"] is False
         assert "timestamp" in log
 
     def test_log_breaches_default_zero(self) -> None:

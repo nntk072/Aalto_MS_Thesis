@@ -191,18 +191,27 @@ class TestDecodeActionStrategy:
     def test_weak_intensity_is_hold(self) -> None:
         env = self._make_strategy_env(ctx=1)
         row = pd.Series({"context_trade_direction": 1.0})
-        # a=-0.9 → u=0.05 < default 0.1 threshold
+        # a=-0.9 → u=0.05 < 0.1 threshold
+        env.entry_intensity_threshold = 0.1
         da, _, _, _ = env._decode_action(np.array([-0.9, 0.5, 0.5, 0.5]), row)
         assert da == 0
 
-    def test_mild_intensity_still_opens_after_threshold_fix(self) -> None:
-        """Full-train PPO means ~u=0.22 must enter (threshold 0.1), not hold at 0.25."""
+    def test_zero_threshold_opens_on_weak_intensity(self) -> None:
+        """Default threshold 0: PPO cannot park hold on dim 0."""
         env = self._make_strategy_env(ctx=1)
         row = pd.Series({"context_trade_direction": 1.0, "htf_day_bias": 1.0})
-        # a=-0.566 → u≈0.217 (observed on seed50 full checkpoint)
+        da, _, _, _ = env._decode_action(np.array([-1.0, 0.5, 0.5, 0.5]), row)
+        assert da == 1
+        assert env.entry_intensity_threshold == pytest.approx(0.0)
+
+    def test_mild_intensity_still_opens_after_threshold_fix(self) -> None:
+        """Context long + any intensity enters when the hold band is off."""
+        env = self._make_strategy_env(ctx=1)
+        row = pd.Series({"context_trade_direction": 1.0, "htf_day_bias": 1.0})
+        # a=-0.566 → u≈0.217
         da, _, _, _ = env._decode_action(np.array([-0.566, 0.5, 0.5, 0.5]), row)
         assert da == 1
-        assert env.entry_intensity_threshold == pytest.approx(0.1)
+        assert env.entry_intensity_threshold == pytest.approx(0.0)
 
     def test_rr_and_risk_mapping(self) -> None:
         env = self._make_strategy_env(ctx=1)
