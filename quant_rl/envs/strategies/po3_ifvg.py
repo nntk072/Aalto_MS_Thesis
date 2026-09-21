@@ -9,16 +9,12 @@ from .base import TradingStrategy
 
 
 class PO3IFVGStrategy(TradingStrategy):
-    """Entry chain: Asian context + sweep + manipulation + distribution + IFVG.
+    """Sweep, then an IFVG or FVG in the same direction, decides the trade.
 
-    The long candidate chain (Agent.md §17) requires Asian context available,
-    a sell-side sweep, manipulation state detected, manipulation ended with
-    distribution confirmed, a bullish IFVG zone active and price inside or
-    retesting the zone. The short side mirrors. ``enforce_gate=False`` keeps
-    the chain diagnostic-only (for debugging); ``True`` hard-gates entries.
-
-    Structural SL (environment risk rule): long SL at the manipulation low,
-    short SL at the manipulation high, with an optional configured buffer.
+    A long needs a sell-side sweep, or price within one ATR of that level,
+    plus a bullish gap. The short side mirrors. ``enforce_gate`` still only
+    affects :meth:`validate_entry`. Direction for the overlay comes from
+    :meth:`context_direction`.
     """
 
     name = "po3_ifvg"
@@ -114,16 +110,38 @@ class PO3IFVGStrategy(TradingStrategy):
             "previous_day_high_low": _get("prev_day_low"),
         }
 
+    def entry_liquidity(self, row: pd.Series, direction: int) -> bool:
+        """Swept, or within one ATR of the sweep or manipulation level."""
+        if direction == 1:
+            return _flag(row, "sweep_low") or _within_atr(row, "manipulation_low_distance_atr")
+        if direction == -1:
+            return _flag(row, "sweep_high") or _within_atr(row, "manipulation_high_distance_atr")
+        return False
+
+    def entry_gap(self, row: pd.Series, direction: int) -> bool:
+        """Price is in, or within one ATR of, an IFVG or FVG on this side."""
+        if direction == 1:
+            return (
+                _flag(row, "price_in_ifvg_bull")
+                or _flag(row, "fvg_in_bull")
+                or _gap_within_atr(row, "fvg_bull_dist")
+            )
+        if direction == -1:
+            return (
+                _flag(row, "price_in_ifvg_bear")
+                or _flag(row, "fvg_in_bear")
+                or _gap_within_atr(row, "fvg_bear_dist")
+            )
+        return False
+
     def context_direction(self, row: pd.Series) -> int:
-        """Prefer distribution direction / context_trade_direction, else HTF bias."""
-        if float(row.get("po3_distribution", 0.0)) > 0:
-            dist = float(row.get("po3_distribution_direction", 0.0))
-            if dist != 0.0 and np.isfinite(dist):
-                return int(np.sign(dist))
-        for col in ("context_trade_direction", "htf_day_bias"):
-            val = float(row.get(col, 0.0))
-            if val != 0.0 and np.isfinite(val):
-                return int(np.sign(val))
+        """Long after a sell-side sweep plus a bullish gap. Short mirrors."""
+        long_ok = self.entry_liquidity(row, 1) and self.entry_gap(row, 1)
+        short_ok = self.entry_liquidity(row, -1) and self.entry_gap(row, -1)
+        if long_ok and not short_ok:
+            return 1
+        if short_ok and not long_ok:
+            return -1
         return 0
 
     def sl_candidates(self, *, direction: int, row: pd.Series) -> list[tuple[str, float]]:
@@ -132,6 +150,7 @@ class PO3IFVGStrategy(TradingStrategy):
             cols = (
                 "last_swing_low",
                 "po3_manipulation_low",
+                "sweep_low_level",
                 "asian_low",
                 "london_low",
             )
@@ -139,6 +158,7 @@ class PO3IFVGStrategy(TradingStrategy):
             cols = (
                 "last_swing_high",
                 "po3_manipulation_high",
+                "sweep_high_level",
                 "asian_high",
                 "london_high",
             )
@@ -152,3 +172,17 @@ class PO3IFVGStrategy(TradingStrategy):
             if np.isfinite(level):
                 out.append((col, level))
         return out
+
+
+def _flag(row: pd.Series, col: str) -> bool:
+    return float(row.get(col, 0.0) or 0.0) > 0.0
+
+
+def _within_atr(row: pd.Series, col: str) -> bool:
+    value = float(row.get(col, np.nan))
+    return bool(np.isfinite(value) and abs(value) <= 1.0)
+
+
+def _gap_within_atr(row: pd.Series, col: str) -> bool:
+    value = float(row.get(col, np.nan))
+    return bool(np.isfinite(value) and value < 5.0 and value <= 1.0)

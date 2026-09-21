@@ -1495,6 +1495,16 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     ),
                     "manipulation_end": (float(feat_row.get("po3_manipulation_end", 0.0)) > 0),
                     "distribution_phase": (float(feat_row.get("po3_distribution", 0.0)) > 0),
+                    "liquidity": (
+                        self.strategy.entry_liquidity(feat_row, pos_dir)
+                        if pos_dir != 0 and hasattr(self.strategy, "entry_liquidity")
+                        else True
+                    ),
+                    "in_gap": (
+                        self.strategy.entry_gap(feat_row, pos_dir)
+                        if pos_dir != 0 and hasattr(self.strategy, "entry_gap")
+                        else in_ifvg
+                    ),
                     "sweep_high": float(feat_row.get("sweep_high", 0.0)) > 0,
                     "sweep_low": float(feat_row.get("sweep_low", 0.0)) > 0,
                     "bos_up": float(feat_row.get("bos_up", 0.0)) > 0,

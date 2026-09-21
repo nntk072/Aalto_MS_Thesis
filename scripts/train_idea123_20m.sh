@@ -1,5 +1,5 @@
 #!/bin/bash
-# Sequential Idea 1 / 2 / 3 year-episode 20M trains.
+# Sequential merged overlay, then unconstrained baseline, 20M trains.
 # PPO uses trailing $7k-from-peak as a training-only fail; reported train/test
 # eval follows FTMO (daily $5k, max $10k from initial).
 # Run on the GPU node after srun (see scripts/run_idea123_20m_tmux.sh).
@@ -25,6 +25,8 @@ fi
 
 export QUANT_RL_MAX_N_ENVS="${QUANT_RL_MAX_N_ENVS:-64}"
 export PYTHONUNBUFFERED=1
+ENCODER="${ARCH:-tcn}"
+echo "encoder=$ENCODER"
 
 python -c "import torch; print('CUDA', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else None)"
 python - <<'PY'
@@ -59,6 +61,7 @@ python -u -m quant_rl.train.train_rl \
   --config config/features_full_po3_mtf.yaml \
   --strategy po3_ifvg \
   --seed 50 \
+  --arch "$ENCODER" \
   --out outputs \
   features.include_session_ohlc=true \
   features.liquidity.enabled=true \
@@ -67,20 +70,12 @@ python -u -m quant_rl.train.train_rl \
   env.n_envs=64 \
   2>&1 | tee outputs/idea1_20m_final.log
 
-echo "=== Idea 2 distribution 20M ==="
-python -u -m quant_rl.train.train_rl \
-  --config config/idea2_distribution.yaml \
-  --strategy distribution \
-  --seed 50 \
-  --out outputs \
-  env.n_envs=64 \
-  2>&1 | tee outputs/idea2_20m_final.log
-
 if [[ "${SKIP_IDEA3:-0}" != "1" ]]; then
   echo "=== Idea 3 unconstrained baseline 20M ==="
   python -u -m quant_rl.train.train_rl \
-    --config quant_rl/config/default.yaml \
-    --seed 50 \
+  --config quant_rl/config/default.yaml \
+  --seed 50 \
+  --arch "$ENCODER" \
     --out outputs \
     env.n_envs=64 \
     2>&1 | tee outputs/idea3_20m_final.log
@@ -88,4 +83,4 @@ else
   echo "=== skip Idea 3 (SKIP_IDEA3=1) ==="
 fi
 
-echo "=== all three arms finished ==="
+echo "=== overlay and baseline finished ==="

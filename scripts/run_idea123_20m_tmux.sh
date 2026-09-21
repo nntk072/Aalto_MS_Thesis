@@ -32,7 +32,7 @@ echo "ALLOC: tmux $SESSION + srun partition=$PARTITION gpus=$GPUS time=$TIME mem
 echo "Log: $LOG"
 
 tmux new-session -d -s "$SESSION" -c "$REPO" \
-  "export SKIP_IDEA3=${SKIP_IDEA3:-0}; srun --partition=$PARTITION --gpus=$GPUS --time=$TIME --mem=$MEM --ntasks=1 --cpus-per-task=$CPUS --chdir=$REPO bash $TRAIN 2>&1 | tee $LOG; echo DONE exit=\$?; exec bash"
+  "export SKIP_IDEA3=${SKIP_IDEA3:-0}; export ARCH=${ARCH:-tcn}; srun --partition=$PARTITION --gpus=$GPUS --time=$TIME --mem=$MEM --ntasks=1 --cpus-per-task=$CPUS --chdir=$REPO bash $TRAIN 2>&1 | tee $LOG; echo DONE exit=\$?; exec bash"
 
 echo "Started tmux session $SESSION (detached)."
 echo "Attach: tmux attach -t $SESSION"

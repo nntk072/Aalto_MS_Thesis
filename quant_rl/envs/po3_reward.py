@@ -33,6 +33,8 @@ class PO3Reward:
         "manipulation_active",
         "manipulation_end",
         "distribution_phase",
+        "liquidity",
+        "in_gap",
     )
 
     def __init__(
@@ -41,11 +43,13 @@ class PO3Reward:
         manipulation_penalty: float,
         invalid_ifvg_penalty: float,
         distribution_bonus: float,
+        sweep_penalty: float = 0.0,
     ) -> None:
         self.entry_bonus = float(entry_bonus)
         self.manipulation_penalty = float(manipulation_penalty)
         self.invalid_ifvg_penalty = float(invalid_ifvg_penalty)
         self.distribution_bonus = float(distribution_bonus)
+        self.sweep_penalty = float(sweep_penalty)
 
     def reset(self) -> None:
         """Reset per-episode state (no-op: the reward is stateless)."""
@@ -59,6 +63,8 @@ class PO3Reward:
         manipulation_active: bool,
         manipulation_end: bool,
         distribution_phase: bool,
+        liquidity: bool = True,
+        in_gap: bool | None = None,
     ) -> float:
         """Compute the entry-event reward for the current step.
 
@@ -70,12 +76,15 @@ class PO3Reward:
             return 0.0
 
         reward = 0.0
+        zone = in_ifvg if in_gap is None else in_gap
         if manipulation_active and not manipulation_end:
             reward -= self.manipulation_penalty
-        if in_ifvg:
+        if zone:
             reward += self.entry_bonus
         else:
             reward -= self.invalid_ifvg_penalty
         if distribution_phase:
             reward += self.distribution_bonus
+        if self.sweep_penalty and not liquidity and not zone:
+            reward -= self.sweep_penalty
         return reward

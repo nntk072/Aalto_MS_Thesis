@@ -169,6 +169,7 @@ def _strategy_from_cfg(cfg: Any) -> tuple[Any, Any, float]:
             manipulation_penalty=float(reward_cfg.get("manipulation_penalty", 0.02)),
             invalid_ifvg_penalty=float(reward_cfg.get("invalid_ifvg_penalty", 0.01)),
             distribution_bonus=float(reward_cfg.get("distribution_bonus", 0.005)),
+            sweep_penalty=float(reward_cfg.get("sweep_penalty", 0.02)),
         )
     elif name == "distribution":
         strategy = DistributionStrategy(enforce_gate=enforce_gate)
