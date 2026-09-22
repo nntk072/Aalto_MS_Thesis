@@ -966,7 +966,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     sweep_delay = (
                         float("nan")
                         if cross_time is None
-                        else float((bar_time - cross_time).total_seconds())
+                        else float(
+                            (
+                                pd.Timestamp(cast(Any, bar_time))
+                                - pd.Timestamp(cast(Any, cross_time))
+                            ).total_seconds()
+                        )
                     )
                     self.trade_log.append(
                         {

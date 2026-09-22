@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from omegaconf import OmegaConf
 
@@ -197,8 +198,8 @@ def test_enable_extractor_autocast_skips_transformer() -> None:
 
     observation_space = spaces.Dict(
         {
-            "seq": spaces.Box(low=-1.0, high=1.0, shape=(8, 4), dtype=float),
-            "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=float),
+            "seq": spaces.Box(low=-1.0, high=1.0, shape=(8, 4), dtype=np.float32),
+            "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
         }
     )
     encoder = TransformerEncoder(

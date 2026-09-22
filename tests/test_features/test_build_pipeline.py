@@ -157,5 +157,5 @@ class TestBuildFeaturesPipeline:
         )
 
 
-# v13: volume_spike uses tickvol/activity, not always-zero CFD volume.
-_GOLDEN_HASH = "1855b9624f493b82d37d7cdb0892be8fbf78a9c7e2fa8bef03c3af74ed4f567f"
+# v14-session-clock: ny_session_clock + valid-window observation columns.
+_GOLDEN_HASH = "b2add9255d212573a2c2bdc5e7cbc004cdca07e25626482e8b775db76a91001f"

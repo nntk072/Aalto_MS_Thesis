@@ -41,7 +41,7 @@ def _features(bars: pd.DataFrame) -> pd.DataFrame:
             "asian_high": np.full(n, float(high.max()) + 1.0),
             "asian_low": np.full(n, float(low.min()) - 1.0),
             "sweep_high": np.zeros(n),
-            "sweep_low": np.zeros(n),
+            "sweep_low": np.ones(n),
             "po3_manipulation_low": np.full(n, 95.0),
             "po3_manipulation_high": np.full(n, 105.0),
             "po3_manipulation_end": np.zeros(n),

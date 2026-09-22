@@ -40,14 +40,15 @@ def _bars(n: int = 200, session_ids: np.ndarray[Any, Any] | None = None) -> pd.D
 
 def _features(bars: pd.DataFrame, *, ctx_dir: float = 1.0) -> pd.DataFrame:
     n = len(bars)
+    is_long = ctx_dir > 0
     return pd.DataFrame(
         {
             "asian_high": np.full(n, 102.0),
             "asian_low": np.full(n, 98.0),
             "london_high": np.full(n, 103.0),
             "london_low": np.full(n, 97.0),
-            "sweep_high": np.zeros(n),
-            "sweep_low": np.zeros(n),
+            "sweep_high": np.zeros(n) if is_long else np.ones(n),
+            "sweep_low": np.ones(n) if is_long else np.zeros(n),
             "po3_manipulation_low": np.full(n, 95.0),
             "po3_manipulation_high": np.full(n, 105.0),
             "po3_manipulation_end": np.zeros(n),
@@ -55,11 +56,12 @@ def _features(bars: pd.DataFrame, *, ctx_dir: float = 1.0) -> pd.DataFrame:
             "po3_distribution_direction": np.zeros(n),
             "ifvg_bull_low": np.full(n, 98.0),
             "ifvg_bull_high": np.full(n, 99.0),
-            "price_in_ifvg_bull": np.ones(n),
-            "ifvg_bear_low": np.zeros(n),
-            "ifvg_bear_high": np.zeros(n),
-            "ifvg_bull_active": np.ones(n),
-            "ifvg_bear_active": np.zeros(n),
+            "price_in_ifvg_bull": np.ones(n) if is_long else np.zeros(n),
+            "price_in_ifvg_bear": np.zeros(n) if is_long else np.ones(n),
+            "ifvg_bear_low": np.zeros(n) if is_long else np.full(n, 99.0),
+            "ifvg_bear_high": np.zeros(n) if is_long else np.full(n, 100.0),
+            "ifvg_bull_active": np.ones(n) if is_long else np.zeros(n),
+            "ifvg_bear_active": np.zeros(n) if is_long else np.ones(n),
             "last_swing_high": np.full(n, np.nan),
             "last_swing_low": np.full(n, np.nan),
             "htf_day_bias": np.full(n, ctx_dir),

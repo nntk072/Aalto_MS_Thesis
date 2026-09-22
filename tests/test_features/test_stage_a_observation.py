@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 
@@ -12,7 +14,7 @@ from quant_rl.live.rl_strategy import RLStrategyAdapter
 
 
 class _StubModel:
-    def predict(self, obs: dict, deterministic: bool = True) -> np.ndarray:  # noqa: ARG002
+    def predict(self, obs: dict[str, Any], deterministic: bool = True) -> np.ndarray[Any, Any]:  # noqa: ARG002
         return np.array([1])
 
 
