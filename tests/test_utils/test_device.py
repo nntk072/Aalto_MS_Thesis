@@ -185,3 +185,31 @@ def test_scale_training_cfg_cpu_keeps_n_envs(monkeypatch: pytest.MonkeyPatch) ->
     assert int(cfg.env.n_envs) == 4
     assert int(cfg.ppo.batch_size) == 256
     assert int(cfg.ppo.n_epochs) == 10
+
+
+def test_enable_extractor_autocast_skips_transformer() -> None:
+    """Transformer stays fp32; bf16 autocast caused PPO policy NaNs on GH200."""
+    pytest.importorskip("torch")
+    from gymnasium import spaces
+
+    from quant_rl.models.encoder import TransformerEncoder
+    from quant_rl.utils.device import enable_extractor_autocast
+
+    observation_space = spaces.Dict(
+        {
+            "seq": spaces.Box(low=-1.0, high=1.0, shape=(8, 4), dtype=float),
+            "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=float),
+        }
+    )
+    encoder = TransformerEncoder(
+        observation_space=observation_space,
+        seq_len=8,
+        n_features=4,
+        latent_dim=16,
+        d_model=16,
+        nhead=2,
+        num_layers=1,
+        dim_feedforward=32,
+    )
+    enable_extractor_autocast(encoder)
+    assert getattr(encoder, "_amp_wrapped", False) is False

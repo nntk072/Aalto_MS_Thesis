@@ -269,6 +269,7 @@ class TransformerEncoder(BaseFeaturesExtractor):
             dropout=dropout,
             batch_first=True,
             activation="gelu",
+            norm_first=True,
         )
         self.transformer = nn.TransformerEncoder(enc_layer, num_layers=num_layers)
         self.proj = nn.Linear(d_model, latent_dim)
@@ -285,7 +286,7 @@ class TransformerEncoder(BaseFeaturesExtractor):
         return mask
 
     def forward(self, observations: dict[str, torch.Tensor]) -> torch.Tensor:
-        seq = observations["seq"]  # [B, T, F]
+        seq = torch.nan_to_num(observations["seq"], nan=0.0, posinf=0.0, neginf=0.0)
         account = observations["account"]  # [B, A]
         lengths = _valid_lengths(seq, observations)
 

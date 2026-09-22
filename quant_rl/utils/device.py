@@ -227,6 +227,11 @@ def scale_training_cfg(cfg: Any, device: torch.device, arch: str) -> None:
 
 def enable_extractor_autocast(extractor: nn.Module) -> None:
     """Run the encoder under bf16 autocast; cast back to fp32 for SB3 heads."""
+    from quant_rl.models.encoder import TransformerEncoder
+
+    # Transformer attention in bf16 can NaN under PPO's large rollout batches.
+    if isinstance(extractor, TransformerEncoder):
+        return
     if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
         return
     if getattr(extractor, "_amp_wrapped", False):

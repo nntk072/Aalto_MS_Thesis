@@ -186,6 +186,24 @@ def _strategy_from_cfg(cfg: Any) -> tuple[Any, Any, float]:
     return strategy, reward, weight
 
 
+def _publish_obs_memmap(features: pd.DataFrame, cfg: Any, path: Path) -> str | None:
+    """Write the model observation matrix once so workers mmap it read-only.
+
+    ``n_envs <= 1`` keeps the private ``to_numpy`` copy. The pandas frame is
+    still passed in; this only removes the extra float32 matrix per worker.
+    """
+    if int(cfg.env.get("n_envs", 1)) <= 1:
+        return None
+    from quant_rl.features.build import select_obs_columns
+
+    strategy, _, _ = _strategy_from_cfg(cfg)
+    frame = select_obs_columns(features, strategy.raw_columns)
+    array = np.ascontiguousarray(frame.to_numpy(dtype=np.float32))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.save(path, array)
+    return str(path)
+
+
 def make_env(
     bars: pd.DataFrame,
     features: pd.DataFrame,
@@ -197,6 +215,7 @@ def make_env(
     use_vae: bool = False,
     vae: Any | None = None,
     pre_ny_by_date: dict[Any, Any] | None = None,
+    obs_features_mmap: str | None = None,
 ) -> TradingEnv:
     continuous_actions = algo == "sac"
     use_sweep_reward = reward == "sweep"
@@ -234,6 +253,7 @@ def make_env(
         use_vae=use_vae,
         vae=vae,
         pre_ny_by_date=pre_ny_by_date,
+        obs_features_mmap=obs_features_mmap,
     )
 
 
@@ -462,6 +482,12 @@ def main() -> None:
             len(pre_ny_by_date),
         )
 
+    # Setup output directory for model
+    run_dir = build_run_dir(args.out, f"rl_train_seed{args.seed}_{args.arch}")
+    model_dir = run_dir / "model"
+    model_dir.mkdir(parents=True, exist_ok=True)
+    obs_mmap = _publish_obs_memmap(train_feat, cfg, run_dir / "obs_features.npy")
+
     # Create training environment
     log.info("Creating training environment...")
     train_env = make_env(
@@ -473,12 +499,8 @@ def main() -> None:
         use_vae=args.use_vae,
         vae=env_vae,
         pre_ny_by_date=pre_ny_by_date,
+        obs_features_mmap=obs_mmap,
     )
-
-    # Setup output directory for model
-    run_dir = build_run_dir(args.out, f"rl_train_seed{args.seed}")
-    model_dir = run_dir / "model"
-    model_dir.mkdir(parents=True, exist_ok=True)
 
     checkpoint_callback = _periodic_checkpoint_callback(cfg, model_dir)
 
@@ -504,6 +526,7 @@ def main() -> None:
             use_vae=args.use_vae,
             vae=env_vae,
             pre_ny_by_date=pre_ny_by_date,
+            obs_features_mmap=obs_mmap,
         ),
     )
 
@@ -804,6 +827,9 @@ def main() -> None:
                 len(fold_test_bars),
             )
 
+            fold_mmap = _publish_obs_memmap(
+                fold_train_feat, cfg, run_dir / f"obs_features_fold{split.fold}.npy"
+            )
             fold_env = make_env(
                 fold_train_bars,
                 fold_train_feat,
@@ -813,6 +839,7 @@ def main() -> None:
                 use_vae=args.use_vae,
                 vae=env_vae,
                 pre_ny_by_date=pre_ny_by_date,
+                obs_features_mmap=fold_mmap,
             )
             fold_model = build_agent(
                 fold_env,
@@ -832,6 +859,7 @@ def main() -> None:
                     use_vae=args.use_vae,
                     vae=env_vae,
                     pre_ny_by_date=pre_ny_by_date,
+                    obs_features_mmap=fold_mmap,
                 ),
             )
             fold_model.learn(total_timesteps=wf_steps, callback=None, progress_bar=False)

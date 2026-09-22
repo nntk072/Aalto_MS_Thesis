@@ -266,3 +266,32 @@ def test_eval_year_fail_latches_once() -> None:
             break
     assert len(env.breach_events) == n_first
     assert env._year_failed is True
+
+
+@pytest.mark.unit
+def test_shared_obs_memmap_matches_private_copy_across_session(tmp_path: Any) -> None:
+    """A read-only memmap must match a private matrix, including a new session."""
+    private = _multi_day_env(n_days=2, bars_per_day=100, obs_window=60)
+    array = np.ascontiguousarray(private._obs_features.to_numpy(dtype=np.float32))
+    path = tmp_path / "obs_features.npy"
+    np.save(path, array)
+    shared = TradingEnv(
+        bars=private.bars,
+        features=private.features,
+        obs_window=60,
+        eod_risk={"max_age_hours": 1000.0, "stale_bars": 10_000, "max_loss_usd": 1e12},
+        obs_features_mmap=str(path),
+    )
+    assert shared._obs_features_arr.flags.writeable is False
+    private.reset()
+    shared.reset()
+    for _ in range(150):
+        obs_private, _, done_p, trunc_p, _ = private.step(0)
+        obs_shared, _, done_s, trunc_s, _ = shared.step(0)
+        np.testing.assert_array_equal(obs_private["seq"], obs_shared["seq"])
+        np.testing.assert_array_equal(obs_private["seq_mask"], obs_shared["seq_mask"])
+        assert done_p == done_s
+        assert trunc_p == trunc_s
+        if done_p or trunc_p:
+            break
+    assert private.step_idx > 100

@@ -59,7 +59,7 @@ log = logging.getLogger(__name__)
 
 def build_run_dir(base: str | Path, name: str) -> Path:
     """Return a new timestamped directory path (does not create it yet)."""
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     return Path(base) / f"{ts}_{name}"
 
 

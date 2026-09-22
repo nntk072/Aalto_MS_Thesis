@@ -91,6 +91,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         entry_cooldown_bars: int = 0,
         reward_mode: str = "dsr",
         entry_intensity_threshold: float = 0.0,
+        obs_features_mmap: str | None = None,
     ):
         """Initialize trading environment.
 
@@ -309,13 +310,23 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # Drop non-numeric columns (e.g. string ``session`` labels) — they cannot
         # be cast to float32 and are not part of the model's normalized observation.
         self._obs_features = select_obs_columns(features, self.strategy.raw_columns)
+        self._obs_features_mmap = obs_features_mmap
 
         # Cache numpy arrays for hot-path env stepping — avoids per-step pandas
         # iloc/Series-creation overhead that starves the GPU.
         #   - _obs_features / _features_arr: immutable post-construction
         #   - OHLC/spread bar caches: rebuilt via ``_sync_bar_arrays()`` (call
         #     again after in-place ``env.bars`` mutations in tests)
-        self._obs_features_arr = self._obs_features.to_numpy(dtype=np.float32)
+        # A read-only memmap is one shared copy for every SubprocVecEnv worker.
+        if obs_features_mmap:
+            shared = np.load(obs_features_mmap, mmap_mode="r")
+            if shared.shape != self._obs_features.shape:
+                raise ValueError(
+                    f"obs memmap shape {shared.shape} != obs columns {self._obs_features.shape}"
+                )
+            self._obs_features_arr = shared
+        else:
+            self._obs_features_arr = self._obs_features.to_numpy(dtype=np.float32)
         _feat_numeric = self.features.select_dtypes(include="number")
         self._features_cols = list(_feat_numeric.columns)
         self._features_col_to_idx: dict[str, int] = {

@@ -12,7 +12,7 @@ Protocol: year episode; daily loss $5,000; max loss $10,000 from initial;
 Do not plot a 7% line. Overlay PPO: `log_std` clamped to `[-0.7, 0.0]`
 (`std` in about `[0.50, 1.0]`). Discrete Idea 3 keeps `ent_coef: 0.01`.
 
-Launcher: `scripts/run_idea123_20m_tmux.sh` → `scripts/train_idea123_20m.sh`.
+Launcher: `scripts/run_encoder_slot_tmux.sh` → `scripts/train_overlay_baseline_20m.sh`.
 Slurm 20368731, log `outputs/idea123_20m_final_tmux.log`.
 
 Identify Idea 3 by `training_log.json` `strategy: baseline` and
@@ -71,7 +71,7 @@ Old seed-50 Idea 1 had **no** trailing-DD key and Gaussian `std` exploded
 
 ```bash
 # Full three-arm 20M (login tmux + one GH200 srun)
-bash scripts/run_idea123_20m_tmux.sh
+bash scripts/run_encoder_slot_tmux.sh
 
 # MVP smoke (not used for chapter tables)
 uv run python -m quant_rl.train.train_rl --mvp --seed=50
