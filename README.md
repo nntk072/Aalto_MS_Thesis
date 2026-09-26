@@ -87,14 +87,25 @@ learns position sizing, entry timing, and stop-loss/take-profit placement.
 
 ## Installation
 
+The project uses **arch-matching virtualenvs** on Triton (shared NFS):
+
+| Architecture | Host | Venv | Setup |
+|--------------|------|------|-------|
+| **aarch64** | GH200 GPU nodes | `.venv` | `uv sync` or `scripts/setup_venv.sh` |
+| **x86_64** | H200, local, CI | `.venv-x86` | `scripts/setup_venv_x86.sh` |
+
+Do not cross-activate (sourcing the wrong-arch venv gives "Exec format error").
+
 ```bash
 git clone https://github.com/nntk072/Aalto_MS_Thesis.git
 cd Aalto_MS_Thesis
 
-# Create virtual environment and install all dependencies
-uv sync
+# x86_64 (local, H200, CI)
+scripts/setup_venv_x86.sh
+source scripts/triton/activate_venv.sh
 
-# Activate (Linux/macOS)
+# aarch64 (GH200) — run on an aarch64 node
+uv sync
 source .venv/bin/activate
 ```
 
@@ -106,8 +117,8 @@ source .venv/bin/activate
 
 ```bash
 cd Aalto_MS_Thesis
-uv sync
-source .venv/bin/activate
+scripts/setup_venv.sh          # auto-detects arch (.venv or .venv-x86)
+source scripts/triton/activate_venv.sh
 ```
 
 ### Prepare data

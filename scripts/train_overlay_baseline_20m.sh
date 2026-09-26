@@ -10,17 +10,8 @@ REPO="${TRITON_REPO:-/scratch/work/nguyenl37/Aalto_MS_Thesis}"
 cd "$REPO"
 mkdir -p outputs
 
-machine="$(uname -m)"
-if [[ "$machine" == "aarch64" ]]; then
-  # shellcheck source=/dev/null
-  source "$REPO/.venv/bin/activate"
-elif [[ -n "${X86_VENV:-}" ]]; then
-  # shellcheck source=/dev/null
-  source "${X86_VENV}/bin/activate"
-else
-  echo "ERROR: x86 node — set X86_VENV to an x86 venv; do not source GH200 .venv" >&2
-  exit 1
-fi
+# shellcheck source=/dev/null
+source "$REPO/scripts/triton/activate_venv.sh"
 
 export QUANT_RL_MAX_N_ENVS="${QUANT_RL_MAX_N_ENVS:-64}"
 export PYTHONUNBUFFERED=1

@@ -82,10 +82,13 @@ Pick **1 or 2** GPUs from the job, not from habit. Login (`login4`: 40 CPUs,
 | One model (one TCN / GRU / Transformer, 20M) | **1** | GH200: `--gpus=gh200:1 --mem=512G --cpus-per-task=48 --time=6:00:00` or `--time=12:00:00` | One process, one 141 GB GPU. 6h is the default 20M train. 12h when `MaxTime` allows and the user asks for the longer shell. |
 | Six-run matrix (overlay then baseline, three archs) | **2** | GH200: `--gpus=gh200:2 --mem=900G --cpus-per-task=128 --time=6:00:00` | Same shape as [`scripts/run_6run_matrix_tmux.sh`](../../scripts/run_6run_matrix_tmux.sh). The node has 2 GPUs and ~1.1 TB. |
 
-H200 (`gpu-h200-141g-short`, x86 venv) is still preferred for a **1-GPU** job
+H200 (`gpu-h200-141g-short`, `.venv-x86`) is still preferred for a **1-GPU** job
 when that partition has idle capacity. The six-run matrix stays on GH200
-(`gpu-grace-h200-141g`, aarch64 `.venv`) because that node is 2 GPUs and the
-project env matches it. Do not request 3+ GPUs.
+(`gpu-grace-h200-141g`, `.venv`) because that node is 2 GPUs and the project
+env matches it. Do not request 3+ GPUs.
+
+Setup x86 env once on an x86 node: `scripts/setup_venv_x86.sh`. Inside any GPU
+shell: `source scripts/triton/activate_venv.sh` (picks `.venv` or `.venv-x86`).
 
 ### Time / mem / CPUs
 
@@ -125,7 +128,8 @@ srun --partition=gpu-grace-h200-141g --gpus=gh200:2 --time=6:00:00 \
 Login-node SSH: `ls`, `cat`, `tmux capture-pane`, `squeue`, `sinfo`, edits,
 `grep`, log tails, inspect-only `scripts/triton/*.sh`.
 
-Never `source` the wrong-arch `.venv` on login (GH200 `.venv` is aarch64).
+Never `source` the wrong-arch venv on login (`.venv` is aarch64-only). Use
+`scripts/triton/activate_venv.sh` only inside the GPU bash.
 
 ## Train + eval
 

@@ -8,17 +8,8 @@ cd "$REPO"
 mkdir -p outputs
 
 arch="$(uname -m)"
-if [[ "$arch" == "aarch64" ]]; then
-  # GH200: project .venv is aarch64.
-  # shellcheck source=/dev/null
-  source "$REPO/.venv/bin/activate"
-elif [[ -n "${X86_VENV:-}" ]]; then
-  # shellcheck source=/dev/null
-  source "${X86_VENV}/bin/activate"
-else
-  echo "ERROR: x86 node — set X86_VENV to an x86 venv; do not source GH200 .venv" >&2
-  exit 1
-fi
+# shellcheck source=/dev/null
+source "$REPO/scripts/triton/activate_venv.sh"
 
 export PYTHONUNBUFFERED=1
 python -c "import torch; print('arch', '$arch', 'CUDA', torch.cuda.is_available())"

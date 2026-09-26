@@ -8,11 +8,18 @@ and config details see [architecture.md](../architecture.md) and
 
 ## Setup
 
+Arch-matching venvs (Triton shared NFS):
+
 ```bash
 cd Aalto_MS_Thesis
-uv sync
-source .venv/bin/activate
+scripts/setup_venv.sh                    # aarch64 -> .venv, x86_64 -> .venv-x86
+source scripts/triton/activate_venv.sh   # use inside GPU shell on Triton
 ```
+
+| Arch | Venv | One-time setup |
+|------|------|----------------|
+| aarch64 (GH200) | `.venv` | `uv sync` on aarch64 node |
+| x86_64 (H200, local) | `.venv-x86` | `scripts/setup_venv_x86.sh` |
 
 ---
 

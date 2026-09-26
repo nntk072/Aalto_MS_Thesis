@@ -5,7 +5,7 @@
 # PyTorch index, and mixing that index with PyPI via --extra-index-url lets it
 # shadow common PyPI packages (certifi, numpy, ...). Install torch separately
 # from an index-scoped command instead (see the CI workflow / Makefile):
-#   pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.0+cpu
 annotated-types==0.8.0
 antlr4-python3-runtime==4.9.3
 anyio==4.14.2 ; python_full_version < '3.15'

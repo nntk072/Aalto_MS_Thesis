@@ -92,9 +92,9 @@ TIME="${TIME:?}"
 echo
 echo "Selected: partition=$PARTITION gpus=$GPUS mem=$MEM cpus=$CPUS time=$TIME"
 if [[ "$GPUS" == h200:* ]]; then
-  echo "NOTE: H200 is x86_64 — do not source the GH200 aarch64 .venv; use an x86 env."
+  echo "NOTE: H200 is x86_64 — activate_venv.sh will use .venv-x86 on the compute node."
 elif [[ "$GPUS" == gh200:* ]]; then
-  echo "NOTE: GH200 is aarch64 — source $REPO/.venv on the compute node."
+  echo "NOTE: GH200 is aarch64 — activate_venv.sh will use .venv on the compute node."
 fi
 
 if command -v squeue >/dev/null 2>&1; then
@@ -129,11 +129,7 @@ srun --partition=$PARTITION --gpus=$GPUS --time=$TIME --mem=$MEM --ntasks=1 --cp
   echo "=== allocated on \$(hostname) ==="
   nvidia-smi -L 2>/dev/null || true
   uname -m
-  if [[ "\$(uname -m)" == "aarch64" ]]; then
-    source $REPO/.venv/bin/activate
-  else
-    echo "x86 node: activate your x86 venv (not GH200 .venv)"
-  fi
+  source $REPO/scripts/triton/activate_venv.sh
   python -c "import torch; print(\"CUDA\", torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else None)" 2>/dev/null || true
   echo "Leave this shell open after training. Do not exit unless replacing the allocation."
   exec bash

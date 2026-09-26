@@ -34,7 +34,7 @@ lock-export:
 	  '# PyTorch index, and mixing that index with PyPI via --extra-index-url lets it' \
 	  '# shadow common PyPI packages (certifi, numpy, ...). Install torch separately' \
 	  '# from an index-scoped command instead (see the CI workflow / Makefile):' \
-	  '#   pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu' \
+	  '#   pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.0+cpu' \
 	  > requirements.txt
 	$(EXPORT) | grep -vE '^\s*#|^\s*$$|^-e ' | $(STRIP_TORCH) >> requirements.txt
 	@printf '%s\n' \
@@ -63,7 +63,7 @@ lock-export:
 	  '#   pip install -c constraints.txt -r requirements.txt -r requirements-dev.txt' \
 	  '#   # torch (index-scoped, installed WITHOUT -c: constraints pin PyPI-only' \
 	  '#   # transitive versions absent from the torch index):' \
-	  '#   pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0+cpu' \
+	  '#   pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.0+cpu' \
 	  '#' \
 	  '# Single source of truth is uv.lock; regenerate with `make lock-export`.' \
 	  '' \

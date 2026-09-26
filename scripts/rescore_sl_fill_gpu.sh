@@ -2,9 +2,11 @@
 # Run the six checkpoint rescores on the already-allocated GH200 shell.
 # Two models at a time, one per GPU. Does not allocate and does not exit the parent shell.
 set -u
-cd /scratch/work/nguyenl37/Aalto_MS_Thesis
-source /scratch/work/nguyenl37/Aalto_MS_Thesis/.venv/bin/activate
-export PYTHONPATH=/scratch/work/nguyenl37/Aalto_MS_Thesis
+REPO="${TRITON_REPO:-/scratch/work/nguyenl37/Aalto_MS_Thesis}"
+cd "$REPO"
+# shellcheck source=/dev/null
+source "$REPO/scripts/triton/activate_venv.sh"
+export PYTHONPATH="$REPO"
 mkdir -p outputs/rescore_sl_fill/logs
 
 run_pair() {
