@@ -74,7 +74,10 @@ def print_report(df: pd.DataFrame) -> None:
 def _format_value(label: str, value: float) -> str:
     if label in ("Total Trades", "Max Consec Loss", "Breach Count"):
         return str(int(value))
-    if label in ("Max Drawdown", "Total Return", "Win Rate", "Breach Rate"):
+    if label == "Total Return":
+        # total_return_pct is already percent (pnl / balance * 100).
+        return f"{value:.2f}%"
+    if label in ("Max Drawdown", "Win Rate", "Breach Rate"):
         return f"{value * 100:.2f}%"
     if label == "Turnover":
         return f"{value:.6f}"

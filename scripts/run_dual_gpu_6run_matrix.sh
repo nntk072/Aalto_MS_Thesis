@@ -59,8 +59,9 @@ wait_wave() {
       status=1
     fi
   done
-  unset PIDS
-  declare -A PIDS=()
+  # Rebind the global array. A plain `declare -A` inside this
+  # function would be local, and the next wave would see PIDS as unset.
+  declare -gA PIDS=()
   ARCHS=()
   return "$status"
 }

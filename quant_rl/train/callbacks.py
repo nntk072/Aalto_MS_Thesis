@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,8 @@ import numpy as np
 import pandas as pd
 
 from quant_rl.models.ppo_policy import clip_policy_log_std
+
+log = logging.getLogger(__name__)
 
 try:
     from stable_baselines3.common.callbacks import BaseCallback as _Base
@@ -54,17 +57,63 @@ if _SB3_AVAILABLE:
             if self._rows:
                 pd.DataFrame(self._rows).to_csv(self._log_path, index=False)
 
-    class BestCheckpointEvalCallback(_Base):
-        """Periodically evaluate on a held-out validation split and save the
-        best model by mean episode reward.
+    class EpisodeEquityCallback(_Base):
+        """Write one row per finished training episode to ``episode_equity.csv``.
 
-        PPO's default behavior saves a final model at the end of training,
-        but the final model is rarely the best one — a noisy single rollout
-        can pick a local minimum. This callback wraps a per-N-rollouts
-        evaluation on a fresh env (with ``episodic=False`` so a single
-        guardrail breach does not kill the whole evaluation) and copies
-        the policy weights to ``best_model_path`` whenever the new
-        evaluation improves on the running best.
+        Warns when the shaped reward sum is positive while end equity is
+        below the episode start. That is the reward/equity mismatch.
+        """
+
+        def __init__(self, log_path: str | Path, verbose: int = 0) -> None:
+            super().__init__(verbose=verbose)
+            self._log_path = Path(log_path)
+            self._log_path.parent.mkdir(parents=True, exist_ok=True)
+            self._rows: list[dict[str, Any]] = []
+
+        def _on_step(self) -> bool:
+            dones = self.locals.get("dones")
+            infos = self.locals.get("infos") or []
+            if dones is None:
+                return True
+            for i, done in enumerate(np.asarray(dones).reshape(-1)):
+                if not done or i >= len(infos):
+                    continue
+                ep = infos[i].get("episode_equity") if isinstance(infos[i], dict) else None
+                if not ep:
+                    continue
+                end_equity: float = float(ep["end_equity"])
+                start_equity: float = float(ep["start_equity"])
+                reward_sum: float = float(ep["reward_sum"])
+                equity_delta = end_equity - start_equity
+                row = {
+                    "timestep": int(self.num_timesteps),
+                    "end_equity": end_equity,
+                    "start_equity": start_equity,
+                    "equity_delta": equity_delta,
+                    "reward_sum": reward_sum,
+                    "n_trades": int(ep["n_trades"]),
+                    "breach_reason": str(ep.get("breach_reason") or ""),
+                }
+                self._rows.append(row)
+                if reward_sum > 0.0 and end_equity < start_equity:
+                    log.warning(
+                        "episode reward %.4f is positive but equity fell %.2f (breach=%s)",
+                        reward_sum,
+                        -equity_delta,
+                        row["breach_reason"] or "none",
+                    )
+            return True
+
+        def _on_training_end(self) -> None:
+            if self._rows:
+                pd.DataFrame(self._rows).to_csv(self._log_path, index=False)
+
+    class BestCheckpointEvalCallback(_Base):
+        """Save the policy with the highest end equity on a train-calendar rollout.
+
+        The score is the account equity at the end of the rollout, not the
+        shaped episode reward. A higher reward with a lower balance does not
+        replace the saved checkpoint.
 
         Parameters
         ----------
@@ -96,6 +145,8 @@ if _SB3_AVAILABLE:
             self._best_model_path = Path(best_model_path)
             self._best_model_path.parent.mkdir(parents=True, exist_ok=True)
             self._n_eval_episodes = int(n_eval_episodes)
+            self.best_end_equity: float = -np.inf
+            # Kept in sync with ``best_end_equity`` so older callers still read a score.
             self.best_mean_reward: float = -np.inf
 
         def _on_step(self) -> bool:
@@ -105,24 +156,23 @@ if _SB3_AVAILABLE:
             return True
 
         def _run_eval(self) -> None:
-            episode_rewards: list[float] = []
+            end_equities: list[float] = []
             for _ in range(self._n_eval_episodes):
                 env = self._eval_env_factory()
                 obs, _ = env.reset()
-                ep_reward = 0.0
                 done = truncated = False
                 while not (done or truncated):
                     action, _ = self.model.predict(obs, deterministic=True)
-                    obs, reward, done, truncated, _ = env.step(action)
-                    ep_reward += float(reward)
-                episode_rewards.append(ep_reward)
-            mean_reward = float(np.mean(episode_rewards))
-            if mean_reward > self.best_mean_reward:
-                self.best_mean_reward = mean_reward
+                    obs, _reward, done, truncated, _ = env.step(action)
+                end_equities.append(float(env.account.equity))
+            end_equity = float(np.mean(end_equities))
+            if end_equity > self.best_end_equity:
+                self.best_end_equity = end_equity
+                self.best_mean_reward = end_equity
                 self.model.save(self._best_model_path)
                 if self.verbose:
                     print(
-                        f"[BestCheckpointEval] new best={mean_reward:.3f} at "
+                        f"[BestCheckpointEval] new best end_equity={end_equity:.2f} at "
                         f"timestep={self.num_timesteps} → saved {self._best_model_path}"
                     )
 
@@ -204,6 +254,15 @@ else:
         def __init__(self, *args: object, **kwargs: object) -> None:
             raise ImportError(
                 "stable-baselines3 is required for ProgressLoggerCallback. "
+                "Install it with: pip install stable-baselines3"
+            )
+
+    class EpisodeEquityCallback:  # type: ignore[no-redef]
+        """Stub — stable-baselines3 is not installed."""
+
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            raise ImportError(
+                "stable-baselines3 is required for EpisodeEquityCallback. "
                 "Install it with: pip install stable-baselines3"
             )
 

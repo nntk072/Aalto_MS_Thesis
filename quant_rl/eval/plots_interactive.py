@@ -698,6 +698,7 @@ def plot_per_trade_orders(
     contract_size: float = 1.0,
     show_mae_mfe: bool = True,
     show_sl_tp: bool = True,
+    show_vwap: bool = False,
     secondary_bars: pd.DataFrame | None = None,
 ) -> None:
     """Generate one M1 candlestick HTML per trade in *orders_dir* with MT5-style overlays.
@@ -719,20 +720,22 @@ def plot_per_trade_orders(
     contract_size : Contract size.
     show_mae_mfe : Whether to plot MAE/MFE lines.
     show_sl_tp : Whether to plot SL/TP lines.
+    show_vwap : Draw session VWAP. Off until the feed has real tick volume.
     secondary_bars : Optional US500 (or correlated) bars for SMT lines.
     """
     _check()
     from plotly.subplots import make_subplots
 
-    from .chart_indicators import compute_chart_overlays_full, slice_overlays
+    from .chart_indicators import compute_chart_overlays_full
     from .chart_overlays import (
         VWAP_COLOR,
         build_overlay_events,
         draw_macd_rsi_plotly,
         draw_overlays_plotly,
     )
-    from .plots import _extract_window, _pair_trades, _trade_filename
-    from .trade_metrics import compute_trade_metrics
+    from .order_chart import draw_order_levels_plotly
+    from .order_window import prepare_order_chart
+    from .plots import _pair_trades, _trade_filename
 
     orders_dir = Path(orders_dir)
     orders_dir.mkdir(parents=True, exist_ok=True)
@@ -755,29 +758,33 @@ def plot_per_trade_orders(
     overlay_events = build_overlay_events(bars, secondary=secondary_bars)
 
     for seq_i, (open_row, close_row) in enumerate(pairs):
-        t_open = pd.Timestamp(open_row["time"])
-        t_close = pd.Timestamp(close_row["time"])
-        window = _extract_window(bars, t_open, t_close, context_bars)
-        if len(window) < 3:
-            continue
-
-        direction = int(open_row["direction"]) if pd.notna(open_row.get("direction")) else 0
-        pnl = float(close_row["pnl"]) if pd.notna(close_row.get("pnl")) else 0.0
-        close_type = str(close_row["type"])
-
-        # Compute MAE/MFE/SL/TP metrics
-        metrics = compute_trade_metrics(
+        prepared = prepare_order_chart(
             bars,
             open_row,
             close_row,
+            overlay_events=overlay_events,
+            full_overlays=full_overlays,
+            context_bars=context_bars,
             max_loss_per_trade_usd=max_loss_per_trade_usd,
             take_profit_per_trade_usd=take_profit_per_trade_usd,
             lots=lots,
             contract_size=contract_size,
+            show_mae_mfe=show_mae_mfe,
+            show_sl_tp=show_sl_tp,
         )
+        if prepared is None:
+            continue
+        window = prepared.window
+        metrics = prepared.metrics
+        overlays = prepared.overlays
+        levels = prepared.levels
+        events = prepared.events
+        t_open = prepared.t_open
+        t_close = prepared.t_close
 
-        # Compute chart overlays (EMA50, MACD, RSI, VWAP), sliced from full-history calc
-        overlays = slice_overlays(full_overlays, window.index)
+        direction = int(open_row["direction"]) if pd.notna(open_row.get("direction")) else 0
+        pnl = float(close_row["pnl"]) if pd.notna(close_row.get("pnl")) else 0.0
+        close_type = str(close_row["type"])
 
         fig = make_subplots(
             rows=2,
@@ -815,114 +822,19 @@ def plot_per_trade_orders(
             row=1,
             col=1,
         )
-        fig.add_trace(
-            go.Scatter(
-                x=window.index,
-                y=overlays["vwap"],
-                name="VWAP",
-                line=dict(color=VWAP_COLOR, width=1.8, dash="dashdot"),
-            ),
-            row=1,
-            col=1,
-        )
-        events = overlay_events.clip(pd.Timestamp(window.index[0]), pd.Timestamp(window.index[-1]))
+        if show_vwap:
+            fig.add_trace(
+                go.Scatter(
+                    x=window.index,
+                    y=overlays["vwap"],
+                    name="VWAP",
+                    line=dict(color=VWAP_COLOR, width=1.8, dash="dashdot"),
+                ),
+                row=1,
+                col=1,
+            )
         draw_overlays_plotly(fig, events, row=1, col=1)
-
-        # Entry marker: green arrow (triangle-up for long, triangle-down for short)
-        i_o = int(window.index.get_indexer(pd.Index([t_open]), method="nearest")[0])
-        if 0 <= i_o < len(window):
-            ep = (
-                float(open_row["price"])
-                if pd.notna(open_row.get("price"))
-                else float(window["close"].iloc[i_o])
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=[window.index[i_o]],
-                    y=[ep],
-                    mode="markers",
-                    name="Entry",
-                    showlegend=True,
-                    marker=dict(
-                        symbol="triangle-up" if direction == 1 else "triangle-down",
-                        size=14,
-                        color="#00cc00",  # bright green
-                    ),
-                ),
-                row=1,
-                col=1,
-            )
-
-        # Exit marker: red arrow (triangle-down for long, triangle-up for short)
-        i_c = int(window.index.get_indexer(pd.Index([t_close]), method="nearest")[0])
-        if 0 <= i_c < len(window):
-            ep2 = (
-                float(close_row["price"])
-                if pd.notna(close_row.get("price"))
-                else float(window["close"].iloc[i_c])
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=[window.index[i_c]],
-                    y=[ep2],
-                    mode="markers",
-                    name="Exit",
-                    showlegend=True,
-                    marker=dict(
-                        symbol="triangle-down" if direction == 1 else "triangle-up",
-                        size=14,
-                        color="#ff0000",  # bright red
-                    ),
-                ),
-                row=1,
-                col=1,
-            )
-
-        # Add MAE/MFE horizontal lines
-        if show_mae_mfe:
-            # MAE line (red dashed)
-            fig.add_hline(
-                y=metrics.mae_price,
-                line_color="#ff6666",
-                line_dash="dash",
-                annotation_text="MAE",
-                annotation_position="right",
-                row=1,
-                col=1,
-            )
-            # MFE line (green dashed)
-            fig.add_hline(
-                y=metrics.mfe_price,
-                line_color="#66ff66",
-                line_dash="dash",
-                annotation_text="MFE",
-                annotation_position="right",
-                row=1,
-                col=1,
-            )
-
-        # Add SL/TP horizontal lines (if configured)
-        if show_sl_tp:
-            if metrics.sl_price is not None:
-                fig.add_hline(
-                    y=metrics.sl_price,
-                    line_color="#ff0000",
-                    line_dash="dot",
-                    annotation_text="SL",
-                    annotation_position="right",
-                    row=1,
-                    col=1,
-                )
-            if metrics.tp_price is not None:
-                fig.add_hline(
-                    y=metrics.tp_price,
-                    line_color="#00cc00",
-                    line_dash="dot",
-                    annotation_text="TP",
-                    annotation_position="right",
-                    row=1,
-                    col=1,
-                )
+        draw_order_levels_plotly(fig, levels)
 
         # Bottom panel: MACD (left) + RSI (right)
         draw_macd_rsi_plotly(fig, window, overlays, row=2)
@@ -956,15 +868,18 @@ def plot_per_trade_orders(
             f"Open: {metrics.entry_price:.2f} | Close: {metrics.exit_price:.2f} | "
             f"Volume: {volume:.2f} | Duration: {duration_mins}m{duration_secs}s<br>"
             f"PnL (logged): {pnl:+.2f} | PnL (calc): {pnl_calc:+.2f} | "
-            f"Reason: {close_reason_detail}</sub>"
+            f"Reason: {close_reason_detail}"
+            + ("" if not levels.notes else " | " + " | ".join(levels.notes))
+            + "</sub>"
         )
 
         # Hide overnight / weekend gaps when a multi-day window slips through.
         days = pd.DatetimeIndex(window.index).normalize().unique()
-        rangebreaks: list[dict[str, Any]] = [
-            dict(bounds=["sat", "mon"]),
-            dict(bounds=[23.01, 16.5], pattern="hour"),
-        ]
+        clock = pd.DatetimeIndex(window.index)
+        pre_ny = ((clock.hour < 16) | ((clock.hour == 16) & (clock.minute < 30))).any()
+        rangebreaks: list[dict[str, Any]] = [dict(bounds=["sat", "mon"])]
+        if not pre_ny:
+            rangebreaks.append(dict(bounds=[23.01, 16.5], pattern="hour"))
         tickformat = "%H:%M" if len(days) == 1 else "%m/%d %H:%M"
 
         fig.update_layout(
@@ -978,6 +893,7 @@ def plot_per_trade_orders(
             xaxis=dict(rangebreaks=rangebreaks, tickformat=tickformat),
             xaxis2=dict(rangebreaks=rangebreaks, tickformat=tickformat),
         )
+        fig.update_yaxes(range=list(levels.ylim), row=1, col=1)
 
         fname = _trade_filename(seq_i + 1, open_row, close_row, "html")
         try:

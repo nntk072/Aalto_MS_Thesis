@@ -103,6 +103,7 @@ def evaluate_model(
     entry_cooldown_bars: int = 0,
     reward_mode: str = "dsr",
     entry_intensity_threshold: float = 0.0,
+    peak_trailing_dd_limit: float = 0.0,
 ) -> dict[str, Any]:
     """Walk a trained RL ``model`` over *bars*/*features* and collect trades.
 
@@ -160,6 +161,7 @@ def evaluate_model(
         entry_cooldown_bars=entry_cooldown_bars,
         reward_mode=reward_mode,
         entry_intensity_threshold=entry_intensity_threshold,
+        peak_trailing_dd_limit=peak_trailing_dd_limit,
     )
 
     obs, _ = env.reset()

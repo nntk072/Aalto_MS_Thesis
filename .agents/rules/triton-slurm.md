@@ -51,7 +51,8 @@ never a burst of short diagnostic jobs.
 - Loops / bursts of short jobs or job steps (&lt; ~120s each).
 - `scancel -u $USER` unless the user explicitly requests a full wipe.
 - Using `srun` for login-node checks (`ls`, log tails, plain `grep`).
-- More than **one GPU** per allocation unless the user asks for multi-GPU.
+- More than **two GPUs** per allocation. One model uses 1 GPU. The six-run
+  encoder matrix uses 2. Do not request 3+.
 
 ## Before allocating (after user OK) — check availability
 
@@ -70,36 +71,43 @@ squeue -p gpu-h200-141g-short,gpu-h200-141g-m,gpu-grace-h200-141g -o '%.18i %.9P
 Prefer partitions with **idle** or lightly **mixed** nodes and short queues.
 Confirm `MaxTime` before choosing wall-clock.
 
-### GPU priority (1 GPU only)
+### GPU count
 
-| Priority | When | Partition (typical) | GRES | CPU arch / venv |
-|----------|------|---------------------|------|-----------------|
-| **1 — H200** | H200 partition has idle/usable capacity | `gpu-h200-141g-short` (preferred) or `gpu-h200-141g-m` | `--gpus=h200:1` | **x86_64** — use an x86 venv (not the GH200 aarch64 `.venv`) |
-| **2 — GH200** | No usable H200 (full queue, no access, or user asks) | `gpu-grace-h200-141g` | `--gpus=gh200:1` | **aarch64** — project `.venv` on scratch |
+Pick **1 or 2** GPUs from the job, not from habit. Login (`login4`: 40 CPUs,
+250 GB RAM, no GPU) cannot run `n_envs=64`. A PO3 worker is budgeted at 4 GB;
+64 workers OOM at 256 GB, so one 64-env train needs about **512 GB**.
 
-Always **`--gpus=<type>:1`** (one GPU). Do not request 2+.
+| Job | GPUs | Typical request | Why |
+|-----|------|-----------------|-----|
+| One model (one TCN / GRU / Transformer, 20M) | **1** | GH200: `--gpus=gh200:1 --mem=512G --cpus-per-task=48 --time=6:00:00` or `--time=12:00:00` | One process, one 141 GB GPU. 6h is the default 20M train. 12h when `MaxTime` allows and the user asks for the longer shell. |
+| Six-run matrix (overlay then baseline, three archs) | **2** | GH200: `--gpus=gh200:2 --mem=900G --cpus-per-task=128 --time=6:00:00` | Same shape as [`scripts/run_6run_matrix_tmux.sh`](../../scripts/run_6run_matrix_tmux.sh). The node has 2 GPUs and ~1.1 TB. |
+
+H200 (`gpu-h200-141g-short`, x86 venv) is still preferred for a **1-GPU** job
+when that partition has idle capacity. The six-run matrix stays on GH200
+(`gpu-grace-h200-141g`, aarch64 `.venv`) because that node is 2 GPUs and the
+project env matches it. Do not request 3+ GPUs.
 
 ### Time / mem / CPUs
 
-| Knob | Rule |
-|------|------|
-| Time | Prefer **`--time=12:00:00`** when the partition `MaxTime` allows it; otherwise **`--time=6:00:00`** (or the partition max if lower, e.g. `gpu-h200-141g-m` is 8h so 6h is fine). |
-| Mem | Start **`--mem=128G`**. Raise only after OOM (256G / 512G for high `n_envs`). Stay under partition memory. |
-| CPUs | Start **`--cpus-per-task=8`**. Raise for high `n_envs` (e.g. 48) only if needed; check node CPU count via `sinfo`. |
-| Tasks | `--ntasks=1` |
+| Knob | 1 GPU (one model) | 2 GPU (six-run) |
+|------|-------------------|-----------------|
+| Time | **6h or 12h.** Default `--time=6:00:00`. Use `--time=12:00:00` when the partition `MaxTime` allows it and the user asked for 12h. | **`--time=6:00:00`** |
+| Mem | **`--mem=512G`** for `n_envs=64`. Do not start a 64-env PO3 train at 128G. | **`--mem=900G`** (stay under the ~1.1 TB node) |
+| CPUs | **`--cpus-per-task=48`** | **`--cpus-per-task=128`** (node has 144) |
+| Tasks | `--ntasks=1` | `--ntasks=1` |
 
-Example after checks + user OK (H200 available, MaxTime ≥ 12h):
+Example, one TCN, GH200 free, user OK (6h, or 12h if they asked):
 
 ```bash
-srun --partition=gpu-h200-141g-short --gpus=h200:1 --time=12:00:00 \
-  --mem=128G --ntasks=1 --cpus-per-task=8 --pty bash
+srun --partition=gpu-grace-h200-141g --gpus=gh200:1 --time=6:00:00 \
+  --mem=512G --ntasks=1 --cpus-per-task=48 --pty bash
 ```
 
-Fallback when only GH200 is usable:
+Example, six-run matrix, user OK:
 
 ```bash
-srun --partition=gpu-grace-h200-141g --gpus=gh200:1 --time=12:00:00 \
-  --mem=128G --ntasks=1 --cpus-per-task=8 --pty bash
+srun --partition=gpu-grace-h200-141g --gpus=gh200:2 --time=6:00:00 \
+  --mem=900G --ntasks=1 --cpus-per-task=128 --pty bash
 ```
 
 `attach_or_alloc.sh` follows the same priority when it allocates (override with

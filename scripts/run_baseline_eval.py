@@ -30,6 +30,7 @@ from quant_rl.baselines import (  # noqa: E402
     BuyAndHoldStrategy,
     EMAMACDRSIStrategy,
     MultiLevelBreakoutStrategy,
+    SessionMomentumStrategy,
 )
 from quant_rl.data.split import split_train_test  # noqa: E402
 from quant_rl.envs.trading_env import TradingEnv  # noqa: E402
@@ -44,6 +45,7 @@ def build_strategies(bars: pd.DataFrame) -> dict[str, BaseStrategy]:
         "buy_and_hold": BuyAndHoldStrategy(n_bars=len(bars)),
         "ema_macd_rsi": EMAMACDRSIStrategy(bars),
         "breakout": MultiLevelBreakoutStrategy(bars),
+        "session_momentum": SessionMomentumStrategy(bars),
     }
     # The env starts stepping at bar `obs_window`; skip the first
     # pre-computed signals so signal k lines up with the traded bar.
@@ -63,7 +65,7 @@ def parse_args() -> argparse.Namespace:
         "--strategies",
         nargs="+",
         default=["buy_and_hold", "ema_macd_rsi", "breakout"],
-        choices=["buy_and_hold", "ema_macd_rsi", "breakout"],
+        choices=["buy_and_hold", "ema_macd_rsi", "breakout", "session_momentum"],
     )
     parser.add_argument("--out-dir", default="models/rl_runs", help="Base directory for reports")
     return parser.parse_args()

@@ -145,6 +145,8 @@ env:
   # A positive band lets PPO park at "never trade"; seed-50 20M did that at 0.1.
   entry_intensity_threshold: 0.0
   reward_mode: dsr                     # baseline stays dsr; idea configs set pnl
+  # Training behavior, not an FTMO kill. 0 = off. 0.10 = flatten at 10% from peak.
+  peak_trailing_dd_limit: 0.0
   max_entries_per_session: 3
   entry_cooldown_bars: 15
   sl_buffer_pts: 0.0                   # structural stop buffer (0 = exact)

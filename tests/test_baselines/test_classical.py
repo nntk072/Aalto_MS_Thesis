@@ -11,6 +11,7 @@ from quant_rl.baselines import (
     BuyAndHoldStrategy,
     EMAMACDRSIStrategy,
     MultiLevelBreakoutStrategy,
+    SessionMomentumStrategy,
 )
 
 
@@ -50,6 +51,23 @@ class TestBuyAndHold:
         # Assert
         assert strategy.act({}) == 1.0
 
+    def test_intraday_enters_once_per_session(self) -> None:
+        idx = pd.DatetimeIndex(
+            list(pd.date_range("2025-01-06 16:30", periods=3, freq="1min", tz="Etc/GMT-3"))
+            + list(pd.date_range("2025-01-07 16:30", periods=3, freq="1min", tz="Etc/GMT-3"))
+        )
+        bars = pd.DataFrame({"close": 100.0}, index=idx)
+        strategy = BuyAndHoldStrategy(bars=bars, mode="intraday")
+        actions = [strategy.act({}) for _ in range(len(bars))]
+        assert actions == [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+
+    def test_swing_enters_once(self) -> None:
+        idx = pd.date_range("2025-01-06 16:30", periods=4, freq="1min", tz="Etc/GMT-3")
+        bars = pd.DataFrame({"close": 100.0}, index=idx)
+        strategy = BuyAndHoldStrategy(bars=bars, mode="swing")
+        actions = [strategy.act({}) for _ in range(len(bars))]
+        assert actions == [1.0, 0.0, 0.0, 0.0]
+
 
 @pytest.mark.unit
 class TestEMAMACDRSIStrategy:
@@ -66,6 +84,24 @@ class TestEMAMACDRSIStrategy:
 
     def test_is_a_base_strategy(self) -> None:
         assert isinstance(EMAMACDRSIStrategy(_make_bars()), BaseStrategy)
+
+
+@pytest.mark.unit
+class TestSessionMomentumStrategy:
+    def test_second_session_takes_sign_of_the_first(self) -> None:
+        # Day 1 rises, so day 2 is long. Day 2 falls, so day 3 is short.
+        idx = pd.DatetimeIndex(
+            list(pd.date_range("2025-01-06 16:30", periods=3, freq="1min", tz="Etc/GMT-3"))
+            + list(pd.date_range("2025-01-07 16:30", periods=3, freq="1min", tz="Etc/GMT-3"))
+            + list(pd.date_range("2025-01-08 16:30", periods=3, freq="1min", tz="Etc/GMT-3"))
+        )
+        close = [100.0, 101.0, 110.0, 110.0, 105.0, 100.0, 100.0, 100.0, 100.0]
+        bars = pd.DataFrame({"close": close}, index=idx)
+        strategy = SessionMomentumStrategy(bars)
+        actions = [strategy.act({}) for _ in range(len(bars))]
+        assert actions[:3] == [0.0, 0.0, 0.0]
+        assert actions[3:6] == [1.0, 1.0, 1.0]
+        assert actions[6:9] == [-1.0, -1.0, -1.0]
 
 
 @pytest.mark.unit

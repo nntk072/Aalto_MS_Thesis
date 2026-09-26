@@ -85,6 +85,8 @@ if [[ "$MODE" == "overlay" ]]; then
     features.po3_state_mtf.enabled=true \
     features.ifvg_mtf.enabled=true \
     env.n_envs=64 \
+    env.peak_trailing_dd_limit=0.10 \
+    ftmo.trailing_dd_limit=0 \
     2>&1 | tee "$LOG"
 else
   python -u -m quant_rl.train.train_rl \
@@ -93,6 +95,8 @@ else
     --arch "$ARCH" \
     --out outputs \
     env.n_envs=64 \
+    env.peak_trailing_dd_limit=0.10 \
+    ftmo.trailing_dd_limit=0 \
     2>&1 | tee "$LOG"
 fi
 

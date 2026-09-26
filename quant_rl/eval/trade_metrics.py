@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
+
+from quant_rl.eval.chart_levels import tradable_mask, wick_time
 
 
 @dataclass
@@ -32,6 +34,10 @@ class TradeChartMetrics:
         Stop Loss level based on max_loss_per_trade_usd. None if not configured.
     tp_price : float | None
         Take Profit level based on take_profit_per_trade_usd. None if not configured.
+    sl_time, tp_time : pd.Timestamp | None
+        Bar whose wick printed the stop or target, when one exists.
+    mae_drawn, mfe_drawn : bool
+        False when no valid in-trade bar printed that excursion.
     """
 
     entry_price: float
@@ -43,6 +49,11 @@ class TradeChartMetrics:
     mfe_time: pd.Timestamp
     sl_price: float | None
     tp_price: float | None
+    sl_time: pd.Timestamp | None = None
+    tp_time: pd.Timestamp | None = None
+    mae_drawn: bool = True
+    mfe_drawn: bool = True
+    notes: list[str] = field(default_factory=list)
 
 
 def compute_trade_metrics(
@@ -91,35 +102,42 @@ def compute_trade_metrics(
     entry_price = float(open_row["price"]) if pd.notna(open_row.get("price")) else np.nan
     exit_price = float(close_row["price"]) if pd.notna(close_row.get("price")) else np.nan
 
-    # Extract bars within [t_open, t_close]
+    # Extract bars within [t_open, t_close]. MAE/MFE ignore impossible OHLC
+    # and a one-bar print that both neighbors reject. A news candle whose
+    # neighbors stay at the new price remains eligible.
     trade_bars = bars.loc[(bars.index >= t_open) & (bars.index <= t_close)]
+    if len(trade_bars) > 0:
+        trade_bars = trade_bars.loc[tradable_mask(trade_bars)]
 
     # Fallback: if exit_price is nan, use close price from the close bar
     if np.isnan(exit_price) and len(trade_bars) > 0:
-        exit_price = trade_bars["close"].iloc[-1]
+        exit_price = float(trade_bars["close"].iloc[-1])
 
     # Compute MAE and MFE
     mfe_idx: pd.Timestamp
     mae_idx: pd.Timestamp
+    mae_drawn = True
+    mfe_drawn = True
     if len(trade_bars) > 0:
         if direction == 1:  # Long
-            mfe_price = trade_bars["high"].max()
-            mae_price = trade_bars["low"].min()
+            mfe_price = float(trade_bars["high"].max())
+            mae_price = float(trade_bars["low"].min())
             mfe_idx = pd.Timestamp(trade_bars["high"].idxmax())
             mae_idx = pd.Timestamp(trade_bars["low"].idxmin())
         elif direction == -1:  # Short
-            mfe_price = trade_bars["low"].min()
-            mae_price = trade_bars["high"].max()
+            mfe_price = float(trade_bars["low"].min())
+            mae_price = float(trade_bars["high"].max())
             mfe_idx = pd.Timestamp(trade_bars["low"].idxmin())
             mae_idx = pd.Timestamp(trade_bars["high"].idxmax())
         else:
             raise ValueError(f"Invalid trade direction: {direction} (expected +1 or -1)")
     else:
-        # Fallback if no bars in window
         mfe_price = entry_price
         mae_price = entry_price
         mfe_idx = t_open
         mae_idx = t_open
+        mae_drawn = False
+        mfe_drawn = False
 
     # Compute SL and TP levels
     sl_price = None
@@ -151,6 +169,13 @@ def compute_trade_metrics(
         else:
             raise ValueError(f"Invalid trade direction: {direction} (expected +1 or -1)")
 
+    if direction == 1:
+        sl_time = wick_time(bars, sl_price, "low") if sl_price is not None else None
+        tp_time = wick_time(bars, tp_price, "high") if tp_price is not None else None
+    else:
+        sl_time = wick_time(bars, sl_price, "high") if sl_price is not None else None
+        tp_time = wick_time(bars, tp_price, "low") if tp_price is not None else None
+
     return TradeChartMetrics(
         entry_price=entry_price,
         exit_price=exit_price,
@@ -161,4 +186,8 @@ def compute_trade_metrics(
         mfe_time=mfe_idx,
         sl_price=sl_price,
         tp_price=tp_price,
+        sl_time=sl_time,
+        tp_time=tp_time,
+        mae_drawn=mae_drawn,
+        mfe_drawn=mfe_drawn,
     )

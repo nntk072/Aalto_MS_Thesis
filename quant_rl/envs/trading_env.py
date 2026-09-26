@@ -22,12 +22,7 @@ from ..backtest.account import AccountState
 from ..backtest.broker import Broker, Position
 from ..backtest.costs import COST_US100, CostModel
 from ..backtest.guardrails import FTMOGuardrails
-from ..backtest.risk import (
-    compute_lots,
-    compute_sl_tp_from_structure,
-    compute_sl_tp_long,
-    compute_sl_tp_short,
-)
+from ..backtest.risk import compute_lots, compute_sl_tp_long, compute_sl_tp_short
 from ..data.session import ny_session_mask
 from ..envs.feature_row import BarView, FeatureRow
 from ..envs.reward import DSRReward, PnLReward
@@ -92,6 +87,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         reward_mode: str = "dsr",
         entry_intensity_threshold: float = 0.0,
         obs_features_mmap: str | None = None,
+        peak_trailing_dd_limit: float = 0.0,
     ):
         """Initialize trading environment.
 
@@ -251,6 +247,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.reward_mode = str(reward_mode or "dsr").lower()
         # 0 = intensity never holds; entry follows context_direction.
         self.entry_intensity_threshold = float(entry_intensity_threshold)
+        # Training behavior, not an FTMO kill-switch. 0 disables it.
+        # At this fraction of peak equity, flatten the open position at the
+        # market quote and refuse new risk. Stops and targets are not rewritten.
+        self.peak_trailing_dd_limit = float(peak_trailing_dd_limit)
+        self._peak_dd_fired = False
         # Resolve trader/strategy action flag early (needed for reward + spaces).
         _strategy_actions = (
             bool(trader_actions) if trader_actions is not None else bool(strategy_actions)
@@ -300,6 +301,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             missing = [c for c in self.strategy.required_features if c not in features.columns]
             if missing:
                 raise ValueError(f"Missing strategy features: {missing}")
+        self._max_tp_dist: np.ndarray[Any, Any] | None = None
+        if self.strategy_actions and "atr_5" in features.columns:
+            from quant_rl.backtest.tp_reach import max_tp_distance
+
+            dist = max_tp_distance(bars, features["atr_5"]).reindex(self.bars.index)
+            self._max_tp_dist = dist.to_numpy(dtype=float)
 
         # Model-facing observation frame: the strategy's raw price-level
         # columns stay in ``features`` for execution/risk but must not enter
@@ -404,6 +411,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             "hold_low_intensity": 0,
             "hold_no_context": 0,
             "rejected_sl": 0,
+            "rejected_rr": 0,
             "opened": 0,
             "soft_brick": 0,
         }
@@ -498,10 +506,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._cooldown_until_bar = -1
         self._last_realized_close_pnl = None
         self._selected_sl_anchor = 0.0
+        self._ep_start_equity = float(self.initial_balance)
+        self._ep_reward_sum = 0.0
         self._entry_diag = {
             "hold_low_intensity": 0,
             "hold_no_context": 0,
             "rejected_sl": 0,
+            "rejected_rr": 0,
             "opened": 0,
             "soft_brick": 0,
         }
@@ -680,6 +691,40 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         return reason, session_blocked, done, truncated
 
+    def _apply_peak_trailing_dd(self, fill_bid: float, fill_ask: float, bar_time: Any) -> bool:
+        """Keep peak trailing drawdown inside the training ceiling.
+
+        This is strategy behavior, not an FTMO kill and not a breakeven stop.
+        At the ceiling, the open position is closed at the current quote.
+        Its stop and target prices are left unchanged. New entries are refused
+        while drawdown from the peak is still at the ceiling.
+        """
+        limit = self.peak_trailing_dd_limit
+        if limit <= 0.0:
+            return False
+        if float(self.account.trailing_drawdown_pct()) < limit:
+            return False
+        self._peak_dd_fired = True
+        if self.position is not None:
+            pnl, fill_price = self.broker.close_position(
+                self.account, self.position, (fill_bid, fill_ask)
+            )
+            self.trade_log.append(
+                {
+                    "type": "close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "reason": "peak_dd_behavior",
+                    "bar": self.step_idx,
+                    "time": bar_time,
+                    "equity": self.account.equity,
+                }
+            )
+            self.position = None
+            self.sessions_with_trades.add(self._current_session_id())
+            self._note_close(pnl)
+        return True
+
     def _check_sl_tp(
         self,
         bar: BarView,
@@ -689,8 +734,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
     ) -> None:
         """Check whether the open position hit its SL or TP on this bar.
 
-        If a stop-loss or take-profit level is triggered, the position is
-        closed at the current fill quote and recorded in the trade log.
+        A touched stop or target fills at that price. Slippage, when
+        configured, moves the fill only against the position. The next
+        bar's quote is not used: a wick through a tight stop must not
+        book the favorable close. If both levels sit inside one bar, the
+        stop wins.
         """
         if self.position is None:
             return
@@ -700,6 +748,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             if 0 <= idx < len(self._bar_times)
             else self._bar_times[self.step_idx]
         )
+        # Touch detection uses the bar range. The next quote must not be the fill.
+        _ = (fill_bid, fill_ask)
 
         sl_hit = False
         if self.position.sl_price is not None:
@@ -709,8 +759,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 sl_hit = True
 
         if sl_hit:
+            assert self.position.sl_price is not None
             pnl, fill_price = self.broker.close_position(
-                self.account, self.position, (fill_bid, fill_ask)
+                self.account,
+                self.position,
+                self._sl_tp_fill_quote(int(self.position.direction), float(self.position.sl_price)),
             )
             self.trade_log.append(
                 {
@@ -736,8 +789,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 tp_hit = True
 
             if tp_hit:
+                assert self.position.tp_price is not None
                 pnl, fill_price = self.broker.close_position(
-                    self.account, self.position, (fill_bid, fill_ask)
+                    self.account,
+                    self.position,
+                    self._sl_tp_fill_quote(
+                        int(self.position.direction), float(self.position.tp_price)
+                    ),
                 )
                 self.trade_log.append(
                     {
@@ -753,6 +811,23 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 self.position = None
                 self.sessions_with_trades.add(self._current_session_id())
                 self._note_close(pnl)
+
+    def _sl_tp_fill_quote(self, direction: int, hit_price: float) -> tuple[float, float]:
+        """Bid/ask that closes at *hit_price*, worsened only by adverse slippage.
+
+        Longs sell the bid and shorts buy the ask, so that side is the stop
+        or target. The other side is one model spread away so
+        ``Broker.close_position`` still sees a two-sided quote.
+        """
+        spread = self.cost_model.spread_points * self.cost_model.point_size
+        slip = self.cost_model.slippage_points * self.cost_model.point_size
+        if direction == 1:
+            bid = hit_price - slip
+            ask = bid + spread
+        else:
+            ask = hit_price + slip
+            bid = ask - spread
+        return bid, ask
 
     def _current_session_id(self) -> int:
         """Return the session_id for the current bar."""
@@ -824,49 +899,19 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
             has_levels = False
             if self.strategy_actions:
-                min_dist = self._min_sl_distance(feat_row)
-                cands = self.strategy.sl_candidates(
-                    direction=discrete_action,
-                    row=feat_row,  # type: ignore[arg-type]
-                )
-                if not cands:
-                    # Fall back to single structural reference.
-                    sl_ref = self.strategy.sl_reference(
-                        direction=discrete_action,
-                        row=feat_row,  # type: ignore[arg-type]
-                    )
-                    if sl_ref is not None and np.isfinite(float(sl_ref)):
-                        cands = [("sl_reference", float(sl_ref))]
-                valid = self._filter_sl_candidates(
+                from quant_rl.backtest.entry_levels import resolve_strategy_entry
+
+                sl_price, tp_price, rr_rejected = resolve_strategy_entry(
+                    self.strategy,
                     direction=discrete_action,
                     entry_price=entry_price,
-                    candidates=cands,
-                    min_dist=min_dist,
+                    rr_ratio=rr_ratio,
+                    feat_row=feat_row,  # type: ignore[arg-type]
+                    min_dist=self._min_sl_distance(feat_row),
+                    sl_anchor=float(self._selected_sl_anchor),
+                    buffer_pts=self.sl_buffer_pts,
+                    max_tp_distance=self._max_tp_here(),
                 )
-                if valid:
-                    anchor = float(np.clip(self._selected_sl_anchor, 0.0, 1.0))
-                    idx = min(int(round(anchor * (len(valid) - 1))), len(valid) - 1)
-                    _name, sl_level = valid[idx]
-                    try:
-                        sl_price, _tp_rr = compute_sl_tp_from_structure(
-                            direction=discrete_action,
-                            entry_price=entry_price,
-                            structure_level=float(sl_level),
-                            rr_ratio=rr_ratio,
-                            buffer_pts=self.sl_buffer_pts,
-                        )
-                        # Re-validate distance after buffer.
-                        if abs(entry_price - sl_price) + 1e-12 < min_dist:
-                            raise ValueError("SL below min distance")
-                        tp_price = self._resolve_trader_tp(
-                            direction=discrete_action,
-                            entry_price=entry_price,
-                            sl_price=sl_price,
-                            rr_ratio=rr_ratio,
-                            feat_row=feat_row,
-                        )
-                    except ValueError:
-                        sl_price, tp_price = None, None
                 if sl_price is not None and tp_price is not None:
                     lots = compute_lots(
                         self.account.equity,
@@ -881,7 +926,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     has_levels = True
                 else:
                     lots = 0.0
-                    self._entry_diag["rejected_sl"] += 1
+                    if rr_rejected:
+                        self._entry_diag["rejected_rr"] += 1
+                    else:
+                        self._entry_diag["rejected_sl"] += 1
             elif (
                 discrete_action == 1
                 and not np.isnan(last_swing_low)
@@ -1037,18 +1085,28 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         candidates: list[tuple[str, float]],
         min_dist: float,
     ) -> list[tuple[str, float]]:
-        """Keep SL levels on the correct side and at least ``min_dist`` away."""
-        valid: list[tuple[str, float]] = []
-        for name, level in candidates:
-            if direction == 1 and level < entry_price:
-                dist = entry_price - level
-            elif direction == -1 and level > entry_price:
-                dist = level - entry_price
-            else:
-                continue
-            if dist + 1e-12 >= min_dist:
-                valid.append((name, level))
-        return valid
+        from quant_rl.backtest.entry_levels import filter_sl_candidates
+
+        return filter_sl_candidates(
+            direction=direction,
+            entry_price=entry_price,
+            candidates=candidates,
+            min_dist=min_dist,
+        )
+
+    def _max_tp_here(self) -> float:
+        """Reachable take-profit distance at the current bar, or NaN."""
+        if self._max_tp_dist is None:
+            return float("nan")
+        i = self.step_idx
+        if i < 0 or i >= len(self._max_tp_dist):
+            return float("nan")
+        return float(self._max_tp_dist[i])
+
+    def _rr_fits(self, entry_price: float, sl_price: float, rr_ratio: float) -> bool:
+        from quant_rl.backtest.tp_reach import rr_reaches
+
+        return rr_reaches(entry_price, sl_price, rr_ratio, self._max_tp_here())
 
     def _resolve_trader_tp(
         self,
@@ -1058,26 +1116,19 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         sl_price: float,
         rr_ratio: float,
         feat_row: FeatureRow | pd.Series,
+        max_tp_distance: float | None = None,
     ) -> float:
-        """RR TP, unless a structural target implies RR >= selected rr."""
-        risk = abs(entry_price - sl_price)
-        rr_tp = entry_price + direction * rr_ratio * risk
+        from quant_rl.backtest.entry_levels import resolve_trader_tp
+
         targets = self.strategy.target_candidates(direction=direction, row=feat_row)  # type: ignore[arg-type]
-        best_struct: float | None = None
-        best_implied = -1.0
-        for level in targets.values():
-            if not np.isfinite(level):
-                continue
-            if direction == 1 and level > entry_price:
-                implied = (level - entry_price) / risk if risk > 0 else 0.0
-            elif direction == -1 and level < entry_price:
-                implied = (entry_price - level) / risk if risk > 0 else 0.0
-            else:
-                continue
-            if implied >= rr_ratio and implied > best_implied:
-                best_implied = implied
-                best_struct = float(level)
-        return best_struct if best_struct is not None else float(rr_tp)
+        return resolve_trader_tp(
+            direction=direction,
+            entry_price=entry_price,
+            sl_price=sl_price,
+            rr_ratio=rr_ratio,
+            targets=targets,
+            max_tp_distance=max_tp_distance,
+        )
 
     def _decode_action(
         self,
@@ -1261,6 +1312,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             self._check_sl_tp(bar, fill_bid, fill_ask)
             self._apply_position_guards(bar, bar_time, fill_bid, fill_ask, eod=False)
 
+        self._peak_dd_fired = False
+        peak_dd_block = self._apply_peak_trailing_dd(fill_bid, fill_ask, bar_time)
+
         # Action handling
         if not done:
             if not self.strategy_actions and action == 19:  # exit action
@@ -1281,7 +1335,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     self.position = None
                     self.sessions_with_trades.add(session_id)
                     self._note_close(pnl)
-            elif discrete_action != 0 and not session_blocked:  # enter_long or enter_short
+            elif discrete_action != 0 and not session_blocked and not peak_dd_block:
                 # Soft brick: stop new entries on daily-loss or trailing-DD
                 # soft limits; hard breaches still use session_blocked.
                 if self.guardrails.check_soft_daily(
@@ -1307,9 +1361,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.pnl_history.append(pnl_step)
 
         reward = self._calculate_reward(pnl_step, bar, feat_row, done, truncated)
+        if self.peak_trailing_dd_limit > 0.0 and self._peak_dd_fired:
+            # One-bar penalty for hitting the peak-DD ceiling. Not a stop rewrite.
+            reward -= 1.0
 
         obs = self._get_observation()
-        info = {
+        info: dict[str, Any] = {
             "equity": self.account.equity,
             "position": self.position is not None,
             **{f"entry_{k}": v for k, v in self._entry_diag.items()},
@@ -1327,6 +1384,17 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # (terminated) into a pure truncation when the cap also fires.
         if self.max_episode_steps is not None and self.episode_step_count >= self.max_episode_steps:
             truncated = True
+
+        self._ep_reward_sum += float(reward)
+        if done or truncated:
+            n_trades = sum(1 for t in self.trade_log if t.get("type") == "open")
+            info["episode_equity"] = {
+                "end_equity": float(self.account.equity),
+                "start_equity": float(self._ep_start_equity),
+                "reward_sum": float(self._ep_reward_sum),
+                "n_trades": int(n_trades),
+                "breach_reason": str(self.breach_log[-1]) if self.breach_log else "",
+            }
 
         return obs, float(reward), done, truncated, info
 

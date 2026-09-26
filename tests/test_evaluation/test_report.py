@@ -57,6 +57,12 @@ class TestReportTables:
         for label in ("Sharpe", "Max Drawdown", "Breach Rate", "Max Consec Loss", "Turnover"):
             assert label in table
 
+    def test_total_return_is_not_scaled_twice(self) -> None:
+        # 1015.58 / 100_000 * 100 = 1.01558 percent, which prints as 1.02%.
+        table = build_summary_table(_metrics(1015.58, 2))
+        assert "1.02%" in table
+        assert "101.56%" not in table
+
     def test_comparison_table_train_and_test_columns(self) -> None:
         # Act
         table = build_comparison_table(_metrics(100.0, 2), _metrics(-30.0, 1))

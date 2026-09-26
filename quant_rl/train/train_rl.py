@@ -52,9 +52,11 @@ from quant_rl.train.auxiliary_training import AuxiliaryTrainerCallback
 from quant_rl.train.callbacks import (
     BestCheckpointEvalCallback,
     ClipLogStdCallback,
+    EpisodeEquityCallback,
     PeriodicCheckpointCallback,
     ProgressLoggerCallback,
 )
+from quant_rl.train.equity_gate import assess_train_equity
 from quant_rl.utils.device import get_device, scale_training_cfg
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -250,6 +252,7 @@ def make_env(
         entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
         reward_mode=str(cfg.env.get("reward_mode", "dsr")),
         entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
+        peak_trailing_dd_limit=float(cfg.env.get("peak_trailing_dd_limit", 0.0)),
         use_vae=use_vae,
         vae=vae,
         pre_ny_by_date=pre_ny_by_date,
@@ -552,18 +555,21 @@ def main() -> None:
         | BestCheckpointEvalCallback
         | ProgressLoggerCallback
         | ClipLogStdCallback
+        | EpisodeEquityCallback
     ] = [c for c in (checkpoint_callback, aux_cb) if c is not None]
 
-    # Best-checkpoint eval: every N rollouts, evaluate on a fresh copy of the
-    # training env (episodic=False so guardrail breaches don't kill the run)
-    # and save the best policy to model_dir/best_model. PPO's final save is
-    # rarely the best one; this gives us a "best-so-far" snapshot for the
-    # final test evaluation.
-    best_eval_freq = max(1, timesteps)  # eval once at end — avoids CPU-only stalls during training
+    callbacks.append(EpisodeEquityCallback(log_path=model_dir / "episode_equity.csv"))
+
+    # Best checkpoint: one short prefix of the train calendar, scored by
+    # end equity. A full-year replay is the post-train gate, not this callback.
+    short_n = min(20_000, len(train_bars))
+    short_bars = train_bars.iloc[:short_n]
+    short_feat = train_feat.iloc[:short_n]
+    best_eval_freq = max(1, timesteps)  # once at the end — a full-year eval here stalls training
     best_cb = BestCheckpointEvalCallback(
         eval_env_factory=lambda: make_env(
-            train_bars,
-            train_feat,
+            short_bars,
+            short_feat,
             cfg,
             algo=args.algo,
             reward=args.reward,
@@ -640,6 +646,7 @@ def main() -> None:
         entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
         reward_mode=str(cfg.env.get("reward_mode", "dsr")),
         entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
+        peak_trailing_dd_limit=float(cfg.env.get("peak_trailing_dd_limit", 0.0)),
     )
     log.info("Evaluating trained model on test set...")
     test_result = evaluate_model(
@@ -691,6 +698,14 @@ def main() -> None:
         n_breach_sessions=train_result.get("n_breach_sessions", 0),
     )
     train_dir_sum = _direction_summary(train_result["trades"])
+    train_gate = assess_train_equity(
+        train_result["equity"],
+        initial=float(cfg.account.initial_balance),
+        breached=not bool(train_result.get("survived_full_year", False)),
+    )
+    (run_dir / "train_equity_gate.json").write_text(json.dumps(train_gate, indent=2))
+    if not train_gate["ok"]:
+        log.error("TRAIN_EQUITY_FAILED %s", train_gate)
     log.info(
         "[train] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%  "
         "survived=%s  days=%d/%d  fail_time=%s  max_trailing_dd=%.2f%%  direction=%s  entry_diag=%s",
@@ -768,7 +783,15 @@ def main() -> None:
         else str(cfg.strategy.get("name", args.strategy)),
         strategy_actions=strategy_actions,
     )
+    training_log["train_equity_ok"] = bool(train_gate["ok"])
+    training_log["train_end_equity"] = float(train_gate["end_equity"])
+    training_log["train_equity_slope"] = float(train_gate["slope"])
+    training_log["train_equity_reason"] = str(train_gate["reason"])
     (run_dir / "training_log.json").write_text(json.dumps(training_log, indent=2))
+    if not train_gate["ok"]:
+        raise SystemExit(
+            f"TRAIN_EQUITY_FAILED: train-year equity did not rise ({train_gate['reason']})"
+        )
 
     # Optional wandb logging — the sweep (config/wandb_sweep.yaml) reads
     # these same keys when it launches this entrypoint.

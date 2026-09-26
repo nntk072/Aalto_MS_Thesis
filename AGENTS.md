@@ -148,11 +148,11 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
   there (`tmux send-keys`).
 - **`srun` needs confirmation:** agents may allocate only after you explicitly
   OK it in-chat. No self-started short diagnostic jobs (&lt;~120s).
-- **Before alloc:** check `sinfo`/`squeue` for free GPU/CPU/RAM. Prefer
-  **H200** (`gpu-h200-141g-short`, `--gpus=h200:1`) when available; else
-  **GH200** (`gpu-grace-h200-141g`, `--gpus=gh200:1`). Always **1 GPU**.
-  Time **12h** if `MaxTime` allows, else **6h**. Start mem 128G / 8 CPUs.
-  Match venv arch (H200=x86, GH200=aarch64).
+- **Before alloc:** check `sinfo`/`squeue` for free GPU/CPU/RAM. **1 GPU**
+  for one model (`gh200:1` or `h200:1`, `--mem=512G`, 48 CPUs, **6h or 12h**).
+  **2 GPUs** for the six-run matrix (`gh200:2`, `--mem=900G`, 128 CPUs, 6h).
+  Never 3+. Match venv arch (H200=x86, GH200=aarch64). Login has no GPU and
+  not enough RAM for `n_envs=64`.
 - **Do not `scancel`** when a train finishes — keep the GPU bash + tmux for
   the next run (unless you ask, or replacing an OOM).
 - Login SSH for `ls` / `squeue` / `sinfo` / `tmux capture-pane` / inspect-only

@@ -23,6 +23,9 @@ import pandas as pd
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 
+from .order_window import _extend_trade_window as _extend_trade_window
+from .order_window import _extract_window as _extract_window
+from .order_window import _structure_anchors as _structure_anchors
 from .plot_series import (
     apply_mpl_date_axis,
     daily_drawdown_usd,
@@ -903,72 +906,6 @@ def _per_trade_equity(
     return pd.DatetimeIndex(times), vals
 
 
-def _align_ts(ts: pd.Timestamp, index: pd.DatetimeIndex) -> pd.Timestamp:
-    """Localize/convert ``ts`` to match ``index`` timezone."""
-    out = pd.Timestamp(ts)
-    if index.tz is None:
-        return out.tz_localize(None) if out.tzinfo is not None else out
-    if out.tzinfo is None:
-        return out.tz_localize(index.tz)
-    return out.tz_convert(index.tz)
-
-
-def _ny_session_positions(
-    index: pd.DatetimeIndex,
-    t_open: pd.Timestamp,
-    t_close: pd.Timestamp,
-) -> np.ndarray[Any, Any]:
-    """Integer positions of NY bars on calendar days spanned by the trade."""
-    from quant_rl.data.session import ny_session_mask
-
-    t0 = _align_ts(t_open, index)
-    t1 = _align_ts(t_close, index)
-    day0 = t0.normalize()
-    day1 = t1.normalize()
-    ny = ny_session_mask(index).to_numpy()
-    norms = pd.DatetimeIndex(index).normalize()
-    same_days = (norms == day0) | (norms == day1)
-    return np.flatnonzero(ny & np.asarray(same_days))
-
-
-def _extract_window(
-    bars: pd.DataFrame,
-    t_open: pd.Timestamp,
-    t_close: pd.Timestamp,
-    context: int,
-) -> pd.DataFrame:
-    """Return M1 bars around a trade, capped to the trade's NY session(s).
-
-    Context bars before entry / after exit never cross into the next (or
-    previous) NY session. When the spine holds full-day bars, overnight and
-    next-session candles are excluded so a ``%H:%M`` axis cannot paint two
-    days on top of each other after an ``eod_close``.
-    """
-    idx = pd.DatetimeIndex(bars.index)
-    i_o = int(idx.get_indexer(pd.Index([_align_ts(t_open, idx)]), method="nearest")[0])
-    i_c = int(idx.get_indexer(pd.Index([_align_ts(t_close, idx)]), method="nearest")[0])
-    if i_o < 0 or i_c < 0:
-        return pd.DataFrame(columns=bars.columns)
-
-    session_pos = _ny_session_positions(idx, t_open, t_close)
-    if session_pos.size == 0:
-        i_s = max(0, min(i_o, i_c) - context)
-        i_e = min(len(bars) - 1, max(i_o, i_c) + context)
-        return bars.iloc[i_s : i_e + 1]
-
-    sess_start = int(session_pos[0])
-    sess_end = int(session_pos[-1])
-    i_o = min(max(i_o, sess_start), sess_end)
-    i_c = min(max(i_c, sess_start), sess_end)
-    i_s = max(sess_start, min(i_o, i_c) - context)
-    i_e = min(sess_end, max(i_o, i_c) + context)
-
-    # Keep only NY bars inside the window so overnight holes never appear.
-    window = bars.iloc[i_s : i_e + 1]
-    keep = np.isin(np.arange(i_s, i_e + 1), session_pos)
-    return window.iloc[keep]
-
-
 def _axis_date_format(window: pd.DataFrame) -> str:
     """``%H:%M`` for a single calendar day; include month/day otherwise."""
     idx = pd.DatetimeIndex(window.index)
@@ -1019,6 +956,7 @@ def plot_per_trade_orders(
     contract_size: float = 1.0,
     show_mae_mfe: bool = True,
     show_sl_tp: bool = True,
+    show_vwap: bool = False,
     secondary_bars: pd.DataFrame | None = None,
 ) -> None:
     """Generate 2-panel PNG per trade with datetime axes, EMA50, MACD, and trade info.
@@ -1042,18 +980,20 @@ def plot_per_trade_orders(
     contract_size : Contract size.
     show_mae_mfe : Whether to plot MAE/MFE lines.
     show_sl_tp : Whether to plot SL/TP lines.
+    show_vwap : Draw session VWAP. Off until the feed has real tick volume.
     secondary_bars : Optional US500 (or correlated) bars for SMT lines.
     """
     import matplotlib.dates as mdates
 
-    from .chart_indicators import compute_chart_overlays_full, slice_overlays
+    from .chart_indicators import compute_chart_overlays_full
     from .chart_overlays import (
         VWAP_COLOR,
         build_overlay_events,
         draw_macd_rsi_mpl,
         draw_overlays_mpl,
     )
-    from .trade_metrics import compute_trade_metrics
+    from .order_chart import draw_order_levels_mpl
+    from .order_window import prepare_order_chart
 
     orders_dir = Path(orders_dir)
     orders_dir.mkdir(parents=True, exist_ok=True)
@@ -1076,27 +1016,33 @@ def plot_per_trade_orders(
     overlay_events = build_overlay_events(bars, secondary=secondary_bars)
 
     for seq_i, (open_row, close_row) in enumerate(pairs):
-        t_open = pd.Timestamp(open_row["time"])
-        t_close = pd.Timestamp(close_row["time"])
-        window = _extract_window(bars, t_open, t_close, context_bars)
-        if len(window) < 3:
-            continue
-
-        direction = int(open_row["direction"]) if pd.notna(open_row.get("direction")) else 0
-        pnl = float(close_row["pnl"]) if pd.notna(close_row.get("pnl")) else 0.0
-        close_type = str(close_row["type"])
-
-        # Compute metrics
-        metrics = compute_trade_metrics(
+        prepared = prepare_order_chart(
             bars,
             open_row,
             close_row,
+            overlay_events=overlay_events,
+            full_overlays=full_overlays,
+            context_bars=context_bars,
             max_loss_per_trade_usd=max_loss_per_trade_usd,
             take_profit_per_trade_usd=take_profit_per_trade_usd,
             lots=lots,
             contract_size=contract_size,
+            show_mae_mfe=show_mae_mfe,
+            show_sl_tp=show_sl_tp,
         )
-        overlays = slice_overlays(full_overlays, window.index)
+        if prepared is None:
+            continue
+        window = prepared.window
+        metrics = prepared.metrics
+        overlays = prepared.overlays
+        levels = prepared.levels
+        events = prepared.events
+        t_open = prepared.t_open
+        t_close = prepared.t_close
+
+        direction = int(open_row["direction"]) if pd.notna(open_row.get("direction")) else 0
+        pnl = float(close_row["pnl"]) if pd.notna(close_row.get("pnl")) else 0.0
+        close_type = str(close_row["type"])
 
         # Create 2-panel figure: price + dual-axis MACD/RSI
         fig, (ax_price, ax_osc) = plt.subplots(
@@ -1144,81 +1090,18 @@ def plot_per_trade_orders(
             label="EMA50",
             zorder=3,
         )
-        ax_price.plot(
-            window.index,
-            overlays["vwap"],
-            color=VWAP_COLOR,
-            linewidth=1.7,
-            linestyle="-.",
-            label="VWAP",
-            zorder=3,
-        )
-        events = overlay_events.clip(pd.Timestamp(window.index[0]), pd.Timestamp(window.index[-1]))
+        if show_vwap:
+            ax_price.plot(
+                window.index,
+                overlays["vwap"],
+                color=VWAP_COLOR,
+                linewidth=1.7,
+                linestyle="-.",
+                label="VWAP",
+                zorder=3,
+            )
         draw_overlays_mpl(ax_price, events)
-
-        # Entry marker
-        ep_entry = metrics.entry_price
-        ax_price.scatter(
-            [t_open],
-            [ep_entry],
-            marker="^" if direction == 1 else "v",
-            s=200,
-            color="#00cc00",
-            zorder=5,
-            label="Entry",
-        )
-
-        # Exit marker
-        ep_exit = metrics.exit_price
-        ax_price.scatter(
-            [t_close],
-            [ep_exit],
-            marker="v" if direction == 1 else "^",
-            s=150,
-            color="#ff0000",
-            zorder=5,
-            label="Exit",
-        )
-
-        # MAE/MFE
-        if show_mae_mfe:
-            ax_price.axhline(
-                metrics.mae_price,
-                color="#ff6666",
-                linewidth=1,
-                linestyle="--",
-                alpha=0.5,
-                label="MAE",
-            )
-            ax_price.axhline(
-                metrics.mfe_price,
-                color="#66ff66",
-                linewidth=1,
-                linestyle="--",
-                alpha=0.5,
-                label="MFE",
-            )
-
-        # SL/TP
-        if show_sl_tp:
-            if metrics.sl_price is not None:
-                ax_price.axhline(
-                    metrics.sl_price,
-                    color="#ff0000",
-                    linewidth=0.8,
-                    linestyle=":",
-                    alpha=0.5,
-                    label="SL",
-                )
-            if metrics.tp_price is not None:
-                ax_price.axhline(
-                    metrics.tp_price,
-                    color="#00cc00",
-                    linewidth=0.8,
-                    linestyle=":",
-                    alpha=0.5,
-                    label="TP",
-                )
+        draw_order_levels_mpl(ax_price, levels)
 
         # Formatting
         ax_price.set_ylabel("Price")
@@ -1264,6 +1147,8 @@ def plot_per_trade_orders(
             f"PnL (calc): {pnl_calc:+.2f}\n"
             f"Reason: {close_reason_detail}"
         )
+        if levels.notes:
+            trade_info = trade_info + "\n" + "\n".join(levels.notes)
         props = dict(boxstyle="round", facecolor="wheat", alpha=0.8)
         ax_price.text(
             0.98,
