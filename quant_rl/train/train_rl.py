@@ -33,8 +33,8 @@ from omegaconf import DictConfig, OmegaConf
 
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import build_tick_books, run_pipeline
-from quant_rl.data.ticks import TickBook, ticks_covering
 from quant_rl.data.split import get_split_config, make_train_mask, split_bars, split_train_test
+from quant_rl.data.ticks import TickBook, ticks_covering
 from quant_rl.envs.distribution_reward import DistributionReward
 from quant_rl.envs.po3_reward import PO3Reward
 from quant_rl.envs.strategies import (
@@ -53,10 +53,12 @@ from quant_rl.train.auxiliary_training import AuxiliaryTrainerCallback
 from quant_rl.train.callbacks import (
     BestCheckpointEvalCallback,
     ClipLogStdCallback,
+    EarlyAbortCallback,
     EpisodeEquityCallback,
     PeriodicCheckpointCallback,
     ProgressLoggerCallback,
 )
+from quant_rl.train.dashboard import TrainingDashboardCallback
 from quant_rl.train.equity_gate import assess_train_equity
 from quant_rl.utils.device import get_device, scale_training_cfg
 
@@ -207,6 +209,109 @@ def _publish_obs_memmap(features: pd.DataFrame, cfg: Any, path: Path) -> str | N
     return str(path)
 
 
+def _early_abort_callback(cfg: Any) -> EarlyAbortCallback | None:
+    """Build the mid-training stop, or ``None`` when the config disables it."""
+    training = cfg.get("training") if hasattr(cfg, "get") else None
+    block: Any = {}
+    if training is not None:
+        raw = training.get("early_abort", {})
+        if raw is not None:
+            block = raw
+    if not bool(block.get("enabled", True)):
+        return None
+    return EarlyAbortCallback(
+        min_timesteps=int(block.get("min_timesteps", 2_000_000)),
+        window=int(block.get("window", 4)),
+        stop_on_nonfinite=bool(block.get("stop_on_nonfinite", True)),
+        stop_on_no_trades=bool(block.get("stop_on_no_trades", True)),
+        stop_on_equity_gate=bool(block.get("stop_on_equity_gate", True)),
+    )
+
+
+def _dashboard_block(cfg: Any) -> Any:
+    """``training.dashboard`` config, or an empty mapping when it is absent."""
+    training = cfg.get("training") if hasattr(cfg, "get") else None
+    if training is None:
+        return {}
+    raw = training.get("dashboard", {})
+    return {} if raw is None else raw
+
+
+def _build_eval_common(
+    cfg: Any,
+    args: Any,
+    env_vae: Any,
+    pre_ny_by_date: dict[Any, Any] | None,
+) -> tuple[dict[str, Any], Any, Any, float, bool]:
+    """Kwargs shared by the in-loop dashboard slice and the final eval."""
+    strategy, strategy_reward, strategy_weight = _strategy_from_cfg(cfg)
+    strategy_actions = bool(cfg.env.get("strategy_actions", False))
+    sl_buffer_pts = float(cfg.env.get("sl_buffer_pts", 0.0))
+    risk_frac_range, rr_ratio_range = _strategy_risk_ranges(cfg)
+    eval_common = {
+        "obs_window": cfg.env.obs_window,
+        "initial_balance": cfg.account.initial_balance,
+        "guardrail_kwargs": _eval_guardrail_kwargs(cfg),
+        "risk_frac_range": risk_frac_range,
+        "rr_ratio_range": rr_ratio_range,
+        "swing_buffer_pts": cfg.risk.swing_buffer_pts,
+        "contract_size": cfg.account.contract_size,
+        "max_loss_per_trade_usd": _max_loss_per_trade(cfg),
+        "dsr_eta": cfg.env.reward_dsr_eta,
+        "continuous_actions": (args.algo == "sac"),
+        "use_sweep_reward": (args.reward == "sweep"),
+        "block_overnight": bool(cfg.env.get("block_overnight", True)),
+        "eod_risk": dict(cfg.env.get("eod_risk", {})),
+        "use_vae": args.use_vae,
+        "vae": env_vae,
+        "strategy": strategy,
+        "strategy_actions": strategy_actions,
+        "strategy_reward": strategy_reward,
+        "strategy_weight": strategy_weight,
+        "sl_buffer_pts": sl_buffer_pts,
+        "pre_ny_by_date": pre_ny_by_date,
+        "min_sl_atr_mult": float(cfg.risk.get("min_sl_atr_mult", 0.5)),
+        "min_sl_points": float(cfg.risk.get("min_sl_points", 0.0)),
+        "max_entries_per_session": int(cfg.env.get("max_entries_per_session", 0)),
+        "entry_cooldown_bars": int(cfg.env.get("entry_cooldown_bars", 0)),
+        "reward_mode": str(cfg.env.get("reward_mode", "dsr")),
+        "entry_intensity_threshold": float(cfg.env.get("entry_intensity_threshold", 0.0)),
+        "peak_trailing_dd_limit": float(cfg.env.get("peak_trailing_dd_limit", 0.0)),
+        "agent_direction_control": bool(cfg.env.get("agent_direction_control", False)),
+        "direction_override_threshold": float(cfg.env.get("direction_override_threshold", 0.0)),
+        "fill_delay_ms": _fill_delay_ms(cfg),
+    }
+    return eval_common, strategy, strategy_reward, strategy_weight, strategy_actions
+
+
+def _log_effective_ppo(model: Any, cfg: Any) -> None:
+    """Print the PPO settings the run actually uses, after the n_envs split."""
+    n_steps = int(model.n_steps)
+    n_envs = int(model.n_envs)
+    strategy_name = (
+        str(cfg.strategy.get("name", "strategy"))
+        if bool(cfg.env.get("strategy_actions", False))
+        else "baseline"
+    )
+    log.info(
+        "PPO effective: n_envs=%d n_steps=%d rollout=%d batch=%s epochs=%s lr=%s "
+        "gamma=%s clip=%s ent_coef=%s log_std=[%s,%s] reward_mode=%s strategy=%s",
+        n_envs,
+        n_steps,
+        n_steps * n_envs,
+        cfg.ppo.batch_size,
+        cfg.ppo.n_epochs,
+        cfg.ppo.learning_rate,
+        cfg.ppo.gamma,
+        cfg.ppo.clip_range,
+        model.ent_coef,
+        cfg.ppo.get("log_std_min", -0.7),
+        cfg.ppo.get("log_std_max", 0.0),
+        cfg.env.get("reward_mode", "dsr"),
+        strategy_name,
+    )
+
+
 def _fill_delay_ms(cfg: Any) -> int:
     """Milliseconds between the crossing tick and the SL/TP fill."""
     execution = cfg.get("execution") if hasattr(cfg, "get") else None
@@ -266,6 +371,8 @@ def make_env(
         reward_mode=str(cfg.env.get("reward_mode", "dsr")),
         entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
         peak_trailing_dd_limit=float(cfg.env.get("peak_trailing_dd_limit", 0.0)),
+        agent_direction_control=bool(cfg.env.get("agent_direction_control", False)),
+        direction_override_threshold=float(cfg.env.get("direction_override_threshold", 0.0)),
         tickbook=tickbook,
         fill_delay_ms=_fill_delay_ms(cfg),
         use_vae=use_vae,
@@ -549,6 +656,7 @@ def main() -> None:
             obs_features_mmap=obs_mmap,
         ),
     )
+    _log_effective_ppo(model, cfg)
 
     aux_cb = None
     aux_cfg = getattr(cfg, "auxiliary", None)
@@ -573,9 +681,14 @@ def main() -> None:
         | ProgressLoggerCallback
         | ClipLogStdCallback
         | EpisodeEquityCallback
+        | EarlyAbortCallback
+        | TrainingDashboardCallback
     ] = [c for c in (checkpoint_callback, aux_cb) if c is not None]
 
     callbacks.append(EpisodeEquityCallback(log_path=model_dir / "episode_equity.csv"))
+    abort_cb = _early_abort_callback(cfg)
+    if abort_cb is not None:
+        callbacks.append(abort_cb)
 
     # Best checkpoint: one short prefix of the train calendar, scored by
     # end equity. A full-year replay is the post-train gate, not this callback.
@@ -611,7 +724,63 @@ def main() -> None:
             )
         )
 
+    eval_common, _strategy, _strategy_reward, _strategy_weight, strategy_actions = (
+        _build_eval_common(cfg, args, env_vae, pre_ny_by_date)
+    )
+    dash = _dashboard_block(cfg)
+    if bool(dash.get("enabled", True)):
+        eval_bars = int(dash.get("eval_bars", 20_000))
+        slice_n = min(eval_bars, len(train_bars))
+        dash_bars = train_bars.iloc[:slice_n]
+        dash_feat = train_feat.iloc[:slice_n]
+
+        def _dashboard_eval() -> dict[str, float]:
+            result = evaluate_model(
+                model,
+                bars=dash_bars,
+                features=dash_feat,
+                max_episode_steps=None,
+                tickbook=ticks_covering(primary_ticks, dash_bars),
+                **eval_common,
+            )
+            metrics = calculate_metrics(
+                result["equity"],
+                trades=result["trades"],
+                n_sessions=result.get("n_sessions", 1),
+                n_breach_sessions=result.get("n_breach_sessions", 0),
+            )
+            n_steps = max(1, int(result.get("n_steps", 1)))
+            return {
+                "return_pct": float(metrics.total_return_pct),
+                "sharpe": float(metrics.sharpe),
+                "sortino": float(metrics.sortino),
+                "max_drawdown": float(metrics.max_drawdown),
+                "profit_factor": float(metrics.profit_factor),
+                "win_rate": float(metrics.win_rate),
+                "avg_trade": float(metrics.avg_trade),
+                "n_trades": float(metrics.n_trades),
+                "turnover": float(metrics.turnover),
+                "reward_mean": float(result.get("reward_sum", 0.0)) / n_steps,
+            }
+
+        callbacks.append(
+            TrainingDashboardCallback(
+                total_timesteps=timesteps,
+                eval_every=int(dash.get("eval_every", 100_000)),
+                eval_fn=_dashboard_eval,
+            )
+        )
+
     model.learn(total_timesteps=timesteps, callback=callbacks)
+    abort_reason = abort_cb.reason if abort_cb is not None else None
+    if abort_reason:
+        (run_dir / "early_abort.json").write_text(
+            json.dumps(
+                {"reason": abort_reason, "timesteps": int(model.num_timesteps)},
+                indent=2,
+            )
+        )
+        log.error("EARLY_ABORT %s at timesteps=%s", abort_reason, model.num_timesteps)
 
     # Save final model
     model_path = model_dir / "ppo_final"
@@ -632,41 +801,6 @@ def main() -> None:
         log.warning("Training progress plots skipped: %s", exc)
 
     # Evaluate the trained model on the held-out test set (out-of-sample).
-    strategy, strategy_reward, strategy_weight = _strategy_from_cfg(cfg)
-    strategy_actions = bool(cfg.env.get("strategy_actions", False))
-    sl_buffer_pts = float(cfg.env.get("sl_buffer_pts", 0.0))
-    risk_frac_range, rr_ratio_range = _strategy_risk_ranges(cfg)
-    eval_common = dict(
-        obs_window=cfg.env.obs_window,
-        initial_balance=cfg.account.initial_balance,
-        guardrail_kwargs=_eval_guardrail_kwargs(cfg),
-        risk_frac_range=risk_frac_range,
-        rr_ratio_range=rr_ratio_range,
-        swing_buffer_pts=cfg.risk.swing_buffer_pts,
-        contract_size=cfg.account.contract_size,
-        max_loss_per_trade_usd=_max_loss_per_trade(cfg),
-        dsr_eta=cfg.env.reward_dsr_eta,
-        continuous_actions=(args.algo == "sac"),
-        use_sweep_reward=(args.reward == "sweep"),
-        block_overnight=bool(cfg.env.get("block_overnight", True)),
-        eod_risk=dict(cfg.env.get("eod_risk", {})),
-        use_vae=args.use_vae,
-        vae=env_vae,
-        strategy=strategy,
-        strategy_actions=strategy_actions,
-        strategy_reward=strategy_reward,
-        strategy_weight=strategy_weight,
-        sl_buffer_pts=sl_buffer_pts,
-        pre_ny_by_date=pre_ny_by_date,
-        min_sl_atr_mult=float(cfg.risk.get("min_sl_atr_mult", 0.5)),
-        min_sl_points=float(cfg.risk.get("min_sl_points", 0.0)),
-        max_entries_per_session=int(cfg.env.get("max_entries_per_session", 0)),
-        entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
-        reward_mode=str(cfg.env.get("reward_mode", "dsr")),
-        entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
-        peak_trailing_dd_limit=float(cfg.env.get("peak_trailing_dd_limit", 0.0)),
-        fill_delay_ms=_fill_delay_ms(cfg),
-    )
     log.info("Evaluating trained model on test set...")
     test_result = evaluate_model(
         model,
@@ -808,6 +942,8 @@ def main() -> None:
     training_log["train_end_equity"] = float(train_gate["end_equity"])
     training_log["train_equity_slope"] = float(train_gate["slope"])
     training_log["train_equity_reason"] = str(train_gate["reason"])
+    training_log["early_abort_reason"] = abort_reason or ""
+    training_log["timesteps_completed"] = int(model.num_timesteps)
     (run_dir / "training_log.json").write_text(json.dumps(training_log, indent=2))
     if not train_gate["ok"]:
         raise SystemExit(
@@ -937,6 +1073,10 @@ def main() -> None:
                 entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
                 reward_mode=str(cfg.env.get("reward_mode", "dsr")),
                 entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
+                agent_direction_control=bool(cfg.env.get("agent_direction_control", False)),
+                direction_override_threshold=float(
+                    cfg.env.get("direction_override_threshold", 0.0)
+                ),
                 tickbook=ticks_covering(primary_ticks, fold_test_bars),
                 fill_delay_ms=_fill_delay_ms(cfg),
             )

@@ -97,6 +97,26 @@ class TestSuggestNEnvs:
         )
         assert n == 64
 
+    def test_gh200_allows_128_for_600g_allocation(self) -> None:
+        n = suggest_n_envs(
+            requested=8,
+            total_ram_bytes=600 * _GiB,
+            available_ram_bytes=600 * _GiB,
+            cpu_count=48,
+            vram_bytes=142 * _GiB,
+        )
+        assert n == 128
+
+    def test_gh200_stays_at_64_on_512g_even_when_requested_128(self) -> None:
+        n = suggest_n_envs(
+            requested=128,
+            total_ram_bytes=512 * _GiB,
+            available_ram_bytes=512 * _GiB,
+            cpu_count=48,
+            vram_bytes=142 * _GiB,
+        )
+        assert n == 64
+
     def test_cpu_does_not_scale_up(self) -> None:
         n = suggest_n_envs(
             requested=4,

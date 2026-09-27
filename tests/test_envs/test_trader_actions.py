@@ -185,7 +185,7 @@ class TestContextDirectionForcesSide:
 
 
 class TestRRMapping:
-    def test_rr_always_at_least_1_5(self) -> None:
+    def test_reward_fraction_tracks_the_action(self) -> None:
         bars = _bars()
         feats = _features(bars)
         env = TradingEnv(
@@ -198,11 +198,11 @@ class TestRRMapping:
             rr_ratio_range=(1.5, 5.0),
         )
         for t in (0.0, 0.25, 0.5, 0.75, 1.0):
-            _d, _r, rr, _tp = env._decode_action(
+            _d, _r, frac, _tp = env._decode_action(
                 np.array([0.9, 0.0, 0.5, t], dtype=np.float32),
                 feats.iloc[10],
             )
-            assert rr >= 1.5 - 1e-9
+            assert frac == pytest.approx(0.5 * (t + 1.0))
 
 
 class TestMinSL:

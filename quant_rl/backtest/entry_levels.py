@@ -1,7 +1,7 @@
-"""Strategy stop filter and take-profit choice.
+"""Strategy stop filter and dynamic take-profit.
 
-The env still opens the trade, sizes it, and writes the log. This module only
-decides whether a structural stop and reward-ratio target are allowed.
+The env still opens the trade, sizes it, and writes the log. This module
+places the stop on structure and the target on this bar's reachable reward.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ import numpy as np
 import pandas as pd
 
 from quant_rl.backtest.risk import compute_sl_tp_from_structure
-from quant_rl.backtest.tp_reach import rr_reaches
 
 
 def filter_sl_candidates(
@@ -36,41 +35,36 @@ def filter_sl_candidates(
     return valid
 
 
-def resolve_trader_tp(
+def dynamic_tp(
     *,
     direction: int,
     entry_price: float,
     sl_price: float,
-    rr_ratio: float,
-    targets: dict[str, float],
+    reward_fraction: float,
     max_tp_distance: float | None = None,
-) -> float:
-    """RR TP, or the nearest structural target that still meets the ratio.
+) -> tuple[float | None, bool]:
+    """Place the target between the stop distance and this bar's reachable distance.
 
-    Levels farther than ``max_tp_distance`` are ignored. Among the rest, the
-    nearest level at or beyond the chosen ratio wins.
+    ``reward_fraction`` is in ``[0, 1]``. At 0 the target sits one stop-distance
+    away (1R). At 1 it sits at ``max_tp_distance``, which may be past 5R.
+    The realized ratio is that distance divided by the stop distance.
+
+    Returns ``(tp_price, rejected)``. Rejected when a finite reachable
+    distance is shorter than the stop, so the bar cannot pay 1R. A non-finite
+    distance has no measured room, so the target stays at 1R.
     """
-    risk = abs(entry_price - sl_price)
-    rr_tp = entry_price + direction * rr_ratio * risk
-    best_struct: float | None = None
-    best_implied = float("inf")
-    cap = float(max_tp_distance) if max_tp_distance is not None else float("nan")
-    for level in targets.values():
-        if not np.isfinite(level):
-            continue
-        dist = abs(float(level) - entry_price)
-        if np.isfinite(cap) and dist > cap + 1e-9:
-            continue
-        if direction == 1 and level > entry_price:
-            implied = (level - entry_price) / risk if risk > 0 else 0.0
-        elif direction == -1 and level < entry_price:
-            implied = (entry_price - level) / risk if risk > 0 else 0.0
-        else:
-            continue
-        if implied >= rr_ratio and implied < best_implied:
-            best_implied = implied
-            best_struct = float(level)
-    return best_struct if best_struct is not None else float(rr_tp)
+    if direction not in (1, -1):
+        return None, False
+    risk = abs(float(entry_price) - float(sl_price))
+    if risk <= 1e-12:
+        return None, False
+    frac = float(np.clip(reward_fraction, 0.0, 1.0))
+    room = float(max_tp_distance) if max_tp_distance is not None else float("nan")
+    if np.isfinite(room) and room + 1e-9 < risk:
+        return None, True
+    extra = (room - risk) if np.isfinite(room) and room > risk else 0.0
+    dist = risk + frac * extra
+    return float(entry_price) + direction * dist, False
 
 
 def resolve_strategy_entry(
@@ -78,7 +72,7 @@ def resolve_strategy_entry(
     *,
     direction: int,
     entry_price: float,
-    rr_ratio: float,
+    reward_fraction: float,
     feat_row: pd.Series,
     min_dist: float,
     sl_anchor: float,
@@ -87,9 +81,9 @@ def resolve_strategy_entry(
 ) -> tuple[float | None, float | None, bool]:
     """Return ``(sl, tp, rr_rejected)`` for a strategy entry.
 
-    ``rr_rejected`` is true when the chosen ratio does not fit the recent
-    session range. A non-finite cap allows the trade. Dollar size is left to
-    the caller.
+    The stop is structural. The target is a continuous fraction of this bar's
+    reachable reward. ``rr_rejected`` is true when that reward is shorter
+    than the stop. Dollar size is left to the caller.
     """
     cands = strategy.sl_candidates(direction=direction, row=feat_row)
     if not cands:
@@ -108,26 +102,24 @@ def resolve_strategy_entry(
     idx = min(int(round(anchor * (len(valid) - 1))), len(valid) - 1)
     _name, sl_level = valid[idx]
     try:
-        sl_price, _tp_rr = compute_sl_tp_from_structure(
+        sl_price, _tp_unused = compute_sl_tp_from_structure(
             direction=direction,
             entry_price=entry_price,
             structure_level=float(sl_level),
-            rr_ratio=rr_ratio,
+            rr_ratio=1.0,
             buffer_pts=buffer_pts,
         )
         if abs(entry_price - sl_price) + 1e-12 < min_dist:
             raise ValueError("SL below min distance")
     except ValueError:
         return None, None, False
-    targets = strategy.target_candidates(direction=direction, row=feat_row)
-    tp_price = resolve_trader_tp(
+    tp_price, rejected = dynamic_tp(
         direction=direction,
         entry_price=entry_price,
-        sl_price=sl_price,
-        rr_ratio=rr_ratio,
-        targets=targets,
+        sl_price=float(sl_price),
+        reward_fraction=reward_fraction,
         max_tp_distance=max_tp_distance,
     )
-    if not rr_reaches(entry_price, sl_price, rr_ratio, max_tp_distance):
-        return None, None, True
+    if rejected or tp_price is None:
+        return None, None, rejected
     return float(sl_price), float(tp_price), False

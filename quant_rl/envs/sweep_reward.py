@@ -15,6 +15,8 @@ from typing import Any
 
 import numpy as np
 
+from ..envs.reward import DSRReward, empty_reward_parts
+
 
 class SweepConfirmationReward:
     """Dense, label-free reward with sweep confirmation scoring.
@@ -32,6 +34,12 @@ class SweepConfirmationReward:
         Number of bars price must hold beyond level for confirmation (default: 3)
     cost_per_trade : float
         Estimated transaction cost per trade (default: 0.0)
+    decay_grace_min : float
+        Minutes after the session open before the time decay starts (default: 20)
+    decay_horizon_min : float | None
+        Minutes at which the decay saturates. Defaults to ``alpha / beta`` so
+        the penalty can at most cancel the confirmation bonus it penalises.
+        Pass ``None`` explicitly with ``beta == 0`` to disable the decay.
     """
 
     def __init__(
@@ -40,11 +48,23 @@ class SweepConfirmationReward:
         beta: float = 0.01,
         hold_bars: int = 3,
         cost_per_trade: float = 0.0,
+        decay_grace_min: float = 20.0,
+        decay_horizon_min: float | None = None,
     ):
         self.alpha = alpha
         self.beta = beta
         self.hold_bars = hold_bars
         self.cost_per_trade = cost_per_trade
+        self.decay_grace_min = float(decay_grace_min)
+        # Bound the decay. T_t is a function of the session clock, which grows
+        # with the episode, so an unbounded linear ramp eventually dwarfs both
+        # the PnL term and the confirmation bonus: on a long episode it drove
+        # the value function to NaN. Saturating at alpha/beta keeps this a
+        # shaping term on the same scale as C_t, whatever the bar spacing.
+        if decay_horizon_min is None:
+            self.decay_horizon_min = float(alpha / beta) if beta > 0.0 else 0.0
+        else:
+            self.decay_horizon_min = max(0.0, float(decay_horizon_min))
 
         # State for sweep tracking (reset per episode)
         self.prev_price: float | None = None
@@ -116,8 +136,15 @@ class SweepConfirmationReward:
         # Compute sweep confirmation score C_t
         c_t = self._compute_sweep_score(price, london_high, london_low, asian_high, asian_low)
 
-        # Compute time decay T_t
-        t_t = max(0.0, minutes_since_open - 20.0)
+        # Compute time decay T_t, saturating at the horizon so a long episode
+        # cannot make this term unbounded.
+        t_t = float(
+            np.clip(
+                minutes_since_open - self.decay_grace_min,
+                0.0,
+                self.decay_horizon_min,
+            )
+        )
 
         # Compute transaction cost
         if position_changed:
@@ -268,9 +295,8 @@ class CompositeReward:
         self.strategy_reward = strategy_reward
         self.strategy_weight = strategy_weight
         # Persist DSR/PnL state across steps so EMA estimates accumulate.
-        from ..envs.reward import DSRReward
-
         self._dsr_fn = base_reward if base_reward is not None else DSRReward(eta=dsr_eta)
+        self.last_parts: dict[str, float] = {}
 
     def reset(self) -> None:
         """Reset all component reward functions."""
@@ -335,6 +361,13 @@ class CompositeReward:
                 realized_close_pnl=realized_close_pnl,
                 equity=equity,
             )
+            base_parts = {
+                key: float(value)
+                for key, value in getattr(self._dsr_fn, "last_parts", empty_reward_parts()).items()
+            }
+        else:
+            base_parts = empty_reward_parts()
+            base_parts["dsr"] = float(dsr_reward)
 
         # If sweep parameters are provided, compute sweep reward
         if all(p is not None for p in [price, london_high, london_low, asian_high, asian_low]):
@@ -350,9 +383,12 @@ class CompositeReward:
                 position_changed,
             )
             total = (self.dsr_weight * dsr_reward) + (self.sweep_weight * sweep_r)
+            parts = {key: self.dsr_weight * value for key, value in base_parts.items()}
+            parts["sweep"] = parts.get("sweep", 0.0) + self.sweep_weight * float(sweep_r)
         else:
             # Fallback to DSR only
             total = dsr_reward
+            parts = dict(base_parts)
 
         # Optional strategy-alignment component (event-based; see PO3Reward).
         if self.strategy_reward is not None and total is not None:
@@ -361,5 +397,9 @@ class CompositeReward:
                 required = getattr(sr, "required_inputs", ())
                 inputs = {k: v for k, v in strategy_context.items() if k in required}
                 if inputs:
-                    total = float(total) + self.strategy_weight * float(sr(**inputs))
+                    shaped = self.strategy_weight * float(sr(**inputs))
+                    total = float(total) + shaped
+                    parts["strategy"] = parts.get("strategy", 0.0) + shaped
+        self.last_parts = empty_reward_parts()
+        self.last_parts.update({key: float(value) for key, value in parts.items()})
         return total

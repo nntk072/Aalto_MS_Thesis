@@ -193,6 +193,51 @@ class TestSweepConfirmationReward:
 
         assert r2 == pytest.approx(r1 - 1.0, abs=0.01)
 
+    def test_time_decay_saturates(self) -> None:
+        """The decay must be bounded, not an unbounded linear ramp.
+
+        ``minutes_since_open`` grows with the episode, so an unbounded
+        ``beta * T_t`` eventually dwarfs both the PnL term and the
+        confirmation bonus, which drove the value function to NaN.
+        """
+        reward_fn = SweepConfirmationReward(alpha=0.1, beta=0.01, hold_bars=3)
+
+        def _reward(minutes: float) -> float:
+            reward_fn.reset()
+            return float(
+                reward_fn(
+                    0,
+                    0,
+                    100,
+                    london_high=95,
+                    london_low=90,
+                    asian_high=98,
+                    asian_low=92,
+                    minutes_since_open=minutes,
+                )
+            )
+
+        # Saturates at alpha/beta = 10 minutes past the 20-minute grace.
+        at_horizon = _reward(30.0)
+        far_past = _reward(130_000.0)
+        assert far_past == pytest.approx(at_horizon, abs=1e-9)
+        # And the penalty can at most cancel the confirmation bonus.
+        assert far_past == pytest.approx(-reward_fn.alpha, abs=1e-6)
+
+    def test_time_decay_horizon_is_configurable(self) -> None:
+        reward_fn = SweepConfirmationReward(
+            alpha=0.1, beta=0.01, decay_grace_min=0.0, decay_horizon_min=5.0
+        )
+        reward_fn.reset()
+        r = reward_fn(0, 0, 100, 95, 90, 98, 92, minutes_since_open=1000.0)
+        assert r == pytest.approx(-0.05, abs=1e-6)
+
+    def test_zero_beta_disables_the_decay(self) -> None:
+        reward_fn = SweepConfirmationReward(alpha=0.1, beta=0.0)
+        reward_fn.reset()
+        r = reward_fn(0, 0, 100, 95, 90, 98, 92, minutes_since_open=10_000.0)
+        assert r == pytest.approx(0.0, abs=1e-9)
+
 
 class TestCompositeReward:
     """Tests for CompositeReward class."""

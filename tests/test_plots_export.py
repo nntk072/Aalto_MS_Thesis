@@ -277,6 +277,54 @@ def test_extract_window_pre_entry_stays_in_session():
     assert all(ts.normalize() == pd.Timestamp("2024-12-30") for ts in window.index)
 
 
+def test_extract_window_keeps_post_exit_context_mid_session():
+    """Clamping to the session close must not delete post-exit context.
+
+    A trade that closes mid-session still has ``context`` tradable bars after
+    it, so the exit marker does not sit on the axis edge. Only the overnight
+    gap is dropped.
+    """
+    from quant_rl.eval.plots import _extract_window
+
+    day1 = pd.date_range("2024-12-30 16:30", "2024-12-30 23:00", freq="1min")
+    overnight = pd.date_range("2024-12-30 23:01", "2024-12-31 16:29", freq="1min")
+    idx = day1.union(overnight)
+    bars = pd.DataFrame(
+        {"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5},
+        index=idx,
+    )
+    t_open = pd.Timestamp("2024-12-30 18:00")
+    t_close = pd.Timestamp("2024-12-30 18:10")
+    context = 30
+    window = _extract_window(bars, t_open, t_close, context=context)
+
+    # Full context either side, measured in tradable bars.
+    assert window.index.min() == t_open - pd.Timedelta(minutes=context)
+    assert window.index.max() == t_close + pd.Timedelta(minutes=context)
+    # Never the dead overnight candles.
+    assert window.index.max() <= pd.Timestamp("2024-12-30 23:00")
+
+
+def test_extract_window_keeps_exit_bar_when_trade_runs_past_session():
+    """An overnight-hold exit is after the NY close; the window must keep it."""
+    from quant_rl.eval.plots import _extract_window
+
+    day1 = pd.date_range("2024-12-30 16:30", "2024-12-30 23:00", freq="1min")
+    overnight = pd.date_range("2024-12-30 23:01", "2024-12-31 16:29", freq="1min")
+    idx = day1.union(overnight)
+    bars = pd.DataFrame(
+        {"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5},
+        index=idx,
+    )
+    t_open = pd.Timestamp("2024-12-30 22:50")
+    t_close = pd.Timestamp("2024-12-30 23:10")  # past the NY close
+    window = _extract_window(bars, t_open, t_close, context=10)
+
+    assert not window.empty
+    # The exit bar itself must survive the session clamp.
+    assert t_close in window.index
+
+
 def test_close_time_label_includes_date_across_days():
     from quant_rl.eval.plots import _close_time_label
 

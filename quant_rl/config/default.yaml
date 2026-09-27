@@ -157,10 +157,30 @@ env:
   sl_buffer_pts: 0.0                   # structural stop buffer (0 = exact)
   block_overnight: true                # force-close positions at last NY bar (no gap hold)
   eod_risk:
-    max_loss_usd: 500.0
+    # Intraday adverse-excursion cut, in account currency. This is a floor,
+    # not the primary risk boundary: with `respect_planned_risk` the guard
+    # never fires closer than the trade's own loss at its structural stop, so
+    # a position sized to risk $1,000 is not flattened at $500 before the
+    # setup can play out. 20M seed-50 runs showed ~80% of test losses coming
+    # from this guard on positions whose stops were never touched.
+    max_loss_usd: 1100.0
+    respect_planned_risk: true
+    planned_risk_mult: 1.1
     max_age_hours: 8
     stale_bars: 60
     progress_threshold_atr: 0.25
+    # Breakeven management: once favorable excursion reaches this many stop
+    # distances, the stop moves to entry +/- `breakeven_buffer_pts`. 0 = off.
+    breakeven_trigger_r: 1.0
+    breakeven_buffer_pts: 2.0
+  # Opt-in signed direction control. false keeps the 4-D overlay layout where
+  # `strategy.context_direction` owns the side; true gives the agent a 5-D
+  # action space whose dim 0 is signed conviction, so it can veto or invert
+  # the heuristic when the pattern is failing in the current regime.
+  agent_direction_control: false
+  # Conviction band (distance from the neutral 0.5) below which the agent
+  # defers to the heuristic side. Only used with agent_direction_control.
+  direction_override_threshold: 0.0
 
 ppo:
   n_steps: 2048
@@ -230,6 +250,20 @@ training:
   primary_only: false    # true = ignore secondary symbol entirely
   max_days: null         # null = all data; integer = last N calendar days for training
   total_timesteps_mvp: 8192   # short timestep count used in mvp mode
+  # Stop before total_timesteps when the run is invalid or recent episodes
+  # cannot satisfy the train-year equity gate. Early episodes are ignored.
+  early_abort:
+    enabled: true
+    min_timesteps: 2000000
+    window: 4
+    stop_on_nonfinite: true
+    stop_on_no_trades: true
+    stop_on_equity_gate: true
+  # Terminal block during learn(). Eval is a short deterministic train prefix.
+  dashboard:
+    enabled: true
+    eval_every: 100000
+    eval_bars: 20000
 
 # Chain E Step 0 — auxiliary return-prediction head (opt-in).
 auxiliary:

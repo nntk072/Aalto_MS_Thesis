@@ -309,3 +309,69 @@ def test_sync_bar_arrays_picks_up_mutated_low() -> None:
     assert float(env._low_arr[i]) != 12.0
     env._sync_bar_arrays()
     assert float(env._low_arr[i]) == pytest.approx(12.0)
+
+
+@pytest.mark.unit
+def test_minutes_per_step_is_read_from_the_index() -> None:
+    """The step duration must come from the bars, not a hard-coded factor.
+
+    ``minutes_since_open`` feeds a linear time-decay penalty in the sweep
+    reward, so an assumed 5 minutes on an M1 feed made that term five times
+    too large and let it dominate the PnL component.
+    """
+    from quant_rl.envs.trading_env import _minutes_per_step
+
+    m1 = pd.date_range("2025-01-06 16:30", periods=10, freq="1min", tz="Etc/GMT-3")
+    m5 = pd.date_range("2025-01-06 16:30", periods=10, freq="5min", tz="Etc/GMT-3")
+    assert _minutes_per_step(m1) == pytest.approx(1.0)
+    assert _minutes_per_step(m5) == pytest.approx(5.0)
+
+
+@pytest.mark.unit
+def test_minutes_per_step_falls_back_on_degenerate_index() -> None:
+    from quant_rl.envs.trading_env import _minutes_per_step
+
+    single = pd.date_range("2025-01-06 16:30", periods=1, freq="1min", tz="Etc/GMT-3")
+    assert _minutes_per_step(single) == pytest.approx(1.0)
+
+
+@pytest.mark.unit
+def test_env_derives_minutes_per_step_on_m1_bars() -> None:
+    env = _make_env()
+    assert env._minutes_per_step == pytest.approx(1.0)
+
+
+@pytest.mark.unit
+def test_ny_session_start_defaults_to_the_first_tradable_bar() -> None:
+    """``minutes_since_open`` measures from the real session open, not obs_window."""
+    env = _make_env()
+    assert env.ny_session_start_idx == int(env._ny_indices[0])
+
+
+@pytest.mark.unit
+def test_sweep_reward_receives_real_elapsed_minutes() -> None:
+    """Ten M1 steps into the session must report about ten minutes, not fifty."""
+    from quant_rl.envs.sweep_reward import CompositeReward
+
+    env = _make_env(block_overnight=True, use_sweep_reward=True)
+    assert isinstance(env.reward_fn, CompositeReward)
+    env.reset()
+    seen: list[float] = []
+    original = CompositeReward.__call__
+
+    def _spy(self: Any, *args: Any, **kwargs: Any) -> float:
+        if "minutes_since_open" in kwargs:
+            seen.append(float(kwargs["minutes_since_open"]))
+        return original(self, *args, **kwargs)
+
+    # `env.reward_fn(...)` looks `__call__` up on the type, so patch the class.
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(CompositeReward, "__call__", _spy)
+    try:
+        for _ in range(10):
+            env.step(0)
+    finally:
+        monkey.undo()
+    assert seen, "sweep reward must receive minutes_since_open"
+    assert seen[-1] < 5.0 * 10  # far below the old 5x-inflated series
+    assert seen[-1] == pytest.approx(10.0, abs=2.0)

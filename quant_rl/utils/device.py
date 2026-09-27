@@ -18,6 +18,12 @@ _WORKER_RAM_BYTES = 4 * _GiB
 _RAM_HEADROOM_BYTES = int(1.5 * _GiB)
 # Main process holds the policy, Adam states, and the source env (~3 GiB observed).
 _PARENT_RAM_BYTES = 3 * _GiB
+# Host-RAM rollout tiers for 141G-class GPUs (H200/GH200): 32 / 64 / 128 workers.
+_N_ENVS_RAM_TIERS: tuple[tuple[int, int], ...] = (
+    (520 * _GiB, 128),
+    (280 * _GiB, 64),
+    (0, 32),
+)
 
 
 def get_device(config_device: str | None = None) -> torch.device:
@@ -98,7 +104,9 @@ def suggest_n_envs(
         1,
         (available_ram_bytes - _RAM_HEADROOM_BYTES - _PARENT_RAM_BYTES) // _WORKER_RAM_BYTES,
     )
-    gpu_target = requested if vram_bytes is None else _gpu_n_envs_target(vram_bytes)
+    gpu_target = (
+        requested if vram_bytes is None else _gpu_n_envs_target(vram_bytes, available_ram_bytes)
+    )
     cap = min(max_from_avail, gpu_target)
     target = min(max(requested, gpu_target), cap)
     return _floor_power_of_two(max(1, target))
@@ -247,9 +255,13 @@ def enable_extractor_autocast(extractor: nn.Module) -> None:
     setattr(extractor, "_amp_wrapped", True)
 
 
-def _gpu_n_envs_target(vram_bytes: int) -> int:
+def _gpu_n_envs_target(vram_bytes: int, available_ram_bytes: int) -> int:
+    """VRAM class ceiling, with host-RAM tiers on datacenter GPUs."""
     if vram_bytes >= 70 * _GiB:
-        return 64
+        for min_ram, target in _N_ENVS_RAM_TIERS:
+            if available_ram_bytes >= min_ram:
+                return target
+        return 32
     if vram_bytes >= 35 * _GiB:
         return 16
     if vram_bytes >= 8 * _GiB:

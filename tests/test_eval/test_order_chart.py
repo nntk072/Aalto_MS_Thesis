@@ -12,6 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pytest
 from matplotlib.figure import Figure
 
 from quant_rl.backtest.tp_reach import max_tp_distance, rr_reaches
@@ -32,10 +33,10 @@ from quant_rl.eval.chart_overlays import (
     draw_overlays_mpl,
 )
 from quant_rl.eval.order_chart import order_levels
+from quant_rl.eval.overlay_events import _swing_origins
 from quant_rl.eval.plots import plot_per_trade_orders
 from quant_rl.eval.plots_interactive import plot_per_trade_orders as plot_per_trade_orders_html
 from quant_rl.eval.trade_metrics import compute_trade_metrics
-from quant_rl.eval.overlay_events import _swing_origins
 from quant_rl.features.structure import structure_levels
 
 
@@ -287,23 +288,21 @@ def test_ny_trade_window_ignores_earlier_pivots() -> None:
     )
     t_open = pd.Timestamp("2024-12-31 16:32")
     t_close = pd.Timestamp("2024-12-31 16:33")
-    open_row = pd.Series(
-        {
-            "time": t_open,
-            "direction": 1,
-            "price": float(bars.loc[t_open, "close"]),
-            "type": "open",
-            "lots": 1.0,
-        }
-    )
-    close_row = pd.Series(
-        {
-            "time": t_close,
-            "price": float(bars.loc[t_close, "close"]),
-            "pnl": -100.0,
-            "type": "stop_close",
-        }
-    )
+    open_payload: dict[str, Any] = {
+        "time": t_open,
+        "direction": 1,
+        "price": float(cast(Any, bars.loc[t_open, "close"])),
+        "type": "open",
+        "lots": 1.0,
+    }
+    close_payload: dict[str, Any] = {
+        "time": t_close,
+        "price": float(cast(Any, bars.loc[t_close, "close"])),
+        "pnl": -100.0,
+        "type": "stop_close",
+    }
+    open_row = pd.Series(open_payload)
+    close_row = pd.Series(close_payload)
     events = OverlayEvents(
         swings=[
             SwingRay(
@@ -342,10 +341,7 @@ def test_ny_trade_window_ignores_earlier_pivots() -> None:
         ],
     )
     flat = pd.Series(close, index=idx)
-    overlays = {
-        key: flat.copy()
-        for key in ("ema50", "macd", "signal", "histogram", "rsi", "vwap")
-    }
+    overlays = {key: flat.copy() for key in ("ema50", "macd", "signal", "histogram", "rsi", "vwap")}
     from quant_rl.eval.chart_indicators import break_overlay_gaps
     from quant_rl.eval.order_window import prepare_order_chart
 
@@ -416,7 +412,7 @@ def test_rr_cap_scales_with_atr_not_a_fixed_point_distance() -> None:
     assert rr_reaches(100.0, 50.0, 4.0, float(bdist.iloc[-1]))
 
 
-def test_structural_target_past_the_cap_is_ignored() -> None:
+def test_dynamic_rr_scales_with_reachable_reward() -> None:
     idx = pd.date_range("2026-01-02 16:30", periods=40, freq="1min")
     close = np.full(40, 100.0)
     bars = pd.DataFrame(
@@ -450,22 +446,39 @@ def test_structural_target_past_the_cap_is_ignored() -> None:
         obs_window=5,
         rr_ratio_range=(1.5, 5.0),
     )
-    row = pd.Series({"prev_day_high": 1000.0, "sweep_high_level": np.nan})
-    tp = env._resolve_trader_tp(
+    # Stop distance is 10. A tight bar (12 points of room) stays near 1R.
+    tight = env._resolve_trader_tp(
         direction=1,
         entry_price=100.0,
         sl_price=90.0,
-        rr_ratio=1.5,
-        feat_row=row,
-        max_tp_distance=30.0,
+        reward_fraction=1.0,
+        max_tp_distance=12.0,
     )
-    assert tp == 115.0
-    nearer = env._resolve_trader_tp(
+    assert tight == pytest.approx(112.0)
+    # A wide bar can pay past 5R. Full fraction uses the whole reachable distance.
+    wide = env._resolve_trader_tp(
         direction=1,
         entry_price=100.0,
         sl_price=90.0,
-        rr_ratio=1.5,
-        feat_row=pd.Series({"prev_day_high": 140.0, "sweep_high_level": 130.0}),
-        max_tp_distance=50.0,
+        reward_fraction=1.0,
+        max_tp_distance=70.0,
     )
-    assert nearer == 130.0
+    assert wide == pytest.approx(170.0)
+    # Half of a wide bar is 4R (40 points), not a preset 5R print.
+    mid = env._resolve_trader_tp(
+        direction=1,
+        entry_price=100.0,
+        sl_price=90.0,
+        reward_fraction=0.5,
+        max_tp_distance=70.0,
+    )
+    assert mid == pytest.approx(140.0)
+    # Reachable reward shorter than the stop cannot pay 1R.
+    skipped = env._resolve_trader_tp(
+        direction=1,
+        entry_price=100.0,
+        sl_price=90.0,
+        reward_fraction=1.0,
+        max_tp_distance=8.0,
+    )
+    assert skipped is None

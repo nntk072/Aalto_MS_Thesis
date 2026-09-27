@@ -14,6 +14,33 @@ from __future__ import annotations
 
 import numpy as np
 
+REWARD_PART_KEYS: tuple[str, ...] = (
+    "pnl",
+    "dsr",
+    "soft_daily",
+    "soft_year",
+    "soft_trailing",
+    "strategy",
+    "breach",
+    "sweep",
+    "peak_dd",
+)
+
+
+def empty_reward_parts() -> dict[str, float]:
+    """Zero split of one step reward. The keys sum to the returned reward."""
+    return {key: 0.0 for key in REWARD_PART_KEYS}
+
+
+def fit_reward_parts(parts: dict[str, float], raw: float, clipped: float) -> dict[str, float]:
+    """Scale a split so it sums to the clipped reward the agent receives."""
+    out = empty_reward_parts()
+    out.update({key: float(value) for key, value in parts.items()})
+    if raw != 0.0 and clipped != raw:
+        scale = clipped / raw
+        out = {key: float(value) * scale for key, value in out.items()}
+    return out
+
 
 def _soft_band_penalty(
     value: float,
@@ -37,6 +64,7 @@ class DSRReward:
         self.eta = eta  # EMA damping for A and B estimates
         self._A: float = 0.0  # EMA of returns
         self._B: float = 0.0  # EMA of squared returns
+        self.last_parts: dict[str, float] = empty_reward_parts()
 
     def reset(self) -> None:
         self._A = 0.0
@@ -78,6 +106,7 @@ class DSRReward:
             Hard FTMO guardrail breached → large negative terminal reward.
         """
         if breach:
+            self.last_parts = fit_reward_parts({"breach": -10.0}, -10.0, -10.0)
             return -10.0
 
         # Normalise P&L to relative return
@@ -101,11 +130,22 @@ class DSRReward:
             if soft_daily_loss_limit is not None and soft_daily_loss_limit > 0.0
             else 0.8 * daily_loss_limit
         )
-        dsr -= _soft_band_penalty(daily_loss, soft, daily_loss_limit)
-        dsr -= _soft_band_penalty(loss_from_initial, soft_max_loss_limit, max_loss_limit)
-        dsr -= _soft_band_penalty(trailing_dd, soft_trailing_dd_limit, trailing_dd_limit)
-
-        return float(np.clip(dsr, -10.0, 10.0))
+        soft_daily = -_soft_band_penalty(daily_loss, soft, daily_loss_limit)
+        soft_year = -_soft_band_penalty(loss_from_initial, soft_max_loss_limit, max_loss_limit)
+        soft_trailing = -_soft_band_penalty(trailing_dd, soft_trailing_dd_limit, trailing_dd_limit)
+        raw = dsr + soft_daily + soft_year + soft_trailing
+        clipped = float(np.clip(raw, -10.0, 10.0))
+        self.last_parts = fit_reward_parts(
+            {
+                "dsr": dsr,
+                "soft_daily": soft_daily,
+                "soft_year": soft_year,
+                "soft_trailing": soft_trailing,
+            },
+            raw,
+            clipped,
+        )
+        return clipped
 
 
 class PnLReward:
@@ -119,6 +159,7 @@ class PnLReward:
         self.soft_loss_frac = soft_loss_frac
         self.dsr_weight = float(dsr_weight)
         self._dsr = DSRReward() if self.dsr_weight > 0 else None
+        self.last_parts: dict[str, float] = empty_reward_parts()
 
     def reset(self) -> None:
         if self._dsr is not None:
@@ -143,11 +184,12 @@ class PnLReward:
         equity: float | None = None,
     ) -> float:
         if breach:
+            self.last_parts = fit_reward_parts({"breach": -10.0}, -10.0, -10.0)
             return -10.0
 
-        reward = 0.0
+        parts = empty_reward_parts()
         if realized_close_pnl is not None:
-            reward += float(realized_close_pnl) / initial_balance
+            parts["pnl"] = float(realized_close_pnl) / initial_balance
 
         eq = float(equity) if equity is not None else initial_balance
         soft_start = (
@@ -155,12 +197,16 @@ class PnLReward:
             if soft_daily_loss_limit is not None and soft_daily_loss_limit > 0.0
             else self.soft_loss_frac * max(eq, 1.0)
         )
-        reward -= _soft_band_penalty(daily_loss, soft_start, daily_loss_limit)
-        reward -= _soft_band_penalty(loss_from_initial, soft_max_loss_limit, max_loss_limit)
-        reward -= _soft_band_penalty(trailing_dd, soft_trailing_dd_limit, trailing_dd_limit)
+        parts["soft_daily"] = -_soft_band_penalty(daily_loss, soft_start, daily_loss_limit)
+        parts["soft_year"] = -_soft_band_penalty(
+            loss_from_initial, soft_max_loss_limit, max_loss_limit
+        )
+        parts["soft_trailing"] = -_soft_band_penalty(
+            trailing_dd, soft_trailing_dd_limit, trailing_dd_limit
+        )
 
         if self._dsr is not None:
-            dsr = self._dsr(
+            self._dsr(
                 step_pnl,
                 daily_loss=daily_loss,
                 daily_loss_limit=daily_loss_limit,
@@ -174,6 +220,10 @@ class PnLReward:
                 initial_balance=initial_balance,
                 breach=False,
             )
-            reward += self.dsr_weight * dsr
+            for key, value in self._dsr.last_parts.items():
+                parts[key] = parts.get(key, 0.0) + self.dsr_weight * float(value)
 
-        return float(np.clip(reward, -10.0, 10.0))
+        raw = float(sum(parts.values()))
+        clipped = float(np.clip(raw, -10.0, 10.0))
+        self.last_parts = fit_reward_parts(parts, raw, clipped)
+        return clipped

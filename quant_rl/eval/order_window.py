@@ -58,6 +58,29 @@ def _ny_session_positions(
     return np.flatnonzero(ny & np.asarray(same_days))
 
 
+def _session_end_pos(idx: pd.DatetimeIndex, i: int) -> int:
+    """Last NY bar position on the same calendar day as ``idx[i]``.
+
+    The market is closed between the NY close and the next open, so a window
+    that counts those dead overnight candles pushes the exit marker away from
+    the axis edge for no information gain. Returns ``i`` when ``i`` is not
+    itself an NY bar, so callers fall back to their own bounds.
+    """
+    from quant_rl.data.session import ny_session_mask
+
+    if i < 0 or i >= len(idx):
+        return i
+    ny = ny_session_mask(idx).to_numpy()
+    if not ny[i]:
+        return i
+    day = pd.Timestamp(idx[i]).normalize()
+    n = len(idx)
+    j = i
+    while j + 1 < n and ny[j + 1] and pd.Timestamp(idx[j + 1]).normalize() == day:
+        j += 1
+    return j
+
+
 def _extract_window(
     bars: pd.DataFrame,
     t_open: pd.Timestamp,
@@ -69,7 +92,8 @@ def _extract_window(
     ``context`` bars before the entry and after the exit. A trade that opens
     at 16:30 still gets earlier candles that same day, so the order sits in
     the middle. The slice does not cross into the previous or next calendar
-    day.
+    day, and trailing context stops at the session close so an eod_close does
+    not drag in the overnight gap.
     """
     idx = pd.DatetimeIndex(bars.index)
     i_o = int(idx.get_indexer(pd.Index([_align_ts(t_open, idx)]), method="nearest")[0])
@@ -87,6 +111,10 @@ def _extract_window(
         i_s += 1
     while i_e > i_s and pd.Timestamp(idx[i_e]) >= day_end:
         i_e -= 1
+    # Trailing context is measured in tradable bars, so cap it at the session
+    # close. ``max(..., i_c)`` keeps the exit itself inside the window when the
+    # trade runs past the session (overnight hold).
+    i_e = min(i_e, max(_session_end_pos(idx, max(i_o, i_c)), max(i_o, i_c)))
     return bars.iloc[i_s : i_e + 1]
 
 
@@ -109,9 +137,7 @@ def _structure_anchors(
         # Both pivots have to sit on this session or the previous day.
         if not (seg.t1 >= t_open and seg.t0 <= t_close):
             continue
-        if _on_trade_or_previous_day(seg.t0, t_open) and _on_trade_or_previous_day(
-            seg.t1, t_open
-        ):
+        if _on_trade_or_previous_day(seg.t0, t_open) and _on_trade_or_previous_day(seg.t1, t_open):
             anchors.extend([seg.t0, seg.t1])
     return anchors
 

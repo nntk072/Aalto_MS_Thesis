@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from quant_rl.models.ppo_policy import clip_policy_log_std
+from quant_rl.train.equity_gate import decide_early_abort
 
 log = logging.getLogger(__name__)
 
@@ -246,6 +247,90 @@ if _SB3_AVAILABLE:
                 self._next_save += self.save_freq * crossed
             return True
 
+    class EarlyAbortCallback(_Base):
+        """Stop ``learn()`` when training is invalid or recent episodes fail.
+
+        Returning ``False`` from ``_on_step`` is the Stable-Baselines3 stop.
+        Equity and no-trade checks wait until ``min_timesteps``. A non-finite
+        logged metric or episode equity stops immediately.
+        """
+
+        def __init__(
+            self,
+            min_timesteps: int = 2_000_000,
+            window: int = 4,
+            stop_on_nonfinite: bool = True,
+            stop_on_no_trades: bool = True,
+            stop_on_equity_gate: bool = True,
+            verbose: int = 0,
+        ) -> None:
+            super().__init__(verbose=verbose)
+            self.min_timesteps = int(min_timesteps)
+            self.window = int(window)
+            self.stop_on_nonfinite = bool(stop_on_nonfinite)
+            self.stop_on_no_trades = bool(stop_on_no_trades)
+            self.stop_on_equity_gate = bool(stop_on_equity_gate)
+            self._episodes: list[dict[str, Any]] = []
+            self._nonfinite = False
+            self.reason: str | None = None
+
+        def _note_episode(self, ep: dict[str, Any]) -> None:
+            for key in (
+                "end_equity",
+                "start_equity",
+                "slope",
+                "max_peak_trailing_dd",
+                "reward_sum",
+            ):
+                if key not in ep:
+                    continue
+                try:
+                    if not np.isfinite(float(ep[key])):
+                        self._nonfinite = True
+                except (TypeError, ValueError):
+                    self._nonfinite = True
+            self._episodes.append(ep)
+
+        def _on_rollout_end(self) -> None:
+            if not self.stop_on_nonfinite:
+                return
+            logger = getattr(self.model, "logger", None)
+            values = getattr(logger, "name_to_value", {}) if logger is not None else {}
+            for value in values.values():
+                try:
+                    if not np.isfinite(float(value)):
+                        self._nonfinite = True
+                        return
+                except (TypeError, ValueError):
+                    continue
+
+        def _on_step(self) -> bool:
+            dones = self.locals.get("dones")
+            infos = self.locals.get("infos") or []
+            if dones is not None:
+                for i, done in enumerate(np.asarray(dones).reshape(-1)):
+                    if not done or i >= len(infos):
+                        continue
+                    info = infos[i]
+                    ep = info.get("episode_equity") if isinstance(info, dict) else None
+                    if ep:
+                        self._note_episode(ep)
+            reason = decide_early_abort(
+                self._episodes,
+                num_timesteps=int(self.num_timesteps),
+                min_timesteps=self.min_timesteps,
+                window=self.window,
+                nonfinite=self._nonfinite,
+                stop_on_nonfinite=self.stop_on_nonfinite,
+                stop_on_no_trades=self.stop_on_no_trades,
+                stop_on_equity_gate=self.stop_on_equity_gate,
+            )
+            if reason is None:
+                return True
+            self.reason = reason
+            log.error("EARLY_ABORT %s at timestep=%s", reason, self.num_timesteps)
+            return False
+
 else:
 
     class ProgressLoggerCallback:  # type: ignore[no-redef]
@@ -290,5 +375,14 @@ else:
         def __init__(self, *args: object, **kwargs: object) -> None:
             raise ImportError(
                 "stable-baselines3 is required for PeriodicCheckpointCallback. "
+                "Install it with: pip install stable-baselines3"
+            )
+
+    class EarlyAbortCallback:  # type: ignore[no-redef]
+        """Stub — stable-baselines3 is not installed."""
+
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            raise ImportError(
+                "stable-baselines3 is required for EarlyAbortCallback. "
                 "Install it with: pip install stable-baselines3"
             )

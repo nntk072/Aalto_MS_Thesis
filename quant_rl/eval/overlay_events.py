@@ -79,7 +79,7 @@ class OverlayEvents:
         needs both ends on the chart. The forward end of a swing may still
         be trimmed to ``end`` so the ray does not leave the axis.
         """
-        swings = []
+        swings: list[SwingRay] = []
         for r in self.swings:
             origin = r.pivot_time()
             if origin < start or origin > end or r.t1 <= origin:
@@ -97,18 +97,18 @@ class OverlayEvents:
                     mark_pivot=r.mark_pivot,
                 )
             )
-        sweeps = []
+        sweeps: list[SweepLine] = []
         for s in self.sweeps:
             if s.t0 < start or s.t1 > end or s.t1 <= s.t0:
                 continue
             sweeps.append(s)
-        smt = []
-        for s in self.smt:
+        smt: list[SmtSegment] = []
+        for seg in self.smt:
             # Keep the segment only when both swing candles are on the chart.
             # Clipping a week-long line to the window edge leaves SMT off any candle.
-            if s.t0 < start or s.t1 > end:
+            if seg.t0 < start or seg.t1 > end:
                 continue
-            smt.append(s)
+            smt.append(seg)
         return OverlayEvents(swings=swings, sweeps=sweeps, smt=smt)
 
 

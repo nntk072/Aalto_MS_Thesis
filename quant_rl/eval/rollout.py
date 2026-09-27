@@ -106,6 +106,8 @@ def evaluate_model(
     peak_trailing_dd_limit: float = 0.0,
     tickbook: Any | None = None,
     fill_delay_ms: int = 0,
+    agent_direction_control: bool = False,
+    direction_override_threshold: float = 0.0,
 ) -> dict[str, Any]:
     """Walk a trained RL ``model`` over *bars*/*features* and collect trades.
 
@@ -166,6 +168,8 @@ def evaluate_model(
         peak_trailing_dd_limit=peak_trailing_dd_limit,
         tickbook=tickbook,
         fill_delay_ms=fill_delay_ms,
+        agent_direction_control=agent_direction_control,
+        direction_override_threshold=direction_override_threshold,
     )
 
     obs, _ = env.reset()
@@ -175,6 +179,8 @@ def evaluate_model(
         model, continuous_actions, deterministic, strategy_actions=strategy_actions
     )
     action_counts: Counter[str] = Counter()
+    reward_sum = 0.0
+    n_steps = 0
     while not (done or truncated):
         action = action_fn(obs)
         if strategy_actions:
@@ -182,7 +188,9 @@ def evaluate_model(
         else:
             action_key = str(action)
         action_counts[action_key] += 1
-        obs, _, done, truncated, _ = env.step(action)
+        obs, reward, done, truncated, _ = env.step(action)
+        reward_sum += float(reward)
+        n_steps += 1
 
     equity_series = pd.Series(
         env.equity_curve,
@@ -207,6 +215,8 @@ def evaluate_model(
         "n_sessions_skipped": n_sessions - days_traded,
         "days_traded": days_traded,
         "survived_full_year": survived_full_year,
+        "reward_sum": reward_sum,
+        "n_steps": n_steps,
         "fail_time": fail_time,
         "max_trailing_dd": float(max_drawdown(env.equity_curve)),
         "action_counts": dict(action_counts),

@@ -31,7 +31,30 @@ from ..envs.strategies import BaselineStrategy, TradingStrategy
 from ..envs.sweep_reward import CompositeReward, SweepConfirmationReward
 from ..features.build import select_obs_columns
 from ..models.vae import VAE
+from ..train.equity_gate import assess_train_equity
 from .observation import normalized_account_vector, pad_observation_window
+
+#: Fallback bar spacing when the index has no usable delta (single bar, or a
+#: non-monotonic index). The env steps the M1 spine, so one minute is the safe
+#: default rather than the old hard-coded five.
+_DEFAULT_MINUTES_PER_STEP = 1.0
+
+
+def _minutes_per_step(index: pd.DatetimeIndex) -> float:
+    """Median bar spacing in minutes, read from the index itself.
+
+    Assumes nothing about the timeframe: the environment is fed M1 bars today,
+    but a resampled feed must not silently make every time-based term wrong.
+    """
+    if index is None or len(index) < 2:
+        return _DEFAULT_MINUTES_PER_STEP
+    nanos = index.to_numpy(dtype="datetime64[ns]").astype("int64")
+    deltas = np.diff(nanos)
+    positive = deltas[deltas > 0]
+    if positive.size == 0:
+        return _DEFAULT_MINUTES_PER_STEP
+    minutes = float(np.median(positive)) / 60_000_000_000.0
+    return minutes if minutes > 0.0 else _DEFAULT_MINUTES_PER_STEP
 
 
 class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, Any]]):
@@ -91,6 +114,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         peak_trailing_dd_limit: float = 0.0,
         tickbook: TickBook | None = None,
         fill_delay_ms: int = 0,
+        agent_direction_control: bool = False,
+        direction_override_threshold: float = 0.0,
     ):
         """Initialize trading environment.
 
@@ -239,6 +264,17 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._eod_max_age_hours = float(eod.get("max_age_hours", 8.0))
         self._eod_stale_bars = int(eod.get("stale_bars", 60))
         self._eod_progress_atr = float(eod.get("progress_threshold_atr", 0.25))
+        # Risk/sizing alignment: the intraday adverse-excursion cut never
+        # fires closer than the trade's own planned loss at the structural
+        # stop. Without this, a $500 cutoff flattens a position sized to
+        # risk $1,000 and the structural thesis never gets to play out.
+        self._eod_respect_planned_risk = bool(eod.get("respect_planned_risk", True))
+        self._eod_planned_risk_mult = float(eod.get("planned_risk_mult", 1.1))
+        # Breakeven management: once favorable excursion reaches this many
+        # stop distances, the stop moves to the entry plus a small buffer.
+        # 0 disables the rewrite.
+        self._breakeven_trigger_r = float(eod.get("breakeven_trigger_r", 0.0))
+        self._breakeven_buffer_pts = float(eod.get("breakeven_buffer_pts", 2.0))
         self._ny_indices = self._resolve_ny_indices(bars)
         self._ny_pos = 0
         self.episodic = episodic
@@ -255,6 +291,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # market quote and refuse new risk. Stops and targets are not rewritten.
         self.peak_trailing_dd_limit = float(peak_trailing_dd_limit)
         self._peak_dd_fired = False
+        # Opt-in agent direction control (see agent_implementation_plan.md).
+        # False keeps the 4-D overlay layout where the strategy owns the side.
+        self.agent_direction_control = bool(agent_direction_control)
+        # Conviction band (distance from the neutral 0.5) below which the agent
+        # defers to ``strategy.context_direction``. 0.0 means the agent's sign
+        # always wins except at exactly neutral.
+        self.direction_override_threshold = float(direction_override_threshold)
         self._tickbook = tickbook
         self._fill_delay_ms = int(fill_delay_ms)
         # Resolve trader/strategy action flag early (needed for reward + spaces).
@@ -389,18 +432,31 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 param.requires_grad = False
 
         if self.strategy_actions:
-            # Trader-like 4-D Box [-1,1]^4 (no free long/short dim).
+            # Trader-like Box (no free long/short dim).
             # PPO's unsquashed Gaussian mean sits near 0; a [0,1] box clipped
             # deterministic mean to 0 (always hold). Affine-map to unit interval
             # at decode: u = 0.5 * (clip(a, -1, 1) + 1).
+            #
+            # Default 4-D layout (strategy owns the side):
             #   [0] entry intensity (hold only if threshold > 0 and u[0] < it;
             #       default 0 → context_direction decides enter vs hold)
             #   [1] sl_anchor among valid structural SL candidates
             #   [2] risk_frac -> risk_frac_range
-            #   [3] rr -> rr_ratio_range
+            #   [3] fraction of this bar's reachable reward (not a fixed RR)
+            #
+            # Opt-in 5-D layout (``agent_direction_control=True``) — dim 0 is
+            # signed, so the agent can confirm, veto, or invert the heuristic
+            # side when the pattern is failing:
+            #   [0] direction conviction +1 long .. -1 short (sign is the side;
+            #       |u| < context_direction_threshold defers to the strategy)
+            #   [1] entry intensity
+            #   [2] sl_anchor among valid structural SL candidates
+            #   [3] risk_frac -> risk_frac_range
+            #   [4] fraction of this bar's reachable reward (not a fixed RR)
+            n_dims = 5 if self.agent_direction_control else 4
             self.action_space = spaces.Box(
-                low=np.array([-1.0, -1.0, -1.0, -1.0], dtype=np.float32),
-                high=np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32),
+                low=np.full(n_dims, -1.0, dtype=np.float32),
+                high=np.full(n_dims, 1.0, dtype=np.float32),
                 dtype=np.float32,
             )
         elif continuous_actions:
@@ -421,10 +477,20 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             "soft_brick": 0,
         }
 
-        # NY session start index for time decay penalty
+        # NY session start index for time decay penalty. Default to the first
+        # tradable NY bar, which is what "minutes since open" measures from.
         self.ny_session_start_idx = (
-            ny_session_start_idx if ny_session_start_idx is not None else self.obs_window
+            int(ny_session_start_idx)
+            if ny_session_start_idx is not None
+            else int(self._ny_indices[0])
+            if len(self._ny_indices)
+            else 0
         )
+        # Bar spacing in minutes, read from the index rather than assumed. The
+        # env steps the M1 spine, so the old hard-coded *5 made
+        # "minutes_since_open" five times too large and let the sweep
+        # time-decay term dominate the reward.
+        self._minutes_per_step = _minutes_per_step(pd.DatetimeIndex(bars.index))
 
         # Observation space: dict with time-series + account state (+ VAE latent if enabled)
         # features: (obs_window, n_features)
@@ -840,9 +906,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 self.sessions_with_trades.add(self._current_session_id())
                 self._note_close(pnl)
 
-    def _tick_exit_quote(
-        self, bar_time: pd.Timestamp
-    ) -> tuple[str, tuple[float, float]] | None:
+    def _tick_exit_quote(self, bar_time: pd.Timestamp) -> tuple[str, tuple[float, float]] | None:
         """Delayed tick quote for a stop or target, or ``None`` to use the level."""
         book = self._tickbook
         pos = self.position
@@ -955,7 +1019,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     self.strategy,
                     direction=discrete_action,
                     entry_price=entry_price,
-                    rr_ratio=rr_ratio,
+                    reward_fraction=rr_ratio,
                     feat_row=feat_row,  # type: ignore[arg-type]
                     min_dist=self._min_sl_distance(feat_row),
                     sl_anchor=float(self._selected_sl_anchor),
@@ -1043,9 +1107,25 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 if self.position:
                     self._entry_diag["opened"] += 1
                     self.position.sl_price = sl_price
+                    self.position.sl_initial_price = sl_price
+                    self.position.breakeven_done = False
+                    if sl_price is not None:
+                        # Loss in account currency if the structural stop fills.
+                        # The intraday adverse guard uses this as its floor so
+                        # sizing and the guard cannot disagree.
+                        self.position.planned_risk_usd = (
+                            abs(entry_price - float(sl_price))
+                            * float(self.position.size)
+                            * self.contract_size
+                        )
                     self.position.tp_price = tp_price
                     self.position.risk_frac = risk_frac
-                    self.position.rr_ratio = rr_ratio
+                    logged_rr = rr_ratio
+                    if self.strategy_actions and sl_price is not None and tp_price is not None:
+                        risk_pts = abs(entry_price - float(sl_price))
+                        if risk_pts > 0.0:
+                            logged_rr = abs(float(tp_price) - entry_price) / risk_pts
+                    self.position.rr_ratio = logged_rr
                     self.position.entry_timestamp = bar_time
                     atr_val = feat_row.get("atr_5", feat_row.get("atr", np.nan))
                     self.position.entry_atr = (
@@ -1081,7 +1161,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                             "sl_price": sl_price,
                             "tp_price": tp_price,
                             "risk_frac": risk_frac,
-                            "rr_ratio": rr_ratio,
+                            "rr_ratio": self.position.rr_ratio,
                             "bar": self.step_idx,
                             "time": bar_time,
                             "equity": self.account.equity,
@@ -1164,21 +1244,38 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         direction: int,
         entry_price: float,
         sl_price: float,
-        rr_ratio: float,
-        feat_row: FeatureRow | pd.Series,
+        reward_fraction: float,
+        feat_row: FeatureRow | pd.Series | None = None,
         max_tp_distance: float | None = None,
-    ) -> float:
-        from quant_rl.backtest.entry_levels import resolve_trader_tp
+    ) -> float | None:
+        from quant_rl.backtest.entry_levels import dynamic_tp
 
-        targets = self.strategy.target_candidates(direction=direction, row=feat_row)  # type: ignore[arg-type]
-        return resolve_trader_tp(
+        del feat_row
+        tp, rejected = dynamic_tp(
             direction=direction,
             entry_price=entry_price,
             sl_price=sl_price,
-            rr_ratio=rr_ratio,
-            targets=targets,
+            reward_fraction=reward_fraction,
             max_tp_distance=max_tp_distance,
         )
+        if rejected:
+            return None
+        return tp
+
+    def _apply_direction_control(self, ctx: int, u: np.ndarray[Any, Any]) -> int:
+        """Combine the agent's signed conviction with the heuristic side.
+
+        ``u`` is the affine-mapped unit-interval action, where ``u[0] == 0.5``
+        is neutral (PPO's deterministic mean) and the sign of
+        ``u[0] - 0.5`` is the agent's side. The agent overrides the strategy
+        only when its conviction is wider than
+        ``direction_override_threshold``; otherwise ``ctx`` stands, so the
+        heuristic side still governs at neutral. Returns ``-1``/``0``/``+1``.
+        """
+        conviction = float(u[0]) - 0.5
+        if abs(conviction) < max(self.direction_override_threshold, 1e-6):
+            return ctx if ctx in (-1, 1) else 0
+        return 1 if conviction > 0.0 else -1
 
     def _decode_action(
         self,
@@ -1187,11 +1284,16 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
     ) -> tuple[int, float, float, str]:
         """Decode an action into (discrete_action, risk_frac, rr_ratio, tp_mode).
 
-        Handles three action formats:
-        - Strategy/trader (4-D Box [-1,1]^4): affine-mapped to unit interval then
-          [intensity, sl_anchor, risk, rr]
+        Handles four action formats:
+        - Strategy overlay, 4-D Box [-1,1]^4: affine-mapped to the unit interval
+          then [intensity, sl_anchor, risk, reward fraction]. The strategy owns
+          the trade side (``context_direction``).
+        - Strategy overlay, 5-D Box [-1,1]^5 (``agent_direction_control``): dim 0
+          is signed direction conviction, so the agent can override the
+          heuristic side; the remaining dims shift by one.
         - Continuous (Box(-1,1)): proportional position sizing
-        - Discrete (Discrete(20)): 0=hold, 1-9=long variants, 10-18=short variants, 19=exit
+        - Discrete (Discrete(20)): 0=hold, 1-9=long variants, 10-18=short
+          variants, 19=exit
         """
         tp_mode = "rr"
         risk_frac = self.risk_frac_range[0]
@@ -1202,7 +1304,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             # Affine map Box[-1,1] -> [0,1] so PPO's mean-0 policy yields
             # intensity 0.5 (above the default entry threshold).
             u = 0.5 * (np.clip(arr, -1.0, 1.0) + 1.0)
-            intensity = float(u[0]) if u.size else 0.0
+            direction_offset = 1 if self.agent_direction_control and u.size >= 5 else 0
+            intensity = float(u[direction_offset]) if u.size > direction_offset else 0.0
             entry_threshold = self.entry_intensity_threshold
             if feat_row is None:
                 discrete_action = 0
@@ -1211,20 +1314,23 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 self._entry_diag["hold_low_intensity"] += 1
             else:
                 ctx = int(self.strategy.context_direction(feat_row))  # type: ignore[arg-type]
-                if ctx in (-1, 1):
-                    discrete_action = ctx
-                else:
-                    discrete_action = 0
+                discrete_action = (
+                    self._apply_direction_control(ctx, u)
+                    if direction_offset
+                    else (ctx if ctx in (-1, 1) else 0)
+                )
+                if discrete_action == 0 and ctx not in (-1, 1):
                     self._entry_diag["hold_no_context"] += 1
-            if u.size >= 4:
-                self._selected_sl_anchor = float(np.clip(u[1], 0.0, 1.0))
+            if u.size >= 4 + direction_offset:
+                self._selected_sl_anchor = float(np.clip(u[1 + direction_offset], 0.0, 1.0))
                 r_lo, r_hi = self.risk_frac_range
-                rr_lo, rr_hi = self.rr_ratio_range
-                risk_frac = r_lo + float(u[2]) * (r_hi - r_lo)
-                rr_ratio = rr_lo + float(u[3]) * (rr_hi - rr_lo)
+                risk_frac = r_lo + float(u[2 + direction_offset]) * (r_hi - r_lo)
+                # Fraction of this bar's reachable reward. The filled ratio is
+                # target distance / stop distance and is not this number.
+                rr_ratio = float(u[3 + direction_offset])
             else:
                 risk_frac = self.risk_frac_range[0]
-                rr_ratio = self.rr_ratio_range[0]
+                rr_ratio = 0.0
             tp_mode = "rr"
         elif self.continuous_actions:
             if isinstance(action, np.ndarray):
@@ -1411,14 +1517,26 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.pnl_history.append(pnl_step)
 
         reward = self._calculate_reward(pnl_step, bar, feat_row, done, truncated)
+        reward_parts = {
+            key: float(value) for key, value in getattr(self.reward_fn, "last_parts", {}).items()
+        }
         if self.peak_trailing_dd_limit > 0.0 and self._peak_dd_fired:
-            # One-bar penalty for hitting the peak-DD ceiling. Not a stop rewrite.
+            # Penalty each bar the training peak-DD ceiling is still hit.
             reward -= 1.0
+            reward_parts["peak_dd"] = float(reward_parts.get("peak_dd", 0.0)) - 1.0
 
         obs = self._get_observation()
+        close_reason = ""
+        if self.trade_log:
+            last_trade = self.trade_log[-1]
+            if last_trade.get("bar") == self.step_idx and last_trade.get("type") != "open":
+                close_reason = str(last_trade.get("reason") or "")
         info: dict[str, Any] = {
             "equity": self.account.equity,
             "position": self.position is not None,
+            "position_direction": 0 if self.position is None else int(self.position.direction),
+            "close_reason": close_reason,
+            "reward_parts": reward_parts,
             **{f"entry_{k}": v for k, v in self._entry_diag.items()},
         }
 
@@ -1438,12 +1556,19 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._ep_reward_sum += float(reward)
         if done or truncated:
             n_trades = sum(1 for t in self.trade_log if t.get("type") == "open")
+            gate = assess_train_equity(
+                pd.Series(self.equity_curve, dtype=float),
+                initial=float(self._ep_start_equity),
+                breached=bool(self.breach_log),
+            )
             info["episode_equity"] = {
                 "end_equity": float(self.account.equity),
                 "start_equity": float(self._ep_start_equity),
                 "reward_sum": float(self._ep_reward_sum),
                 "n_trades": int(n_trades),
                 "breach_reason": str(self.breach_log[-1]) if self.breach_log else "",
+                "slope": float(gate["slope"]),
+                "max_peak_trailing_dd": float(gate["max_peak_trailing_dd"]),
             }
 
         return obs, float(reward), done, truncated, info
@@ -1567,7 +1692,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         with the appropriate kwargs.
         """
         daily_loss = float(self.account.daily_loss)
-        minutes_since_open = max(0, (self.step_idx - self.ny_session_start_idx)) * 5.0 / 60.0
+        # Elapsed session time in minutes. Derived from the bar spacing rather
+        # than assumed, because the sweep time-decay term is a linear penalty
+        # in this value and a wrong factor dominates the whole reward.
+        minutes_since_open = max(0, self.step_idx - self.ny_session_start_idx) * (
+            self._minutes_per_step
+        )
 
         reward_kwargs: dict[str, Any] = {
             "daily_loss": daily_loss,
@@ -1694,6 +1824,55 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             self.broker.mark_to_market(self.account, self.position, (bid, ask))
             self._apply_position_guards(bar, self._bar_times[i], bid, ask, eod=False)
 
+    def _eod_adverse_cut_usd(self, pos: Position) -> float:
+        """Dollar adverse excursion that fires the intraday max-loss guard.
+
+        The guard must never sit *inside* the trade's own structural stop, or
+        a position sized to risk ``ftmo.risk_per_trade_limit`` gets flattened
+        at half that risk and never reaches its target. When
+        ``respect_planned_risk`` is on, the cutoff is the larger of the
+        configured cap and ``planned_risk_mult`` times the loss the position
+        would take at its structural stop.
+        """
+        configured = float(self._eod_max_loss_usd)
+        if not self._eod_respect_planned_risk:
+            return configured
+        planned = float(pos.planned_risk_usd or 0.0)
+        if planned <= 0.0:
+            return configured
+        return max(configured, self._eod_planned_risk_mult * planned)
+
+    def _apply_breakeven(self, pos: Position, favorable: float) -> None:
+        """Move the stop to breakeven once the trade has earned its risk.
+
+        Only ever tightens toward entry: never widens a stop and never rewrites
+        a stop that already sits at or beyond breakeven. Disabled when
+        ``breakeven_trigger_r <= 0``.
+        """
+        if self._breakeven_trigger_r <= 0.0 or pos.breakeven_done:
+            return
+        # The stop distance at entry is exact per contract, so use it rather
+        # than dollars: it is the same number the sizing used.
+        sl0 = pos.sl_initial_price if pos.sl_initial_price is not None else pos.sl_price
+        if sl0 is None:
+            return
+        risk_pts = abs(pos.entry_price - float(sl0))
+        if risk_pts <= 0.0:
+            return
+        if favorable < self._breakeven_trigger_r * risk_pts:
+            return
+        buffer = self._breakeven_buffer_pts
+        if pos.direction == 1:
+            new_sl = pos.entry_price + buffer
+            if pos.sl_price is None or new_sl > float(pos.sl_price):
+                pos.sl_price = new_sl
+                pos.breakeven_done = True
+        else:
+            new_sl = pos.entry_price - buffer
+            if pos.sl_price is None or new_sl < float(pos.sl_price):
+                pos.sl_price = new_sl
+                pos.breakeven_done = True
+
     def _apply_position_guards(
         self,
         bar: BarView,
@@ -1703,7 +1882,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         *,
         eod: bool,
     ) -> None:
-        """Age, stale-progress, and max-loss guards for an open position."""
+        """Age, stale-progress, breakeven, and max-loss guards for a position."""
         pos = self.position
         if pos is None:
             return
@@ -1723,6 +1902,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         pos.mfe = max(pos.mfe, favorable)
         pos.mae = max(pos.mae, adverse)
         pos.best_favorable = max(pos.best_favorable, favorable)
+        # Breakeven first: a trade that has already paid its risk should not
+        # be able to become a full loss, and the tighter stop changes whether
+        # the adverse cut below is even reachable.
+        self._apply_breakeven(pos, pos.best_favorable)
         thresh = self._eod_progress_atr * float(pos.entry_atr or 0.0)
         if thresh > 0.0 and (favorable - pos.last_progress_favorable) >= thresh:
             pos.last_progress_favorable = favorable
@@ -1730,7 +1913,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         else:
             pos.stale_counter += 1
         notional_adverse = adverse * pos.size * self.contract_size
-        if notional_adverse >= self._eod_max_loss_usd:
+        if notional_adverse >= self._eod_adverse_cut_usd(pos):
             self._force_close_guard(fill_bid, fill_ask, "eod_max_loss", bar_time)
             return
         if eod and pos.stale_counter >= self._eod_stale_bars:

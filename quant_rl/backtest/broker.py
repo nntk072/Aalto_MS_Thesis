@@ -42,6 +42,16 @@ class Position:
     stale_counter: int = 0
     mfe: float = 0.0
     mae: float = 0.0
+    #: Planned loss at the structural stop in account currency. Set by the
+    #: environment at entry from the lot size and stop distance. The
+    #: intraday adverse-excursion guard uses it as its floor so sizing and
+    #: the guard cannot disagree.
+    planned_risk_usd: float | None = None
+    #: Stop level as placed at entry. Breakeven management compares against
+    #: this, not against a rewritten ``sl_price``.
+    sl_initial_price: float | None = None
+    #: True once the stop has been moved to the breakeven level.
+    breakeven_done: bool = False
 
 
 @dataclass

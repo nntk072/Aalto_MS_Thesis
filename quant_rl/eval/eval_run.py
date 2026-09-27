@@ -27,8 +27,8 @@ from stable_baselines3 import PPO
 
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import build_tick_books, run_pipeline
-from quant_rl.data.ticks import ticks_covering
 from quant_rl.data.split import get_split_config, split_bars, split_train_test
+from quant_rl.data.ticks import ticks_covering
 from quant_rl.eval.export import save_run
 from quant_rl.eval.rollout import evaluate_model
 from quant_rl.evaluation import calculate_metrics
@@ -168,6 +168,8 @@ def main() -> None:
         entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
         reward_mode=str(cfg.env.get("reward_mode", "dsr")),
         entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
+        agent_direction_control=bool(cfg.env.get("agent_direction_control", False)),
+        direction_override_threshold=float(cfg.env.get("direction_override_threshold", 0.0)),
         max_episode_steps=None,
         fill_delay_ms=_fill_delay_ms(cfg),
     )

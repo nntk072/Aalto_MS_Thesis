@@ -216,11 +216,11 @@ class TestDecodeActionStrategy:
     def test_rr_and_risk_mapping(self) -> None:
         env = self._make_strategy_env(ctx=1)
         row = pd.Series({"context_trade_direction": 1.0})
-        # a=-1 → u=0 → min risk/rr; a=1 → u=1 → max
-        _, risk, rr, tp = env._decode_action(np.array([0.9, -1.0, -1.0, -1.0]), row)
+        # a=-1 → u=0 → min risk and no extra reach; a=1 → u=1 → max risk, full reach
+        _, risk, frac, tp = env._decode_action(np.array([0.9, -1.0, -1.0, -1.0]), row)
         assert risk == pytest.approx(0.005)
-        assert rr == pytest.approx(1.5)
+        assert frac == pytest.approx(0.0)
         assert tp == "rr"
-        _, risk, rr, _ = env._decode_action(np.array([0.9, -1.0, 1.0, 1.0]), row)
+        _, risk, frac, _ = env._decode_action(np.array([0.9, -1.0, 1.0, 1.0]), row)
         assert risk == pytest.approx(0.01)
-        assert rr == pytest.approx(5.0)
+        assert frac == pytest.approx(1.0)

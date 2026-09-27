@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pandas as pd
 
 from ..features.indicators import _ema
@@ -155,9 +157,11 @@ def _break_series_gaps(series: pd.Series) -> pd.Series:
         if delta > step:
             pieces.append(series.iloc[start:i])
             mid = pd.Timestamp(idx[i - 1]) + pd.Timedelta(delta) / 2
-            pieces.append(pd.Series([float("nan")], index=pd.DatetimeIndex([mid]), name=series.name))
+            pieces.append(
+                pd.Series([float("nan")], index=pd.DatetimeIndex([mid]), name=series.name)
+            )
             start = i
     pieces.append(series.iloc[start:])
     if len(pieces) == 1:
         return series
-    return pd.concat(pieces)
+    return cast(pd.Series, pd.concat(pieces))

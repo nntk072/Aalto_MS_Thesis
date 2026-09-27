@@ -913,11 +913,7 @@ def _candle_body_days(index: pd.DatetimeIndex) -> float:
     else:
         deltas = index[1:] - index[:-1]
         positive = deltas[deltas > pd.Timedelta(0)]
-        step = (
-            pd.Timedelta(pd.Series(positive).median())
-            if len(positive)
-            else pd.Timedelta("1min")
-        )
+        step = pd.Timedelta(pd.Series(positive).median()) if len(positive) else pd.Timedelta("1min")
         if step <= pd.Timedelta(0):
             step = pd.Timedelta("1min")
     return float(step / pd.Timedelta("1D"))
