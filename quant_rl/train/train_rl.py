@@ -32,7 +32,8 @@ from gymnasium import spaces
 from omegaconf import DictConfig, OmegaConf
 
 from quant_rl.config import load_config
-from quant_rl.data.pipeline import run_pipeline
+from quant_rl.data.pipeline import build_tick_books, run_pipeline
+from quant_rl.data.ticks import TickBook, ticks_covering
 from quant_rl.data.split import get_split_config, make_train_mask, split_bars, split_train_test
 from quant_rl.envs.distribution_reward import DistributionReward
 from quant_rl.envs.po3_reward import PO3Reward
@@ -206,6 +207,17 @@ def _publish_obs_memmap(features: pd.DataFrame, cfg: Any, path: Path) -> str | N
     return str(path)
 
 
+def _fill_delay_ms(cfg: Any) -> int:
+    """Milliseconds between the crossing tick and the SL/TP fill."""
+    execution = cfg.get("execution") if hasattr(cfg, "get") else None
+    if execution is None:
+        return 0
+    try:
+        return int(execution.get("fill_delay_ms", 0))
+    except Exception:
+        return 0
+
+
 def make_env(
     bars: pd.DataFrame,
     features: pd.DataFrame,
@@ -218,6 +230,7 @@ def make_env(
     vae: Any | None = None,
     pre_ny_by_date: dict[Any, Any] | None = None,
     obs_features_mmap: str | None = None,
+    tickbook: TickBook | None = None,
 ) -> TradingEnv:
     continuous_actions = algo == "sac"
     use_sweep_reward = reward == "sweep"
@@ -253,6 +266,8 @@ def make_env(
         reward_mode=str(cfg.env.get("reward_mode", "dsr")),
         entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
         peak_trailing_dd_limit=float(cfg.env.get("peak_trailing_dd_limit", 0.0)),
+        tickbook=tickbook,
+        fill_delay_ms=_fill_delay_ms(cfg),
         use_vae=use_vae,
         vae=vae,
         pre_ny_by_date=pre_ny_by_date,
@@ -417,6 +432,7 @@ def main() -> None:
         cfg.training.max_days = 30
 
     data = run_pipeline(cfg, force=args.force)
+    primary_ticks = build_tick_books(cfg).get(str(cfg.data.primary))
 
     primary_sym = cfg.data.primary
     secondary_sym = cfg.data.secondary
@@ -503,6 +519,7 @@ def main() -> None:
         vae=env_vae,
         pre_ny_by_date=pre_ny_by_date,
         obs_features_mmap=obs_mmap,
+        tickbook=ticks_covering(primary_ticks, train_bars),
     )
 
     checkpoint_callback = _periodic_checkpoint_callback(cfg, model_dir)
@@ -577,6 +594,7 @@ def main() -> None:
             use_vae=args.use_vae,
             vae=env_vae,
             pre_ny_by_date=pre_ny_by_date,
+            tickbook=ticks_covering(primary_ticks, short_bars),
         ),
         eval_freq=best_eval_freq,
         best_model_path=model_dir / "ppo_best",
@@ -647,6 +665,7 @@ def main() -> None:
         reward_mode=str(cfg.env.get("reward_mode", "dsr")),
         entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
         peak_trailing_dd_limit=float(cfg.env.get("peak_trailing_dd_limit", 0.0)),
+        fill_delay_ms=_fill_delay_ms(cfg),
     )
     log.info("Evaluating trained model on test set...")
     test_result = evaluate_model(
@@ -654,6 +673,7 @@ def main() -> None:
         bars=test_bars,
         features=test_feat,
         max_episode_steps=None,
+        tickbook=ticks_covering(primary_ticks, test_bars),
         **eval_common,
     )
     test_result["initial_balance"] = cfg.account.initial_balance
@@ -688,6 +708,7 @@ def main() -> None:
         bars=train_bars,
         features=train_feat,
         max_episode_steps=None,
+        tickbook=ticks_covering(primary_ticks, train_bars),
         **eval_common,
     )
     train_result["initial_balance"] = cfg.account.initial_balance
@@ -863,6 +884,7 @@ def main() -> None:
                 vae=env_vae,
                 pre_ny_by_date=pre_ny_by_date,
                 obs_features_mmap=fold_mmap,
+                tickbook=ticks_covering(primary_ticks, fold_train_bars),
             )
             fold_model = build_agent(
                 fold_env,
@@ -883,6 +905,7 @@ def main() -> None:
                     vae=env_vae,
                     pre_ny_by_date=pre_ny_by_date,
                     obs_features_mmap=fold_mmap,
+                    tickbook=ticks_covering(primary_ticks, fold_train_bars),
                 ),
             )
             fold_model.learn(total_timesteps=wf_steps, callback=None, progress_bar=False)
@@ -914,6 +937,8 @@ def main() -> None:
                 entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
                 reward_mode=str(cfg.env.get("reward_mode", "dsr")),
                 entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
+                tickbook=ticks_covering(primary_ticks, fold_test_bars),
+                fill_delay_ms=_fill_delay_ms(cfg),
             )
             fold_m = calculate_metrics(
                 fold_result["equity"],

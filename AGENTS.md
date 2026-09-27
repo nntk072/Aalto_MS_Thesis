@@ -147,7 +147,9 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
 - **Reuse first:** if a GPU tmux/`srun` already exists, run train/eval/tests
   there (`tmux send-keys`).
 - **`srun` needs confirmation:** agents may allocate only after you explicitly
-  OK it in-chat. No self-started short diagnostic jobs (&lt;~120s).
+  OK a **new** allocation in-chat. SSH, an existing tmux pane, or “use this
+  GPU task” is not that OK. `srun`, `srun --overlap`, `srun --jobid=`, and a
+  second step stay blocked. No self-started short diagnostic jobs (&lt;~120s).
 - **Before alloc:** check `sinfo`/`squeue` for free GPU/CPU/RAM. **1 GPU**
   for one model (`gh200:1` or `h200:1`, `--mem=512G`, 48 CPUs, **6h or 12h**).
   **2 GPUs** for the six-run matrix (`gh200:2`, `--mem=900G`, 128 CPUs, 6h).

@@ -906,6 +906,23 @@ def _per_trade_equity(
     return pd.DatetimeIndex(times), vals
 
 
+def _candle_body_days(index: pd.DatetimeIndex) -> float:
+    """Body width of one bar, in matplotlib day units."""
+    if len(index) < 2:
+        step = pd.Timedelta("1min")
+    else:
+        deltas = index[1:] - index[:-1]
+        positive = deltas[deltas > pd.Timedelta(0)]
+        step = (
+            pd.Timedelta(pd.Series(positive).median())
+            if len(positive)
+            else pd.Timedelta("1min")
+        )
+        if step <= pd.Timedelta(0):
+            step = pd.Timedelta("1min")
+    return float(step / pd.Timedelta("1D"))
+
+
 def _axis_date_format(window: pd.DataFrame) -> str:
     """``%H:%M`` for a single calendar day; include month/day otherwise."""
     idx = pd.DatetimeIndex(window.index)
@@ -985,7 +1002,7 @@ def plot_per_trade_orders(
     """
     import matplotlib.dates as mdates
 
-    from .chart_indicators import compute_chart_overlays_full
+    from .chart_indicators import break_overlay_gaps, compute_chart_overlays_full
     from .chart_overlays import (
         VWAP_COLOR,
         build_overlay_events,
@@ -1039,6 +1056,7 @@ def plot_per_trade_orders(
         events = prepared.events
         t_open = prepared.t_open
         t_close = prepared.t_close
+        overlays = break_overlay_gaps(overlays)
 
         direction = int(open_row["direction"]) if pd.notna(open_row.get("direction")) else 0
         pnl = float(close_row["pnl"]) if pd.notna(close_row.get("pnl")) else 0.0
@@ -1058,6 +1076,7 @@ def plot_per_trade_orders(
             LONG_COLOR if o <= c else SHORT_COLOR for o, c in zip(window["open"], window["close"])
         ]
 
+        body_width = _candle_body_days(pd.DatetimeIndex(window.index))
         for i, (idx, row) in enumerate(window.iterrows()):
             hl_color = colors_up[i]
             # High-low line
@@ -1070,10 +1089,10 @@ def plot_per_trade_orders(
             # Open-close body
             body_height = abs(row["close"] - row["open"])
             body_bottom = min(row["open"], row["close"])
-            x0 = mdates.date2num(cast(pd.Timestamp, idx) - pd.Timedelta("1min") / 2)
+            x0 = mdates.date2num(cast(pd.Timestamp, idx)) - body_width / 2
             rect = Rectangle(
                 (x0, body_bottom),
-                float(pd.Timedelta("1min") / pd.Timedelta("1D")),
+                body_width,
                 body_height,
                 facecolor=hl_color,
                 edgecolor=hl_color,
@@ -1081,19 +1100,27 @@ def plot_per_trade_orders(
             )
             ax_price.add_patch(rect)
 
+        # HTF/LTF imbalance boxes, same geometry as the PO3 sample figure.
+        from quant_rl.eval.po3_plots import _draw_zones
+        from quant_rl.features.po3_config import build_fvg_zones_for_plot
+
+        _draw_zones(ax_price, build_fvg_zones_for_plot(window), window)
+
         # EMA50
+        ema = overlays["ema50"]
         ax_price.plot(
-            window.index,
-            overlays["ema50"],
+            ema.index,
+            ema.to_numpy(),
             color="#0066cc",
             linewidth=2,
             label="EMA50",
             zorder=3,
         )
         if show_vwap:
+            vwap = overlays["vwap"]
             ax_price.plot(
-                window.index,
-                overlays["vwap"],
+                vwap.index,
+                vwap.to_numpy(),
                 color=VWAP_COLOR,
                 linewidth=1.7,
                 linestyle="-.",
@@ -1102,6 +1129,12 @@ def plot_per_trade_orders(
             )
         draw_overlays_mpl(ax_price, events)
         draw_order_levels_mpl(ax_price, levels)
+        # Structure lines must not stretch a one-minute trade across later months.
+        pad = float(pd.Timedelta("30s") / pd.Timedelta("1D"))
+        ax_price.set_xlim(
+            mdates.date2num(pd.Timestamp(window.index[0])) - pad,
+            mdates.date2num(pd.Timestamp(window.index[-1])) + pad,
+        )
 
         # Formatting
         ax_price.set_ylabel("Price")

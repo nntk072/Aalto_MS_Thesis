@@ -64,12 +64,12 @@ def _extract_window(
     t_close: pd.Timestamp,
     context: int,
 ) -> pd.DataFrame:
-    """Return M1 bars around a trade, capped to the trade's NY session(s).
+    """Return M1 bars around a trade, with the order away from the axis edge.
 
-    Context bars before entry / after exit never cross into the next (or
-    previous) NY session. When the spine holds full-day bars, overnight and
-    next-session candles are excluded so a ``%H:%M`` axis cannot paint two
-    days on top of each other after an ``eod_close``.
+    ``context`` bars before the entry and after the exit. A trade that opens
+    at 16:30 still gets earlier candles that same day, so the order sits in
+    the middle. The slice does not cross into the previous or next calendar
+    day.
     """
     idx = pd.DatetimeIndex(bars.index)
     i_o = int(idx.get_indexer(pd.Index([_align_ts(t_open, idx)]), method="nearest")[0])
@@ -77,22 +77,17 @@ def _extract_window(
     if i_o < 0 or i_c < 0:
         return pd.DataFrame(columns=bars.columns)
 
-    session_pos = _ny_session_positions(idx, t_open, t_close)
-    if session_pos.size == 0:
-        i_s = max(0, min(i_o, i_c) - context)
-        i_e = min(len(bars) - 1, max(i_o, i_c) + context)
-        return bars.iloc[i_s : i_e + 1]
-
-    sess_start = int(session_pos[0])
-    sess_end = int(session_pos[-1])
-    i_o = min(max(i_o, sess_start), sess_end)
-    i_c = min(max(i_c, sess_start), sess_end)
-    i_s = max(sess_start, min(i_o, i_c) - context)
-    i_e = min(sess_end, max(i_o, i_c) + context)
-
-    window = bars.iloc[i_s : i_e + 1]
-    keep = np.isin(np.arange(i_s, i_e + 1), session_pos)
-    return window.iloc[keep]
+    i_s = max(0, min(i_o, i_c) - context)
+    i_e = min(len(bars) - 1, max(i_o, i_c) + context)
+    t0 = _align_ts(t_open, idx)
+    t1 = _align_ts(t_close, idx)
+    day_start = t0.normalize()
+    day_end = t1.normalize() + pd.Timedelta(days=1)
+    while i_s < i_e and pd.Timestamp(idx[i_s]) < day_start:
+        i_s += 1
+    while i_e > i_s and pd.Timestamp(idx[i_e]) >= day_end:
+        i_e -= 1
+    return bars.iloc[i_s : i_e + 1]
 
 
 def _structure_anchors(
@@ -110,9 +105,26 @@ def _structure_anchors(
         if sweep.t1 >= t_open and sweep.t0 <= t_close:
             anchors.append(sweep.t0)
     for seg in events.smt:
-        if seg.t1 >= t_open and seg.t0 <= t_close:
+        # A segment that runs to a later week must not set the chart axis.
+        # Both pivots have to sit on this session or the previous day.
+        if not (seg.t1 >= t_open and seg.t0 <= t_close):
+            continue
+        if _on_trade_or_previous_day(seg.t0, t_open) and _on_trade_or_previous_day(
+            seg.t1, t_open
+        ):
             anchors.extend([seg.t0, seg.t1])
     return anchors
+
+
+def _on_trade_or_previous_day(ts: pd.Timestamp, t_open: pd.Timestamp) -> bool:
+    """True when ``ts`` is on the trade's calendar day or the day before."""
+    ref = pd.Timestamp(t_open)
+    cur = pd.Timestamp(ts)
+    if ref.tzinfo is not None:
+        cur = cur.tz_localize(ref.tzinfo) if cur.tzinfo is None else cur.tz_convert(ref.tzinfo)
+    day = cur.normalize()
+    trade_day = ref.normalize()
+    return bool(day == trade_day or day == trade_day - pd.Timedelta(days=1))
 
 
 def _extend_trade_window(
@@ -174,6 +186,11 @@ def prepare_order_chart(
 ) -> PreparedOrderChart | None:
     """Build the window, metrics, clipped events, and position box for one trade.
 
+    The window is the trade's NY session plus ``context_bars`` before the
+    entry and after the exit. Structure pivots and SL/TP/MAE/MFE times stay
+    as levels on those candles. They do not pull earlier sessions onto the axis.
+    ``_extend_trade_window`` is left in place for that older behaviour.
+
     Returns ``None`` when fewer than three bars remain. Does not draw.
     """
     t_open = pd.Timestamp(open_row["time"])
@@ -191,13 +208,6 @@ def prepare_order_chart(
         contract_size=contract_size,
     )
     marked = confirmed_pivots(overlay_events, bars)
-    anchors = _structure_anchors(marked, t_open, t_close)
-    for extra_ts in (metrics.sl_time, metrics.tp_time, metrics.mae_time, metrics.mfe_time):
-        if extra_ts is not None:
-            anchors.append(pd.Timestamp(extra_ts))
-    window = _extend_trade_window(bars, window, anchors, t_open)
-    if len(window) < 3:
-        return None
     levels = order_levels(
         window,
         metrics,

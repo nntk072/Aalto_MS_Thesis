@@ -911,7 +911,9 @@ def build_fvg_zones_for_plot(
                 zone_high = float(ltf_ifvg[high_col].iloc[i])
                 if not np.isfinite(zone_low) or not np.isfinite(zone_high) or zone_high <= zone_low:
                     continue
-                start_ts = ltf_bars.index[i]
+                # Two LTF candles left of the confirmation bar, so the box
+                # covers the imbalance pair and not only the close-through.
+                start_ts = ltf_bars.index[i - 2] if i >= 2 else ltf_bars.index[0]
                 end_ts, invalidated = _invalidate_zone_on_tf(
                     ltf_bars,
                     side=side,

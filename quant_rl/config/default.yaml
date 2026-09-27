@@ -47,6 +47,11 @@ costs:
   # set false to disable tick lookup and always use bar-spread fallback
   use_tick_execution: true
 
+execution:
+  # Fill on the tick that crosses SL or TP. 0 = that tick, not a later one.
+  # A prop-firm stop fills at the level or worse; a later tick can bounce back.
+  fill_delay_ms: 0
+
 ftmo:
   # Hard daily loss (5% of $100k): force-close + block the rest of that session.
   daily_loss_limit: 5000.0

@@ -25,28 +25,62 @@ from quant_rl.eval.chart_levels import (
 )
 from quant_rl.eval.chart_overlays import (
     OverlayEvents,
+    SmtSegment,
     SweepLine,
     SwingRay,
     build_overlay_events,
     draw_overlays_mpl,
 )
 from quant_rl.eval.order_chart import order_levels
-from quant_rl.eval.plots import _extend_trade_window, _extract_window, plot_per_trade_orders
+from quant_rl.eval.plots import plot_per_trade_orders
 from quant_rl.eval.plots_interactive import plot_per_trade_orders as plot_per_trade_orders_html
 from quant_rl.eval.trade_metrics import compute_trade_metrics
+from quant_rl.eval.overlay_events import _swing_origins
 from quant_rl.features.structure import structure_levels
 
 
-def test_clip_does_not_move_the_pivot_dot_onto_the_window_edge() -> None:
+def test_clip_cuts_smt_that_runs_months_past_the_trade() -> None:
+    start = pd.Timestamp("2024-12-31 16:00")
+    end = pd.Timestamp("2024-12-31 17:00")
+    seg = SmtSegment(
+        t0=pd.Timestamp("2024-12-31 16:20"),
+        p0=21200.0,
+        t1=pd.Timestamp("2025-03-08 16:00"),
+        p1=22000.0,
+        side="high",
+        label="SMT",
+    )
+    clipped = OverlayEvents(smt=[seg]).clip(start, end)
+    assert clipped.smt == []
+    inside = SmtSegment(
+        t0=pd.Timestamp("2024-12-31 16:20"),
+        p0=21200.0,
+        t1=pd.Timestamp("2024-12-31 16:40"),
+        p1=21240.0,
+        side="high",
+        label="SMT",
+    )
+    kept = OverlayEvents(smt=[inside]).clip(start, end)
+    assert len(kept.smt) == 1
+    assert kept.smt[0].t0 == inside.t0
+    assert kept.smt[0].t1 == inside.t1
+
+
+def test_clip_drops_a_swing_whose_pivot_is_outside_the_window() -> None:
     idx = pd.date_range("2026-03-02 16:30", periods=10, freq="1min")
     ray = SwingRay(t0=idx[0], t1=idx[8], price=10.0, side="high", origin=idx[0])
     clipped = OverlayEvents(swings=[ray]).clip(pd.Timestamp(idx[4]), pd.Timestamp(idx[8]))
-    assert len(clipped.swings) == 1
-    assert clipped.swings[0].origin == idx[0]
-    assert clipped.swings[0].t0 == idx[4]
+    assert clipped.swings == []
+
+    inside = SwingRay(t0=idx[5], t1=idx[9], price=10.0, side="high", origin=idx[5])
+    kept = OverlayEvents(swings=[inside]).clip(pd.Timestamp(idx[4]), pd.Timestamp(idx[8]))
+    assert len(kept.swings) == 1
+    assert kept.swings[0].origin == idx[5]
+    assert kept.swings[0].t0 == idx[5]
+    assert kept.swings[0].t1 == idx[8]
     fig, ax = plt.subplots()
-    draw_overlays_mpl(ax, clipped)
-    assert len(ax.collections) == 0
+    draw_overlays_mpl(ax, kept)
+    assert len(ax.collections) == 1
     plt.close(fig)
 
 
@@ -71,6 +105,26 @@ def test_swing_origin_is_the_pivot_candle() -> None:
     assert pd.Timestamp(ray.origin) == pd.Timestamp(levels["last_swing_high_time"].dropna().iloc[0])
     loc = int(bars.index.get_indexer(pd.Index([ray.origin]))[0])
     assert float(bars["high"].iloc[loc]) == float(ray.price)
+
+
+def test_swing_off_the_wick_still_draws_on_that_candle() -> None:
+    idx = pd.date_range("2026-03-02 16:30", periods=10, freq="1min")
+    high = np.full(10, 100.0)
+    high[4] = 112.0
+    levels = pd.DataFrame(
+        {
+            "last_swing_high": np.nan,
+            "last_swing_high_time": pd.Series(pd.NaT, index=idx),
+        },
+        index=idx,
+    )
+    levels.loc[idx[4], "last_swing_high"] = 999.0
+    levels.loc[idx[4], "last_swing_high_time"] = idx[4]
+    origins = _swing_origins(levels, pd.Series(high, index=idx), idx, 3, "high")
+    assert origins
+    origin_i, price = origins[0]
+    assert origin_i == 4
+    assert price == 112.0
 
 
 def test_sweep_x_sits_on_the_right_end_of_the_line() -> None:
@@ -224,20 +278,109 @@ def test_deviation_levels_skip_far_multiples_and_need_an_extreme() -> None:
     assert not at_sample_extreme(fallen, idx[-1], 1)
 
 
-def test_same_day_anchor_extends_the_window_through_london() -> None:
-    idx = pd.date_range("2026-03-02 09:00", periods=10 * 60, freq="1min")
-    close = np.full(len(idx), 100.0)
+def test_ny_trade_window_ignores_earlier_pivots() -> None:
+    idx = pd.date_range("2024-12-30 07:00", "2024-12-31 23:00", freq="1min")
+    close = np.linspace(21000.0, 21200.0, len(idx))
     bars = pd.DataFrame(
-        {"open": close, "high": close + 1, "low": close - 1, "close": close},
+        {"open": close, "high": close + 1.0, "low": close - 1.0, "close": close},
         index=idx,
     )
-    t_open = pd.Timestamp("2026-03-02 17:00")
-    t_close = pd.Timestamp("2026-03-02 17:30")
-    window = _extract_window(bars, t_open, t_close, context=5)
-    assert window.index[0] >= pd.Timestamp("2026-03-02 16:30")
-    extended = _extend_trade_window(bars, window, [pd.Timestamp("2026-03-02 10:00")], t_open)
-    assert extended.index[0] <= pd.Timestamp("2026-03-02 10:00")
-    assert pd.Timestamp("2026-03-02 12:00") in extended.index
+    t_open = pd.Timestamp("2024-12-31 16:32")
+    t_close = pd.Timestamp("2024-12-31 16:33")
+    open_row = pd.Series(
+        {
+            "time": t_open,
+            "direction": 1,
+            "price": float(bars.loc[t_open, "close"]),
+            "type": "open",
+            "lots": 1.0,
+        }
+    )
+    close_row = pd.Series(
+        {
+            "time": t_close,
+            "price": float(bars.loc[t_close, "close"]),
+            "pnl": -100.0,
+            "type": "stop_close",
+        }
+    )
+    events = OverlayEvents(
+        swings=[
+            SwingRay(
+                t0=pd.Timestamp("2024-12-30 07:15"),
+                t1=pd.Timestamp("2024-12-31 18:00"),
+                price=21100.0,
+                side="high",
+                origin=pd.Timestamp("2024-12-30 07:15"),
+            ),
+            SwingRay(
+                t0=pd.Timestamp("2024-12-31 10:00"),
+                t1=pd.Timestamp("2024-12-31 18:00"),
+                price=21150.0,
+                side="low",
+                origin=pd.Timestamp("2024-12-31 10:00"),
+            ),
+        ],
+        sweeps=[
+            SweepLine(
+                t0=pd.Timestamp("2024-12-31 10:00"),
+                t1=pd.Timestamp("2024-12-31 16:40"),
+                price=21150.0,
+                side="low",
+                label="SSL",
+            )
+        ],
+        smt=[
+            SmtSegment(
+                t0=pd.Timestamp("2024-12-30 08:00"),
+                p0=21100.0,
+                t1=pd.Timestamp("2024-12-31 12:00"),
+                p1=21140.0,
+                side="high",
+                label="SMT",
+            )
+        ],
+    )
+    flat = pd.Series(close, index=idx)
+    overlays = {
+        key: flat.copy()
+        for key in ("ema50", "macd", "signal", "histogram", "rsi", "vwap")
+    }
+    from quant_rl.eval.chart_indicators import break_overlay_gaps
+    from quant_rl.eval.order_window import prepare_order_chart
+
+    prepared = prepare_order_chart(
+        bars,
+        open_row,
+        close_row,
+        overlay_events=events,
+        full_overlays=overlays,
+        context_bars=60,
+    )
+    assert prepared is not None
+    assert prepared.window.index[0] == pd.Timestamp("2024-12-31 15:32")
+    assert prepared.window.index[-1] <= pd.Timestamp("2024-12-31 17:33")
+    assert all(ts.normalize() == pd.Timestamp("2024-12-31") for ts in prepared.window.index)
+    assert t_open in prepared.window.index
+    assert t_close in prepared.window.index
+    assert prepared.events.smt == []
+    assert prepared.events.swings == []
+    assert prepared.events.sweeps == []
+
+    gapped = pd.Series(
+        [1.0, 2.0, 3.0, 4.0],
+        index=pd.to_datetime(
+            [
+                "2024-12-30 22:59",
+                "2024-12-30 23:00",
+                "2024-12-31 16:30",
+                "2024-12-31 16:31",
+            ]
+        ),
+    )
+    broken = break_overlay_gaps({"ema50": gapped})["ema50"]
+    assert broken.isna().any()
+    assert list(broken.dropna()) == [1.0, 2.0, 3.0, 4.0]
 
 
 def _session(

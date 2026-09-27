@@ -24,6 +24,7 @@ from ..backtest.costs import COST_US100, CostModel
 from ..backtest.guardrails import FTMOGuardrails
 from ..backtest.risk import compute_lots, compute_sl_tp_long, compute_sl_tp_short
 from ..data.session import ny_session_mask
+from ..data.ticks import TickBook
 from ..envs.feature_row import BarView, FeatureRow
 from ..envs.reward import DSRReward, PnLReward
 from ..envs.strategies import BaselineStrategy, TradingStrategy
@@ -88,6 +89,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         entry_intensity_threshold: float = 0.0,
         obs_features_mmap: str | None = None,
         peak_trailing_dd_limit: float = 0.0,
+        tickbook: TickBook | None = None,
+        fill_delay_ms: int = 0,
     ):
         """Initialize trading environment.
 
@@ -252,6 +255,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # market quote and refuse new risk. Stops and targets are not rewritten.
         self.peak_trailing_dd_limit = float(peak_trailing_dd_limit)
         self._peak_dd_fired = False
+        self._tickbook = tickbook
+        self._fill_delay_ms = int(fill_delay_ms)
         # Resolve trader/strategy action flag early (needed for reward + spaces).
         _strategy_actions = (
             bool(trader_actions) if trader_actions is not None else bool(strategy_actions)
@@ -734,11 +739,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
     ) -> None:
         """Check whether the open position hit its SL or TP on this bar.
 
-        A touched stop or target fills at that price. Slippage, when
-        configured, moves the fill only against the position. The next
-        bar's quote is not used: a wick through a tight stop must not
-        book the favorable close. If both levels sit inside one bar, the
-        stop wins.
+        With a tick book, the first bid (long) or ask (short) beyond the
+        level is the fill. ``fill_delay_ms`` is 0, so a later tick is not
+        used: a stop cannot bounce back to a better price. That crossing
+        tick is already through the level, so a loss can exceed $100 and a
+        target can pay more than $100. With no crossing tick, the fill stays
+        at the level. Slippage, when configured, moves that level fill only
+        against the position. If both levels sit inside one bar and there is
+        no tick, the stop wins.
         """
         if self.position is None:
             return
@@ -750,6 +758,26 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         )
         # Touch detection uses the bar range. The next quote must not be the fill.
         _ = (fill_bid, fill_ask)
+
+        tick_hit = self._tick_exit_quote(log_time)
+        if tick_hit is not None:
+            kind, quote = tick_hit
+            pnl, fill_price = self.broker.close_position(self.account, self.position, quote)
+            self.trade_log.append(
+                {
+                    "type": "stop_close" if kind == "sl" else "tp_close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "reason": "structure_sl" if kind == "sl" else "structure_tp",
+                    "bar": idx,
+                    "time": log_time,
+                    "equity": self.account.equity,
+                }
+            )
+            self.position = None
+            self.sessions_with_trades.add(self._current_session_id())
+            self._note_close(pnl)
+            return
 
         sl_hit = False
         if self.position.sl_price is not None:
@@ -811,6 +839,28 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 self.position = None
                 self.sessions_with_trades.add(self._current_session_id())
                 self._note_close(pnl)
+
+    def _tick_exit_quote(
+        self, bar_time: pd.Timestamp
+    ) -> tuple[str, tuple[float, float]] | None:
+        """Delayed tick quote for a stop or target, or ``None`` to use the level."""
+        book = self._tickbook
+        pos = self.position
+        if book is None or pos is None:
+            return None
+        if pos.sl_price is None and pos.tp_price is None:
+            return None
+        hit = book.delayed_exit_quote(
+            pd.Timestamp(bar_time),
+            int(pos.direction),
+            None if pos.sl_price is None else float(pos.sl_price),
+            None if pos.tp_price is None else float(pos.tp_price),
+            pd.Timedelta(milliseconds=self._fill_delay_ms),
+        )
+        if hit is None:
+            return None
+        kind, bid, ask = hit
+        return kind, (bid, ask)
 
     def _sl_tp_fill_quote(self, direction: int, hit_price: float) -> tuple[float, float]:
         """Bid/ask that closes at *hit_price*, worsened only by adverse slippage.

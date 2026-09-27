@@ -72,19 +72,24 @@ class OverlayEvents:
     smt: list[SmtSegment] = field(default_factory=list)
 
     def clip(self, start: pd.Timestamp, end: pd.Timestamp) -> OverlayEvents:
-        """Keep events that intersect ``[start, end]`` and clip rays to the window."""
+        """Keep events whose pivot candles lie inside ``[start, end]``.
+
+        A swing that only passes through the window is dropped. Cutting it
+        at the edge draws a dash that does not sit on its pivot. A sweep
+        needs both ends on the chart. The forward end of a swing may still
+        be trimmed to ``end`` so the ray does not leave the axis.
+        """
         swings = []
         for r in self.swings:
             origin = r.pivot_time()
-            if r.t1 < start or origin > end:
+            if origin < start or origin > end or r.t1 <= origin:
                 continue
-            t0 = max(origin, start)
             t1 = min(r.t1, end)
-            if t1 <= t0:
+            if t1 <= origin:
                 continue
             swings.append(
                 SwingRay(
-                    t0=t0,
+                    t0=origin,
                     t1=t1,
                     price=r.price,
                     side=r.side,
@@ -92,8 +97,18 @@ class OverlayEvents:
                     mark_pivot=r.mark_pivot,
                 )
             )
-        sweeps = [s for s in self.sweeps if s.t1 >= start and s.t0 <= end]
-        smt = [s for s in self.smt if s.t1 >= start and s.t0 <= end]
+        sweeps = []
+        for s in self.sweeps:
+            if s.t0 < start or s.t1 > end or s.t1 <= s.t0:
+                continue
+            sweeps.append(s)
+        smt = []
+        for s in self.smt:
+            # Keep the segment only when both swing candles are on the chart.
+            # Clipping a week-long line to the window edge leaves SMT off any candle.
+            if s.t0 < start or s.t1 > end:
+                continue
+            smt.append(s)
         return OverlayEvents(swings=swings, sweeps=sweeps, smt=smt)
 
 
@@ -117,8 +132,31 @@ def _align_origin_ts(ts: pd.Timestamp, index: pd.DatetimeIndex) -> pd.Timestamp:
     return out.tz_convert(index.tz)
 
 
+def _bar_that_prints(
+    wick: pd.Series,
+    origin_i: int,
+    price: float,
+    swing_period: int,
+) -> int:
+    """Index of the candle whose wick is ``price``, or -1.
+
+    The structure timestamp can land on the confirmation bar. Search a few
+    bars around it for the candle that actually printed the level.
+    """
+    if origin_i < 0 or origin_i >= len(wick) or np.isnan(price):
+        return -1
+    lo = max(0, origin_i - swing_period)
+    hi = min(len(wick), origin_i + swing_period + 1)
+    values = wick.to_numpy(dtype=float)
+    for j in range(lo, hi):
+        if np.isfinite(values[j]) and np.isclose(values[j], price, atol=0.05, rtol=0.0):
+            return j
+    return -1
+
+
 def _swing_origins(
     levels: pd.DataFrame,
+    wick: pd.Series,
     index: pd.DatetimeIndex,
     swing_period: int,
     side: Side,
@@ -150,9 +188,19 @@ def _swing_origins(
                 origin_i = loc
         if origin_i < 0:
             origin_i = i - swing_period
-        if origin_i < 0 or origin_i >= len(index):
+        if origin_i < 0 or origin_i >= len(wick):
             continue
-        out.append((origin_i, price))
+        # A stored level that misses the wick still belongs on this pivot.
+        # Draw the candle's high or low so the ray is not thrown away.
+        matched = _bar_that_prints(wick, origin_i, price, swing_period)
+        if matched >= 0:
+            origin_i = matched
+            draw_px = price
+        else:
+            draw_px = float(wick.iloc[origin_i])
+            if not np.isfinite(draw_px):
+                continue
+        out.append((origin_i, draw_px))
     return out
 
 
@@ -202,8 +250,10 @@ def _sweep_lines(
             continue
         prior = origin_i_arr[origin_i_arr < i]
         origin_i = int(prior[-1]) if len(prior) else i
-        t0 = pd.Timestamp(index[origin_i]) - pad
-        t1 = pd.Timestamp(index[i]) + pad
+        # Endpoints are the candles themselves. A time pad draws the X
+        # between bars, off the wick the sweep took.
+        t0 = pd.Timestamp(index[origin_i])
+        t1 = pd.Timestamp(index[i])
         if t1 <= t0:
             t1 = t0 + pad * 2
         lines.append(SweepLine(t0=t0, t1=t1, price=price, side=side, label=label))
@@ -258,8 +308,8 @@ def build_overlay_events(
     pad = _bar_pad(idx)
     levels = structure_levels(bars, swing_period)
     sweeps = detect_liquidity_sweeps(bars, swing_period=swing_period)
-    high_origins = _swing_origins(levels, idx, swing_period, "high")
-    low_origins = _swing_origins(levels, idx, swing_period, "low")
+    high_origins = _swing_origins(levels, bars["high"], idx, swing_period, "high")
+    low_origins = _swing_origins(levels, bars["low"], idx, swing_period, "low")
 
     events = OverlayEvents(
         swings=_rays_from_origins(idx, high_origins, "high")

@@ -1,4 +1,4 @@
-"""Merged overlay: a sweep plus a same-side gap sets the trade direction."""
+"""Overlay direction follows distribution, context, then higher-timeframe bias."""
 
 from __future__ import annotations
 
@@ -9,27 +9,27 @@ from quant_rl.envs.po3_reward import PO3Reward
 from quant_rl.envs.strategies.po3_ifvg import PO3IFVGStrategy
 
 
-def test_long_after_sellside_sweep_and_bullish_gap() -> None:
+def test_distribution_direction_sets_the_trade() -> None:
     strategy = PO3IFVGStrategy(enforce_gate=False)
-    row = pd.Series({"sweep_low": 1.0, "price_in_ifvg_bull": 1.0})
-    assert strategy.context_direction(row) == 1
-
-
-def test_near_sweep_and_nearby_fvg_is_enough() -> None:
-    strategy = PO3IFVGStrategy(enforce_gate=False)
-    row = pd.Series({"manipulation_high_distance_atr": 0.4, "fvg_bear_dist": 0.8})
+    row = pd.Series({"po3_distribution": 1.0, "po3_distribution_direction": -1.0})
     assert strategy.context_direction(row) == -1
 
 
-def test_gap_without_sweep_holds() -> None:
+def test_htf_bias_sets_the_trade_without_a_sweep() -> None:
     strategy = PO3IFVGStrategy(enforce_gate=False)
     row = pd.Series({"price_in_ifvg_bull": 1.0, "htf_day_bias": 1.0})
-    assert strategy.context_direction(row) == 0
+    assert strategy.context_direction(row) == 1
 
 
-def test_absent_fvg_cap_is_not_a_nearby_gap() -> None:
+def test_context_direction_when_distribution_is_off() -> None:
     strategy = PO3IFVGStrategy(enforce_gate=False)
-    row = pd.Series({"sweep_low": 1.0, "fvg_bull_dist": 5.0})
+    row = pd.Series({"po3_distribution": 0.0, "context_trade_direction": -1.0, "htf_day_bias": 1.0})
+    assert strategy.context_direction(row) == -1
+
+
+def test_sweep_and_gap_without_bias_holds() -> None:
+    strategy = PO3IFVGStrategy(enforce_gate=False)
+    row = pd.Series({"sweep_low": 1.0, "price_in_ifvg_bull": 1.0})
     assert strategy.context_direction(row) == 0
 
 

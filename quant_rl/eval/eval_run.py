@@ -26,7 +26,8 @@ from omegaconf import DictConfig, OmegaConf
 from stable_baselines3 import PPO
 
 from quant_rl.config import load_config
-from quant_rl.data.pipeline import run_pipeline
+from quant_rl.data.pipeline import build_tick_books, run_pipeline
+from quant_rl.data.ticks import ticks_covering
 from quant_rl.data.split import get_split_config, split_bars, split_train_test
 from quant_rl.eval.export import save_run
 from quant_rl.eval.rollout import evaluate_model
@@ -35,6 +36,7 @@ from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features
 from quant_rl.models.ppo_policy import ClampedStdMultiInputPolicy
 from quant_rl.train.train_rl import (
     _eval_guardrail_kwargs,
+    _fill_delay_ms,
     _max_loss_per_trade,
     _strategy_from_cfg,
     _strategy_risk_ranges,
@@ -167,9 +169,17 @@ def main() -> None:
         reward_mode=str(cfg.env.get("reward_mode", "dsr")),
         entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
         max_episode_steps=None,
+        fill_delay_ms=_fill_delay_ms(cfg),
     )
+    primary_ticks = build_tick_books(cfg).get(str(cfg.data.primary))
 
-    test_result = evaluate_model(model, bars=test_bars, features=test_feat, **eval_common)
+    test_result = evaluate_model(
+        model,
+        bars=test_bars,
+        features=test_feat,
+        tickbook=ticks_covering(primary_ticks, test_bars),
+        **eval_common,
+    )
     test_result["initial_balance"] = cfg.account.initial_balance
     test_m = calculate_metrics(
         test_result["equity"],
@@ -186,7 +196,13 @@ def main() -> None:
         test_result.get("fail_time"),
     )
 
-    train_result = evaluate_model(model, bars=train_bars, features=train_feat, **eval_common)
+    train_result = evaluate_model(
+        model,
+        bars=train_bars,
+        features=train_feat,
+        tickbook=ticks_covering(primary_ticks, train_bars),
+        **eval_common,
+    )
     train_result["initial_balance"] = cfg.account.initial_balance
     train_m = calculate_metrics(
         train_result["equity"],

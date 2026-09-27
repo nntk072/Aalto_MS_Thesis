@@ -134,6 +134,7 @@ def run_backtest(
     max_loss_per_trade_usd: float | None = None,
     take_profit_per_trade_usd: float | None = None,
     tickbook: TickBook | None = None,
+    fill_delay_ms: int = 0,
     use_structure_sl_tp: bool = False,
     risk_frac: float = 0.01,
     rr_ratio: float = 2.0,
@@ -219,7 +220,37 @@ def run_backtest(
             fill_row = row
         fq = _fill_quote(fill_instant, fill_row, cost_model, tickbook)
 
-        if position is not None and max_loss_per_trade_usd is not None:
+        tick_hit = None
+        if (
+            position is not None
+            and tickbook is not None
+            and (position.sl_price is not None or position.tp_price is not None)
+        ):
+            tick_hit = tickbook.delayed_exit_quote(
+                bar_time,
+                int(position.direction),
+                None if position.sl_price is None else float(position.sl_price),
+                None if position.tp_price is None else float(position.tp_price),
+                pd.Timedelta(milliseconds=fill_delay_ms),
+            )
+        if tick_hit is not None and position is not None:
+            kind, bid, ask = tick_hit
+            pnl, fill_price = broker.close_position(acc, position, (bid, ask))
+            trade_log.append(
+                {
+                    "type": "stop_close" if kind == "sl" else "tp_close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "reason": "structure_sl" if kind == "sl" else "structure_tp",
+                    "bar": i,
+                    "time": bar_time,
+                    "equity": acc.equity,
+                }
+            )
+            sessions_with_trades.add(session)
+            position = None
+
+        if position is not None and max_loss_per_trade_usd is not None and tick_hit is None:
             # Check intrabar high/low vs SL
             sl_hit = False
             if position.sl_price is not None:
@@ -264,9 +295,10 @@ def run_backtest(
                 sessions_with_trades.add(session)
                 position = None
 
-        # Check TP (structure-based if available, else use global)
+        # Check TP (structure-based if available, else use global).
+        # A tick fill already closed the position above.
         tp_hit = False
-        if position is not None:
+        if position is not None and tick_hit is None:
             if position.tp_price is not None:
                 if position.direction == 1 and float(row["high"]) >= position.tp_price:
                     tp_hit = True

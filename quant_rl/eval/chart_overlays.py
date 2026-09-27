@@ -252,8 +252,11 @@ def draw_overlays_plotly(fig: Any, events: OverlayEvents, *, row: int = 1, col: 
 
 def draw_macd_rsi_mpl(ax_macd: Any, window: pd.DataFrame, overlays: dict[str, pd.Series]) -> Any:
     """MACD on the left y-axis, RSI on the right y-axis of the same axes."""
-    ax_macd.plot(window.index, overlays["macd"], color="#0066cc", linewidth=1.5, label="MACD")
-    ax_macd.plot(window.index, overlays["signal"], color="#ff6600", linewidth=1.5, label="Signal")
+    macd = overlays["macd"]
+    signal = overlays["signal"]
+    rsi = overlays["rsi"]
+    ax_macd.plot(macd.index, macd.to_numpy(), color="#0066cc", linewidth=1.5, label="MACD")
+    ax_macd.plot(signal.index, signal.to_numpy(), color="#ff6600", linewidth=1.5, label="Signal")
     hist = overlays["histogram"]
     ax_macd.bar(
         window.index,
@@ -266,7 +269,7 @@ def draw_macd_rsi_mpl(ax_macd: Any, window: pd.DataFrame, overlays: dict[str, pd
     ax_macd.axhline(0, color="#000000", linewidth=0.5, linestyle="-", alpha=0.3)
     ax_macd.set_ylabel("MACD")
     ax_rsi = ax_macd.twinx()
-    ax_rsi.plot(window.index, overlays["rsi"], color=RSI_COLOR, linewidth=1.2, label="RSI")
+    ax_rsi.plot(rsi.index, rsi.to_numpy(), color=RSI_COLOR, linewidth=1.2, label="RSI")
     ax_rsi.axhline(70, color=RSI_LEVEL_COLOR, linewidth=0.6, linestyle=":", alpha=0.8)
     ax_rsi.axhline(30, color=RSI_LEVEL_COLOR, linewidth=0.6, linestyle=":", alpha=0.8)
     ax_rsi.set_ylabel("RSI")
@@ -284,9 +287,16 @@ def draw_macd_rsi_plotly(
     """MACD (left) and RSI (right) on a Plotly subplot with a secondary y-axis."""
     import plotly.graph_objects as go
 
+    macd = overlays["macd"]
+    signal = overlays["signal"]
+    rsi = overlays["rsi"]
     fig.add_trace(
         go.Scatter(
-            x=window.index, y=overlays["macd"], name="MACD", line=dict(color="#0066cc", width=2)
+            x=macd.index,
+            y=macd.to_numpy(),
+            name="MACD",
+            connectgaps=False,
+            line=dict(color="#0066cc", width=2),
         ),
         row=row,
         col=1,
@@ -294,7 +304,11 @@ def draw_macd_rsi_plotly(
     )
     fig.add_trace(
         go.Scatter(
-            x=window.index, y=overlays["signal"], name="Signal", line=dict(color="#ff6600", width=2)
+            x=signal.index,
+            y=signal.to_numpy(),
+            name="Signal",
+            connectgaps=False,
+            line=dict(color="#ff6600", width=2),
         ),
         row=row,
         col=1,
@@ -317,7 +331,11 @@ def draw_macd_rsi_plotly(
     fig.add_hline(y=0, line_color="#000000", line_width=1, line_dash="solid", row=row, col=1)
     fig.add_trace(
         go.Scatter(
-            x=window.index, y=overlays["rsi"], name="RSI", line=dict(color=RSI_COLOR, width=1.5)
+            x=rsi.index,
+            y=rsi.to_numpy(),
+            name="RSI",
+            connectgaps=False,
+            line=dict(color=RSI_COLOR, width=1.5),
         ),
         row=row,
         col=1,

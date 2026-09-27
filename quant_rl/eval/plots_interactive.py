@@ -726,7 +726,7 @@ def plot_per_trade_orders(
     _check()
     from plotly.subplots import make_subplots
 
-    from .chart_indicators import compute_chart_overlays_full
+    from .chart_indicators import break_overlay_gaps, compute_chart_overlays_full
     from .chart_overlays import (
         VWAP_COLOR,
         build_overlay_events,
@@ -781,6 +781,7 @@ def plot_per_trade_orders(
         events = prepared.events
         t_open = prepared.t_open
         t_close = prepared.t_close
+        overlays = break_overlay_gaps(overlays)
 
         direction = int(open_row["direction"]) if pd.notna(open_row.get("direction")) else 0
         pnl = float(close_row["pnl"]) if pd.notna(close_row.get("pnl")) else 0.0
@@ -812,22 +813,26 @@ def plot_per_trade_orders(
         )
 
         # Top panel: EMA50 overlay
+        ema = overlays["ema50"]
         fig.add_trace(
             go.Scatter(
-                x=window.index,
-                y=overlays["ema50"],
+                x=ema.index,
+                y=ema.to_numpy(),
                 name="EMA50",
                 line=dict(color="#0066cc", width=2),
+                connectgaps=False,
             ),
             row=1,
             col=1,
         )
         if show_vwap:
+            vwap = overlays["vwap"]
             fig.add_trace(
                 go.Scatter(
-                    x=window.index,
-                    y=overlays["vwap"],
+                    x=vwap.index,
+                    y=vwap.to_numpy(),
                     name="VWAP",
+                    connectgaps=False,
                     line=dict(color=VWAP_COLOR, width=1.8, dash="dashdot"),
                 ),
                 row=1,
@@ -882,6 +887,9 @@ def plot_per_trade_orders(
             rangebreaks.append(dict(bounds=[23.01, 16.5], pattern="hour"))
         tickformat = "%H:%M" if len(days) == 1 else "%m/%d %H:%M"
 
+        fig.update_xaxes(
+            range=[window.index[0], window.index[-1]],
+        )
         fig.update_layout(
             template=_TEMPLATE,
             title=title,

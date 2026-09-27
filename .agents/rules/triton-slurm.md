@@ -15,8 +15,22 @@ Helper scripts: [`scripts/triton/`](../../scripts/triton/) (`status.sh`, `find_g
 ## Hard rule: `srun` only with user confirmation
 
 Agents **may** run `srun` / `attach_or_alloc.sh`, but **only after the user
-explicitly permits it in this chat** (e.g. “ok to srun”, “allocate a GPU”,
-“start the job”). Do **not** self-start allocations.
+explicitly permits a new allocation in this chat** (e.g. “ok to srun”,
+“allocate a GPU”, “start the job”). Do **not** self-start allocations.
+
+Access is not permission to allocate. A login shell, SSH onto a node that
+already has this user's job, a live tmux pane, or “use the current GPU task”
+does **not** allow `srun`. These stay blocked until the user asks for a
+**new** allocation:
+
+- `srun` (batch, `--pty`, or interactive)
+- `srun --overlap`, `srun --jobid=<id>`, or any extra Slurm step
+- `attach_or_alloc.sh` when it would allocate
+
+Stopping the foreground program inside an existing task, when the user says
+to stop it and continue, is not `scancel` and is not a new `srun`. Continue
+on that same node (SSH `step_extern` or `tmux send-keys`). Do not replace
+the job.
 
 Triton emails when many jobs last &lt; ~120s. Prefer one long shell (hours),
 never a burst of short diagnostic jobs.
@@ -39,7 +53,7 @@ never a burst of short diagnostic jobs.
 
 ### Requires explicit user confirmation in-chat
 
-- Any new `srun` (interactive or batch).
+- Any new `srun` (interactive, batch, `--overlap`, or `--jobid=`).
 - `bash scripts/triton/attach_or_alloc.sh` when it would start a new alloc.
 - `scancel` / replacing a running job.
 - Extra GPU jobs for “quick” pytest / ruff / mypy / CUDA smoke when no

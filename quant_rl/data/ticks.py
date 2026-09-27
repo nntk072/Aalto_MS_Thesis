@@ -74,6 +74,59 @@ class TickBook:
     def __len__(self) -> int:
         return len(self._ts)
 
+    def delayed_exit_quote(
+        self,
+        bar_start: pd.Timestamp,
+        direction: int,
+        sl: float | None,
+        tp: float | None,
+        delay: pd.Timedelta,
+        bar_minutes: int = 1,
+    ) -> tuple[str, float, float] | None:
+        """Quote ``delay`` after the first tick that trades through SL or TP.
+
+        A long exit watches the bid; a short exit watches the ask. The first
+        tick beyond either level is the trigger, so a target that prints
+        before the stop wins. Delay 0 fills that crossing tick, which is
+        already through the level. Returns ``None`` when the bar has no
+        crossing tick.
+        """
+        n = len(self._ts)
+        if n == 0 or direction not in (1, -1):
+            return None
+        start_ns = pd.Timestamp(bar_start).value
+        end_ns = start_ns + int(pd.Timedelta(minutes=bar_minutes).value)
+        i0 = int(np.searchsorted(self._ts, start_ns, side="left"))
+        i1 = int(np.searchsorted(self._ts, end_ns, side="left"))
+        if i0 >= i1:
+            return None
+        side = self._bid if direction == 1 else self._ask
+        trigger = -1
+        kind = ""
+        for i in range(i0, i1):
+            px = float(side[i])
+            sl_cross = sl is not None and (
+                (direction == 1 and px <= sl) or (direction == -1 and px >= sl)
+            )
+            tp_cross = tp is not None and (
+                (direction == 1 and px >= tp) or (direction == -1 and px <= tp)
+            )
+            if sl_cross:
+                trigger = i
+                kind = "sl"
+                break
+            if tp_cross:
+                trigger = i
+                kind = "tp"
+                break
+        if trigger < 0:
+            return None
+        fill_ns = int(self._ts[trigger]) + int(pd.Timedelta(delay).value)
+        quote = self.quote_at(pd.Timestamp(fill_ns, unit="ns"))
+        if quote is None:
+            return None
+        return kind, quote[0], quote[1]
+
     def slice(self, start: pd.Timestamp, end: pd.Timestamp) -> TickBook:
         """Return a sub-book covering the half-open interval [start, end)."""
         i_s = int(np.searchsorted(self._ts, start.value, side="left"))
@@ -83,6 +136,22 @@ class TickBook:
             self._bid[i_s:i_e].copy(),
             self._ask[i_s:i_e].copy(),
         )
+
+
+def ticks_covering(book: TickBook | None, bars: pd.DataFrame) -> TickBook | None:
+    """Slice *book* to the bars, plus one extra minute for the fill delay.
+
+    An empty slice means this window has no tape, so the caller keeps the
+    level fill.
+    """
+    if book is None or len(book) == 0 or bars.empty:
+        return None
+    start = pd.Timestamp(bars.index[0])
+    end = pd.Timestamp(bars.index[-1]) + pd.Timedelta(minutes=2)
+    sliced = book.slice(start, end)
+    if len(sliced) == 0:
+        return None
+    return sliced
 
 
 def build_tick_book(

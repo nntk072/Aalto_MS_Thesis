@@ -118,3 +118,46 @@ def compute_chart_overlays_full(bars: pd.DataFrame) -> dict[str, pd.Series]:
 def slice_overlays(overlays: dict[str, pd.Series], index: pd.Index) -> dict[str, pd.Series]:
     """Slice a full-history overlays dict down to a trade window's index."""
     return {key: series.reindex(index) for key, series in overlays.items()}
+
+
+_LINE_KEYS = ("ema50", "macd", "signal", "rsi", "vwap")
+
+
+def break_overlay_gaps(overlays: dict[str, pd.Series]) -> dict[str, pd.Series]:
+    """Insert a NaN wherever two plotted candles are more than one bar apart.
+
+    Line series are warmed up on the full M1 spine, then sliced onto the
+    window. A gap in that index must not be drawn as a straight slope.
+    Histogram bars stay on the candle index.
+    """
+    out = dict(overlays)
+    for key in _LINE_KEYS:
+        series = out.get(key)
+        if series is not None:
+            out[key] = _break_series_gaps(series)
+    return out
+
+
+def _break_series_gaps(series: pd.Series) -> pd.Series:
+    idx = pd.DatetimeIndex(series.index)
+    if len(idx) < 2:
+        return series
+    deltas = idx[1:] - idx[:-1]
+    positive = deltas[deltas > pd.Timedelta(0)]
+    if len(positive) == 0:
+        return series
+    step = pd.Timedelta(pd.Series(positive).median())
+    if step <= pd.Timedelta(0):
+        return series
+    pieces: list[pd.Series] = []
+    start = 0
+    for i, delta in enumerate(deltas, start=1):
+        if delta > step:
+            pieces.append(series.iloc[start:i])
+            mid = pd.Timestamp(idx[i - 1]) + pd.Timedelta(delta) / 2
+            pieces.append(pd.Series([float("nan")], index=pd.DatetimeIndex([mid]), name=series.name))
+            start = i
+    pieces.append(series.iloc[start:])
+    if len(pieces) == 1:
+        return series
+    return pd.concat(pieces)

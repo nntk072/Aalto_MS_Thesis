@@ -807,6 +807,32 @@ class TestBuildFVGZonesForPlot:
             index=idx,
         )
 
+    def test_ltf_plot_zone_starts_two_candles_before_confirmation(self) -> None:
+        """LTF box starts two candles left of the close-through bar."""
+        idx = pd.date_range("2025-01-02 10:00", periods=25, freq="1min", tz="Etc/GMT-3")
+        open_ = np.full(25, 105.0)
+        high = np.full(25, 106.0)
+        low = np.full(25, 104.0)
+        close = np.full(25, 105.0)
+        high[0:5] = 100.0
+        low[0:5] = 95.0
+        close[0:5] = 98.0
+        high[10:15] = 115.0
+        low[10:15] = 110.0
+        close[10:15] = 112.0
+        close[15:20] = 120.0
+        high[15:20] = 121.0
+        low[15:20] = 118.0
+        open_[15:20] = 112.0
+        bars = pd.DataFrame(
+            {"open": open_, "high": high, "low": low, "close": close},
+            index=idx,
+        )
+        zones = build_fvg_zones_for_plot(bars, htf="M15", ltf="M5")
+        bull = [z for z in zones if z.kind == "ltf_ifvg" and z.side == "bullish"]
+        assert bull, "expected an LTF bullish IFVG"
+        assert bull[0].start_ts == pd.Timestamp("2025-01-02 10:05", tz="Etc/GMT-3")
+
     def test_plot_zone_starts_at_bar2_open(self) -> None:
         bars = self._m15_bullish_gap_m1()
         zones = build_fvg_zones_for_plot(bars, htf="M15", ltf="M5")

@@ -9,12 +9,10 @@ from .base import TradingStrategy
 
 
 class PO3IFVGStrategy(TradingStrategy):
-    """Sweep, then an IFVG or FVG in the same direction, decides the trade.
+    """Direction follows distribution, then context, then the higher-timeframe bias.
 
-    A long needs a sell-side sweep, or price within one ATR of that level,
-    plus a bullish gap. The short side mirrors. ``enforce_gate`` still only
-    affects :meth:`validate_entry`. Direction for the overlay comes from
-    :meth:`context_direction`.
+    A sweep is not required. ``enforce_gate`` still only affects
+    :meth:`validate_entry`. The overlay reads :meth:`context_direction`.
     """
 
     name = "po3_ifvg"
@@ -135,13 +133,15 @@ class PO3IFVGStrategy(TradingStrategy):
         return False
 
     def context_direction(self, row: pd.Series) -> int:
-        """Long after a sell-side sweep plus a bullish gap. Short mirrors."""
-        long_ok = self.entry_liquidity(row, 1) and self.entry_gap(row, 1)
-        short_ok = self.entry_liquidity(row, -1) and self.entry_gap(row, -1)
-        if long_ok and not short_ok:
-            return 1
-        if short_ok and not long_ok:
-            return -1
+        """Prefer distribution direction, then context, then the daily bias."""
+        if float(row.get("po3_distribution", 0.0)) > 0:
+            dist = float(row.get("po3_distribution_direction", 0.0))
+            if dist != 0.0 and np.isfinite(dist):
+                return int(np.sign(dist))
+        for col in ("context_trade_direction", "htf_day_bias"):
+            val = float(row.get(col, 0.0))
+            if val != 0.0 and np.isfinite(val):
+                return int(np.sign(val))
         return 0
 
     def sl_candidates(self, *, direction: int, row: pd.Series) -> list[tuple[str, float]]:
