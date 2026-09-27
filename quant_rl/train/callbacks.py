@@ -14,6 +14,12 @@ from quant_rl.train.equity_gate import decide_early_abort
 
 log = logging.getLogger(__name__)
 
+
+def save_ppo_checkpoint(model: Any, path: str | Path) -> None:
+    """Save PPO weights; omit the dashboard ``train`` hook (unpickleable on Py 3.12+)."""
+    model.save(path, exclude=["train"])
+
+
 try:
     from stable_baselines3.common.callbacks import BaseCallback as _Base
 
@@ -170,7 +176,7 @@ if _SB3_AVAILABLE:
             if end_equity > self.best_end_equity:
                 self.best_end_equity = end_equity
                 self.best_mean_reward = end_equity
-                self.model.save(self._best_model_path)
+                save_ppo_checkpoint(self.model, self._best_model_path)
                 if self.verbose:
                     print(
                         f"[BestCheckpointEval] new best end_equity={end_equity:.2f} at "
@@ -233,8 +239,8 @@ if _SB3_AVAILABLE:
 
         def _save(self) -> None:
             ckpt = self.save_path / f"{self.name_prefix}_{self.num_timesteps}_steps"
-            self.model.save(ckpt)
-            self.model.save(self.save_path / self.latest_name)
+            save_ppo_checkpoint(self.model, ckpt)
+            save_ppo_checkpoint(self.model, self.save_path / self.latest_name)
             if self.verbose:
                 print(f"[PeriodicCheckpoint] timestep={self.num_timesteps} → {ckpt}.zip")
 

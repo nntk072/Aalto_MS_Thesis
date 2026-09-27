@@ -11,6 +11,7 @@
 #   bash scripts/triton/status.sh           # squeue + tmux overview
 #   bash scripts/triton/find_gpu_session.sh # exit 0 if reusable GPU job/session
 #   bash scripts/triton/attach_or_alloc.sh  # reuse, or ONE long srun (needs OK)
+#   bash scripts/triton/two_trains_one_h200.sh  # 1xH200 900G 6h, two n_envs=64 (needs OK)
 #
 # Defaults / overrides:
 #   MEM=128G CPUS=8 TIME=auto(12h|6h) PARTITION/GPUS=auto(H200 then GH200)

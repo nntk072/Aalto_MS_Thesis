@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.envs.reward import DSRReward, PnLReward
+from quant_rl.envs.reward import REWARD_PART_KEYS, DSRReward, PnLReward
 from quant_rl.evaluation.metrics import calculate_metrics
 from quant_rl.train.dashboard import (
+    TrainingDashboardCallback,
     action_stats,
     close_shares,
     format_dashboard,
     policy_from_logger,
     position_mix,
+    ppo_log_interval,
+    snapshot_row,
     sum_parts,
 )
 
@@ -30,9 +35,9 @@ def test_pnl_parts_match_the_returned_reward() -> None:
 
 def test_breach_is_its_own_reward_part() -> None:
     reward_fn = DSRReward()
-    assert reward_fn(0.0, breach=True) == -10.0
-    assert reward_fn.last_parts["breach"] == -10.0
-    assert sum(reward_fn.last_parts.values()) == pytest.approx(-10.0)
+    assert reward_fn(0.0, breach=True) == -1.0
+    assert reward_fn.last_parts["breach"] == -1.0
+    assert sum(reward_fn.last_parts.values()) == pytest.approx(-1.0)
 
 
 def test_position_mix_and_close_shares() -> None:
@@ -89,13 +94,78 @@ def test_eval_block_prints_metrics_from_a_short_equity_curve() -> None:
             },
         }
     )
-    assert "EVAL" in text
-    assert "Sharpe" in text
-    assert "explained var" in text
-    assert "0.0000" in text
-    assert "grad norm         0.820" in text
+    assert "eval      " in text
+    assert "sharpe" in text
+    assert "expl" in text
+    assert "+0.0000" in text
+    assert "grad 0.820" in text
     assert metrics.n_trades == 3
     assert np.isfinite(metrics.sharpe)
+
+
+def _sample_snapshot(*, with_eval: bool) -> dict[str, Any]:
+    snap = {
+        "timesteps": 8192,
+        "total_timesteps": 20_000_000,
+        "train_reward_mean": 0.01,
+        "reward_parts": sum_parts([{"pnl": 0.002, "dsr": -0.1}]),
+        "position": position_mix([1, 0, -1]),
+        "action": action_stats([0.2, -0.1, 0.0]),
+        "closes": close_shares(["structure_sl", "structure_tp"]),
+        "n_closes": 2,
+        "critic": {"ret_mean": 0.1, "val_mean": 0.0, "adv_mean": 0.1, "adv_std": 0.2},
+        "policy": policy_from_logger({"train/std": 0.9}, grad_norm=1.25),
+        "eval": None,
+    }
+    if with_eval:
+        snap["eval"] = {
+            "return_pct": 1.5,
+            "sharpe": 0.8,
+            "sortino": 1.1,
+            "max_drawdown": 0.04,
+            "profit_factor": 1.2,
+            "win_rate": 0.5,
+            "avg_trade": 12.0,
+            "n_trades": 4,
+            "turnover": 0.01,
+            "reward_mean": 0.002,
+        }
+    return snap
+
+
+def test_ppo_log_interval_matches_dashboard_cadence() -> None:
+    assert ppo_log_interval(n_steps=64, n_envs=128, log_every=100_000) == 12
+    assert ppo_log_interval(n_steps=64, n_envs=128, log_every=0) == 1
+
+
+def test_dashboard_log_waits_for_the_interval() -> None:
+    cb = TrainingDashboardCallback(total_timesteps=1_000_000, log_every=100_000)
+    cb.model = type("M", (), {"num_timesteps": 8192})()
+    assert cb._should_log()
+    cb._advance_log()
+    assert cb._next_log == 100_000
+    cb.model.num_timesteps = 16_384
+    assert not cb._should_log()
+    cb._eval_just_ran = True
+    assert cb._should_log()
+
+
+def test_snapshot_row_keeps_behavior_and_omits_eval_until_recorded() -> None:
+    row = snapshot_row(_sample_snapshot(with_eval=False))
+    for key in REWARD_PART_KEYS:
+        assert key in row
+    assert row["action_mean"] == pytest.approx(float(np.mean([0.2, -0.1, 0.0])))
+    assert row["long"] == pytest.approx(1 / 3)
+    assert row["structure_sl"] == pytest.approx(0.5)
+    assert row["grad_norm"] == pytest.approx(1.25)
+    assert "return_pct" not in row
+    assert "eval_reward" not in row
+
+    recorded = snapshot_row(_sample_snapshot(with_eval=True), record_eval=True)
+    assert recorded["return_pct"] == pytest.approx(1.5)
+    assert recorded["eval_max_drawdown"] == pytest.approx(0.04)
+    assert recorded["eval_reward"] == pytest.approx(0.002)
+    assert recorded["max_drawdown"] == 0.0
 
 
 def test_step_info_carries_reward_parts_and_direction() -> None:

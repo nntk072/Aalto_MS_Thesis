@@ -1,12 +1,14 @@
 """Terminal dashboard for a PPO training run.
 
-Rollout behavior, reward parts, and critic stats print every update.
-A short deterministic slice adds return and risk metrics on a slower cadence.
+Rollout behavior, reward parts, and critic stats print on ``log_every``.
+A short deterministic slice adds return and risk metrics on the same cadence.
 """
 
 from __future__ import annotations
 
+import csv
 import logging
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -95,82 +97,164 @@ def sum_parts(rows: list[dict[str, float]]) -> dict[str, float]:
     return total
 
 
+def ppo_log_interval(*, n_steps: int, n_envs: int, log_every: int) -> int:
+    """How many PPO rollouts to skip between Stable-Baselines3 log dumps.
+
+    ``log_every`` is in environment steps. One rollout is ``n_steps * n_envs``.
+    """
+    rollout = max(1, int(n_steps) * max(1, int(n_envs)))
+    if log_every <= 0:
+        return 1
+    return max(1, int(log_every) // rollout)
+
+
 def format_dashboard(snapshot: dict[str, Any]) -> str:
-    """One text block for the terminal."""
+    """A few column rows, one per section, for the terminal log."""
     steps = int(snapshot["timesteps"])
     total = int(snapshot["total_timesteps"])
+    parts = snapshot["reward_parts"]
+    action = snapshot["action"]
+    position = snapshot["position"]
+    closes = snapshot["closes"]
+    critic = snapshot["critic"]
+    policy = snapshot["policy"]
+    reward = "  ".join(f"{label} {parts.get(key, 0.0):+.4f}" for key, label in _PART_LABELS)
+    per_1k = snapshot.get("reward_per_1k") or {}
+    per_line = "  ".join(f"{label} {per_1k.get(key, 0.0):+.4f}" for key, label in _PART_LABELS)
+    risk = "  ".join(f"{key} {100.0 * closes.get(key, 0.0):.1f}%" for key in _CLOSE_KEYS)
     lines = [
-        "================================================================",
-        f"PPO TRAINING | {steps:,} / {total:,}",
-        "================================================================",
+        f"PPO {steps:,} / {total:,}   train_reward {snapshot['train_reward_mean']:+.4f}",
+        f"reward    {reward}",
+        f"per1k     {per_line}  breach_events {int(snapshot.get('breach_events', 0))}",
+        (
+            "behavior  "
+            f"mean {action['mean']:+.3f}  std {action['std']:.3f}  "
+            f"long {100.0 * position['long']:.1f}%  "
+            f"short {100.0 * position['short']:.1f}%  "
+            f"flat {100.0 * position['flat']:.1f}%"
+        ),
+        f"risk      closes {int(snapshot['n_closes'])}  {risk}",
+        (
+            "policy    "
+            f"expl {policy['explained_variance']:.4f}  "
+            f"vloss {policy['value_loss']:.4f}  "
+            f"ret {critic['ret_mean']:+.4f}  val {critic['val_mean']:+.4f}  "
+            f"adv {critic['adv_mean']:+.4f}  "
+            f"kl {policy['approx_kl']:.4f}  clip {policy['clip_fraction']:.4f}  "
+            f"ent {policy['entropy']:.3f}  std {policy['std']:.3f}  "
+            f"grad {policy['grad_norm']}"
+        ),
     ]
     ev = snapshot.get("eval")
     if ev:
-        lines.extend(
-            [
-                "EVAL",
-                f"return            {ev['return_pct']:+.2f}%",
-                f"Sharpe            {ev['sharpe']:.2f}",
-                f"Sortino           {ev['sortino']:.2f}",
-                f"max DD            {-100.0 * ev['max_drawdown']:.2f}%",
-                f"profit factor     {ev['profit_factor']:.2f}",
-                f"win rate          {100.0 * ev['win_rate']:.1f}%",
-                f"avg trade         {ev['avg_trade']:+.2f}",
-                f"trades            {int(ev['n_trades'])}",
-                f"turnover          {ev['turnover']:.4f}",
-                f"train reward      {snapshot['train_reward_mean']:+.4f}",
-                f"eval reward       {ev['reward_mean']:+.4f}",
-            ]
+        lines.append(
+            "eval      "
+            f"return {ev['return_pct']:+.2f}%  sharpe {ev['sharpe']:.2f}  "
+            f"sortino {ev['sortino']:.2f}  "
+            f"maxdd {-100.0 * ev['max_drawdown']:.2f}%  "
+            f"pf {ev['profit_factor']:.2f}  "
+            f"win {100.0 * ev['win_rate']:.1f}%  "
+            f"avg {ev['avg_trade']:+.2f}  trades {int(ev['n_trades'])}  "
+            f"turn {ev['turnover']:.4f}  rew {ev['reward_mean']:+.4f}"
         )
-    else:
-        lines.append(f"TRAIN reward      {snapshot['train_reward_mean']:+.4f}   (eval not run yet)")
-
-    parts = snapshot["reward_parts"]
-    lines.append("REWARD")
-    for key, label in _PART_LABELS:
-        lines.append(f"{label:<18}{parts.get(key, 0.0):+.4f}")
-    lines.append(f"{'total':<18}{sum(parts.values()):+.4f}")
-
-    mix = snapshot["position"]
-    act = snapshot["action"]
-    lines.extend(
-        [
-            "BEHAVIOR",
-            f"action mean       {act['mean']:+.3f}",
-            f"action std        {act['std']:.3f}",
-            f"long              {100.0 * mix['long']:.1f}%",
-            f"short             {100.0 * mix['short']:.1f}%",
-            f"flat              {100.0 * mix['flat']:.1f}%",
-        ]
-    )
-
-    risk = snapshot["closes"]
-    lines.append("RISK")
-    lines.append(f"closes            {int(snapshot['n_closes'])}")
-    for key in _CLOSE_KEYS:
-        lines.append(f"{key:<18}{100.0 * risk.get(key, 0.0):.1f}%")
-
-    critic = snapshot["critic"]
-    policy = snapshot["policy"]
-    lines.extend(
-        [
-            "CRITIC",
-            f"explained var     {policy['explained_variance']:.4f}",
-            f"value loss        {policy['value_loss']:.4f}",
-            f"mean return       {critic['ret_mean']:+.4f}",
-            f"mean value        {critic['val_mean']:+.4f}",
-            f"advantage mean    {critic['adv_mean']:+.4f}",
-            f"advantage std     {critic['adv_std']:.4f}",
-            "POLICY",
-            f"approx KL         {policy['approx_kl']:.4f}",
-            f"clip fraction     {policy['clip_fraction']:.4f}",
-            f"entropy           {policy['entropy']:.3f}",
-            f"std               {policy['std']:.3f}",
-            f"grad norm         {policy['grad_norm']}",
-            "================================================================",
-        ]
-    )
     return "\n".join(lines)
+
+
+# Eval drawdown is ``eval_max_drawdown`` so it does not overwrite the close-reason
+# share stored in ``max_drawdown``.
+_EVAL_ROW_KEYS: tuple[tuple[str, str], ...] = (
+    ("return_pct", "return_pct"),
+    ("sharpe", "sharpe"),
+    ("sortino", "sortino"),
+    ("max_drawdown", "eval_max_drawdown"),
+    ("profit_factor", "profit_factor"),
+    ("win_rate", "win_rate"),
+    ("avg_trade", "avg_trade"),
+    ("n_trades", "n_trades"),
+    ("turnover", "turnover"),
+    ("reward_mean", "eval_reward"),
+)
+
+DASHBOARD_COLUMNS: tuple[str, ...] = (
+    "timestep",
+    "train_reward_mean",
+    *REWARD_PART_KEYS,
+    *(f"{key}_per_1k" for key in REWARD_PART_KEYS),
+    "breach_events",
+    "action_mean",
+    "action_std",
+    "long",
+    "short",
+    "flat",
+    "n_closes",
+    *_CLOSE_KEYS,
+    "grad_norm",
+    "return_pct",
+    "sharpe",
+    "sortino",
+    "eval_max_drawdown",
+    "profit_factor",
+    "win_rate",
+    "avg_trade",
+    "n_trades",
+    "turnover",
+    "eval_reward",
+)
+
+
+def snapshot_row(snapshot: dict[str, Any], *, record_eval: bool = False) -> dict[str, Any]:
+    """Flatten one dashboard snapshot. Eval keys appear only when ``record_eval``."""
+    parts = snapshot["reward_parts"]
+    action = snapshot["action"]
+    position = snapshot["position"]
+    closes = snapshot["closes"]
+    policy = snapshot.get("policy") or {}
+    row: dict[str, Any] = {
+        "timestep": int(snapshot["timesteps"]),
+        "train_reward_mean": float(snapshot["train_reward_mean"]),
+    }
+    for key in REWARD_PART_KEYS:
+        row[key] = float(parts.get(key, 0.0))
+    per_1k = snapshot.get("reward_per_1k") or {}
+    for key in REWARD_PART_KEYS:
+        row[f"{key}_per_1k"] = float(per_1k.get(key, 0.0))
+    row["breach_events"] = int(snapshot.get("breach_events", 0))
+    row["action_mean"] = float(action["mean"])
+    row["action_std"] = float(action["std"])
+    row["long"] = float(position["long"])
+    row["short"] = float(position["short"])
+    row["flat"] = float(position["flat"])
+    row["n_closes"] = int(snapshot["n_closes"])
+    for key in _CLOSE_KEYS:
+        row[key] = float(closes.get(key, 0.0))
+    row["grad_norm"] = _grad_norm_value(policy.get("grad_norm"))
+    if record_eval and snapshot.get("eval"):
+        ev = snapshot["eval"]
+        for src, dest in _EVAL_ROW_KEYS:
+            row[dest] = float(ev[src])
+    return row
+
+
+def _grad_norm_value(raw: Any) -> float | str:
+    if raw is None or raw == "n/a" or raw == "":
+        return ""
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return ""
+
+
+def append_dashboard_row(path: str | Path, row: dict[str, Any]) -> None:
+    """Append one snapshot row and flush so a crash keeps the log."""
+    dest = Path(path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not dest.exists() or dest.stat().st_size == 0
+    with dest.open("a", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=DASHBOARD_COLUMNS, extrasaction="ignore")
+        if write_header:
+            writer.writeheader()
+        writer.writerow({key: row.get(key, "") for key in DASHBOARD_COLUMNS})
+        handle.flush()
 
 
 def _logger_float(values: dict[str, Any], key: str) -> float:
@@ -209,19 +293,25 @@ except ImportError:
 if _SB3_AVAILABLE:
 
     class TrainingDashboardCallback(_Base):
-        """Print the training dashboard once per PPO update."""
+        """Print and record the dashboard every ``log_every`` env steps."""
 
         def __init__(
             self,
             total_timesteps: int,
             eval_every: int = 100_000,
             eval_fn: Any | None = None,
+            log_path: str | Path | None = None,
+            log_every: int = 100_000,
             verbose: int = 0,
         ) -> None:
             super().__init__(verbose=verbose)
             self.total_timesteps = int(total_timesteps)
             self.eval_every = int(eval_every)
+            self.log_every = int(log_every)
             self._eval_fn = eval_fn
+            self._log_path = Path(log_path) if log_path is not None else None
+            self._eval_just_ran = False
+            self._next_log = 0
             self._next_eval = self.eval_every if self.eval_every > 0 else 0
             self._parts: list[dict[str, float]] = []
             self._directions: list[int] = []
@@ -239,8 +329,11 @@ if _SB3_AVAILABLE:
             callback = self
 
             def _train_and_report() -> None:
-                snapshot = callback._snapshot()
                 callback._maybe_eval()
+                if not callback._should_log():
+                    orig()
+                    return
+                snapshot = callback._snapshot()
                 norms: list[float] = []
                 real_clip = torch.nn.utils.clip_grad_norm_
 
@@ -263,9 +356,15 @@ if _SB3_AVAILABLE:
                     dict(callback.model.logger.name_to_value),
                     callback._grad_norm,
                 )
-                if callback._last_eval is not None:
+                if callback._eval_just_ran and callback._last_eval is not None:
                     snapshot["eval"] = callback._last_eval
                 print(format_dashboard(snapshot))
+                if callback._log_path is not None:
+                    append_dashboard_row(
+                        callback._log_path,
+                        snapshot_row(snapshot, record_eval=callback._eval_just_ran),
+                    )
+                callback._advance_log()
 
             setattr(self.model, "train", _train_and_report)
 
@@ -296,15 +395,33 @@ if _SB3_AVAILABLE:
                     self._closes.append(str(reason))
             return True
 
+        def _should_log(self) -> bool:
+            if self.log_every <= 0:
+                return True
+            return int(self.num_timesteps) >= self._next_log or self._eval_just_ran
+
+        def _advance_log(self) -> None:
+            if self.log_every <= 0:
+                return
+            step = int(self.num_timesteps)
+            self._next_log = self.log_every * (1 + step // self.log_every)
+
         def _snapshot(self) -> dict[str, Any]:
             train_mean = (
                 self._since_eval_reward / self._since_eval_steps if self._since_eval_steps else 0.0
             )
+            parts = sum_parts(self._parts)
+            n_steps = max(1, int(self._reward_steps))
+            per_1k = {key: float(value) * 1000.0 / n_steps for key, value in parts.items()}
+            breach_events = sum(1 for part in self._parts if float(part.get("breach", 0.0)) != 0.0)
             snapshot = {
                 "timesteps": int(self.num_timesteps),
                 "total_timesteps": self.total_timesteps,
                 "train_reward_mean": train_mean,
-                "reward_parts": sum_parts(self._parts),
+                "reward_parts": parts,
+                "reward_per_1k": per_1k,
+                "reward_steps": int(self._reward_steps),
+                "breach_events": breach_events,
                 "position": position_mix(self._directions),
                 "action": action_stats(self._actions),
                 "closes": close_shares(self._closes),
@@ -328,6 +445,7 @@ if _SB3_AVAILABLE:
             return critic_stats(buffer.advantages, buffer.returns, buffer.values)
 
         def _maybe_eval(self) -> None:
+            self._eval_just_ran = False
             if self._eval_fn is None or self._next_eval <= 0:
                 return
             if int(self.num_timesteps) < self._next_eval:
@@ -337,6 +455,7 @@ if _SB3_AVAILABLE:
             except Exception as exc:
                 log.warning("Dashboard eval skipped: %s", exc)
                 return
+            self._eval_just_ran = True
             crossed = 1 + (int(self.num_timesteps) - self._next_eval) // self.eval_every
             self._next_eval += self.eval_every * crossed
             self._since_eval_reward = 0.0

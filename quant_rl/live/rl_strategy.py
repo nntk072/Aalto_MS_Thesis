@@ -30,7 +30,7 @@ import pandas as pd
 from omegaconf import OmegaConf
 
 from ..envs.observation import normalized_account_vector, pad_observation_window
-from ..features.build import select_obs_columns
+from ..features.build import attach_reachable_r, select_obs_columns
 
 if TYPE_CHECKING:  # pragma: no cover
     from mt5_trading.adapters import TradingData
@@ -63,6 +63,7 @@ class RLStrategyAdapter:
         account_cfg = getattr(self.cfg, "account", None)
         self._initial_balance = float(getattr(account_cfg, "initial_balance", 100_000.0))
         self._features: pd.DataFrame | None = None
+        self._bars: pd.DataFrame | None = None
         self._last_close = 1.0
         self._feature_lock = threading.Lock()
         self._secondary_bars: pd.DataFrame | None = None
@@ -100,6 +101,7 @@ class RLStrategyAdapter:
     def update_bars(self, bars: pd.DataFrame, secondary_bars: pd.DataFrame | None = None) -> None:
         """Feed the latest M1 bars; rebuilds features (call once per new bar)."""
         self._secondary_bars = secondary_bars
+        self._bars = bars
         if "close" in bars.columns and len(bars):
             self._last_close = float(bars["close"].iloc[-1])
         self._rebuild_features(bars)
@@ -127,6 +129,8 @@ class RLStrategyAdapter:
             raise RuntimeError("update_bars() must be called before build_observation()")
 
         feats = select_obs_columns(self._features, self._raw_columns())
+        if self._bars is not None:
+            feats = attach_reachable_r(feats, self._bars, self._features)
         window = feats.iloc[-self.obs_window :]
         seq = np.nan_to_num(np.asarray(window.values, dtype=np.float32), nan=0.0)
         seq, seq_mask = pad_observation_window(seq, self.obs_window)

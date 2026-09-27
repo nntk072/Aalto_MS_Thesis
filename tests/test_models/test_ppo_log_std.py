@@ -8,7 +8,7 @@ import pytest
 import torch
 
 from quant_rl.models.agent import build_agent
-from quant_rl.models.ppo_policy import clip_policy_log_std
+from quant_rl.models.ppo_policy import clip_policy_log_std, install_post_update_std_clip
 from quant_rl.train.callbacks import ClipLogStdCallback
 from tests.test_models.test_sac_agent import make_env
 
@@ -53,6 +53,33 @@ def test_clip_policy_log_std_clamps_and_skips_discrete() -> None:
     assert hi <= 0.0
     assert lo >= -2.0
     assert clip_policy_log_std(object(), -2.0, 0.0) is False
+
+
+def test_post_update_clip_logs_the_clamped_std() -> None:
+    class _Pol:
+        def __init__(self) -> None:
+            self.log_std = torch.nn.Parameter(torch.tensor([0.5]))
+
+    class _Logger:
+        def __init__(self) -> None:
+            self.values: dict[str, float] = {}
+
+        def record(self, key: str, value: float) -> None:
+            self.values[key] = float(value)
+
+    class _Model:
+        def __init__(self) -> None:
+            self.policy = _Pol()
+            self.logger = _Logger()
+
+        def train(self) -> None:
+            self.logger.record("train/std", 9.0)
+
+    model = _Model()
+    install_post_update_std_clip(model, -0.7, 0.0)
+    model.train()
+    assert float(model.policy.log_std.detach().item()) == pytest.approx(0.0)
+    assert model.logger.values["train/std"] == pytest.approx(1.0)
 
 
 def test_clip_log_std_callback_clamps_exploded_std() -> None:

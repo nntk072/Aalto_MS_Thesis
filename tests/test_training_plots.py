@@ -15,6 +15,7 @@ from quant_rl.eval.training_plots import (
     plot_learning_curve,
     plot_learning_rate,
     plot_losses,
+    save_dashboard_plots,
     save_training_plots,
 )
 
@@ -100,3 +101,33 @@ def test_save_training_plots_empty_log(tmp_path):
     save_training_plots(missing, out_dir=tmp_path, save_html=False)
     # Should not raise, should create no files
     assert not any(tmp_path.glob("*.png"))
+
+
+def test_save_dashboard_plots(tmp_path):
+    log_path = tmp_path / "dashboard_log.csv"
+    pd.DataFrame(
+        {
+            "timestep": [8192, 16384],
+            "pnl": [0.1, -0.2],
+            "action_mean": [0.1, -0.1],
+            "action_std": [1.0, 0.9],
+            "long": [0.2, 0.3],
+            "short": [0.3, 0.2],
+            "flat": [0.5, 0.5],
+            "structure_sl": [0.4, 0.5],
+            "structure_tp": [0.6, 0.5],
+            "grad_norm": [1.2, 0.8],
+            "return_pct": [1.0, ""],
+            "sharpe": [0.5, ""],
+        }
+    ).to_csv(log_path, index=False)
+    out = tmp_path / "plots"
+    save_dashboard_plots(log_path, out_dir=out, save_html=False)
+    for name in (
+        "dashboard_eval",
+        "dashboard_reward",
+        "dashboard_behavior",
+        "dashboard_risk",
+        "dashboard_grad_norm",
+    ):
+        assert (out / f"{name}.png").stat().st_size > 0

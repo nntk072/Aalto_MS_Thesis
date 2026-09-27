@@ -49,6 +49,7 @@ from quant_rl.eval.rollout import evaluate_model
 from quant_rl.evaluation import calculate_metrics
 from quant_rl.features.build import build_features, feature_cache_path
 from quant_rl.models.agent import build_agent
+from quant_rl.models.ppo_policy import install_post_update_std_clip
 from quant_rl.train.auxiliary_training import AuxiliaryTrainerCallback
 from quant_rl.train.callbacks import (
     BestCheckpointEvalCallback,
@@ -57,8 +58,10 @@ from quant_rl.train.callbacks import (
     EpisodeEquityCallback,
     PeriodicCheckpointCallback,
     ProgressLoggerCallback,
+    save_ppo_checkpoint,
 )
-from quant_rl.train.dashboard import TrainingDashboardCallback
+from quant_rl.train.dashboard import TrainingDashboardCallback, ppo_log_interval
+from quant_rl.train.debug_trace import install_flight_recorder
 from quant_rl.train.equity_gate import assess_train_equity
 from quant_rl.utils.device import get_device, scale_training_cfg
 
@@ -191,7 +194,12 @@ def _strategy_from_cfg(cfg: Any) -> tuple[Any, Any, float]:
     return strategy, reward, weight
 
 
-def _publish_obs_memmap(features: pd.DataFrame, cfg: Any, path: Path) -> str | None:
+def _publish_obs_memmap(
+    features: pd.DataFrame,
+    bars: pd.DataFrame,
+    cfg: Any,
+    path: Path,
+) -> str | None:
     """Write the model observation matrix once so workers mmap it read-only.
 
     ``n_envs <= 1`` keeps the private ``to_numpy`` copy. The pandas frame is
@@ -199,10 +207,10 @@ def _publish_obs_memmap(features: pd.DataFrame, cfg: Any, path: Path) -> str | N
     """
     if int(cfg.env.get("n_envs", 1)) <= 1:
         return None
-    from quant_rl.features.build import select_obs_columns
+    from quant_rl.features.build import attach_reachable_r, select_obs_columns
 
     strategy, _, _ = _strategy_from_cfg(cfg)
-    frame = select_obs_columns(features, strategy.raw_columns)
+    frame = attach_reachable_r(select_obs_columns(features, strategy.raw_columns), bars, features)
     array = np.ascontiguousarray(frame.to_numpy(dtype=np.float32))
     path.parent.mkdir(parents=True, exist_ok=True)
     np.save(path, array)
@@ -273,6 +281,7 @@ def _build_eval_common(
         "min_sl_atr_mult": float(cfg.risk.get("min_sl_atr_mult", 0.5)),
         "min_sl_points": float(cfg.risk.get("min_sl_points", 0.0)),
         "max_entries_per_session": int(cfg.env.get("max_entries_per_session", 0)),
+        "open_manipulation_bars": int(cfg.env.get("open_manipulation_bars", 10)),
         "entry_cooldown_bars": int(cfg.env.get("entry_cooldown_bars", 0)),
         "reward_mode": str(cfg.env.get("reward_mode", "dsr")),
         "entry_intensity_threshold": float(cfg.env.get("entry_intensity_threshold", 0.0)),
@@ -367,12 +376,14 @@ def make_env(
         min_sl_atr_mult=float(cfg.risk.get("min_sl_atr_mult", 0.5)),
         min_sl_points=float(cfg.risk.get("min_sl_points", 0.0)),
         max_entries_per_session=int(cfg.env.get("max_entries_per_session", 0)),
+        open_manipulation_bars=int(cfg.env.get("open_manipulation_bars", 10)),
         entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
         reward_mode=str(cfg.env.get("reward_mode", "dsr")),
         entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
         peak_trailing_dd_limit=float(cfg.env.get("peak_trailing_dd_limit", 0.0)),
         agent_direction_control=bool(cfg.env.get("agent_direction_control", False)),
         direction_override_threshold=float(cfg.env.get("direction_override_threshold", 0.0)),
+        risk_floor=float(cfg.env.get("risk_floor", 0.0005)),
         tickbook=tickbook,
         fill_delay_ms=_fill_delay_ms(cfg),
         use_vae=use_vae,
@@ -612,7 +623,7 @@ def main() -> None:
     run_dir = build_run_dir(args.out, f"rl_train_seed{args.seed}_{args.arch}")
     model_dir = run_dir / "model"
     model_dir.mkdir(parents=True, exist_ok=True)
-    obs_mmap = _publish_obs_memmap(train_feat, cfg, run_dir / "obs_features.npy")
+    obs_mmap = _publish_obs_memmap(train_feat, train_bars, cfg, run_dir / "obs_features.npy")
 
     # Create training environment
     log.info("Creating training environment...")
@@ -768,10 +779,33 @@ def main() -> None:
                 total_timesteps=timesteps,
                 eval_every=int(dash.get("eval_every", 100_000)),
                 eval_fn=_dashboard_eval,
+                log_path=model_dir / "dashboard_log.csv",
+                log_every=int(dash.get("log_every", 100_000)),
             )
         )
 
-    model.learn(total_timesteps=timesteps, callback=callbacks)
+    log_every = int(dash.get("log_every", 100_000))
+    log_interval = ppo_log_interval(
+        n_steps=int(model.n_steps),
+        n_envs=int(model.n_envs),
+        log_every=log_every,
+    )
+    log.info("SB3 log every %d rollouts (~%d env steps)", log_interval, log_every)
+    if isinstance(train_env.action_space, spaces.Box):
+        install_post_update_std_clip(
+            model,
+            float(cfg.ppo.get("log_std_min", -0.7)),
+            float(cfg.ppo.get("log_std_max", 0.0)),
+        )
+    debug_cfg = cfg.training.get("debug", {})
+    if bool(debug_cfg.get("enabled", False)):
+        install_flight_recorder(model, run_dir, thresholds=debug_cfg)
+    value_net = getattr(model.policy, "value_net", None)
+    if value_net is not None:
+        with torch.no_grad():
+            for param in value_net.parameters():
+                param.zero_()
+    model.learn(total_timesteps=timesteps, callback=callbacks, log_interval=log_interval)
     abort_reason = abort_cb.reason if abort_cb is not None else None
     if abort_reason:
         (run_dir / "early_abort.json").write_text(
@@ -784,15 +818,21 @@ def main() -> None:
 
     # Save final model
     model_path = model_dir / "ppo_final"
-    model.save(model_path)
+    save_ppo_checkpoint(model, model_path)
     log.info("Model saved: %s", model_path)
 
     # Learning-curve / loss charts from the SB3 progress CSV.
     try:
-        from quant_rl.eval.training_plots import save_training_plots
+        from quant_rl.eval.training_plots import save_dashboard_plots, save_training_plots
 
         save_training_plots(
             progress_log,
+            out_dir=model_dir,
+            dpi=getattr(cfg.output, "dpi", 150),
+            save_html=getattr(cfg.output, "save_html", True),
+        )
+        save_dashboard_plots(
+            model_dir / "dashboard_log.csv",
             out_dir=model_dir,
             dpi=getattr(cfg.output, "dpi", 150),
             save_html=getattr(cfg.output, "save_html", True),
@@ -1008,7 +1048,10 @@ def main() -> None:
             )
 
             fold_mmap = _publish_obs_memmap(
-                fold_train_feat, cfg, run_dir / f"obs_features_fold{split.fold}.npy"
+                fold_train_feat,
+                fold_train_bars,
+                cfg,
+                run_dir / f"obs_features_fold{split.fold}.npy",
             )
             fold_env = make_env(
                 fold_train_bars,

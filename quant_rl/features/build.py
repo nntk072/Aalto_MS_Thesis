@@ -267,6 +267,72 @@ def select_obs_columns(
     return kept.select_dtypes(include="number")
 
 
+def reachable_r_series(bars: pd.DataFrame, features: pd.DataFrame) -> pd.Series:
+    """Causal reward room: max take-profit distance divided by the structural stop.
+
+    The side is the distribution direction when it is set, otherwise the
+    higher-timeframe bias. A flat bar uses the tighter of the two stops.
+    The ratio is scale-free, so it can sit in the model sequence.
+    """
+    from quant_rl.backtest.tp_reach import max_tp_distance
+
+    idx = bars.index
+    if "atr_5" not in features.columns or "close" not in bars.columns:
+        return pd.Series(0.0, index=idx, name="reachable_r")
+    dist = max_tp_distance(bars, features["atr_5"]).reindex(idx)
+    close = pd.to_numeric(bars["close"], errors="coerce")
+    atr = pd.to_numeric(features["atr_5"].reindex(idx), errors="coerce")
+    if "po3_manipulation_low" in features.columns and "po3_manipulation_high" in features.columns:
+        risk_long = (
+            close - pd.to_numeric(features["po3_manipulation_low"].reindex(idx), errors="coerce")
+        ).clip(lower=0.0)
+        risk_short = (
+            pd.to_numeric(features["po3_manipulation_high"].reindex(idx), errors="coerce") - close
+        ).clip(lower=0.0)
+    else:
+        risk_long = atr.clip(lower=0.0)
+        risk_short = atr.clip(lower=0.0)
+    if "po3_distribution_direction" in features.columns:
+        direction = pd.to_numeric(
+            features["po3_distribution_direction"].reindex(idx), errors="coerce"
+        ).fillna(0.0)
+    elif "htf_day_bias" in features.columns:
+        direction = pd.to_numeric(features["htf_day_bias"].reindex(idx), errors="coerce").fillna(
+            0.0
+        )
+    else:
+        direction = pd.Series(0.0, index=idx)
+    long_a = risk_long.to_numpy(dtype=float)
+    short_a = risk_short.to_numpy(dtype=float)
+    side = direction.to_numpy(dtype=float)
+    risk = np.where(side < 0.0, short_a, long_a)
+    tighter = np.minimum(
+        np.where(long_a > 0.0, long_a, np.inf),
+        np.where(short_a > 0.0, short_a, np.inf),
+    )
+    risk = np.where(side == 0.0, tighter, risk)
+    atr_a = atr.to_numpy(dtype=float)
+    missing = ~np.isfinite(risk) | (risk <= 0.0)
+    risk = np.where(missing, atr_a, risk)
+    room = dist.to_numpy(dtype=float)
+    ratio = room / np.where(risk > 1e-8, risk, np.nan)
+    ratio = np.clip(np.nan_to_num(ratio, nan=0.0, posinf=0.0, neginf=0.0), 0.0, 20.0)
+    return pd.Series(ratio, index=idx, name="reachable_r")
+
+
+def attach_reachable_r(
+    obs: pd.DataFrame,
+    bars: pd.DataFrame,
+    features: pd.DataFrame,
+) -> pd.DataFrame:
+    """Append ``reachable_r`` after raw price columns have been dropped."""
+    out = obs.copy()
+    out["reachable_r"] = (
+        reachable_r_series(bars, features).reindex(obs.index).fillna(0.0).astype(float)
+    )
+    return out
+
+
 def ensure_london_atr_distances(feat: pd.DataFrame, close: pd.Series) -> pd.DataFrame:
     """Add London ATR distances when the PD-context pair is absent.
 

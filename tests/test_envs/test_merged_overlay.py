@@ -11,19 +11,44 @@ from quant_rl.envs.strategies.po3_ifvg import PO3IFVGStrategy
 
 def test_distribution_direction_sets_the_trade() -> None:
     strategy = PO3IFVGStrategy(enforce_gate=False)
-    row = pd.Series({"po3_distribution": 1.0, "po3_distribution_direction": -1.0})
+    row = pd.Series(
+        {
+            "po3_distribution": 1.0,
+            "po3_distribution_direction": -1.0,
+            "ny_manip_confirmed": 1.0,
+        }
+    )
     assert strategy.context_direction(row) == -1
+
+
+def test_stale_distribution_before_session_confirm_holds() -> None:
+    strategy = PO3IFVGStrategy(enforce_gate=False)
+    row = pd.Series(
+        {
+            "po3_distribution": 1.0,
+            "po3_distribution_direction": -1.0,
+            "htf_day_bias": 1.0,
+        }
+    )
+    assert strategy.context_direction(row) == 0
 
 
 def test_htf_bias_sets_the_trade_without_a_sweep() -> None:
     strategy = PO3IFVGStrategy(enforce_gate=False)
-    row = pd.Series({"price_in_ifvg_bull": 1.0, "htf_day_bias": 1.0})
+    row = pd.Series({"price_in_ifvg_bull": 1.0, "htf_day_bias": 1.0, "ny_manip_confirmed": 1.0})
     assert strategy.context_direction(row) == 1
 
 
 def test_context_direction_when_distribution_is_off() -> None:
     strategy = PO3IFVGStrategy(enforce_gate=False)
-    row = pd.Series({"po3_distribution": 0.0, "context_trade_direction": -1.0, "htf_day_bias": 1.0})
+    row = pd.Series(
+        {
+            "po3_distribution": 0.0,
+            "context_trade_direction": -1.0,
+            "htf_day_bias": 1.0,
+            "ny_manip_confirmed": 1.0,
+        }
+    )
     assert strategy.context_direction(row) == -1
 
 

@@ -133,7 +133,18 @@ class PO3IFVGStrategy(TradingStrategy):
         return False
 
     def context_direction(self, row: pd.Series) -> int:
-        """Prefer distribution direction, then context, then the daily bias."""
+        """Side only after this New York session confirms manipulation end.
+
+        A distribution or daily bias that was already set before the open
+        is ignored until ``po3_manipulation_end`` or ``ny_manip_confirmed``.
+        """
+        confirmed = (
+            _flag(row, "po3_manipulation_end")
+            or _flag(row, "ny_manip_confirmed")
+            or bool(getattr(self, "_session_manip_confirmed", False))
+        )
+        if not confirmed:
+            return 0
         if float(row.get("po3_distribution", 0.0)) > 0:
             dist = float(row.get("po3_distribution_direction", 0.0))
             if dist != 0.0 and np.isfinite(dist):

@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 from gymnasium.spaces import Box, Discrete
 
+from quant_rl.envs.po3_reward import PO3Reward
 from quant_rl.envs.strategies import BaselineStrategy, PO3IFVGStrategy
 from quant_rl.envs.trading_env import TradingEnv
 
@@ -51,7 +52,7 @@ def _features(bars: pd.DataFrame, *, ctx_dir: float = 1.0) -> pd.DataFrame:
             "sweep_low": np.ones(n) if is_long else np.zeros(n),
             "po3_manipulation_low": np.full(n, 95.0),
             "po3_manipulation_high": np.full(n, 105.0),
-            "po3_manipulation_end": np.zeros(n),
+            "po3_manipulation_end": np.ones(n),
             "po3_distribution": np.zeros(n),
             "po3_distribution_direction": np.zeros(n),
             "ifvg_bull_low": np.full(n, 98.0),
@@ -290,6 +291,7 @@ class TestSessionCaps:
             min_sl_points=1.0,
             min_sl_atr_mult=0.0,
             max_entries_per_session=3,
+            open_manipulation_bars=0,
             entry_cooldown_bars=0,
             block_overnight=False,
             max_episode_steps=None,
@@ -314,3 +316,192 @@ class TestSessionCaps:
                 assert env._session_entry_counts.get(0, 0) == before == 3
                 return
         pytest.fail("never reached 3 session entries")
+
+    def test_unlimited_entries_allow_a_fourth_open(self) -> None:
+        n = 200
+        bars = _bars(n=n)
+        feats = _features(bars)
+        feats["po3_manipulation_low"] = np.full(n, 90.0)
+        feats["asian_low"] = np.nan
+        feats["london_low"] = np.nan
+        env = TradingEnv(
+            bars,
+            feats,
+            strategy_actions=True,
+            strategy=PO3IFVGStrategy(enforce_gate=False),
+            obs_window=10,
+            risk_frac_range=(0.01, 0.01),
+            rr_ratio_range=(2.0, 2.0),
+            min_sl_points=1.0,
+            min_sl_atr_mult=0.0,
+            max_entries_per_session=0,
+            open_manipulation_bars=0,
+            entry_cooldown_bars=0,
+            block_overnight=False,
+            max_episode_steps=None,
+        )
+        env.reset()
+        for _ in range(n - 20):
+            if env.position is not None:
+                pnl, _fp = env.broker.close_position(
+                    env.account,
+                    env.position,
+                    env._bar_quote(env._bar_at(env.step_idx)),
+                )
+                env.trade_log.append({"type": "close", "pnl": pnl})
+                env.position = None
+                env._note_close(pnl)
+            env.step(np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32))
+            if env._session_entry_counts.get(0, 0) >= 4:
+                return
+        pytest.fail("session stayed capped below 4 entries")
+
+    def test_stale_distribution_at_the_open_does_not_trade(self) -> None:
+        bars = _bars(n=30)
+        feats = _features(bars, ctx_dir=1.0)
+        feats["po3_manipulation_end"] = 0.0
+        feats["po3_distribution"] = 1.0
+        feats["po3_distribution_direction"] = 1.0
+        env = TradingEnv(
+            bars,
+            feats,
+            strategy_actions=True,
+            strategy=PO3IFVGStrategy(enforce_gate=False),
+            obs_window=5,
+            open_manipulation_bars=0,
+            entry_cooldown_bars=0,
+            block_overnight=False,
+        )
+        env.reset()
+        for _ in range(20):
+            env.step(np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32))
+            assert env.position is None
+
+    def test_post_open_manipulation_end_allows_the_trade(self) -> None:
+        n = 40
+        bars = _bars(n=n)
+        feats = _features(bars, ctx_dir=1.0)
+        feats["po3_manipulation_end"] = 0.0
+        feats["po3_distribution"] = 1.0
+        feats["po3_distribution_direction"] = 1.0
+        feats.loc[feats.index[12], "po3_manipulation_end"] = 1.0
+        env = TradingEnv(
+            bars,
+            feats,
+            strategy_actions=True,
+            strategy=PO3IFVGStrategy(enforce_gate=False),
+            obs_window=5,
+            risk_frac_range=(0.01, 0.01),
+            rr_ratio_range=(2.0, 2.0),
+            min_sl_points=1.0,
+            min_sl_atr_mult=0.0,
+            open_manipulation_bars=10,
+            entry_cooldown_bars=0,
+            block_overnight=False,
+            max_episode_steps=None,
+        )
+        env.reset()
+        opened_at = None
+        for _ in range(n - 5):
+            env.step(np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32))
+            if env.position is not None:
+                opened_at = env.step_idx
+                break
+        assert opened_at is not None
+        assert opened_at >= 12
+
+    def test_first_ten_minutes_stay_flat(self) -> None:
+        bars = _bars(n=20)
+        feats = _features(bars)
+        env = TradingEnv(
+            bars,
+            feats,
+            strategy_actions=True,
+            strategy=PO3IFVGStrategy(enforce_gate=False),
+            obs_window=5,
+            open_manipulation_bars=10,
+            entry_cooldown_bars=0,
+            block_overnight=False,
+        )
+        env.reset()
+        for _ in range(10):
+            env.step(np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32))
+            assert env.position is None
+
+
+def test_risk_at_the_floor_does_not_open() -> None:
+    n = 30
+    bars = _bars(n=n)
+    feats = _features(bars, ctx_dir=1.0)
+    feats["po3_manipulation_low"] = np.full(n, 80.0)
+    feats["asian_low"] = np.nan
+    feats["london_low"] = np.nan
+    env = TradingEnv(
+        bars,
+        feats,
+        strategy_actions=True,
+        strategy=PO3IFVGStrategy(enforce_gate=False),
+        obs_window=5,
+        risk_frac_range=(0.0, 0.01),
+        risk_floor=0.0005,
+        rr_ratio_range=(2.0, 2.0),
+        min_sl_points=1.0,
+        min_sl_atr_mult=0.0,
+        open_manipulation_bars=0,
+        entry_cooldown_bars=0,
+        block_overnight=False,
+    )
+    env.reset()
+    for _ in range(15):
+        env.step(np.array([0.9, 0.0, -1.0, 0.0], dtype=np.float32))
+        assert env.position is None
+
+
+def test_confirmed_entry_is_shaped_once() -> None:
+    """A confirmed in-zone entry scores once; later bars of the hold do not."""
+    n = 40
+    bars = _bars(n=n)
+    feats = _features(bars, ctx_dir=1.0)
+    feats["po3_distribution"] = 1.0
+    feats["po3_manipulation_low"] = np.full(n, 80.0)
+    feats["asian_low"] = np.nan
+    feats["london_low"] = np.nan
+    env = TradingEnv(
+        bars,
+        feats,
+        strategy_actions=True,
+        strategy=PO3IFVGStrategy(enforce_gate=False),
+        strategy_reward=PO3Reward(
+            entry_bonus=0.01,
+            manipulation_penalty=0.02,
+            invalid_ifvg_penalty=0.01,
+            distribution_bonus=0.005,
+        ),
+        strategy_weight=1.0,
+        reward_mode="pnl",
+        obs_window=5,
+        risk_frac_range=(0.01, 0.01),
+        rr_ratio_range=(2.0, 2.0),
+        min_sl_points=1.0,
+        min_sl_atr_mult=0.0,
+        open_manipulation_bars=0,
+        entry_cooldown_bars=0,
+        block_overnight=False,
+        max_episode_steps=None,
+    )
+    env.reset()
+    opened = False
+    for _ in range(n - 5):
+        _obs, _reward, _done, _trunc, info = env.step(
+            np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32)
+        )
+        shaped = float(info["reward_parts"]["strategy"])
+        if env.position is not None and not opened:
+            assert shaped > 0.0
+            opened = True
+            continue
+        if opened:
+            assert shaped == 0.0
+            assert env.position is not None
+            return
+    pytest.fail("confirmed entry never opened")

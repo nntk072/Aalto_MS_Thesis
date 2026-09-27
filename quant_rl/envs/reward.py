@@ -57,18 +57,42 @@ def _soft_band_penalty(
     return weight * float(np.clip(excess, 0.0, 1.0))
 
 
+def _fresh_band_state() -> dict[str, bool]:
+    return {"soft_daily": False, "soft_year": False, "soft_trailing": False}
+
+
+def _charge_band_once(
+    state: dict[str, bool],
+    key: str,
+    value: float,
+    soft: float | None,
+    hard: float,
+    *,
+    weight: float = 0.5,
+) -> float:
+    """Penalise the bar that enters the band. Later bars inside it pay nothing."""
+    penalty = _soft_band_penalty(value, soft, hard, weight=weight)
+    inside = penalty > 0.0
+    entered = inside and not state[key]
+    state[key] = inside
+    return -penalty if entered else 0.0
+
+
 class DSRReward:
     """Online differential Sharpe reward with FTMO soft penalties."""
 
-    def __init__(self, eta: float = 0.01) -> None:
+    def __init__(self, eta: float = 0.01, *, breach_penalty: float = -1.0) -> None:
         self.eta = eta  # EMA damping for A and B estimates
+        self.breach_penalty = float(breach_penalty)
         self._A: float = 0.0  # EMA of returns
         self._B: float = 0.0  # EMA of squared returns
+        self._band_inside = _fresh_band_state()
         self.last_parts: dict[str, float] = empty_reward_parts()
 
     def reset(self) -> None:
         self._A = 0.0
         self._B = 0.0
+        self._band_inside = _fresh_band_state()
 
     def __call__(
         self,
@@ -106,8 +130,9 @@ class DSRReward:
             Hard FTMO guardrail breached → large negative terminal reward.
         """
         if breach:
-            self.last_parts = fit_reward_parts({"breach": -10.0}, -10.0, -10.0)
-            return -10.0
+            penalty = self.breach_penalty
+            self.last_parts = fit_reward_parts({"breach": penalty}, penalty, penalty)
+            return penalty
 
         # Normalise P&L to relative return
         r = step_pnl / initial_balance
@@ -130,9 +155,19 @@ class DSRReward:
             if soft_daily_loss_limit is not None and soft_daily_loss_limit > 0.0
             else 0.8 * daily_loss_limit
         )
-        soft_daily = -_soft_band_penalty(daily_loss, soft, daily_loss_limit)
-        soft_year = -_soft_band_penalty(loss_from_initial, soft_max_loss_limit, max_loss_limit)
-        soft_trailing = -_soft_band_penalty(trailing_dd, soft_trailing_dd_limit, trailing_dd_limit)
+        soft_daily = _charge_band_once(
+            self._band_inside, "soft_daily", daily_loss, soft, daily_loss_limit
+        )
+        soft_year = _charge_band_once(
+            self._band_inside, "soft_year", loss_from_initial, soft_max_loss_limit, max_loss_limit
+        )
+        soft_trailing = _charge_band_once(
+            self._band_inside,
+            "soft_trailing",
+            trailing_dd,
+            soft_trailing_dd_limit,
+            trailing_dd_limit,
+        )
         raw = dsr + soft_daily + soft_year + soft_trailing
         clipped = float(np.clip(raw, -10.0, 10.0))
         self.last_parts = fit_reward_parts(
@@ -155,13 +190,24 @@ class PnLReward:
     Baseline Idea 3 keeps :class:`DSRReward`.
     """
 
-    def __init__(self, *, soft_loss_frac: float = 0.01, dsr_weight: float = 0.0) -> None:
+    def __init__(
+        self,
+        *,
+        soft_loss_frac: float = 0.01,
+        dsr_weight: float = 0.0,
+        breach_penalty: float = -1.0,
+        soft_band_weight: float = 0.05,
+    ) -> None:
         self.soft_loss_frac = soft_loss_frac
         self.dsr_weight = float(dsr_weight)
-        self._dsr = DSRReward() if self.dsr_weight > 0 else None
+        self.breach_penalty = float(breach_penalty)
+        self.soft_band_weight = float(soft_band_weight)
+        self._dsr = DSRReward(breach_penalty=self.breach_penalty) if self.dsr_weight > 0 else None
+        self._band_inside = _fresh_band_state()
         self.last_parts: dict[str, float] = empty_reward_parts()
 
     def reset(self) -> None:
+        self._band_inside = _fresh_band_state()
         if self._dsr is not None:
             self._dsr.reset()
 
@@ -184,8 +230,9 @@ class PnLReward:
         equity: float | None = None,
     ) -> float:
         if breach:
-            self.last_parts = fit_reward_parts({"breach": -10.0}, -10.0, -10.0)
-            return -10.0
+            penalty = self.breach_penalty
+            self.last_parts = fit_reward_parts({"breach": penalty}, penalty, penalty)
+            return penalty
 
         parts = empty_reward_parts()
         if realized_close_pnl is not None:
@@ -197,12 +244,29 @@ class PnLReward:
             if soft_daily_loss_limit is not None and soft_daily_loss_limit > 0.0
             else self.soft_loss_frac * max(eq, 1.0)
         )
-        parts["soft_daily"] = -_soft_band_penalty(daily_loss, soft_start, daily_loss_limit)
-        parts["soft_year"] = -_soft_band_penalty(
-            loss_from_initial, soft_max_loss_limit, max_loss_limit
+        parts["soft_daily"] = _charge_band_once(
+            self._band_inside,
+            "soft_daily",
+            daily_loss,
+            soft_start,
+            daily_loss_limit,
+            weight=self.soft_band_weight,
         )
-        parts["soft_trailing"] = -_soft_band_penalty(
-            trailing_dd, soft_trailing_dd_limit, trailing_dd_limit
+        parts["soft_year"] = _charge_band_once(
+            self._band_inside,
+            "soft_year",
+            loss_from_initial,
+            soft_max_loss_limit,
+            max_loss_limit,
+            weight=self.soft_band_weight,
+        )
+        parts["soft_trailing"] = _charge_band_once(
+            self._band_inside,
+            "soft_trailing",
+            trailing_dd,
+            soft_trailing_dd_limit,
+            trailing_dd_limit,
+            weight=self.soft_band_weight,
         )
 
         if self._dsr is not None:

@@ -109,7 +109,7 @@ shell: `source scripts/triton/activate_venv.sh` (picks `.venv` or `.venv-x86`).
 | Knob | 1 GPU (one model) | 2 GPU (six-run) |
 |------|-------------------|-----------------|
 | Time | **6h or 12h.** Default `--time=6:00:00`. Use `--time=12:00:00` when the partition `MaxTime` allows it and the user asked for 12h. | **`--time=6:00:00`** |
-| Mem | **`--mem=512G`** for `n_envs=64`. Do not start a 64-env PO3 train at 128G. | **`--mem=900G`** (stay under the ~1.1 TB node) |
+| Mem | **`--mem=512G`** for one `n_envs=64` train. Steady use is ~300G; this feature set peaked ~473G. 256G OOMs at worker start. | **`--mem=900G`** (stay under the ~1.1 TB node). Same 900G figure for two trains on **one** H200 — see below. |
 | CPUs | **`--cpus-per-task=48`** | **`--cpus-per-task=128`** (node has 144) |
 | Tasks | `--ntasks=1` | `--ntasks=1` |
 
@@ -129,6 +129,32 @@ srun --partition=gpu-grace-h200-141g --gpus=gh200:2 --time=6:00:00 \
 
 `attach_or_alloc.sh` follows the same priority when it allocates (override with
 `PARTITION` / `GPUS` / `TIME` / `MEM` / `CPUS` env vars).
+
+## Two trains, one H200 (do not rediscover this)
+
+Idea 1 (`po3_ifvg`) and Idea 2 (`distribution`) at `n_envs=64` share **one**
+H200. Run `bash scripts/triton/two_trains_one_h200.sh` after the user says to
+allocate. Do not probe other sizes first.
+
+| Knob | Value | Do not try first |
+|------|--------|------------------|
+| GPU | `--gpus=h200:1` | `h200:2`, `gh200:2` while those GPUs are already taken |
+| Mem | **`--mem=900G`** | 1024G, 1200G, 1400G (they stay PENDING) |
+| CPU | **`--cpus-per-task=64`** | 96 |
+| Time | **`--time=6:00:00`** | 12h on this shape (stays PENDING; `srun --test-only` can still say "now") |
+| Envs | `QUANT_RL_MAX_N_ENVS=64` | Leaving the cap unset: 900G selects 128 workers and OOMs |
+
+A PENDING job with `StartTime=Unknown` does not fit. Cancel that one job and
+stop. Do not climb memory, CPUs, GPUs, or wall time.
+
+Second train: a new tmux window that **`ssh`s the compute node**. That shell
+joins the same job (`SLURM_JOB_ID` is set). `srun --overlap` / `srun --jobid=`
+fails here with `Insane message length`. Do not retry overlap.
+
+2× GH200 is a different shape (`gh200:2`, 900G, 128 CPUs, **6h** only). Use it
+only when a node has both GPUs free. If `AllocTRES` already shows `gh200=2`
+on both `gpuarm` nodes, the wait is occupancy, not a wrong size — do not
+submit it.
 
 ## Reuse (when a GPU shell already exists)
 

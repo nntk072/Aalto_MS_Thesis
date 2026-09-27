@@ -44,7 +44,7 @@ def _features(bars: pd.DataFrame) -> pd.DataFrame:
             "sweep_low": np.ones(n),
             "po3_manipulation_low": np.full(n, 95.0),
             "po3_manipulation_high": np.full(n, 105.0),
-            "po3_manipulation_end": np.zeros(n),
+            "po3_manipulation_end": np.ones(n),
             "po3_distribution": np.zeros(n),
             "po3_distribution_direction": np.zeros(n),
             "ifvg_bull_low": np.full(n, 98.0),

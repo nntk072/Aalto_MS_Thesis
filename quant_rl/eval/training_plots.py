@@ -353,3 +353,183 @@ def save_training_plots(
 
     if save_html:
         _save_training_html(df, out_dir)
+
+
+# ---------------------------------------------------------------------------
+# Dashboard series (reward parts, behavior, risk, eval, grad norm)
+# ---------------------------------------------------------------------------
+
+_DASH_COLORS = (_C0, _C1, _C2, _C3, _C4, "#00838f", "#6d4c41", "#ad1457", "#455a64")
+
+_EVAL_PLOT_COLS: tuple[tuple[str, str], ...] = (
+    ("return_pct", "return %"),
+    ("sharpe", "Sharpe"),
+    ("sortino", "Sortino"),
+    ("eval_max_drawdown", "max DD"),
+    ("profit_factor", "profit factor"),
+    ("win_rate", "win rate"),
+    ("avg_trade", "avg trade"),
+    ("n_trades", "trades"),
+    ("turnover", "turnover"),
+    ("eval_reward", "eval reward"),
+)
+
+_REWARD_PLOT_COLS: tuple[str, ...] = (
+    "pnl",
+    "dsr",
+    "soft_daily",
+    "soft_year",
+    "soft_trailing",
+    "strategy",
+    "breach",
+    "sweep",
+    "peak_dd",
+)
+
+_RISK_PLOT_COLS: tuple[str, ...] = (
+    "daily_loss",
+    "trailing_dd",
+    "max_drawdown",
+    "structure_sl",
+    "structure_tp",
+    "session_end",
+    "peak_dd_behavior",
+)
+
+
+def _numeric(df: pd.DataFrame, col: str) -> pd.DataFrame:
+    if col not in df.columns:
+        return df.iloc[0:0]
+    out = df[["timestep", col]].copy()
+    out[col] = pd.to_numeric(out[col], errors="coerce")
+    return out.dropna()
+
+
+def _has_points(df: pd.DataFrame, cols: tuple[str, ...]) -> bool:
+    return any(len(_numeric(df, col)) > 0 for col in cols)
+
+
+def _line_chart(
+    df: pd.DataFrame,
+    cols: tuple[tuple[str, str], ...],
+    title: str,
+    ylabel: str,
+    out_path: Path,
+    dpi: int,
+) -> bool:
+    present = [(col, label) for col, label in cols if len(_numeric(df, col)) > 0]
+    if not present:
+        return False
+    _apply_white()
+    fig, ax = plt.subplots(figsize=(10, 4))
+    for i, (col, label) in enumerate(present):
+        v = _numeric(df, col)
+        ax.plot(
+            v["timestep"],
+            v[col],
+            color=_DASH_COLORS[i % len(_DASH_COLORS)],
+            marker="o",
+            markersize=3,
+            label=label,
+        )
+    ax.set_title(title, fontweight="bold")
+    ax.set_xlabel("Timestep")
+    ax.set_ylabel(ylabel)
+    ax.legend(fontsize=8, ncol=2)
+    ax.grid(True)
+    fig.tight_layout()
+    _save_fig(fig, out_path, dpi)
+    return True
+
+
+def _html_lines(
+    df: pd.DataFrame,
+    cols: tuple[tuple[str, str], ...],
+    title: str,
+    out_path: Path,
+) -> None:
+    try:
+        import plotly.graph_objects as go
+    except ImportError:
+        return
+    present = [(col, label) for col, label in cols if len(_numeric(df, col)) > 0]
+    if not present:
+        return
+    fig = go.Figure()
+    for col, label in present:
+        v = _numeric(df, col)
+        fig.add_trace(go.Scatter(x=v["timestep"], y=v[col], mode="lines+markers", name=label))
+    fig.update_layout(template="plotly_white", title=title, xaxis_title="Timestep", height=420)
+    fig.write_html(str(out_path), include_plotlyjs="cdn")
+
+
+def save_dashboard_plots(
+    log_path: Path | str,
+    out_dir: Path | str,
+    dpi: int = 150,
+    save_html: bool = True,
+) -> None:
+    """Chart the dashboard CSV written during ``learn()``."""
+    log_path = Path(log_path)
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if not log_path.exists() or log_path.stat().st_size == 0:
+        return
+    df = pd.read_csv(log_path)
+    if df.empty or "timestep" not in df.columns:
+        return
+
+    charts: tuple[tuple[str, tuple[tuple[str, str], ...], str], ...] = (
+        ("dashboard_eval", _EVAL_PLOT_COLS, "Dashboard eval"),
+        (
+            "dashboard_reward",
+            tuple((col, col) for col in _REWARD_PLOT_COLS),
+            "Dashboard reward parts",
+        ),
+        (
+            "dashboard_risk",
+            tuple((col, col) for col in _RISK_PLOT_COLS),
+            "Dashboard close reasons",
+        ),
+        ("dashboard_grad_norm", (("grad_norm", "grad norm"),), "Dashboard grad norm"),
+    )
+    for name, cols, title in charts:
+        if _line_chart(df, cols, title, "", out_dir / f"{name}.png", dpi) and save_html:
+            _html_lines(df, cols, title, out_dir / f"{name}.html")
+
+    behavior = (
+        ("action_mean", "action mean"),
+        ("action_std", "action std"),
+        ("long", "long"),
+        ("short", "short"),
+        ("flat", "flat"),
+    )
+    if _has_points(df, tuple(col for col, _ in behavior)):
+        _apply_white()
+        fig, axes = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+        for col, label, color in (
+            ("action_mean", "action mean", _C0),
+            ("action_std", "action std", _C1),
+        ):
+            v = _numeric(df, col)
+            if len(v):
+                axes[0].plot(v["timestep"], v[col], color=color, label=label)
+        for col, label, color in (
+            ("long", "long", _C2),
+            ("short", "short", _C1),
+            ("flat", "flat", _C3),
+        ):
+            v = _numeric(df, col)
+            if len(v):
+                axes[1].plot(v["timestep"], v[col], color=color, label=label)
+        axes[0].set_title("Dashboard behavior", fontweight="bold")
+        axes[0].set_ylabel("Action")
+        axes[1].set_ylabel("Position share")
+        axes[1].set_xlabel("Timestep")
+        for ax in axes:
+            ax.legend(fontsize=8)
+            ax.grid(True)
+        fig.tight_layout()
+        _save_fig(fig, out_dir / "dashboard_behavior.png", dpi)
+        if save_html:
+            _html_lines(df, behavior, "Dashboard behavior", out_dir / "dashboard_behavior.html")

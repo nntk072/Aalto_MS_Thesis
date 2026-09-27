@@ -10,7 +10,44 @@ from quant_rl.envs.reward import DSRReward
 def test_breach_returns_strong_terminal():
     r = DSRReward()
     val = r(0.0, breach=True)
-    assert val == pytest.approx(-10.0)
+    assert val == pytest.approx(-1.0)
+
+
+def test_eval_breach_keeps_the_report_penalty():
+    r = DSRReward(breach_penalty=-10.0)
+    assert r(0.0, breach=True) == pytest.approx(-10.0)
+
+
+def test_soft_band_charges_once_on_entry():
+    from quant_rl.envs.reward import PnLReward
+
+    r = PnLReward()
+    first = r(
+        0.0,
+        daily_loss=3500.0,
+        daily_loss_limit=5000.0,
+        soft_daily_loss_limit=2000.0,
+        initial_balance=100_000.0,
+    )
+    second = r(
+        0.0,
+        daily_loss=3600.0,
+        daily_loss_limit=5000.0,
+        soft_daily_loss_limit=2000.0,
+        initial_balance=100_000.0,
+    )
+    assert first < 0.0
+    assert r.last_parts["soft_daily"] == 0.0
+    assert second == pytest.approx(0.0)
+    r.reset()
+    again = r(
+        0.0,
+        daily_loss=3500.0,
+        daily_loss_limit=5000.0,
+        soft_daily_loss_limit=2000.0,
+        initial_balance=100_000.0,
+    )
+    assert again < 0.0
 
 
 def test_positive_pnl_eventually_positive():

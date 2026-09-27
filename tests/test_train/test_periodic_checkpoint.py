@@ -16,7 +16,7 @@ class _FakeModel:
         self.num_timesteps = 0
         self.saved: list[str] = []
 
-    def save(self, path: Any) -> None:
+    def save(self, path: Any, exclude: Any = None) -> None:
         self.saved.append(Path(path).name)
 
 

@@ -8,7 +8,11 @@ import numpy as np
 import pandas as pd
 
 from quant_rl.envs.trading_env import TradingEnv
-from quant_rl.features.build import ensure_london_atr_distances, select_obs_columns
+from quant_rl.features.build import (
+    attach_reachable_r,
+    ensure_london_atr_distances,
+    select_obs_columns,
+)
 from quant_rl.features.indicators import ny_session_clock
 from quant_rl.live.rl_strategy import RLStrategyAdapter
 
@@ -102,6 +106,7 @@ def test_train_live_observation_parity() -> None:
 
     adapter = RLStrategyAdapter(model=_StubModel(), config_path="quant_rl/config/default.yaml")
     adapter._features = features
+    adapter._bars = bars
     adapter.obs_window = 10
     adapter._initial_balance = 100_000.0
     step = int(env.step_idx)
@@ -121,6 +126,34 @@ def test_train_live_observation_parity() -> None:
     assert env_obs["seq"].shape == live_obs["seq"].shape
     assert env_obs["seq_mask"].shape == live_obs["seq_mask"].shape
     assert env_obs["account"].shape == live_obs["account"].shape == (6,)
-    assert list(env._obs_features.columns) == list(select_obs_columns(features).columns)
+    assert list(env._obs_features.columns) == list(
+        attach_reachable_r(select_obs_columns(features), bars, features).columns
+    )
+    assert "reachable_r" in env._obs_features.columns
     assert "M5_last_swing_high" not in env._obs_features.columns
     np.testing.assert_allclose(env_obs["account"], live_obs["account"])
+
+
+def test_reachable_r_is_room_over_the_structural_stop() -> None:
+    idx = pd.date_range("2024-01-02 16:30", periods=4, freq="1min")
+    nxt = pd.date_range("2024-01-03 16:30", periods=4, freq="1min")
+    index = idx.append(nxt)
+    close = pd.Series(100.0, index=index)
+    bars = pd.DataFrame(
+        {"open": close, "high": close + 5.0, "low": close - 5.0, "close": close},
+        index=index,
+    )
+    features = pd.DataFrame(
+        {
+            "atr_5": 1.0,
+            "po3_manipulation_low": 98.0,
+            "po3_manipulation_high": 110.0,
+            "po3_distribution_direction": 1.0,
+        },
+        index=index,
+    )
+    series = attach_reachable_r(features[["atr_5"]], bars, features)["reachable_r"]
+    # First session has no completed range yet. The next session's stop is 2 points
+    # and the prior session range is 10, so the room is 10 / 2.
+    assert float(series.iloc[0]) == 0.0
+    assert float(series.iloc[-1]) == 5.0

@@ -29,8 +29,15 @@ from ..envs.feature_row import BarView, FeatureRow
 from ..envs.reward import DSRReward, PnLReward
 from ..envs.strategies import BaselineStrategy, TradingStrategy
 from ..envs.sweep_reward import CompositeReward, SweepConfirmationReward
-from ..features.build import select_obs_columns
+from ..features.build import attach_reachable_r, select_obs_columns
 from ..models.vae import VAE
+from ..train.debug_trace import (
+    DebugStepError,
+    new_debug_window,
+    note_debug_step,
+    summarize_window,
+    wiring_from_env,
+)
 from ..train.equity_gate import assess_train_equity
 from .observation import normalized_account_vector, pad_observation_window
 
@@ -107,6 +114,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         min_sl_atr_mult: float = 0.5,
         min_sl_points: float = 0.0,
         max_entries_per_session: int = 0,
+        open_manipulation_bars: int = 10,
         entry_cooldown_bars: int = 0,
         reward_mode: str = "dsr",
         entry_intensity_threshold: float = 0.0,
@@ -116,6 +124,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         fill_delay_ms: int = 0,
         agent_direction_control: bool = False,
         direction_override_threshold: float = 0.0,
+        risk_floor: float = 0.0005,
     ):
         """Initialize trading environment.
 
@@ -229,6 +238,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             are rejected when strategy/trader actions are on.
         max_entries_per_session : int
             Cap on opens per ``session_id`` (0 = unlimited).
+        open_manipulation_bars : int
+            No new entry for this many M1 bars after each NY session open.
+            ``0`` disables the blackout.
         entry_cooldown_bars : int
             Bars to wait after a close before the next entry (0 = none).
         reward_mode : str
@@ -282,6 +294,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.min_sl_atr_mult = float(min_sl_atr_mult)
         self.min_sl_points = float(min_sl_points)
         self.max_entries_per_session = int(max_entries_per_session)
+        self.open_manipulation_bars = int(open_manipulation_bars)
+        self._session_open_idx: dict[int, int] = {}
+        self._ny_manip_confirmed: set[int] = set()
         self.entry_cooldown_bars = int(entry_cooldown_bars)
         self.reward_mode = str(reward_mode or "dsr").lower()
         # 0 = intensity never holds; entry follows context_direction.
@@ -298,6 +313,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # defers to ``strategy.context_direction``. 0.0 means the agent's sign
         # always wins except at exactly neutral.
         self.direction_override_threshold = float(direction_override_threshold)
+        self.risk_floor = float(risk_floor)
         self._tickbook = tickbook
         self._fill_delay_ms = int(fill_delay_ms)
         # Resolve trader/strategy action flag early (needed for reward + spaces).
@@ -305,10 +321,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             bool(trader_actions) if trader_actions is not None else bool(strategy_actions)
         )
 
-        # Initialize reward function
+        # Initialize reward function. Training breaches are a small terminal
+        # spike; eval keeps the -10 report. The guardrail still ends the episode.
         self.reward_fn: DSRReward | CompositeReward | PnLReward
+        breach_penalty = 0.0 if episodic else -10.0
         base_pnl = (
-            PnLReward(soft_loss_frac=0.01, dsr_weight=0.1) if self.reward_mode == "pnl" else None
+            PnLReward(soft_loss_frac=0.01, dsr_weight=0.0, breach_penalty=breach_penalty)
+            if self.reward_mode == "pnl"
+            else None
         )
         if (
             use_sweep_reward
@@ -320,18 +340,20 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             )
             self.reward_fn = CompositeReward(
                 sweep_reward=sweep_reward,
-                dsr_weight=0.1 if self.reward_mode == "pnl" else dsr_weight,
+                dsr_weight=0.0 if self.reward_mode == "pnl" else dsr_weight,
                 sweep_weight=0.0 if self.reward_mode == "pnl" else sweep_weight,
                 strategy_reward=strategy_reward,
                 strategy_weight=strategy_weight,
                 base_reward=base_pnl,
             )
-            self.dsr_reward = DSRReward(eta=dsr_eta)  # Keep for composite
+            self.dsr_reward = DSRReward(eta=dsr_eta, breach_penalty=breach_penalty)
         elif self.reward_mode == "pnl":
-            self.reward_fn = PnLReward(soft_loss_frac=0.01, dsr_weight=0.1)
-            self.dsr_reward = DSRReward(eta=dsr_eta)
+            self.reward_fn = PnLReward(
+                soft_loss_frac=0.01, dsr_weight=0.0, breach_penalty=breach_penalty
+            )
+            self.dsr_reward = DSRReward(eta=dsr_eta, breach_penalty=breach_penalty)
         else:
-            self.reward_fn = DSRReward(eta=dsr_eta)
+            self.reward_fn = DSRReward(eta=dsr_eta, breach_penalty=breach_penalty)
 
         # Entry-gate: warn once (not per-step) if required features are missing.
         self._entry_gate_warned: bool = False
@@ -345,6 +367,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._session_entry_counts: dict[int, int] = {}
         self._cooldown_until_bar: int = -1
         self._last_realized_close_pnl: float | None = None
+        self._opened_this_step = False
+        self._debug_trace = False
+        self._debug_window: dict[str, Any] | None = None
         if self.strategy_actions:
             missing = [c for c in self.strategy.required_features if c not in features.columns]
             if missing:
@@ -364,7 +389,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # never reach the encoder.
         # Drop non-numeric columns (e.g. string ``session`` labels) — they cannot
         # be cast to float32 and are not part of the model's normalized observation.
-        self._obs_features = select_obs_columns(features, self.strategy.raw_columns)
+        self._obs_features = attach_reachable_r(
+            select_obs_columns(features, self.strategy.raw_columns),
+            bars,
+            features,
+        )
         self._obs_features_mmap = obs_features_mmap
 
         # Cache numpy arrays for hot-path env stepping — avoids per-step pandas
@@ -576,6 +605,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._session_entry_counts = {}
         self._cooldown_until_bar = -1
         self._last_realized_close_pnl = None
+        self._opened_this_step = False
         self._selected_sl_anchor = 0.0
         self._ep_start_equity = float(self.initial_balance)
         self._ep_reward_sum = 0.0
@@ -1136,7 +1166,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     self.position.stale_counter = 0
                     self.position.mfe = 0.0
                     self.position.mae = 0.0
-                    if self.strategy_actions and self.max_entries_per_session > 0:
+                    if self.strategy_actions:
                         self._session_entry_counts[session_id] = (
                             self._session_entry_counts.get(session_id, 0) + 1
                         )
@@ -1151,6 +1181,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                             ).total_seconds()
                         )
                     )
+                    self._opened_this_step = True
                     self.trade_log.append(
                         {
                             "type": "open",
@@ -1389,9 +1420,53 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 discrete_action = 0
                 risk_frac = self.risk_frac_range[0]
                 rr_ratio = self.rr_ratio_range[0]
+        if discrete_action in (1, -1) and risk_frac <= self.risk_floor:
+            discrete_action = 0
         return discrete_action, risk_frac, rr_ratio, tp_mode
 
+    def enable_debug_trace(self) -> None:
+        """Start per-rollout counters and step-failure snapshots."""
+        self._debug_trace = True
+        self._debug_window = new_debug_window()
+
+    def debug_flush(self) -> dict[str, Any]:
+        """Return the counters since the last flush and start a new window."""
+        if not self._debug_trace or self._debug_window is None:
+            return {}
+        summary = summarize_window(self._debug_window)
+        self._debug_window = new_debug_window()
+        return summary
+
+    def debug_wiring(self) -> dict[str, Any]:
+        """Reward and risk settings this env was built with."""
+        return wiring_from_env(self)
+
     def step(
+        self,
+        action: int | float | np.ndarray[Any, Any],
+    ) -> tuple[dict[str, np.ndarray[Any, Any]], float, bool, bool, dict[str, Any]]:
+        """Execute one step. With tracing on, failures become :class:`DebugStepError`."""
+        if not self._debug_trace:
+            return self._step_untraced(action)
+        try:
+            return self._step_untraced(action)
+        except DebugStepError:
+            raise
+        except Exception as exc:
+            position = self.position
+            raise DebugStepError(
+                "exception",
+                {
+                    "action": action.tolist() if isinstance(action, np.ndarray) else action,
+                    "reward": None,
+                    "reward_parts": {},
+                    "position": position is not None,
+                    "position_direction": 0 if position is None else int(position.direction),
+                },
+                exc,
+            ) from exc
+
+    def _step_untraced(
         self,
         action: int | float | np.ndarray[Any, Any],
     ) -> tuple[dict[str, np.ndarray[Any, Any]], float, bool, bool, dict[str, Any]]:
@@ -1414,6 +1489,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             int(self._session_ids_arr[self.step_idx]) if self._session_ids_arr is not None else 0
         )
         self._last_realized_close_pnl = None
+        self._opened_this_step = False
 
         # Fill quote for next action (latency-shifted: decision at bar t
         # fills at the quote of bar t + fill_latency_bars, not t + 1)
@@ -1423,6 +1499,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         )
 
         # Decode action (discrete or continuous)
+        self._note_session_open(session_id, feat_row)
+        self._arm_po3_confirm(session_id)
         discrete_action, risk_frac, rr_ratio, tp_mode = self._decode_action(action, feat_row)
         self._selected_tp_mode = tp_mode
 
@@ -1435,7 +1513,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         # Session entry cap + post-close cooldown (trader / strategy actions).
         if self.strategy_actions and discrete_action != 0:
-            if (
+            if self._in_open_blackout(session_id):
+                discrete_action = 0
+                risk_frac = 0.0
+            elif (
                 self.max_entries_per_session > 0
                 and self._session_entry_counts.get(session_id, 0) >= self.max_entries_per_session
             ):
@@ -1553,6 +1634,20 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         if self.max_episode_steps is not None and self.episode_step_count >= self.max_episode_steps:
             truncated = True
 
+        if self._debug_trace and self._debug_window is not None:
+            note_debug_step(
+                self._debug_window,
+                reward=float(reward),
+                reward_parts=reward_parts,
+                opened=bool(self._opened_this_step),
+                entered=discrete_action in (1, -1),
+                risk_frac=float(risk_frac),
+                close_reason=close_reason,
+                action=action,
+                position=self.position is not None,
+                position_direction=0 if self.position is None else int(self.position.direction),
+            )
+
         self._ep_reward_sum += float(reward)
         if done or truncated:
             n_trades = sum(1 for t in self.trade_log if t.get("type") == "open")
@@ -1572,6 +1667,28 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             }
 
         return obs, float(reward), done, truncated, info
+
+    def _note_session_open(self, session_id: int, feat_row: FeatureRow | pd.Series) -> None:
+        """Remember the first bar of this session and a post-open manip end."""
+        self._session_open_idx.setdefault(session_id, self.step_idx)
+        if float(feat_row.get("po3_manipulation_end", 0.0) or 0.0) > 0.0:
+            self._ny_manip_confirmed.add(session_id)
+
+    def _arm_po3_confirm(self, session_id: int) -> None:
+        """Let Idea 1 use a side only after this session's manipulation ends."""
+        if getattr(self.strategy, "name", "") != "po3_ifvg":
+            return
+        setattr(
+            self.strategy,
+            "_session_manip_confirmed",
+            session_id in self._ny_manip_confirmed,
+        )
+
+    def _in_open_blackout(self, session_id: int) -> bool:
+        if self.open_manipulation_bars <= 0:
+            return False
+        start = self._session_open_idx.get(session_id, self.step_idx)
+        return (self.step_idx - start) < self.open_manipulation_bars
 
     def _matched_entry_level(self, session_id: int, discrete_action: int) -> tuple[str | None, Any]:
         """Match an entry to the most recently crossed liquidity level.
@@ -1747,11 +1864,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                         else float(feat_row.get("price_in_ifvg_bear", 0.0)) > 0
                     )
                 reward_kwargs["strategy_context"] = {
-                    "position_changed": bool(
-                        self.position is not None
-                        and len(self.trade_log) > 0
-                        and self.trade_log[-1].get("type") in ("open", "close")
-                    ),
+                    "position_changed": bool(self._opened_this_step),
                     "direction": pos_dir,
                     "in_ifvg": in_ifvg,
                     "manipulation_active": (

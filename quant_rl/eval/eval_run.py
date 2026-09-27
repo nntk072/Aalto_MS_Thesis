@@ -165,6 +165,7 @@ def main() -> None:
         min_sl_atr_mult=float(cfg.risk.get("min_sl_atr_mult", 0.5)),
         min_sl_points=float(cfg.risk.get("min_sl_points", 0.0)),
         max_entries_per_session=int(cfg.env.get("max_entries_per_session", 0)),
+        open_manipulation_bars=int(cfg.env.get("open_manipulation_bars", 10)),
         entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
         reward_mode=str(cfg.env.get("reward_mode", "dsr")),
         entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),

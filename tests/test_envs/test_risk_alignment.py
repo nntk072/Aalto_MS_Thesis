@@ -58,7 +58,7 @@ def _features(bars: pd.DataFrame, *, ctx_dir: float = 1.0) -> pd.DataFrame:
             "sweep_low": np.ones(n) if is_long else np.zeros(n),
             "po3_manipulation_low": np.full(n, 95.0),
             "po3_manipulation_high": np.full(n, 105.0),
-            "po3_manipulation_end": np.zeros(n),
+            "po3_manipulation_end": np.ones(n),
             "po3_distribution": np.zeros(n),
             "po3_distribution_direction": np.zeros(n),
             "ifvg_bull_low": np.full(n, 98.0),
@@ -89,6 +89,7 @@ def _make_env(**kwargs: Any) -> TradingEnv:
     kwargs.setdefault("min_sl_points", 0.0)
     kwargs.setdefault("min_sl_atr_mult", 0.0)
     kwargs.setdefault("max_entries_per_session", 0)
+    kwargs.setdefault("open_manipulation_bars", 0)
     kwargs.setdefault("entry_cooldown_bars", 0)
     return TradingEnv(
         bars,

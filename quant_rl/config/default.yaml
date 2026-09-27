@@ -152,7 +152,9 @@ env:
   reward_mode: dsr                     # baseline stays dsr; idea configs set pnl
   # Training behavior, not an FTMO kill. 0 = off. 0.10 = flatten at 10% from peak.
   peak_trailing_dd_limit: 0.0
-  max_entries_per_session: 3
+  max_entries_per_session: 0
+  # First NY minutes are the open manipulation. 0 disables the blackout.
+  open_manipulation_bars: 10
   entry_cooldown_bars: 15
   sl_buffer_pts: 0.0                   # structural stop buffer (0 = exact)
   block_overnight: true                # force-close positions at last NY bar (no gap hold)
@@ -264,6 +266,19 @@ training:
     enabled: true
     eval_every: 100000
     eval_bars: 20000
+    log_every: 100000
+  # One JSON line per PPO update, plus an incident on exceptions, non-finite
+  # numbers, and registered checks. enabled: false leaves training unchanged.
+  debug:
+    enabled: true
+    ring_size: 5
+    ev_floor: 0.2
+    ev_windows: 5
+    std_min: 0.497
+    std_max: 1.0
+    part_vs_pnl: 10.0
+    corr_floor: 0.3
+    corr_windows: 3
 
 # Chain E Step 0 — auxiliary return-prediction head (opt-in).
 auxiliary:
@@ -291,7 +306,7 @@ strategy:
   risk:
     sl_mode: "exact"            # "exact" | "buffered"
     sl_buffer_pts: 1.0
-    risk_frac_range: [0.005, 0.01]
+    risk_frac_range: [0.0, 0.01]
     rr_range: [1.5, 5.0]
   tp:
     mode: "agent"
@@ -308,5 +323,5 @@ strategy:
     manipulation_penalty: 0.02
     invalid_ifvg_penalty: 0.01
     distribution_bonus: 0.005
-    strategy_weight: 0.1
+    strategy_weight: 0.01
   batch_windows: 256     # supervised windows sampled per rollout
