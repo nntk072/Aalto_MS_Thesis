@@ -306,6 +306,8 @@ def swing_features(
             "hl": structure["hl"],
             "lh": structure["lh"],
             "ll": structure["ll"],
+            "swing_high_event": swings["swing_high_event"].astype(float),
+            "swing_low_event": swings["swing_low_event"].astype(float),
         },
         index=df.index,
     )

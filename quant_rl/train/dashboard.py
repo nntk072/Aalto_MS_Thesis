@@ -147,16 +147,23 @@ def format_dashboard(snapshot: dict[str, Any]) -> str:
     ]
     ev = snapshot.get("eval")
     if ev:
-        lines.append(
-            "eval      "
-            f"return {ev['return_pct']:+.2f}%  sharpe {ev['sharpe']:.2f}  "
-            f"sortino {ev['sortino']:.2f}  "
-            f"maxdd {-100.0 * ev['max_drawdown']:.2f}%  "
-            f"pf {ev['profit_factor']:.2f}  "
-            f"win {100.0 * ev['win_rate']:.1f}%  "
-            f"avg {ev['avg_trade']:+.2f}  trades {int(ev['n_trades'])}  "
-            f"turn {ev['turnover']:.4f}  rew {ev['reward_mean']:+.4f}"
-        )
+        if int(ev.get("n_trades", 0)) == 0:
+            lines.append("eval      FAILED  trades 0  empty replay is not a flat return")
+        else:
+            lines.append(
+                "eval      "
+                f"return {ev['return_pct']:+.2f}%  sharpe {ev['sharpe']:.2f}  "
+                f"sortino {ev['sortino']:.2f}  "
+                f"maxdd {-100.0 * ev['max_drawdown']:.2f}%  "
+                f"pf {ev['profit_factor']:.2f}  "
+                f"win {100.0 * ev['win_rate']:.1f}%  "
+                f"avg {ev['avg_trade']:+.2f}  trades {int(ev['n_trades'])}  "
+                f"turn {ev['turnover']:.4f}  rew {ev['reward_mean']:+.4f}"
+            )
+    if ev:
+        diversity = ev.get("diversity_text")
+        if diversity:
+            lines.append(str(diversity).rstrip())
     return "\n".join(lines)
 
 
@@ -259,9 +266,12 @@ def append_dashboard_row(path: str | Path, row: dict[str, Any]) -> None:
 
 def _logger_float(values: dict[str, Any], key: str) -> float:
     try:
-        return float(values.get(key, 0.0))
+        value = float(values.get(key, 0.0))
     except (TypeError, ValueError):
         return 0.0
+    if not np.isfinite(value) and key.endswith("explained_variance"):
+        return 0.0
+    return value
 
 
 def policy_from_logger(values: dict[str, Any], grad_norm: float | None) -> dict[str, Any]:

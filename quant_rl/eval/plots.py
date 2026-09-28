@@ -971,6 +971,7 @@ def plot_per_trade_orders(
     show_sl_tp: bool = True,
     show_vwap: bool = False,
     secondary_bars: pd.DataFrame | None = None,
+    features: pd.DataFrame | None = None,
 ) -> None:
     """Generate 2-panel PNG per trade with datetime axes, EMA50, MACD, and trade info.
 
@@ -1042,6 +1043,7 @@ def plot_per_trade_orders(
             contract_size=contract_size,
             show_mae_mfe=show_mae_mfe,
             show_sl_tp=show_sl_tp,
+            features=features,
         )
         if prepared is None:
             continue

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
+from numbers import Real
 from typing import Any
 
 import pandas as pd
@@ -53,6 +55,8 @@ class OrderLevels:
     deviations: list[tuple[float, float]] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     offset: float = 1.0
+    manip_spans: list[tuple[pd.Timestamp, pd.Timestamp]] = field(default_factory=list)
+    manip_ends: list[pd.Timestamp] = field(default_factory=list)
 
 
 def _active_swing(events: OverlayEvents, t: pd.Timestamp, side: str) -> float | None:
@@ -94,6 +98,74 @@ def _on_chart(
     return level_near_candles(float(price), lo, hi)
 
 
+def _finite_at(frame: pd.DataFrame, column: str, when: pd.Timestamp) -> float | None:
+    if column not in frame.columns:
+        return None
+    if when not in frame.index:
+        return None
+    value = frame.at[when, column]
+    if isinstance(value, bool) or not isinstance(value, Real):
+        return None
+    number = float(value)
+    if not math.isfinite(number):
+        return None
+    return number
+
+
+def _stamp(ts: object) -> pd.Timestamp:
+    if isinstance(ts, pd.Timestamp):
+        return ts
+    return pd.Timestamp(str(ts))
+
+
+def _manipulation_marks(
+    features: pd.DataFrame,
+    window: pd.DataFrame,
+    t_open: pd.Timestamp,
+    t_close: pd.Timestamp,
+    direction: int,
+) -> tuple[list[tuple[pd.Timestamp, pd.Timestamp]], list[pd.Timestamp], list[LevelSeg]]:
+    """Active spans, the end bar, and the prices already on the feature row."""
+    aligned = features.reindex(window.index)
+    spans: list[tuple[pd.Timestamp, pd.Timestamp]] = []
+    ends: list[pd.Timestamp] = []
+    if "po3_manipulation_active" in aligned.columns:
+        active = pd.to_numeric(aligned["po3_manipulation_active"], errors="coerce").fillna(0.0)
+        start: pd.Timestamp | None = None
+        prev: pd.Timestamp | None = None
+        for ts, flag in active.items():
+            stamp = _stamp(ts)
+            if float(flag) > 0.0:
+                if start is None:
+                    start = stamp
+                prev = stamp
+            elif start is not None and prev is not None:
+                spans.append((start, prev))
+                start = None
+                prev = None
+        if start is not None and prev is not None:
+            spans.append((start, prev))
+    if "po3_manipulation_end" in aligned.columns:
+        ended = pd.to_numeric(aligned["po3_manipulation_end"], errors="coerce").fillna(0.0)
+        ends = [_stamp(ts) for ts, flag in ended.items() if float(flag) > 0.0]
+    names = (
+        ("asian_high", "Asian high"),
+        ("asian_low", "Asian low"),
+        ("london_high", "London high"),
+        ("london_low", "London low"),
+        ("po3_manipulation_high", "manip high"),
+        ("po3_manipulation_low", "manip low"),
+        ("sweep_low_level" if direction == 1 else "sweep_high_level", "sweep"),
+    )
+    segs: list[LevelSeg] = []
+    for column, label in names:
+        price = _finite_at(aligned, column, t_open)
+        if price is None:
+            continue
+        segs.append(LevelSeg(label, price, t_open, t_close, "#6a1b9a", "--"))
+    return spans, ends, segs
+
+
 def order_levels(
     window: pd.DataFrame,
     metrics: TradeChartMetrics,
@@ -105,6 +177,7 @@ def order_levels(
     *,
     show_mae_mfe: bool = True,
     show_sl_tp: bool = True,
+    features: pd.DataFrame | None = None,
 ) -> OrderLevels:
     """Position box, segments, and notes. A far RR target does not set the axis."""
     lo, hi = _candle_bounds(window)
@@ -136,13 +209,30 @@ def order_levels(
         )
         extra.append(metrics.mfe_price)
 
+    sl_ref = str(open_row.get("sl_ref") or "")
+    tp_ref = str(open_row.get("tp_ref") or "")
+    exit_mode = str(open_row.get("exit_mode") or "")
+    planned = open_row.get("planned_rr")
+    planned_txt = ""
+    if planned is not None and pd.notna(planned):
+        planned_txt = f" ({float(planned):.2f}R)"
+    sl_label = f"SL {sl_ref}" if sl_ref else "SL"
+    tp_label = f"TP {tp_ref}{planned_txt}" if tp_ref else f"TP{planned_txt}"
+    ema_exit = exit_mode == "ema_21" or tp_ref == "ema_21"
+
     sl_on = show_sl_tp and _on_chart(metrics.sl_price, metrics.sl_time, window, lo, hi)
-    tp_on = show_sl_tp and _on_chart(metrics.tp_price, metrics.tp_time, window, lo, hi)
+    tp_on = (
+        show_sl_tp and not ema_exit and _on_chart(metrics.tp_price, metrics.tp_time, window, lo, hi)
+    )
     if sl_on and metrics.sl_price is not None:
-        segs.append(LevelSeg("SL", metrics.sl_price, t_open, t_close, _RED, ":", metrics.sl_time))
+        segs.append(
+            LevelSeg(sl_label, metrics.sl_price, t_open, t_close, _RED, ":", metrics.sl_time)
+        )
         extra.append(metrics.sl_price)
     if tp_on and metrics.tp_price is not None:
-        segs.append(LevelSeg("TP", metrics.tp_price, t_open, t_close, _GREEN, ":", metrics.tp_time))
+        segs.append(
+            LevelSeg(tp_label, metrics.tp_price, t_open, t_close, _GREEN, ":", metrics.tp_time)
+        )
         extra.append(metrics.tp_price)
 
     deviations: list[tuple[float, float]] = []
@@ -159,12 +249,32 @@ def order_levels(
     green = _clip_band(metrics.entry_price, metrics.tp_price, y0, y1) if show_sl_tp else None
 
     notes: list[str] = []
-    rr = open_row.get("rr_ratio")
-    rr_txt = f" ({float(rr):.2f}R)" if rr is not None and pd.notna(rr) else ""
-    if show_sl_tp and metrics.tp_price is not None and not tp_on:
-        notes.append(f"TP {metrics.tp_price:.2f}{rr_txt}")
+    if ema_exit and show_sl_tp:
+        notes.append("exit ema_21")
+    elif show_sl_tp and metrics.tp_price is not None and not tp_on:
+        if tp_ref:
+            notes.append(tp_label)
+        else:
+            rr = open_row.get("rr_ratio")
+            rr_txt = f" ({float(rr):.2f}R)" if rr is not None and pd.notna(rr) else ""
+            notes.append(f"TP {metrics.tp_price:.2f}{rr_txt}")
     if show_sl_tp and metrics.sl_price is not None and not sl_on:
-        notes.append(f"SL {metrics.sl_price:.2f}")
+        if sl_ref:
+            notes.append(sl_label)
+        else:
+            notes.append(f"SL {metrics.sl_price:.2f}")
+
+    manip_spans: list[tuple[pd.Timestamp, pd.Timestamp]] = []
+    manip_ends: list[pd.Timestamp] = []
+    if features is not None and not features.empty:
+        manip_spans, manip_ends, context = _manipulation_marks(
+            features, window, t_open, t_close, metrics.direction
+        )
+        segs.extend(context)
+        extra.extend(seg.price for seg in context)
+        y0, y1 = chart_ylim(lo, hi, extra)
+        red = _clip_band(metrics.entry_price, metrics.sl_price, y0, y1) if show_sl_tp else None
+        green = _clip_band(metrics.entry_price, metrics.tp_price, y0, y1) if show_sl_tp else None
 
     return OrderLevels(
         ylim=(y0, y1),
@@ -179,6 +289,8 @@ def order_levels(
         deviations=deviations,
         notes=notes,
         offset=offset,
+        manip_spans=manip_spans,
+        manip_ends=manip_ends,
     )
 
 
@@ -197,6 +309,29 @@ def _clip_band(
 
 def draw_order_levels_mpl(ax: Any, levels: OrderLevels) -> None:
     """Light SL/TP fills, the entry dash, candle marks, and offset arrows."""
+    labeled_span = False
+    for t0, t1 in levels.manip_spans:
+        ax.axvspan(
+            t0,
+            t1,
+            color="#7e57c2",
+            alpha=0.12,
+            linewidth=0,
+            zorder=0,
+            label="manipulation active" if not labeled_span else None,
+        )
+        labeled_span = True
+    labeled_end = False
+    for ts in levels.manip_ends:
+        ax.axvline(
+            ts,
+            color="#4527a0",
+            linewidth=1.0,
+            linestyle="-.",
+            zorder=2,
+            label="manipulation end" if not labeled_end else None,
+        )
+        labeled_end = True
     if levels.red is not None:
         ax.fill_between(
             [levels.t_open, levels.t_close],
@@ -293,6 +428,26 @@ def _arrow(
 def draw_order_levels_plotly(fig: Any, levels: OrderLevels) -> None:
     """Plotly twin of :func:`draw_order_levels_mpl`."""
     import plotly.graph_objects as go
+
+    for t0, t1 in levels.manip_spans:
+        fig.add_vrect(
+            x0=t0,
+            x1=t1,
+            fillcolor="#7e57c2",
+            opacity=0.12,
+            line_width=0,
+            row=1,
+            col=1,
+        )
+    for ts in levels.manip_ends:
+        fig.add_vline(
+            x=ts,
+            line_color="#4527a0",
+            line_width=1,
+            line_dash="dash",
+            row=1,
+            col=1,
+        )
 
     def _band(band: tuple[float, float] | None, color: str) -> None:
         if band is None:

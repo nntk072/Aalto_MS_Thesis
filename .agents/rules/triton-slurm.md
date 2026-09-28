@@ -12,11 +12,16 @@ Helper scripts: [`scripts/triton/`](../../scripts/triton/) (`status.sh`, `find_g
   scratch path (or resolve the symlink) before any GPU-side command.
 - Do **not** treat a WSL or laptop checkout as the live Triton tree.
 
-## Hard rule: `srun` only with user confirmation
+## Hard rule: `srun` and `scancel` only with user confirmation
 
 Agents **may** run `srun` / `attach_or_alloc.sh`, but **only after the user
 explicitly permits a new allocation in this chat** (e.g. “ok to srun”,
 “allocate a GPU”, “start the job”). Do **not** self-start allocations.
+
+Agents **may** run `scancel`, but **only after the user explicitly permits
+cancelling that job in this chat** (e.g. “scancel”, “cancel the GPU job”,
+“cancel this allocation”). Do **not** cancel a running or completing job on
+your own.
 
 Access is not permission to allocate. A login shell, SSH onto a node that
 already has this user's job, a live tmux pane, or “use the current GPU task”
@@ -26,6 +31,16 @@ does **not** allow `srun`. These stay blocked until the user asks for a
 - `srun` (batch, `--pty`, or interactive)
 - `srun --overlap`, `srun --jobid=<id>`, or any extra Slurm step
 - `attach_or_alloc.sh` when it would allocate
+
+Retrain, delete outputs, restart, or “the run is wrong” is **not** permission
+to `scancel`. Those stay blocked until the user names the cancel:
+
+- `scancel <jobid>` or `scancel` of a running train
+- `REPLACE=1` on `scripts/triton/two_trains_one_h200.sh` (it cancels other GPU jobs)
+- Replacing a job after OOM, a code change, or a bad log
+
+If a job was cancelled without that permission, do **not** `scancel` again.
+A replacement `srun` still needs its own explicit allocation permission.
 
 Stopping the foreground program inside an existing task, when the user says
 to stop it and continue, is not `scancel` and is not a new `srun`. Continue
@@ -55,7 +70,8 @@ never a burst of short diagnostic jobs.
 
 - Any new `srun` (interactive, batch, `--overlap`, or `--jobid=`).
 - `bash scripts/triton/attach_or_alloc.sh` when it would start a new alloc.
-- `scancel` / replacing a running job.
+- `scancel` of a running or completing job, including `REPLACE=1`.
+  “Retrain” or “delete the old files” is not this permission.
 - Extra GPU jobs for “quick” pytest / ruff / mypy / CUDA smoke when no
   reusable shell exists (prefer asking for one long alloc, or login-only
   x86-safe tools).
@@ -144,8 +160,9 @@ allocate. Do not probe other sizes first.
 | Time | **`--time=6:00:00`** | 12h on this shape (stays PENDING; `srun --test-only` can still say "now") |
 | Envs | `QUANT_RL_MAX_N_ENVS=64` | Leaving the cap unset: 900G selects 128 workers and OOMs |
 
-A PENDING job with `StartTime=Unknown` does not fit. Cancel that one job and
-stop. Do not climb memory, CPUs, GPUs, or wall time.
+A PENDING job with `StartTime=Unknown` does not fit. Cancel **that one job
+you just submitted** and stop. Do not climb memory, CPUs, GPUs, or wall time.
+That cancel does not allow cancelling any other running train.
 
 Second train: a new tmux window that **`ssh`s the compute node**. That shell
 joins the same job (`SLURM_JOB_ID` is set). `srun --overlap` / `srun --jobid=`

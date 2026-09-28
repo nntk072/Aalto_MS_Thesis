@@ -150,6 +150,11 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
   OK a **new** allocation in-chat. SSH, an existing tmux pane, or “use this
   GPU task” is not that OK. `srun`, `srun --overlap`, `srun --jobid=`, and a
   second step stay blocked. No self-started short diagnostic jobs (&lt;~120s).
+- **`scancel` needs the same kind of confirmation:** agents may cancel a job
+  only after you explicitly say to cancel it. Retrain, delete outputs, or a
+  bad log is not that yes. Do not pass `REPLACE=1`. The only exception is a
+  job just submitted that stays PENDING with `StartTime=Unknown`: cancel that
+  one request and stop.
 - **Before alloc:** check `sinfo`/`squeue` for free GPU/CPU/RAM. **1 GPU**
   for one model (`gh200:1` or `h200:1`, `--mem=512G`, 48 CPUs, **6h or 12h**).
   **2 GPUs** for the six-run matrix (`gh200:2`, `--mem=900G`, 128 CPUs, 6h).
@@ -157,6 +162,6 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
   GPU shell (`.venv` on GH200/aarch64, `.venv-x86` on H200/x86_64). Login has no
   GPU and not enough RAM for `n_envs=64`.
 - **Do not `scancel`** when a train finishes — keep the GPU bash + tmux for
-  the next run (unless you ask, or replacing an OOM).
+  the next run until you explicitly ask to cancel the job.
 - Login SSH for `ls` / `squeue` / `sinfo` / `tmux capture-pane` / inspect-only
   `scripts/triton/*.sh`; never `srun` for those checks.

@@ -209,6 +209,7 @@ def prepare_order_chart(
     contract_size: float = 1.0,
     show_mae_mfe: bool = True,
     show_sl_tp: bool = True,
+    features: pd.DataFrame | None = None,
 ) -> PreparedOrderChart | None:
     """Build the window, metrics, clipped events, and position box for one trade.
 
@@ -244,6 +245,7 @@ def prepare_order_chart(
         open_row,
         show_mae_mfe=show_mae_mfe,
         show_sl_tp=show_sl_tp,
+        features=features,
     )
     events = marked.clip(pd.Timestamp(window.index[0]), pd.Timestamp(window.index[-1]))
     return PreparedOrderChart(

@@ -3,7 +3,7 @@
 Validates the full chain: OHLCV -> build_features (with the strategy-state
 block enabled) -> TradingEnv(strategy_actions=True) -> reset() -> step(),
 asserting new feature columns exist, the observation shape is valid, the
-action shape is the 4-D Box, and strategy trades are logged with context.
+action shape is the 5-D Box, and strategy trades are logged with context.
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ def test_full_strategy_pipeline_runs() -> None:
     assert env.observation_space.contains(obs)
     assert obs["seq"].shape == (10, seq_width)
 
-    action = np.array([0.8, 0.5, 0.7, 0.0], dtype=np.float32)
+    action = np.array([0.8, 0.5, 0.7, 0.0, -1.0], dtype=np.float32)
     assert env.action_space.contains(action)
 
     # Step through; at least one strategy trade should be logged.

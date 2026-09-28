@@ -99,9 +99,9 @@ def decide_early_abort(
 ) -> str | None:
     """Return a stop reason, or ``None`` to keep training.
 
-    Non-finite metrics stop immediately. Equity and no-trade stops wait
-    until ``min_timesteps`` and require every episode in the last
-    ``window`` to fail. One rising episode keeps the run going.
+    Non-finite metrics stop immediately. No-trade stops, and equity stops
+    when enabled, wait until ``min_timesteps`` and require every episode
+    in the last ``window`` to fail. One rising episode keeps the run going.
     """
     if stop_on_nonfinite and nonfinite:
         return "nonfinite"

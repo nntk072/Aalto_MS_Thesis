@@ -50,6 +50,7 @@ def _features(bars: pd.DataFrame) -> pd.DataFrame:
             "ifvg_bull_low": np.full(n, 98.0),
             "ifvg_bull_high": np.full(n, 99.0),
             "price_in_ifvg_bull": np.ones(n),
+            "ifvg_retest_bull": np.ones(n),
             "ifvg_bear_low": np.zeros(n),
             "ifvg_bear_high": np.zeros(n),
             "ifvg_bull_active": np.ones(n),
@@ -62,13 +63,15 @@ def _features(bars: pd.DataFrame) -> pd.DataFrame:
             "context_trade_direction": np.ones(n),
             "manip_reverses_htf": np.zeros(n),
             "atr_5": np.ones(n),
+            "prev_day_high": np.full(n, 150.0),
+            "prev_day_low": np.full(n, 50.0),
         },
         index=bars.index,
     )
 
 
 class TestStrategyActionSpace:
-    def test_4d_box_shape_and_bounds(self) -> None:
+    def test_5d_box_shape_and_bounds(self) -> None:
         bars = _bars()
         feats = _features(bars)
         env = TradingEnv(
@@ -79,11 +82,11 @@ class TestStrategyActionSpace:
             obs_window=10,
         )
         assert isinstance(env.action_space, Box)
-        assert env.action_space.shape == (4,)
-        np.testing.assert_array_equal(env.action_space.low, [-1.0, -1.0, -1.0, -1.0])
-        np.testing.assert_array_equal(env.action_space.high, [1.0, 1.0, 1.0, 1.0])
+        assert env.action_space.shape == (5,)
+        np.testing.assert_array_equal(env.action_space.low, [-1.0, -1.0, -1.0, -1.0, -1.0])
+        np.testing.assert_array_equal(env.action_space.high, [1.0, 1.0, 1.0, 1.0, 1.0])
 
-    def test_action_contains_valid_4d(self) -> None:
+    def test_action_contains_valid_5d(self) -> None:
         bars = _bars()
         feats = _features(bars)
         env = TradingEnv(
@@ -93,15 +96,15 @@ class TestStrategyActionSpace:
             strategy=PO3IFVGStrategy(enforce_gate=False),
             obs_window=10,
         )
-        action = np.array([0.0, 0.5, 0.7, 0.0], dtype=np.float32)
+        action = np.array([0.0, 0.5, 0.7, 0.0, -1.0], dtype=np.float32)
         assert env.action_space.contains(action)
 
     def test_baseline_keeps_legacy_space(self) -> None:
         bars = _bars()
         feats = _features(bars)
         env = TradingEnv(bars, feats, strategy_actions=False, obs_window=10)
-        # Baseline (strategy_actions=False) must NOT use the 4-D Box.
-        assert env.action_space.shape != (4,)
+        # Baseline (strategy_actions=False) must NOT use the 5-D Box.
+        assert env.action_space.shape != (5,)
 
 
 class TestStrategyObservation:
@@ -153,7 +156,7 @@ class TestStrategyStructuralSL:
             action = np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32)
             obs, reward, done, truncated, info = env.step(action)
             if env.position is not None:
-                assert env.position.sl_price == pytest.approx(95.0)
+                assert env.position.sl_price == pytest.approx(94.75)
                 filled = True
                 break
             if done or truncated:
@@ -168,6 +171,7 @@ class TestStrategyStructuralSL:
         feats["last_swing_low"] = np.nan
         feats["asian_low"] = np.nan
         feats["london_low"] = np.nan
+        feats["ifvg_bull_active"] = 0.0
         env = TradingEnv(
             bars,
             feats,

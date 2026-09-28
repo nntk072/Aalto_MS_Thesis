@@ -10,7 +10,7 @@ import pytest
 from gymnasium.spaces import Box, Discrete
 
 from quant_rl.envs.po3_reward import PO3Reward
-from quant_rl.envs.strategies import BaselineStrategy, PO3IFVGStrategy
+from quant_rl.envs.strategies import BaselineStrategy, DistributionStrategy, PO3IFVGStrategy
 from quant_rl.envs.trading_env import TradingEnv
 
 
@@ -59,6 +59,8 @@ def _features(bars: pd.DataFrame, *, ctx_dir: float = 1.0) -> pd.DataFrame:
             "ifvg_bull_high": np.full(n, 99.0),
             "price_in_ifvg_bull": np.ones(n) if is_long else np.zeros(n),
             "price_in_ifvg_bear": np.zeros(n) if is_long else np.ones(n),
+            "ifvg_retest_bull": np.ones(n) if is_long else np.zeros(n),
+            "ifvg_retest_bear": np.zeros(n) if is_long else np.ones(n),
             "ifvg_bear_low": np.zeros(n) if is_long else np.full(n, 99.0),
             "ifvg_bear_high": np.zeros(n) if is_long else np.full(n, 100.0),
             "ifvg_bull_active": np.ones(n) if is_long else np.zeros(n),
@@ -69,6 +71,8 @@ def _features(bars: pd.DataFrame, *, ctx_dir: float = 1.0) -> pd.DataFrame:
             "context_trade_direction": np.full(n, ctx_dir),
             "manip_reverses_htf": np.zeros(n),
             "atr_5": np.full(n, 1.0),
+            "prev_day_high": np.full(n, 150.0),
+            "prev_day_low": np.full(n, 50.0),
         },
         index=bars.index,
     )
@@ -87,8 +91,8 @@ class TestTraderActionSpace:
             rr_ratio_range=(1.5, 5.0),
         )
         assert isinstance(env.action_space, Box)
-        np.testing.assert_array_equal(env.action_space.low, [-1.0, -1.0, -1.0, -1.0])
-        np.testing.assert_array_equal(env.action_space.high, [1.0, 1.0, 1.0, 1.0])
+        np.testing.assert_array_equal(env.action_space.low, [-1.0, -1.0, -1.0, -1.0, -1.0])
+        np.testing.assert_array_equal(env.action_space.high, [1.0, 1.0, 1.0, 1.0, 1.0])
 
     def test_baseline_discrete20_unchanged(self) -> None:
         bars = _bars()
@@ -362,6 +366,8 @@ class TestSessionCaps:
         feats["po3_manipulation_end"] = 0.0
         feats["po3_distribution"] = 1.0
         feats["po3_distribution_direction"] = 1.0
+        feats["sweep_low"] = 0.0
+        feats["sweep_high"] = 0.0
         env = TradingEnv(
             bars,
             feats,
@@ -505,3 +511,193 @@ def test_confirmed_entry_is_shaped_once() -> None:
             assert env.position is not None
             return
     pytest.fail("confirmed entry never opened")
+
+
+def _policy_env(
+    feats: pd.DataFrame,
+    bars: pd.DataFrame,
+    *,
+    direction_control: bool = False,
+    strategy: Any = None,
+) -> TradingEnv:
+    return TradingEnv(
+        bars,
+        feats,
+        strategy_actions=True,
+        strategy=strategy or PO3IFVGStrategy(enforce_gate=False),
+        agent_direction_control=direction_control,
+        obs_window=5,
+        risk_frac_range=(0.01, 0.01),
+        min_sl_points=0.0,
+        min_sl_atr_mult=0.0,
+        open_manipulation_bars=0,
+        entry_cooldown_bars=0,
+        block_overnight=False,
+        max_episode_steps=None,
+    )
+
+
+def test_sweep_entry_stays_open_while_manipulation_is_active() -> None:
+    bars = _bars(n=20)
+    feats = _features(bars)
+    feats["po3_manipulation_active"] = 1.0
+    feats["po3_manipulation_end"] = 0.0
+    env = _policy_env(feats, bars)
+    env.reset()
+    env.step(np.array([0.9, 0.0, 0.5, 0.0, -1.0], dtype=np.float32))
+    assert env.position is not None
+    assert env.position.direction == 1
+    assert env.position.sl_price is not None
+
+
+def test_direction_override_is_refused_until_the_close_through() -> None:
+    bars = _bars(n=20)
+    feats = _features(bars)
+    feats["po3_manipulation_active"] = 1.0
+    feats["po3_manipulation_end"] = 0.0
+    env = _policy_env(feats, bars, direction_control=True)
+    env.reset()
+    _obs, _reward, _done, _trunc, info = env.step(
+        np.array([-1.0, 0.9, 0.0, 0.5, 0.0, -1.0], dtype=np.float32)
+    )
+    assert env.position is None
+    assert info["entry_rejection_reason"] == "manipulation_unconfirmed"
+    confirmed = _policy_env(feats, bars, direction_control=True)
+    confirmed.reset()
+    confirmed.step(np.array([1.0, 0.9, 0.0, 0.5, 0.0, -1.0], dtype=np.float32))
+    assert confirmed.position is not None
+    assert confirmed.position.direction == 1
+
+
+def test_unconfirmed_leg_does_not_invent_a_side() -> None:
+    bars = _bars(n=20)
+    feats = _features(bars)
+    feats["po3_manipulation_active"] = 1.0
+    feats["po3_manipulation_end"] = 0.0
+    feats["sweep_low"] = 0.0
+    feats["sweep_high"] = 0.0
+    env = _policy_env(feats, bars, direction_control=True)
+    env.reset()
+    _obs, _reward, _done, _trunc, info = env.step(
+        np.array([1.0, 0.9, 0.0, 0.5, 0.0, -1.0], dtype=np.float32)
+    )
+    assert env.position is None
+    assert info["entry_rejection_reason"] == "manipulation_unconfirmed"
+
+
+def test_manipulation_end_alone_does_not_open_idea1() -> None:
+    bars = _bars(n=20)
+    feats = _features(bars)
+    feats["po3_manipulation_active"] = 0.0
+    feats["po3_manipulation_end"] = 1.0
+    feats["po3_distribution"] = 1.0
+    feats["po3_distribution_direction"] = 1.0
+    feats["sweep_low"] = 0.0
+    feats["sweep_high"] = 0.0
+    env = _policy_env(feats, bars, direction_control=True)
+    env.reset()
+    _obs, _reward, _done, _trunc, info = env.step(
+        np.array([-1.0, 0.9, 0.0, 0.5, 0.0, -1.0], dtype=np.float32)
+    )
+    assert env.position is not None
+    assert info["entry_rejection_reason"] == ""
+    plain = _policy_env(feats, bars)
+    plain.reset()
+    plain.step(np.array([0.9, 0.0, 0.5, 0.0, -1.0], dtype=np.float32))
+    assert plain.position is None
+
+
+def test_distribution_strategy_stays_flat_during_the_active_leg() -> None:
+    bars = _bars(n=20)
+    feats = _features(bars)
+    feats["po3_manipulation_active"] = 1.0
+    feats["po3_manipulation_end"] = 0.0
+    feats["po3_distribution"] = 0.0
+    feats["po3_distribution_after_ifvg"] = 0.0
+    feats["sweep_high_level"] = 110.0
+    feats["sweep_low_level"] = 90.0
+    feats["sweep_high_reclaimed"] = 0.0
+    feats["sweep_low_reclaimed"] = 0.0
+    feats["bos_up"] = 0.0
+    feats["bos_down"] = 0.0
+    env = _policy_env(feats, bars, strategy=DistributionStrategy(enforce_gate=True))
+    env.reset()
+    env.step(np.array([0.9, 0.0, 0.5, 0.0, -1.0], dtype=np.float32))
+    assert env.position is None
+
+
+def test_short_manipulation_mirrors_the_long_lock() -> None:
+    bars = _bars(n=20)
+    feats = _features(bars, ctx_dir=-1.0)
+    feats["po3_manipulation_active"] = 1.0
+    feats["po3_manipulation_end"] = 0.0
+    refused = _policy_env(feats, bars, direction_control=True)
+    refused.reset()
+    _obs, _reward, _done, _trunc, info = refused.step(
+        np.array([1.0, 0.9, 0.0, 0.5, 0.0, -1.0], dtype=np.float32)
+    )
+    assert refused.position is None
+    assert info["entry_rejection_reason"] == "manipulation_unconfirmed"
+    taken = _policy_env(feats, bars, direction_control=True)
+    taken.reset()
+    taken.step(np.array([-1.0, 0.9, 0.0, 0.5, 0.0, -1.0], dtype=np.float32))
+    assert taken.position is not None
+    assert taken.position.direction == -1
+
+
+def test_close_targets_inside_the_stop_leave_no_order() -> None:
+    bars = _bars(n=20)
+    feats = _features(bars)
+    feats["po3_manipulation_active"] = 0.0
+    feats["po3_manipulation_end"] = 1.0
+    feats["asian_high"] = 101.0
+    feats["london_high"] = 101.0
+    feats["prev_day_high"] = 101.0
+    feats["last_swing_high"] = np.nan
+    feats["ifvg_bear_low"] = np.nan
+    feats["ifvg_bear_high"] = np.nan
+    env = _policy_env(feats, bars)
+    env.reset()
+    _obs, _reward, _done, _trunc, info = env.step(
+        np.array([0.9, 0.0, 0.5, 0.0, -1.0], dtype=np.float32)
+    )
+    assert env.position is None
+    assert info["entry_rejection_reason"] == "no_valid_tp"
+
+
+def test_a_later_reclaim_does_not_unlock_the_earlier_bar() -> None:
+    from quant_rl.features.po3_state import build_po3_state
+
+    idx = pd.date_range("2020-01-02 16:30", periods=8, freq="1min")
+    bars = pd.DataFrame(
+        {
+            "open": 100.0,
+            "high": [101.0, 100.5, 100.4, 102.0, 102.0, 102.0, 102.0, 102.0],
+            "low": [99.0, 97.0, 98.0, 100.0, 101.0, 101.0, 101.0, 101.0],
+            "close": [100.0, 99.0, 99.5, 101.5, 101.6, 101.7, 101.8, 101.9],
+            "volume": 1,
+            "session_id": 0,
+            "session": "ny",
+        },
+        index=idx,
+    )
+    sweeps = pd.DataFrame(0.0, index=idx, columns=["sweep_high", "sweep_low"])
+    sweeps.loc[sweeps.index[1], "sweep_low"] = 1.0
+    asian = pd.DataFrame({"asian_high": 103.0, "asian_low": 98.0}, index=idx)
+    full = build_po3_state(bars, sweeps, asian)
+    early = build_po3_state(bars.iloc[:3], sweeps.iloc[:3], asian.iloc[:3])
+    pd.testing.assert_frame_equal(full.iloc[:3], early, check_freq=False)
+    assert float(early["po3_manipulation_end"].iloc[2]) == 0.0
+    feats = _features(bars.iloc[:3])
+    feats["po3_manipulation_active"] = early["po3_manipulation_active"].to_numpy()
+    feats["po3_manipulation_end"] = early["po3_manipulation_end"].to_numpy()
+    feats["po3_manipulation_low"] = early["po3_manipulation_low"].to_numpy()
+    feats["po3_manipulation_high"] = early["po3_manipulation_high"].to_numpy()
+    env = _policy_env(feats, bars.iloc[:3], direction_control=True)
+    env.reset()
+    env.step_idx = 2
+    _obs, _reward, _done, _trunc, info = env.step(
+        np.array([-1.0, 0.9, 0.0, 0.5, 0.0, -1.0], dtype=np.float32)
+    )
+    assert info["entry_rejection_reason"] == "manipulation_unconfirmed"
+    assert env.position is None

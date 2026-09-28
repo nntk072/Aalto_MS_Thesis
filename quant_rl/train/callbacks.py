@@ -16,8 +16,8 @@ log = logging.getLogger(__name__)
 
 
 def save_ppo_checkpoint(model: Any, path: str | Path) -> None:
-    """Save PPO weights; omit the dashboard ``train`` hook (unpickleable on Py 3.12+)."""
-    model.save(path, exclude=["train"])
+    """Save PPO weights; omit the ``train`` and ``learn`` hooks (unpickleable on Py 3.12+)."""
+    model.save(path, exclude=["train", "learn"])
 
 
 try:
@@ -169,7 +169,7 @@ if _SB3_AVAILABLE:
                 obs, _ = env.reset()
                 done = truncated = False
                 while not (done or truncated):
-                    action, _ = self.model.predict(obs, deterministic=True)
+                    action, _ = self.model.predict(obs, deterministic=False)
                     obs, _reward, done, truncated, _ = env.step(action)
                 end_equities.append(float(env.account.equity))
             end_equity = float(np.mean(end_equities))
@@ -263,11 +263,11 @@ if _SB3_AVAILABLE:
 
         def __init__(
             self,
-            min_timesteps: int = 2_000_000,
+            min_timesteps: int = 5_000_000,
             window: int = 4,
             stop_on_nonfinite: bool = True,
             stop_on_no_trades: bool = True,
-            stop_on_equity_gate: bool = True,
+            stop_on_equity_gate: bool = False,
             verbose: int = 0,
         ) -> None:
             super().__init__(verbose=verbose)
@@ -302,7 +302,10 @@ if _SB3_AVAILABLE:
                 return
             logger = getattr(self.model, "logger", None)
             values = getattr(logger, "name_to_value", {}) if logger is not None else {}
-            for value in values.values():
+            for key, value in values.items():
+                # SB3 sets this to NaN when every return in the rollout is 0.
+                if str(key).endswith("explained_variance"):
+                    continue
                 try:
                     if not np.isfinite(float(value)):
                         self._nonfinite = True

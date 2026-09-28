@@ -65,6 +65,8 @@ def _features(bars: pd.DataFrame, *, ctx_dir: float = 1.0) -> pd.DataFrame:
             "ifvg_bull_high": np.full(n, 99.0),
             "price_in_ifvg_bull": np.ones(n) if is_long else np.zeros(n),
             "price_in_ifvg_bear": np.zeros(n) if is_long else np.ones(n),
+            "ifvg_retest_bull": np.ones(n) if is_long else np.zeros(n),
+            "ifvg_retest_bear": np.zeros(n) if is_long else np.ones(n),
             "ifvg_bear_low": np.zeros(n) if is_long else np.full(n, 99.0),
             "ifvg_bear_high": np.zeros(n) if is_long else np.full(n, 100.0),
             "ifvg_bull_active": np.ones(n) if is_long else np.zeros(n),
@@ -75,6 +77,8 @@ def _features(bars: pd.DataFrame, *, ctx_dir: float = 1.0) -> pd.DataFrame:
             "context_trade_direction": np.full(n, ctx_dir),
             "manip_reverses_htf": np.zeros(n),
             "atr_5": np.full(n, 1.0),
+            "prev_day_high": np.full(n, 150.0),
+            "prev_day_low": np.full(n, 50.0),
         },
         index=bars.index,
     )
@@ -237,15 +241,15 @@ class TestBreakevenManagement:
 
 
 class TestAgentDirectionControl:
-    def test_default_action_space_stays_4d(self) -> None:
+    def test_default_action_space_stays_5d(self) -> None:
         env = _make_env()
         assert isinstance(env.action_space, Box)
-        assert env.action_space.shape == (4,)
+        assert env.action_space.shape == (5,)
 
-    def test_opt_in_action_space_is_5d_and_signed(self) -> None:
+    def test_opt_in_action_space_is_6d_and_signed(self) -> None:
         env = _make_env(agent_direction_control=True)
         assert isinstance(env.action_space, Box)
-        assert env.action_space.shape == (5,)
+        assert env.action_space.shape == (6,)
         assert float(env.action_space.low[0]) == pytest.approx(-1.0)
         assert float(env.action_space.high[0]) == pytest.approx(1.0)
 
@@ -288,7 +292,7 @@ class TestAgentDirectionControl:
         assert env._selected_sl_anchor == pytest.approx(1.0)
 
     def test_disabled_control_ignores_an_extra_dim(self) -> None:
-        """A 5-D action on the 4-D layout must not shift the other dims."""
+        """An exit-mode dim on the 5-D layout must not shift intensity, stop, or risk."""
         env = _make_env()
         row = env._feature_row_at(env.step_idx)
         da_4, risk_4, reward_4, _ = env._decode_action(np.array([1.0, 1.0, 1.0, 1.0]), row)

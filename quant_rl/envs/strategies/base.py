@@ -3,8 +3,15 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 
 import pandas as pd
+
+
+def columns_matching(columns: Iterable[object], stem: str) -> tuple[str, ...]:
+    """Column names equal to ``stem`` or ending with ``_{stem}``."""
+    suffix = "_" + stem
+    return tuple(str(col) for col in columns if str(col) == stem or str(col).endswith(suffix))
 
 
 class TradingStrategy(ABC):
@@ -34,6 +41,9 @@ class TradingStrategy(ABC):
     @abstractmethod
     def target_candidates(self, *, direction: int, row: pd.Series) -> dict[str, float]:
         """Named take-profit candidate levels for the TP-target resolver."""
+
+    def bind_columns(self, columns: Iterable[object]) -> None:
+        """Remember column positions once, when the environment is built."""
 
     def context_direction(self, row: pd.Series) -> int:  # noqa: ARG002
         """Intended trade side from HTF/PO3 context: -1, 0, or +1.

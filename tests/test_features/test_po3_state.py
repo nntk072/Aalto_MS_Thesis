@@ -10,7 +10,11 @@ import pytest
 from omegaconf import DictConfig, OmegaConf
 
 from quant_rl.features.build import build_features
-from quant_rl.features.po3_state import build_ifvg_zone_features, build_po3_state
+from quant_rl.features.po3_state import (
+    build_distribution_after_ifvg,
+    build_ifvg_zone_features,
+    build_po3_state,
+)
 
 N = 20
 
@@ -149,9 +153,9 @@ class TestIFVGZones:
         rows = [
             (100.0, 99.0, 99.5),
             (100.5, 99.5, 100.0),
-            (100.5, 99.8, 100.0),
+            (101.2, 99.8, 100.0),
             (102.5, 100.9, 102.0),  # FVG zone 100.5-100.9 + close-through
-            (103.0, 100.4, 102.5),  # low stays <= 100.5: no second FVG
+            (103.0, 100.6, 102.5),  # above the zone low, and no second FVG
             (103.5, 102.0, 103.0),
             (103.2, 102.0, 102.5),
             (103.0, 101.5, 101.8),
@@ -197,7 +201,7 @@ class TestIFVGZones:
             (97.8, 96.0, 96.5),
             (97.0, 95.8, 96.2),
             (96.5, 95.5, 96.0),
-            (99.5, 98.2, 98.7),  # retest: close inside the active zone
+            (99.5, 98.2, 98.7),  # close inside the active zone
             (99.0, 98.0, 98.5),
         ]
         bars = make_bars(rows)
@@ -209,6 +213,30 @@ class TestIFVGZones:
         assert zones["ifvg_bear_low"].iloc[start] == pytest.approx(99.0)
         assert zones["ifvg_bear_high"].iloc[start] == pytest.approx(99.5)
         assert zones["price_in_ifvg_bear"].iloc[8] == 1
+
+    def test_fill_ends_the_zone(self) -> None:
+        bars = self.build_frame()
+        bars.loc[bars.index[6], "low"] = 100.4
+        zones = build_ifvg_zone_features(bars, max_age_bars=50)
+        assert zones["ifvg_bull_active"].iloc[6] == 1
+        assert zones["ifvg_bull_active"].iloc[7] == 0
+        assert zones["price_in_ifvg_bull"].iloc[8] == 0
+        assert zones["ifvg_retest_bull"].iloc[8] == 0
+        assert zones["ifvg_bull_distance_atr"].iloc[8] == 5.0
+
+    def test_holding_retest_is_not_a_close_inside_the_gap(self) -> None:
+        bars = self.build_frame()
+        # Bar 7 is entirely above the zone. Bar 8 tags the high and closes back above it.
+        bars.loc[bars.index[7], "low"] = 101.2
+        bars.loc[bars.index[7], "high"] = 103.0
+        bars.loc[bars.index[7], "close"] = 102.0
+        bars.loc[bars.index[8], "low"] = 100.7
+        bars.loc[bars.index[8], "high"] = 102.0
+        bars.loc[bars.index[8], "close"] = 101.1
+        zones = build_ifvg_zone_features(bars, max_age_bars=50)
+        assert zones["price_in_ifvg_bull"].iloc[8] == 0
+        assert zones["ifvg_retest_bull"].iloc[8] == 1
+        assert zones["ifvg_bull_origin"].iloc[8] == pytest.approx(99.5)
 
     def test_causality(self) -> None:
         bars = self.build_frame()
@@ -259,3 +287,27 @@ class TestBuildFeaturesIntegration:
         feat = build_features(bars, cfg=self._cfg(False))
         for col in self.STRATEGY_COLUMNS:
             assert col not in feat.columns
+
+
+def test_distribution_arms_the_bar_after_the_opposing_gap_fails() -> None:
+    """Confirmation during the sell-side sweep arms the later long bars."""
+    dist = np.array([0, 0, 0, 1, 1, 1], dtype=float)
+    manip_on = np.array([0, 1, 1, 0, 0, 0], dtype=float)
+    manip_dir = np.array([0, -1, -1, -1, -1, -1], dtype=float)
+    bull = np.array([0, 0, 1, 0, 0, 0], dtype=float)
+    bear = np.zeros(6)
+    out = build_distribution_after_ifvg(dist, manip_on, manip_dir, bull, bear)
+    assert out.tolist() == [0, 0, 0, 1, 1, 1]
+
+    on_the_open = bull.copy()
+    on_the_open[2] = 0
+    on_the_open[3] = 1
+    opened = build_distribution_after_ifvg(dist, manip_on, manip_dir, on_the_open, bear)
+    assert opened.tolist() == [0, 0, 0, 0, 1, 1]
+
+    flipped = dist.copy()
+    flipped[4] = -1
+    flipped[5] = -1
+    nxt = build_distribution_after_ifvg(flipped, manip_on, manip_dir, bull, bear)
+    assert nxt[4] == 0
+    assert nxt[5] == 0

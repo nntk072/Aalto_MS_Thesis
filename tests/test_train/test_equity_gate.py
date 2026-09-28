@@ -106,10 +106,25 @@ def test_early_abort_waits_out_the_warmup() -> None:
     assert (
         decide_early_abort(
             episodes,
-            num_timesteps=1_000,
-            min_timesteps=2_000_000,
+            num_timesteps=4_999_999,
+            min_timesteps=5_000_000,
             window=4,
             nonfinite=False,
+        )
+        is None
+    )
+
+
+@pytest.mark.unit
+def test_early_abort_keeps_going_when_equity_does_not_rise() -> None:
+    assert (
+        decide_early_abort(
+            [_failing_episode() for _ in range(4)],
+            num_timesteps=5_000_000,
+            min_timesteps=5_000_000,
+            window=4,
+            nonfinite=False,
+            stop_on_equity_gate=False,
         )
         is None
     )
@@ -119,8 +134,8 @@ def test_early_abort_waits_out_the_warmup() -> None:
 def test_early_abort_stops_when_the_window_fails_equity() -> None:
     reason = decide_early_abort(
         [_failing_episode() for _ in range(4)],
-        num_timesteps=3_000_000,
-        min_timesteps=2_000_000,
+        num_timesteps=5_000_000,
+        min_timesteps=5_000_000,
         window=4,
         nonfinite=False,
     )
@@ -133,8 +148,8 @@ def test_early_abort_stops_when_the_window_never_trades() -> None:
     idle = [_failing_episode(trades=0) for _ in range(4)]
     reason = decide_early_abort(
         idle,
-        num_timesteps=3_000_000,
-        min_timesteps=2_000_000,
+        num_timesteps=5_000_000,
+        min_timesteps=5_000_000,
         window=4,
         nonfinite=False,
     )
@@ -147,8 +162,8 @@ def test_early_abort_keeps_going_when_one_episode_rises() -> None:
     assert (
         decide_early_abort(
             episodes,
-            num_timesteps=3_000_000,
-            min_timesteps=2_000_000,
+            num_timesteps=5_000_000,
+            min_timesteps=5_000_000,
             window=4,
             nonfinite=False,
         )
@@ -162,7 +177,7 @@ def test_early_abort_stops_immediately_on_nonfinite() -> None:
         decide_early_abort(
             [],
             num_timesteps=1,
-            min_timesteps=2_000_000,
+            min_timesteps=5_000_000,
             window=4,
             nonfinite=True,
         )

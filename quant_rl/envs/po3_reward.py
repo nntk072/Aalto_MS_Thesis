@@ -1,10 +1,9 @@
 """Idea 1 strategy-alignment reward (Agent.md §21).
 
-Event-based, never continuous: it rewards (or penalises) the *entry*
-transition only, driving the agent toward entries inside a confirmed IFVG
-zone during the distribution phase and away from entries during active
-manipulation. It intentionally stays small relative to the base economic
-reward so the strategy signal shapes behaviour without dominating PnL.
+Event-based, never continuous: it rewards the *entry* transition when the
+bar is a liquidity sweep or a protected-swing confirmation in the trade
+direction. An entry on neither is penalised. A sweep is often still inside
+manipulation, so that penalty is not charged on a sweep or swing entry.
 """
 
 from __future__ import annotations
@@ -16,11 +15,12 @@ class PO3Reward:
     Parameters
     ----------
     entry_bonus:
-        Positive bonus for entering inside a confirmed IFVG zone.
+        Positive bonus for a sweep or protected-swing entry.
     manipulation_penalty:
-        Negative reward for entering while manipulation is still running.
+        Negative reward for an entry that is not a sweep or swing while
+        manipulation is still running.
     invalid_ifvg_penalty:
-        Negative reward for entering outside any confirmed IFVG zone.
+        Negative reward for an entry that is not a sweep or protected swing.
     distribution_bonus:
         Positive bonus for entering during the distribution phase.
     """
@@ -35,6 +35,7 @@ class PO3Reward:
         "distribution_phase",
         "liquidity",
         "in_gap",
+        "entry_setup",
     )
 
     def __init__(
@@ -65,6 +66,7 @@ class PO3Reward:
         distribution_phase: bool,
         liquidity: bool = True,
         in_gap: bool | None = None,
+        entry_setup: bool = False,
     ) -> float:
         """Compute the entry-event reward for the current step.
 
@@ -75,16 +77,16 @@ class PO3Reward:
         if not position_changed or direction == 0:
             return 0.0
 
+        del in_ifvg, in_gap
         reward = 0.0
-        zone = in_ifvg if in_gap is None else in_gap
-        if manipulation_active and not manipulation_end:
-            reward -= self.manipulation_penalty
-        if zone:
+        if entry_setup:
             reward += self.entry_bonus
         else:
+            if manipulation_active and not manipulation_end:
+                reward -= self.manipulation_penalty
             reward -= self.invalid_ifvg_penalty
+            if self.sweep_penalty and not liquidity:
+                reward -= self.sweep_penalty
         if distribution_phase:
             reward += self.distribution_bonus
-        if self.sweep_penalty and not liquidity and not zone:
-            reward -= self.sweep_penalty
         return reward

@@ -16,7 +16,7 @@ Single source of truth for all coding agents in this repo (Cursor, Cline, Windsu
 | [security-rules.md](security-rules.md) | Secret & input safety checklist | Always at commit; deep on sensitive code |
 | [development-workflow.md](development-workflow.md) | Research-first → plan → TDD → review → commit | On non-trivial features |
 | [ci-verification.md](ci-verification.md) | **Blocking** full-tree `ruff` + `mypy .` (not path-scoped); scoped pytest before commit/push | On commit/push |
-| [triton-slurm.md](triton-slurm.md) | Triton GPU: reuse first; `srun` only if the user asks for a new allocation (SSH / existing job is not that); H200 then GH200; 1 GPU; 12h/6h | On Triton / GPU training |
+| [triton-slurm.md](triton-slurm.md) | Triton GPU: reuse first; `srun` and `scancel` only with an explicit in-chat yes (retrain is not cancel); H200 then GH200; 1 GPU; 12h/6h | On Triton / GPU training |
 
 ## Activation flow
 
@@ -32,7 +32,7 @@ request
   ├─ editing .py files?       → python-coding-standards (via token-efficient reads)
   ├─ reviewing a diff >1 file → code-review-graph
   ├─ editing code?            → scoped ruff + pytest on touched paths only
-  ├─ Triton / GPU train?      → triton-slurm (reuse first; `srun` only if user asks for a new allocation)
+  ├─ Triton / GPU train?      → triton-slurm (reuse first; `srun` and `scancel` only with an explicit yes)
   └─ committing / push / PR   → git-commit-rules + ci-verification + security-rules
                                   └─ BLOCKING: ruff format --check . → ruff check .
                                      → mypy . (FULL TREE — never path-scoped mypy)
@@ -51,7 +51,9 @@ Layered principle: **specific overrides general**.
 3. **Domain rules** (Python standards, testing, security, commit rules, review graph, workflow) apply by activity, layered on top of 1–2.
 4. **Triton:** reuse existing GPU tmux/`srun` first. Call `srun` /
    `attach_or_alloc` (including `--overlap` and `--jobid=`) only after the
-   user explicitly asks for a new allocation. SSH or an existing job is not
-   that ask. Never spam short (&lt;~120s) diagnostic jobs.
+   user explicitly asks for a new allocation. Call `scancel` only after the
+   user explicitly asks to cancel that job. SSH, an existing job, retrain,
+   or deleting outputs is not either ask. Never spam short (&lt;~120s)
+   diagnostic jobs.
 5. When two rules conflict, the more specific one for the current activity wins; when still ambiguous, ask before proceeding.
 

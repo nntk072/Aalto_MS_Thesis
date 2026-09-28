@@ -25,6 +25,7 @@ def test_entry_inside_ifvg_after_distribution_is_a_bonus() -> None:
         manipulation_active=False,
         manipulation_end=True,
         distribution_phase=True,
+        entry_setup=True,
     )
     # +entry_bonus +distribution_bonus = 1.5
     assert out == pytest.approx(1.5)

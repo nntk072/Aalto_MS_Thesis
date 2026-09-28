@@ -137,7 +137,7 @@ class TestDecodeActionContinuous:
 
 
 class TestDecodeActionStrategy:
-    """Tests for trader-like strategy (4-D Box [-1,1]^4) action decoding."""
+    """Tests for trader-like strategy (5-D Box [-1,1]^5) action decoding."""
 
     def _make_strategy_env(self, *, ctx: int = 1) -> TradingEnv:
         from quant_rl.envs.strategies.base import TradingStrategy

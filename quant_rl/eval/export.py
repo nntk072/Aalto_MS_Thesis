@@ -136,6 +136,7 @@ def _write_split(
     show_mae_mfe: bool = True,
     show_sl_tp: bool = True,
     secondary_bars: pd.DataFrame | None = None,
+    features: pd.DataFrame | None = None,
 ) -> None:
     """Write all data + charts for one split into *split_dir*."""
     split_dir.mkdir(parents=True, exist_ok=True)
@@ -153,6 +154,18 @@ def _write_split(
             equity.to_csv(split_dir / "equity.csv", header=["equity"])
         if not trades.empty:
             trades.to_csv(split_dir / "trades.csv", index=False)
+            if "sl_ref" in trades.columns:
+                from quant_rl.backtest.entry_levels import geometry_summary
+                from quant_rl.eval.decision_diversity import write_decision_artifacts
+
+                geometry_summary(trades).to_csv(split_dir / "geometry_summary.csv", index=False)
+                write_decision_artifacts(
+                    trades,
+                    split_dir,
+                    save_csv=True,
+                    save_plots=save_plots,
+                    dpi=dpi,
+                )
         if breach_events:
             pd.DataFrame(breach_events).to_csv(split_dir / "breach_events.csv", index=False)
         session_diag = {
@@ -246,6 +259,7 @@ def _write_split(
                 show_mae_mfe=show_mae_mfe,
                 show_sl_tp=show_sl_tp,
                 secondary_bars=secondary_bars,
+                features=features,
             )
 
     # ------------------------------------------------------------------
@@ -295,6 +309,7 @@ def _write_split(
                     show_mae_mfe=show_mae_mfe,
                     show_sl_tp=show_sl_tp,
                     secondary_bars=secondary_bars,
+                    features=features,
                 )
         except ImportError:
             log.warning("plotly not available — skipping interactive HTML charts")
@@ -353,6 +368,8 @@ def save_run(
     test_bars: pd.DataFrame | None = None,
     train_secondary: pd.DataFrame | None = None,
     test_secondary: pd.DataFrame | None = None,
+    train_features: pd.DataFrame | None = None,
+    test_features: pd.DataFrame | None = None,
     cfg: Any | None = None,
     save_plots: bool = True,
     save_html: bool = True,
@@ -418,6 +435,7 @@ def save_run(
             train_metrics,
             train_bars,
             secondary_bars=train_secondary,
+            features=train_features,
             **split_kwargs,
         )
 
@@ -428,6 +446,7 @@ def save_run(
             test_metrics,
             test_bars,
             secondary_bars=test_secondary,
+            features=test_features,
             **split_kwargs,
         )
 

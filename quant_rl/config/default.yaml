@@ -124,7 +124,7 @@ features:
   structure: {enabled: false, timeframes: ["M5", "M15", "H1"]}
   liquidity: {enabled: false, timeframes: ["M5", "M15", "H1"]}
   po3_state_mtf: {enabled: false, timeframes: ["M1", "M5", "M15"]}
-  ifvg_mtf: {enabled: false, timeframes: ["M1", "M5", "M15"]}
+  ifvg_mtf: {enabled: false, timeframes: ["M5", "M15", "H1"]}
   # CT-anchored session levels (additive to the legacy broker-tz levels in
   # structure.detect_session_levels; new columns carry a _ct suffix).
   # Windows are resolved per bar in `tz` via tz-aware conversion, so US DST
@@ -145,7 +145,7 @@ env:
   # null = full train-split year (last NY bar truncates; FTMO fail terminates).
   max_episode_steps: null
   reward_dsr_eta: 0.01                 # differential Sharpe damping
-  strategy_actions: false              # Idea 1/2 trader Box[-1,1]^4 [intensity, sl, risk, rr]
+  strategy_actions: false              # Idea 1/2 trader Box[-1,1]^5 [intensity, stop, risk, target, exit]
   # Overlay: intensity does not gate entry (0 = follow context_direction).
   # A positive band lets PPO park at "never trade"; seed-50 20M did that at 0.1.
   entry_intensity_threshold: 0.0
@@ -175,10 +175,9 @@ env:
     # distances, the stop moves to entry +/- `breakeven_buffer_pts`. 0 = off.
     breakeven_trigger_r: 1.0
     breakeven_buffer_pts: 2.0
-  # Opt-in signed direction control. false keeps the 4-D overlay layout where
-  # `strategy.context_direction` owns the side; true gives the agent a 5-D
-  # action space whose dim 0 is signed conviction, so it can veto or invert
-  # the heuristic when the pattern is failing in the current regime.
+  # Opt-in signed direction control. false keeps the 5-D overlay
+  # [intensity, stop, risk, target, exit] where context_direction owns the
+  # side. true gives a 6-D box with signed conviction first and exit mode last.
   agent_direction_control: false
   # Conviction band (distance from the neutral 0.5) below which the agent
   # defers to the heuristic side. Only used with agent_direction_control.
@@ -212,9 +211,15 @@ sac:
   ent_coef: 0.01
   learning_starts: 500
 
+encoder:
+  windows:
+    m5: 24                    # closed M5 bars when agent.arch is mtf
+    m15: 16
+    h1: 12
+
 agent:
   type: "ppo"                 # "ppo" | "sac"
-  arch: "tcn"                 # "tcn" | "gru" | "transformer"
+  arch: "tcn"                 # "tcn" | "gru" | "transformer" | "mtf"
   use_narrative: false        # true to condition on the VAE narrative embedding
 
 device: "auto"
@@ -252,21 +257,29 @@ training:
   primary_only: false    # true = ignore secondary symbol entirely
   max_days: null         # null = all data; integer = last N calendar days for training
   total_timesteps_mvp: 8192   # short timestep count used in mvp mode
-  # Stop before total_timesteps when the run is invalid or recent episodes
-  # cannot satisfy the train-year equity gate. Early episodes are ignored.
+  # Stop before total_timesteps when the run is invalid. A flat or falling
+  # train-year equity does not stop the run. No-trade stops wait until 5M steps.
   early_abort:
     enabled: true
-    min_timesteps: 2000000
+    min_timesteps: 5000000
     window: 4
     stop_on_nonfinite: true
     stop_on_no_trades: true
-    stop_on_equity_gate: true
+    stop_on_equity_gate: false
   # Terminal block during learn(). Eval is a short deterministic train prefix.
   dashboard:
     enabled: true
     eval_every: 100000
     eval_bars: 20000
     log_every: 100000
+    # Printed warnings only. These do not enter the reward.
+    diversity:
+      sl_top_share: 0.80
+      tp_top_share: 0.80
+      rr_p75: 1.25
+      ema_lo: 0.02
+      ema_hi: 0.98
+      action_std: 0.05
   # One JSON line per PPO update, plus an incident on exceptions, non-finite
   # numbers, and registered checks. enabled: false leaves training unchanged.
   debug:

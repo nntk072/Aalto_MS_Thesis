@@ -52,6 +52,17 @@ class Position:
     sl_initial_price: float | None = None
     #: True once the stop has been moved to the breakeven level.
     breakeven_done: bool = False
+    #: Structural geometry chosen at entry. ``planned_rr`` is empty for an
+    #: EMA-21 exit. ``rr_ratio`` is not reused for that meaning.
+    sl_ref: str = ""
+    tp_ref: str = ""
+    planned_rr: float | None = None
+    exit_mode: str = ""
+    stop_distance: float = 0.0
+    sl_buffer: float = 0.0
+    manipulation: str = ""
+    n_sl: int = 0
+    n_tp: int = 0
 
 
 @dataclass

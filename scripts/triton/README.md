@@ -17,6 +17,7 @@
 #   MEM=128G CPUS=8 TIME=auto(12h|6h) PARTITION/GPUS=auto(H200 then GH200)
 #
 # After training finishes: leave the srun bash and tmux window open.
-# Do not scancel unless you ask or must replace an OOM'd job.
+# Do not scancel unless the user explicitly says to cancel that job.
+# Retrain or deleting outputs is not that permission. Do not pass REPLACE=1.
 #
 # Agent policy: see `.agents/rules/triton-slurm.md`.

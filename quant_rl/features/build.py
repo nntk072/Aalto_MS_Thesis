@@ -48,7 +48,11 @@ from .po3_config import (
     detect_fvg,
     detect_po3_entries,
 )
-from .po3_state import build_ifvg_zone_features, build_po3_state
+from .po3_state import (
+    build_distribution_after_ifvg,
+    build_ifvg_zone_features,
+    build_po3_state,
+)
 from .session_ohlc import prior_period_high_low, range_quadrants, session_ohlc
 from .smt import smt_divergence
 from .structure import (
@@ -80,7 +84,8 @@ from .structure import (
 # v12: trader-context columns (htf_day_bias, manip_reverses_htf, context_trade_direction).
 # v13: tick-count VWAP / activity (ignore CFD vol=0).
 # v14: swing age in [0, 1], London ATR distances, NY session clock.
-FEATURE_CACHE_VERSION = "v14-session-clock"
+# v15: swing confirmation pulses and the distribution-after-IFVG latch.
+FEATURE_CACHE_VERSION = "v15-swing-ifvg-latch"
 
 
 def feature_cache_content_hash(
@@ -141,6 +146,20 @@ def feature_cache_path(
 _DEFAULT_HTF_TIMEFRAMES = ("M5", "M15", "H1")
 # Capped normalised FVG distance: value used when no zone is active nearby.
 _FVG_DIST_CAP = 5.0
+# Kept off the z-score path: prices for the stop ladder, and the 0/1 retest
+# and active flags the entry gate reads on any timeframe prefix.
+_FVG_RAW_STEMS = (
+    "fvg_retest_bull",
+    "fvg_retest_bear",
+    "fvg_bull_active",
+    "fvg_bear_active",
+    "fvg_bull_low",
+    "fvg_bull_high",
+    "fvg_bear_low",
+    "fvg_bear_high",
+    "fvg_bull_origin",
+    "fvg_bear_origin",
+)
 
 # Numeric encoding of detect_po3_entries' entry_trigger_type string column so
 # the feature matrix stays homogeneous float (TradingEnv casts to float32).
@@ -167,6 +186,14 @@ MTF_RAW_SUFFIXES = (
     "ifvg_bull_high",
     "ifvg_bear_low",
     "ifvg_bear_high",
+    "ifvg_bull_origin",
+    "ifvg_bear_origin",
+    "fvg_bull_low",
+    "fvg_bull_high",
+    "fvg_bear_low",
+    "fvg_bear_high",
+    "fvg_bull_origin",
+    "fvg_bear_origin",
     "asian_high",
     "asian_low",
     "london_high",
@@ -197,6 +224,18 @@ _MTF_STATE_TFS = ("M1", "M5", "M15")
 # by default (M1 already has the unprefixed block). M30 stays excluded until
 # htf_timeframes gains it, keeping column growth bounded.
 _MTF_LIGHT_TFS = ("M5", "M15", "H1")
+
+
+def _split_fvg_raw(feat: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Pull FVG prices and retest flags out before the rolling z-score."""
+    cols = [
+        c
+        for c in feat.columns
+        if any(str(c) == stem or str(c).endswith("_" + stem) for stem in _FVG_RAW_STEMS)
+    ]
+    if not cols:
+        return feat, pd.DataFrame(index=feat.index)
+    return feat.drop(columns=cols), feat.loc[:, cols].copy()
 
 
 def _htf_list(feat_cfg: object, key: str, default: tuple[str, ...]) -> list[str]:
@@ -398,6 +437,12 @@ def build_fvg_zone_features(
     - ``fvg_bull_dist`` / ``fvg_bear_dist``: distance from close to the nearest
       active zone edge, normalised by ATR and capped at 5.0 (cap value = no
       active zone nearby)
+    - ``fvg_retest_bull`` / ``fvg_retest_bear``: 1 only when price has left a
+      still-live zone, tags the near edge, and closes back on the trade side.
+      The fill bar is not a retest.
+    - ``fvg_*_low`` / ``fvg_*_high``: live zone bounds. ``fvg_*_origin`` is the
+      low (bull) or high (bear) of candle 1 in the 1-2-3 that left the gap.
+      Candle 2 is the displacement candle the gap belongs to.
 
     All values are computed from the current and earlier bars only (zone
     activity windows end at fill/expire time), so the block is causal.
@@ -405,10 +450,36 @@ def build_fvg_zone_features(
     n = len(bars)
     idx = bars.index
     out = pd.DataFrame(
-        0.0, index=idx, columns=["fvg_in_bull", "fvg_in_bear", "fvg_bull_dist", "fvg_bear_dist"]
+        0.0,
+        index=idx,
+        columns=[
+            "fvg_in_bull",
+            "fvg_in_bear",
+            "fvg_bull_dist",
+            "fvg_bear_dist",
+            "fvg_retest_bull",
+            "fvg_retest_bear",
+            "fvg_bull_active",
+            "fvg_bear_active",
+            "fvg_bull_low",
+            "fvg_bull_high",
+            "fvg_bear_low",
+            "fvg_bear_high",
+            "fvg_bull_origin",
+            "fvg_bear_origin",
+        ],
     )
     out["fvg_bull_dist"] = _FVG_DIST_CAP
     out["fvg_bear_dist"] = _FVG_DIST_CAP
+    for col in (
+        "fvg_bull_low",
+        "fvg_bull_high",
+        "fvg_bear_low",
+        "fvg_bear_high",
+        "fvg_bull_origin",
+        "fvg_bear_origin",
+    ):
+        out[col] = np.nan
 
     if n == 0:
         return out
@@ -432,32 +503,76 @@ def build_fvg_zone_features(
 
     atr_s = atr(bars, period=14).to_numpy()
     close = bars["close"].to_numpy()
+    high = bars["high"].to_numpy()
+    low = bars["low"].to_numpy()
+    bull_in = cast(int, out.columns.get_loc("fvg_in_bull"))
+    bear_in = cast(int, out.columns.get_loc("fvg_in_bear"))
+    bull_dist = cast(int, out.columns.get_loc("fvg_bull_dist"))
+    bear_dist = cast(int, out.columns.get_loc("fvg_bear_dist"))
+    bull_retest = cast(int, out.columns.get_loc("fvg_retest_bull"))
+    bear_retest = cast(int, out.columns.get_loc("fvg_retest_bear"))
+    bull_active = cast(int, out.columns.get_loc("fvg_bull_active"))
+    bear_active = cast(int, out.columns.get_loc("fvg_bear_active"))
+    bull_lo = cast(int, out.columns.get_loc("fvg_bull_low"))
+    bull_hi = cast(int, out.columns.get_loc("fvg_bull_high"))
+    bear_lo = cast(int, out.columns.get_loc("fvg_bear_low"))
+    bear_hi = cast(int, out.columns.get_loc("fvg_bear_high"))
+    bull_origin = cast(int, out.columns.get_loc("fvg_bull_origin"))
+    bear_origin = cast(int, out.columns.get_loc("fvg_bear_origin"))
 
     for zone in zones:
         start_i = int(idx.searchsorted(zone.start_ts, side="left"))
         end_i = int(idx.searchsorted(zone.end_ts, side="right"))  # exclusive
         if start_i >= n:
             continue
+        fill_i = int(idx.searchsorted(zone.end_ts, side="left")) if zone.invalidated else None
+        origin_i = start_i - 2
         mid = 0.5 * (zone.zone_low + zone.zone_high)
-        bull_in = cast(int, out.columns.get_loc("fvg_in_bull"))
-        bear_in = cast(int, out.columns.get_loc("fvg_in_bear"))
-        bull_dist = cast(int, out.columns.get_loc("fvg_bull_dist"))
-        bear_dist = cast(int, out.columns.get_loc("fvg_bear_dist"))
+        left = False
+        bull = zone.side == "bullish"
         for i in range(start_i, min(end_i, n)):
-            if zone.side == "bullish":
+            if bull:
                 edge = zone.zone_high if close[i] >= mid else zone.zone_low
             else:
                 edge = zone.zone_low if close[i] <= mid else zone.zone_high
             d = abs(close[i] - edge)
             a = atr_s[i] if not np.isnan(atr_s[i]) and atr_s[i] > 0 else 1.0
-            in_col, dist_col = (
-                (bull_in, bull_dist) if zone.side == "bullish" else (bear_in, bear_dist)
-            )
+            in_col, dist_col = (bull_in, bull_dist) if bull else (bear_in, bear_dist)
             dist = min(d / a, out.iat[i, dist_col])
             out.iat[i, dist_col] = dist
-            # "in zone" = close inside the zone boundaries (OR across zones)
             if zone.zone_low <= close[i] <= zone.zone_high:
                 out.iat[i, in_col] = 1.0
+            is_fill = fill_i is not None and i == fill_i
+            if bull:
+                out.iat[i, bull_active] = 1.0
+                out.iat[i, bull_lo] = zone.zone_low
+                out.iat[i, bull_hi] = zone.zone_high
+                if origin_i >= 0:
+                    out.iat[i, bull_origin] = low[origin_i]
+                if (
+                    not is_fill
+                    and left
+                    and zone.zone_low < low[i] <= zone.zone_high
+                    and close[i] >= zone.zone_high
+                ):
+                    out.iat[i, bull_retest] = 1.0
+                if low[i] > zone.zone_high:
+                    left = True
+            else:
+                out.iat[i, bear_active] = 1.0
+                out.iat[i, bear_lo] = zone.zone_low
+                out.iat[i, bear_hi] = zone.zone_high
+                if origin_i >= 0:
+                    out.iat[i, bear_origin] = high[origin_i]
+                if (
+                    not is_fill
+                    and left
+                    and zone.zone_low <= high[i] < zone.zone_high
+                    and close[i] <= zone.zone_low
+                ):
+                    out.iat[i, bear_retest] = 1.0
+                if high[i] < zone.zone_low:
+                    left = True
     return out
 
 
@@ -551,6 +666,7 @@ def build_features(
             feat = align_timeframes(feat, htf_blocks)
 
     # --- Chain B variant blocks (opt-in via config flags) ---
+    _fvg_raw = pd.DataFrame(index=primary.index)
     if feat_cfg is not None:
         # PO3 phase tag: time-derived, identical across TFs once aligned.
         if bool(getattr(feat_cfg, "include_po3", False)):
@@ -577,10 +693,15 @@ def build_features(
                 tf_bars = primary if str(tf) == "M1" else resample(primary, tf)  # type: ignore[arg-type]
                 fvg_blocks[str(tf)] = build_fvg_zone_features(tf_bars)
             feat = align_timeframes(feat, fvg_blocks)
+            # Zone prices and the retest flag must stay raw. The distance
+            # columns above are normalised with the rest of the matrix.
+            feat, _fvg_raw = _split_fvg_raw(feat)
 
     # --- normalisation ---
     window = feat_cfg.zscore_window if feat_cfg is not None else 252
     feat = rolling_zscore(feat, window=window, train_mask=train_mask)
+    if len(_fvg_raw.columns) > 0:
+        feat = pd.concat([feat, _fvg_raw], axis=1)
 
     # --- Structure levels (swings) + MTF structure/BOS (plan §4.2) ---
     # Raw price levels after normalization (existing convention). M1 stays
@@ -721,7 +842,11 @@ def build_features(
             if pri_tf.empty:
                 continue
             sweeps_tf = detect_liquidity_sweeps(pri_tf, swing_period=swing)
-            sweep_blocks[str(tf)] = sweeps_tf
+            tf_cfg = TIMEFRAME_CONFIG.get(str(tf), TIMEFRAME_CONFIG["M1"])
+            pivots_tf = detect_pivots(pri_tf, left=int(tf_cfg["left"]), right=int(tf_cfg["right"]))
+            swings_tf = detect_swings(pri_tf, pivots_tf, atr_mult=float(tf_cfg["atr_mult"]))
+            events_tf = swings_tf[["swing_high_event", "swing_low_event"]].astype(float)
+            sweep_blocks[str(tf)] = pd.concat([sweeps_tf, events_tf], axis=1)
             _mtf_sweep_levels[str(tf)] = detect_session_levels(pri_tf)
         if sweep_blocks:
             feat = align_timeframes(feat, sweep_blocks)
@@ -754,7 +879,10 @@ def build_features(
         )
         po3_state = build_po3_state(primary, sweeps, levels)
         ifvg_zones = build_ifvg_zone_features(primary)
-        feat = pd.concat([feat, sweeps, bos, po3_state, ifvg_zones], axis=1)
+        bull_conf = ifvg_zones["ifvg_bull_confirmed"].to_numpy(dtype=float)
+        bear_conf = ifvg_zones["ifvg_bear_confirmed"].to_numpy(dtype=float)
+        zone_cols = [c for c in ifvg_zones.columns if not str(c).endswith("_confirmed")]
+        feat = pd.concat([feat, sweeps, bos, po3_state, ifvg_zones[zone_cols]], axis=1)
 
         # ATR-normalised distances for the model; the raw levels in the frame
         # above stay available for the environment's structural SL/TP logic
@@ -798,9 +926,8 @@ def build_features(
                 feat = align_timeframes(feat, po3_mtf_blocks)
 
         # --- IFVG active-zone MTF (plan §4.6, opt-in, default off) ---
-        # Same resample-loop treatment as FVG §4.5, scoped to M1/M5/M15
-        # (IFVG confirmation is a two-step causal sequence, unlike the
-        # memoryless FVG zone-distance features).
+        # Same resample-loop treatment as FVG. Timeframes come from config
+        # (M5/M15/H1 by default): a gap is not limited to the low timeframe.
         if _enabled(feat_cfg, "ifvg_mtf", False):
             ifvg_blocks: dict[str, pd.DataFrame] = {}
             for tf in _htf_list(feat_cfg, "ifvg_mtf", _MTF_STATE_TFS):
@@ -809,9 +936,24 @@ def build_features(
                 pri_tf, _ = _resample_pair(primary, None, str(tf))
                 if pri_tf.empty:
                     continue
-                ifvg_blocks[str(tf)] = build_ifvg_zone_features(pri_tf)
+                zones_tf = build_ifvg_zone_features(pri_tf)
+                bull_pulse = zones_tf["ifvg_bull_confirmed"].shift(1).reindex(feat.index)
+                bear_pulse = zones_tf["ifvg_bear_confirmed"].shift(1).reindex(feat.index)
+                bull_conf = np.maximum(bull_conf, bull_pulse.fillna(0.0).to_numpy(dtype=float))
+                bear_conf = np.maximum(bear_conf, bear_pulse.fillna(0.0).to_numpy(dtype=float))
+                ifvg_blocks[str(tf)] = zones_tf.drop(
+                    columns=["ifvg_bull_confirmed", "ifvg_bear_confirmed"]
+                )
             if ifvg_blocks:
                 feat = align_timeframes(feat, ifvg_blocks)
+
+        feat["po3_distribution_after_ifvg"] = build_distribution_after_ifvg(
+            po3_state["po3_distribution_direction"].to_numpy(dtype=float),
+            po3_state["po3_manipulation_active"].to_numpy(dtype=float),
+            po3_state["po3_manipulation_direction"].to_numpy(dtype=float),
+            bull_conf,
+            bear_conf,
+        )
 
     # --- LTF BOS + MSS decision stack ---
     # With include_strategy_state, BOS is already present; with include_pd_context

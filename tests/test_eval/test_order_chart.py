@@ -32,11 +32,11 @@ from quant_rl.eval.chart_overlays import (
     build_overlay_events,
     draw_overlays_mpl,
 )
-from quant_rl.eval.order_chart import order_levels
+from quant_rl.eval.order_chart import draw_order_levels_mpl, order_levels
 from quant_rl.eval.overlay_events import _swing_origins
 from quant_rl.eval.plots import plot_per_trade_orders
 from quant_rl.eval.plots_interactive import plot_per_trade_orders as plot_per_trade_orders_html
-from quant_rl.eval.trade_metrics import compute_trade_metrics
+from quant_rl.eval.trade_metrics import TradeChartMetrics, compute_trade_metrics
 from quant_rl.features.structure import structure_levels
 
 
@@ -482,3 +482,64 @@ def test_dynamic_rr_scales_with_reachable_reward() -> None:
         max_tp_distance=8.0,
     )
     assert skipped is None
+
+
+def test_order_chart_shades_active_manipulation_and_marks_the_end() -> None:
+    idx = pd.date_range("2020-01-02 16:30", periods=6, freq="1min")
+    window = pd.DataFrame(
+        {"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1},
+        index=idx,
+    )
+    features = pd.DataFrame(
+        {
+            "po3_manipulation_active": [1.0, 1.0, 1.0, 0.0, 0.0, 0.0],
+            "po3_manipulation_end": [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+            "asian_high": 110.0,
+            "asian_low": 90.0,
+            "london_high": 112.0,
+            "london_low": 88.0,
+            "po3_manipulation_high": 104.0,
+            "po3_manipulation_low": 96.0,
+            "sweep_low_level": 97.0,
+        },
+        index=idx,
+    )
+    metrics = TradeChartMetrics(
+        entry_price=100.0,
+        exit_price=101.0,
+        direction=1,
+        mae_price=99.0,
+        mfe_price=101.0,
+        mae_time=idx[2],
+        mfe_time=idx[4],
+        sl_price=96.0,
+        tp_price=110.0,
+        mae_drawn=False,
+        mfe_drawn=False,
+    )
+    levels = order_levels(
+        window,
+        metrics,
+        OverlayEvents(),
+        window,
+        idx[1],
+        idx[4],
+        pd.Series({"direction": 1}),
+        show_mae_mfe=False,
+        features=features,
+    )
+    assert levels.manip_spans == [(idx[0], idx[2])]
+    assert levels.manip_ends == [idx[3]]
+    labels = {seg.label for seg in levels.segs}
+    assert {
+        "Asian high",
+        "Asian low",
+        "London high",
+        "London low",
+        "manip high",
+        "manip low",
+        "sweep",
+    } <= labels
+    fig, ax = plt.subplots()
+    draw_order_levels_mpl(ax, levels)
+    plt.close(fig)

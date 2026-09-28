@@ -30,6 +30,19 @@ except ImportError:
     _SB3_AVAILABLE = False
 
 
+def encoder_for(arch: str) -> type[Any]:
+    """Feature extractor selected by ``agent.arch``. Unknown names stay on the TCN."""
+    from .encoder import GRUEncoder, MTFEncoder, TCNEncoder, TransformerEncoder
+
+    if arch == "transformer":
+        return TransformerEncoder
+    if arch == "gru":
+        return GRUEncoder
+    if arch == "mtf":
+        return MTFEncoder
+    return TCNEncoder
+
+
 def build_agent(
     env: Any,
     cfg: DictConfig,
@@ -49,7 +62,7 @@ def build_agent(
     cfg:
         Full OmegaConf config.
     arch:
-        ``"tcn"`` (default), ``"transformer"``, or ``"gru"``.
+        ``"tcn"`` (default), ``"transformer"``, ``"gru"``, or ``"mtf"``.
     algo:
         ``"ppo"`` (default) or ``"sac"``.
     use_vae:
@@ -79,7 +92,6 @@ def build_agent(
     if not _SB3_AVAILABLE:
         raise ImportError("stable-baselines3 is required: pip install stable-baselines3")
 
-    from .encoder import GRUEncoder, TCNEncoder, TransformerEncoder
     from .vae import VAEFeatureExtractor
 
     if use_vae and vae is None:
@@ -95,19 +107,19 @@ def build_agent(
         latent_dim = env.observation_space["vae_z"].shape[0]
         extractor_kwargs: dict[str, Any] = {"vae": vae, "freeze": True}
     else:
-        if arch == "transformer":
-            extractor_cls = TransformerEncoder
-        elif arch == "gru":
-            extractor_cls = GRUEncoder
-        else:
-            extractor_cls = TCNEncoder
+        if arch == "mtf" and "seq_m5" not in env.observation_space.spaces:
+            raise ValueError("arch 'mtf' requires an environment built with mtf=True")
+        extractor_cls = encoder_for(arch)
 
         latent_dim = 128
-        extractor_kwargs = dict(
-            seq_len=cfg.env.obs_window,
-            n_features=n_features,
-            latent_dim=latent_dim,
-        )
+        if arch == "mtf":
+            extractor_kwargs = dict(latent_dim=latent_dim)
+        else:
+            extractor_kwargs = dict(
+                seq_len=cfg.env.obs_window,
+                n_features=n_features,
+                latent_dim=latent_dim,
+            )
 
     # Two hidden layers after the encoder. SAC uses ``qf`` for the critic.
     if algo == "sac":

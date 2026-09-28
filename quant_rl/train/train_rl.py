@@ -171,7 +171,11 @@ def _strategy_from_cfg(cfg: Any) -> tuple[Any, Any, float]:
     reward: PO3Reward | DistributionReward | None = None
     strategy: TradingStrategy
     if name == "po3_ifvg":
-        strategy = PO3IFVGStrategy(enforce_gate=enforce_gate)
+        ifvg_cfg = strat_cfg.get("ifvg", {}) or {}
+        strategy = PO3IFVGStrategy(
+            enforce_gate=enforce_gate,
+            require_price_retest=bool(ifvg_cfg.get("require_price_retest", True)),
+        )
         reward = PO3Reward(
             entry_bonus=float(reward_cfg.get("entry_bonus", 0.01)),
             manipulation_penalty=float(reward_cfg.get("manipulation_penalty", 0.02)),
@@ -228,11 +232,11 @@ def _early_abort_callback(cfg: Any) -> EarlyAbortCallback | None:
     if not bool(block.get("enabled", True)):
         return None
     return EarlyAbortCallback(
-        min_timesteps=int(block.get("min_timesteps", 2_000_000)),
+        min_timesteps=int(block.get("min_timesteps", 5_000_000)),
         window=int(block.get("window", 4)),
         stop_on_nonfinite=bool(block.get("stop_on_nonfinite", True)),
         stop_on_no_trades=bool(block.get("stop_on_no_trades", True)),
-        stop_on_equity_gate=bool(block.get("stop_on_equity_gate", True)),
+        stop_on_equity_gate=bool(block.get("stop_on_equity_gate", False)),
     )
 
 
@@ -332,6 +336,23 @@ def _fill_delay_ms(cfg: Any) -> int:
         return 0
 
 
+def _mtf_settings(cfg: Any, arch: str | None) -> tuple[bool, dict[str, int]]:
+    """``mtf`` is on only when the selected architecture is the multi-window encoder."""
+    from quant_rl.envs.observation import DEFAULT_HTF_WINDOWS
+
+    chosen = arch
+    if chosen is None:
+        agent = cfg.get("agent") if hasattr(cfg, "get") else None
+        chosen = str(agent.get("arch", "tcn")) if agent is not None else "tcn"
+    windows = dict(DEFAULT_HTF_WINDOWS)
+    encoder = cfg.get("encoder") if hasattr(cfg, "get") else None
+    raw = encoder.get("windows") if encoder is not None and hasattr(encoder, "get") else None
+    if raw:
+        for key, value in dict(raw).items():
+            windows[str(key)] = int(value)
+    return str(chosen) == "mtf", windows
+
+
 def make_env(
     bars: pd.DataFrame,
     features: pd.DataFrame,
@@ -345,9 +366,11 @@ def make_env(
     pre_ny_by_date: dict[Any, Any] | None = None,
     obs_features_mmap: str | None = None,
     tickbook: TickBook | None = None,
+    arch: str | None = None,
 ) -> TradingEnv:
     continuous_actions = algo == "sac"
     use_sweep_reward = reward == "sweep"
+    use_mtf, mtf_windows = _mtf_settings(cfg, arch)
     strategy, strategy_reward, strategy_weight = _strategy_from_cfg(cfg)
     risk_frac_range, rr_ratio_range = _strategy_risk_ranges(cfg)
     return TradingEnv(
@@ -390,6 +413,8 @@ def make_env(
         vae=vae,
         pre_ny_by_date=pre_ny_by_date,
         obs_features_mmap=obs_features_mmap,
+        mtf=use_mtf,
+        mtf_windows=mtf_windows,
     )
 
 
@@ -409,7 +434,10 @@ def parse_train_args() -> argparse.Namespace:
     parser.add_argument("--out", default="outputs", help="Base output directory")
     parser.add_argument("--algo", choices=["ppo", "sac"], default="ppo", help="RL algorithm")
     parser.add_argument(
-        "--arch", choices=["tcn", "gru", "transformer"], default="tcn", help="Encoder architecture"
+        "--arch",
+        choices=["tcn", "gru", "transformer", "mtf"],
+        default="tcn",
+        help="Encoder architecture",
     )
     parser.add_argument("--reward", choices=["dsr", "sweep"], default="dsr", help="Reward function")
     parser.add_argument(
@@ -638,6 +666,7 @@ def main() -> None:
         pre_ny_by_date=pre_ny_by_date,
         obs_features_mmap=obs_mmap,
         tickbook=ticks_covering(primary_ticks, train_bars),
+        arch=args.arch,
     )
 
     checkpoint_callback = _periodic_checkpoint_callback(cfg, model_dir)
@@ -665,6 +694,7 @@ def main() -> None:
             vae=env_vae,
             pre_ny_by_date=pre_ny_by_date,
             obs_features_mmap=obs_mmap,
+            arch=args.arch,
         ),
     )
     _log_effective_ppo(model, cfg)
@@ -719,6 +749,7 @@ def main() -> None:
             vae=env_vae,
             pre_ny_by_date=pre_ny_by_date,
             tickbook=ticks_covering(primary_ticks, short_bars),
+            arch=args.arch,
         ),
         eval_freq=best_eval_freq,
         best_model_path=model_dir / "ppo_best",
@@ -745,12 +776,13 @@ def main() -> None:
         dash_bars = train_bars.iloc[:slice_n]
         dash_feat = train_feat.iloc[:slice_n]
 
-        def _dashboard_eval() -> dict[str, float]:
+        def _dashboard_eval() -> dict[str, Any]:
             result = evaluate_model(
                 model,
                 bars=dash_bars,
                 features=dash_feat,
                 max_episode_steps=None,
+                deterministic=False,
                 tickbook=ticks_covering(primary_ticks, dash_bars),
                 **eval_common,
             )
@@ -761,6 +793,15 @@ def main() -> None:
                 n_breach_sessions=result.get("n_breach_sessions", 0),
             )
             n_steps = max(1, int(result.get("n_steps", 1)))
+            from quant_rl.eval.decision_diversity import (
+                format_diversity_text,
+                thresholds_from_mapping,
+            )
+
+            diversity = format_diversity_text(
+                result["trades"],
+                thresholds_from_mapping(dash.get("diversity")),
+            )
             return {
                 "return_pct": float(metrics.total_return_pct),
                 "sharpe": float(metrics.sharpe),
@@ -772,6 +813,7 @@ def main() -> None:
                 "n_trades": float(metrics.n_trades),
                 "turnover": float(metrics.turnover),
                 "reward_mean": float(result.get("reward_sum", 0.0)) / n_steps,
+                "diversity_text": diversity,
             }
 
         callbacks.append(
@@ -847,6 +889,7 @@ def main() -> None:
         bars=test_bars,
         features=test_feat,
         max_episode_steps=None,
+        deterministic=False,
         tickbook=ticks_covering(primary_ticks, test_bars),
         **eval_common,
     )
@@ -882,6 +925,7 @@ def main() -> None:
         bars=train_bars,
         features=train_feat,
         max_episode_steps=None,
+        deterministic=False,
         tickbook=ticks_covering(primary_ticks, train_bars),
         **eval_common,
     )
@@ -1064,6 +1108,7 @@ def main() -> None:
                 pre_ny_by_date=pre_ny_by_date,
                 obs_features_mmap=fold_mmap,
                 tickbook=ticks_covering(primary_ticks, fold_train_bars),
+                arch=args.arch,
             )
             fold_model = build_agent(
                 fold_env,
@@ -1085,6 +1130,7 @@ def main() -> None:
                     pre_ny_by_date=pre_ny_by_date,
                     obs_features_mmap=fold_mmap,
                     tickbook=ticks_covering(primary_ticks, fold_train_bars),
+                    arch=args.arch,
                 ),
             )
             fold_model.learn(total_timesteps=wf_steps, callback=None, progress_bar=False)
@@ -1093,6 +1139,7 @@ def main() -> None:
                 fold_model,
                 bars=fold_test_bars,
                 features=fold_test_feat,
+                deterministic=False,
                 obs_window=cfg.env.obs_window,
                 initial_balance=cfg.account.initial_balance,
                 guardrail_kwargs=_eval_guardrail_kwargs(cfg),

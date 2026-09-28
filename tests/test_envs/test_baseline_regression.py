@@ -122,14 +122,14 @@ class TestBaselineActionSpace:
         assert isinstance(env.action_space, Box)
         assert env.action_space.shape == (1,)
 
-    def test_strategy_actions_true_uses_4d_box(
+    def test_strategy_actions_true_uses_5d_box(
         self, bars: pd.DataFrame, features: pd.DataFrame
     ) -> None:
         env = TradingEnv(
             bars, features, strategy_actions=True, strategy=BaselineStrategy(), obs_window=20
         )
         assert isinstance(env.action_space, Box)
-        assert env.action_space.shape == (4,)
+        assert env.action_space.shape == (5,)
 
 
 # ---------------------------------------------------------------------------

@@ -8,7 +8,8 @@ import numpy as np
 import torch
 from gymnasium import spaces
 
-from quant_rl.models.encoder import GRUEncoder, TCNEncoder, TransformerEncoder
+from quant_rl.models.agent import encoder_for
+from quant_rl.models.encoder import GRUEncoder, MTFEncoder, TCNEncoder, TransformerEncoder
 
 
 class TestTCNEncoder:
@@ -421,3 +422,72 @@ def test_mixed_valid_lengths_match_rowwise_suffix() -> None:
                     }
                 )
                 assert torch.allclose(mixed[row : row + 1], alone, atol=1e-5), kind
+
+
+def _mtf_space() -> spaces.Dict:
+    return spaces.Dict(
+        {
+            "seq": spaces.Box(low=-1.0, high=1.0, shape=(8, 3), dtype=np.float32),
+            "seq_mask": spaces.Box(low=0.0, high=1.0, shape=(8,), dtype=np.float32),
+            "seq_m5": spaces.Box(low=-1.0, high=1.0, shape=(6, 2), dtype=np.float32),
+            "mask_m5": spaces.Box(low=0.0, high=1.0, shape=(6,), dtype=np.float32),
+            "seq_m15": spaces.Box(low=-1.0, high=1.0, shape=(4, 1), dtype=np.float32),
+            "mask_m15": spaces.Box(low=0.0, high=1.0, shape=(4,), dtype=np.float32),
+            "seq_h1": spaces.Box(low=-1.0, high=1.0, shape=(4, 1), dtype=np.float32),
+            "mask_h1": spaces.Box(low=0.0, high=1.0, shape=(4,), dtype=np.float32),
+            "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
+        }
+    )
+
+
+def test_mtf_encoder_returns_160() -> None:
+    encoder = MTFEncoder(_mtf_space(), latent_dim=128, channels=(8, 8), dropout=0.0)
+    encoder.eval()
+    batch = 2
+    obs = {
+        "seq": torch.randn(batch, 8, 3),
+        "seq_mask": torch.ones(batch, 8),
+        "seq_m5": torch.randn(batch, 6, 2),
+        "mask_m5": torch.ones(batch, 6),
+        "seq_m15": torch.randn(batch, 4, 1),
+        "mask_m15": torch.ones(batch, 4),
+        "seq_h1": torch.randn(batch, 4, 1),
+        "mask_h1": torch.ones(batch, 4),
+        "account": torch.randn(batch, 6),
+    }
+    assert encoder(obs).shape == (batch, 160)
+
+
+def test_mtf_pad_prefix_does_not_change_the_branch() -> None:
+    torch.manual_seed(0)
+    encoder = MTFEncoder(_mtf_space(), latent_dim=128, channels=(8, 8), dropout=0.0)
+    encoder.eval()
+    obs = {
+        "seq": torch.randn(2, 8, 3),
+        "seq_mask": torch.tensor(
+            [[0, 0, 0, 1, 1, 1, 1, 1], [0, 0, 1, 1, 1, 1, 1, 1]],
+            dtype=torch.float32,
+        ),
+        "seq_m5": torch.randn(2, 6, 2),
+        "mask_m5": torch.tensor([[0, 0, 1, 1, 1, 1]]).expand(2, -1).contiguous(),
+        "seq_m15": torch.randn(2, 4, 1),
+        "mask_m15": torch.ones(2, 4),
+        "seq_h1": torch.zeros(2, 4, 1),
+        "mask_h1": torch.zeros(2, 4),
+        "account": torch.randn(2, 6),
+    }
+    with torch.no_grad():
+        first = encoder(obs)
+        shifted = {key: value.clone() for key, value in obs.items()}
+        shifted["seq_m5"][:, :2] = 50.0
+        shifted["seq"][:, :2] = -50.0
+        shifted["seq_h1"][:, :3] = 7.0
+        second = encoder(shifted)
+    assert torch.allclose(first, second, atol=1e-5)
+
+
+def test_tcn_arch_is_the_single_sequence_extractor() -> None:
+    assert encoder_for("tcn") is TCNEncoder
+    assert encoder_for("mtf") is MTFEncoder
+    assert encoder_for("gru") is GRUEncoder
+    assert encoder_for("transformer") is TransformerEncoder

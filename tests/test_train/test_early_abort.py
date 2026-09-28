@@ -15,7 +15,7 @@ def test_callback_returns_false_when_the_window_fails() -> None:
     pytest.importorskip("stable_baselines3")
     from quant_rl.train.callbacks import EarlyAbortCallback
 
-    cb = EarlyAbortCallback(min_timesteps=100, window=2)
+    cb = EarlyAbortCallback(min_timesteps=100, window=2, stop_on_equity_gate=True)
     cb.model = cast(
         Any, SimpleNamespace(num_timesteps=500, logger=SimpleNamespace(name_to_value={}))
     )
@@ -41,7 +41,7 @@ def test_callback_stops_on_a_nonfinite_rollout_metric() -> None:
     pytest.importorskip("stable_baselines3")
     from quant_rl.train.callbacks import EarlyAbortCallback
 
-    cb = EarlyAbortCallback(min_timesteps=2_000_000, window=4)
+    cb = EarlyAbortCallback(min_timesteps=5_000_000, window=4)
     cb.model = cast(
         Any,
         SimpleNamespace(
@@ -53,3 +53,27 @@ def test_callback_stops_on_a_nonfinite_rollout_metric() -> None:
     cb._on_rollout_end()
     assert cb._on_step() is False
     assert cb.reason == "nonfinite"
+
+
+def test_zero_return_explained_variance_does_not_abort() -> None:
+    pytest.importorskip("stable_baselines3")
+    from quant_rl.train.callbacks import EarlyAbortCallback
+
+    cb = EarlyAbortCallback(min_timesteps=5_000_000, window=4)
+    cb.model = cast(
+        Any,
+        SimpleNamespace(
+            num_timesteps=16_448,
+            logger=SimpleNamespace(
+                name_to_value={
+                    "train/explained_variance": float("nan"),
+                    "train/value_loss": 0.0,
+                    "train/std": 1.0,
+                }
+            ),
+        ),
+    )
+    cb.locals = {"dones": np.array([False]), "infos": [{}]}
+    cb._on_rollout_end()
+    assert cb._on_step() is True
+    assert cb.reason is None

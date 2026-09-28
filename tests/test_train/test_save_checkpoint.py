@@ -20,4 +20,4 @@ class _FakeModel:
 def test_save_ppo_checkpoint_excludes_train_hook() -> None:
     model = _FakeModel()
     save_ppo_checkpoint(model, "/tmp/ppo_ckpt")
-    assert model.saved == [("ppo_ckpt", ("train",))]
+    assert model.saved == [("ppo_ckpt", ("train", "learn"))]
