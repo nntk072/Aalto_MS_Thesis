@@ -78,8 +78,8 @@ def test_latency_env_constructs_and_steps(trending_bars, latency):
     """Env accepts fill_latency_bars and steps without error."""
     env = _make_env(trending_bars, latency)
     obs, _ = env.reset(seed=42)
-    # 3 feature columns: f0 + last_swing_low + last_swing_high
-    assert obs["seq"].shape == (10, 3)
+    # f0, the two swings, and the derived reachable_r column.
+    assert obs["seq"].shape == (10, 4)
     for _ in range(20):
         obs, *_ = env.step(0)  # hold
     assert env.fill_latency_bars == latency

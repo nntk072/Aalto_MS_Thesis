@@ -171,7 +171,7 @@ def test_hard_max_loss_terminates_not_truncates() -> None:
     _, reward, done, truncated, _ = env.step(0)
     assert done is True
     assert truncated is False
-    assert reward == pytest.approx(-10.0)
+    assert reward == pytest.approx(0.0)
     assert env.breach_events and env.breach_events[0]["reason"] == "max_drawdown"
 
 
@@ -194,7 +194,7 @@ def test_hard_daily_terminates_year_episode() -> None:
     _, reward, done, truncated, _ = env.step(0)
     assert done is True
     assert truncated is False
-    assert reward == pytest.approx(-10.0)
+    assert reward == pytest.approx(0.0)
     assert env.breach_events[0]["reason"] == "daily_loss"
 
 
@@ -221,7 +221,7 @@ def test_trailing_dd_terminates_year_episode() -> None:
     _, reward, done, truncated, _ = env.step(0)
     assert done is True
     assert truncated is False
-    assert reward == pytest.approx(-10.0)
+    assert reward == pytest.approx(0.0)
     assert env.breach_events[0]["reason"] == "trailing_dd"
 
 

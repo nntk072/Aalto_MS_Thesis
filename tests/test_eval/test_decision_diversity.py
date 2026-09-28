@@ -69,9 +69,7 @@ def test_manipulation_changes_the_stop_family() -> None:
         assert isinstance(row, pd.Series)
         if name not in row.index:
             return 0.0
-        value = row[name]
-        assert isinstance(value, (int, float))
-        return float(value)
+        return float(np.asarray(row[name]).reshape(-1)[0])
 
     assert _share(against, "sweep") > _share(against, "swing")
     assert _share(done, "sweep") == 0.0

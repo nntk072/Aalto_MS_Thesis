@@ -157,5 +157,5 @@ class TestBuildFeaturesPipeline:
         )
 
 
-# v14-session-clock: ny_session_clock + valid-window observation columns.
-_GOLDEN_HASH = "b2add9255d212573a2c2bdc5e7cbc004cdca07e25626482e8b775db76a91001f"
+# Structural targets and the PO3 event columns changed the feature matrix.
+_GOLDEN_HASH = "80261a2eb6573b13719d719d7f6dab00fa406f459bb9e32abb5efa5cb58eb158"

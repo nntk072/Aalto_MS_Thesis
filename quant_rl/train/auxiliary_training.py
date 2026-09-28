@@ -135,7 +135,7 @@ class AuxiliaryTrainerCallback(BaseCallback):
 
     # -- data ---------------------------------------------------------------
     def _env_data(self) -> tuple[NDArray[np.float64], NDArray[np.float64]] | None:
-        """(features, closes) from the first underlying TradingEnv."""
+        """Observation columns and closes from the first underlying TradingEnv."""
         env = self.model.get_env()
         if env is None:
             return None
@@ -143,11 +143,15 @@ class AuxiliaryTrainerCallback(BaseCallback):
         while inner is not None and hasattr(inner, "env"):
             inner = inner.env
         inner = getattr(inner, "unwrapped", inner)
-        features = getattr(inner, "features", None)
+        obs = getattr(inner, "_obs_features_arr", None)
         bars = getattr(inner, "bars", None)
-        if features is None or bars is None or len(bars) != len(features):
+        if obs is None or bars is None or len(bars) != len(obs):
             return None
-        return features.to_numpy(dtype=np.float64), bars["close"].to_numpy(dtype=np.float64)
+        if getattr(inner, "mtf", False):
+            m1_idx = getattr(inner, "_m1_idx", None)
+            if m1_idx is not None and len(m1_idx):
+                obs = obs[:, m1_idx]
+        return np.asarray(obs, dtype=np.float64), bars["close"].to_numpy(dtype=np.float64)
 
     # -- training -----------------------------------------------------------
     def _on_rollout_end(self) -> None:

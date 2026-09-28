@@ -169,7 +169,8 @@ class TestBaselineObservation:
         env.reset()
         seq_cols = set(env._obs_features.columns)
         expected_cols = set(features.columns)
-        assert seq_cols == expected_cols
+        assert expected_cols <= seq_cols
+        assert seq_cols - expected_cols == {"reachable_r"}
 
     def test_extra_col_in_obs(self, bars: pd.DataFrame, features: pd.DataFrame) -> None:
         env = TradingEnv(bars, features, obs_window=20)
