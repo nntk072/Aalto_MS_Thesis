@@ -92,6 +92,7 @@ def merge_variant_cfg(
     *,
     strategy: str,
     include_pd_context: bool,
+    variant: dict[str, Any] | None = None,
 ) -> DictConfig:
     """Merge strategy / PD-context overlays onto a base config."""
     cfg = cast(DictConfig, OmegaConf.create(OmegaConf.to_container(base, resolve=True)))
@@ -103,6 +104,21 @@ def merge_variant_cfg(
         strat_path = Path(_STRATEGY_CONFIGS[strategy])
         if strat_path.is_file():
             cfg = cast(DictConfig, OmegaConf.merge(cfg, OmegaConf.load(strat_path)))
+    # Ladder flags (A0-A4): thread from the variant dict so experiments.yaml can
+    # toggle the entry/SL/TP architecture layers independently of strategy.
+    for key in (
+        "entry_state_machine",
+        "entry_state_observation",
+        "allow_agent_sl_mode",
+        "allow_agent_tp_mode",
+        "allow_multi_tp",
+        "agent_direction_control",
+        "strategy_actions",
+        "arm_requires_retest",
+        "candidate_max_age_bars",
+    ):
+        if variant is not None and key in variant:
+            cfg.env[key] = variant[key]
     # Force single-env for scripted ablations (no SubprocVecEnv spawn).
     cfg.env.n_envs = 1
     return cfg
@@ -155,7 +171,12 @@ def train_and_score_variant(
             "seed": seed,
         }
 
-    cfg = merge_variant_cfg(base_cfg, strategy=strategy, include_pd_context=include_pd)
+    cfg = merge_variant_cfg(
+        base_cfg,
+        strategy=strategy,
+        include_pd_context=include_pd,
+        variant=variant,
+    )
     train_bars, test_bars, train_feat, test_feat = split_train_test(
         bars, features, train_end, test_start
     )

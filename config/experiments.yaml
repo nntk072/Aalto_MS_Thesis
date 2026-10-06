@@ -6,6 +6,10 @@
 # Feature-flag variants assume the --features-csv was built with matching
 # build_features flags (e.g. include_pd_context). Strategy variants merge the
 # Idea 1/2 YAML overlays when constructing the env.
+#
+# Ladder variants (A0-A4) add one architecture layer per row so marginal value
+# is directly measurable. `allow_agent_tp_mode` only takes effect when
+# `allow_agent_sl_mode` is also on (trading_env.py:2276), so A2+ require A1.
 defaults:
   algo: ppo
   arch: gru
@@ -18,6 +22,102 @@ defaults:
   test_start: "2026-01-01"
 
 variants:
+  # ===== LADDER: additive architecture layers (TCN) =====
+  - name: ladder_a0_flat
+    arch: tcn
+    strategy_actions: true
+
+  - name: ladder_a1_sl
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+
+  - name: ladder_a2_tp
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+    allow_agent_tp_mode: true
+
+  - name: ladder_a3_multi_tp
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+    allow_agent_tp_mode: true
+    allow_multi_tp: true
+
+  - name: ladder_a4b_entry_fsm
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+    allow_agent_tp_mode: true
+    allow_multi_tp: true
+    entry_state_machine: true
+    entry_state_observation: true
+
+  - name: ladder_a4a_entry_fsm_hidden
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+    allow_agent_tp_mode: true
+    allow_multi_tp: true
+    entry_state_machine: true
+    entry_state_observation: false
+
+  # ===== LADDER x STRATEGY (A4b under each strategy) =====
+  - name: ladder_a4b_po3_ifvg
+    strategy: po3_ifvg
+    include_pd_context: true
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+    allow_agent_tp_mode: true
+    allow_multi_tp: true
+    entry_state_machine: true
+    entry_state_observation: true
+
+  - name: ladder_a4b_distribution
+    strategy: distribution
+    include_pd_context: true
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+    allow_agent_tp_mode: true
+    allow_multi_tp: true
+    entry_state_machine: true
+    entry_state_observation: true
+
+  # ===== CONTROL KNOBS (A4b sensitivity) =====
+  - name: knob_retest_true
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+    allow_agent_tp_mode: true
+    allow_multi_tp: true
+    entry_state_machine: true
+    entry_state_observation: true
+    arm_requires_retest: true
+
+  - name: knob_age_20
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+    allow_agent_tp_mode: true
+    allow_multi_tp: true
+    entry_state_machine: true
+    entry_state_observation: true
+    candidate_max_age_bars: 20
+
+  - name: knob_age_60
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+    allow_agent_tp_mode: true
+    allow_multi_tp: true
+    entry_state_machine: true
+    entry_state_observation: true
+    candidate_max_age_bars: 60
+
+  # ===== EXISTING MATRIX (control group, unchanged by A4) =====
   - name: ablation_baseline_unconditional
     use_vae: 0
 
