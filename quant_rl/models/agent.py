@@ -201,7 +201,12 @@ def build_agent(
         width = int(env.action_space.shape[0])
         has_direction = bool(getattr(env, "agent_direction_control", False))
         has_sl_mode = bool(getattr(env, "allow_agent_sl_mode", False))
-        ppo_model.policy._action_layout_key = _layout_key(width, has_direction, has_sl_mode)  # type: ignore[assignment]
+        has_tp_mode = bool(getattr(env, "allow_agent_tp_mode", False))
+        has_multi_tp = bool(getattr(env, "allow_multi_tp", False))
+        has_simplex = bool(getattr(env, "allow_simplex", has_multi_tp))
+        ppo_model.policy._action_layout_key = _layout_key(
+            width, has_direction, has_sl_mode, has_tp_mode, has_multi_tp, has_simplex
+        )  # type: ignore[assignment]
     from .rollout_buffer import install_single_copy_add
 
     install_single_copy_add(ppo_model.rollout_buffer)

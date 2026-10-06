@@ -172,6 +172,10 @@ env:
   allow_ema_exit: true               # false = structural targets only
   allow_agent_sl_mode: true           # true = 6-D/7-D action with SL mode dim
   sl_mode_defer_threshold: 0.1        # |u_sl - 0.5| below this defers to state machine
+  allow_agent_tp_mode: false          # opt-in TP mode dim
+  tp_mode_defer_threshold: 0.1        # agent veto threshold
+  allow_multi_tp: false               # opt-in multi-TP levels
+  tp_breakeven_alpha: 0.5             # alpha for breakeven TP: TP = entry + alpha * R
   # Training behavior, not an FTMO kill. 0 = off. 0.10 = flatten at 10% from peak.
   peak_trailing_dd_limit: 0.0
   max_entries_per_session: 0
@@ -357,6 +361,8 @@ strategy:
     require_price_retest: true
   risk:
     sl_mode: "fixed"            # "fixed" | "breakeven" | "trailing"
+    tp_mode: "fixed"            # "fixed" | "breakeven" | "trailing"
+    tp_reference: "structural"  # anchor for TP distance ratios
     sl_buffer_pts: 1.0
     risk_frac_range: [0.0, 0.01]
     rr_range: [1.5, 5.0]

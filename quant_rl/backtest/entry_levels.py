@@ -49,6 +49,14 @@ class OrderGeometry:
     tp_index: int = -1
     sl_menu: tuple[tuple[str, float], ...] = ()
     tp_menu: tuple[tuple[str, float], ...] = ()
+    tp1_price: float | None = None
+    tp2_price: float | None = None
+    tp3_price: float | None = None
+    tp1_ref: str = ""
+    tp2_ref: str = ""
+    tp3_ref: str = ""
+    tp_lot_fractions: tuple[float, ...] = ()
+    tp_indices: tuple[int | None, int | None, int | None] = (None, None, None)
 
 
 def _menu_pairs(
@@ -191,6 +199,10 @@ def place_strategy_order(
     max_tp_distance: float,
     rr_bounds: tuple[float, float] | None = None,
     htf: tuple[str, ...] = ("M5", "M15", "H1"),
+    tp_selections: tuple[Any, Any, Any] | None = None,
+    tp_z: tuple[float, float] | None = None,
+    allow_multi_tp: bool = False,
+    allow_simplex: bool = True,
 ) -> OrderGeometry:
     """Pick the stop, then a structural target or an EMA-21 exit.
 
@@ -311,6 +323,88 @@ def place_strategy_order(
             stops,
             [],
         )
+    if allow_multi_tp or tp_selections is not None:
+        from quant_rl.envs.tp_decoders import decode_tp_fractions, decode_tp_selections
+
+        raw1, raw2, raw3 = (
+            tp_selections if tp_selections is not None else (tp_fraction, tp_fraction, tp_fraction)
+        )
+        tp1_idx, tp2_idx, tp3_idx = decode_tp_selections(raw1, raw2, raw3, len(targets))
+        active_indices = [idx for idx in (tp1_idx, tp2_idx, tp3_idx) if idx is not None]
+        if not active_indices:
+            return _with_menus(
+                OrderGeometry(
+                    None,
+                    None,
+                    "",
+                    "",
+                    buf,
+                    None,
+                    mode,
+                    state,
+                    len(stops),
+                    0,
+                    True,
+                    "tp",
+                ),
+                stops,
+                [],
+            )
+        tp1_name, tp1_px = (
+            (targets[tp1_idx][0], float(targets[tp1_idx][1])) if tp1_idx is not None else ("", None)
+        )
+        tp2_name, tp2_px = (
+            (targets[tp2_idx][0], float(targets[tp2_idx][1])) if tp2_idx is not None else ("", None)
+        )
+        tp3_name, tp3_px = (
+            (targets[tp3_idx][0], float(targets[tp3_idx][1])) if tp3_idx is not None else ("", None)
+        )
+
+        if tp_z is not None and allow_simplex:
+            fractions = decode_tp_fractions(tp_z[0], tp_z[1], (tp1_idx, tp2_idx, tp3_idx))
+        else:
+            fractions = tuple(1.0 / len(active_indices) for _ in active_indices)
+
+        nearest_px = tp1_px if tp1_px is not None else (tp2_px if tp2_px is not None else tp3_px)
+        nearest_name = tp1_name if tp1_name else (tp2_name if tp2_name else tp3_name)
+        nearest_idx = (
+            tp1_idx if tp1_idx is not None else (tp2_idx if tp2_idx is not None else tp3_idx)
+        )
+        nearest_dist = (
+            abs(float(nearest_px) - float(entry_price)) if nearest_px is not None else 0.0
+        )
+
+        return _with_menus(
+            OrderGeometry(
+                sl_price,
+                nearest_px,
+                sl_name,
+                nearest_name,
+                buf,
+                nearest_dist / sl_dist if sl_dist > 1e-12 else None,
+                mode,
+                state,
+                len(stops),
+                len(targets),
+                False,
+                "",
+                sl_at,
+                nearest_idx if nearest_idx is not None else -1,
+                (),
+                (),
+                tp1_px,
+                tp2_px,
+                tp3_px,
+                tp1_name,
+                tp2_name,
+                tp3_name,
+                fractions,
+                (tp1_idx, tp2_idx, tp3_idx),
+            ),
+            stops,
+            targets,
+        )
+
     tp_at = select_index(tp_fraction, len(targets))
     tp_name, tp_price, tp_dist = targets[tp_at]
     return _with_menus(
@@ -329,6 +423,16 @@ def place_strategy_order(
             "",
             sl_at,
             tp_at,
+            (),
+            (),
+            None,
+            None,
+            tp_price,
+            "",
+            "",
+            tp_name,
+            (1.0,),
+            (None, None, tp_at),
         ),
         stops,
         targets,

@@ -115,6 +115,10 @@ def evaluate_model(
     sl_mode: str = "fixed",
     allow_agent_sl_mode: bool = True,
     sl_mode_defer_threshold: float = 0.1,
+    allow_agent_tp_mode: bool = False,
+    tp_mode_defer_threshold: float = 0.1,
+    allow_multi_tp: bool = False,
+    tp_breakeven_alpha: float = 0.5,
 ) -> dict[str, Any]:
     """Walk a trained RL ``model`` over *bars*/*features* and collect trades.
 
@@ -184,6 +188,10 @@ def evaluate_model(
         sl_mode=sl_mode,
         allow_agent_sl_mode=allow_agent_sl_mode,
         sl_mode_defer_threshold=sl_mode_defer_threshold,
+        allow_agent_tp_mode=allow_agent_tp_mode,
+        tp_mode_defer_threshold=tp_mode_defer_threshold,
+        allow_multi_tp=allow_multi_tp,
+        tp_breakeven_alpha=tp_breakeven_alpha,
     )
 
     obs, _ = env.reset()

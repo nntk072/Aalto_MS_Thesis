@@ -24,28 +24,105 @@ _MODE_INDEX: dict[str, dict[str, int]] = {
     "5": {"stop": 1, "risk": 2, "target": 3, "exit": 4},
     "6_dir": {"direction": 0, "stop": 2, "risk": 3, "target": 4, "exit": 5},
     "6_sl": {"stop": 1, "risk": 2, "target": 3, "sl_mode": 4, "exit": 5},
+    "6_tp": {"stop": 1, "risk": 2, "target": 3, "tp_mode": 4, "exit": 5},
     "7": {"direction": 0, "stop": 2, "risk": 3, "target": 4, "sl_mode": 5, "exit": 6},
+    "7_tp": {"direction": 0, "stop": 2, "risk": 3, "target": 4, "tp_mode": 5, "exit": 6},
+    "8": {
+        "direction": 0,
+        "stop": 2,
+        "risk": 3,
+        "target": 4,
+        "sl_mode": 5,
+        "tp_mode": 6,
+        "exit": 7,
+    },
+    "10": {
+        "direction": 0,
+        "stop": 2,
+        "risk": 3,
+        "tp1_sel": 4,
+        "tp2_sel": 5,
+        "tp3_sel": 6,
+        "target": 4,
+        "sl_mode": 7,
+        "tp_mode": 8,
+        "exit": 9,
+    },
+    "12": {
+        "direction": 0,
+        "stop": 2,
+        "risk": 3,
+        "tp1_sel": 4,
+        "tp2_sel": 5,
+        "tp3_sel": 6,
+        "target": 4,
+        "sl_mode": 7,
+        "tp_mode": 8,
+        "z1": 9,
+        "z2": 10,
+        "exit": 11,
+    },
 }
-_PRIOR_ORDER: tuple[str, ...] = ("direction", "stop", "risk", "target", "sl_mode", "exit")
+_PRIOR_ORDER: tuple[str, ...] = (
+    "direction",
+    "stop",
+    "risk",
+    "target",
+    "sl_mode",
+    "tp_mode",
+    "exit",
+)
 
 
-def _layout_key(width: int, has_direction: bool, has_sl_mode: bool) -> str:
+def _layout_key(
+    width: int,
+    has_direction: bool = False,
+    has_sl_mode: bool = False,
+    has_tp_mode: bool = False,
+    has_multi_tp: bool = False,
+    has_simplex: bool = False,
+) -> str:
     if width == 1:
         return "1"
     if width == 5:
         return "5"
     if width == 6:
-        return "6_dir" if has_direction else "6_sl"
+        if has_direction:
+            return "6_dir"
+        if has_tp_mode:
+            return "6_tp"
+        return "6_sl"
     if width == 7:
+        if has_tp_mode and not has_sl_mode:
+            return "7_tp"
         return "7"
+    if width == 8:
+        return "8"
+    if width == 10:
+        return "10"
+    if width == 12:
+        return "12"
     raise ValueError(f"unsupported action width {width}")
 
 
 def mode_index(
-    name: str, width: int, has_direction: bool = False, has_sl_mode: bool = False
+    name: str,
+    width: int,
+    has_direction: bool = False,
+    has_sl_mode: bool = False,
+    has_tp_mode: bool = False,
+    has_multi_tp: bool = False,
+    has_simplex: bool = False,
 ) -> int:
     """Column of one prior name."""
-    key = _layout_key(width, has_direction, has_sl_mode)
+    key = _layout_key(
+        width,
+        has_direction,
+        has_sl_mode,
+        has_tp_mode,
+        has_multi_tp,
+        has_simplex,
+    )
     table = _MODE_INDEX.get(key)
     if table is None or name not in table:
         raise ValueError(f"no mode prior index for {name!r} at width {width} (layout {key})")

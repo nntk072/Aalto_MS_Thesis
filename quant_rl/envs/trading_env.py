@@ -148,6 +148,7 @@ _PRICE_TOL = 1e-4
 # Monotonic SL mode ordering: fixed → breakeven → trailing.
 # Used to advance the state machine only forward.
 _SL_MODE_RANK: dict[str, int] = {"fixed": 0, "breakeven": 1, "trailing": 2}
+_TP_MODE_RANK: dict[str, int] = {"fixed": 0, "breakeven": 1, "trailing": 2}
 
 
 def _at(values: np.ndarray[Any, Any], index: int) -> float:
@@ -161,25 +162,52 @@ def _decision_from_action(
     unit: np.ndarray[Any, Any],
     direction_offset: int,
     sl_mode_offset: int = 0,
+    tp_mode_offset: int = 0,
+    multi_tp_offset: int = 0,
+    simplex_offset: int = 0,
 ) -> dict[str, float]:
     """Raw box endpoints and the unit-interval coordinates of one action."""
     off = int(direction_offset)
+    target_width = 3 if multi_tp_offset else 1
     sm_off = int(sl_mode_offset)
-    return {
+    tm_off = int(tp_mode_offset)
+    sim_off = int(simplex_offset)
+    sl_idx = 3 + off + target_width
+    tp_idx = sl_idx + sm_off
+    z_idx = tp_idx + tm_off
+    exit_idx = z_idx + sim_off
+
+    result = {
         "action_direction": _at(raw, 0) if off else float("nan"),
         "action_intensity": _at(raw, off),
         "action_stop": _at(raw, 1 + off),
         "action_risk": _at(raw, 2 + off),
         "action_target": _at(raw, 3 + off),
-        "action_sl_mode": _at(raw, 4 + off) if sm_off else float("nan"),
-        "action_exit": _at(raw, 4 + off + sm_off),
+        "action_sl_mode": _at(raw, sl_idx) if sm_off else float("nan"),
+        "action_exit": _at(raw, exit_idx),
         "intensity_u": _at(unit, off),
         "stop_u": _at(unit, 1 + off),
         "risk_u": _at(unit, 2 + off),
         "target_u": _at(unit, 3 + off),
-        "sl_mode_u": _at(unit, 4 + off) if sm_off else float("nan"),
-        "exit_u": _at(unit, 4 + off + sm_off),
+        "sl_mode_u": _at(unit, sl_idx) if sm_off else float("nan"),
+        "exit_u": _at(unit, exit_idx),
     }
+    if multi_tp_offset:
+        result["action_tp1_sel"] = _at(raw, 3 + off)
+        result["action_tp2_sel"] = _at(raw, 4 + off)
+        result["action_tp3_sel"] = _at(raw, 5 + off)
+        result["tp1_sel_u"] = _at(unit, 3 + off)
+        result["tp2_sel_u"] = _at(unit, 4 + off)
+        result["tp3_sel_u"] = _at(unit, 5 + off)
+    if tm_off:
+        result["action_tp_mode"] = _at(raw, tp_idx)
+        result["tp_mode_u"] = _at(unit, tp_idx)
+    if sim_off:
+        result["action_z1"] = _at(raw, z_idx)
+        result["action_z2"] = _at(raw, z_idx + 1)
+        result["z1_u"] = _at(unit, z_idx)
+        result["z2_u"] = _at(unit, z_idx + 1)
+    return result
 
 
 class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, Any]]):
@@ -249,6 +277,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         risk_floor: float = 0.0005,
         allow_agent_sl_mode: bool = True,
         sl_mode_defer_threshold: float = 0.1,
+        allow_agent_tp_mode: bool = False,
+        tp_mode_defer_threshold: float = 0.1,
+        allow_multi_tp: bool = False,
+        tp_breakeven_alpha: float = 0.5,
+        tp_mode: str = "fixed",
+        tp_reference: str = "structural",
+        allow_simplex: bool = True,
         mtf: bool = False,
         mtf_windows: dict[str, int] | None = None,
     ):
@@ -407,6 +442,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.sl_mode = str(sl_mode or "fixed").lower()
         if self.sl_mode not in _SL_MODE_RANK:
             raise ValueError(f"Unknown sl_mode: {self.sl_mode!r}")
+        self.tp_mode = str(tp_mode or "fixed").lower()
+        if self.tp_mode not in _TP_MODE_RANK:
+            raise ValueError(f"Unknown tp_mode: {self.tp_mode!r}")
+        self.tp_reference = str(tp_reference or "structural")
         self.min_lot = min_lot
         self.max_lot = max_lot
         self.contract_size = contract_size
@@ -472,6 +511,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.direction_override_threshold = float(direction_override_threshold)
         self.allow_agent_sl_mode = bool(allow_agent_sl_mode)
         self.sl_mode_defer_threshold = float(sl_mode_defer_threshold)
+        self.allow_agent_tp_mode = bool(allow_agent_tp_mode)
+        self.tp_mode_defer_threshold = float(tp_mode_defer_threshold)
+        self.allow_multi_tp = bool(allow_multi_tp)
+        self.tp_breakeven_alpha = float(tp_breakeven_alpha)
+        self.allow_simplex = bool(allow_simplex)
         self.risk_floor = float(risk_floor)
         self._tickbook = tickbook
         self._fill_delay_ms = int(fill_delay_ms)
@@ -526,12 +570,15 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.strategy: TradingStrategy = strategy if strategy is not None else BaselineStrategy()
         self.strategy_actions = _strategy_actions
         self.sl_buffer_pts = float(sl_buffer_pts)
-        self._selected_tp_mode = "rr"
         self._selected_sl_anchor = 0.0
         self._selected_tp_fraction = 0.0
         self._selected_exit_mode = "structural"
         self._selected_sl_mode = "fixed"
         self._sl_mode_explicit = False
+        self._selected_tp_mode = self.tp_mode
+        self._tp_mode_explicit = False
+        self._selected_tp_selections = (-1.0, -1.0, -1.0)
+        self._selected_tp_z = (0.0, 0.0)
         self._decision_action = _empty_decision()
         self._entry_rejection_reason = ""
         self._session_entry_counts: dict[int, int] = {}
@@ -685,6 +732,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 5
                 + (1 if self.agent_direction_control else 0)
                 + (1 if self.allow_agent_sl_mode else 0)
+                + (1 if self.allow_agent_tp_mode else 0)
+                + (2 if self.allow_multi_tp else 0)
+                + (2 if (self.allow_multi_tp and self.allow_simplex) else 0)
             )
             self.action_space = spaces.Box(
                 low=np.full(n_dims, -1.0, dtype=np.float32),
@@ -829,6 +879,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._selected_exit_mode = "structural"
         self._selected_sl_mode = "fixed"
         self._sl_mode_explicit = False
+        self._selected_tp_mode = self.tp_mode
+        self._tp_mode_explicit = False
+        self._selected_tp_selections = (-1.0, -1.0, -1.0)
+        self._selected_tp_z = (0.0, 0.0)
         self._decision_action = _empty_decision()
         self._entry_rejection_reason = ""
         self._ep_start_equity = float(self.initial_balance)
@@ -1122,7 +1176,110 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             self._note_close(pnl)
             return
 
-        if self.position.tp_price is not None:
+        has_multi_levels = self.position is not None and (
+            self.position.tp1_price is not None
+            or self.position.tp2_price is not None
+            or self.position.tp3_price is not None
+        )
+        if has_multi_levels and self.position is not None:
+            pos = self.position
+            for slot_num in (1, 2, 3):
+                if self.position is None or pos.size <= 0:
+                    break
+                slot_px = getattr(pos, f"tp{slot_num}_price")
+                if slot_px is None:
+                    continue
+                hit_mask_bit = 1 << (slot_num - 1)
+                if pos.tp_hit_mask & hit_mask_bit:
+                    continue
+
+                slot_hit = False
+                if pos.direction == 1 and float(bar.high) >= float(slot_px):
+                    slot_hit = True
+                elif pos.direction == -1 and float(bar.low) <= float(slot_px):
+                    slot_hit = True
+
+                if slot_hit:
+                    # Check remaining active slots after this one
+                    remaining_slots = [
+                        s
+                        for s in (1, 2, 3)
+                        if s > slot_num and getattr(pos, f"tp{s}_price") is not None
+                    ]
+                    is_final = len(remaining_slots) == 0
+                    if is_final:
+                        close_size = pos.size
+                    else:
+                        init_size = float(pos.tp_initial_size or pos.size)
+                        active_slots_at_entry = []
+                        for s in (1, 2, 3):
+                            if (pos.tp_hit_mask & (1 << (s - 1))) or getattr(
+                                pos, f"tp{s}_price"
+                            ) is not None:
+                                active_slots_at_entry.append(s)
+                        if slot_num in active_slots_at_entry:
+                            idx_in_active = active_slots_at_entry.index(slot_num)
+                            frac = (
+                                pos.tp_lot_fractions[idx_in_active]
+                                if idx_in_active < len(pos.tp_lot_fractions)
+                                else (1.0 / len(active_slots_at_entry))
+                            )
+                        else:
+                            frac = 1.0 / max(1, len(pos.tp_lot_fractions))
+                        close_size = round(frac * init_size, 2)
+                        close_size = min(close_size, pos.size)
+                        if close_size <= 0:
+                            close_size = pos.size
+
+                    quote = self._sl_tp_fill_quote(int(pos.direction), float(slot_px))
+                    pnl, fill_price = self.broker.close_position(
+                        self.account,
+                        pos,
+                        quote,
+                        size=close_size,
+                    )
+                    pos.tp_hit_mask |= hit_mask_bit
+                    setattr(pos, f"tp{slot_num}_price", None)
+                    record = {
+                        "type": "tp_close" if pos.size <= 0 else "tp_partial_close",
+                        "pnl": pnl,
+                        "price": fill_price,
+                        "reason": f"structure_tp{slot_num}",
+                        "bar": idx,
+                        "time": log_time,
+                        "equity": self.account.equity,
+                        "tp_slot": slot_num,
+                        "size": close_size,
+                    }
+                    self._stamp_exit(record, fill_price)
+                    self.trade_log.append(record)
+                    self.sessions_with_trades.add(self._current_session_id())
+
+                    if pos.size <= 0:
+                        self.position = None
+                        self._note_close(pnl)
+                        return
+                    else:
+                        pos.tp_price = (
+                            pos.tp1_price
+                            if pos.tp1_price is not None
+                            else (pos.tp2_price if pos.tp2_price is not None else pos.tp3_price)
+                        )
+                        if self._breakeven_trigger_r > 0.0:
+                            buffer = self._breakeven_buffer_pts
+                            if pos.direction == 1:
+                                new_sl = pos.entry_price + buffer
+                                if pos.sl_price is None or new_sl > float(pos.sl_price):
+                                    pos.sl_price = new_sl
+                                    pos.breakeven_done = True
+                            else:
+                                new_sl = pos.entry_price - buffer
+                                if pos.sl_price is None or new_sl < float(pos.sl_price):
+                                    pos.sl_price = new_sl
+                                    pos.breakeven_done = True
+            if self.position is None:
+                return
+        elif self.position.tp_price is not None:
             tp_hit = False
             if self.position.direction == 1 and float(bar.high) >= self.position.tp_price:
                 tp_hit = True
@@ -1368,6 +1525,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     max_tp_distance=self._max_tp_here(),
                     rr_bounds=self.rr_ratio_range,
                     htf=tuple(self._mtf_windows.keys()),
+                    tp_selections=(self._selected_tp_selections if self.allow_multi_tp else None),
+                    tp_z=(
+                        self._selected_tp_z
+                        if (self.allow_multi_tp and self.allow_simplex)
+                        else None
+                    ),
+                    allow_multi_tp=self.allow_multi_tp,
+                    allow_simplex=self.allow_simplex,
                 )
                 sl_price = placed.sl_price
                 tp_price = placed.tp_price
@@ -1468,8 +1633,50 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                         self.position.stop_distance = abs(entry_price - float(placed.sl_price))
                         # planned_rr is the structural ratio. rr_ratio stays empty.
                         self.position.rr_ratio = None
+                        self.position.tp1_price = placed.tp1_price
+                        self.position.tp2_price = placed.tp2_price
+                        self.position.tp3_price = placed.tp3_price
+                        self.position.tp1_ref = placed.tp1_ref
+                        self.position.tp2_ref = placed.tp2_ref
+                        self.position.tp3_ref = placed.tp3_ref
+                        self.position.tp_lot_fractions = placed.tp_lot_fractions
+                        self.position.tp_initial_price = (
+                            placed.tp3_price if placed.tp3_price is not None else placed.tp_price
+                        )
                     else:
                         self.position.rr_ratio = rr_ratio
+                        self.position.tp3_price = tp_price
+                        self.position.tp_initial_price = tp_price
+                        self.position.tp_lot_fractions = (1.0,)
+                        if feat_row is not None and tp_price is not None:
+                            try:
+                                from quant_rl.backtest.entry_levels import _target_menu
+
+                                sl_d = (
+                                    abs(entry_price - float(sl_price))
+                                    if sl_price is not None
+                                    else 0.0
+                                )
+                                targets = _target_menu(
+                                    direction=discrete_action,
+                                    entry_price=entry_price,
+                                    row=feat_row,
+                                    stop_dist=sl_d,
+                                    max_tp_distance=float("inf"),
+                                    rr_bounds=None,
+                                    htf=tuple(self._mtf_windows.keys()),
+                                )
+                                if targets:
+                                    self.position.entry_tp_ref_price = float(targets[0][1])
+                                    self.position.tp_ref = str(targets[0][0])
+                                    self.position.tp3_ref = str(targets[0][0])
+                            except Exception:
+                                pass
+                    self.position.tp_initial_size = float(self.position.size)
+                    self.position.tp_mode = self._selected_tp_mode
+                    self.position.tp_mode_overridden = self._tp_mode_explicit
+                    self.position.tp_breakeven_done = False
+                    self.position.tp_hit_mask = 0
                     self.position.entry_timestamp = bar_time
                     atr_val = feat_row.get("atr_5", feat_row.get("atr", np.nan))
                     self.position.entry_atr = (
@@ -1935,6 +2142,44 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             return "trailing"
         return "fixed"
 
+    def _default_tp_mode(self, pos: Position | None = None) -> str:
+        """State-machine default TP mode. fixed -> breakeven -> trailing (monotonic)."""
+        if pos is None:
+            pos = self.position
+        if pos is None:
+            return "fixed"
+        sl0 = pos.sl_initial_price if pos.sl_initial_price is not None else pos.sl_price
+        if sl0 is None:
+            return "fixed"
+        risk_pts = abs(pos.entry_price - float(sl0))
+        # breakeven: favorable excursion >= 0.5 * risk
+        if risk_pts > 0 and float(pos.best_favorable) >= 0.5 * risk_pts:
+            # Check for new swing -> trailing
+            new_swing = False
+            if pos.entry_last_swing_high is not None or pos.entry_last_swing_low is not None:
+                cur_high = self._finite(
+                    self._feature_row_at(self.step_idx) if self.step_idx >= 0 else None,
+                    "last_swing_high",
+                )
+                cur_low = self._finite(
+                    self._feature_row_at(self.step_idx) if self.step_idx >= 0 else None,
+                    "last_swing_low",
+                )
+                if (
+                    pos.direction == 1
+                    and cur_high is not None
+                    and pos.entry_last_swing_high is not None
+                ):
+                    new_swing = float(cur_high) > float(pos.entry_last_swing_high)
+                elif (
+                    pos.direction == -1
+                    and cur_low is not None
+                    and pos.entry_last_swing_low is not None
+                ):
+                    new_swing = float(cur_low) < float(pos.entry_last_swing_low)
+            return "trailing" if new_swing else "breakeven"
+        return "fixed"
+
     def _decode_action(
         self,
         action: int | float | np.ndarray[Any, Any],
@@ -1965,9 +2210,6 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             raw = np.clip(arr, -1.0, 1.0)
             u = 0.5 * (raw + 1.0)
             direction_offset = 1 if self.agent_direction_control and u.size >= 6 else 0
-            sl_mode_offset = (
-                1 if self.allow_agent_sl_mode and u.size >= 5 + direction_offset + 1 else 0
-            )
             intensity = float(u[direction_offset]) if u.size > direction_offset else 0.0
             entry_threshold = self.entry_intensity_threshold
             if feat_row is None:
@@ -1984,23 +2226,67 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 )
                 if discrete_action == 0 and ctx not in (-1, 1):
                     self._entry_diag["hold_no_context"] += 1
+            # Calculate target width (1 for single TP, 3 for multi-tp)
+            target_width = 3 if self.allow_multi_tp else 1
+
+            # sl_mode: present if flag set AND the vector still fits exit after it
+            # (sl_mode comes after the TP dimensions, exit stays last)
+            sl_base = 3 + direction_offset + target_width
+            sl_mode_offset = 1 if self.allow_agent_sl_mode and u.size >= sl_base + 2 else 0
+            # tp_mode: present only if sl_mode also present (tp_mode comes after sl_mode)
+            tp_mode_offset = (
+                1 if self.allow_agent_tp_mode and u.size >= sl_base + sl_mode_offset + 2 else 0
+            )
+            # simplex z1/z2: present only with multi_tp enabled
+            simplex_offset = (
+                2
+                if (
+                    self.allow_multi_tp
+                    and self.allow_simplex
+                    and u.size >= sl_base + sl_mode_offset + tp_mode_offset + 3
+                )
+                else 0
+            )
+
+            # Compute indices
+            sl_idx = sl_base
+            tp_idx = sl_idx + sl_mode_offset
+            z_idx = tp_idx + tp_mode_offset
+            exit_idx = z_idx + simplex_offset
+
+            # Extract stop/risk (indices unchanged regardless of target_width)
             if u.size >= 4 + direction_offset:
                 sl_raw = float(raw[1 + direction_offset])
                 self._selected_sl_anchor = sl_raw + 1.0
                 r_lo, r_hi = self.risk_frac_range
                 risk_frac = r_lo + float(u[2 + direction_offset]) * (r_hi - r_lo)
-                self._selected_tp_fraction = float(u[3 + direction_offset])
-                rr_ratio = self._selected_tp_fraction
+                if self.allow_multi_tp:
+                    # Extract tp1_sel, tp2_sel, tp3_sel (raw unit-interval 0..1)
+                    self._selected_tp_selections = (
+                        float(u[3 + direction_offset]),
+                        float(u[4 + direction_offset]),
+                        float(u[5 + direction_offset]),
+                    )
+                    # rr_ratio from tp3 (primary TP slot) for legacy downstream use
+                    self._selected_tp_fraction = float(u[5 + direction_offset])
+                    rr_ratio = self._selected_tp_fraction
+                else:
+                    self._selected_tp_fraction = float(u[3 + direction_offset])
+                    rr_ratio = self._selected_tp_fraction
+                    self._selected_tp_selections = (-1.0, -1.0, -1.0)
             else:
                 risk_frac = self.risk_frac_range[0]
                 rr_ratio = 0.0
-            exit_at = 4 + direction_offset + sl_mode_offset
-            if u.size > exit_at and self.allow_ema_exit:
-                self._selected_exit_mode = "ema_21" if float(u[exit_at]) >= 0.5 else "structural"
+
+            # Extract exit dim
+            if u.size > exit_idx and self.allow_ema_exit:
+                self._selected_exit_mode = "ema_21" if float(u[exit_idx]) >= 0.5 else "structural"
+
+            # Decode sl_mode
             self._selected_sl_mode = "structural"
             self._sl_mode_explicit = False
-            if sl_mode_offset and u.size > 4 + direction_offset:
-                u_sl = float(u[4 + direction_offset])
+            if sl_mode_offset and u.size > sl_idx:
+                u_sl = float(u[sl_idx])
                 if abs(u_sl - 0.5) < self.sl_mode_defer_threshold:
                     self._selected_sl_mode = self._default_sl_mode()
                 else:
@@ -2008,8 +2294,39 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     self._sl_mode_explicit = True
             else:
                 self._selected_sl_mode = self.sl_mode
-            self._decision_action = _decision_from_action(raw, u, direction_offset, sl_mode_offset)
-            tp_mode = "rr"
+
+            # Decode tp_mode
+            self._tp_mode_explicit = False
+            if tp_mode_offset and u.size > tp_idx:
+                from quant_rl.envs.tp_decoders import decode_tp_mode
+
+                u_tp = float(u[tp_idx])
+                decoded, explicit = decode_tp_mode(
+                    u_tp, self.tp_mode, self.tp_mode_defer_threshold, is_unit=True
+                )
+                self._selected_tp_mode = decoded
+                self._tp_mode_explicit = explicit
+                tp_mode = decoded
+            else:
+                # No tp_mode dim: keep the legacy sentinel so flag-off decode stays "rr".
+                tp_mode = self.tp_mode if self.allow_agent_tp_mode else "rr"
+                self._selected_tp_mode = tp_mode
+
+            # Decode z1/z2 for simplex
+            if simplex_offset and u.size > z_idx + 1:
+                self._selected_tp_z = (float(u[z_idx]), float(u[z_idx + 1]))
+            else:
+                self._selected_tp_z = (0.0, 0.0)
+
+            self._decision_action = _decision_from_action(
+                raw,
+                u,
+                direction_offset,
+                sl_mode_offset,
+                tp_mode_offset=tp_mode_offset,
+                multi_tp_offset=(target_width - 1),  # 2 if multi_tp else 0
+                simplex_offset=simplex_offset,
+            )
         elif self.continuous_actions:
             if isinstance(action, np.ndarray):
                 action_value = float(action[0]) if action.size > 0 else 0.0
@@ -2768,6 +3085,84 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 if pos.sl_price is None or new_sl < float(pos.sl_price):
                     pos.sl_price = new_sl
 
+    def _reorder_tp_levels_safe(self, pos: Position) -> None:
+        """Ensure tp1 < tp2 < tp3 for long (or tp3 < tp2 < tp1 for short) after adjustment."""
+        if pos.direction == 1:
+            # Long: TP1 < TP2 < TP3
+            prices = [pos.tp1_price, pos.tp2_price, pos.tp3_price]
+            active = [i for i, p in enumerate(prices) if p is not None]
+            if len(active) >= 2:
+                for i in range(len(active) - 1):
+                    ai, bi = active[i], active[i + 1]
+                    p_ai = prices[ai]
+                    p_bi = prices[bi]
+                    if p_ai is not None and p_bi is not None and p_ai >= p_bi:
+                        # Clamp the nearer TP to be strictly less than the farther one
+                        prices[ai] = p_bi - _PRICE_TOL
+                        setattr(pos, f"tp{ai + 1}_price", p_ai)
+        elif pos.direction == -1:
+            # Short: TP3 < TP2 < TP1
+            prices = [pos.tp1_price, pos.tp2_price, pos.tp3_price]
+            active = [i for i, p in enumerate(prices) if p is not None]
+            if len(active) >= 2:
+                for i in range(len(active) - 1):
+                    ai, bi = active[i], active[i + 1]
+                    p_ai = prices[ai]
+                    p_bi = prices[bi]
+                    if p_ai is not None and p_bi is not None and p_ai <= p_bi:
+                        # Clamp the nearer TP to be strictly greater than the farther one
+                        prices[ai] = p_bi + _PRICE_TOL
+                        setattr(pos, f"tp{ai + 1}_price", p_ai)
+
+    def _apply_tp_breakeven(self, pos: Position, favorable: float) -> None:
+        """Tighten nearest active TP to entry + alpha*R. Only tightens; never widens."""
+        if not self.allow_agent_tp_mode or pos.tp_breakeven_done:
+            return
+        sl0 = pos.sl_initial_price if pos.sl_initial_price is not None else pos.sl_price
+        if sl0 is None:
+            return
+        risk_pts = abs(pos.entry_price - float(sl0))
+        if risk_pts <= 0:
+            return
+        alpha = self.tp_breakeven_alpha  # config field, default 0.5
+        if pos.direction == 1:
+            new_tp = pos.entry_price + alpha * risk_pts
+        else:
+            new_tp = pos.entry_price - alpha * risk_pts
+        # Apply only to nearest active TP (tp1 if active, else tp2, else tp3)
+        for attr in ("tp1_price", "tp2_price", "tp3_price"):
+            current = getattr(pos, attr)
+            if current is not None:
+                if pos.direction == 1 and new_tp < float(current):
+                    setattr(pos, attr, new_tp)
+                    pos.tp_breakeven_done = True
+                elif pos.direction == -1 and new_tp > float(current):
+                    setattr(pos, attr, new_tp)
+                    pos.tp_breakeven_done = True
+                break  # only nearest active TP
+
+    def _apply_tp_trailing(self, pos: Position, feat_row: Any) -> None:
+        """Monotonically move TPs toward profit following the local swing."""
+        if not self.allow_agent_tp_mode or pos.tp_mode != "trailing":
+            return
+        if pos.direction == 1:
+            swing = self._finite(feat_row, "last_swing_high")
+            if swing is not None:
+                # For each active TP: move toward profit monotonically (only increase for long)
+                for attr in ("tp1_price", "tp2_price", "tp3_price"):
+                    current = getattr(pos, attr)
+                    if current is not None and float(swing) > float(current):
+                        setattr(pos, attr, float(swing))
+        elif pos.direction == -1:
+            swing = self._finite(feat_row, "last_swing_low")
+            if swing is not None:
+                for attr in ("tp1_price", "tp2_price", "tp3_price"):
+                    current = getattr(pos, attr)
+                    if current is not None and float(swing) < float(current):
+                        setattr(pos, attr, float(swing))
+        # Revalidate ordering after trailing adjustment
+        self._reorder_tp_levels_safe(pos)
+
     def _apply_position_guards(
         self,
         bar: BarView,
@@ -2808,6 +3203,15 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         if pos.sl_mode != "fixed":
             self._apply_breakeven(pos, pos.best_favorable)
         self._apply_trailing_stop(pos, feat_row if feat_row is not None else bar)
+        # Advance the TP mode state machine (monotonic: fixed → breakeven → trailing).
+        if self.allow_agent_tp_mode and not pos.tp_mode_overridden:
+            default_tp = self._default_tp_mode(pos)
+            if _TP_MODE_RANK.get(default_tp, 0) > _TP_MODE_RANK.get(pos.tp_mode, 0):
+                pos.tp_mode = default_tp
+        if self.allow_agent_tp_mode and pos.tp_mode != "fixed":
+            self._apply_tp_breakeven(pos, pos.best_favorable)
+        if self.allow_agent_tp_mode:
+            self._apply_tp_trailing(pos, feat_row if feat_row is not None else bar)
         thresh = self._eod_progress_atr * float(pos.entry_atr or 0.0)
         if thresh > 0.0 and (favorable - pos.last_progress_favorable) >= thresh:
             pos.last_progress_favorable = favorable

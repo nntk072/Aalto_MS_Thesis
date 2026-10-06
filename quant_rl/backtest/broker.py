@@ -68,6 +68,20 @@ class Position:
     entry_last_swing_low: float | None = None
     sl_mode: str = "fixed"
     sl_mode_overridden: bool = False
+    tp_initial_size: float | None = None
+    tp_mode: str = "fixed"
+    tp_mode_overridden: bool = False
+    tp_breakeven_done: bool = False
+    tp_initial_price: float | None = None
+    tp1_price: float | None = None
+    tp2_price: float | None = None
+    tp3_price: float | None = None
+    tp1_ref: str = ""
+    tp2_ref: str = ""
+    tp3_ref: str = ""
+    tp_lot_fractions: tuple[float, ...] = ()
+    tp_hit_mask: int = 0
+    entry_tp_ref_price: float | None = None
 
 
 @dataclass
@@ -121,8 +135,9 @@ class Broker:
         acc: AccountState,
         position: Position,
         quote: Quote,
+        size: float | None = None,
     ) -> tuple[float, float]:
-        """Close an open position and return (pnl, fill_price).
+        """Close an open position (or part of it) and return (pnl, fill_price).
 
         Long closes fill at bid; short closes fill at ask.
         Commission is deducted from P&L before booking to the account.
@@ -133,11 +148,19 @@ class Broker:
         bid, ask = quote
         # Closing direction is opposite to the position direction
         fill = self.cost_model.fill_price(bid, ask, -position.direction)
-        cost = self.cost_model.total_cost(position.size)
+        close_size = position.size if size is None else min(float(size), position.size)
+        cost = self.cost_model.total_cost(close_size)
         pnl = (
             fill - position.entry_price
-        ) * position.direction * position.size * self.contract_size - cost
+        ) * position.direction * close_size * self.contract_size - cost
         acc.close_trade(pnl)
+        position.size -= close_size
+        if position.size <= 1e-9:
+            position.size = 0.0
+            position.margin_used = 0.0
+        else:
+            position.margin_used = self.required_margin(position.entry_price, position.size)
+            self.mark_to_market(acc, position, quote)
         return pnl, fill
 
     def mark_to_market(
