@@ -609,6 +609,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._last_realized_close_pnl: float | None = None
         self._last_realized_close_r: float | None = None
         self._opened_this_step = False
+        self._trigger_requested_this_step = False
         self._debug_trace = False
         self._debug_window: dict[str, Any] | None = None
         bind = getattr(self.strategy, "bind_columns", None)
@@ -2504,6 +2505,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._last_realized_close_r = None
         self._pending_realized_r = None
         self._opened_this_step = False
+        self._trigger_requested_this_step = False
 
         # Fill quote for next action (latency-shifted: decision at bar t
         # fills at the quote of bar t + fill_latency_bars, not t + 1)
@@ -2533,6 +2535,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             elif action_requested:
                 entry_candidate = entry_machine.request_trigger()
                 if entry_candidate is not None:
+                    self._trigger_requested_this_step = True
                     discrete_action = entry_candidate.direction
                     self._decision_action["action_direction"] = float(entry_candidate.direction)
                 else:
@@ -2920,6 +2923,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         or trade-log entry with no backing bucket.
         """
         self._entry_diag[_REJECTION_COUNTERS[reason]] += 1
+        # A refusal that arrives after PPO requested an ARMED trigger counts as
+        # a trigger refusal, so the arm->trigger conversion rate is measurable.
+        if self._trigger_requested_this_step and self.entry_state_machine is not None:
+            self.entry_state_machine.trigger_refused += 1
         self._entry_rejection_reason = reason
 
     def _in_open_blackout(self, session_id: int) -> bool:
@@ -3583,3 +3590,37 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             obs["vae_z"] = vae_z
 
         return obs
+
+    def entry_state_diagnostics(self) -> dict[str, Any]:
+        """Aggregate entry-state lifecycle counters for reporting.
+
+        Reads the FSM's own counters (never infers them from feature data), so
+        the reporting surface is owned by the object that owns the lifecycle.
+        Returns an empty dict when the FSM is off (A3), so callers can merge
+        unconditionally.
+        """
+        machine = self.entry_state_machine
+        if machine is None:
+            return {}
+        total_steps = max(1, int(self.episode_step_count))
+        visits = dict(machine.visits)
+        armed_bars = max(1, machine.armed_bars)
+        return {
+            "entry_state_machine": True,
+            "entry_state_visits": visits,
+            "entry_state_share": {
+                state: round(count / total_steps, 6) for state, count in visits.items()
+            },
+            "candidate_created": int(machine.candidate_created),
+            "candidate_expired": int(machine.candidate_expired),
+            "candidate_invalidated": int(machine.candidate_invalidated),
+            "trigger_requested": int(machine.trigger_requested),
+            "trigger_refused": int(machine.trigger_refused),
+            "entered": int(machine.entered),
+            "closed": int(machine.closed),
+            "armed_bars": int(machine.armed_bars),
+            "arm_to_trigger_rate": round(machine.entered / armed_bars, 6),
+            "trigger_refusal_rate": round(
+                machine.trigger_refused / max(1, machine.trigger_requested), 6
+            ),
+        }

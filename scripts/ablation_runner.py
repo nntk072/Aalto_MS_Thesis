@@ -133,13 +133,28 @@ def evaluate_oos(
     cfg: DictConfig,
     reward: str,
 ) -> dict[str, Any]:
-    """Deterministic OOS episode scored via ``build_run_report``."""
+    """Deterministic OOS episode scored via ``build_run_report``.
+
+    Returns the report plus the raw env artifacts (trade log, entry
+    diagnostics, FSM lifecycle) so the caller can write per-seed full
+    artifacts for debugging without re-running the episode.
+    """
     env = make_env(bars, features, cfg, algo=algo, reward=reward, episodic=False)
     metrics = run_episode(
         env,
         action_fn=make_action_fn(model, continuous_actions=algo == "sac"),
     )
-    return build_run_report(metrics, env.trade_log)
+    report = build_run_report(metrics, env.trade_log)
+    report["_artifacts"] = {
+        "trade_log": list(getattr(env, "trade_log", [])),
+        "entry_diag": dict(getattr(env, "_entry_diag", {})),
+        "entry_state_diagnostics": (
+            env.entry_state_diagnostics()
+            if callable(getattr(env, "entry_state_diagnostics", None))
+            else {}
+        ),
+    }
+    return report
 
 
 def train_and_score_variant(
@@ -154,6 +169,8 @@ def train_and_score_variant(
     reward: str,
     train_end: str,
     test_start: str,
+    out_dir: str,
+    name: str,
 ) -> dict[str, Any]:
     """Train one seed of a variant and return the OOS report (+ metadata)."""
     algo = str(variant.get("algo", defaults.get("algo", "ppo")))
@@ -204,6 +221,13 @@ def train_and_score_variant(
         cfg=cfg,
         reward=reward,
     )
+    artifacts = oos.pop("_artifacts", {})
+    action_space = getattr(env, "action_space", None)
+    action_space_width = (
+        int(action_space.shape[0])
+        if action_space is not None and hasattr(action_space, "shape")
+        else None
+    )
     oos.update(
         {
             "status": "ok",
@@ -213,8 +237,37 @@ def train_and_score_variant(
             "include_pd_context": include_pd,
             "seed": seed,
             "steps": steps,
+            "action_space_width": action_space_width,
+            "observation_account_dim": int(cfg.env.get("account_dim", 0))
+            if "account_dim" in cfg.env
+            else None,
+            "env_flags": {
+                key: bool(cfg.env.get(key, False))
+                for key in (
+                    "strategy_actions",
+                    "allow_agent_sl_mode",
+                    "allow_agent_tp_mode",
+                    "allow_multi_tp",
+                    "entry_state_machine",
+                    "entry_state_observation",
+                    "arm_requires_retest",
+                )
+            },
         }
     )
+    if artifacts:
+        art_dir = Path(out_dir) / name / f"seed{seed}"
+        art_dir.mkdir(parents=True, exist_ok=True)
+        (art_dir / "trade_log.json").write_text(
+            json.dumps(artifacts["trade_log"], indent=2, default=str)
+        )
+        (art_dir / "entry_diag.json").write_text(json.dumps(artifacts["entry_diag"], indent=2))
+        (art_dir / "entry_state.json").write_text(
+            json.dumps(artifacts["entry_state_diagnostics"], indent=2, default=str)
+        )
+        (art_dir / "config.json").write_text(
+            json.dumps(OmegaConf.to_container(cfg, resolve=True), indent=2, default=str)
+        )
     return oos
 
 
@@ -312,6 +365,8 @@ def main() -> None:
                 reward=args.reward,
                 train_end=train_end,
                 test_start=test_start,
+                out_dir=str(out_root),
+                name=name,
             )
             seed_reports.append(report)
 

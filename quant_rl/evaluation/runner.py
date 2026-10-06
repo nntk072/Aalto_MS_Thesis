@@ -62,6 +62,22 @@ def run_episode(
     extras = {
         f"pnl_dist_{k}": float(v) for k, v in asdict(dist).items() if isinstance(v, (int, float))
     }
+    # Entry-state lifecycle + refusal funnel, so a collapsing FSM is
+    # distinguishable from a working one in the report (Tier 1 capture).
+    entry_diag = getattr(env, "_entry_diag", None)
+    if entry_diag:
+        opened = float(entry_diag.get("opened", 0))
+        attempts = opened + sum(v for k, v in entry_diag.items() if k.startswith("rejected_"))
+        extras["entry_opened"] = float(opened)
+        extras["entry_attempts"] = float(attempts)
+        extras["entry_rejection_rate"] = round(1.0 - opened / attempts, 6) if attempts else 0.0
+        for key, value in entry_diag.items():
+            if key.startswith("rejected_"):
+                extras[f"entry_{key}"] = float(value)
+                extras[f"entry_{key}_rate"] = round(value / attempts, 6) if attempts else 0.0
+    state_diag = getattr(env, "entry_state_diagnostics", None)
+    if callable(state_diag):
+        extras.update(state_diag())
 
     return compute_metrics(
         equities,

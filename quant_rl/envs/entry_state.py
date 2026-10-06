@@ -91,11 +91,36 @@ class EntryStateMachine:
         self.arm_requires_retest = bool(arm_requires_retest)
         self.state: EntryState = "FLAT"
         self.candidate: EntryCandidate | None = None
+        # Per-episode lifecycle counters. Kept here (not on the env) so the
+        # FSM owns its own reporting surface; the env only reads them out.
+        self.visits: dict[EntryState, int] = {
+            "FLAT": 0,
+            "CANDIDATE": 0,
+            "ARMED": 0,
+            "IN_POSITION": 0,
+        }
+        self.candidate_created: int = 0
+        self.candidate_expired: int = 0
+        self.candidate_invalidated: int = 0
+        self.trigger_requested: int = 0
+        self.trigger_refused: int = 0
+        self.entered: int = 0
+        self.closed: int = 0
+        self.armed_bars: int = 0
 
     def reset(self) -> None:
         """Return to the initial state at an episode boundary."""
         self.state = "FLAT"
         self.candidate = None
+        self.visits = {"FLAT": 0, "CANDIDATE": 0, "ARMED": 0, "IN_POSITION": 0}
+        self.candidate_created = 0
+        self.candidate_expired = 0
+        self.candidate_invalidated = 0
+        self.trigger_requested = 0
+        self.trigger_refused = 0
+        self.entered = 0
+        self.closed = 0
+        self.armed_bars = 0
 
     def observe(self, evidence: EntryEvidence) -> EntryState:
         """Apply one bar of evidence without changing executed trade state."""
@@ -113,7 +138,8 @@ class EntryStateMachine:
                     origin_bar=evidence.bar,
                     setup_levels_snapshot=evidence.setup_levels_snapshot,
                 )
-                self.state = "CANDIDATE"
+                self.candidate_created += 1
+                self._enter("CANDIDATE")
             return self.state
 
         candidate = self.candidate
@@ -127,41 +153,47 @@ class EntryStateMachine:
             evidence.evidence_detected or evidence.retest_confirmed
         )
         if evidence.invalidated or opposing_evidence:
+            self.candidate_invalidated += 1
             self._clear()
             return self.state
 
         if self.state == "CANDIDATE":
             age = evidence.bar - candidate.origin_bar
             if age > self.candidate_max_age_bars:
+                self.candidate_expired += 1
                 self._clear()
             elif evidence.arm_condition and (
                 not self.arm_requires_retest
                 or (evidence.retest_confirmed and evidence.direction == candidate.direction)
             ):
-                self.state = "ARMED"
+                self._enter("ARMED")
         return self.state
 
     def request_trigger(self) -> EntryCandidate | None:
         """Return the armed candidate for an attempt without consuming it."""
         if self.state != "ARMED":
             return None
+        self.trigger_requested += 1
         return self.candidate
 
     def mark_entered(self) -> None:
         """Record successful position creation for the armed candidate."""
         if self.state != "ARMED" or self.candidate is None:
             raise RuntimeError("only an armed candidate can enter a position")
-        self.state = "IN_POSITION"
+        self.entered += 1
+        self._enter("IN_POSITION")
 
     def mark_closed(self) -> None:
         """Clear lifecycle state after the environment closes the position."""
         if self.state != "IN_POSITION":
             raise RuntimeError("only an open position can be marked closed")
+        self.closed += 1
         self._clear()
 
     def invalidate(self) -> None:
         """Clear an unexecuted opportunity."""
         if self.state in ("CANDIDATE", "ARMED"):
+            self.candidate_invalidated += 1
             self._clear()
 
     def is_armed(self) -> bool:
@@ -175,3 +207,10 @@ class EntryStateMachine:
     def _clear(self) -> None:
         self.state = "FLAT"
         self.candidate = None
+
+    def _enter(self, state: EntryState) -> None:
+        """Record a state transition and count bars spent in ARMED."""
+        if self.state == "ARMED":
+            self.armed_bars += 1
+        self.state = state
+        self.visits[state] += 1
