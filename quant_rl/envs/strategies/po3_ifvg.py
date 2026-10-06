@@ -7,6 +7,7 @@ from collections.abc import Iterable
 import numpy as np
 import pandas as pd
 
+from ..feature_row import FeatureRow
 from .base import TradingStrategy, columns_matching
 
 
@@ -80,7 +81,7 @@ class PO3IFVGStrategy(TradingStrategy):
             return True
         return self.entry_setup(row, direction)
 
-    def sl_reference(self, *, direction: int, row: pd.Series) -> float | None:
+    def sl_reference(self, *, direction: int, row: FeatureRow | pd.Series) -> float | None:
         """Long -> manipulation low, short -> manipulation high (Agent.md §14).
 
         Returns the raw reference level; the environment validates geometry

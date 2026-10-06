@@ -7,6 +7,7 @@ from collections.abc import Iterable
 import numpy as np
 import pandas as pd
 
+from ..feature_row import FeatureRow
 from .base import TradingStrategy, columns_matching
 
 _LOWER_RANK = {"": 0, "M1": 1, "M5": 2, "M15": 3}
@@ -99,7 +100,7 @@ class DistributionStrategy(TradingStrategy):
             return True
         return self.distribution_ready(row, direction)
 
-    def sl_reference(self, *, direction: int, row: pd.Series) -> float | None:
+    def sl_reference(self, *, direction: int, row: FeatureRow | pd.Series) -> float | None:
         """Long -> swept low, short -> swept high (Agent.md §14).
 
         Returns the raw reference level; the environment validates geometry

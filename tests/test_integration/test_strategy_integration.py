@@ -65,6 +65,7 @@ def test_full_strategy_pipeline_runs() -> None:
         strategy=PO3IFVGStrategy(enforce_gate=False),
         obs_window=10,
         initial_balance=100_000.0,
+        allow_agent_sl_mode=False,
     )
     obs, _ = env.reset()
     seq_width = int(obs["seq"].shape[1])

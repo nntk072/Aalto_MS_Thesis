@@ -110,6 +110,7 @@ class DSRReward:
         initial_balance: float = 100_000.0,
         breach: bool = False,
         realized_close_pnl: float | None = None,  # noqa: ARG002
+        realized_r: float | None = None,  # noqa: ARG002
         equity: float | None = None,  # noqa: ARG002
     ) -> float:
         """Compute the DSR reward for one step.
@@ -227,6 +228,7 @@ class PnLReward:
         initial_balance: float = 100_000.0,
         breach: bool = False,
         realized_close_pnl: float | None = None,
+        realized_r: float | None = None,
         equity: float | None = None,
     ) -> float:
         if breach:
@@ -286,6 +288,104 @@ class PnLReward:
             )
             for key, value in self._dsr.last_parts.items():
                 parts[key] = parts.get(key, 0.0) + self.dsr_weight * float(value)
+
+        raw = float(sum(parts.values()))
+        clipped = float(np.clip(raw, -10.0, 10.0))
+        self.last_parts = fit_reward_parts(parts, raw, clipped)
+        return clipped
+
+
+class RMultipleReward:
+    """Reward on realized R-multiples: maximise cumulative R, not Sharpe.
+
+    ``reward_mode: rr``. Each closed trade contributes its realized R, so the
+    agent is scored on the sum of R rather than on a risk-adjusted return or a
+    dollar P&L that is silently tied to position size.
+
+    This only means anything when sizing is fixed. Under fractional compounding
+    the same edge produces different dollar P&L as equity drifts, and the reward
+    would partly reward position size rather than decisions. With
+    ``env.fixed_risk_usd`` set, 1R is a known dollar amount, so cumulative R is
+    a clean, comparable objective.
+
+    A losing trade costs -1R by construction, so the agent is pushed toward a
+    positive hit rate rather than toward large positions.
+    """
+
+    def __init__(self, *, breach_penalty: float = -1.0, soft_band_weight: float = 0.05) -> None:
+        self.breach_penalty = float(breach_penalty)
+        self.soft_band_weight = float(soft_band_weight)
+        self._band_inside = _fresh_band_state()
+        self.cumulative_r = 0.0
+        self.last_parts: dict[str, float] = empty_reward_parts()
+
+    def reset(self) -> None:
+        self._band_inside = _fresh_band_state()
+        self.cumulative_r = 0.0
+
+    def __call__(
+        self,
+        step_pnl: float,
+        *,
+        daily_loss: float = 0.0,
+        daily_loss_limit: float = 5_000.0,
+        soft_daily_loss_limit: float | None = 2_000.0,
+        loss_from_initial: float = 0.0,
+        soft_max_loss_limit: float | None = 5_000.0,
+        max_loss_limit: float = 10_000.0,
+        trailing_dd: float = 0.0,
+        soft_trailing_dd_limit: float | None = 0.04,
+        trailing_dd_limit: float = 0.07,
+        initial_balance: float = 100_000.0,
+        breach: bool = False,
+        realized_close_pnl: float | None = None,
+        realized_r: float | None = None,
+        equity: float | None = None,
+    ) -> float:
+        if breach:
+            penalty = self.breach_penalty
+            self.last_parts = fit_reward_parts({"breach": penalty}, penalty, penalty)
+            return penalty
+
+        parts = empty_reward_parts()
+        # Only the close bar carries the trade's realized R; holding bars score 0,
+        # so the agent is never paid for sitting still.
+        if realized_r is not None and np.isfinite(realized_r):
+            parts["pnl"] = float(realized_r)
+            self.cumulative_r += float(realized_r)
+
+        eq = float(equity) if equity is not None else initial_balance
+        soft_start = (
+            float(soft_daily_loss_limit)
+            if soft_daily_loss_limit is not None and soft_daily_loss_limit > 0.0
+            else 0.01 * max(eq, 1.0)
+        )
+        # Soft penalties stay in dollars and are rescaled to R units via the fixed
+        # risk, so the trade term and the guardrail term share one scale.
+        parts["soft_daily"] = _charge_band_once(
+            self._band_inside,
+            "soft_daily",
+            daily_loss,
+            soft_start,
+            daily_loss_limit,
+            weight=self.soft_band_weight,
+        )
+        parts["soft_year"] = _charge_band_once(
+            self._band_inside,
+            "soft_year",
+            loss_from_initial,
+            soft_max_loss_limit,
+            max_loss_limit,
+            weight=self.soft_band_weight,
+        )
+        parts["soft_trailing"] = _charge_band_once(
+            self._band_inside,
+            "soft_trailing",
+            trailing_dd,
+            soft_trailing_dd_limit,
+            trailing_dd_limit,
+            weight=self.soft_band_weight,
+        )
 
         raw = float(sum(parts.values()))
         clipped = float(np.clip(raw, -10.0, 10.0))

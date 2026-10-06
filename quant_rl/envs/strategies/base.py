@@ -7,6 +7,8 @@ from collections.abc import Iterable
 
 import pandas as pd
 
+from ..feature_row import FeatureRow
+
 
 def columns_matching(columns: Iterable[object], stem: str) -> tuple[str, ...]:
     """Column names equal to ``stem`` or ending with ``_{stem}``."""
@@ -23,6 +25,8 @@ class TradingStrategy(ABC):
 
     name: str = "base"
 
+    manipulation_filter: str = "against"
+
     #: Feature columns that must exist in the feature matrix (Agent.md §11).
     required_features: tuple[str, ...] = ()
 
@@ -35,7 +39,7 @@ class TradingStrategy(ABC):
         """Whether an entry in ``direction`` is allowed at this bar."""
 
     @abstractmethod
-    def sl_reference(self, *, direction: int, row: pd.Series) -> float | None:
+    def sl_reference(self, *, direction: int, row: FeatureRow | pd.Series) -> float | None:
         """Structural SL reference price, or None if unavailable/invalid."""
 
     @abstractmethod

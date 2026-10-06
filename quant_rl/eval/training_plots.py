@@ -71,6 +71,15 @@ def _col(df: pd.DataFrame, *keywords: str) -> str | None:
     return None
 
 
+def _exact_col(df: pd.DataFrame, name: str) -> str | None:
+    """Column ``name`` or ``.../name``, not a longer key that only contains it."""
+    for column in df.columns:
+        text = str(column)
+        if text == name or text.endswith("/" + name):
+            return text
+    return None
+
+
 def _valid(df: pd.DataFrame, col: str) -> pd.DataFrame:
     return df[["timestep", col]].dropna()
 
@@ -210,6 +219,49 @@ def plot_kl_clip(df: pd.DataFrame, out_path: Path | str | None = None, dpi: int 
     return fig
 
 
+def plot_mode_means(
+    df: pd.DataFrame, out_path: Path | str | None = None, dpi: int = 150
+) -> Figure | None:
+    """Exit and direction means, with the prior value on a second axis.
+
+    Returns ``None`` when the log has none of those columns.
+    """
+    exit_col = _exact_col(df, "mean_exit")
+    direction_col = _exact_col(df, "mean_direction")
+    prior_col = _exact_col(df, "mode_prior")
+    present = [
+        col
+        for col in (exit_col, direction_col, prior_col)
+        if col is not None and len(_valid(df, col)) > 1
+    ]
+    if not present:
+        return None
+    _apply_white()
+    fig, ax = plt.subplots(figsize=(10, 4))
+    if exit_col and exit_col in present:
+        v = _valid(df, exit_col)
+        ax.plot(v["timestep"], v[exit_col], color=_C0, label="Exit mean")
+    if direction_col and direction_col in present:
+        v = _valid(df, direction_col)
+        ax.plot(v["timestep"], v[direction_col], color=_C2, label="Direction mean")
+    ax.set_ylabel("Action mean")
+    if prior_col and prior_col in present:
+        ax2 = ax.twinx()
+        v = _valid(df, prior_col)
+        ax2.plot(v["timestep"], v[prior_col], color=_C4, linestyle="--", label="Mode prior")
+        ax2.set_ylabel("Mode prior", color=_C4)
+        ax2.tick_params(axis="y", labelcolor=_C4)
+        ax2.legend(fontsize=8, loc="upper right")
+    ax.set_title("Mode means", fontweight="bold")
+    ax.set_xlabel("Timestep")
+    ax.legend(fontsize=8, loc="upper left")
+    ax.grid(True)
+    fig.tight_layout()
+    if out_path:
+        _save_fig(fig, Path(out_path), dpi)
+    return fig
+
+
 def plot_learning_rate(
     df: pd.DataFrame, out_path: Path | str | None = None, dpi: int = 150
 ) -> Figure:
@@ -323,6 +375,38 @@ def _save_training_html(df: pd.DataFrame, out_dir: Path) -> None:
         )
         _write(fig, "lr.html")
 
+    exit_col = _exact_col(df, "mean_exit")
+    direction_col = _exact_col(df, "mean_direction")
+    prior_col = _exact_col(df, "mode_prior")
+    mode_cols = [
+        col
+        for col in (exit_col, direction_col, prior_col)
+        if col is not None and len(_valid(df, col)) > 1
+    ]
+    if mode_cols:
+        fig = make_subplots(specs=[[{"secondary_y": prior_col in mode_cols}]])
+        if exit_col in mode_cols:
+            v = _valid(df, exit_col or "")
+            fig.add_trace(
+                go.Scatter(x=v["timestep"], y=v[exit_col], name="Exit mean"), secondary_y=False
+            )
+        if direction_col in mode_cols:
+            v = _valid(df, direction_col or "")
+            fig.add_trace(
+                go.Scatter(x=v["timestep"], y=v[direction_col], name="Direction mean"),
+                secondary_y=False,
+            )
+        if prior_col in mode_cols:
+            v = _valid(df, prior_col or "")
+            fig.add_trace(
+                go.Scatter(
+                    x=v["timestep"], y=v[prior_col], name="Mode prior", line=dict(dash="dash")
+                ),
+                secondary_y=True,
+            )
+        fig.update_layout(template=T, title="Mode means", xaxis_title="Timestep", height=400)
+        _write(fig, "mode_means.html")
+
 
 # ---------------------------------------------------------------------------
 # Entry point
@@ -350,6 +434,7 @@ def save_training_plots(
     plot_entropy_explvar(df, out_path=out_dir / "entropy_explvar.png", dpi=dpi)
     plot_kl_clip(df, out_path=out_dir / "kl_clip.png", dpi=dpi)
     plot_learning_rate(df, out_path=out_dir / "lr.png", dpi=dpi)
+    plot_mode_means(df, out_path=out_dir / "mode_means.png", dpi=dpi)
 
     if save_html:
         _save_training_html(df, out_dir)

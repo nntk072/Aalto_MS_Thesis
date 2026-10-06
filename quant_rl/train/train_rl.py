@@ -31,7 +31,8 @@ import torch
 from gymnasium import spaces
 from omegaconf import DictConfig, OmegaConf
 
-from quant_rl.config import load_config
+from quant_rl.backtest.costs import CostModel
+from quant_rl.config import apply_overrides, load_config
 from quant_rl.data.pipeline import build_tick_books, run_pipeline
 from quant_rl.data.split import get_split_config, make_train_mask, split_bars, split_train_test
 from quant_rl.data.ticks import TickBook, ticks_covering
@@ -68,10 +69,37 @@ from quant_rl.utils.device import get_device, scale_training_cfg
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
+_CONFIG_DIR = Path(__file__).parent.parent.parent / "config"
+
 _STRATEGY_CONFIGS = {
-    "po3_ifvg": "config/idea1_po3_ifvg.yaml",
-    "distribution": "config/idea2_distribution.yaml",
+    "po3_ifvg": _CONFIG_DIR / "idea1_po3_ifvg.yaml",
+    "distribution": _CONFIG_DIR / "idea2_distribution.yaml",
 }
+
+_RUN_LOG_NAME = "train.log"
+
+
+def _attach_run_log(run_dir: Path) -> Path | None:
+    """Mirror console logs into ``run_dir/train.log``.
+
+    Adds a file handler to the root logger without removing console handlers,
+    so the transcript lives beside the run's model and eval artifacts. A
+    second call for the same directory reuses the existing handler instead of
+    duplicating records or truncating the file. An unwritable directory
+    returns ``None`` rather than aborting training over logging.
+    """
+    name = str(run_dir / _RUN_LOG_NAME)
+    for handler in logging.getLogger().handlers:
+        if isinstance(handler, logging.FileHandler) and handler.baseFilename == name:
+            return Path(name)
+    try:
+        run_dir.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(name)
+    except OSError:
+        return None
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logging.getLogger().addHandler(handler)
+    return Path(name)
 
 
 def _strategy_risk_ranges(cfg: Any) -> tuple[tuple[float, float], tuple[float, float]]:
@@ -164,6 +192,7 @@ def _strategy_from_cfg(cfg: Any) -> tuple[Any, Any, float]:
         return BaselineStrategy(), None, 0.0
 
     name = str(strat_cfg.get("name", "baseline"))
+    manipulation_filter = str(strat_cfg.get("manipulation_filter", "against"))
     enforce_gate = bool(strat_cfg.get("entry", {}).get("enforce_gate", False))
     reward_cfg = strat_cfg.get("reward", {})
     weight = float(reward_cfg.get("strategy_weight", 0.0)) if reward_cfg else 0.0
@@ -176,6 +205,7 @@ def _strategy_from_cfg(cfg: Any) -> tuple[Any, Any, float]:
             enforce_gate=enforce_gate,
             require_price_retest=bool(ifvg_cfg.get("require_price_retest", True)),
         )
+        strategy.manipulation_filter = manipulation_filter
         reward = PO3Reward(
             entry_bonus=float(reward_cfg.get("entry_bonus", 0.01)),
             manipulation_penalty=float(reward_cfg.get("manipulation_penalty", 0.02)),
@@ -185,6 +215,7 @@ def _strategy_from_cfg(cfg: Any) -> tuple[Any, Any, float]:
         )
     elif name == "distribution":
         strategy = DistributionStrategy(enforce_gate=enforce_gate)
+        strategy.manipulation_filter = manipulation_filter
         reward_cfg = strat_cfg.get("reward", {}) or {}
         reward = DistributionReward(
             entry_bonus=float(reward_cfg.get("entry_bonus", 0.01)),
@@ -263,6 +294,7 @@ def _build_eval_common(
     eval_common = {
         "obs_window": cfg.env.obs_window,
         "initial_balance": cfg.account.initial_balance,
+        "cost_model": _cost_model(cfg),
         "guardrail_kwargs": _eval_guardrail_kwargs(cfg),
         "risk_frac_range": risk_frac_range,
         "rr_ratio_range": rr_ratio_range,
@@ -353,6 +385,27 @@ def _mtf_settings(cfg: Any, arch: str | None) -> tuple[bool, dict[str, int]]:
     return str(chosen) == "mtf", windows
 
 
+def _cost_model(cfg: Any) -> CostModel:
+    """Build the broker ``CostModel`` from ``costs.*``.
+
+    ``make_env`` used to leave the env on its ``COST_US100`` default, so the
+    ``costs.slippage_points: 5`` YAML value never reached fills. Spreads come
+    from the primary-symbol YAML key; slippage is quoted in price points.
+    """
+    costs = cfg.get("costs", {}) if hasattr(cfg, "get") else {}
+    if costs is None:
+        costs = {}
+    get = costs.get if hasattr(costs, "get") else lambda _k, _d=None: _d
+    primary = str(cfg.data.primary) if hasattr(cfg, "data") else "US100.cash"
+    spread_key = "spread_us500" if "US500" in primary else "spread_us100"
+    return CostModel(
+        spread_points=float(get(spread_key, 0.6)),
+        slippage_points=float(get("slippage_points", 0.0)),
+        commission_per_lot=float(get("commission_per_lot", 0.0)),
+        point_size=float(get("point_size", 0.01)),
+    )
+
+
 def make_env(
     bars: pd.DataFrame,
     features: pd.DataFrame,
@@ -378,10 +431,12 @@ def make_env(
         features=features,
         obs_window=cfg.env.obs_window,
         initial_balance=cfg.account.initial_balance,
+        cost_model=_cost_model(cfg),
         guardrail_kwargs=_guardrail_kwargs(cfg),
         risk_frac_range=risk_frac_range,
         rr_ratio_range=rr_ratio_range,
         swing_buffer_pts=cfg.risk.swing_buffer_pts,
+        sl_mode=str(cfg.risk.get("sl_mode", "fixed")),
         contract_size=cfg.account.contract_size,
         max_loss_per_trade_usd=_max_loss_per_trade(cfg),
         dsr_eta=cfg.env.reward_dsr_eta,
@@ -406,6 +461,8 @@ def make_env(
         peak_trailing_dd_limit=float(cfg.env.get("peak_trailing_dd_limit", 0.0)),
         agent_direction_control=bool(cfg.env.get("agent_direction_control", False)),
         direction_override_threshold=float(cfg.env.get("direction_override_threshold", 0.0)),
+        allow_agent_sl_mode=bool(cfg.env.get("allow_agent_sl_mode", True)),
+        sl_mode_defer_threshold=float(cfg.env.get("sl_mode_defer_threshold", 0.1)),
         risk_floor=float(cfg.env.get("risk_floor", 0.0005)),
         tickbook=tickbook,
         fill_delay_ms=_fill_delay_ms(cfg),
@@ -492,8 +549,13 @@ def _setup_rngs(seed: int) -> None:
 
 
 def _load_merged_config(args: argparse.Namespace) -> DictConfig:
-    """Load base config and merge strategy variant if requested."""
-    cfg = load_config(args.overrides, config_path=args.config)
+    """Load base config and merge strategy variant if requested.
+
+    CLI ``overrides`` apply *after* the strategy overlay merge: the Idea 1
+    variant pins ``env.reward_mode: pnl``, which used to clobber an explicit
+    ``env.reward_mode=rr`` override and silently ran every RR run as PnL.
+    """
+    cfg = load_config(None, config_path=args.config)
     # Merge the strategy variant config (Idea 1/2) on top of the base config.
     # Baseline (Idea 3) leaves cfg untouched.
     if args.strategy in _STRATEGY_CONFIGS:
@@ -502,7 +564,7 @@ def _load_merged_config(args: argparse.Namespace) -> DictConfig:
         log.info("Merged strategy config: %s", variant_path)
     elif args.strategy != "baseline":
         raise ValueError(f"unknown strategy: {args.strategy}")
-    return cfg
+    return apply_overrides(cfg, args.overrides)
 
 
 def _build_training_log(
@@ -1146,6 +1208,7 @@ def main() -> None:
                 risk_frac_range=_strategy_risk_ranges(cfg)[0],
                 rr_ratio_range=_strategy_risk_ranges(cfg)[1],
                 swing_buffer_pts=cfg.risk.swing_buffer_pts,
+                sl_mode=str(cfg.risk.get("sl_mode", "fixed")),
                 contract_size=cfg.account.contract_size,
                 max_loss_per_trade_usd=_max_loss_per_trade(cfg),
                 dsr_eta=cfg.env.reward_dsr_eta,
@@ -1167,6 +1230,8 @@ def main() -> None:
                 direction_override_threshold=float(
                     cfg.env.get("direction_override_threshold", 0.0)
                 ),
+                allow_agent_sl_mode=bool(cfg.env.get("allow_agent_sl_mode", True)),
+                sl_mode_defer_threshold=float(cfg.env.get("sl_mode_defer_threshold", 0.1)),
                 tickbook=ticks_covering(primary_ticks, fold_test_bars),
                 fill_delay_ms=_fill_delay_ms(cfg),
             )

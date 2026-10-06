@@ -15,6 +15,7 @@ from quant_rl.eval.training_plots import (
     plot_learning_curve,
     plot_learning_rate,
     plot_losses,
+    plot_mode_means,
     save_dashboard_plots,
     save_training_plots,
 )
@@ -93,6 +94,25 @@ def test_save_training_plots(tmp_path):
 
     for name in ["learning_curve", "losses", "entropy_explvar", "kl_clip", "lr"]:
         assert (tmp_path / f"{name}.png").stat().st_size > 0, f"Missing {name}.png"
+
+
+def test_plot_mode_means_skips_a_log_without_those_columns(training_log, tmp_path):
+    assert plot_mode_means(training_log, out_path=tmp_path / "mode_means.png") is None
+    assert not (tmp_path / "mode_means.png").exists()
+
+
+def test_plot_mode_means_writes_when_the_columns_exist(tmp_path):
+    df = pd.DataFrame(
+        {
+            "timestep": [2048, 4096, 6144],
+            "train/mean_exit": [0.2, 0.4, 0.1],
+            "train/mean_direction": [-0.1, -0.3, 0.0],
+            "train/mode_prior": [1e-4, 2e-4, 1e-4],
+        }
+    )
+    fig = plot_mode_means(df, out_path=tmp_path / "mode_means.png")
+    assert fig is not None
+    assert (tmp_path / "mode_means.png").stat().st_size > 0
 
 
 def test_save_training_plots_empty_log(tmp_path):

@@ -195,6 +195,16 @@ def build_agent(
         policy_kwargs=policy_kwargs,
         **ppo_kwargs,
     )
+    from .ppo_policy import _layout_key
+
+    if isinstance(env.action_space, spaces.Box):
+        width = int(env.action_space.shape[0])
+        has_direction = bool(getattr(env, "agent_direction_control", False))
+        has_sl_mode = bool(getattr(env, "allow_agent_sl_mode", False))
+        ppo_model.policy._action_layout_key = _layout_key(width, has_direction, has_sl_mode)  # type: ignore[assignment]
+    from .rollout_buffer import install_single_copy_add
+
+    install_single_copy_add(ppo_model.rollout_buffer)
     return _finalize_cuda_policy(ppo_model, device)
 
 
@@ -213,6 +223,7 @@ def _ppo_policy_and_ent_coef(
     kwargs["log_std_init"] = float(cfg.ppo.get("log_std_init", 0.0))
     kwargs["log_std_min"] = float(cfg.ppo.get("log_std_min", -0.7))
     kwargs["log_std_max"] = float(cfg.ppo.get("log_std_max", 0.0))
+    kwargs["mode_prior_coef"] = float(cfg.ppo.get("mode_prior_coef", 1e-3))
     return ClampedStdMultiInputPolicy, kwargs, float(cfg.ppo.get("ent_coef_continuous", 0.001))
 
 

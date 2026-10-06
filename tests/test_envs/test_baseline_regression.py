@@ -126,7 +126,12 @@ class TestBaselineActionSpace:
         self, bars: pd.DataFrame, features: pd.DataFrame
     ) -> None:
         env = TradingEnv(
-            bars, features, strategy_actions=True, strategy=BaselineStrategy(), obs_window=20
+            bars,
+            features,
+            strategy_actions=True,
+            strategy=BaselineStrategy(),
+            obs_window=20,
+            allow_agent_sl_mode=False,
         )
         assert isinstance(env.action_space, Box)
         assert env.action_space.shape == (5,)

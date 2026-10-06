@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from quant_rl.envs.feature_row import FeatureRow
 from quant_rl.envs.trading_env import TradingEnv
 
 
@@ -153,7 +154,7 @@ class TestDecodeActionStrategy:
             def validate_entry(self, *, direction: int, row: pd.Series) -> bool:
                 return True
 
-            def sl_reference(self, *, direction: int, row: pd.Series) -> float | None:
+            def sl_reference(self, *, direction: int, row: FeatureRow | pd.Series) -> float | None:
                 return None
 
             def target_candidates(self, *, direction: int, row: pd.Series) -> dict[str, float]:

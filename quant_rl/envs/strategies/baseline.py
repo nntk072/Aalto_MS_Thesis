@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from ..feature_row import FeatureRow
 from .base import TradingStrategy
 
 
@@ -22,7 +23,7 @@ class BaselineStrategy(TradingStrategy):
         """No gate: the baseline agent decides freely."""
         return True
 
-    def sl_reference(self, *, direction: int, row: pd.Series) -> float | None:  # noqa: ARG002
+    def sl_reference(self, *, direction: int, row: FeatureRow | pd.Series) -> float | None:  # noqa: ARG002
         """No structural stop: baseline keeps its existing SL behaviour."""
         return None
 

@@ -242,12 +242,12 @@ class TestBreakevenManagement:
 
 class TestAgentDirectionControl:
     def test_default_action_space_stays_5d(self) -> None:
-        env = _make_env()
+        env = _make_env(allow_agent_sl_mode=False)
         assert isinstance(env.action_space, Box)
         assert env.action_space.shape == (5,)
 
     def test_opt_in_action_space_is_6d_and_signed(self) -> None:
-        env = _make_env(agent_direction_control=True)
+        env = _make_env(agent_direction_control=True, allow_agent_sl_mode=False)
         assert isinstance(env.action_space, Box)
         assert env.action_space.shape == (6,)
         assert float(env.action_space.low[0]) == pytest.approx(-1.0)
@@ -255,10 +255,11 @@ class TestAgentDirectionControl:
 
     def test_agent_can_veto_the_heuristic_side(self) -> None:
         """Context is long, but strong negative conviction takes the short."""
-        env = _make_env(agent_direction_control=True)
+        env = _make_env(agent_direction_control=True, allow_agent_sl_mode=False)
         row = env._feature_row_at(env.step_idx)
-        # a[0] = -1 -> u[0] = 0 -> conviction -0.5 -> short.
-        da, _, _, _ = env._decode_action(np.array([-1.0, 0.5, 0.5, 0.5, 0.5]), row)
+        da, _, _, _ = env._decode_action(
+            np.array([-1.0, 0.5, 0.5, 0.5, 0.5, 0.5], dtype=np.float32), row
+        )
         assert da == -1
 
     def test_agent_can_confirm_the_heuristic_side(self) -> None:
@@ -283,10 +284,11 @@ class TestAgentDirectionControl:
         assert da == 1
 
     def test_last_four_dims_keep_their_meaning(self) -> None:
-        env = _make_env(agent_direction_control=True)
+        env = _make_env(agent_direction_control=True, allow_agent_sl_mode=False)
         row = env._feature_row_at(env.step_idx)
-        # dims 1..4 are intensity, sl_anchor, risk, reward fraction.
-        _, risk_frac, reward_frac, _ = env._decode_action(np.array([1.0, 1.0, 1.0, 1.0, 1.0]), row)
+        _, risk_frac, reward_frac, _ = env._decode_action(
+            np.array([1.0, 0.0, 0.0, 1.0, 1.0, 0.5], dtype=np.float32), row
+        )
         assert risk_frac == pytest.approx(0.01)
         assert reward_frac == pytest.approx(1.0)
         assert env._selected_sl_anchor == pytest.approx(1.0)

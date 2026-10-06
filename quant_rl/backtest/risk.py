@@ -98,15 +98,18 @@ def compute_lots(
     min_lot: float = 0.01,
     max_lot: float = 100.0,
     max_loss_cap: float | None = None,
+    risk_usd: float | None = None,
 ) -> float:
     """Compute lot size from risk budget and SL distance.
 
     Parameters
     ----------
     equity : float
-        Current account equity.
+        Current account equity. Ignored when ``risk_usd`` is given.
     risk_frac : float
-        Fraction of equity at risk (e.g. 0.01 for 1%).
+        Fraction of equity at risk (e.g. 0.01 for 1%). Ignored when ``risk_usd``
+        is given, so a caller asking for a fixed dollar risk cannot have it
+        silently scaled to zero by a ``risk_frac`` of 0.
     entry_price : float
         Entry price.
     sl_price : float
@@ -120,24 +123,33 @@ def compute_lots(
     max_lot : float
         Maximum lot size to trade.
     max_loss_cap : float | None
-        If set, cap the USD loss at this amount (e.g. 100 for $100).
+        If set, cap the USD loss at this amount (e.g. 100 for $100). Ignored when
+        ``risk_usd`` is given: that cap is a guard rail for fractional sizing, and
+        letting it apply would silently override the caller's explicit request
+        (a $500 ask was clamped to the $100 default, so no trade could ever risk
+        $500).
+    risk_usd : float | None
+        Explicit dollar risk for this trade. When set it takes precedence over
+        ``equity * risk_frac`` and makes 1R a known constant independent of
+        account equity and of the agent's chosen fraction.
 
     Returns
     -------
     float
         Computed lot size, clipped to [min_lot, max_lot].
     """
-    risk_usd = equity * risk_frac
+    budget = float(risk_usd) if risk_usd is not None else float(equity) * float(risk_frac)
     sl_distance = abs(entry_price - sl_price)
 
     if sl_distance < 1e-8:
         # Avoid division by near-zero
         return min_lot
 
-    lots = risk_usd / (sl_distance * contract_size * point_value)
+    lots = budget / (sl_distance * contract_size * point_value)
 
-    # Apply safety cap if configured
-    if max_loss_cap is not None:
+    # Apply safety cap if configured. An explicit risk_usd states the intended
+    # risk, so the fractional-sizing cap must not shrink it.
+    if max_loss_cap is not None and risk_usd is None:
         max_lots_from_cap = max_loss_cap / (sl_distance * contract_size * point_value)
         lots = min(lots, max_lots_from_cap)
 

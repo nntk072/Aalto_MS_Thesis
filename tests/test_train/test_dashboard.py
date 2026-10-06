@@ -168,6 +168,124 @@ def test_snapshot_row_keeps_behavior_and_omits_eval_until_recorded() -> None:
     assert recorded["max_drawdown"] == 0.0
 
 
+def _prior_book(n: int, **cols: object) -> list[dict[str, object]]:
+    row: dict[str, object] = {
+        "sl_ref": "swing_low",
+        "tp_ref": "swing_high",
+        "exit_mode": "structural",
+        "direction": 1,
+        "stop_u": 0.2,
+        "target_u": 0.3,
+        "n_sl": 3,
+        "n_tp": 3,
+        "sl_index": 1,
+        "tp_index": 1,
+    }
+    row.update(cols)
+    rows: list[dict[str, object]] = []
+    for i in range(n):
+        item: dict[str, object] = {}
+        for key, value in row.items():
+            if isinstance(value, (list, tuple, np.ndarray)):
+                item[key] = value[i]
+            else:
+                item[key] = value
+        rows.append(item)
+    return rows
+
+
+def test_training_interval_sets_the_prior_and_eval_does_not() -> None:
+    class _Policy:
+        def __init__(self) -> None:
+            self.names: set[str] = {"stale"}
+
+        def set_active_prior(self, names: set[str]) -> None:
+            self.names = set(names)
+
+    class _Model:
+        def __init__(self) -> None:
+            self.policy = _Policy()
+            self.action_space = type("Space", (), {"shape": (6,)})()
+            self.num_timesteps = 50_000
+            self.rollout_buffer = None
+
+    cb = TrainingDashboardCallback(total_timesteps=1_000_000, log_every=100_000)
+    cb.model = _Model()  # type: ignore[assignment]
+    cb._prior_opens = _prior_book(10, n_sl=5, sl_index=4, stop_u=1.0)
+    cb._apply_prior_interval()
+    assert cb.model.policy.names == {"stale"}
+
+    cb.num_timesteps = 100_000
+    cb.model.num_timesteps = 100_000
+    cb._apply_prior_interval()
+    assert cb.model.policy.names == set()
+    assert cb._prior_opens == []
+
+    spread = np.linspace(0.0, 1.0, 40).tolist()
+    cb._prior_opens = _prior_book(40, n_sl=5, sl_index=4, stop_u=spread, target_u=spread)
+    cb.num_timesteps = 200_000
+    cb.model.num_timesteps = 200_000
+    cb._apply_prior_interval()
+    assert cb.model.policy.names == {"stop"}
+    row = snapshot_row(cb._snapshot())
+    assert row["prior_active_stop"] == 1
+    assert row["prior_active_target"] == 0
+    assert row["prior_active_exit"] == 0
+    assert row["prior_active_direction"] == 0
+    assert row["sl_rank_median"] == pytest.approx(1.0)
+
+    cb._eval_fn = lambda: {"diversity_text": "eval must not set the prior"}
+    cb._next_eval = 200_000
+    cb._maybe_eval()
+    assert cb.model.policy.names == {"stop"}
+
+    cb.model.action_space = type("Space", (), {"shape": (5,)})()
+    one_side = [-1] * 95 + [1] * 5
+    wide = np.linspace(0.0, 1.0, 100).tolist()
+    cb._prior_opens = _prior_book(
+        100,
+        direction=one_side,
+        exit_mode=["ema_21", "structural"] * 50,
+        stop_u=wide,
+        target_u=wide,
+    )
+    cb.num_timesteps = 300_000
+    cb.model.num_timesteps = 300_000
+    cb._apply_prior_interval()
+    assert cb.model.policy.names == set()
+
+
+def test_empty_opens_still_turn_risk_on_at_the_floor() -> None:
+    class _Policy:
+        def __init__(self) -> None:
+            self.names: set[str] = set()
+
+        def set_active_prior(self, names: set[str]) -> None:
+            self.names = set(names)
+
+    class _Model:
+        def __init__(self) -> None:
+            self.policy = _Policy()
+            self.action_space = type("Space", (), {"shape": (6,)})()
+            self.num_timesteps = 100_000
+            self.rollout_buffer = None
+
+    cb = TrainingDashboardCallback(total_timesteps=1_000_000, log_every=100_000)
+    cb.model = _Model()  # type: ignore[assignment]
+    cb.num_timesteps = 100_000
+    cb._risk_sum = 0.0
+    cb._risk_n = 2000
+    cb._apply_prior_interval()
+    assert cb.model.policy.names == {"risk"}
+    assert cb._risk_n == 0
+
+    cb.num_timesteps = 200_000
+    cb._risk_sum = 0.5 * 2000
+    cb._risk_n = 2000
+    cb._apply_prior_interval()
+    assert cb.model.policy.names == set()
+
+
 def test_step_info_carries_reward_parts_and_direction() -> None:
     from tests.test_envs.test_ny_steps_eod import _make_env
 

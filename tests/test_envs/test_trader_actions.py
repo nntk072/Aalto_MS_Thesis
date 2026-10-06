@@ -89,6 +89,7 @@ class TestTraderActionSpace:
             obs_window=10,
             risk_frac_range=(0.005, 0.01),
             rr_ratio_range=(1.5, 5.0),
+            allow_agent_sl_mode=False,
         )
         assert isinstance(env.action_space, Box)
         np.testing.assert_array_equal(env.action_space.low, [-1.0, -1.0, -1.0, -1.0, -1.0])
@@ -701,3 +702,124 @@ def test_a_later_reclaim_does_not_unlock_the_earlier_bar() -> None:
     )
     assert info["entry_rejection_reason"] == "manipulation_unconfirmed"
     assert env.position is None
+
+
+class TestSLMode:
+    def test_invalid_sl_mode_raises(self) -> None:
+        bars, feats = _bars(), _features(_bars())
+        with pytest.raises(ValueError, match="Unknown sl_mode"):
+            TradingEnv(
+                bars,
+                feats,
+                strategy_actions=True,
+                strategy=PO3IFVGStrategy(enforce_gate=False),
+                obs_window=10,
+                sl_mode="bogus",
+            )
+
+    def test_6d_action_space_with_sl_mode(self) -> None:
+        bars, feats = _bars(), _features(_bars())
+        env = TradingEnv(
+            bars,
+            feats,
+            strategy_actions=True,
+            strategy=PO3IFVGStrategy(enforce_gate=False),
+            obs_window=10,
+            allow_agent_sl_mode=True,
+            agent_direction_control=False,
+        )
+        assert isinstance(env.action_space, Box)
+        assert env.action_space.shape == (6,)
+
+    def test_7d_action_space_with_sl_mode_and_direction(self) -> None:
+        bars, feats = _bars(), _features(_bars())
+        env = TradingEnv(
+            bars,
+            feats,
+            strategy_actions=True,
+            strategy=PO3IFVGStrategy(enforce_gate=False),
+            obs_window=10,
+            allow_agent_sl_mode=True,
+            agent_direction_control=True,
+        )
+        assert isinstance(env.action_space, Box)
+        assert env.action_space.shape == (7,)
+
+    def test_sl_mode_selection_fixed(self) -> None:
+        bars, feats = _bars(), _features(_bars())
+        env = TradingEnv(
+            bars,
+            feats,
+            strategy_actions=True,
+            strategy=PO3IFVGStrategy(enforce_gate=False),
+            obs_window=10,
+            allow_agent_sl_mode=True,
+        )
+        env.reset()
+        env._decode_action(
+            np.array([0.9, 0.0, 0.5, 0.5, -1.0, 0.5], dtype=np.float32), feats.iloc[10]
+        )
+        assert env._selected_sl_mode == "fixed"
+        assert env._sl_mode_explicit is True
+
+    def test_sl_mode_selection_breakeven(self) -> None:
+        bars, feats = _bars(), _features(_bars())
+        env = TradingEnv(
+            bars,
+            feats,
+            strategy_actions=True,
+            strategy=PO3IFVGStrategy(enforce_gate=False),
+            obs_window=10,
+            allow_agent_sl_mode=True,
+        )
+        env.reset()
+        env._decode_action(
+            np.array([0.9, 0.0, 0.5, 0.5, -0.3, 0.5], dtype=np.float32), feats.iloc[10]
+        )
+        assert env._selected_sl_mode == "breakeven"
+        assert env._sl_mode_explicit is True
+
+    def test_sl_mode_defer_to_state_machine(self) -> None:
+        bars, feats = _bars(), _features(_bars())
+        env = TradingEnv(
+            bars,
+            feats,
+            strategy_actions=True,
+            strategy=PO3IFVGStrategy(enforce_gate=False),
+            obs_window=10,
+            allow_agent_sl_mode=True,
+            sl_mode_defer_threshold=0.1,
+        )
+        env.reset()
+        env._decode_action(
+            np.array([0.9, 0.0, 0.5, 0.5, 0.0, 0.5], dtype=np.float32), feats.iloc[10]
+        )
+        assert env._selected_sl_mode == env._default_sl_mode()
+        assert env._sl_mode_explicit is False
+
+    def test_sl_mode_config_used_when_sl_mode_dim_disabled(self) -> None:
+        bars, feats = _bars(), _features(_bars())
+        env = TradingEnv(
+            bars,
+            feats,
+            strategy_actions=True,
+            strategy=PO3IFVGStrategy(enforce_gate=False),
+            obs_window=10,
+            allow_agent_sl_mode=False,
+            sl_mode="breakeven",
+        )
+        env.reset()
+        env._decode_action(np.array([0.9, 0.0, 0.5, 0.5], dtype=np.float32), feats.iloc[10])
+        assert env._selected_sl_mode == "breakeven"
+
+    def test_default_sl_mode_fixed_when_no_position(self) -> None:
+        bars, feats = _bars(), _features(_bars())
+        env = TradingEnv(
+            bars,
+            feats,
+            strategy_actions=True,
+            strategy=PO3IFVGStrategy(enforce_gate=False),
+            obs_window=10,
+        )
+        env.reset()
+        assert env._default_sl_mode() == "fixed"

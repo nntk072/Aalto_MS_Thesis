@@ -53,7 +53,7 @@ from .po3_state import (
     build_ifvg_zone_features,
     build_po3_state,
 )
-from .session_ohlc import prior_period_high_low, range_quadrants, session_ohlc
+from .session_ohlc import prev_ny_high_low, prior_period_high_low, range_quadrants, session_ohlc
 from .smt import smt_divergence
 from .structure import (
     TIMEFRAME_CONFIG,
@@ -64,6 +64,7 @@ from .structure import (
     structure_levels,
     swing_features,
 )
+from .swings import swing_history
 
 # Bump whenever build_features() output schema changes so stale caches are
 # not silently reused by the {symbol}_features.parquet call sites.
@@ -85,7 +86,9 @@ from .structure import (
 # v13: tick-count VWAP / activity (ignore CFD vol=0).
 # v14: swing age in [0, 1], London ATR distances, NY session clock.
 # v15: swing confirmation pulses and the distribution-after-IFVG latch.
-FEATURE_CACHE_VERSION = "v15-swing-ifvg-latch"
+# v16: SL modes (state machine + agent veto), prev-NY session H/L, swing
+#      history columns (swing_high_{1..3}/swing_low_{1..3}), TF-SMT enablement.
+FEATURE_CACHE_VERSION = "v16-sl-modes"
 
 
 def feature_cache_content_hash(
@@ -729,6 +732,7 @@ def build_features(
                 feat,
                 structure,
                 swing_features(primary, swings_df, struct_cls, obs_window=obs_window),
+                swing_history(swings_df, n=3),
             ],
             axis=1,
         )
@@ -999,7 +1003,8 @@ def build_features(
 
         yday = prior_period_high_low(primary, freq="D", tz=sess_tz)
         lweek = prior_period_high_low(primary, freq="W", tz=sess_tz)
-        feat = pd.concat([feat, yday, lweek], axis=1)
+        prev_ny = prev_ny_high_low(primary, session_tz=sess_tz)
+        feat = pd.concat([feat, yday, lweek, prev_ny], axis=1)
 
         for range_name in list(sess_cfg.get("quadrant_ranges", ["yesterday", "lastweek"])):
             feat = pd.concat(

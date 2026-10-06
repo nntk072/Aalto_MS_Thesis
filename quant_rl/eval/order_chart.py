@@ -247,6 +247,11 @@ def order_levels(
     # A target with no candle still paints a band, clipped to the candle scale.
     red = _clip_band(metrics.entry_price, metrics.sl_price, y0, y1) if show_sl_tp else None
     green = _clip_band(metrics.entry_price, metrics.tp_price, y0, y1) if show_sl_tp else None
+    # An ema_21 exit has no fixed target, so no green band would be drawn. Fall
+    # back to the realized move (entry -> exit) so a reward zone is always
+    # visible. Stays green even on a losing exit; the note states the PnL.
+    if show_sl_tp and green is None and ema_exit and metrics.exit_price is not None:
+        green = _clip_band(metrics.entry_price, metrics.exit_price, y0, y1)
 
     notes: list[str] = []
     if ema_exit and show_sl_tp:

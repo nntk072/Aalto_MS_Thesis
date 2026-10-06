@@ -12,8 +12,15 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 from quant_rl.envs.reward import REWARD_PART_KEYS, empty_reward_parts
+from quant_rl.eval.decision_diversity import (
+    DiversityThresholds,
+    active_prior_names,
+    choice_rank_median,
+    risk_mean_collapsed,
+)
 
 log = logging.getLogger(__name__)
 
@@ -164,6 +171,10 @@ def format_dashboard(snapshot: dict[str, Any]) -> str:
         diversity = ev.get("diversity_text")
         if diversity:
             lines.append(str(diversity).rstrip())
+    if "prior_names" in snapshot:
+        names = snapshot.get("prior_names") or []
+        text = ", ".join(str(name) for name in names) if names else "none"
+        lines.append(f"prior     {text}")
     return "\n".join(lines)
 
 
@@ -206,7 +217,16 @@ DASHBOARD_COLUMNS: tuple[str, ...] = (
     "n_trades",
     "turnover",
     "eval_reward",
+    "prior_active_stop",
+    "prior_active_target",
+    "prior_active_exit",
+    "prior_active_direction",
+    "prior_active_risk",
+    "sl_rank_median",
+    "tp_rank_median",
 )
+
+_PRIOR_NAMES: tuple[str, ...] = ("stop", "target", "exit", "direction", "risk")
 
 
 def snapshot_row(snapshot: dict[str, Any], *, record_eval: bool = False) -> dict[str, Any]:
@@ -239,7 +259,21 @@ def snapshot_row(snapshot: dict[str, Any], *, record_eval: bool = False) -> dict
         ev = snapshot["eval"]
         for src, dest in _EVAL_ROW_KEYS:
             row[dest] = float(ev[src])
+    active = set(snapshot.get("prior_names") or [])
+    for name in _PRIOR_NAMES:
+        row[f"prior_active_{name}"] = 1 if name in active else 0
+    for key in ("sl_rank_median", "tp_rank_median"):
+        value = snapshot.get(key)
+        row[key] = "" if value is None or not np.isfinite(float(value)) else float(value)
     return row
+
+
+def _action_width(model: Any) -> int | None:
+    space = getattr(model, "action_space", None)
+    shape = getattr(space, "shape", None)
+    if not shape:
+        return None
+    return int(shape[0])
 
 
 def _grad_norm_value(raw: Any) -> float | str:
@@ -313,6 +347,8 @@ if _SB3_AVAILABLE:
             log_path: str | Path | None = None,
             log_every: int = 100_000,
             verbose: int = 0,
+            diversity: DiversityThresholds | None = None,
+            prior_every: int | None = None,
         ) -> None:
             super().__init__(verbose=verbose)
             self.total_timesteps = int(total_timesteps)
@@ -320,6 +356,15 @@ if _SB3_AVAILABLE:
             self.log_every = int(log_every)
             self._eval_fn = eval_fn
             self._log_path = Path(log_path) if log_path is not None else None
+            self._diversity = diversity
+            self._prior_every = int(self.log_every if prior_every is None else prior_every)
+            self._next_prior = self._prior_every if self._prior_every > 0 else 0
+            self._prior_opens: list[dict[str, Any]] = []
+            self._prior_names: list[str] = []
+            self._risk_sum = 0.0
+            self._risk_n = 0
+            self._sl_rank_median = float("nan")
+            self._tp_rank_median = float("nan")
             self._eval_just_ran = False
             self._next_log = 0
             self._next_eval = self.eval_every if self.eval_every > 0 else 0
@@ -339,6 +384,7 @@ if _SB3_AVAILABLE:
             callback = self
 
             def _train_and_report() -> None:
+                callback._apply_prior_interval()
                 callback._maybe_eval()
                 if not callback._should_log():
                     orig()
@@ -403,6 +449,13 @@ if _SB3_AVAILABLE:
                 reason = info.get("close_reason")
                 if reason:
                     self._closes.append(str(reason))
+                opened = info.get("prior_open")
+                if isinstance(opened, dict):
+                    self._prior_opens.append(opened)
+                risk_u = info.get("risk_u")
+                if isinstance(risk_u, (int, float)) and np.isfinite(risk_u):
+                    self._risk_sum += float(risk_u)
+                    self._risk_n += 1
             return True
 
         def _should_log(self) -> bool:
@@ -439,6 +492,9 @@ if _SB3_AVAILABLE:
                 "critic": self._critic_from_buffer(),
                 "policy": policy_from_logger({}, None),
                 "eval": None,
+                "prior_names": list(self._prior_names),
+                "sl_rank_median": self._sl_rank_median,
+                "tp_rank_median": self._tp_rank_median,
             }
             self._parts.clear()
             self._directions.clear()
@@ -453,6 +509,37 @@ if _SB3_AVAILABLE:
             if buffer is None or getattr(buffer, "advantages", None) is None:
                 return critic_stats([], [], [])
             return critic_stats(buffer.advantages, buffer.returns, buffer.values)
+
+        def _apply_prior_interval(self) -> None:
+            """Replace the active set from this interval of training opens.
+
+            The dashboard replay is not consulted. Until the first interval
+            finishes, the policy keeps the empty set it started with.
+            """
+            if self._prior_every <= 0 or int(self.num_timesteps) < self._next_prior:
+                return
+            frame = pd.DataFrame(self._prior_opens)
+            names = active_prior_names(frame, self._diversity)
+            risk_n = int(self._risk_n)
+            risk_mean = self._risk_sum / risk_n if risk_n else float("nan")
+            if risk_mean_collapsed(risk_mean, risk_n, self._diversity):
+                names.add("risk")
+            width = _action_width(self.model)
+            if width is not None and width < 6:
+                names.discard("direction")
+            setter = getattr(self.model.policy, "set_active_prior", None)
+            if callable(setter):
+                setter(names)
+            self._prior_names = sorted(names)
+            self._sl_rank_median = choice_rank_median(frame, "sl")
+            self._tp_rank_median = choice_rank_median(frame, "tp")
+            text = ", ".join(self._prior_names) if self._prior_names else "none"
+            log.info("prior active %s", text)
+            self._prior_opens.clear()
+            self._risk_sum = 0.0
+            self._risk_n = 0
+            step = int(self.num_timesteps)
+            self._next_prior = self._prior_every * (1 + step // self._prior_every)
 
         def _maybe_eval(self) -> None:
             self._eval_just_ran = False

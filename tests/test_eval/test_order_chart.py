@@ -543,3 +543,79 @@ def test_order_chart_shades_active_manipulation_and_marks_the_end() -> None:
     fig, ax = plt.subplots()
     draw_order_levels_mpl(ax, levels)
     plt.close(fig)
+
+
+def test_ema_exit_without_target_still_paints_a_green_band() -> None:
+    """An ema_21 exit has no tp_price, so green used to be None."""
+    idx = pd.date_range("2025-10-27 17:44", periods=40, freq="1min")
+    close = np.linspace(25744.0, 25730.0, 40)
+    bars = pd.DataFrame(
+        {
+            "open": close,
+            "high": close + 6.0,
+            "low": close - 6.0,
+            "close": close,
+        },
+        index=idx,
+    )
+    open_row = pd.Series(
+        {
+            "time": idx[0],
+            "direction": 1,
+            "price": 25744.25,
+            "sl_price": 25683.385,
+            "tp_price": float("nan"),
+            "tp_ref": "ema_21",
+            "exit_mode": "ema_21",
+        }
+    )
+    close_row = pd.Series({"time": idx[6], "price": 25729.85, "pnl": -21.53})
+    metrics = compute_trade_metrics(bars, open_row, close_row)
+    assert metrics.tp_price is None
+
+    levels = order_levels(
+        bars,
+        metrics,
+        OverlayEvents(),
+        bars,
+        idx[0],
+        idx[6],
+        open_row,
+    )
+    assert levels.green is not None
+    lo, hi = levels.green
+    assert lo <= metrics.entry_price <= hi
+    assert hi <= levels.ylim[1]
+    # Built from entry -> exit, so the far edge is the realized exit price.
+    assert hi == pytest.approx(max(metrics.entry_price, metrics.exit_price))
+    assert levels.red is not None
+
+
+def test_structural_target_keeps_the_entry_to_tp_band() -> None:
+    idx = pd.date_range("2025-10-28 19:02", periods=40, freq="1min")
+    close = np.linspace(25930.0, 25950.0, 40)
+    bars = pd.DataFrame(
+        {"open": close, "high": close + 5.0, "low": close - 5.0, "close": close},
+        index=idx,
+    )
+    open_row = pd.Series(
+        {
+            "time": idx[0],
+            "direction": -1,
+            "price": 25929.75,
+            "sl_price": 25951.66,
+            "tp_price": 25870.0,
+            "tp_ref": "H1_last_swing_low",
+            "exit_mode": "structural",
+        }
+    )
+    close_row = pd.Series({"time": idx[10], "price": 25945.0, "pnl": -200.0})
+    metrics = compute_trade_metrics(bars, open_row, close_row)
+    levels = order_levels(bars, metrics, OverlayEvents(), bars, idx[0], idx[10], open_row)
+    assert levels.green is not None
+    lo, hi = levels.green
+    # A short's TP sits below the candles, so the entry is the top edge and the
+    # TP edge is clipped up to the axis. This is the pre-existing target path.
+    assert hi == pytest.approx(metrics.entry_price)
+    assert lo >= levels.ylim[0] - 1e-6
+    assert lo < hi

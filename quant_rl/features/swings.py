@@ -323,3 +323,36 @@ def _bars_since(events: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
         if last >= 0:
             out[i] = i - last
     return out
+
+
+def swing_history(swings: pd.DataFrame, n: int = 3) -> pd.DataFrame:
+    """Last N accepted swing extremes, causally observable.
+
+    ``swing_high_1`` is the most recent accepted swing high; ``swing_high_2``
+    is the one before that, and so on. Same for ``swing_low_*``. Bars before
+    the first accepted swing are NaN.
+    """
+    n = max(int(n), 1)
+    ev_h = swings["swing_high_event"].to_numpy(dtype=bool)
+    ev_l = swings["swing_low_event"].to_numpy(dtype=bool)
+    px_h = swings["swing_high_extreme"].to_numpy(dtype=float)
+    px_l = swings["swing_low_extreme"].to_numpy(dtype=float)
+    m = len(swings)
+    out: dict[str, np.ndarray[Any, Any]] = {}
+    for i in range(1, n + 1):
+        out[f"swing_high_{i}"] = np.full(m, np.nan)
+        out[f"swing_low_{i}"] = np.full(m, np.nan)
+    hist_h: list[float] = []
+    hist_l: list[float] = []
+    for t in range(m):
+        if ev_h[t] and np.isfinite(px_h[t]):
+            hist_h.append(float(px_h[t]))
+            hist_h = hist_h[-n:]
+        if ev_l[t] and np.isfinite(px_l[t]):
+            hist_l.append(float(px_l[t]))
+            hist_l = hist_l[-n:]
+        for i in range(1, n + 1):
+            idx = i - 1
+            out[f"swing_high_{i}"][t] = hist_h[idx] if idx < len(hist_h) else np.nan
+            out[f"swing_low_{i}"][t] = hist_l[idx] if idx < len(hist_l) else np.nan
+    return pd.DataFrame(out, index=swings.index)

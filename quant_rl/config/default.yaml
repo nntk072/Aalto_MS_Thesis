@@ -39,7 +39,10 @@ costs:
   # spread in price units (same unit as bar close prices)
   spread_us100: 0.6
   spread_us500: 1.53
-  slippage_points: 0.0
+  # Adverse slippage applied to stop/target fills, in PRICE POINTS (not ticks).
+  # ~5 points keeps the `risk.min_sl_points` floor at its 2x sizing margin, so
+  # keep min_sl_points >= 2 * slippage_points.
+  slippage_points: 5.0
   commission_per_lot: 0.0
   # minimum price increment for converting the CSV integer spread column
   # to price units (e.g. 0.01 for US100 quoted to 2 d.p.)
@@ -150,6 +153,25 @@ env:
   # A positive band lets PPO park at "never trade"; seed-50 20M did that at 0.1.
   entry_intensity_threshold: 0.0
   reward_mode: dsr                     # baseline stays dsr; idea configs set pnl
+  # "rr" scores the agent on cumulative realized R instead of Sharpe or dollar PnL.
+  # Only meaningful with `fixed_risk_usd`: under fractional sizing the same edge
+  # yields different dollar PnL as equity drifts, so the reward would partly pay
+  # for position size rather than for decisions.
+  fixed_risk_usd: 0                   # >0 = every trade risks exactly this many
+                                      # dollars, so 1R is a fixed known amount
+  # How the per-trade dollar risk is chosen.
+  #   fixed   -> always `fixed_risk_usd`, independent of equity and of the
+  #              agent's risk_frac. Makes 1R a constant and the cumulative-R
+  #              reward a clean objective.
+  #   dynamic -> live equity x agent's risk_frac, plus the max_loss_per_trade_usd
+  #              cap. Risk drifts as the account compounds.
+  risk_mode: dynamic                 # "fixed" | "dynamic"
+  # EMA-21 exit. It was chosen on 92% of trades in the first 20M run, which
+  # collapsed exits onto one non-structural mode and left the structural target
+  # head untrained. false forces every exit onto a structural level >= 1R away.
+  allow_ema_exit: true               # false = structural targets only
+  allow_agent_sl_mode: true           # true = 6-D/7-D action with SL mode dim
+  sl_mode_defer_threshold: 0.1        # |u_sl - 0.5| below this defers to state machine
   # Training behavior, not an FTMO kill. 0 = off. 0.10 = flatten at 10% from peak.
   peak_trailing_dd_limit: 0.0
   max_entries_per_session: 0
@@ -197,6 +219,9 @@ ppo:
   log_std_init: 0.0
   log_std_min: -0.7
   log_std_max: 0.0
+  # Quadratic pull on the exit mean, and the direction mean of the 6-D box.
+  # Zero disables it. This is not an environment reward and does not change ent_coef.
+  mode_prior_coef: 0.001
   checkpoint_freq: 1000000
   total_timesteps: 20000000
 
@@ -227,7 +252,7 @@ device: "auto"
 output:
   dir: "outputs"                    # base directory for run artifacts
   save_plots: true                  # save static PNG figures
-  save_html: true                   # save interactive plotly HTML
+  save_html: false                  # save interactive plotly HTML (slow: ~1h per split)
   save_csv: true                    # save equity.csv + trades.csv
   dpi: 150                          # PNG resolution
   candle_tf: "15min"                # resample TF for candlestick chart
@@ -247,7 +272,10 @@ risk:
   max_lot: 100.0
   default_risk_frac: 0.01              # 1% equity fallback for baselines
   min_sl_atr_mult: 0.5                 # reject/tighten stops inside noise
-  min_sl_points: 20.0                  # absolute min SL distance (US100 points)
+  # Absolute minimum |entry - SL| in price points. Sized as ~2x the worst
+  # expected fill slippage (costs.slippage_points), so a 5-point slip still
+  # leaves the stop meaningful rather than whipsawing on the fill itself.
+  min_sl_points: 10.0
   swing_buffer_pts: 1.0
   rr_ratio_default: 2.0
 
@@ -272,7 +300,8 @@ training:
     eval_every: 100000
     eval_bars: 20000
     log_every: 100000
-    # Printed warnings only. These do not enter the reward.
+    # Warning shares are printed only. The prior floors gate the training loss.
+    # Neither enters the environment reward.
     diversity:
       sl_top_share: 0.80
       tp_top_share: 0.80
@@ -280,6 +309,15 @@ training:
       ema_lo: 0.02
       ema_hi: 0.98
       action_std: 0.05
+      min_prior_trades: 50
+      min_prior_sl_choices: 30
+      min_prior_tp_choices: 30
+      min_prior_direction_choices: 30
+      rank_edge: 0.05
+      direction_min_share: 0.90
+      min_prior_risk_steps: 1000
+      # u <= 0.05 is risk_frac <= 0.0005 on range [0, 0.01], the hold floor.
+      risk_u_max: 0.05
   # One JSON line per PPO update, plus an incident on exceptions, non-finite
   # numbers, and registered checks. enabled: false leaves training unchanged.
   debug:
@@ -303,6 +341,7 @@ auxiliary:
 # the Idea 1 (PO3 + IFVG) values; config/idea2_distribution.yaml overrides.
 strategy:
   name: "po3_ifvg"              # "baseline" | "po3_ifvg" | "distribution"
+  manipulation_filter: "against"  # "against" | "follow"
   session:
     timezone: "Etc/GMT-3"
   liquidity:
@@ -317,7 +356,7 @@ strategy:
     max_age_bars: 50
     require_price_retest: true
   risk:
-    sl_mode: "exact"            # "exact" | "buffered"
+    sl_mode: "fixed"            # "fixed" | "breakeven" | "trailing"
     sl_buffer_pts: 1.0
     risk_frac_range: [0.0, 0.01]
     rr_range: [1.5, 5.0]

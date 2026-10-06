@@ -34,6 +34,14 @@ class DiversityThresholds:
     ema_lo: float = 0.02
     ema_hi: float = 0.98
     action_std: float = 0.05
+    min_prior_trades: int = 50
+    min_prior_sl_choices: int = 30
+    min_prior_tp_choices: int = 30
+    min_prior_direction_choices: int = 30
+    rank_edge: float = 0.05
+    direction_min_share: float = 0.90
+    min_prior_risk_steps: int = 1000
+    risk_u_max: float = 0.05
 
 
 def thresholds_from_mapping(raw: dict[str, Any] | None) -> DiversityThresholds:
@@ -174,6 +182,66 @@ def format_diversity_text(
     return diversity_report(trades, thresholds).text
 
 
+def active_prior_names(
+    trades: pd.DataFrame,
+    thresholds: DiversityThresholds | None = None,
+) -> set[str]:
+    """Names whose interval of opens is a recognized collapse.
+
+    Family share never activates a name. Intensity and risk are never returned.
+    Rank evidence uses only rows with a real menu (``n >= 2``).
+    """
+    limits = thresholds or DiversityThresholds()
+    opens = _opens(trades)
+    names: set[str] = set()
+    if opens.empty:
+        return names
+    if _stop_prior(opens, limits):
+        names.add("stop")
+    if _target_prior(opens, limits):
+        names.add("target")
+    if len(opens) >= int(limits.min_prior_trades) and _exit_collapsed(opens, limits):
+        names.add("exit")
+    if _direction_prior(opens, limits):
+        names.add("direction")
+    return names
+
+
+def risk_mean_collapsed(
+    mean_u: float,
+    n: int,
+    thresholds: DiversityThresholds | None = None,
+) -> bool:
+    """True when the risk coordinate is parked at or below the entry floor.
+
+    ``mean_u`` is the unit-interval risk action over the training interval,
+    not an open-trade sample. A mean of 0.5 is the neutral Gaussian and stays off.
+    """
+    limits = thresholds or DiversityThresholds()
+    if int(n) < int(limits.min_prior_risk_steps):
+        return False
+    if not np.isfinite(mean_u):
+        return False
+    return float(mean_u) <= float(limits.risk_u_max)
+
+
+def choice_rank_median(trades: pd.DataFrame, side: str) -> float:
+    """Median rank on multi-candidate rows. EMA exits are left out of target."""
+    opens = _opens(trades)
+    if side == "sl":
+        rows = _choice_rows(opens, "n_sl")
+        ranks = _ranks(rows, "sl_index", "n_sl")
+    elif side == "tp":
+        rows = _choice_rows(opens, "n_tp", _structural_mask(opens))
+        ranks = _ranks(rows, "tp_index", "n_tp")
+    else:
+        raise ValueError(f"unknown rank side {side}")
+    finite = [rank for rank in ranks if np.isfinite(rank)]
+    if not finite:
+        return float("nan")
+    return float(np.median(finite))
+
+
 def write_decision_artifacts(
     trades: pd.DataFrame,
     directory: Path,
@@ -238,6 +306,89 @@ def _exit_shares(frame: pd.DataFrame) -> pd.Series:
     if labels.empty:
         return pd.Series(dtype=float)
     return labels.value_counts(normalize=True).sort_values(ascending=False)
+
+
+def _structural_mask(frame: pd.DataFrame) -> pd.Series:
+    if "exit_mode" not in frame.columns:
+        return pd.Series(True, index=frame.index)
+    return frame["exit_mode"].astype(str).ne("ema_21")
+
+
+def _choice_rows(
+    frame: pd.DataFrame,
+    count_name: str,
+    extra: pd.Series | None = None,
+) -> pd.DataFrame:
+    """Rows with a real menu. ``n == 1`` is not a collapse."""
+    if frame.empty or count_name not in frame.columns:
+        return frame.iloc[0:0]
+    counts = pd.to_numeric(frame[count_name], errors="coerce")
+    mask = counts.ge(2)
+    if extra is not None:
+        mask = mask & extra.reindex(frame.index).fillna(False)
+    return frame.loc[mask]
+
+
+def _std_below(frame: pd.DataFrame, column: str, limit: float) -> bool:
+    if column not in frame.columns or frame.empty:
+        return False
+    values = pd.to_numeric(frame[column], errors="coerce").dropna()
+    if values.size < 2:
+        return False
+    return float(values.std(ddof=0)) < float(limit)
+
+
+def _rank_parked(frame: pd.DataFrame, index_name: str, count_name: str, edge: float) -> bool:
+    ranks = np.asarray(_ranks(frame, index_name, count_name), dtype=float)
+    finite = ranks[np.isfinite(ranks)]
+    if finite.size == 0:
+        return False
+    median = float(np.median(finite))
+    return median <= float(edge) or median >= 1.0 - float(edge)
+
+
+def _stop_prior(opens: pd.DataFrame, limits: DiversityThresholds) -> bool:
+    rows = _choice_rows(opens, "n_sl")
+    if len(rows) < int(limits.min_prior_sl_choices):
+        return False
+    return _std_below(rows, "stop_u", limits.action_std) or _rank_parked(
+        rows, "sl_index", "n_sl", limits.rank_edge
+    )
+
+
+def _target_prior(opens: pd.DataFrame, limits: DiversityThresholds) -> bool:
+    rows = _choice_rows(opens, "n_tp", _structural_mask(opens))
+    if len(rows) < int(limits.min_prior_tp_choices):
+        return False
+    return _std_below(rows, "target_u", limits.action_std) or _rank_parked(
+        rows, "tp_index", "n_tp", limits.rank_edge
+    )
+
+
+def _exit_collapsed(opens: pd.DataFrame, limits: DiversityThresholds) -> bool:
+    """Same band as the printed EXIT COLLAPSE warning."""
+    shares = _exit_shares(opens)
+    if shares.empty:
+        return False
+    if "ema_21" in shares.index:
+        ema = float(shares["ema_21"])
+        return ema < float(limits.ema_lo) or ema > float(limits.ema_hi)
+    return float(shares.iloc[0]) > float(limits.ema_hi)
+
+
+def _direction_prior(opens: pd.DataFrame, limits: DiversityThresholds) -> bool:
+    if "direction" not in opens.columns or len(opens) < int(limits.min_prior_trades):
+        return False
+    dirs = pd.to_numeric(opens["direction"], errors="coerce")
+    nonflat = dirs[dirs.notna() & dirs.ne(0)]
+    if len(nonflat) < int(limits.min_prior_direction_choices):
+        return False
+    long = int((nonflat > 0).sum())
+    short = int((nonflat < 0).sum())
+    total = long + short
+    if total <= 0:
+        return False
+    return max(long, short) / total >= float(limits.direction_min_share)
 
 
 def _joint(frame: pd.DataFrame) -> pd.DataFrame:

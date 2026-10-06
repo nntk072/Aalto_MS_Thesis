@@ -14,6 +14,7 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
+from quant_rl.config import load_config
 from quant_rl.train.auxiliary_training import (
     AuxiliaryTrainerCallback,
     build_supervised_windows,
@@ -89,7 +90,7 @@ def test_callback_disabled_at_zero_weight():
 
 
 def test_callback_config_defaults():
-    cfg = OmegaConf.load("quant_rl/config/default.yaml")
+    cfg = load_config([])
     aux = cfg.auxiliary
     assert float(aux.aux_weight) == 0.0  # opt-in by default
     assert int(aux.prediction_horizon) == 5

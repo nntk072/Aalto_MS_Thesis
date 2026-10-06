@@ -12,6 +12,8 @@ import numpy as np
 
 from quant_rl.train.train_rl import (
     _build_training_log,
+    _cost_model,
+    _load_merged_config,
     _setup_rngs,
     parse_train_args,
 )
@@ -138,3 +140,40 @@ class TestBuildTrainingLog:
             test_result={},  # no n_breach_sessions
         )
         assert log["test_breaches"] == 0
+
+
+class TestLoadMergedConfig:
+    """Tests for _load_merged_config() override ordering (SL Phase 0.1)."""
+
+    def test_overrides_win_over_strategy_overlay(self) -> None:
+        """CLI overrides apply after the Idea 1 variant merge.
+
+        ``config/idea1_po3_ifvg.yaml`` pins ``env.reward_mode: pnl``; an
+        explicit ``env.reward_mode=rr`` override must survive the merge
+        instead of being silently reverted to pnl.
+        """
+        import argparse
+
+        ns = argparse.Namespace(config=None, strategy="po3_ifvg", overrides=["env.reward_mode=rr"])
+        cfg = _load_merged_config(ns)
+        assert str(cfg.env.reward_mode) == "rr"
+
+    def test_baseline_leaves_overrides_intact(self) -> None:
+        import argparse
+
+        ns = argparse.Namespace(config=None, strategy="baseline", overrides=["env.reward_mode=rr"])
+        cfg = _load_merged_config(ns)
+        assert str(cfg.env.reward_mode) == "rr"
+
+
+class TestCostModel:
+    """Tests for _cost_model() YAML wiring (SL Phase 0.5)."""
+
+    def test_cost_model_matches_default_yaml(self) -> None:
+        from quant_rl.config import load_config
+
+        cfg = load_config([])
+        model = _cost_model(cfg)
+        assert model.slippage_points == float(cfg.costs.slippage_points) == 5.0
+        assert model.spread_points == float(cfg.costs.spread_us100)
+        assert float(cfg.risk.min_sl_points) >= 2 * model.slippage_points

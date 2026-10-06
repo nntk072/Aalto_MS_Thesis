@@ -37,6 +37,12 @@ class BarView:
             return self.spread
         raise KeyError(key)
 
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
     @property
     def index(self) -> frozenset[str]:
         keys = {"open", "high", "low", "close"}

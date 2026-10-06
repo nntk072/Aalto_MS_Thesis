@@ -180,3 +180,35 @@ def range_quadrants(high: pd.Series, low: pd.Series, prefix: str) -> pd.DataFram
         },
         index=high.index,
     )
+
+
+def prev_ny_high_low(
+    df: pd.DataFrame,
+    start_ct: str = "16:30",
+    end_ct: str = "23:00",
+    session_tz: str = "America/Chicago",
+) -> pd.DataFrame:
+    """Previous completed NY session high/low, causally shifted.
+
+    Every bar in NY session N sees session N-1's final high/low. Bars before
+    the first session are NaN.
+    """
+    idx = pd.DatetimeIndex(df.index)
+    mask = session_mask(idx, start_ct, end_ct, session_tz)
+    idx_ct = idx.tz_convert(session_tz)
+    grp = _session_dates(idx_ct, _parse_hhmm(start_ct), _parse_hhmm(end_ct)).where(mask)
+    session_high = df["high"].where(mask).groupby(grp).transform("last")
+    session_low = df["low"].where(mask).groupby(grp).transform("last")
+    session_id = grp.where(mask)
+    prev_high = session_high.groupby(session_id).transform("last").groupby(session_id).shift(1)
+    prev_low = session_low.groupby(session_id).transform("last").groupby(session_id).shift(1)
+    out = pd.DataFrame(
+        {
+            "prev_ny_high": prev_high,
+            "prev_ny_low": prev_low,
+        },
+        index=idx,
+    )
+    out = out.where(mask | out.notna().any(axis=1))
+    out = out.ffill()
+    return out

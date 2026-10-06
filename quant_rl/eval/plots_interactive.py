@@ -853,7 +853,6 @@ def plot_per_trade_orders(
         duration_mins = int((t_close - t_open).total_seconds() / 60)
         duration_secs = int((t_close - t_open).total_seconds() % 60)
         lots_val = float(open_row.get("lots", 1.0)) if pd.notna(open_row.get("lots")) else 1.0
-        volume = lots_val  # Volume in lots
 
         # Reconciliation: recompute PnL from the entry/exit prices shown on
         # this chart and compare to the logged PnL. A mismatch flags a
@@ -865,19 +864,29 @@ def plot_per_trade_orders(
         )
 
         from .plots import _close_time_label
+        from .trade_note import build_trade_note
 
-        # Create extended title with trade info
+        # Same caption as the PNG renderer, shown under the two subplots.
+        note_lines = build_trade_note(
+            open_row,
+            close_row,
+            entry_price=metrics.entry_price,
+            exit_price=metrics.exit_price,
+            direction=direction,
+            pnl=pnl,
+            pnl_calc=pnl_calc,
+            duration_mins=duration_mins,
+            duration_secs=duration_secs,
+            lots=lots_val,
+            close_reason_detail=close_reason_detail,
+            extra_notes=levels.notes,
+        )
+
+        # Title keeps the headline; the detail lives in the note block.
         title = (
             f"{dir_label} | Open {t_open.strftime('%Y-%m-%d %H:%M')} "
             f"→ Close {_close_time_label(t_open, t_close)} | "
-            f"PnL: {pnl:+.2f} | {close_reason}<br>"
-            f"<sub>Direction: {'Buy' if direction == 1 else 'Sell'} | "
-            f"Open: {metrics.entry_price:.2f} | Close: {metrics.exit_price:.2f} | "
-            f"Volume: {volume:.2f} | Duration: {duration_mins}m{duration_secs}s<br>"
-            f"PnL (logged): {pnl:+.2f} | PnL (calc): {pnl_calc:+.2f} | "
-            f"Reason: {close_reason_detail}"
-            + ("" if not levels.notes else " | " + " | ".join(levels.notes))
-            + "</sub>"
+            f"PnL: {pnl:+.2f} | {close_reason}"
         )
 
         # Hide overnight / weekend gaps when a multi-day window slips through.
@@ -899,10 +908,25 @@ def plot_per_trade_orders(
             yaxis_title="Price",
             xaxis_rangeslider_visible=False,
             hovermode="x unified",
-            height=680,
+            height=680 + 22 * len(note_lines),
+            margin=dict(b=40 + 18 * len(note_lines)),
             xaxis=dict(rangebreaks=rangebreaks, tickformat=tickformat),
             xaxis2=dict(rangebreaks=rangebreaks, tickformat=tickformat),
         )
+        # Caption under both subplots, matching the PNG renderer.
+        for i, line in enumerate(note_lines):
+            fig.add_annotation(
+                x=0,
+                y=-0.12 - 0.045 * i,
+                xref="paper",
+                yref="paper",
+                text=line,
+                showarrow=False,
+                xanchor="left",
+                yanchor="top",
+                align="left",
+                font=dict(family="Courier New, monospace", size=11),
+            )
         fig.update_yaxes(range=list(levels.ylim), row=1, col=1)
 
         fname = _trade_filename(seq_i + 1, open_row, close_row, "html")

@@ -15,7 +15,7 @@ from quant_rl.backtest.entry_levels import (
     select_index,
 )
 from quant_rl.backtest.risk import compute_lots
-from quant_rl.envs.feature_row import BarView
+from quant_rl.envs.feature_row import BarView, FeatureRow
 from quant_rl.envs.trading_env import TradingEnv
 
 
@@ -37,7 +37,7 @@ class _Menu:
             out.append((name, float(row[name])))
         return out
 
-    def sl_reference(self, *, direction: int, row: pd.Series) -> float | None:
+    def sl_reference(self, *, direction: int, row: FeatureRow | pd.Series) -> float | None:
         del direction, row
         return None
 
@@ -107,8 +107,8 @@ def test_long_and_short_menus_share_distances() -> None:
     long = _place(row, direction=1, sl_fraction=0.5, min_dist=0.5)
     short = _place(row, direction=-1, sl_fraction=0.5, min_dist=0.5)
     assert long.sl_price is not None and short.sl_price is not None
-    assert long.sl_index == 1
-    assert short.sl_index == 1
+    assert long.sl_index == 0
+    assert short.sl_index == 0
     assert abs(100.0 - long.sl_price) == pytest.approx(abs(short.sl_price - 100.0))
     assert long.planned_rr == pytest.approx(short.planned_rr)
 

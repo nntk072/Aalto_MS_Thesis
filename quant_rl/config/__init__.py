@@ -32,28 +32,48 @@ def load_config(
     # (config/features_*_mtf.yaml only override the features.* keys they set,
     # everything else comes from defaults) and for full standalone configs.
     cfg = cast(DictConfig, OmegaConf.merge(base, extra))
-    if overrides:
-        # Snapshot the *pre-override* merged config so variant-config merges
-        # (which happen above, before overrides) are not flagged as typos.
-        known_paths = _leaf_paths(cfg)
-        for ov in overrides:
-            key = ov.partition("=")[0].strip()
-            if key and key not in known_paths:
-                raise ValueError(
-                    f"override key {key!r} does not exist in default.yaml — check for a typo"
-                )
-            _, _, val = ov.partition("=")
-            # Try to coerce to int/float/bool before storing
-            coerced: object = val
+    return apply_overrides(cfg, overrides)
+
+
+def apply_overrides(cfg: DictConfig, overrides: list[str] | None) -> DictConfig:
+    """Apply ``key=value`` string overrides on top of an already-merged ``cfg``.
+
+    Split out of :func:`load_config` so callers that merge an extra layer can
+    apply CLI overrides *last*. ``train_rl._load_merged_config`` used to call
+    ``load_config(overrides)`` and then merge the strategy variant YAML on top,
+    which silently reverted every CLI override — that is why
+    ``--overrides env.reward_mode=rr`` stopped taking effect for Idea 1/2 runs.
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        Config to mutate in place; returned for convenience.
+    overrides : list[str], optional
+        ``key=value`` strings applied after the merge.
+    """
+    if not overrides:
+        return cfg
+    # Snapshot the *pre-override* config so keys introduced by a variant merge
+    # that already happened are not flagged as typos.
+    known_paths = _leaf_paths(cfg)
+    for ov in overrides:
+        key = ov.partition("=")[0].strip()
+        if key and key not in known_paths:
+            raise ValueError(
+                f"override key {key!r} does not exist in default.yaml — check for a typo"
+            )
+        _, _, val = ov.partition("=")
+        # Try to coerce to int/float/bool before storing
+        coerced: object = val
+        try:
+            coerced = int(val)
+        except ValueError:
             try:
-                coerced = int(val)
+                coerced = float(val)
             except ValueError:
-                try:
-                    coerced = float(val)
-                except ValueError:
-                    if val.lower() in ("true", "false"):
-                        coerced = val.lower() == "true"
-            OmegaConf.update(cfg, key.strip(), coerced, merge=True)
+                if val.lower() in ("true", "false"):
+                    coerced = val.lower() == "true"
+        OmegaConf.update(cfg, key.strip(), coerced, merge=True)
     return cfg
 
 

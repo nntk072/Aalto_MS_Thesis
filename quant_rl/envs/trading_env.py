@@ -26,7 +26,7 @@ from ..backtest.risk import compute_lots, compute_sl_tp_long, compute_sl_tp_shor
 from ..data.session import ny_session_mask
 from ..data.ticks import TickBook
 from ..envs.feature_row import BarView, FeatureRow
-from ..envs.reward import DSRReward, PnLReward
+from ..envs.reward import DSRReward, PnLReward, RMultipleReward
 from ..envs.strategies import BaselineStrategy, TradingStrategy
 from ..envs.sweep_reward import CompositeReward, SweepConfirmationReward
 from ..features.build import attach_reachable_r, select_obs_columns
@@ -78,17 +78,76 @@ _DECISION_KEYS: tuple[str, ...] = (
     "action_stop",
     "action_risk",
     "action_target",
+    "action_sl_mode",
     "action_exit",
     "intensity_u",
     "stop_u",
     "risk_u",
     "target_u",
+    "sl_mode_u",
     "exit_u",
 )
 
 
 def _empty_decision() -> dict[str, float]:
     return {key: float("nan") for key in _DECISION_KEYS}
+
+
+def _empty_entry_diag() -> dict[str, int]:
+    """Per-episode entry diagnostics (strategy_actions).
+
+    Defined once so ``__init__`` and ``reset`` cannot drift apart. Every
+    ``rejected_*`` bucket corresponds to exactly one ``entry_rejection_reason``
+    string; ``entry_rejected_total`` in the step info is derived from the
+    ``rejected_`` prefix rather than stored, so it cannot go stale.
+    """
+    return {
+        # Requested entry suppressed before the order was built.
+        "hold_low_intensity": 0,
+        "hold_no_context": 0,
+        "hold_risk_floor": 0,
+        "rejected_overnight": 0,
+        "rejected_blackout": 0,
+        "rejected_session_cap": 0,
+        "rejected_cooldown": 0,
+        "rejected_manipulation": 0,
+        "rejected_gate": 0,
+        "rejected_soft_brick": 0,
+        # Order geometry rejected (place_strategy_order returned no survivor).
+        "rejected_sl": 0,
+        "rejected_rr": 0,
+        "rejected_ema": 0,
+        # Geometry existed but the stop was already through the fill quote.
+        "rejected_sl_already_hit": 0,
+        "opened": 0,
+    }
+
+
+#: Rejection reason -> ``_entry_diag`` bucket. Every site that refuses an entry
+#: must go through :meth:`TradingEnv._reject`, which increments the mapped
+#: bucket and sets the reason atomically, so counter and reason cannot drift
+#: apart the way the old "ema increments rejected_sl but reports no_valid_tp"
+#: mismatch did. A reason missing from this map raises ``KeyError`` at the
+#: rejection site instead of silently dropping into the funnel.
+_REJECTION_COUNTERS: dict[str, str] = {
+    "overnight_boundary": "rejected_overnight",
+    "open_blackout": "rejected_blackout",
+    "session_cap": "rejected_session_cap",
+    "entry_cooldown": "rejected_cooldown",
+    "manipulation_unconfirmed": "rejected_manipulation",
+    "entry_gate": "rejected_gate",
+    "soft_brick": "rejected_soft_brick",
+    "no_valid_sl": "rejected_sl",
+    "no_valid_tp": "rejected_rr",
+    "no_ema_exit": "rejected_ema",
+    "sl_already_hit": "rejected_sl_already_hit",
+}
+
+
+_PRICE_TOL = 1e-4
+# Monotonic SL mode ordering: fixed → breakeven → trailing.
+# Used to advance the state machine only forward.
+_SL_MODE_RANK: dict[str, int] = {"fixed": 0, "breakeven": 1, "trailing": 2}
 
 
 def _at(values: np.ndarray[Any, Any], index: int) -> float:
@@ -101,21 +160,25 @@ def _decision_from_action(
     raw: np.ndarray[Any, Any],
     unit: np.ndarray[Any, Any],
     direction_offset: int,
+    sl_mode_offset: int = 0,
 ) -> dict[str, float]:
     """Raw box endpoints and the unit-interval coordinates of one action."""
     off = int(direction_offset)
+    sm_off = int(sl_mode_offset)
     return {
         "action_direction": _at(raw, 0) if off else float("nan"),
         "action_intensity": _at(raw, off),
         "action_stop": _at(raw, 1 + off),
         "action_risk": _at(raw, 2 + off),
         "action_target": _at(raw, 3 + off),
-        "action_exit": _at(raw, 4 + off),
+        "action_sl_mode": _at(raw, 4 + off) if sm_off else float("nan"),
+        "action_exit": _at(raw, 4 + off + sm_off),
         "intensity_u": _at(unit, off),
         "stop_u": _at(unit, 1 + off),
         "risk_u": _at(unit, 2 + off),
         "target_u": _at(unit, 3 + off),
-        "exit_u": _at(unit, 4 + off),
+        "sl_mode_u": _at(unit, 4 + off) if sm_off else float("nan"),
+        "exit_u": _at(unit, 4 + off + sm_off),
     }
 
 
@@ -136,6 +199,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         risk_frac_range: tuple[float, float] = (0.005, 0.02),
         rr_ratio_range: tuple[float, float] = (1.0, 3.0),
         swing_buffer_pts: float = 1.0,
+        sl_mode: str = "fixed",
         min_lot: float = 0.01,
         max_lot: float = 100.0,
         contract_size: float = 1.0,
@@ -172,6 +236,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         open_manipulation_bars: int = 10,
         entry_cooldown_bars: int = 0,
         reward_mode: str = "dsr",
+        fixed_risk_usd: float = 0.0,
+        allow_ema_exit: bool = True,
+        risk_mode: str = "dynamic",
         entry_intensity_threshold: float = 0.0,
         obs_features_mmap: str | None = None,
         peak_trailing_dd_limit: float = 0.0,
@@ -180,6 +247,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         agent_direction_control: bool = False,
         direction_override_threshold: float = 0.0,
         risk_floor: float = 0.0005,
+        allow_agent_sl_mode: bool = True,
+        sl_mode_defer_threshold: float = 0.1,
         mtf: bool = False,
         mtf_windows: dict[str, int] | None = None,
     ):
@@ -294,6 +363,18 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             Stops tighter than ``max(min_sl_points, min_sl_atr_mult * atr)``
             are rejected when strategy/trader actions are on.
         max_entries_per_session : int
+        fixed_risk_usd : float
+            When ``risk_mode="fixed"``, every trade risks exactly this many
+            dollars, so 1R is a constant known in advance instead of a fraction
+            of drifting equity. 0 (default) keeps fractional compounding on live
+            equity.
+        allow_ema_exit : bool
+            When False the agent cannot pick the EMA-21 exit, so every trade must
+            target a structural level at least 1R away. True (default) keeps the
+            EMA-21 exit available.
+        risk_mode : str
+            ``"fixed"`` sizes every trade to ``fixed_risk_usd``; ``"dynamic"``
+            sizes to live equity times the agent's chosen risk fraction.
             Cap on opens per ``session_id`` (0 = unlimited).
         open_manipulation_bars : int
             No new entry for this many M1 bars after each NY session open.
@@ -322,7 +403,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         self.risk_frac_range = risk_frac_range
         self.rr_ratio_range = rr_ratio_range
-        self.swing_buffer_pts = swing_buffer_pts
+        self.swing_buffer_pts = float(sl_buffer_pts)
+        self.sl_mode = str(sl_mode or "fixed").lower()
+        if self.sl_mode not in _SL_MODE_RANK:
+            raise ValueError(f"Unknown sl_mode: {self.sl_mode!r}")
         self.min_lot = min_lot
         self.max_lot = max_lot
         self.contract_size = contract_size
@@ -351,10 +435,26 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.min_sl_atr_mult = float(min_sl_atr_mult)
         self.min_sl_points = float(min_sl_points)
         self.max_entries_per_session = int(max_entries_per_session)
+        # Sizing mode. "fixed" risks exactly fixed_risk_usd every trade so 1R is
+        # a known constant; "dynamic" risks a fraction of live equity instead.
+        if risk_mode not in ("fixed", "dynamic"):
+            raise ValueError(f"risk_mode must be 'fixed' or 'dynamic', got {risk_mode!r}")
+        self.risk_mode = risk_mode
+        self.fixed_risk_usd = float(fixed_risk_usd)
+        if self.risk_mode == "fixed" and self.fixed_risk_usd <= 0.0:
+            raise ValueError(
+                "risk_mode='fixed' requires fixed_risk_usd > 0, otherwise every "
+                "trade would size to min_lot and risk ~$0"
+            )
         self.open_manipulation_bars = int(open_manipulation_bars)
         self._session_open_idx: dict[int, int] = {}
         self._ny_manip_confirmed: set[int] = set()
         self.entry_cooldown_bars = int(entry_cooldown_bars)
+        # EMA-21 exit is opt-out. It was selected on 92% of trades, which
+        # collapsed the target column onto one non-structural exit and left the
+        # structural target choice effectively untrained. Off forces every exit
+        # onto a structural target at least 1R away.
+        self.allow_ema_exit = bool(allow_ema_exit)
         self.reward_mode = str(reward_mode or "dsr").lower()
         # 0 = intensity never holds; entry follows context_direction.
         self.entry_intensity_threshold = float(entry_intensity_threshold)
@@ -370,6 +470,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # defers to ``strategy.context_direction``. 0.0 means the agent's sign
         # always wins except at exactly neutral.
         self.direction_override_threshold = float(direction_override_threshold)
+        self.allow_agent_sl_mode = bool(allow_agent_sl_mode)
+        self.sl_mode_defer_threshold = float(sl_mode_defer_threshold)
         self.risk_floor = float(risk_floor)
         self._tickbook = tickbook
         self._fill_delay_ms = int(fill_delay_ms)
@@ -380,11 +482,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         # Initialize reward function. Training breaches are a small terminal
         # spike; eval keeps the -10 report. The guardrail still ends the episode.
-        self.reward_fn: DSRReward | CompositeReward | PnLReward
+        self.reward_fn: DSRReward | CompositeReward | PnLReward | RMultipleReward
         breach_penalty = 0.0 if episodic else -10.0
         base_pnl = (
             PnLReward(soft_loss_frac=0.01, dsr_weight=0.0, breach_penalty=breach_penalty)
-            if self.reward_mode == "pnl"
+            if self.reward_mode in ("pnl", "rr")
             else None
         )
         if (
@@ -403,6 +505,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 strategy_weight=strategy_weight,
                 base_reward=base_pnl,
             )
+            self.dsr_reward = DSRReward(eta=dsr_eta, breach_penalty=breach_penalty)
+        elif self.reward_mode == "rr":
+            # R-multiple objective. Only a plain RMultipleReward: no sweep or
+            # strategy shaping, so the agent is scored purely on cumulative R.
+            self.reward_fn = RMultipleReward(breach_penalty=breach_penalty)
             self.dsr_reward = DSRReward(eta=dsr_eta, breach_penalty=breach_penalty)
         elif self.reward_mode == "pnl":
             self.reward_fn = PnLReward(
@@ -423,11 +530,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._selected_sl_anchor = 0.0
         self._selected_tp_fraction = 0.0
         self._selected_exit_mode = "structural"
+        self._selected_sl_mode = "fixed"
+        self._sl_mode_explicit = False
         self._decision_action = _empty_decision()
         self._entry_rejection_reason = ""
         self._session_entry_counts: dict[int, int] = {}
         self._cooldown_until_bar: int = -1
         self._last_realized_close_pnl: float | None = None
+        self._last_realized_close_r: float | None = None
         self._opened_this_step = False
         self._debug_trace = False
         self._debug_window: dict[str, Any] | None = None
@@ -545,11 +655,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             # deterministic mean to 0 (always hold). Affine-map to unit interval
             # at decode: u = 0.5 * (clip(a, -1, 1) + 1).
             #
-            # Default 5-D layout (strategy owns the side). A 4-D checkpoint
-            # does not load. Exit mode is the last dimension:
+            # Default 5-D layout (strategy owns the side). Exit mode is the
+            # last dimension:
             #   [0] entry intensity (hold only if threshold > 0 and u[0] < it;
             #       default 0 → context_direction decides enter vs hold)
-            #   [1] stop fraction among buffered invalidation candidates
+            #   [1] stop distance ratio: 1.0 = at sl_reference, <1 tighter,
+            #       >1 wider (mapped from raw[-1,1] to [0,2])
             #   [2] risk_frac -> risk_frac_range
             #   [3] target fraction among structural prices at least 1R away
             #   [4] exit mode: u >= 0.5 is ema_21, u < 0.5 is structural
@@ -560,11 +671,21 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             #   [0] direction conviction +1 long .. -1 short (sign is the side;
             #       |u| < context_direction_threshold defers to the strategy)
             #   [1] entry intensity
-            #   [2] stop fraction among buffered invalidation candidates
+            #   [2] stop distance ratio
             #   [3] risk_frac -> risk_frac_range
             #   [4] target fraction among structural prices at least 1R away
             #   [5] exit mode: u >= 0.5 is ema_21, u < 0.5 is structural
-            n_dims = 6 if self.agent_direction_control else 5
+            #
+            # Opt-in SL-mode dim (``allow_agent_sl_mode=True``) inserts one
+            # dimension before exit so the invariant "exit mode is the last
+            # dimension" survives:
+            #   5-D -> 6-D: [intensity, stop, risk, target, sl_mode, exit]
+            #   6-D -> 7-D: [direction, intensity, stop, risk, target, sl_mode, exit]
+            n_dims = (
+                5
+                + (1 if self.agent_direction_control else 0)
+                + (1 if self.allow_agent_sl_mode else 0)
+            )
             self.action_space = spaces.Box(
                 low=np.full(n_dims, -1.0, dtype=np.float32),
                 high=np.full(n_dims, 1.0, dtype=np.float32),
@@ -579,15 +700,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             self.action_space = spaces.Discrete(20)
 
         # Per-step entry diagnostics (strategy_actions); reset each episode.
-        self._entry_diag: dict[str, int] = {
-            "hold_low_intensity": 0,
-            "hold_no_context": 0,
-            "hold_risk_floor": 0,
-            "rejected_sl": 0,
-            "rejected_rr": 0,
-            "opened": 0,
-            "soft_brick": 0,
-        }
+        self._entry_diag: dict[str, int] = _empty_entry_diag()
 
         # NY session start index for time decay penalty. Default to the first
         # tradable NY bar, which is what "minutes since open" measures from.
@@ -706,23 +819,21 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._session_entry_counts = {}
         self._cooldown_until_bar = -1
         self._last_realized_close_pnl = None
+        self._last_realized_close_r = None
+        # ``float | None``: an exit with no stampable R leaves this unset rather
+        # than NaN, so the annotation must allow more than the None it starts as.
+        self._pending_realized_r: float | None = None
         self._opened_this_step = False
         self._selected_sl_anchor = 0.0
         self._selected_tp_fraction = 0.0
         self._selected_exit_mode = "structural"
+        self._selected_sl_mode = "fixed"
+        self._sl_mode_explicit = False
         self._decision_action = _empty_decision()
         self._entry_rejection_reason = ""
         self._ep_start_equity = float(self.initial_balance)
         self._ep_reward_sum = 0.0
-        self._entry_diag = {
-            "hold_low_intensity": 0,
-            "hold_no_context": 0,
-            "hold_risk_floor": 0,
-            "rejected_sl": 0,
-            "rejected_rr": 0,
-            "opened": 0,
-            "soft_brick": 0,
-        }
+        self._entry_diag = _empty_entry_diag()
 
         obs = self._get_observation()
         return obs, {}
@@ -1073,7 +1184,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         ``Broker.close_position`` still sees a two-sided quote.
         """
         spread = self.cost_model.spread_points * self.cost_model.point_size
-        slip = self.cost_model.slippage_points * self.cost_model.point_size
+        # Slippage is quoted in price points, the same unit as ``min_sl_points``,
+        # ``sl_buffer_pts`` and ``swing_buffer_pts``, so it is *not* scaled by
+        # ``point_size`` the way the tick-denominated spread fallback is. It was
+        # scaled before, which meant ``slippage_points: 10`` bought 0.1 of a
+        # point — an order of magnitude below the slippage the sizing floor is
+        # written to tolerate. Positive only ever widens the fill against us.
+        slip = float(self.cost_model.slippage_points)
         if direction == 1:
             bid = hit_price - slip
             ask = bid + spread
@@ -1088,9 +1205,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             return int(self._session_ids_arr[self.step_idx])
         return 0
 
-    def _note_close(self, pnl: float) -> None:
-        """Record realized close PnL and start the post-close entry cooldown."""
+    def _note_close(self, pnl: float, realized_r: float | None = None) -> None:
+        """Record realized close PnL/R and start the post-close entry cooldown."""
         self._last_realized_close_pnl = float(pnl)
+        if realized_r is None:
+            realized_r = self._pending_realized_r
+        self._last_realized_close_r = None if realized_r is None else float(realized_r)
+        self._pending_realized_r = None
         if self.strategy_actions and self.entry_cooldown_bars > 0:
             self._cooldown_until_bar = self.step_idx + self.entry_cooldown_bars
 
@@ -1112,6 +1233,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         record["tp_ref"] = pos.tp_ref
         record["planned_rr"] = float("nan") if planned is None else float(planned)
         record["realized_r"] = realized
+        # Stash for the reward: _stamp_exit runs immediately before _note_close at
+        # every close site, so the R is already computed and need not be passed.
+        self._pending_realized_r = None if not np.isfinite(realized) else float(realized)
         record["exit_mode"] = pos.exit_mode
         record["sl_buffer"] = pos.sl_buffer
         record["manipulation"] = pos.manipulation
@@ -1242,6 +1366,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     exit_mode=str(self._selected_exit_mode),
                     buffer_pts=self.sl_buffer_pts,
                     max_tp_distance=self._max_tp_here(),
+                    rr_bounds=self.rr_ratio_range,
+                    htf=tuple(self._mtf_windows.keys()),
                 )
                 sl_price = placed.sl_price
                 tp_price = placed.tp_price
@@ -1251,27 +1377,20 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 )
                 if order_ok:
                     assert sl_price is not None
-                    lots = compute_lots(
-                        self.account.equity,
-                        risk_frac,
-                        entry_price,
-                        sl_price,
-                        contract_size=self.contract_size,
-                        min_lot=self.min_lot,
-                        max_lot=self.max_lot,
-                        max_loss_cap=self.max_loss_per_trade_usd,
-                    )
+                    lots = self._compute_lots_for(risk_frac, entry_price, sl_price)
                     has_levels = True
                 else:
                     lots = 0.0
                     if placed.reject_kind == "tp":
-                        self._entry_diag["rejected_rr"] += 1
-                        self._entry_rejection_reason = "no_valid_tp"
+                        self._reject("no_valid_tp")
+                    elif placed.reject_kind == "ema":
+                        # A missing EMA-21 level is an exit problem, not a stop
+                        # problem. It used to increment rejected_sl while
+                        # reporting no_valid_tp, so the counter and the reason
+                        # disagreed and the EMA case was invisible in entry_sl.
+                        self._reject("no_ema_exit")
                     else:
-                        self._entry_diag["rejected_sl"] += 1
-                        self._entry_rejection_reason = (
-                            "no_valid_tp" if placed.reject_kind == "ema" else "no_valid_sl"
-                        )
+                        self._reject("no_valid_sl")
             elif (
                 discrete_action == 1
                 and not np.isnan(last_swing_low)
@@ -1283,16 +1402,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     buffer_pts=self.swing_buffer_pts,
                     rr_ratio=rr_ratio,
                 )
-                lots = compute_lots(
-                    self.account.equity,
-                    risk_frac,
-                    entry_price,
-                    sl_price,
-                    contract_size=self.contract_size,
-                    min_lot=self.min_lot,
-                    max_lot=self.max_lot,
-                    max_loss_cap=self.max_loss_per_trade_usd,
-                )
+                lots = self._compute_lots_for(risk_frac, entry_price, sl_price)
                 has_levels = True
             elif (
                 discrete_action == -1
@@ -1305,16 +1415,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     buffer_pts=self.swing_buffer_pts,
                     rr_ratio=rr_ratio,
                 )
-                lots = compute_lots(
-                    self.account.equity,
-                    risk_frac,
-                    entry_price,
-                    sl_price,
-                    contract_size=self.contract_size,
-                    min_lot=self.min_lot,
-                    max_lot=self.max_lot,
-                    max_loss_cap=self.max_loss_per_trade_usd,
-                )
+                lots = self._compute_lots_for(risk_frac, entry_price, sl_price)
                 has_levels = True
             else:
                 lots = 0.0
@@ -1332,7 +1433,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                         self.account, (fill_bid, fill_ask), lots, discrete_action
                     )
                 else:
+                    # The chosen stop is already through the fill quote, so the
+                    # order would open and stop out on the same fill. Previously
+                    # this was a silent no-trade: no counter, no reason, and the
+                    # funnel lost the opportunity entirely.
                     self.position = None
+                    self._reject("sl_already_hit")
                 if self.position:
                     self._entry_diag["opened"] += 1
                     self.position.sl_price = sl_price
@@ -1369,6 +1475,25 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     self.position.entry_atr = (
                         float(atr_val) if pd.notna(atr_val) and float(atr_val) > 0 else 1.0
                     )
+                    if placed is not None and placed.sl_ref == "sl_reference":
+                        ref = None
+                        if hasattr(self.strategy, "sl_reference"):
+                            ref = self.strategy.sl_reference(
+                                direction=discrete_action, row=feat_row
+                            )
+                        self.position.entry_sl_ref_price = (
+                            float(ref) if ref is not None and np.isfinite(float(ref)) else None
+                        )
+                    try:
+                        self.position.entry_last_swing_high = float(feat_row["last_swing_high"])
+                    except (KeyError, TypeError, ValueError):
+                        self.position.entry_last_swing_high = None
+                    try:
+                        self.position.entry_last_swing_low = float(feat_row["last_swing_low"])
+                    except (KeyError, TypeError, ValueError):
+                        self.position.entry_last_swing_low = None
+                    self.position.sl_mode = self._selected_sl_mode
+                    self.position.sl_mode_overridden = self._sl_mode_explicit
                     self.position.best_favorable = 0.0
                     self.position.last_progress_favorable = 0.0
                     self.position.stale_counter = 0
@@ -1413,6 +1538,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                             "manipulation": self.position.manipulation,
                             "n_sl": self.position.n_sl,
                             "n_tp": self.position.n_tp,
+                            "sl_menu": (
+                                [] if placed is None else [list(pair) for pair in placed.sl_menu]
+                            ),
+                            "tp_menu": (
+                                [] if placed is None else [list(pair) for pair in placed.tp_menu]
+                            ),
                             **(
                                 self._decision_fields(
                                     placed,
@@ -1428,6 +1559,20 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                             "bar": self.step_idx,
                             "time": bar_time,
                             "equity": self.account.equity,
+                            # Always recorded, on the strategy path and the baseline
+                            # path alike, so the logged risk can never disagree with
+                            # the filled lots. Baseline rows used to omit these,
+                            # leaving no record of what a trade actually risked.
+                            "stop_distance": (
+                                abs(float(self.position.entry_price) - float(sl_price))
+                                if sl_price is not None
+                                else float("nan")
+                            ),
+                            "risk_cash": self._actual_risk_usd(
+                                abs(float(self.position.entry_price) - float(sl_price))
+                                if sl_price is not None
+                                else float("nan")
+                            ),
                             "level_type": entry_level,
                             "sweep_delay_s": sweep_delay,
                             "action_tp_mode": getattr(self, "_selected_tp_mode", "rr"),
@@ -1463,6 +1608,104 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                         }
                     )
                     self.sessions_with_trades.add(session_id)
+
+    def _prior_open_payload(self) -> dict[str, float | str] | None:
+        """Detector fields for the open that happened on this step."""
+        if not self._opened_this_step or not self.trade_log:
+            return None
+        row = self.trade_log[-1]
+        if row.get("type") != "open":
+            return None
+
+        def _num(value: Any) -> float:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return float("nan")
+
+        def _text(value: Any) -> str:
+            if value is None:
+                return ""
+            return str(value)
+
+        return {
+            "stop_u": _num(row.get("stop_u")),
+            "target_u": _num(row.get("target_u")),
+            "sl_index": _num(row.get("sl_index")),
+            "n_sl": _num(row.get("n_sl")),
+            "tp_index": _num(row.get("tp_index")),
+            "n_tp": _num(row.get("n_tp")),
+            "planned_rr": _num(row.get("planned_rr")),
+            "direction": _num(row.get("direction")),
+            "exit_mode": _text(row.get("exit_mode")),
+            "sl_ref": _text(row.get("sl_ref")),
+            "tp_ref": _text(row.get("tp_ref")),
+        }
+
+    def _sizing_equity(self) -> float:
+        """Equity basis for lot sizing (dynamic risk mode only).
+
+        In ``risk_mode="dynamic"`` the agent's ``risk_frac`` acts on live account
+        equity, so risk per trade drifts with the balance. In ``risk_mode="fixed"``
+        sizing never touches this value: the dollar budget comes from
+        ``fixed_risk_usd`` via :meth:`_risk_budget_usd` and is passed to
+        ``compute_lots`` as an explicit amount, which is what makes 1R exactly
+        ``fixed_risk_usd`` at every stop width.
+        """
+        return float(self.account.equity)
+
+    def _risk_budget_usd(self, risk_frac: float) -> float:
+        """Dollar risk actually requested for the next trade, by sizing mode.
+
+        ``fixed``  -> ``fixed_risk_usd``, independent of equity and risk_frac.
+        ``dynamic`` -> live equity times the agent's chosen fraction.
+        """
+        if self.risk_mode == "fixed":
+            return float(self.fixed_risk_usd)
+        return float(self.account.equity) * float(risk_frac)
+
+    def _compute_lots_for(self, risk_frac: float, entry_price: float, sl_price: float) -> float:
+        """Lot size for one trade under the active sizing mode.
+
+        Fixed mode passes an explicit dollar budget and drops ``max_loss_cap``:
+        that cap is a fraction-of-equity safety rail, and leaving it on silently
+        overrode the requested risk (a $500 request was clamped to the $100
+        default, so no stop width could ever risk $500).
+        """
+        if self.risk_mode == "fixed":
+            return compute_lots(
+                self._sizing_equity(),
+                risk_frac,
+                entry_price,
+                sl_price,
+                contract_size=self.contract_size,
+                min_lot=self.min_lot,
+                max_lot=self.max_lot,
+                max_loss_cap=None,
+                risk_usd=self._risk_budget_usd(risk_frac),
+            )
+        return compute_lots(
+            self._sizing_equity(),
+            risk_frac,
+            entry_price,
+            sl_price,
+            contract_size=self.contract_size,
+            min_lot=self.min_lot,
+            max_lot=self.max_lot,
+            max_loss_cap=self.max_loss_per_trade_usd,
+        )
+
+    def _actual_risk_usd(self, stop_distance: float) -> float:
+        """Dollar risk the filled position really carries, in account currency.
+
+        Uses the broker's accepted size rather than the requested budget, so the
+        logged number is what a stop would cost. Returns NaN when there is no
+        open position or the stop distance is unusable.
+        """
+        pos = self.position
+        if pos is None or not np.isfinite(stop_distance) or stop_distance <= 0.0:
+            return float("nan")
+        return float(pos.size) * float(stop_distance) * float(self.contract_size)
 
     def _decision_fields(
         self,
@@ -1504,7 +1747,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             "tp_index": float("nan") if int(placed.tp_index) < 0 else int(placed.tp_index),
             "stop_distance": stop_distance,
             "target_distance": target_distance,
-            "risk_cash": float(entry_equity) * float(risk_frac),
+            # risk_cash is set unconditionally on the open row from the filled
+            # lots, not here: reporting the requested budget let risk_cash read
+            # 500.0 on trades that really risked $0.82, because min_lot and
+            # max_loss_cap had clamped lots below the request.
             "session": session,
             "volatility_regime": self._volatility_regime(),
             "trend_regime": self._trend_regime(feat_row),
@@ -1623,6 +1869,72 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             return ctx if ctx in (-1, 1) else 0
         return 1 if conviction > 0.0 else -1
 
+    def _finite(self, series: FeatureRow | pd.Series | BarView | None, name: str) -> float | None:
+        if series is None or name not in series.index:
+            return None
+        value = float(series.get(name, np.nan))
+        return value if np.isfinite(value) else None
+
+    def _default_sl_mode(self, pos: Position | None = None) -> str:
+        """State-machine default SL mode from market state.
+
+        - ``fixed``: reference level not yet tested and TP is beyond the swing.
+        - ``breakeven``: reference level has been tested.
+        - ``trailing``: a new local swing formed during the move.
+        """
+        if pos is None:
+            pos = self.position
+        if pos is None:
+            return "fixed"
+        ref = pos.entry_sl_ref_price
+        if ref is not None and pos.direction == 1:
+            ref_taken = float(pos.mae) >= (pos.entry_price - float(ref))
+        elif ref is not None and pos.direction == -1:
+            ref_taken = float(pos.mae) >= (float(ref) - pos.entry_price)
+        else:
+            ref_taken = False
+        tp_farther = False
+        if pos.tp_price is not None and not np.isnan(pos.tp_price):
+            if pos.direction == 1:
+                swing = self._finite(
+                    self._feature_row_at(self.step_idx) if self.step_idx >= 0 else None,
+                    "last_swing_high",
+                )
+                tp_farther = swing is not None and float(pos.tp_price) > float(swing)
+            elif pos.direction == -1:
+                swing = self._finite(
+                    self._feature_row_at(self.step_idx) if self.step_idx >= 0 else None,
+                    "last_swing_low",
+                )
+                tp_farther = swing is not None and float(pos.tp_price) < float(swing)
+        new_swing = False
+        if pos.entry_last_swing_high is not None or pos.entry_last_swing_low is not None:
+            cur_high = self._finite(
+                self._feature_row_at(self.step_idx) if self.step_idx >= 0 else None,
+                "last_swing_high",
+            )
+            cur_low = self._finite(
+                self._feature_row_at(self.step_idx) if self.step_idx >= 0 else None,
+                "last_swing_low",
+            )
+            if (
+                pos.direction == 1
+                and cur_high is not None
+                and pos.entry_last_swing_high is not None
+            ):
+                new_swing = float(cur_high) > float(pos.entry_last_swing_high)
+            elif (
+                pos.direction == -1 and cur_low is not None and pos.entry_last_swing_low is not None
+            ):
+                new_swing = float(cur_low) < float(pos.entry_last_swing_low)
+        if not ref_taken and tp_farther:
+            return "fixed"
+        if ref_taken:
+            return "breakeven"
+        if new_swing:
+            return "trailing"
+        return "fixed"
+
     def _decode_action(
         self,
         action: int | float | np.ndarray[Any, Any],
@@ -1650,11 +1962,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._entry_rejection_reason = ""
         if self.strategy_actions:
             arr = np.asarray(action, dtype=np.float32).reshape(-1)
-            # Affine map Box[-1,1] -> [0,1] so PPO's mean-0 policy yields
-            # intensity 0.5 (above the default entry threshold).
             raw = np.clip(arr, -1.0, 1.0)
             u = 0.5 * (raw + 1.0)
-            direction_offset = 1 if self.agent_direction_control and u.size >= 5 else 0
+            direction_offset = 1 if self.agent_direction_control and u.size >= 6 else 0
+            sl_mode_offset = (
+                1 if self.allow_agent_sl_mode and u.size >= 5 + direction_offset + 1 else 0
+            )
             intensity = float(u[direction_offset]) if u.size > direction_offset else 0.0
             entry_threshold = self.entry_intensity_threshold
             if feat_row is None:
@@ -1672,20 +1985,30 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 if discrete_action == 0 and ctx not in (-1, 1):
                     self._entry_diag["hold_no_context"] += 1
             if u.size >= 4 + direction_offset:
-                self._selected_sl_anchor = float(np.clip(u[1 + direction_offset], 0.0, 1.0))
+                sl_raw = float(raw[1 + direction_offset])
+                self._selected_sl_anchor = sl_raw + 1.0
                 r_lo, r_hi = self.risk_frac_range
                 risk_frac = r_lo + float(u[2 + direction_offset]) * (r_hi - r_lo)
-                # Target fraction among structural prices. The planned ratio is
-                # target distance / stop distance and is not this number.
                 self._selected_tp_fraction = float(u[3 + direction_offset])
                 rr_ratio = self._selected_tp_fraction
             else:
                 risk_frac = self.risk_frac_range[0]
                 rr_ratio = 0.0
-            exit_at = 4 + direction_offset
-            if u.size > exit_at:
+            exit_at = 4 + direction_offset + sl_mode_offset
+            if u.size > exit_at and self.allow_ema_exit:
                 self._selected_exit_mode = "ema_21" if float(u[exit_at]) >= 0.5 else "structural"
-            self._decision_action = _decision_from_action(raw, u, direction_offset)
+            self._selected_sl_mode = "structural"
+            self._sl_mode_explicit = False
+            if sl_mode_offset and u.size > 4 + direction_offset:
+                u_sl = float(u[4 + direction_offset])
+                if abs(u_sl - 0.5) < self.sl_mode_defer_threshold:
+                    self._selected_sl_mode = self._default_sl_mode()
+                else:
+                    self._selected_sl_mode = ("fixed", "breakeven", "trailing")[int(u_sl * 3)]
+                    self._sl_mode_explicit = True
+            else:
+                self._selected_sl_mode = self.sl_mode
+            self._decision_action = _decision_from_action(raw, u, direction_offset, sl_mode_offset)
             tp_mode = "rr"
         elif self.continuous_actions:
             if isinstance(action, np.ndarray):
@@ -1744,7 +2067,15 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 discrete_action = 0
                 risk_frac = self.risk_frac_range[0]
                 rr_ratio = self.rr_ratio_range[0]
-        if discrete_action in (1, -1) and risk_frac <= self.risk_floor:
+        # The risk floor rejects an entry whose *fraction* is too small to be worth
+        # sizing. Under fixed_risk_usd the fraction is ignored entirely, so applying
+        # it there would silently cancel trades the agent asked for (Idea 1's
+        # risk_frac_range starts at 0.0, which this gate would reject outright).
+        if (
+            self.fixed_risk_usd <= 0.0
+            and discrete_action in (1, -1)
+            and risk_frac <= self.risk_floor
+        ):
             self._entry_diag["hold_risk_floor"] += 1
             discrete_action = 0
         return discrete_action, risk_frac, rr_ratio, tp_mode
@@ -1814,6 +2145,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             int(self._session_ids_arr[self.step_idx]) if self._session_ids_arr is not None else 0
         )
         self._last_realized_close_pnl = None
+        self._last_realized_close_r = None
+        self._pending_realized_r = None
         self._opened_this_step = False
 
         # Fill quote for next action (latency-shifted: decision at bar t
@@ -1833,24 +2166,30 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # Suppress new entries on the last bar of a session (overnight block
         # just closed a position or would have if there was one).
         entering_new_session = self.block_overnight and self._is_ny_session_boundary()
-        if entering_new_session:
+        if entering_new_session and discrete_action != 0:
+            # Counting only when an entry was actually requested keeps this a
+            # true funnel: a plain hold is not a rejection.
             discrete_action = 0
+            if self.strategy_actions:
+                self._reject("overnight_boundary")
 
         # Session entry cap + post-close cooldown (trader / strategy actions).
         if self.strategy_actions and discrete_action != 0:
             if self._in_open_blackout(session_id):
                 discrete_action = 0
                 risk_frac = 0.0
-                self._entry_rejection_reason = "open_blackout"
+                self._reject("open_blackout")
             elif (
                 self.max_entries_per_session > 0
                 and self._session_entry_counts.get(session_id, 0) >= self.max_entries_per_session
             ):
                 discrete_action = 0
                 risk_frac = 0.0
+                self._reject("session_cap")
             elif self.entry_cooldown_bars > 0 and self.step_idx < self._cooldown_until_bar:
                 discrete_action = 0
                 risk_frac = 0.0
+                self._reject("entry_cooldown")
 
         if self.strategy_actions:
             discrete_action, risk_frac = self._lock_unconfirmed_side(
@@ -1870,6 +2209,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 # Gate not satisfied, force to hold
                 discrete_action = 0
                 risk_frac = 0.0
+                if self.strategy_actions:
+                    self._reject("entry_gate")
 
         # Check guardrails
         reason, session_blocked, done, truncated = self._check_guardrails(
@@ -1878,7 +2219,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         if not reason and not session_blocked:
             self._check_sl_tp(bar, fill_bid, fill_ask)
-            self._apply_position_guards(bar, bar_time, fill_bid, fill_ask, eod=False)
+            self._apply_position_guards(
+                bar, bar_time, fill_bid, fill_ask, eod=False, feat_row=feat_row
+            )
 
         self._peak_dd_fired = False
         peak_dd_block = self._apply_peak_trailing_dd(fill_bid, fill_ask, bar_time)
@@ -1909,7 +2252,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 if self.guardrails.check_soft_daily(
                     self.account
                 ) or self.guardrails.check_soft_trailing_dd(self.account):
-                    self._entry_diag["soft_brick"] += 1
+                    # Soft brick on daily loss or trailing DD. Renamed from
+                    # ``soft_brick`` so it counts in the rejected_* funnel; the
+                    # reason key below was never set before, so the rejection
+                    # was invisible in both the buckets and the trade log.
+                    self._reject("soft_brick")
                 else:
                     self._try_enter_position(
                         discrete_action,
@@ -1964,7 +2311,17 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             "reward_parts": reward_parts,
             "entry_rejection_reason": self._entry_rejection_reason,
             **{f"entry_{k}": v for k, v in self._entry_diag.items()},
+            # Derived, never stored, so it cannot drift from the buckets.
+            "entry_rejected_total": sum(
+                v for k, v in self._entry_diag.items() if k.startswith("rejected_")
+            ),
         }
+        prior_open = self._prior_open_payload()
+        if prior_open is not None:
+            info["prior_open"] = prior_open
+        risk_u = self._decision_action.get("risk_u")
+        if isinstance(risk_u, (int, float)) and np.isfinite(risk_u):
+            info["risk_u"] = float(risk_u)
 
         self._advance_ny_step()
         self.episode_step_count += 1
@@ -2049,8 +2406,18 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         ctx = int(self.strategy.context_direction(feat_row))  # type: ignore[arg-type]
         if discrete_action == ctx:
             return discrete_action, risk_frac
-        self._entry_rejection_reason = "manipulation_unconfirmed"
+        self._reject("manipulation_unconfirmed")
         return 0, 0.0
+
+    def _reject(self, reason: str) -> None:
+        """Refuse an entry: bump its counter and stamp the reason, atomically.
+
+        The mapping lives in :data:`_REJECTION_COUNTERS`. An unregistered
+        reason raises ``KeyError`` here rather than silently producing a ratio
+        or trade-log entry with no backing bucket.
+        """
+        self._entry_diag[_REJECTION_COUNTERS[reason]] += 1
+        self._entry_rejection_reason = reason
 
     def _in_open_blackout(self, session_id: int) -> bool:
         if self.open_manipulation_bars <= 0:
@@ -2198,6 +2565,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             # Year-fail is terminated (done) with truncated=False.
             "breach": bool(done and not truncated),
             "realized_close_pnl": self._last_realized_close_pnl,
+            "realized_r": self._last_realized_close_r,
             "equity": float(self.account.equity),
         }
 
@@ -2299,7 +2667,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         if nxt > cur + 1 and self.position is not None and not self.block_overnight:
             bar = self._bar_at(cur)
             bid, ask = self._bar_quote(bar)
-            self._apply_position_guards(bar, self._bar_times[cur], bid, ask, eod=True)
+            self._apply_position_guards(
+                bar,
+                self._bar_times[cur],
+                bid,
+                ask,
+                eod=True,
+                feat_row=self._feature_row_at(cur),
+            )
             self._replay_skipped_bars(cur + 1, nxt)
         self._ny_pos += 1
         self.step_idx = nxt
@@ -2315,7 +2690,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             if self.position is None:
                 break
             self.broker.mark_to_market(self.account, self.position, (bid, ask))
-            self._apply_position_guards(bar, self._bar_times[i], bid, ask, eod=False)
+            self._apply_position_guards(
+                bar,
+                self._bar_times[i],
+                bid,
+                ask,
+                eod=False,
+                feat_row=self._feature_row_at(i),
+            )
 
     def _eod_adverse_cut_usd(self, pos: Position) -> float:
         """Dollar adverse excursion that fires the intraday max-loss guard.
@@ -2344,8 +2726,6 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         """
         if self._breakeven_trigger_r <= 0.0 or pos.breakeven_done:
             return
-        # The stop distance at entry is exact per contract, so use it rather
-        # than dollars: it is the same number the sizing used.
         sl0 = pos.sl_initial_price if pos.sl_initial_price is not None else pos.sl_price
         if sl0 is None:
             return
@@ -2366,6 +2746,28 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 pos.sl_price = new_sl
                 pos.breakeven_done = True
 
+    def _apply_trailing_stop(
+        self,
+        pos: Position,
+        feat_row: FeatureRow | pd.Series | BarView | None,
+    ) -> None:
+        """Structure trailing: follow the local swing formed during the move."""
+        if pos.sl_mode != "trailing":
+            return
+        buf = self.sl_buffer_pts
+        if pos.direction == 1:
+            swing = self._finite(feat_row, "last_swing_high")
+            if swing is not None:
+                new_sl = float(swing) - buf
+                if pos.sl_price is None or new_sl > float(pos.sl_price):
+                    pos.sl_price = new_sl
+        elif pos.direction == -1:
+            swing = self._finite(feat_row, "last_swing_low")
+            if swing is not None:
+                new_sl = float(swing) + buf
+                if pos.sl_price is None or new_sl < float(pos.sl_price):
+                    pos.sl_price = new_sl
+
     def _apply_position_guards(
         self,
         bar: BarView,
@@ -2374,6 +2776,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         fill_ask: float,
         *,
         eod: bool,
+        feat_row: FeatureRow | pd.Series | None = None,
     ) -> None:
         """Age, stale-progress, breakeven, and max-loss guards for a position."""
         pos = self.position
@@ -2395,10 +2798,16 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         pos.mfe = max(pos.mfe, favorable)
         pos.mae = max(pos.mae, adverse)
         pos.best_favorable = max(pos.best_favorable, favorable)
-        # Breakeven first: a trade that has already paid its risk should not
-        # be able to become a full loss, and the tighter stop changes whether
-        # the adverse cut below is even reachable.
-        self._apply_breakeven(pos, pos.best_favorable)
+        # Advance the SL mode state machine (monotonic: fixed → breakeven →
+        # trailing).  An agent override (outside the defer band) locks the mode;
+        # only the default state machine advances here, and only forward.
+        if not pos.sl_mode_overridden:
+            default_mode = self._default_sl_mode(pos)
+            if _SL_MODE_RANK.get(default_mode, 0) > _SL_MODE_RANK.get(pos.sl_mode, 0):
+                pos.sl_mode = default_mode
+        if pos.sl_mode != "fixed":
+            self._apply_breakeven(pos, pos.best_favorable)
+        self._apply_trailing_stop(pos, feat_row if feat_row is not None else bar)
         thresh = self._eod_progress_atr * float(pos.entry_atr or 0.0)
         if thresh > 0.0 and (favorable - pos.last_progress_favorable) >= thresh:
             pos.last_progress_favorable = favorable

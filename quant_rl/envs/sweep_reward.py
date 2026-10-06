@@ -335,6 +335,7 @@ class CompositeReward:
         dsr_reward: float | None = None,
         strategy_context: dict[str, Any] | None = None,
         realized_close_pnl: float | None = None,
+        realized_r: float | None = None,
         equity: float | None = None,
     ) -> float:
         """Compute composite reward.

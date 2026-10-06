@@ -158,4 +158,4 @@ class TestBuildFeaturesPipeline:
 
 
 # Structural targets and the PO3 event columns changed the feature matrix.
-_GOLDEN_HASH = "80261a2eb6573b13719d719d7f6dab00fa406f459bb9e32abb5efa5cb58eb158"
+_GOLDEN_HASH = "c8ed94bff2fd07aabab1e3f0bcead83ffaa5d6d02f0e1ce8ce277a875e364780"

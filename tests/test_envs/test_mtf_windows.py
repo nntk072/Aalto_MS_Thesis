@@ -89,6 +89,7 @@ def _env(bars: pd.DataFrame, features: pd.DataFrame, *, mtf: bool) -> TradingEnv
         risk_frac_range=(0.01, 0.01),
         min_sl_points=0.0,
         min_sl_atr_mult=0.0,
+        allow_agent_sl_mode=False,
         mtf=mtf,
         mtf_windows={"m5": 24, "m15": 16, "h1": 12},
     )
@@ -130,6 +131,7 @@ def test_column_ownership_and_closed_bars() -> None:
         strategy=PO3IFVGStrategy(enforce_gate=False),
         obs_window=10,
         agent_direction_control=True,
+        allow_agent_sl_mode=False,
         mtf=True,
     )
     assert directed.action_space.shape == (6,)

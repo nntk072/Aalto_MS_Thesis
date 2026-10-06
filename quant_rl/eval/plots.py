@@ -58,6 +58,10 @@ STYLE = {
 
 LONG_COLOR = "#26a69a"  # teal
 SHORT_COLOR = "#ef5350"  # red
+
+# Point size of the per-trade note rendered under the price/MACD panels. Kept in
+# one place so the caption's reserved height can be derived from the line count.
+_NOTE_FONT_PT = 8
 CLOSE_COLOR = "#ffd54f"  # amber
 EQUITY_COLOR = "#42a5f5"  # blue
 PEAK_COLOR = "#90caf9"  # lighter blue
@@ -1008,6 +1012,7 @@ def plot_per_trade_orders(
     )
     from .order_chart import draw_order_levels_mpl
     from .order_window import prepare_order_chart
+    from .trade_note import build_trade_note
 
     orders_dir = Path(orders_dir)
     orders_dir.mkdir(parents=True, exist_ok=True)
@@ -1064,7 +1069,7 @@ def plot_per_trade_orders(
         fig, (ax_price, ax_osc) = plt.subplots(
             2,
             1,
-            figsize=(14, 8),
+            figsize=(14, 9),
             gridspec_kw={"height_ratios": [2, 1]},
             sharex=True,
         )
@@ -1154,7 +1159,7 @@ def plot_per_trade_orders(
         ax_osc.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=4, maxticks=12))
         plt.setp(ax_osc.xaxis.get_majorticklabels(), rotation=45, ha="right")
 
-        # --- Trade info box ---
+        # --- Trade note below both subplots ---
         duration_mins = int((t_close - t_open).total_seconds() / 60)
         duration_secs = int((t_close - t_open).total_seconds() % 60)
         lots_val = float(open_row.get("lots", 1.0)) if pd.notna(open_row.get("lots")) else 1.0
@@ -1168,30 +1173,45 @@ def plot_per_trade_orders(
             str(close_row.get("reason")) if pd.notna(close_row.get("reason")) else close_type
         )
 
-        trade_info = (
-            f"Direction: {'Buy' if direction == 1 else 'Sell'}\n"
-            f"Open: {metrics.entry_price:.2f}\n"
-            f"Close: {metrics.exit_price:.2f}\n"
-            f"Volume: {lots_val:.2f}\n"
-            f"Duration: {duration_mins}m{duration_secs}s\n"
-            f"PnL (logged): {pnl:+.2f}\n"
-            f"PnL (calc): {pnl_calc:+.2f}\n"
-            f"Reason: {close_reason_detail}"
+        note_lines = build_trade_note(
+            open_row,
+            close_row,
+            entry_price=metrics.entry_price,
+            exit_price=metrics.exit_price,
+            direction=direction,
+            pnl=pnl,
+            pnl_calc=pnl_calc,
+            duration_mins=duration_mins,
+            duration_secs=duration_secs,
+            lots=lots_val,
+            close_reason_detail=close_reason_detail,
+            extra_notes=levels.notes,
         )
-        if levels.notes:
-            trade_info = trade_info + "\n" + "\n".join(levels.notes)
-        props = dict(boxstyle="round", facecolor="wheat", alpha=0.8)
-        ax_price.text(
-            0.98,
-            0.02,
-            trade_info,
-            transform=ax_price.transAxes,
-            fontsize=9,
-            verticalalignment="bottom",
-            horizontalalignment="right",
-            bbox=props,
-            family="monospace",
-        )
+        # The caption sits under the two subplots so it never covers candles.
+        # Its block height is derived from the real line count and the figure is
+        # grown to fit: with a fixed note_top/0.028 step, 6+ note lines spilled
+        # to y<0, note_bottom clamped to 0, and tight_layout reserved no room --
+        # so bbox_inches="tight" pulled the note onto the rotated x tick labels.
+        line_in = _NOTE_FONT_PT * 1.35 / 72.0
+        n_note_lines = len(note_lines)
+        note_h_in = n_note_lines * line_in + 0.22
+        fig_h_in = max(9.0, note_h_in + 7.0)
+        fig.set_size_inches(fig.get_figwidth(), fig_h_in)
+
+        note_top = note_h_in / fig_h_in
+        for i, line in enumerate(note_lines):
+            fig.text(
+                0.012,
+                note_top - i * line_in / fig_h_in,
+                line,
+                fontsize=_NOTE_FONT_PT,
+                family="monospace",
+                ha="left",
+                va="top",
+            )
+        # Reserve the note band (plus a gap) and a little left padding so the
+        # 45-degree tick labels cannot reach the figure edge.
+        note_bottom = min(0.9, note_top + 0.006)
 
         # --- Title ---
         dir_label = "Long" if direction == 1 else "Short"
@@ -1206,7 +1226,7 @@ def plot_per_trade_orders(
         # Save
         fname = _trade_filename(seq_i + 1, open_row, close_row, "png")
         try:
-            fig.tight_layout(rect=(0, 0, 1, 0.96))
+            fig.tight_layout(rect=(0.008, note_bottom, 0.995, 0.96))
             fig.savefig(str(orders_dir / fname), dpi=dpi, bbox_inches="tight")
             plt.close(fig)
         except Exception as exc:

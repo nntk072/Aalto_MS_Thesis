@@ -63,6 +63,11 @@ class Position:
     manipulation: str = ""
     n_sl: int = 0
     n_tp: int = 0
+    entry_sl_ref_price: float | None = None
+    entry_last_swing_high: float | None = None
+    entry_last_swing_low: float | None = None
+    sl_mode: str = "fixed"
+    sl_mode_overridden: bool = False
 
 
 @dataclass

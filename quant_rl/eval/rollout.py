@@ -103,12 +103,18 @@ def evaluate_model(
     open_manipulation_bars: int = 10,
     entry_cooldown_bars: int = 0,
     reward_mode: str = "dsr",
+    fixed_risk_usd: float = 0.0,
+    risk_mode: str = "dynamic",
+    allow_ema_exit: bool = True,
     entry_intensity_threshold: float = 0.0,
     peak_trailing_dd_limit: float = 0.0,
     tickbook: Any | None = None,
     fill_delay_ms: int = 0,
     agent_direction_control: bool = False,
     direction_override_threshold: float = 0.0,
+    sl_mode: str = "fixed",
+    allow_agent_sl_mode: bool = True,
+    sl_mode_defer_threshold: float = 0.1,
 ) -> dict[str, Any]:
     """Walk a trained RL ``model`` over *bars*/*features* and collect trades.
 
@@ -166,12 +172,18 @@ def evaluate_model(
         open_manipulation_bars=open_manipulation_bars,
         entry_cooldown_bars=entry_cooldown_bars,
         reward_mode=reward_mode,
+        fixed_risk_usd=fixed_risk_usd,
+        risk_mode=risk_mode,
+        allow_ema_exit=allow_ema_exit,
         entry_intensity_threshold=entry_intensity_threshold,
         peak_trailing_dd_limit=peak_trailing_dd_limit,
         tickbook=tickbook,
         fill_delay_ms=fill_delay_ms,
         agent_direction_control=agent_direction_control,
         direction_override_threshold=direction_override_threshold,
+        sl_mode=sl_mode,
+        allow_agent_sl_mode=allow_agent_sl_mode,
+        sl_mode_defer_threshold=sl_mode_defer_threshold,
     )
 
     obs, _ = env.reset()

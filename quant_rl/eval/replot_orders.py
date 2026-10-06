@@ -140,7 +140,15 @@ def _replot_split_summary(
         log.warning("plotly not available — skipping interactive summary charts")
 
 
-def _replot_split(run_dir: Path, cfg: Any, split: str, dpi: int, force: bool) -> None:
+def _replot_split(
+    run_dir: Path,
+    cfg: Any,
+    split: str,
+    dpi: int,
+    force: bool,
+    save_html: bool = True,
+    max_charts: int = 200,
+) -> None:
     split_dir = run_dir / split
     trades = None
     trades_path = split_dir / "trades.csv"
@@ -170,25 +178,32 @@ def _replot_split(run_dir: Path, cfg: Any, split: str, dpi: int, force: bool) ->
         shutil.rmtree(orders_dir)
 
     log.info(
-        "Re-plotting PNG orders for split=%s (%d trade rows) → %s", split, len(trades), orders_dir
+        "Re-plotting PNG orders for split=%s (%d trade rows, max %d) → %s",
+        split,
+        len(trades),
+        max_charts,
+        orders_dir,
     )
     _plt.plot_per_trade_orders(
         bars,
         trades,
         orders_dir=orders_dir,
         dpi=dpi,
+        max_charts=max_charts,
         secondary_bars=secondary,
         **chart_cfg,
     )
 
-    log.info("Re-plotting HTML orders for split=%s → %s", split, orders_dir)
-    _pi.plot_per_trade_orders(
-        bars,
-        trades,
-        orders_dir=orders_dir,
-        secondary_bars=secondary,
-        **chart_cfg,
-    )
+    if save_html:
+        log.info("Re-plotting HTML orders for split=%s → %s", split, orders_dir)
+        _pi.plot_per_trade_orders(
+            bars,
+            trades,
+            orders_dir=orders_dir,
+            max_charts=max_charts,
+            secondary_bars=secondary,
+            **chart_cfg,
+        )
     from quant_rl.eval.trade_plots import write_trade_diagnostics
 
     log.info("Re-plotting trade diagnostics → %s", split_dir)
@@ -198,7 +213,7 @@ def _replot_split(run_dir: Path, cfg: Any, split: str, dpi: int, force: bool) ->
         bars,
         dpi=dpi,
         save_plots=True,
-        save_html=True,
+        save_html=save_html,
         lots=float(chart_cfg.get("lots", 1.0)),
         contract_size=float(chart_cfg.get("contract_size", 1.0)),
         max_loss_per_trade_usd=chart_cfg.get("max_loss_per_trade_usd"),
@@ -220,6 +235,19 @@ def main() -> None:
     )
     parser.add_argument("--dpi", type=int, default=150, help="PNG resolution")
     parser.add_argument(
+        "--max-charts",
+        type=int,
+        default=None,
+        help="Cap on per-trade charts per split (default: config output.max_order_charts, else 200).",
+    )
+    parser.add_argument(
+        "--save-html",
+        dest="save_html",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Render interactive HTML (default: config output.save_html).",
+    )
+    parser.add_argument(
         "--force", action="store_true", help="Force the data pipeline to rebuild caches"
     )
     args = parser.parse_args()
@@ -229,10 +257,23 @@ def main() -> None:
         raise SystemExit(f"Run directory not found: {run_dir}")
 
     cfg = _load_run_config(run_dir)
+    # A run's own snapshot is authoritative for data/split settings, but chart
+    # volume is a present-day rendering choice. Let the CLI override both.
+    save_html = (
+        bool(getattr(cfg.output, "save_html", True)) if args.save_html is None else args.save_html
+    )
+    max_charts = args.max_charts
+    if max_charts is None:
+        max_charts = int(getattr(cfg.output, "max_order_charts", 0) or 0) or 200
+    log.info(
+        "Chart rendering: save_html=%s max_charts=%d (overrides snapshot)",
+        save_html,
+        max_charts,
+    )
 
     splits = ["training", "testing"] if args.split == "both" else [args.split]
     for split in splits:
-        _replot_split(run_dir, cfg, split, args.dpi, args.force)
+        _replot_split(run_dir, cfg, split, args.dpi, args.force, save_html, max_charts)
 
     log.info("Done. Re-plotted orders under: %s", run_dir)
 

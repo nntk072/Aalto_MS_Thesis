@@ -35,7 +35,7 @@ from ..features.build import attach_reachable_r, select_obs_columns
 if TYPE_CHECKING:  # pragma: no cover
     from mt5_trading.adapters import TradingData
 
-DEFAULT_CONFIG = Path("quant_rl/config/default.yaml")
+DEFAULT_CONFIG = Path(__file__).parent.parent / "config" / "default.yaml"
 
 
 class RLStrategyAdapter:

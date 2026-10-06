@@ -23,7 +23,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from omegaconf import OmegaConf
+
+from quant_rl.config import load_config
+from quant_rl.train.train_rl import _eval_guardrail_kwargs, _guardrail_kwargs
 
 pytestmark = pytest.mark.slow
 
@@ -249,7 +251,7 @@ def test_ppo_smoke_with_sweep_reward() -> None:
 
 def test_default_config_exposes_max_episode_steps() -> None:
     """Year-episode default: null means no hard step cap (full split)."""
-    cfg = OmegaConf.load("quant_rl/config/default.yaml")
+    cfg = load_config([])
     assert cfg.env.max_episode_steps is None
     assert int(cfg.ppo.total_timesteps) >= 20_000_000
     assert float(cfg.ftmo.soft_max_loss_limit) == 5000.0
@@ -258,10 +260,18 @@ def test_default_config_exposes_max_episode_steps() -> None:
     assert float(cfg.ppo.ent_coef_continuous) == 0.001
     assert float(cfg.ppo.log_std_min) == -0.7
     assert float(cfg.ppo.log_std_max) == 0.0
+    assert float(cfg.ppo.mode_prior_coef) == 0.001
+    diversity = cfg.training.dashboard.diversity
+    assert int(diversity.min_prior_trades) == 50
+    assert int(diversity.min_prior_sl_choices) == 30
+    assert int(diversity.min_prior_tp_choices) == 30
+    assert int(diversity.min_prior_direction_choices) == 30
+    assert float(diversity.rank_edge) == 0.05
+    assert float(diversity.direction_min_share) == 0.90
+    assert int(diversity.min_prior_risk_steps) == 1000
+    assert float(diversity.risk_u_max) == 0.05
     assert int(cfg.ppo.checkpoint_freq) == 1_000_000
     assert float(cfg.env.entry_intensity_threshold) == 0.0
-    from quant_rl.train.train_rl import _eval_guardrail_kwargs, _guardrail_kwargs
-
     train_g = _guardrail_kwargs(cfg)
     eval_g = _eval_guardrail_kwargs(cfg)
     assert train_g["trailing_dd_limit"] == 0.07

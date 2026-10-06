@@ -22,6 +22,8 @@ import shutil
 from datetime import datetime
 from typing import cast
 
+import numpy as np
+import torch
 from omegaconf import DictConfig, OmegaConf
 from stable_baselines3 import PPO
 
@@ -35,6 +37,7 @@ from quant_rl.evaluation import calculate_metrics
 from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features
 from quant_rl.models.ppo_policy import ClampedStdMultiInputPolicy
 from quant_rl.train.train_rl import (
+    _cost_model,
     _eval_guardrail_kwargs,
     _fill_delay_ms,
     _max_loss_per_trade,
@@ -105,6 +108,28 @@ def main() -> None:
         "model/ppo_final.zip, else the highest-step model/ppo_ckpt_*_steps.zip",
     )
     parser.add_argument(
+        "--max-charts",
+        type=int,
+        default=None,
+        help="Cap on per-trade charts per split (default: config output.max_order_charts, else 200).",
+    )
+    parser.add_argument(
+        "--save-html",
+        dest="save_html",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Render interactive HTML (default: config output.save_html).",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="RNG seed for the evaluation rollout. evaluate_model samples actions "
+        "from the policy distribution (deterministic=False), so an unseeded run "
+        "gives a different trade set every time. Pass a seed for a reproducible "
+        "sample; omit it to measure the spread across seeds.",
+    )
+    parser.add_argument(
         "--force", action="store_true", help="Force the data pipeline to rebuild caches"
     )
     args = parser.parse_args()
@@ -113,7 +138,34 @@ def main() -> None:
     if not run_dir.exists():
         raise SystemExit(f"Run directory not found: {run_dir}")
 
+    if args.seed is not None:
+        # train_rl.py seeds np and torch once at startup, so its own in-process
+        # evaluation inherits a seeded RNG. eval_run is a fresh process and must
+        # seed explicitly or every re-export is an independent random draw.
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        log.info("Seeded evaluation RNG: %d", args.seed)
+    else:
+        log.warning(
+            "No --seed given: the rollout is unseeded and will not reproduce "
+            "train_rl.py's numbers for the same checkpoint."
+        )
+
     cfg = _load_run_config(run_dir)
+    # The run's own snapshot is authoritative for data, split, and risk settings,
+    # but how many charts to draw is a present-day rendering choice. A snapshot
+    # written before a config change must not force the slow default back on.
+    save_html = (
+        bool(getattr(cfg.output, "save_html", True)) if args.save_html is None else args.save_html
+    )
+    max_order_charts = args.max_charts
+    if max_order_charts is None:
+        max_order_charts = int(getattr(cfg.output, "max_order_charts", 0) or 0) or 200
+    log.info(
+        "Chart rendering: save_html=%s max_order_charts=%d (CLI overrides snapshot)",
+        save_html,
+        max_order_charts,
+    )
     ckpt_path = _resolve_checkpoint(run_dir, args.checkpoint)
     log.info("Loading model: %s", ckpt_path)
     _ = ClampedStdMultiInputPolicy
@@ -147,6 +199,7 @@ def main() -> None:
     eval_common = dict(
         obs_window=cfg.env.obs_window,
         initial_balance=cfg.account.initial_balance,
+        cost_model=_cost_model(cfg),
         guardrail_kwargs=_eval_guardrail_kwargs(cfg),
         risk_frac_range=risk_frac_range,
         rr_ratio_range=rr_ratio_range,
@@ -155,6 +208,11 @@ def main() -> None:
         max_loss_per_trade_usd=_max_loss_per_trade(cfg),
         dsr_eta=cfg.env.reward_dsr_eta,
         continuous_actions=False,
+        # Must match train_rl.py. evaluate_model defaults to True, which samples
+        # from the action distribution; train_rl evaluates with False. Leaving
+        # this unset silently re-evaluates the checkpoint under a different
+        # policy than the one whose numbers are being reproduced.
+        deterministic=False,
         block_overnight=bool(cfg.env.get("block_overnight", True)),
         eod_risk=dict(cfg.env.get("eod_risk", {})),
         strategy=strategy,
@@ -247,9 +305,10 @@ def main() -> None:
         test_features=test_feat,
         cfg=cfg,
         save_plots=getattr(cfg.output, "save_plots", True),
-        save_html=getattr(cfg.output, "save_html", True),
+        save_html=save_html,
         save_csv=getattr(cfg.output, "save_csv", True),
         dpi=getattr(cfg.output, "dpi", 150),
+        max_order_charts=max_order_charts,
     )
 
     training_log_path = run_dir / "training_log.json"

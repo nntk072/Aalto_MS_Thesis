@@ -80,6 +80,7 @@ class TestStrategyActionSpace:
             strategy_actions=True,
             strategy=PO3IFVGStrategy(enforce_gate=False),
             obs_window=10,
+            allow_agent_sl_mode=False,
         )
         assert isinstance(env.action_space, Box)
         assert env.action_space.shape == (5,)
@@ -95,6 +96,7 @@ class TestStrategyActionSpace:
             strategy_actions=True,
             strategy=PO3IFVGStrategy(enforce_gate=False),
             obs_window=10,
+            allow_agent_sl_mode=False,
         )
         action = np.array([0.0, 0.5, 0.7, 0.0, -1.0], dtype=np.float32)
         assert env.action_space.contains(action)
@@ -136,6 +138,7 @@ class TestStrategyStructuralSL:
         feats["last_swing_low"] = np.nan
         feats["asian_low"] = np.nan
         feats["london_low"] = np.nan
+        feats["ifvg_bull_active"] = np.zeros(len(bars))
         env = TradingEnv(
             bars,
             feats,
@@ -148,15 +151,18 @@ class TestStrategyStructuralSL:
             rr_ratio_range=(2.0, 2.0),
             min_sl_points=0.0,
             min_sl_atr_mult=0.0,
+            allow_agent_sl_mode=False,
         )
         env.reset()
         obs, _ = env.reset()
         filled = False
         for _ in range(len(bars) - 5):
-            action = np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32)
+            action = np.array([0.0, 0.0, 0.5, 0.0, -1.0], dtype=np.float32)
             obs, reward, done, truncated, info = env.step(action)
             if env.position is not None:
-                assert env.position.sl_price == pytest.approx(94.75)
+                # Exact mode (sl_buffer_pts=0.0): the stop sits exactly on the
+                # structural level with no ATR widening applied on top.
+                assert env.position.sl_price == pytest.approx(95.0)
                 filled = True
                 break
             if done or truncated:
@@ -181,11 +187,12 @@ class TestStrategyStructuralSL:
             obs_window=10,
             min_sl_points=0.0,
             min_sl_atr_mult=0.0,
+            allow_agent_sl_mode=False,
         )
         env.reset()
         opened = False
         for _ in range(20):
-            action = np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32)
+            action = np.array([0.0, 0.0, 0.5, 0.0, 0.0], dtype=np.float32)
             obs, reward, done, truncated, info = env.step(action)
             if env.position is not None:
                 opened = True
