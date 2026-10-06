@@ -82,6 +82,8 @@ class Position:
     tp_lot_fractions: tuple[float, ...] = ()
     tp_hit_mask: int = 0
     entry_tp_ref_price: float | None = None
+    entry_setup_types: tuple[str, ...] = ()
+    entry_origin_bar: int | None = None
 
 
 @dataclass

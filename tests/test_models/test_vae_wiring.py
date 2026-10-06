@@ -66,3 +66,17 @@ def test_vae_feature_extractor_accepts_vae_z() -> None:
     }
     out = extractor(batch)
     assert out.shape == (4, 16 + 6)
+
+
+def test_vae_feature_extractor_uses_runtime_account_dimension() -> None:
+    vae = VAE(seq_len=186, n_features=5, latent_dim=16)
+    obs_space = spaces.Dict(
+        {
+            "vae_z": spaces.Box(-np.inf, np.inf, shape=(16,), dtype=np.float32),
+            "account": spaces.Box(-np.inf, np.inf, shape=(10,), dtype=np.float32),
+            "seq": spaces.Box(-np.inf, np.inf, shape=(60, 8), dtype=np.float32),
+        }
+    )
+    extractor = VAEFeatureExtractor(obs_space, vae=vae, account_dim=10)
+    out = extractor({"vae_z": torch.randn(2, 16), "account": torch.randn(2, 10)})
+    assert out.shape == (2, 16 + 10)

@@ -25,6 +25,15 @@ from ..backtest.guardrails import FTMOGuardrails
 from ..backtest.risk import compute_lots, compute_sl_tp_long, compute_sl_tp_short
 from ..data.session import ny_session_mask
 from ..data.ticks import TickBook
+from ..envs.entry_state import (
+    BASE_ACCOUNT_DIM,
+    ENTRY_STATE_DIM,
+    EntryCandidate,
+    EntryEvidence,
+    EntryStateMachine,
+    entry_state_one_hot,
+    immutable_setup_levels,
+)
 from ..envs.feature_row import BarView, FeatureRow
 from ..envs.reward import DSRReward, PnLReward, RMultipleReward
 from ..envs.strategies import BaselineStrategy, TradingStrategy
@@ -93,7 +102,7 @@ def _empty_decision() -> dict[str, float]:
     return {key: float("nan") for key in _DECISION_KEYS}
 
 
-def _empty_entry_diag() -> dict[str, int]:
+def _empty_entry_diag(entry_state_machine: bool = False) -> dict[str, int]:
     """Per-episode entry diagnostics (strategy_actions).
 
     Defined once so ``__init__`` and ``reset`` cannot drift apart. Every
@@ -101,7 +110,7 @@ def _empty_entry_diag() -> dict[str, int]:
     string; ``entry_rejected_total`` in the step info is derived from the
     ``rejected_`` prefix rather than stored, so it cannot go stale.
     """
-    return {
+    diagnostics = {
         # Requested entry suppressed before the order was built.
         "hold_low_intensity": 0,
         "hold_no_context": 0,
@@ -121,6 +130,9 @@ def _empty_entry_diag() -> dict[str, int]:
         "rejected_sl_already_hit": 0,
         "opened": 0,
     }
+    if entry_state_machine:
+        diagnostics["rejected_entry_state"] = 0
+    return diagnostics
 
 
 #: Rejection reason -> ``_entry_diag`` bucket. Every site that refuses an entry
@@ -137,6 +149,7 @@ _REJECTION_COUNTERS: dict[str, str] = {
     "manipulation_unconfirmed": "rejected_manipulation",
     "entry_gate": "rejected_gate",
     "soft_brick": "rejected_soft_brick",
+    "entry_state_not_armed": "rejected_entry_state",
     "no_valid_sl": "rejected_sl",
     "no_valid_tp": "rejected_rr",
     "no_ema_exit": "rejected_ema",
@@ -286,6 +299,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         allow_simplex: bool = True,
         mtf: bool = False,
         mtf_windows: dict[str, int] | None = None,
+        entry_state_machine: bool = False,
+        candidate_max_age_bars: int = 5,
+        arm_requires_retest: bool = False,
+        entry_state_observation: bool = True,
     ):
         """Initialize trading environment.
 
@@ -516,6 +533,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.allow_multi_tp = bool(allow_multi_tp)
         self.tp_breakeven_alpha = float(tp_breakeven_alpha)
         self.allow_simplex = bool(allow_simplex)
+        self.entry_state_machine = (
+            EntryStateMachine(candidate_max_age_bars, arm_requires_retest)
+            if entry_state_machine
+            else None
+        )
+        self.entry_state_observation = bool(entry_state_machine and entry_state_observation)
         self.risk_floor = float(risk_floor)
         self._tickbook = tickbook
         self._fill_delay_ms = int(fill_delay_ms)
@@ -750,7 +773,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             self.action_space = spaces.Discrete(20)
 
         # Per-step entry diagnostics (strategy_actions); reset each episode.
-        self._entry_diag: dict[str, int] = _empty_entry_diag()
+        self._entry_diag: dict[str, int] = _empty_entry_diag(self.entry_state_machine is not None)
 
         # NY session start index for time decay penalty. Default to the first
         # tradable NY bar, which is what "minutes since open" measures from.
@@ -767,7 +790,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # time-decay term dominate the reward.
         self._minutes_per_step = _minutes_per_step(pd.DatetimeIndex(bars.index))
 
-        # Observation space: dict with time-series + account state (+ VAE latent if enabled)
+        # Observation space: market sequence, account state, and optional entry state.
         # features: (obs_window, n_features)
         # account: [equity, position_direction, open_pnl, unrealised_r, dist_to_sl, trailing_dd]
         # vae_z: latent embedding from VAE (if use_vae=True)
@@ -776,6 +799,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             n_features = max(int(self._m1_idx.size), 1)
         vae_latent_dim = vae.encoder.latent_dim if use_vae and vae is not None else 0
 
+        account_dim = BASE_ACCOUNT_DIM + (ENTRY_STATE_DIM if self.entry_state_observation else 0)
         self.observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(
@@ -787,7 +811,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 "account": spaces.Box(
                     low=-np.inf,
                     high=np.inf,
-                    shape=(6,),
+                    shape=(account_dim,),
                     dtype=np.float32,
                 ),
                 "seq_mask": spaces.Box(
@@ -887,7 +911,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._entry_rejection_reason = ""
         self._ep_start_equity = float(self.initial_balance)
         self._ep_reward_sum = 0.0
-        self._entry_diag = _empty_entry_diag()
+        self._entry_diag = _empty_entry_diag(self.entry_state_machine is not None)
+        if self.entry_state_machine is not None:
+            self.entry_state_machine.reset()
 
         obs = self._get_observation()
         return obs, {}
@@ -1462,6 +1488,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         session_id: int,
         fill_bid: float,
         fill_ask: float,
+        entry_candidate: EntryCandidate | None = None,
     ) -> None:
         """Attempt to open or flip a position for the current bar.
 
@@ -1710,6 +1737,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                         self._session_entry_counts[session_id] = (
                             self._session_entry_counts.get(session_id, 0) + 1
                         )
+                    if entry_candidate is not None:
+                        self.position.entry_setup_types = entry_candidate.setup_types
+                        self.position.entry_origin_bar = entry_candidate.origin_bar
                     entry_level, cross_time = self._matched_entry_level(session_id, discrete_action)
                     sweep_delay = (
                         float("nan")
@@ -1766,6 +1796,15 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                             "bar": self.step_idx,
                             "time": bar_time,
                             "equity": self.account.equity,
+                            **(
+                                {
+                                    "entry_setup_types": list(entry_candidate.setup_types),
+                                    "entry_origin_bar": entry_candidate.origin_bar,
+                                    "entry_state": "ARMED",
+                                }
+                                if entry_candidate is not None
+                                else {}
+                            ),
                             # Always recorded, on the strategy path and the baseline
                             # path alike, so the logged risk can never disagree with
                             # the filled lots. Baseline rows used to omit these,
@@ -2476,8 +2515,32 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # Decode action (discrete or continuous)
         self._note_session_open(session_id, feat_row)
         self._arm_po3_confirm(session_id)
+        entry_machine = self.entry_state_machine
+        entry_state_for_action = entry_machine.state if entry_machine is not None else None
         discrete_action, risk_frac, rr_ratio, tp_mode = self._decode_action(action, feat_row)
         self._selected_tp_mode = tp_mode
+        entry_candidate: EntryCandidate | None = None
+        if entry_machine is not None:
+            action_requested = self._entry_action_requested(discrete_action)
+            if entry_state_for_action in ("FLAT", "CANDIDATE"):
+                if action_requested:
+                    self._reject("entry_state_not_armed")
+                discrete_action = 0
+                risk_frac = 0.0
+            elif entry_state_for_action == "IN_POSITION":
+                discrete_action = 0
+                risk_frac = 0.0
+            elif action_requested:
+                entry_candidate = entry_machine.request_trigger()
+                if entry_candidate is not None:
+                    discrete_action = entry_candidate.direction
+                    self._decision_action["action_direction"] = float(entry_candidate.direction)
+                else:
+                    discrete_action = 0
+                    risk_frac = 0.0
+            else:
+                discrete_action = 0
+                risk_frac = 0.0
 
         # Check entry gate for new positions
         # Suppress new entries on the last bar of a session (overnight block
@@ -2515,7 +2578,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         # Check entry gate for new positions
         if discrete_action != 0:  # Only check for long/short entries
-            if self.strategy_actions:
+            if entry_machine is not None and entry_state_for_action == "ARMED":
+                gate_ok = self._check_entry_gate(float(bar.close), discrete_action, feat_row)
+            elif self.strategy_actions:
                 gate_ok = self.strategy.validate_entry(
                     direction=discrete_action,
                     row=feat_row,  # type: ignore[arg-type]
@@ -2585,7 +2650,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                         session_id,
                         fill_bid,
                         fill_ask,
+                        entry_candidate=entry_candidate,
                     )
+                    if entry_machine is not None and self._opened_this_step:
+                        entry_machine.mark_entered()
 
         self.equity_curve.append(self.account.equity)
         self.equity_times.append(bar_time)
@@ -2600,6 +2668,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             # Penalty each bar the training peak-DD ceiling is still hit.
             reward -= 1.0
             reward_parts["peak_dd"] = float(reward_parts.get("peak_dd", 0.0)) - 1.0
+
+        if entry_machine is not None:
+            entry_machine.observe(self.entry_evidence_context(feat_row))
+            if entry_machine.state == "IN_POSITION" and self.position is None:
+                entry_machine.mark_closed()
 
         obs = self._get_observation()
         close_reason = ""
@@ -2617,6 +2690,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     "entry_rejection_reason": self._entry_rejection_reason,
                     "bar": self.step_idx,
                     "time": bar_time,
+                    **({"entry_state": entry_machine.state} if entry_machine is not None else {}),
                     **self._decision_action,
                 }
             )
@@ -2633,6 +2707,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 v for k, v in self._entry_diag.items() if k.startswith("rejected_")
             ),
         }
+        if entry_machine is not None:
+            info["entry_state"] = entry_machine.state
+            info["entry_state_action"] = entry_state_for_action
         prior_open = self._prior_open_payload()
         if prior_open is not None:
             info["prior_open"] = prior_open
@@ -2641,6 +2718,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             info["risk_u"] = float(risk_u)
 
         self._advance_ny_step()
+        if entry_machine is not None and entry_machine.state == "IN_POSITION":
+            if self.position is None:
+                entry_machine.mark_closed()
+                info["entry_state"] = entry_machine.state
+                if self.entry_state_observation:
+                    obs["account"][BASE_ACCOUNT_DIM:] = np.asarray(
+                        entry_state_one_hot(entry_machine.state), dtype=np.float32
+                    )
         self.episode_step_count += 1
 
         # Past last NY bar → year survived (truncated, not terminated).
@@ -2701,6 +2786,107 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             self.strategy,
             "_session_manip_confirmed",
             session_id in self._ny_manip_confirmed,
+        )
+
+    def _entry_action_requested(self, discrete_action: int) -> bool:
+        """Interpret whether the decoded policy action requests entry execution."""
+        if not self.strategy_actions:
+            return discrete_action in (-1, 1)
+        intensity = self._decision_action.get("intensity_u", float("nan"))
+        return bool(np.isfinite(intensity) and intensity >= self.entry_intensity_threshold)
+
+    def entry_evidence_context(self, feat_row: FeatureRow | pd.Series) -> EntryEvidence:
+        """Translate existing strategy predicates into one causal evidence record."""
+        context_direction = int(self.strategy.context_direction(feat_row))  # type: ignore[arg-type]
+        setup_predicate = getattr(self.strategy, "entry_setup", None)
+        setup_matches = (
+            bool(setup_predicate(feat_row, context_direction))
+            if context_direction in (-1, 1) and callable(setup_predicate)
+            else context_direction in (-1, 1) and not callable(setup_predicate)
+        )
+
+        names = tuple(str(name) for name in feat_row.index)
+
+        def flagged(stem: str) -> bool:
+            columns = (name for name in names if name == stem or name.endswith("_" + stem))
+            for column in columns:
+                try:
+                    value = float(feat_row.get(column, 0.0))
+                except (TypeError, ValueError):
+                    continue
+                if np.isfinite(value) and value > 0.0:
+                    return True
+            return False
+
+        bull_retest = flagged("ifvg_retest_bull") or flagged("fvg_retest_bull")
+        bear_retest = flagged("ifvg_retest_bear") or flagged("fvg_retest_bear")
+        direction = context_direction
+        if direction not in (-1, 1):
+            direction = (
+                1
+                if bull_retest and not bear_retest
+                else -1
+                if bear_retest and not bull_retest
+                else 0
+            )
+        suffix = "bull" if direction == 1 else "bear"
+        retest_confirmed = (direction == 1 and bull_retest) or (direction == -1 and bear_retest)
+        distribution_ready = getattr(self.strategy, "distribution_ready", None)
+        distribution_arm = (
+            bool(distribution_ready(feat_row, direction))
+            if direction in (-1, 1) and callable(distribution_ready)
+            else False
+        )
+
+        setup_types: set[str] = set()
+        if direction in (-1, 1):
+            sweep_stem = "sweep_low" if direction == 1 else "sweep_high"
+            swing_stem = "swing_low_event" if direction == 1 else "swing_high_event"
+            if flagged(sweep_stem):
+                setup_types.add("sweep")
+            if flagged(swing_stem):
+                setup_types.add("swing")
+            for setup_type, stems in (
+                ("ifvg", (f"ifvg_{suffix}_active", f"ifvg_retest_{suffix}")),
+                ("fvg", (f"fvg_{suffix}_active", f"fvg_retest_{suffix}")),
+            ):
+                if any(flagged(stem) for stem in stems):
+                    setup_types.add(setup_type)
+        if distribution_arm:
+            setup_types.add("distribution")
+        if setup_matches and not setup_types:
+            setup_types.add(str(getattr(self.strategy, "name", "strategy")))
+
+        snapshot: dict[str, float] = {}
+        if direction in (-1, 1):
+            geometry_stems = (
+                f"ifvg_{suffix}_low",
+                f"ifvg_{suffix}_high",
+                f"fvg_{suffix}_low",
+                f"fvg_{suffix}_high",
+            )
+            for geometry_stem in geometry_stems:
+                for column in names:
+                    if column != geometry_stem and not column.endswith("_" + geometry_stem):
+                        continue
+                    try:
+                        value = float(feat_row.get(column, np.nan))
+                    except (TypeError, ValueError):
+                        continue
+                    if np.isfinite(value):
+                        snapshot[column] = value
+
+        conflicting_sweeps = flagged("sweep_low") and flagged("sweep_high")
+        conflicting_swings = flagged("swing_low_event") and flagged("swing_high_event")
+        return EntryEvidence(
+            bar=self.step_idx,
+            evidence_detected=setup_matches,
+            invalidated=conflicting_sweeps or conflicting_swings or (bull_retest and bear_retest),
+            arm_condition=setup_matches or retest_confirmed or distribution_arm,
+            retest_confirmed=retest_confirmed,
+            direction=direction,
+            setup_types=tuple(sorted(setup_types)),
+            setup_levels_snapshot=immutable_setup_levels(snapshot),
         )
 
     def _lock_unconfirmed_side(
@@ -3296,6 +3482,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         else:
             current_close = 1.0
         trailing_dd = float(self.account.trailing_drawdown_pct())
+        exposed_entry_state = (
+            self.entry_state_machine.state
+            if self.entry_state_observation and self.entry_state_machine is not None
+            else None
+        )
         if self.normalize_account:
             # Rescale so the account vector matches the ~O(1) magnitude of
             # the z-scored seq features. Without this, equity (1e5) and
@@ -3308,19 +3499,20 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 dist_to_sl=dist_to_sl,
                 trailing_dd=trailing_dd,
                 close=current_close,
+                entry_state=exposed_entry_state,
             )
         else:
-            account_state = np.array(
-                [
-                    self.account.equity,
-                    pos_dir,
-                    open_pnl,
-                    unrealised_r,
-                    dist_to_sl,
-                    float(self.account.trailing_drawdown_pct()),
-                ],
-                dtype=np.float32,
-            )
+            raw_account = [
+                self.account.equity,
+                pos_dir,
+                open_pnl,
+                unrealised_r,
+                dist_to_sl,
+                float(self.account.trailing_drawdown_pct()),
+            ]
+            if exposed_entry_state is not None:
+                raw_account.extend(entry_state_one_hot(exposed_entry_state))
+            account_state = np.asarray(raw_account, dtype=np.float32)
 
         obs: dict[str, np.ndarray[Any, Any]] = {
             "seq": seq,

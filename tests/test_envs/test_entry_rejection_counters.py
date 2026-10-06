@@ -108,7 +108,7 @@ def test_registry_covers_every_counter() -> None:
     """Each rejected_* bucket in _empty_entry_diag has exactly one reason key."""
     from quant_rl.envs.trading_env import _empty_entry_diag
 
-    buckets = {k for k in _empty_entry_diag() if k.startswith("rejected_")}
+    buckets = {k for k in _empty_entry_diag(entry_state_machine=True) if k.startswith("rejected_")}
     assert set(_REJECTION_COUNTERS.values()) == buckets
 
 

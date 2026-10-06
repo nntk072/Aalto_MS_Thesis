@@ -11,7 +11,7 @@ Shape contract
 --------------
 Input  : obs["seq"]      float32  [batch, T, F]
          obs["seq_mask"] float32  [batch, T]   (optional; 1 = real bar)
-         obs["account"]  float32  [batch, A]   (A = ACCOUNT_DIM = 6, already normalized)
+         obs["account"]  float32  [batch, A]   (A comes from the observation space)
 Output : float32  [batch, latent_dim + ACCOUNT_EMB_DIM]
 
 Switch architecture via ``agent.build_agent(env, cfg, arch="transformer")``.
@@ -28,17 +28,34 @@ import torch.nn as nn
 from gymnasium import spaces
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
-ACCOUNT_DIM = 6
+from quant_rl.envs.entry_state import BASE_ACCOUNT_DIM
+
+ACCOUNT_DIM = BASE_ACCOUNT_DIM
 ACCOUNT_EMB_DIM = 32
 
 
-class AccountMLP(nn.Module):
-    """Map the six normalized account values to a fixed embedding."""
+def _resolve_account_dim(observation_space: spaces.Space[Any], account_dim: int | None) -> int:
+    """Read the account input width from the configured observation space."""
+    if not isinstance(observation_space, spaces.Dict):
+        raise TypeError("sequence encoders require a Dict observation space")
+    account_space = observation_space.spaces.get("account")
+    if not isinstance(account_space, spaces.Box) or account_space.shape is None:
+        raise TypeError("observation space must contain a Box account vector")
+    observed_dim = int(account_space.shape[0])
+    if account_dim is not None and int(account_dim) != observed_dim:
+        raise ValueError(
+            f"account_dim {account_dim} does not match observation space width {observed_dim}"
+        )
+    return observed_dim
 
-    def __init__(self) -> None:
+
+class AccountMLP(nn.Module):
+    """Map normalized account values to a fixed embedding."""
+
+    def __init__(self, account_dim: int = BASE_ACCOUNT_DIM) -> None:
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(ACCOUNT_DIM, ACCOUNT_EMB_DIM),
+            nn.Linear(account_dim, ACCOUNT_EMB_DIM),
             nn.LayerNorm(ACCOUNT_EMB_DIM),
             nn.SiLU(),
             nn.Linear(ACCOUNT_EMB_DIM, ACCOUNT_EMB_DIM),
@@ -167,6 +184,7 @@ class TCNEncoder(BaseFeaturesExtractor):
         channels: tuple[int, ...] = (128, 128, 256, 256),
         kernel_size: int = 3,
         dropout: float = 0.1,
+        account_dim: int | None = None,
     ) -> None:
         super().__init__(observation_space, features_dim=latent_dim + ACCOUNT_EMB_DIM)
         self.seq_len = seq_len
@@ -174,7 +192,8 @@ class TCNEncoder(BaseFeaturesExtractor):
         self.latent_dim = latent_dim
         self.kernel_size = kernel_size
         self.dilations = tuple(2**i for i in range(len(channels)))
-        self.account_mlp = AccountMLP()
+        resolved_account_dim = _resolve_account_dim(observation_space, account_dim)
+        self.account_mlp = AccountMLP(resolved_account_dim)
 
         tcn_layers: list[nn.Module] = []
         for i, out_ch in enumerate(channels):
@@ -253,12 +272,14 @@ class TransformerEncoder(BaseFeaturesExtractor):
         num_layers: int = 2,
         dim_feedforward: int = 256,
         dropout: float = 0.1,
+        account_dim: int | None = None,
     ) -> None:
         super().__init__(observation_space, features_dim=latent_dim + ACCOUNT_EMB_DIM)
         self.seq_len = seq_len
         self.n_features = n_features
         self.latent_dim = latent_dim
-        self.account_mlp = AccountMLP()
+        resolved_account_dim = _resolve_account_dim(observation_space, account_dim)
+        self.account_mlp = AccountMLP(resolved_account_dim)
 
         self.input_proj = nn.Linear(n_features, d_model)
         self.pos_enc = _PositionalEncoding(d_model, max_len=max(seq_len, 512))
@@ -332,12 +353,14 @@ class GRUEncoder(BaseFeaturesExtractor):
         hidden_size: int = 256,
         num_layers: int = 2,
         dropout: float = 0.1,
+        account_dim: int | None = None,
     ) -> None:
         super().__init__(observation_space, features_dim=latent_dim + ACCOUNT_EMB_DIM)
         self.seq_len = seq_len
         self.n_features = n_features
         self.latent_dim = latent_dim
-        self.account_mlp = AccountMLP()
+        resolved_account_dim = _resolve_account_dim(observation_space, account_dim)
+        self.account_mlp = AccountMLP(resolved_account_dim)
         self.hidden_size = hidden_size
         self.num_layers = num_layers
 
@@ -416,12 +439,14 @@ class MTFEncoder(BaseFeaturesExtractor):
         channels: tuple[int, ...] = (128, 128, 256, 256),
         kernel_size: int = 3,
         dropout: float = 0.1,
+        account_dim: int | None = None,
     ) -> None:
         super().__init__(observation_space, features_dim=latent_dim + ACCOUNT_EMB_DIM)
         if not isinstance(observation_space, spaces.Dict):
             raise TypeError("MTFEncoder requires a Dict observation space")
         self.latent_dim = latent_dim
-        self.account_mlp = AccountMLP()
+        resolved_account_dim = _resolve_account_dim(observation_space, account_dim)
+        self.account_mlp = AccountMLP(resolved_account_dim)
         spaces_map = observation_space.spaces
         self._keys = _MTF_STREAMS
         self.branches = nn.ModuleList()

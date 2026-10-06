@@ -6,6 +6,8 @@ from typing import Any, cast
 
 import numpy as np
 
+from .entry_state import entry_state_one_hot
+
 
 def pad_observation_window(
     seq: np.ndarray[Any, Any],
@@ -110,13 +112,14 @@ def normalized_account_vector(
     dist_to_sl: float,
     trailing_dd: float,
     close: float,
+    entry_state: str | None = None,
 ) -> np.ndarray[Any, Any]:
-    """The six account features the encoder MLP expects. Already O(1)."""
+    """Build the normalized account features, optionally including entry state."""
     norm_equity = float(np.log(equity / initial_balance)) if initial_balance > 0 else 0.0
     norm_pnl = open_pnl / initial_balance if initial_balance > 0 else 0.0
     unrealised_r = (open_pnl / equity * 100.0) if equity > 0 else 0.0
     norm_dist = dist_to_sl / close if close > 0 else 0.0
-    return np.array(
-        [norm_equity, pos_dir, norm_pnl, unrealised_r, norm_dist, float(trailing_dd)],
-        dtype=np.float32,
-    )
+    values = [norm_equity, pos_dir, norm_pnl, unrealised_r, norm_dist, float(trailing_dd)]
+    if entry_state is not None:
+        values.extend(entry_state_one_hot(entry_state))
+    return np.asarray(values, dtype=np.float32)

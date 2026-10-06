@@ -62,6 +62,18 @@ class TestTCNEncoder:
 
         assert output.shape == (batch_size, 128 + 32)
 
+    def test_account_mlp_uses_runtime_observation_dimension(self) -> None:
+        observation_space = spaces.Dict(
+            {
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, 8), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(10,), dtype=np.float32),
+            }
+        )
+        encoder = TCNEncoder(observation_space, seq_len=60, n_features=8, latent_dim=16)
+        assert encoder.account_mlp.net[0].in_features == 10
+        output = encoder({"seq": torch.randn(2, 60, 8), "account": torch.randn(2, 10)})
+        assert output.shape == (2, 16 + 32)
+
 
 class TestTransformerEncoder:
     """Tests for TransformerEncoder class."""

@@ -26,8 +26,6 @@ import torch.nn.functional as F
 from gymnasium import spaces
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
-from .encoder import ACCOUNT_DIM
-
 
 class VAEEncoder(nn.Module):
     """VAE encoder that compresses pre-NY sequence into latent embedding.
@@ -407,10 +405,22 @@ class VAEFeatureExtractor(BaseFeaturesExtractor):
         observation_space: spaces.Space[Any],
         vae: VAE,
         freeze: bool = True,
+        account_dim: int | None = None,
     ) -> None:
+        if not isinstance(observation_space, spaces.Dict):
+            raise TypeError("VAEFeatureExtractor requires a Dict observation space")
+        account_space = observation_space.spaces.get("account")
+        if not isinstance(account_space, spaces.Box) or account_space.shape is None:
+            raise TypeError("observation space must contain a Box account vector")
+        observed_account_dim = int(account_space.shape[0])
+        if account_dim is not None and int(account_dim) != observed_account_dim:
+            raise ValueError(
+                f"account_dim {account_dim} does not match observation space width "
+                f"{observed_account_dim}"
+            )
         super().__init__(
             observation_space,
-            features_dim=vae.encoder.latent_dim + ACCOUNT_DIM,
+            features_dim=vae.encoder.latent_dim + observed_account_dim,
         )
         self.vae = vae
         self.freeze = freeze

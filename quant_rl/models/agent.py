@@ -99,13 +99,18 @@ def build_agent(
 
     # Infer F from the env's observation space
     n_features: int = env.observation_space["seq"].shape[1]
+    account_dim: int = int(env.observation_space["account"].shape[0])
 
     # Choose feature extractor based on architecture / VAE use
     extractor_cls: Any
     if use_vae and "vae_z" in env.observation_space.spaces:
         extractor_cls = VAEFeatureExtractor
         latent_dim = env.observation_space["vae_z"].shape[0]
-        extractor_kwargs: dict[str, Any] = {"vae": vae, "freeze": True}
+        extractor_kwargs: dict[str, Any] = {
+            "vae": vae,
+            "freeze": True,
+            "account_dim": account_dim,
+        }
     else:
         if arch == "mtf" and "seq_m5" not in env.observation_space.spaces:
             raise ValueError("arch 'mtf' requires an environment built with mtf=True")
@@ -113,12 +118,13 @@ def build_agent(
 
         latent_dim = 128
         if arch == "mtf":
-            extractor_kwargs = dict(latent_dim=latent_dim)
+            extractor_kwargs = dict(latent_dim=latent_dim, account_dim=account_dim)
         else:
             extractor_kwargs = dict(
                 seq_len=cfg.env.obs_window,
                 n_features=n_features,
                 latent_dim=latent_dim,
+                account_dim=account_dim,
             )
 
     # Two hidden layers after the encoder. SAC uses ``qf`` for the critic.

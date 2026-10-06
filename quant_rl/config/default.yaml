@@ -149,6 +149,10 @@ env:
   max_episode_steps: null
   reward_dsr_eta: 0.01                 # differential Sharpe damping
   strategy_actions: false              # Idea 1/2 trader Box[-1,1]^5 [intensity, stop, risk, target, exit]
+  entry_state_machine: false           # A4 persistent opportunity lifecycle
+  candidate_max_age_bars: 5            # last valid candidate age, in bars
+  arm_requires_retest: false           # require a current directional gap retest to arm
+  entry_state_observation: true        # false supports the A4a hidden-state ablation
   # Overlay: intensity does not gate entry (0 = follow context_direction).
   # A positive band lets PPO park at "never trade"; seed-50 20M did that at 0.1.
   entry_intensity_threshold: 0.0
