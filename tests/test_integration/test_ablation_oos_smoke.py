@@ -8,11 +8,12 @@ from typing import Any
 
 import pytest
 import yaml
-from scripts.ablation_runner import _average_seed_reports, load_experiments, merge_variant_cfg
+from scripts.ablation_runner import _average_seed_reports, load_experiments
 from scripts.report_ablations import format_table, load_ablation_reports
 from scripts.test_oos import make_cost_model
 
 from quant_rl.config import load_config
+from quant_rl.train.ablation_utils import merge_variant_cfg
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXPERIMENTS = REPO_ROOT / "config" / "experiments.yaml"

@@ -15,7 +15,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pandas as pd
 import yaml
@@ -28,15 +28,9 @@ from quant_rl.data.split import split_train_test  # noqa: E402
 from quant_rl.eval.rollout import make_action_fn  # noqa: E402
 from quant_rl.evaluation import build_run_report, run_episode  # noqa: E402
 from quant_rl.models.agent import build_agent  # noqa: E402
+from quant_rl.train.ablation_utils import merge_variant_cfg  # noqa: E402
 from quant_rl.train.train_rl import make_env  # noqa: E402
 
-_STRATEGY_CONFIGS = {
-    "po3_ifvg": "config/idea1_po3_ifvg.yaml",
-    "distribution": "config/idea2_distribution.yaml",
-}
-_PD_CONTEXT_CONFIG = "config/features_pd_context.yaml"
-
-# Scalar keys averaged across seeds when present in every seed report.
 _AVG_KEYS = (
     "sharpe",
     "sortino",
@@ -100,43 +94,6 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     return parser.parse_args()
-
-
-def merge_variant_cfg(
-    base: DictConfig,
-    *,
-    strategy: str,
-    include_pd_context: bool,
-    variant: dict[str, Any] | None = None,
-) -> DictConfig:
-    """Merge strategy / PD-context overlays onto a base config."""
-    cfg = cast(DictConfig, OmegaConf.create(OmegaConf.to_container(base, resolve=True)))
-    if include_pd_context:
-        pd_path = Path(_PD_CONTEXT_CONFIG)
-        if pd_path.is_file():
-            cfg = cast(DictConfig, OmegaConf.merge(cfg, OmegaConf.load(pd_path)))
-    if strategy in _STRATEGY_CONFIGS:
-        strat_path = Path(_STRATEGY_CONFIGS[strategy])
-        if strat_path.is_file():
-            cfg = cast(DictConfig, OmegaConf.merge(cfg, OmegaConf.load(strat_path)))
-    # Ladder flags (A0-A4): thread from the variant dict so experiments.yaml can
-    # toggle the entry/SL/TP architecture layers independently of strategy.
-    for key in (
-        "entry_state_machine",
-        "entry_state_observation",
-        "allow_agent_sl_mode",
-        "allow_agent_tp_mode",
-        "allow_multi_tp",
-        "agent_direction_control",
-        "strategy_actions",
-        "arm_requires_retest",
-        "candidate_max_age_bars",
-    ):
-        if variant is not None and key in variant:
-            cfg.env[key] = variant[key]
-    # Force single-env for scripted ablations (no SubprocVecEnv spawn).
-    cfg.env.n_envs = 1
-    return cfg
 
 
 def evaluate_oos(

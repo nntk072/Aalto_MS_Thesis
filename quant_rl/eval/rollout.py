@@ -257,4 +257,9 @@ def evaluate_model(
         "max_trailing_dd": float(max_drawdown(env.equity_curve)),
         "action_counts": dict(action_counts),
         "entry_diag": dict(env._entry_diag),
+        "entry_state_diagnostics": (
+            env.entry_state_diagnostics()
+            if callable(getattr(env, "entry_state_diagnostics", None))
+            else {}
+        ),
     }

@@ -51,6 +51,7 @@ from quant_rl.evaluation import calculate_metrics
 from quant_rl.features.build import build_features, feature_cache_path
 from quant_rl.models.agent import build_agent
 from quant_rl.models.ppo_policy import install_post_update_std_clip
+from quant_rl.train.ablation_utils import load_variant_config, merge_variant_cfg  # noqa: E402
 from quant_rl.train.auxiliary_training import AuxiliaryTrainerCallback
 from quant_rl.train.callbacks import (
     BestCheckpointEvalCallback,
@@ -506,6 +507,18 @@ def parse_train_args() -> argparse.Namespace:
     )
     parser.add_argument("overrides", nargs="*", help="Config overrides")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument(
+        "--seeds",
+        nargs="+",
+        type=int,
+        default=None,
+        help="Override seed list (default: single --seed)",
+    )
+    parser.add_argument(
+        "--variant",
+        default=None,
+        help="Variant name from config/experiments.yaml (overrides --strategy if set in variant)",
+    )
     parser.add_argument("--mvp", action="store_true", help="MVP mode: first 30 days only")
     parser.add_argument("--force", action="store_true", help="Force data pipeline rerun")
     parser.add_argument("--out", default="outputs", help="Base output directory")
@@ -589,6 +602,25 @@ def _load_merged_config(args: argparse.Namespace) -> DictConfig:
         log.info("Merged strategy config: %s", variant_path)
     elif args.strategy != "baseline":
         raise ValueError(f"unknown strategy: {args.strategy}")
+
+    # Merge variant flags from experiments.yaml (--variant).
+    if getattr(args, "variant", None):
+        variant_dict = load_variant_config(args.variant)
+        variant_strategy = str(variant_dict.get("strategy", args.strategy))
+        include_pd = bool(variant_dict.get("include_pd_context", False))
+        cfg = merge_variant_cfg(
+            cfg,
+            strategy=variant_strategy,
+            include_pd_context=include_pd,
+            variant=variant_dict,
+        )
+        log.info(
+            "Merged variant: %s (strategy=%s include_pd=%s)",
+            args.variant,
+            variant_strategy,
+            include_pd,
+        )
+
     return apply_overrides(cfg, args.overrides)
 
 
@@ -606,9 +638,18 @@ def _build_training_log(
     test_result: dict[str, Any],
     strategy: str = "baseline",
     strategy_actions: bool = False,
+    entry_diag: dict[str, Any] | None = None,
+    entry_state_diagnostics: dict[str, Any] | None = None,
+    action_space_width: int | None = None,
+    observation_account_dim: int | None = None,
+    env_flags: dict[str, Any] | None = None,
+    oos_role: str = "final_report_only",
 ) -> dict[str, Any]:
     """Build the training_log.json dict from run results."""
-    return {
+    from quant_rl.train.ablation_utils import compute_tier1_funnel
+
+    funnel = compute_tier1_funnel(entry_diag, entry_state_diagnostics)
+    log_dict: dict[str, Any] = {
         "seed": seed,
         "mvp": mvp,
         "algo": algo,
@@ -623,8 +664,6 @@ def _build_training_log(
         "test_max_dd": float(test_m.max_drawdown),
         "test_trades": test_m.n_trades,
         "test_return": float(test_m.total_return_pct),
-        # Gate G3 checks "zero kill-switch breaches"; the count is computed by
-        # evaluate_model but was not being written out.
         "test_breaches": test_result.get("n_breach_sessions", 0),
         "test_n_sessions": int(test_result.get("n_sessions", 0)),
         "test_days_traded": int(test_result.get("days_traded", 0)),
@@ -635,6 +674,187 @@ def _build_training_log(
         ),
         "timestamp": datetime.now().isoformat(),
     }
+    log_dict.update(funnel)
+    if action_space_width is not None:
+        log_dict["action_space_width"] = action_space_width
+    if observation_account_dim is not None:
+        log_dict["observation_account_dim"] = observation_account_dim
+    if env_flags is not None:
+        log_dict["env_flags"] = env_flags
+    log_dict["oos_role"] = oos_role
+    return log_dict
+
+
+def _action_space_width(env: Any) -> int | None:
+    """Return the action space width for logging."""
+    action_space = getattr(env, "action_space", None)
+    if action_space is None:
+        return None
+    if hasattr(action_space, "shape"):
+        return int(action_space.shape[0])
+    if hasattr(action_space, "n"):
+        return int(action_space.n)
+    return None
+
+
+def _observation_account_dim(env: Any) -> int:
+    """Return the account observation dimension from the env's observation space."""
+    obs_space = getattr(env, "observation_space", None)
+    if obs_space is None:
+        return 0
+    account_space = getattr(obs_space, "spaces", {}).get("account")
+    if account_space is None:
+        return 0
+    return int(account_space.shape[0])
+
+
+def _save_seed_artifacts(
+    seed_dir: Path,
+    seed: int,
+    cfg: Any,
+    train_result: dict[str, Any],
+    test_result: dict[str, Any],
+    train_m: Any,
+    test_m: Any,
+) -> None:
+    """Write per-seed artifacts for multi-seed mode."""
+    train_trades = train_result.get("trades")
+    test_trades = test_result.get("trades")
+    trade_log = {
+        "train": train_trades.to_dict(orient="records") if train_trades is not None else [],
+        "test": test_trades.to_dict(orient="records") if test_trades is not None else [],
+    }
+    (seed_dir / "trade_log.json").write_text(json.dumps(trade_log, indent=2, default=str))
+    entry_diag = {
+        "train": train_result.get("entry_diag", {}),
+        "test": test_result.get("entry_diag", {}),
+    }
+    (seed_dir / "entry_diag.json").write_text(json.dumps(entry_diag, indent=2, default=str))
+    entry_state = {
+        "train": train_result.get("entry_state_diagnostics", {}),
+        "test": test_result.get("entry_state_diagnostics", {}),
+    }
+    (seed_dir / "entry_state.json").write_text(json.dumps(entry_state, indent=2, default=str))
+    try:
+        config_dict = OmegaConf.to_container(cfg, resolve=True)
+        (seed_dir / "config.json").write_text(json.dumps(config_dict, indent=2, default=str))
+    except Exception:
+        pass
+
+
+def _aggregate_seed_results(
+    *,
+    seed_results: list[dict[str, Any]],
+    seed: int,
+    mvp: bool,
+    algo: str,
+    arch: str,
+    reward: str,
+    timesteps: int,
+    train_bars: int,
+    test_bars: int,
+    strategy: str,
+    strategy_actions: bool,
+    cfg: Any,
+    args: Any,
+    run_dir: Path,
+) -> dict[str, Any]:
+    """Aggregate per-seed results into a multi-seed training_log.json."""
+    from quant_rl.train.ablation_utils import compute_tier1_funnel
+
+    ok_seeds = [r for r in seed_results if r["test_m"].n_trades > 0]
+    n_seeds_ok = len(ok_seeds)
+
+    scalar_metrics = [
+        "sharpe",
+        "sortino",
+        "max_drawdown",
+        "total_return_pct",
+        "profit_factor",
+        "win_rate",
+        "avg_trade",
+        "turnover",
+        "n_trades",
+    ]
+
+    aggregated: dict[str, Any] = {
+        "seeds": [r["seed"] for r in seed_results],
+        "n_seeds": len(seed_results),
+        "n_seeds_ok": n_seeds_ok,
+        "algo": algo,
+        "arch": arch,
+        "reward": reward,
+        "strategy": strategy,
+        "strategy_actions": strategy_actions,
+        "mvp": mvp,
+        "timesteps": timesteps,
+        "train_bars": train_bars,
+        "test_bars": test_bars,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    for metric in scalar_metrics:
+        test_vals = [float(getattr(r["test_m"], metric)) for r in seed_results]
+        train_vals = [float(getattr(r["train_m"], metric)) for r in seed_results]
+        if test_vals:
+            aggregated[f"test_{metric}_mean"] = round(sum(test_vals) / len(test_vals), 4)
+            aggregated[f"test_{metric}_std"] = round(float(np.std(test_vals)), 4)
+            aggregated[f"test_{metric}_seeds"] = test_vals
+        if train_vals:
+            aggregated[f"train_{metric}_mean"] = round(sum(train_vals) / len(train_vals), 4)
+            aggregated[f"train_{metric}_std"] = round(float(np.std(train_vals)), 4)
+
+    all_ok = all(r["train_gate"]["ok"] for r in seed_results)
+    aggregated["train_equity_ok"] = all_ok
+    aggregated["train_end_equity"] = float(seed_results[-1]["train_gate"]["end_equity"])
+    aggregated["train_equity_slope"] = float(seed_results[-1]["train_gate"]["slope"])
+    aggregated["train_equity_reason"] = str(seed_results[-1]["train_gate"]["reason"])
+
+    abort_reasons = [r["abort_reason"] for r in seed_results if r["abort_reason"]]
+    aggregated["early_abort_reason"] = abort_reasons[0] if abort_reasons else ""
+    aggregated["timesteps_completed"] = seed_results[-1]["model_num_timesteps"]
+
+    first = seed_results[0]
+    funnel = compute_tier1_funnel(
+        first["test_result"].get("entry_diag"),
+        first["test_result"].get("entry_state_diagnostics"),
+    )
+    aggregated.update(funnel)
+
+    aggregated["oos_role"] = (
+        "selection_acknowledged"
+        if getattr(args, "allow_locked_oos_for_selection", False)
+        else "final_report_only"
+    )
+
+    env_flags = {
+        key: bool(cfg.env.get(key, False))
+        for key in (
+            "strategy_actions",
+            "allow_agent_sl_mode",
+            "allow_agent_tp_mode",
+            "allow_multi_tp",
+            "entry_state_machine",
+            "entry_state_observation",
+            "arm_requires_retest",
+        )
+    }
+    aggregated["env_flags"] = env_flags
+
+    action_widths = [
+        r.get("action_space_width") for r in seed_results if r.get("action_space_width") is not None
+    ]
+    obs_dims = [
+        r.get("observation_account_dim")
+        for r in seed_results
+        if r.get("observation_account_dim") is not None
+    ]
+    if action_widths:
+        aggregated["action_space_width"] = action_widths[0]
+    if obs_dims:
+        aggregated["observation_account_dim"] = obs_dims[0]
+
+    return aggregated
 
 
 def main() -> None:
@@ -735,43 +955,35 @@ def main() -> None:
         )
 
     # Setup output directory for model
-    run_dir = build_run_dir(args.out, f"rl_train_seed{args.seed}_{args.arch}")
+    seeds = list(args.seeds) if args.seeds else [args.seed]
+    is_multi_seed = len(seeds) > 1
+    if is_multi_seed:
+        run_name = f"rl_train_seeds_{args.arch}"
+    else:
+        run_name = f"rl_train_seed{args.seed}_{args.arch}"
+    run_dir = build_run_dir(args.out, run_name)
     model_dir = run_dir / "model"
     model_dir.mkdir(parents=True, exist_ok=True)
     obs_mmap = _publish_obs_memmap(train_feat, train_bars, cfg, run_dir / "obs_features.npy")
 
-    # Create training environment
-    log.info("Creating training environment...")
-    train_env = make_env(
-        train_bars,
-        train_feat,
-        cfg,
-        algo=args.algo,
-        reward=args.reward,
-        use_vae=args.use_vae,
-        vae=env_vae,
-        pre_ny_by_date=pre_ny_by_date,
-        obs_features_mmap=obs_mmap,
-        tickbook=ticks_covering(primary_ticks, train_bars),
-        arch=args.arch,
-    )
+    # Seed loop: train + eval for each seed, collect results
+    seed_results: list[dict[str, Any]] = []
+    for seed in seeds:
+        _setup_rngs(seed)
+        log.info("=== Seed %d / %d ===", seed, len(seeds))
 
-    checkpoint_callback = _periodic_checkpoint_callback(cfg, model_dir)
+        # Per-seed output dirs
+        if is_multi_seed:
+            seed_dir = run_dir / "seeds" / f"seed{seed}"
+            seed_model_dir = seed_dir / "model"
+            seed_model_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            seed_dir = run_dir
+            seed_model_dir = model_dir
 
-    # Train agent
-    timesteps = cfg.ppo.total_timesteps if not args.mvp else cfg.training.total_timesteps_mvp
-    log.info("Training %s for %d timesteps...", args.algo.upper(), timesteps)
-
-    model = build_agent(
-        train_env,
-        cfg,
-        arch=args.arch,
-        algo=args.algo,
-        device=device,
-        use_vae=args.use_vae,
-        vae=vae_model,
-        env_fn=partial(
-            make_env,
+        # Create training environment
+        log.info("Creating training environment...")
+        train_env = make_env(
             train_bars,
             train_feat,
             cfg,
@@ -781,344 +993,428 @@ def main() -> None:
             vae=env_vae,
             pre_ny_by_date=pre_ny_by_date,
             obs_features_mmap=obs_mmap,
+            tickbook=ticks_covering(primary_ticks, train_bars),
             arch=args.arch,
-        ),
-    )
-    _log_effective_ppo(model, cfg)
-
-    aux_cb = None
-    aux_cfg = getattr(cfg, "auxiliary", None)
-    if aux_cfg is not None and float(aux_cfg.get("aux_weight", 0.0)) > 0.0:
-        aux_cb = AuxiliaryTrainerCallback(
-            prediction_horizon=int(aux_cfg.get("prediction_horizon", 5)),
-            aux_weight=float(aux_cfg.get("aux_weight", 0.1)),
-            lr=float(aux_cfg.get("lr", 1e-4)),
-            grad_steps=int(aux_cfg.get("grad_steps", 4)),
-            batch_windows=int(aux_cfg.get("batch_windows", 256)),
-        )
-        log.info(
-            "Auxiliary loss enabled: aux_weight=%.3f horizon=%d",
-            aux_cb.aux_weight,
-            aux_cb.prediction_horizon,
         )
 
-    callbacks: list[
-        PeriodicCheckpointCallback
-        | AuxiliaryTrainerCallback
-        | BestCheckpointEvalCallback
-        | ProgressLoggerCallback
-        | ClipLogStdCallback
-        | EpisodeEquityCallback
-        | EarlyAbortCallback
-        | TrainingDashboardCallback
-    ] = [c for c in (checkpoint_callback, aux_cb) if c is not None]
+        checkpoint_callback = _periodic_checkpoint_callback(cfg, seed_model_dir)
 
-    callbacks.append(EpisodeEquityCallback(log_path=model_dir / "episode_equity.csv"))
-    abort_cb = _early_abort_callback(cfg)
-    if abort_cb is not None:
-        callbacks.append(abort_cb)
+        # Train agent
+        timesteps = cfg.ppo.total_timesteps if not args.mvp else cfg.training.total_timesteps_mvp
+        log.info("Training %s for %d timesteps...", args.algo.upper(), timesteps)
 
-    # Best checkpoint: one short prefix of the train calendar, scored by
-    # end equity. A full-year replay is the post-train gate, not this callback.
-    short_n = min(20_000, len(train_bars))
-    short_bars = train_bars.iloc[:short_n]
-    short_feat = train_feat.iloc[:short_n]
-    best_eval_freq = max(1, timesteps)  # once at the end — a full-year eval here stalls training
-    best_cb = BestCheckpointEvalCallback(
-        eval_env_factory=lambda: make_env(
-            short_bars,
-            short_feat,
+        model = build_agent(
+            train_env,
             cfg,
-            algo=args.algo,
-            reward=args.reward,
-            episodic=False,
-            use_vae=args.use_vae,
-            vae=env_vae,
-            pre_ny_by_date=pre_ny_by_date,
-            tickbook=ticks_covering(primary_ticks, short_bars),
             arch=args.arch,
-        ),
-        eval_freq=best_eval_freq,
-        best_model_path=model_dir / "ppo_best",
-    )
-    callbacks.append(best_cb)
-
-    progress_log = model_dir / "training_log.csv"
-    callbacks.append(ProgressLoggerCallback(log_path=progress_log))
-    if isinstance(train_env.action_space, spaces.Box):
-        callbacks.append(
-            ClipLogStdCallback(
-                log_std_min=float(cfg.ppo.get("log_std_min", -0.7)),
-                log_std_max=float(cfg.ppo.get("log_std_max", 0.0)),
-            )
+            algo=args.algo,
+            device=device,
+            use_vae=args.use_vae,
+            vae=vae_model,
+            env_fn=partial(
+                make_env,
+                train_bars,
+                train_feat,
+                cfg,
+                algo=args.algo,
+                reward=args.reward,
+                use_vae=args.use_vae,
+                vae=env_vae,
+                pre_ny_by_date=pre_ny_by_date,
+                obs_features_mmap=obs_mmap,
+                arch=args.arch,
+            ),
         )
+        _log_effective_ppo(model, cfg)
 
-    eval_common, _strategy, _strategy_reward, _strategy_weight, strategy_actions = (
-        _build_eval_common(cfg, args, env_vae, pre_ny_by_date, arch=args.arch)
-    )
-    dash = _dashboard_block(cfg)
-    if bool(dash.get("enabled", True)):
-        eval_bars = int(dash.get("eval_bars", 20_000))
-        slice_n = min(eval_bars, len(train_bars))
-        dash_bars = train_bars.iloc[:slice_n]
-        dash_feat = train_feat.iloc[:slice_n]
+        aux_cb = None
+        aux_cfg = getattr(cfg, "auxiliary", None)
+        if aux_cfg is not None and float(aux_cfg.get("aux_weight", 0.0)) > 0.0:
+            aux_cb = AuxiliaryTrainerCallback(
+                prediction_horizon=int(aux_cfg.get("prediction_horizon", 5)),
+                aux_weight=float(aux_cfg.get("aux_weight", 0.1)),
+                lr=float(aux_cfg.get("lr", 1e-4)),
+                grad_steps=int(aux_cfg.get("grad_steps", 4)),
+                batch_windows=int(aux_cfg.get("batch_windows", 256)),
+            )
+            log.info(
+                "Auxiliary loss enabled: aux_weight=%.3f horizon=%d",
+                aux_cb.aux_weight,
+                aux_cb.prediction_horizon,
+            )
 
-        def _dashboard_eval() -> dict[str, Any]:
-            result = evaluate_model(
+        callbacks: list[
+            PeriodicCheckpointCallback
+            | AuxiliaryTrainerCallback
+            | BestCheckpointEvalCallback
+            | ProgressLoggerCallback
+            | ClipLogStdCallback
+            | EpisodeEquityCallback
+            | EarlyAbortCallback
+            | TrainingDashboardCallback
+        ] = [c for c in (checkpoint_callback, aux_cb) if c is not None]
+
+        callbacks.append(EpisodeEquityCallback(log_path=seed_model_dir / "episode_equity.csv"))
+        abort_cb = _early_abort_callback(cfg)
+        if abort_cb is not None:
+            callbacks.append(abort_cb)
+
+        # Best checkpoint: one short prefix of the train calendar, scored by
+        # end equity. A full-year replay is the post-train gate, not this callback.
+        short_n = min(20_000, len(train_bars))
+        short_bars = train_bars.iloc[:short_n]
+        short_feat = train_feat.iloc[:short_n]
+        best_eval_freq = max(1, timesteps)  # once at the end
+        best_cb = BestCheckpointEvalCallback(
+            eval_env_factory=lambda: make_env(
+                short_bars,
+                short_feat,
+                cfg,
+                algo=args.algo,
+                reward=args.reward,
+                episodic=False,
+                use_vae=args.use_vae,
+                vae=env_vae,
+                pre_ny_by_date=pre_ny_by_date,
+                tickbook=ticks_covering(primary_ticks, short_bars),
+                arch=args.arch,
+            ),
+            eval_freq=best_eval_freq,
+            best_model_path=seed_model_dir / "ppo_best",
+        )
+        callbacks.append(best_cb)
+
+        progress_log = seed_model_dir / "training_log.csv"
+        callbacks.append(ProgressLoggerCallback(log_path=progress_log))
+        if isinstance(train_env.action_space, spaces.Box):
+            callbacks.append(
+                ClipLogStdCallback(
+                    log_std_min=float(cfg.ppo.get("log_std_min", -0.7)),
+                    log_std_max=float(cfg.ppo.get("log_std_max", 0.0)),
+                )
+            )
+
+        eval_common, _strategy, _strategy_reward, _strategy_weight, strategy_actions = (
+            _build_eval_common(cfg, args, env_vae, pre_ny_by_date, arch=args.arch)
+        )
+        dash = _dashboard_block(cfg)
+        if bool(dash.get("enabled", True)):
+            eval_bars = int(dash.get("eval_bars", 20_000))
+            slice_n = min(eval_bars, len(train_bars))
+            dash_bars = train_bars.iloc[:slice_n]
+            dash_feat = train_feat.iloc[:slice_n]
+
+            def _dashboard_eval() -> dict[str, Any]:
+                result = evaluate_model(
+                    model,
+                    bars=dash_bars,
+                    features=dash_feat,
+                    max_episode_steps=None,
+                    deterministic=False,
+                    tickbook=ticks_covering(primary_ticks, dash_bars),
+                    **eval_common,
+                )
+                metrics = calculate_metrics(
+                    result["equity"],
+                    trades=result["trades"],
+                    n_sessions=result.get("n_sessions", 1),
+                    n_breach_sessions=result.get("n_breach_sessions", 0),
+                )
+                n_steps = max(1, int(result.get("n_steps", 1)))
+                from quant_rl.eval.decision_diversity import (
+                    format_diversity_text,
+                    thresholds_from_mapping,
+                )
+
+                diversity = format_diversity_text(
+                    result["trades"],
+                    thresholds_from_mapping(dash.get("diversity")),
+                )
+                return {
+                    "return_pct": float(metrics.total_return_pct),
+                    "sharpe": float(metrics.sharpe),
+                    "sortino": float(metrics.sortino),
+                    "max_drawdown": float(metrics.max_drawdown),
+                    "profit_factor": float(metrics.profit_factor),
+                    "win_rate": float(metrics.win_rate),
+                    "avg_trade": float(metrics.avg_trade),
+                    "n_trades": float(metrics.n_trades),
+                    "turnover": float(metrics.turnover),
+                    "reward_mean": float(result.get("reward_sum", 0.0)) / n_steps,
+                    "diversity_text": diversity,
+                }
+
+            callbacks.append(
+                TrainingDashboardCallback(
+                    total_timesteps=timesteps,
+                    eval_every=int(dash.get("eval_every", 100_000)),
+                    eval_fn=_dashboard_eval,
+                    log_path=seed_model_dir / "dashboard_log.csv",
+                    log_every=int(dash.get("log_every", 100_000)),
+                )
+            )
+
+        log_every = int(dash.get("log_every", 100_000))
+        log_interval = ppo_log_interval(
+            n_steps=int(model.n_steps),
+            n_envs=int(model.n_envs),
+            log_every=log_every,
+        )
+        log.info("SB3 log every %d rollouts (~%d env steps)", log_interval, log_every)
+        if isinstance(train_env.action_space, spaces.Box):
+            install_post_update_std_clip(
                 model,
-                bars=dash_bars,
-                features=dash_feat,
-                max_episode_steps=None,
-                deterministic=False,
-                tickbook=ticks_covering(primary_ticks, dash_bars),
-                **eval_common,
+                float(cfg.ppo.get("log_std_min", -0.7)),
+                float(cfg.ppo.get("log_std_max", 0.0)),
             )
-            metrics = calculate_metrics(
-                result["equity"],
-                trades=result["trades"],
-                n_sessions=result.get("n_sessions", 1),
-                n_breach_sessions=result.get("n_breach_sessions", 0),
+        debug_cfg = cfg.training.get("debug", {})
+        if bool(debug_cfg.get("enabled", False)):
+            install_flight_recorder(model, seed_dir, thresholds=debug_cfg)
+        value_net = getattr(model.policy, "value_net", None)
+        if value_net is not None:
+            with torch.no_grad():
+                for param in value_net.parameters():
+                    param.zero_()
+        model.learn(total_timesteps=timesteps, callback=callbacks, log_interval=log_interval)
+        abort_reason = abort_cb.reason if abort_cb is not None else None
+        if abort_reason:
+            (seed_dir / "early_abort.json").write_text(
+                json.dumps(
+                    {"reason": abort_reason, "timesteps": int(model.num_timesteps)},
+                    indent=2,
+                )
             )
-            n_steps = max(1, int(result.get("n_steps", 1)))
-            from quant_rl.eval.decision_diversity import (
-                format_diversity_text,
-                thresholds_from_mapping,
-            )
+            log.error("EARLY_ABORT %s at timesteps=%s", abort_reason, model.num_timesteps)
 
-            diversity = format_diversity_text(
-                result["trades"],
-                thresholds_from_mapping(dash.get("diversity")),
-            )
-            return {
-                "return_pct": float(metrics.total_return_pct),
-                "sharpe": float(metrics.sharpe),
-                "sortino": float(metrics.sortino),
-                "max_drawdown": float(metrics.max_drawdown),
-                "profit_factor": float(metrics.profit_factor),
-                "win_rate": float(metrics.win_rate),
-                "avg_trade": float(metrics.avg_trade),
-                "n_trades": float(metrics.n_trades),
-                "turnover": float(metrics.turnover),
-                "reward_mean": float(result.get("reward_sum", 0.0)) / n_steps,
-                "diversity_text": diversity,
-            }
+        # Save final model
+        model_path = seed_model_dir / "ppo_final"
+        save_ppo_checkpoint(model, model_path)
+        log.info("Model saved: %s", model_path)
 
-        callbacks.append(
-            TrainingDashboardCallback(
-                total_timesteps=timesteps,
-                eval_every=int(dash.get("eval_every", 100_000)),
-                eval_fn=_dashboard_eval,
-                log_path=model_dir / "dashboard_log.csv",
-                log_every=int(dash.get("log_every", 100_000)),
-            )
-        )
-
-    log_every = int(dash.get("log_every", 100_000))
-    log_interval = ppo_log_interval(
-        n_steps=int(model.n_steps),
-        n_envs=int(model.n_envs),
-        log_every=log_every,
-    )
-    log.info("SB3 log every %d rollouts (~%d env steps)", log_interval, log_every)
-    if isinstance(train_env.action_space, spaces.Box):
-        install_post_update_std_clip(
-            model,
-            float(cfg.ppo.get("log_std_min", -0.7)),
-            float(cfg.ppo.get("log_std_max", 0.0)),
-        )
-    debug_cfg = cfg.training.get("debug", {})
-    if bool(debug_cfg.get("enabled", False)):
-        install_flight_recorder(model, run_dir, thresholds=debug_cfg)
-    value_net = getattr(model.policy, "value_net", None)
-    if value_net is not None:
-        with torch.no_grad():
-            for param in value_net.parameters():
-                param.zero_()
-    model.learn(total_timesteps=timesteps, callback=callbacks, log_interval=log_interval)
-    abort_reason = abort_cb.reason if abort_cb is not None else None
-    if abort_reason:
-        (run_dir / "early_abort.json").write_text(
-            json.dumps(
-                {"reason": abort_reason, "timesteps": int(model.num_timesteps)},
-                indent=2,
-            )
-        )
-        log.error("EARLY_ABORT %s at timesteps=%s", abort_reason, model.num_timesteps)
-
-    # Save final model
-    model_path = model_dir / "ppo_final"
-    save_ppo_checkpoint(model, model_path)
-    log.info("Model saved: %s", model_path)
-
-    # Learning-curve / loss charts from the SB3 progress CSV.
-    try:
-        from quant_rl.eval.training_plots import save_dashboard_plots, save_training_plots
-
-        save_training_plots(
-            progress_log,
-            out_dir=model_dir,
-            dpi=getattr(cfg.output, "dpi", 150),
-            save_html=getattr(cfg.output, "save_html", True),
-        )
-        save_dashboard_plots(
-            model_dir / "dashboard_log.csv",
-            out_dir=model_dir,
-            dpi=getattr(cfg.output, "dpi", 150),
-            save_html=getattr(cfg.output, "save_html", True),
-        )
-    except Exception as exc:
-        log.warning("Training progress plots skipped: %s", exc)
-
-    # Evaluate the trained model on the held-out test set (out-of-sample).
-    log.info("Evaluating trained model on test set...")
-    test_result = evaluate_model(
-        model,
-        bars=test_bars,
-        features=test_feat,
-        max_episode_steps=None,
-        deterministic=False,
-        tickbook=ticks_covering(primary_ticks, test_bars),
-        **eval_common,
-    )
-    test_result["initial_balance"] = cfg.account.initial_balance
-    test_m = calculate_metrics(
-        test_result["equity"],
-        trades=test_result["trades"],
-        n_sessions=test_result.get("n_sessions", 1),
-        n_breach_sessions=test_result.get("n_breach_sessions", 0),
-    )
-    test_dir_sum = _direction_summary(test_result["trades"])
-    log.info(
-        "[test] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%  "
-        "survived=%s  days=%d/%d  fail_time=%s  max_trailing_dd=%.2f%%  direction=%s  entry_diag=%s",
-        test_m.sharpe,
-        test_m.max_drawdown * 100,
-        test_m.n_trades,
-        test_m.total_return_pct,
-        test_result.get("survived_full_year"),
-        test_result.get("days_traded", 0),
-        test_result.get("n_sessions", 0),
-        test_result.get("fail_time"),
-        test_m.max_drawdown * 100,
-        test_dir_sum,
-        test_result.get("entry_diag", {}),
-    )
-
-    # In-sample evaluation on the training split so the run dir carries the same
-    # training/ + testing/ artifact layout as the baseline runners.
-    log.info("Evaluating trained model on training set (in-sample)...")
-    train_result = evaluate_model(
-        model,
-        bars=train_bars,
-        features=train_feat,
-        max_episode_steps=None,
-        deterministic=False,
-        tickbook=ticks_covering(primary_ticks, train_bars),
-        **eval_common,
-    )
-    train_result["initial_balance"] = cfg.account.initial_balance
-    train_m = calculate_metrics(
-        train_result["equity"],
-        trades=train_result["trades"],
-        n_sessions=train_result.get("n_sessions", 1),
-        n_breach_sessions=train_result.get("n_breach_sessions", 0),
-    )
-    train_dir_sum = _direction_summary(train_result["trades"])
-    train_gate = assess_train_equity(
-        train_result["equity"],
-        initial=float(cfg.account.initial_balance),
-        breached=not bool(train_result.get("survived_full_year", False)),
-    )
-    (run_dir / "train_equity_gate.json").write_text(json.dumps(train_gate, indent=2))
-    if not train_gate["ok"]:
-        log.error("TRAIN_EQUITY_FAILED %s", train_gate)
-    log.info(
-        "[train] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%  "
-        "survived=%s  days=%d/%d  fail_time=%s  max_trailing_dd=%.2f%%  direction=%s  entry_diag=%s",
-        train_m.sharpe,
-        train_m.max_drawdown * 100,
-        train_m.n_trades,
-        train_m.total_return_pct,
-        train_result.get("survived_full_year"),
-        train_result.get("days_traded", 0),
-        train_result.get("n_sessions", 0),
-        train_result.get("fail_time"),
-        train_m.max_drawdown * 100,
-        train_dir_sum,
-        train_result.get("entry_diag", {}),
-    )
-    (run_dir / "direction_summary.json").write_text(
-        json.dumps({"train": train_dir_sum, "test": test_dir_sum}, indent=2)
-    )
-
-    # Export both splits so the RL run produces the same artifact layout as the
-    # other runners: training/ + testing/ trees with plots, CSVs, and metrics.
-    save_run(
-        run_dir=run_dir,
-        train_result=train_result,
-        train_metrics=train_m,
-        train_bars=train_bars,
-        train_secondary=train_sec,
-        test_result=test_result,
-        test_metrics=test_m,
-        test_bars=test_bars,
-        test_secondary=test_sec,
-        cfg=cfg,
-        save_plots=getattr(cfg.output, "save_plots", True),
-        save_html=getattr(cfg.output, "save_html", True),
-        save_csv=getattr(cfg.output, "save_csv", True),
-        dpi=getattr(cfg.output, "dpi", 150),
-    )
-
-    # Thesis data/EDA pack at the run root (coverage, returns, features, PO3).
-    try:
-        from quant_rl.eval.data_plots import write_data_eda
-
-        write_data_eda(
-            run_dir / "data",
-            primary_m1,
-            features,
-            train_end=train_end,
-            test_start=test_start,
-            dpi=getattr(cfg.output, "dpi", 150),
-        )
-    except Exception as exc:
-        log.warning("Run data EDA skipped: %s", exc)
-
-    # Save config
-    if cfg is not None:
+        # Learning-curve / loss charts from the SB3 progress CSV.
         try:
-            (run_dir / "config.yaml").write_text(OmegaConf.to_yaml(cfg))
+            from quant_rl.eval.training_plots import save_dashboard_plots, save_training_plots
+
+            save_training_plots(
+                progress_log,
+                out_dir=seed_model_dir,
+                dpi=getattr(cfg.output, "dpi", 150),
+                save_html=getattr(cfg.output, "save_html", True),
+            )
+            save_dashboard_plots(
+                seed_model_dir / "dashboard_log.csv",
+                out_dir=seed_model_dir,
+                dpi=getattr(cfg.output, "dpi", 150),
+                save_html=getattr(cfg.output, "save_html", True),
+            )
+        except Exception as exc:
+            log.warning("Training progress plots skipped: %s", exc)
+
+        # Evaluate the trained model on the held-out test set (out-of-sample).
+        log.info("Evaluating trained model on test set...")
+        test_result = evaluate_model(
+            model,
+            bars=test_bars,
+            features=test_feat,
+            max_episode_steps=None,
+            deterministic=False,
+            tickbook=ticks_covering(primary_ticks, test_bars),
+            **eval_common,
+        )
+        test_result["initial_balance"] = cfg.account.initial_balance
+        test_m = calculate_metrics(
+            test_result["equity"],
+            trades=test_result["trades"],
+            n_sessions=test_result.get("n_sessions", 1),
+            n_breach_sessions=test_result.get("n_breach_sessions", 0),
+        )
+        test_dir_sum = _direction_summary(test_result["trades"])
+        log.info(
+            "[test] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%  "
+            "survived=%s  days=%d/%d  fail_time=%s  max_trailing_dd=%.2f%%  direction=%s  entry_diag=%s",
+            test_m.sharpe,
+            test_m.max_drawdown * 100,
+            test_m.n_trades,
+            test_m.total_return_pct,
+            test_result.get("survived_full_year"),
+            test_result.get("days_traded", 0),
+            test_result.get("n_sessions", 0),
+            test_result.get("fail_time"),
+            test_m.max_drawdown * 100,
+            test_dir_sum,
+            test_result.get("entry_diag", {}),
+        )
+
+        # In-sample evaluation on the training split so the run dir carries the same
+        # training/ + testing/ artifact layout as the baseline runners.
+        log.info("Evaluating trained model on training set (in-sample)...")
+        train_result = evaluate_model(
+            model,
+            bars=train_bars,
+            features=train_feat,
+            max_episode_steps=None,
+            deterministic=False,
+            tickbook=ticks_covering(primary_ticks, train_bars),
+            **eval_common,
+        )
+        train_result["initial_balance"] = cfg.account.initial_balance
+        train_m = calculate_metrics(
+            train_result["equity"],
+            trades=train_result["trades"],
+            n_sessions=train_result.get("n_sessions", 1),
+            n_breach_sessions=train_result.get("n_breach_sessions", 0),
+        )
+        train_dir_sum = _direction_summary(train_result["trades"])
+        train_gate = assess_train_equity(
+            train_result["equity"],
+            initial=float(cfg.account.initial_balance),
+            breached=not bool(train_result.get("survived_full_year", False)),
+        )
+        (seed_dir / "train_equity_gate.json").write_text(json.dumps(train_gate, indent=2))
+        if not train_gate["ok"]:
+            log.error("TRAIN_EQUITY_FAILED %s", train_gate)
+        log.info(
+            "[train] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%  "
+            "survived=%s  days=%d/%d  fail_time=%s  max_trailing_dd=%.2f%%  direction=%s  entry_diag=%s",
+            train_m.sharpe,
+            train_m.max_drawdown * 100,
+            train_m.n_trades,
+            train_m.total_return_pct,
+            train_result.get("survived_full_year"),
+            train_result.get("days_traded", 0),
+            train_result.get("n_sessions", 0),
+            train_result.get("fail_time"),
+            train_m.max_drawdown * 100,
+            train_dir_sum,
+            train_result.get("entry_diag", {}),
+        )
+
+        # Export both splits for this seed
+        save_run(
+            run_dir=seed_dir,
+            train_result=train_result,
+            train_metrics=train_m,
+            train_bars=train_bars,
+            train_secondary=train_sec,
+            test_result=test_result,
+            test_metrics=test_m,
+            test_bars=test_bars,
+            test_secondary=test_sec,
+            cfg=cfg,
+            save_plots=getattr(cfg.output, "save_plots", True),
+            save_html=getattr(cfg.output, "save_html", True),
+            save_csv=getattr(cfg.output, "save_csv", True),
+            dpi=getattr(cfg.output, "dpi", 150),
+        )
+
+        # Save config snapshot for this seed
+        try:
+            (seed_dir / "config.yaml").write_text(OmegaConf.to_yaml(cfg))
         except Exception:
             pass
 
-    # Save training log
-    training_log = _build_training_log(
-        seed=args.seed,
-        mvp=args.mvp,
-        algo=args.algo,
-        arch=args.arch,
-        reward=args.reward,
-        timesteps=timesteps,
-        train_bars=len(train_bars),
-        test_bars=len(test_bars),
-        test_m=test_m,
-        test_result=test_result,
-        strategy="baseline"
-        if not strategy_actions
-        else str(cfg.strategy.get("name", args.strategy)),
-        strategy_actions=strategy_actions,
+        # Per-seed artifacts (multi-seed mode only)
+        if is_multi_seed:
+            _save_seed_artifacts(seed_dir, seed, cfg, train_result, test_result, train_m, test_m)
+
+        # Collect per-seed results for aggregation
+        entry_diag = test_result.get("entry_diag", {})
+        entry_state_diag = test_result.get("entry_state_diagnostics", {})
+        action_space_width = _action_space_width(train_env)
+        observation_account_dim = _observation_account_dim(train_env)
+        env_flags = {
+            key: bool(cfg.env.get(key, False))
+            for key in (
+                "strategy_actions",
+                "allow_agent_sl_mode",
+                "allow_agent_tp_mode",
+                "allow_multi_tp",
+                "entry_state_machine",
+                "entry_state_observation",
+                "arm_requires_retest",
+            )
+        }
+        oos_role = (
+            "selection_acknowledged"
+            if getattr(args, "allow_locked_oos_for_selection", False)
+            else "final_report_only"
+        )
+        seed_results.append(
+            {
+                "seed": seed,
+                "train_m": train_m,
+                "test_m": test_m,
+                "train_result": train_result,
+                "test_result": test_result,
+                "train_gate": train_gate,
+                "abort_reason": abort_reason,
+                "model_num_timesteps": int(model.num_timesteps),
+                "entry_diag": entry_diag,
+                "entry_state_diagnostics": entry_state_diag,
+                "action_space_width": action_space_width,
+                "observation_account_dim": observation_account_dim,
+                "env_flags": env_flags,
+                "oos_role": oos_role,
+            }
+        )
+
+    # Aggregate results across seeds and write training_log.json
+    strategy_actions = bool(cfg.env.get("strategy_actions", False))
+    strategy_name = (
+        "baseline" if not strategy_actions else str(cfg.strategy.get("name", args.strategy))
     )
-    training_log["train_equity_ok"] = bool(train_gate["ok"])
-    training_log["train_end_equity"] = float(train_gate["end_equity"])
-    training_log["train_equity_slope"] = float(train_gate["slope"])
-    training_log["train_equity_reason"] = str(train_gate["reason"])
-    training_log["early_abort_reason"] = abort_reason or ""
-    training_log["timesteps_completed"] = int(model.num_timesteps)
+
+    if is_multi_seed:
+        training_log = _aggregate_seed_results(
+            seed_results=seed_results,
+            seed=args.seed,
+            mvp=args.mvp,
+            algo=args.algo,
+            arch=args.arch,
+            reward=args.reward,
+            timesteps=timesteps,
+            train_bars=len(train_bars),
+            test_bars=len(test_bars),
+            strategy=strategy_name,
+            strategy_actions=strategy_actions,
+            cfg=cfg,
+            args=args,
+            run_dir=run_dir,
+        )
+    else:
+        # Single-seed: preserve current behavior exactly
+        single = seed_results[0]
+        training_log = _build_training_log(
+            seed=single["seed"],
+            mvp=args.mvp,
+            algo=args.algo,
+            arch=args.arch,
+            reward=args.reward,
+            timesteps=timesteps,
+            train_bars=len(train_bars),
+            test_bars=len(test_bars),
+            test_m=single["test_m"],
+            test_result=single["test_result"],
+            strategy=strategy_name,
+            strategy_actions=strategy_actions,
+            entry_diag=single.get("entry_diag"),
+            entry_state_diagnostics=single.get("entry_state_diagnostics"),
+            action_space_width=single.get("action_space_width"),
+            observation_account_dim=single.get("observation_account_dim"),
+            env_flags=single.get("env_flags"),
+            oos_role=single.get("oos_role", "final_report_only"),
+        )
+        training_log["train_equity_ok"] = bool(single["train_gate"]["ok"])
+        training_log["train_end_equity"] = float(single["train_gate"]["end_equity"])
+        training_log["train_equity_slope"] = float(single["train_gate"]["slope"])
+        training_log["train_equity_reason"] = str(single["train_gate"]["reason"])
+        training_log["early_abort_reason"] = single["abort_reason"] or ""
+        training_log["timesteps_completed"] = single["model_num_timesteps"]
+
     (run_dir / "training_log.json").write_text(json.dumps(training_log, indent=2))
-    if not train_gate["ok"]:
+    if not seed_results[-1]["train_gate"]["ok"]:
         raise SystemExit(
-            f"TRAIN_EQUITY_FAILED: train-year equity did not rise ({train_gate['reason']})"
+            f"TRAIN_EQUITY_FAILED: train-year equity did not rise ({seed_results[-1]['train_gate']['reason']})"
         )
 
     # Optional wandb logging — the sweep (config/wandb_sweep.yaml) reads
@@ -1138,19 +1434,29 @@ def main() -> None:
                 "seed": args.seed,
                 "mvp": args.mvp,
                 "timesteps": timesteps,
+                "n_seeds": len(seeds),
             },
         )
         if args.allow_locked_oos_for_selection:
-            wandb.log(
-                {
-                    "sharpe": training_log["test_sharpe"],
-                    "test_sharpe": training_log["test_sharpe"],
-                    "test_max_dd": training_log["test_max_dd"],
-                    "test_trades": training_log["test_trades"],
-                    "test_return": training_log["test_return"],
-                    "test_breaches": training_log["test_breaches"],
-                }
-            )
+            log_payload = {
+                "sharpe": training_log.get(
+                    "test_sharpe_mean", training_log.get("test_sharpe", 0.0)
+                ),
+                "test_sharpe": training_log.get(
+                    "test_sharpe_mean", training_log.get("test_sharpe", 0.0)
+                ),
+                "test_max_dd": training_log.get(
+                    "test_max_dd_mean", training_log.get("test_max_dd", 0.0)
+                ),
+                "test_trades": training_log.get(
+                    "test_n_trades_mean", training_log.get("test_trades", 0)
+                ),
+                "test_return": training_log.get(
+                    "test_total_return_pct_mean", training_log.get("test_return", 0.0)
+                ),
+                "test_breaches": training_log.get("test_breaches", 0),
+            }
+            wandb.log(log_payload)
         wandb.finish()
 
     # Walk-forward validation (additive, does not alter the single-split flow)
