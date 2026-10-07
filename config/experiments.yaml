@@ -86,6 +86,90 @@ variants:
     entry_state_machine: true
     entry_state_observation: true
 
+  # ===== LADDER x po3_ifvg (full A0-A4.2 ladder) =====
+  - name: ladder_a0_flat_po3
+    strategy: po3_ifvg
+    include_pd_context: true
+    arch: tcn
+    strategy_actions: true
+
+  - name: ladder_a1_sl_po3
+    strategy: po3_ifvg
+    include_pd_context: true
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+
+  - name: ladder_a2_tp_po3
+    strategy: po3_ifvg
+    include_pd_context: true
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+    allow_agent_tp_mode: true
+
+  - name: ladder_a3_multi_tp_po3
+    strategy: po3_ifvg
+    include_pd_context: true
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+    allow_agent_tp_mode: true
+    allow_multi_tp: true
+
+  - name: ladder_a4a_entry_fsm_hidden_po3
+    strategy: po3_ifvg
+    include_pd_context: true
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+    allow_agent_tp_mode: true
+    allow_multi_tp: true
+    entry_state_machine: true
+    entry_state_observation: false
+
+  # ===== LADDER x distribution (full A0-A4.2 ladder) =====
+  - name: ladder_a0_flat_dist
+    strategy: distribution
+    include_pd_context: true
+    arch: tcn
+    strategy_actions: true
+
+  - name: ladder_a1_sl_dist
+    strategy: distribution
+    include_pd_context: true
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+
+  - name: ladder_a2_tp_dist
+    strategy: distribution
+    include_pd_context: true
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+    allow_agent_tp_mode: true
+
+  - name: ladder_a3_multi_tp_dist
+    strategy: distribution
+    include_pd_context: true
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+    allow_agent_tp_mode: true
+    allow_multi_tp: true
+
+  - name: ladder_a4a_entry_fsm_hidden_dist
+    strategy: distribution
+    include_pd_context: true
+    arch: tcn
+    strategy_actions: true
+    allow_agent_sl_mode: true
+    allow_agent_tp_mode: true
+    allow_multi_tp: true
+    entry_state_machine: true
+    entry_state_observation: false
+
   # ===== CONTROL KNOBS (A4b sensitivity) =====
   - name: knob_retest_true
     arch: tcn
