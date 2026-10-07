@@ -83,7 +83,8 @@ def merge_variant_cfg(
     for key in _LADDER_FLAGS:
         if variant is not None and key in variant:
             cfg.env[key] = variant[key]
-    cfg.env.n_envs = 1
+    if variant is not None and bool(variant.get("strategy_actions", False)):
+        cfg.features.include_strategy_state = True
     return cfg
 
 

@@ -34,13 +34,21 @@ variant = load_variant_config(sys.argv[1])
 print(variant.get('strategy', 'baseline'))
 " "$VARIANT")
 
-if [[ "$STRATEGY" == "po3_ifvg" || "$STRATEGY" == "distribution" ]]; then
+STRATEGY_ACTIONS=$(python -c "
+from quant_rl.train.ablation_utils import load_variant_config
+import sys
+v = load_variant_config(sys.argv[1])
+print(v.get('strategy_actions', False))
+" "$VARIANT")
+
+if [[ "$STRATEGY" == "po3_ifvg" || "$STRATEGY" == "distribution" || "$STRATEGY_ACTIONS" == "True" ]]; then
   BASE_CONFIG="config/features/full_po3_mtf.yaml"
   EXTRA_OVERRIDES=(
     "features.include_session_ohlc=true"
     "features.liquidity.enabled=true"
     "features.po3_state_mtf.enabled=true"
     "features.ifvg_mtf.enabled=true"
+    "features.include_strategy_state=true"
     "env.open_manipulation_bars=0"
     "env.peak_trailing_dd_limit=0"
     "ftmo.trailing_dd_limit=0.07"
