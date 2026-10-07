@@ -37,12 +37,7 @@ from quant_rl.evaluation import calculate_metrics
 from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features
 from quant_rl.models.ppo_policy import ClampedStdMultiInputPolicy
 from quant_rl.train.train_rl import (
-    _cost_model,
-    _eval_guardrail_kwargs,
-    _fill_delay_ms,
-    _max_loss_per_trade,
-    _strategy_from_cfg,
-    _strategy_risk_ranges,
+    _build_eval_common,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -194,48 +189,7 @@ def main() -> None:
         test_start,
     )
 
-    strategy, strategy_reward, strategy_weight = _strategy_from_cfg(cfg)
-    risk_frac_range, rr_ratio_range = _strategy_risk_ranges(cfg)
-    eval_common = dict(
-        obs_window=cfg.env.obs_window,
-        initial_balance=cfg.account.initial_balance,
-        cost_model=_cost_model(cfg),
-        guardrail_kwargs=_eval_guardrail_kwargs(cfg),
-        risk_frac_range=risk_frac_range,
-        rr_ratio_range=rr_ratio_range,
-        swing_buffer_pts=cfg.risk.swing_buffer_pts,
-        contract_size=cfg.account.contract_size,
-        max_loss_per_trade_usd=_max_loss_per_trade(cfg),
-        dsr_eta=cfg.env.reward_dsr_eta,
-        continuous_actions=False,
-        # Must match train_rl.py. evaluate_model defaults to True, which samples
-        # from the action distribution; train_rl evaluates with False. Leaving
-        # this unset silently re-evaluates the checkpoint under a different
-        # policy than the one whose numbers are being reproduced.
-        deterministic=False,
-        block_overnight=bool(cfg.env.get("block_overnight", True)),
-        eod_risk=dict(cfg.env.get("eod_risk", {})),
-        strategy=strategy,
-        strategy_actions=bool(cfg.env.get("strategy_actions", False)),
-        entry_state_machine=bool(cfg.env.get("entry_state_machine", False)),
-        candidate_max_age_bars=int(cfg.env.get("candidate_max_age_bars", 5)),
-        arm_requires_retest=bool(cfg.env.get("arm_requires_retest", False)),
-        entry_state_observation=bool(cfg.env.get("entry_state_observation", True)),
-        strategy_reward=strategy_reward,
-        strategy_weight=strategy_weight,
-        sl_buffer_pts=float(cfg.env.get("sl_buffer_pts", 0.0)),
-        min_sl_atr_mult=float(cfg.risk.get("min_sl_atr_mult", 0.5)),
-        min_sl_points=float(cfg.risk.get("min_sl_points", 0.0)),
-        max_entries_per_session=int(cfg.env.get("max_entries_per_session", 0)),
-        open_manipulation_bars=int(cfg.env.get("open_manipulation_bars", 10)),
-        entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
-        reward_mode=str(cfg.env.get("reward_mode", "dsr")),
-        entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
-        agent_direction_control=bool(cfg.env.get("agent_direction_control", False)),
-        direction_override_threshold=float(cfg.env.get("direction_override_threshold", 0.0)),
-        max_episode_steps=None,
-        fill_delay_ms=_fill_delay_ms(cfg),
-    )
+    eval_common, _, _, _, _ = _build_eval_common(cfg, args=args, env_vae=None, pre_ny_by_date=None)
     primary_ticks = build_tick_books(cfg).get(str(cfg.data.primary))
 
     test_result = evaluate_model(

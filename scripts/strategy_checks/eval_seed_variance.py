@@ -87,8 +87,6 @@ def _eval_kwargs(cfg: Any) -> dict[str, Any]:
         peak_trailing_dd_limit=float(cfg.env.get("peak_trailing_dd_limit", 0.0)),
         agent_direction_control=bool(cfg.env.get("agent_direction_control", False)),
         direction_override_threshold=float(cfg.env.get("direction_override_threshold", 0.0)),
-        # risk_floor is not an evaluate_model parameter: train_rl feeds it to
-        # the env via pre_ny_by_date construction, not through this call.
         fill_delay_ms=_fill_delay_ms(cfg),
     )
 

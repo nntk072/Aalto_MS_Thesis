@@ -123,6 +123,9 @@ def evaluate_model(
     tp_mode_defer_threshold: float = 0.1,
     allow_multi_tp: bool = False,
     tp_breakeven_alpha: float = 0.5,
+    risk_floor: float = 0.0005,
+    mtf: bool = False,
+    mtf_windows: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """Walk a trained RL ``model`` over *bars*/*features* and collect trades.
 
@@ -200,6 +203,9 @@ def evaluate_model(
         tp_mode_defer_threshold=tp_mode_defer_threshold,
         allow_multi_tp=allow_multi_tp,
         tp_breakeven_alpha=tp_breakeven_alpha,
+        risk_floor=risk_floor,
+        mtf=mtf,
+        mtf_windows=mtf_windows,
     )
 
     obs, _ = env.reset()

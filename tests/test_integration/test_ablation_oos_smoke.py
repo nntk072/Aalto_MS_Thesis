@@ -49,6 +49,11 @@ class TestAblationHelpers:
                 "max_drawdown": 0.1,
                 "n_trades": 2,
                 "pnl_dist_mean": 1.0,
+                "entry_opened": 2,
+                "entry_attempts": 4,
+                "entry_rejection_rate": 0.5,
+                "trigger_refused": 1,
+                "arm_to_trigger_rate": 0.5,
             },
             {
                 "status": "ok",
@@ -56,6 +61,11 @@ class TestAblationHelpers:
                 "max_drawdown": 0.3,
                 "n_trades": 4,
                 "pnl_dist_mean": 3.0,
+                "entry_opened": 6,
+                "entry_attempts": 8,
+                "entry_rejection_rate": 0.25,
+                "trigger_refused": 3,
+                "arm_to_trigger_rate": 0.75,
             },
             {"status": "skipped", "reason": "vae"},
         ]
@@ -64,6 +74,12 @@ class TestAblationHelpers:
         assert avg["n_ok"] == 2
         assert avg["sharpe"] == 2.0
         assert avg["pnl_dist_mean"] == 2.0
+        # Tier 1 entry-state funnel is averaged so a collapsing FSM is visible
+        # in the aggregate report, not hidden in per-seed extras.
+        assert avg["entry_opened"] == 4.0
+        assert avg["entry_attempts"] == 6.0
+        assert avg["trigger_refused"] == 2.0
+        assert avg["arm_to_trigger_rate"] == 0.625
 
 
 @pytest.mark.integration

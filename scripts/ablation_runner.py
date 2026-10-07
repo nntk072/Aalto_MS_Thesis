@@ -47,6 +47,21 @@ _AVG_KEYS = (
     "profit_factor",
     "breach_count",
     "breach_rate",
+    # Tier 1 entry-state funnel: averaged so a collapsing FSM shows up as
+    # zero/near-zero across seeds rather than being hidden in extras.
+    "entry_opened",
+    "entry_attempts",
+    "entry_rejection_rate",
+    "candidate_created",
+    "candidate_expired",
+    "candidate_invalidated",
+    "trigger_requested",
+    "trigger_refused",
+    "entered",
+    "closed",
+    "armed_bars",
+    "arm_to_trigger_rate",
+    "trigger_refusal_rate",
 )
 
 

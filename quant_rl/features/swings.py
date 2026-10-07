@@ -313,6 +313,124 @@ def swing_features(
     )
 
 
+MAX_RETAINED_LEVELS = 8
+
+
+def retained_swing_levels(
+    swings: pd.DataFrame,
+    bars: pd.DataFrame,
+    *,
+    max_levels: int = MAX_RETAINED_LEVELS,
+) -> pd.DataFrame:
+    """Retain every currently-unswept confirmed swing level per side.
+
+    Unlike :func:`swing_history`, which keeps the last N *accepted* swings
+    regardless of whether they were swept, this removes a level as soon as
+    price takes it out. So at any bar the retained set contains only levels
+    that are still valid reference points.
+
+    A high level is swept when ``high[t]`` exceeds it (a low level when
+    ``low[t]`` falls below it). The sweep is recorded as an event on the bar
+    it happens, and the level is dropped from the retained set on the same
+    bar, so downstream components can distinguish "this level never existed"
+    from "this level existed and was just swept" via the swept event columns.
+
+    All levels are causally observable: a swing enters the set only on its
+    confirmation bar, never before.
+
+    Args:
+        swings: Output of :func:`detect_swings`.
+        bars: OHLC frame aligned with ``swings``; needs ``high``/``low``.
+        max_levels: Cap on retained levels per side per bar (fixed-width).
+
+    Returns:
+        Frame indexed like ``swings`` with, per side:
+        ``retained_highs`` / ``retained_lows`` (list of retained levels),
+        ``retained_high_locs`` / ``retained_low_locs`` (their bar locations),
+        ``n_retained_highs`` / ``n_retained_lows`` (counts),
+        ``swept_high`` / ``swept_low`` (level swept this bar, else NaN),
+        ``swept_high_loc`` / ``swept_low_loc`` (its bar location, else NaN).
+    """
+    n = len(swings)
+    ev_h = swings["swing_high_event"].to_numpy(dtype=bool)
+    ev_l = swings["swing_low_event"].to_numpy(dtype=bool)
+    px_h = swings["swing_high_extreme"].to_numpy(dtype=float)
+    px_l = swings["swing_low_extreme"].to_numpy(dtype=float)
+    loc_h = swings["swing_high_location"].to_numpy(dtype=float)
+    loc_l = swings["swing_low_location"].to_numpy(dtype=float)
+    high = bars["high"].to_numpy(dtype=float)
+    low = bars["low"].to_numpy(dtype=float)
+
+    k = max(int(max_levels), 1)
+    out_h = np.full((n, k), np.nan)
+    out_l = np.full((n, k), np.nan)
+    loc_hh = np.full((n, k), np.nan)
+    loc_ll = np.full((n, k), np.nan)
+    n_h = np.zeros(n, dtype=int)
+    n_l = np.zeros(n, dtype=int)
+    swept_h = np.full(n, np.nan)
+    swept_l = np.full(n, np.nan)
+    swept_h_loc = np.full(n, np.nan)
+    swept_l_loc = np.full(n, np.nan)
+
+    # Retained sets are lists of (level, location); oldest first.
+    highs: list[tuple[float, float]] = []
+    lows: list[tuple[float, float]] = []
+
+    for t in range(n):
+        # A swing enters the retained set only on its confirmation bar.
+        if ev_h[t] and np.isfinite(px_h[t]) and np.isfinite(loc_h[t]):
+            highs.append((float(px_h[t]), float(loc_h[t])))
+        if ev_l[t] and np.isfinite(px_l[t]) and np.isfinite(loc_l[t]):
+            lows.append((float(px_l[t]), float(loc_l[t])))
+
+        # Sweep detection: price takes out any retained level this bar.
+        # A high is swept when high[t] exceeds it; a low when low[t] falls
+        # below it. Record the first swept level as the event for this bar.
+        if highs:
+            swept_idx = next((i for i, (lv, _) in enumerate(highs) if high[t] > lv), None)
+            if swept_idx is not None:
+                lv, lc = highs.pop(swept_idx)
+                swept_h[t] = lv
+                swept_h_loc[t] = lc
+        if lows:
+            swept_idx = next((i for i, (lv, _) in enumerate(lows) if low[t] < lv), None)
+            if swept_idx is not None:
+                lv, lc = lows.pop(swept_idx)
+                swept_l[t] = lv
+                swept_l_loc[t] = lc
+
+        # Cap size so the output matrix stays fixed-width.
+        if len(highs) > k:
+            highs = highs[-k:]
+        if len(lows) > k:
+            lows = lows[-k:]
+
+        n_h[t] = len(highs)
+        n_l[t] = len(lows)
+        for i, (lv, lc) in enumerate(highs):
+            out_h[t, i] = lv
+            loc_hh[t, i] = lc
+        for i, (lv, lc) in enumerate(lows):
+            out_l[t, i] = lv
+            loc_ll[t, i] = lc
+
+    cols: dict[str, np.ndarray[Any, Any]] = {
+        "n_retained_highs": n_h,
+        "n_retained_lows": n_l,
+        "swept_high": swept_h,
+        "swept_low": swept_l,
+        "swept_high_loc": swept_h_loc,
+        "swept_low_loc": swept_l_loc,
+    }
+    for i in range(k):
+        cols[f"retained_high_{i + 1}"] = out_h[:, i]
+        cols[f"retained_low_{i + 1}"] = out_l[:, i]
+        cols[f"retained_high_{i + 1}_loc"] = loc_hh[:, i]
+        cols[f"retained_low_{i + 1}_loc"] = loc_ll[:, i]
+    return pd.DataFrame(cols, index=swings.index)
+
+
 def _bars_since(events: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
     n = len(events)
     out = np.full(n, np.nan)

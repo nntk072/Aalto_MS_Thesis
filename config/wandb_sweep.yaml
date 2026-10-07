@@ -37,6 +37,7 @@ command:
   - --reward
   - dsr
   - --wandb
+  - --allow-locked-oos-for-selection
   - --seed
   - 42
   # Config-override dotlists — note `learning_rate`, not the swept `lr`

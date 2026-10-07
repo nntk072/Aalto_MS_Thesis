@@ -25,6 +25,7 @@ import pandas as pd
 
 from .indicators import atr
 from .structure import structure_levels
+from .swings import MAX_RETAINED_LEVELS
 
 
 def _detect_side_sweeps(
@@ -145,6 +146,102 @@ def detect_liquidity_sweeps(
             "sweep_low_reclaimed": rec_l,
             "sweep_high_age": age_h,
             "sweep_low_age": age_l,
+        },
+        index=bars.index,
+    )
+
+
+def detect_liquidity_sweeps_retained(
+    bars: pd.DataFrame,
+    *,
+    swing_period: int = 5,
+    max_sweep_distance_atr: float = 2.0,
+    atr_period: int = 5,
+    max_levels: int = MAX_RETAINED_LEVELS,
+) -> pd.DataFrame:
+    """Liquidity sweeps against *every* retained unswept swing level.
+
+    Unlike :func:`detect_liquidity_sweeps`, which only ever references the
+    single ``last_swing_*`` level, this fires a sweep event for any retained
+    level price takes out. So a sweep "at this swing low but not lower swing
+    lows" is representable: each retained level is swept independently.
+
+    A level is swept when ``high[t]`` exceeds a retained high (or ``low[t]``
+    falls below a retained low), within ``max_sweep_distance_atr`` ATR of the
+    level. Deeper breaks count as breakouts, not sweeps.
+
+    All retained levels are causally observable: they enter only on their
+    confirmation bar, and the previous bar's retained set drives detection.
+
+    Args:
+        bars: OHLC frame with high/low/close and a DatetimeIndex.
+        swing_period: Bars on each side used to confirm swing levels.
+        max_sweep_distance_atr: ATR cap on the overshoot for a sweep.
+        atr_period: ATR period for the distance filter.
+        max_levels: Cap on retained levels per side.
+
+    Returns:
+        Frame indexed like ``bars`` with per-level sweep events:
+        ``sweep_high`` / ``sweep_low`` (1 on a sweep bar, else 0),
+        ``swept_high_level`` / ``swept_low_level`` (the level taken out),
+        ``swept_high_loc`` / ``swept_low_loc`` (its bar location),
+        ``n_swept_high`` / ``n_swept_low`` (levels swept this bar).
+    """
+    levels = structure_levels(bars, swing_period, retained_max=max_levels)
+    k = max(int(max_levels), 1)
+
+    # Retained set as of the previous bar (strict causality).
+    prev_highs = [levels[f"retained_high_{i + 1}"].shift(1).to_numpy(dtype=float) for i in range(k)]
+    prev_lows = [levels[f"retained_low_{i + 1}"].shift(1).to_numpy(dtype=float) for i in range(k)]
+    atr_arr = atr(bars, atr_period).to_numpy(dtype=float)
+    high = bars["high"].to_numpy(dtype=float)
+    low = bars["low"].to_numpy(dtype=float)
+
+    n = len(bars)
+    sweep_h = np.zeros(n)
+    sweep_l = np.zeros(n)
+    swept_h_level = np.full(n, np.nan)
+    swept_l_level = np.full(n, np.nan)
+    swept_h_loc = np.full(n, np.nan)
+    swept_l_loc = np.full(n, np.nan)
+    n_swept_h = np.zeros(n, dtype=int)
+    n_swept_l = np.zeros(n, dtype=int)
+
+    for t in range(n):
+        a = atr_arr[t]
+        for i in range(k):
+            lv = prev_highs[i][t]
+            if np.isnan(lv):
+                continue
+            dist = high[t] - lv
+            if dist > 0.0 and (a <= 0.0 or dist <= max_sweep_distance_atr * a):
+                sweep_h[t] = 1.0
+                swept_h_level[t] = lv
+                swept_h_loc[t] = levels[f"retained_high_{i + 1}_loc"].iloc[t]
+                n_swept_h[t] += 1
+                break  # one sweep event per side per bar
+        for i in range(k):
+            lv = prev_lows[i][t]
+            if np.isnan(lv):
+                continue
+            dist = lv - low[t]
+            if dist > 0.0 and (a <= 0.0 or dist <= max_sweep_distance_atr * a):
+                sweep_l[t] = 1.0
+                swept_l_level[t] = lv
+                swept_l_loc[t] = levels[f"retained_low_{i + 1}_loc"].iloc[t]
+                n_swept_l[t] += 1
+                break
+
+    return pd.DataFrame(
+        {
+            "sweep_high": sweep_h,
+            "sweep_low": sweep_l,
+            "swept_high_level": swept_h_level,
+            "swept_low_level": swept_l_level,
+            "swept_high_loc": swept_h_loc,
+            "swept_low_loc": swept_l_loc,
+            "n_swept_high": n_swept_h,
+            "n_swept_low": n_swept_l,
         },
         index=bars.index,
     )

@@ -12,7 +12,7 @@ from quant_rl.features.structure import (
     structure_levels,
     swing_features,
 )
-from quant_rl.features.swings import classify_structure
+from quant_rl.features.swings import classify_structure, retained_swing_levels
 
 
 def _pivot_bars() -> pd.DataFrame:
@@ -72,6 +72,120 @@ def test_features_invariant_to_future_data() -> None:
     pd.testing.assert_series_equal(
         full["last_swing_high"].iloc[:6],
         trunc["last_swing_high"].iloc[:6],
+        check_names=False,
+    )
+
+
+def test_retained_levels_appear_only_after_confirmation() -> None:
+    bars = _pivot_bars()
+    piv = detect_pivots(bars, left=2, right=2)
+    swings = detect_swings(bars, piv, atr_mult=0.0)
+    retained = retained_swing_levels(swings, bars)
+    # The high at bar 4 is confirmed at bar 6; it must be absent before then.
+    assert retained["n_retained_highs"].iloc[4] == 0
+    assert retained["n_retained_highs"].iloc[6] == 1
+    assert retained["retained_high_1"].iloc[6] == pytest.approx(102.0)
+
+
+def test_retained_levels_are_removed_on_sweep() -> None:
+    n = 40
+    idx = pd.date_range("2024-01-02 01:05", periods=n, freq="1min")
+    close = np.full(n, 100.0)
+    # V-shaped swing low confirmed at bar 9, then price breaks below it.
+    close[6] = 99.0
+    close[7] = 98.0
+    close[8] = 99.0
+    close[9] = 100.0
+    close[20:] = 97.0
+    bars = pd.DataFrame(
+        {"open": close, "high": close + 0.5, "low": close - 0.5, "close": close},
+        index=idx,
+    )
+    piv = detect_pivots(bars, left=2, right=2)
+    swings = detect_swings(bars, piv, atr_mult=0.0)
+    retained = retained_swing_levels(swings, bars)
+    # Before the sweep the low is retained; after, it is gone.
+    assert retained["n_retained_lows"].iloc[15] == 1
+    assert retained["n_retained_lows"].iloc[25] == 0
+
+
+def test_swept_event_preserved_independently_of_retained_set() -> None:
+    """A swept level must be distinguishable from one that never existed."""
+    n = 40
+    idx = pd.date_range("2024-01-02 01:05", periods=n, freq="1min")
+    close = np.full(n, 100.0)
+    close[6] = 99.0
+    close[7] = 98.0
+    close[8] = 99.0
+    close[9] = 100.0
+    close[20:] = 97.0
+    bars = pd.DataFrame(
+        {
+            "open": close,
+            "high": close + 0.5,
+            "low": close - 0.5,
+            "close": close,
+        },
+        index=idx,
+    )
+    piv = detect_pivots(bars, left=2, right=2)
+    swings = detect_swings(bars, piv, atr_mult=0.0)
+    retained = retained_swing_levels(swings, bars)
+    # A level was retained and later swept: the swept event column records it.
+    assert retained["n_retained_lows"].iloc[15] == 1
+    assert retained["n_retained_lows"].iloc[25] == 0
+    assert np.isfinite(retained["swept_low"].iloc[20])
+    assert retained["swept_low_loc"].iloc[20] == pytest.approx(7.0)
+
+
+def test_retained_levels_incremental_equals_full_run() -> None:
+    """Running incrementally must reproduce the full-dataset retained state.
+
+    Catches accidental vectorized lookahead: any future-bar dependence would
+    make the two differ on the overlap.
+    """
+    bars = _pivot_bars()
+    piv = detect_pivots(bars, left=2, right=2)
+    swings = detect_swings(bars, piv, atr_mult=0.0)
+    full = retained_swing_levels(swings, bars)
+
+    trunc = bars.iloc[:8]
+    piv_t = detect_pivots(trunc, left=2, right=2)
+    sw_t = detect_swings(trunc, piv_t, atr_mult=0.0)
+    part = retained_swing_levels(sw_t, trunc)
+
+    overlap = part.index[:6]
+    pd.testing.assert_series_equal(
+        full["n_retained_highs"].loc[overlap],
+        part["n_retained_highs"].loc[overlap],
+        check_names=False,
+    )
+    pd.testing.assert_series_equal(
+        full["n_retained_lows"].loc[overlap],
+        part["n_retained_lows"].loc[overlap],
+        check_names=False,
+    )
+
+
+def test_last_swing_columns_unchanged_by_retained_levels() -> None:
+    """Backward compat: last_swing_* keeps its legacy meaning exactly."""
+    bars = _pivot_bars()
+    legacy = structure_levels(bars, swing_period=2)
+    assert "last_swing_high" in legacy.columns
+    assert "last_swing_low" in legacy.columns
+    assert "retained_high_1" in legacy.columns
+    assert "retained_low_1" in legacy.columns
+    # last_swing_* must still equal the accepted zigzag extreme.
+    piv = detect_pivots(bars, left=2, right=2)
+    swings = detect_swings(bars, piv, atr_mult=0.0)
+    pd.testing.assert_series_equal(
+        legacy["last_swing_high"],
+        swings["swing_high_extreme"],
+        check_names=False,
+    )
+    pd.testing.assert_series_equal(
+        legacy["last_swing_low"],
+        swings["swing_low_extreme"],
         check_names=False,
     )
 

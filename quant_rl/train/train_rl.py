@@ -282,15 +282,17 @@ def _dashboard_block(cfg: Any) -> Any:
 
 def _build_eval_common(
     cfg: Any,
-    args: Any,
-    env_vae: Any,
-    pre_ny_by_date: dict[Any, Any] | None,
+    args: Any | None = None,
+    env_vae: Any | None = None,
+    pre_ny_by_date: dict[Any, Any] | None = None,
+    arch: str | None = None,
 ) -> tuple[dict[str, Any], Any, Any, float, bool]:
     """Kwargs shared by the in-loop dashboard slice and the final eval."""
     strategy, strategy_reward, strategy_weight = _strategy_from_cfg(cfg)
     strategy_actions = bool(cfg.env.get("strategy_actions", False))
     sl_buffer_pts = float(cfg.env.get("sl_buffer_pts", 0.0))
     risk_frac_range, rr_ratio_range = _strategy_risk_ranges(cfg)
+    use_mtf, mtf_windows = _mtf_settings(cfg, arch)
     eval_common = {
         "obs_window": cfg.env.obs_window,
         "initial_balance": cfg.account.initial_balance,
@@ -302,11 +304,11 @@ def _build_eval_common(
         "contract_size": cfg.account.contract_size,
         "max_loss_per_trade_usd": _max_loss_per_trade(cfg),
         "dsr_eta": cfg.env.reward_dsr_eta,
-        "continuous_actions": (args.algo == "sac"),
-        "use_sweep_reward": (args.reward == "sweep"),
+        "continuous_actions": (args.algo == "sac") if args is not None else False,
+        "use_sweep_reward": (args.reward == "sweep") if args is not None else False,
         "block_overnight": bool(cfg.env.get("block_overnight", True)),
         "eod_risk": dict(cfg.env.get("eod_risk", {})),
-        "use_vae": args.use_vae,
+        "use_vae": getattr(args, "use_vae", False) if args is not None else False,
         "vae": env_vae,
         "strategy": strategy,
         "strategy_actions": strategy_actions,
@@ -329,6 +331,12 @@ def _build_eval_common(
         "agent_direction_control": bool(cfg.env.get("agent_direction_control", False)),
         "direction_override_threshold": float(cfg.env.get("direction_override_threshold", 0.0)),
         "fill_delay_ms": _fill_delay_ms(cfg),
+        "allow_multi_tp": bool(cfg.env.get("allow_multi_tp", False)),
+        "allow_agent_tp_mode": bool(cfg.env.get("allow_agent_tp_mode", False)),
+        "allow_agent_sl_mode": bool(cfg.env.get("allow_agent_sl_mode", True)),
+        "risk_floor": float(cfg.env.get("risk_floor", 0.0005)),
+        "mtf": use_mtf,
+        "mtf_windows": mtf_windows,
     }
     return eval_common, strategy, strategy_reward, strategy_weight, strategy_actions
 
@@ -529,6 +537,11 @@ def parse_train_args() -> argparse.Namespace:
         "--vae-config",
         default="config/vae.yaml",
         help="VAE architecture YAML (must match the checkpoint)",
+    )
+    parser.add_argument(
+        "--allow-locked-oos-for-selection",
+        action="store_true",
+        help="Rank on locked-OOS Sharpe. Only use if you knowingly tune on the holdout.",
     )
     parser.add_argument("--wandb", action="store_true", help="Log run metrics to Weights & Biases")
     parser.add_argument(
@@ -841,7 +854,7 @@ def main() -> None:
         )
 
     eval_common, _strategy, _strategy_reward, _strategy_weight, strategy_actions = (
-        _build_eval_common(cfg, args, env_vae, pre_ny_by_date)
+        _build_eval_common(cfg, args, env_vae, pre_ny_by_date, arch=args.arch)
     )
     dash = _dashboard_block(cfg)
     if bool(dash.get("enabled", True)):
@@ -1127,16 +1140,17 @@ def main() -> None:
                 "timesteps": timesteps,
             },
         )
-        wandb.log(
-            {
-                "sharpe": training_log["test_sharpe"],
-                "test_sharpe": training_log["test_sharpe"],
-                "test_max_dd": training_log["test_max_dd"],
-                "test_trades": training_log["test_trades"],
-                "test_return": training_log["test_return"],
-                "test_breaches": training_log["test_breaches"],
-            }
-        )
+        if args.allow_locked_oos_for_selection:
+            wandb.log(
+                {
+                    "sharpe": training_log["test_sharpe"],
+                    "test_sharpe": training_log["test_sharpe"],
+                    "test_max_dd": training_log["test_max_dd"],
+                    "test_trades": training_log["test_trades"],
+                    "test_return": training_log["test_return"],
+                    "test_breaches": training_log["test_breaches"],
+                }
+            )
         wandb.finish()
 
     # Walk-forward validation (additive, does not alter the single-split flow)

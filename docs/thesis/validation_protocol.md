@@ -14,14 +14,17 @@ Default dates live in `quant_rl/config/default.yaml` and `config/experiments.yam
 ## Rules
 
 1. Do **not** tune architecture, seeds-to-keep, or feature flags by repeatedly
-   reading locked-OOS Sharpe.
+    reading locked-OOS Sharpe.
 2. `scripts/ablation_runner.py` writes `oos_role: final_report_only` by default.
-   Pass `--allow-locked-oos-for-selection` only if you knowingly rank on the
-   locked holdout (recorded in the JSON).
-3. Prefer `train_rl --walk-forward` (non-overlapping purged folds, T-03.1) for
-   selection metrics.
-4. Changing locked OOS dates is HUMAN-GATED and must update
-   [threats_to_validity.md](threats_to_validity.md).
+    Pass `--allow-locked-oos-for-selection` only if you knowingly rank on the
+    locked holdout (recorded in the JSON).
+3. `train_rl.py` requires `--allow-locked-oos-for-selection` when used with
+    `--wandb` so the sweep does not log locked-OOS Sharpe by default.
+    The bundled `config/wandb_sweep.yaml` opts in explicitly.
+4. Prefer `train_rl --walk-forward` (non-overlapping purged folds, T-03.1) for
+    selection metrics.
+5. Changing locked OOS dates is HUMAN-GATED and must update
+    [threats_to_validity.md](threats_to_validity.md).
 
 ## Engine
 

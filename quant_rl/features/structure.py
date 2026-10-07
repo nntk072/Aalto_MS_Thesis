@@ -7,20 +7,24 @@ import pandas as pd
 
 from ..data.session import get_session
 from .swings import (
+    MAX_RETAINED_LEVELS,
     TIMEFRAME_CONFIG,
     classify_structure,
     detect_pivots,
     detect_swings,
+    retained_swing_levels,
     swing_features,
 )
 
 __all__ = [
+    "MAX_RETAINED_LEVELS",
     "TIMEFRAME_CONFIG",
     "classify_structure",
     "detect_pivots",
     "detect_session_levels",
     "detect_swings",
     "get_session",
+    "retained_swing_levels",
     "structure_levels",
     "swing_features",
 ]
@@ -30,6 +34,8 @@ def structure_levels(
     bars: pd.DataFrame,
     swing_period: int = 5,
     atr_mult: float = 0.0,
+    *,
+    retained_max: int = MAX_RETAINED_LEVELS,
 ) -> pd.DataFrame:
     """Compute causal swing price levels for structure-based SL/TP.
 
@@ -37,10 +43,22 @@ def structure_levels(
     ``atr_mult=0`` accepts every confirmed fractal so SL/TP and liquidity
     keep fractal timing; pass a positive multiplier for ATR zigzag filtering.
 
+    ``last_swing_high`` / ``last_swing_low`` keep their existing legacy meaning
+    (the most recent accepted zigzag point per side) and are unchanged for
+    backward compatibility. The new ``retained_swing_highs`` /
+    ``retained_swing_lows`` columns expose every currently-unswept confirmed
+    level per side, which can legitimately diverge from ``last_swing_*`` once
+    a swing is swept.
+
     Args:
         bars: OHLC DataFrame with high/low/close and a DatetimeIndex.
         swing_period: Bars on each side of the fractal (left = right).
         atr_mult: Zigzag reversal in ATR units; 0 accepts on confirmation.
+        retained_max: Cap on retained unswept levels per side.
+
+    Returns:
+        Frame with ``last_swing_*`` (legacy) plus retained-set and compact
+        derived columns.
     """
     pivots = detect_pivots(bars, left=swing_period, right=swing_period)
     swings = detect_swings(bars, pivots, atr_mult=atr_mult)
@@ -55,15 +73,20 @@ def structure_levels(
     for i, loc in enumerate(loc_l):
         if np.isfinite(loc):
             sl_times[i] = times[int(loc)]
-    return pd.DataFrame(
-        {
-            "last_swing_high": swings["swing_high_extreme"].to_numpy(dtype=float),
-            "last_swing_low": swings["swing_low_extreme"].to_numpy(dtype=float),
-            "last_swing_high_time": pd.Series(sh_times, index=bars.index, dtype=bars.index.dtype),
-            "last_swing_low_time": pd.Series(sl_times, index=bars.index, dtype=bars.index.dtype),
-        },
-        index=bars.index,
-    )
+    base = {
+        "last_swing_high": swings["swing_high_extreme"].to_numpy(dtype=float),
+        "last_swing_low": swings["swing_low_extreme"].to_numpy(dtype=float),
+        "last_swing_high_time": pd.Series(sh_times, index=bars.index, dtype=bars.index.dtype),
+        "last_swing_low_time": pd.Series(sl_times, index=bars.index, dtype=bars.index.dtype),
+    }
+    retained = {
+        str(k): list(v)
+        for k, v in retained_swing_levels(swings, bars, max_levels=retained_max)
+        .to_dict("list")
+        .items()
+    }
+    base.update(retained)
+    return pd.DataFrame(base, index=bars.index)
 
 
 def detect_session_levels(
