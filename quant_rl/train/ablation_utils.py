@@ -14,10 +14,10 @@ from omegaconf import DictConfig, OmegaConf
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _STRATEGY_CONFIGS = {
-    "po3_ifvg": _PROJECT_ROOT / "config" / "idea1_po3_ifvg.yaml",
-    "distribution": _PROJECT_ROOT / "config" / "idea2_distribution.yaml",
+    "po3_ifvg": _PROJECT_ROOT / "config" / "2_po3_ifvg.yaml",
+    "distribution": _PROJECT_ROOT / "config" / "3_distribution.yaml",
 }
-_PD_CONTEXT_CONFIG = _PROJECT_ROOT / "config" / "features_pd_context.yaml"
+_PD_CONTEXT_CONFIG = _PROJECT_ROOT / "config" / "features" / "pd_context.yaml"
 _EXPERIMENTS_CONFIG = _PROJECT_ROOT / "config" / "experiments.yaml"
 
 _LADDER_FLAGS: tuple[str, ...] = (

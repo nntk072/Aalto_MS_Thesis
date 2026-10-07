@@ -82,6 +82,6 @@
 uv run python -m quant_rl.train.train_rl --mvp --seed=42
 uv run python -m quant_rl.train.train_rl --algo sac --arch gru
 uv run python -m quant_rl.train.train_rl --strategy po3_ifvg
-uv run python -m quant_rl.train.train_rl --config config/features_full_po3_mtf.yaml
+uv run python -m quant_rl.train.train_rl --config config/features/full_po3_mtf.yaml
 uv run python -m quant_rl.train.train_rl --walk-forward --wf-splits 5 --purge-bars 60
 ```

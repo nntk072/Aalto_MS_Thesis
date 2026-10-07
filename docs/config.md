@@ -59,9 +59,9 @@ Selected via `--strategy` on `train_rl.py`. Merged over `default.yaml`.
 
 | CLI flag | YAML file | Idea |
 |----------|-----------|------|
-| `--strategy baseline` (default) | none | Idea 3 — legacy discrete/continuous actions |
-| `--strategy po3_ifvg` | `config/idea1_po3_ifvg.yaml` | Idea 1 — PO3 + IFVG overlay |
-| `--strategy distribution` | `config/idea2_distribution.yaml` | Idea 2 — distribution overlay |
+| `--strategy baseline` (default) | `config/1_baseline.yaml` | Idea 3 — legacy discrete/continuous actions |
+| `--strategy po3_ifvg` | `config/2_po3_ifvg.yaml` | Idea 1 — PO3 + IFVG overlay |
+| `--strategy distribution` | `config/3_distribution.yaml` | Idea 2 — distribution overlay |
 
 Strategy overlays require **both**:
 
@@ -84,17 +84,16 @@ changing the strategy overlay.
 
 | File | Enables |
 |------|---------|
-| `config/features.yaml` | Base feature set reference |
-| `config/features_technical_mtf.yaml` | Technical indicators on M5/M15/H1 |
-| `config/features_po3_mtf.yaml` | PO3 phase tag on multiple TFs |
-| `config/features_fvg_ifvg_mtf.yaml` | FVG/IFVG zones on multiple TFs |
-| `config/features_full_po3_mtf.yaml` | All three Chain-F blocks (`include_po3`, `include_fvg_ifvg`, `include_po3_full`) |
+| `config/features/technical_mtf.yaml` | Technical indicators on M5/M15/H1 |
+| `config/features/po3_mtf.yaml` | PO3 phase tag on multiple TFs |
+| `config/features/fvg_ifvg_mtf.yaml` | FVG/IFVG zones on multiple TFs |
+| `config/features/full_po3_mtf.yaml` | All three Chain-F blocks (`include_po3`, `include_fvg_ifvg`, `include_po3_full`) |
 
 Example:
 
 ```bash
 uv run python -m quant_rl.train.train_rl --mvp \
-    --config config/features_full_po3_mtf.yaml --seed=42
+    --config config/features/full_po3_mtf.yaml --seed=42
 ```
 
 ---
@@ -133,7 +132,7 @@ cache/{symbol}_features_{FEATURE_CACHE_VERSION}_{content_hash}.parquet.hash
 ```bash
 # Base + feature variant + CLI override
 uv run python -m quant_rl.train.train_rl --mvp \
-    --config config/features_full_po3_mtf.yaml \
+    --config config/features/full_po3_mtf.yaml \
     --strategy po3_ifvg \
     env.obs_window=30
 ```
@@ -147,8 +146,6 @@ train/live parity.
 
 | File | Purpose |
 |------|---------|
-| `config/env.yaml` | Environment overrides reference |
-| `config/reward.yaml` | Reward function overrides |
 | `config/vae.yaml` | VAE standalone training |
 | `config/wandb_sweep.yaml` | Weights & Biases sweep |
 | `config/symbols_config.yaml` | Live multi-symbol selection (`live_trading.py`) |

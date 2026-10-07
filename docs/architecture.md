@@ -28,8 +28,8 @@ This page documents the **framework**: the pipeline stages, the contracts
 between them, and the invariants that hold across every configuration.
 *What* a particular strategy trades - the PO3/IFVG chain of Idea 1 or the
 distribution chain of Idea 2 - is documented in the modules that own it
-(`quant_rl/envs/strategies/` plus `config/idea1_po3_ifvg.yaml` /
-`config/idea2_distribution.yaml`) and is linked rather than duplicated here
+(`quant_rl/envs/strategies/` plus `config/2_po3_ifvg.yaml` /
+`config/3_distribution.yaml`) and is linked rather than duplicated here
 as a tutorial. [Adding a strategy](#adding-a-strategy) describes how a new
 one is plugged in.
 
@@ -218,7 +218,7 @@ sequenceDiagram
 The optional feature stage is the overlay: `detect_liquidity_sweeps`,
 `detect_bos`, `build_po3_state` and `build_ifvg_zone_features` run only
 when `features.include_strategy_state` is enabled by a variant config
-(`config/idea1_po3_ifvg.yaml`, `config/idea2_distribution.yaml`).
+(`config/2_po3_ifvg.yaml`, `config/3_distribution.yaml`).
 
 Live loop, one bar (`live_trading_rl.py` driving
 `mt5_trading/robot/rl_robot.py`):
@@ -311,8 +311,8 @@ maps strategy names to variant YAMLs, `_strategy_from_cfg` builds
 `run_episode`, distributional extras). `quant_rl/eval/` owns rollout
 (`evaluate_model`), plot export, and `eval_run` checkpoint re-evaluation.
 Thesis ablation / OOS cost harnesses live as scripts only:
-`scripts/ablation_runner.py` (+ `config/experiments.yaml`),
-`scripts/test_oos.py`, `scripts/report_ablations.py`. There is no parallel
+`scripts/matrix/ablation_runner.py` (+ `config/experiments.yaml`),
+`scripts/eval/test_oos.py`, `scripts/eval/report_ablations.py`. There is no parallel
 `quant_rl/validation/` package. Checkpoints, trades and plots land under
 `outputs/`.
 
@@ -597,13 +597,13 @@ Then:
    `features.include_strategy_state: true` and
    `env.strategy_actions: true` and declaring the `strategy:` block
    (name, gates, risk ranges, TP targets, reward weights). Copy the
-   shape of `config/idea1_po3_ifvg.yaml`.
+    shape of `config/2_po3_ifvg.yaml`.
 2. Register the name in `_STRATEGY_CONFIGS` in
    `quant_rl/train/train_rl.py` and handle it in `_strategy_from_cfg`.
 3. Add contract tests mirroring
    `tests/test_envs/test_baseline_regression.py` (overlay safety) and
    `tests/test_envs/test_strategy_env.py` (env wiring).
-4. Run `scripts/verify_strategy_features.py` to confirm every
+4. Run `scripts/utility/verify_strategy_features.py` to confirm every
    `required_features` / `raw_columns` name exists in the produced
    feature matrix.
 
@@ -613,7 +613,7 @@ Then:
   [Causal-only rule](#causal-only-rule).
 - **Required columns present.** A missing column fails loudly at env
   construction, not silently mid-episode; keep
-  `scripts/verify_strategy_features.py` green.
+  `scripts/utility/verify_strategy_features.py` green.
 - **Overlay-safe.** With `strategy_actions=false` the strategy is never
   constructed; baseline behaviour is untouched.
 - **Repeatable across bars.** `validate_entry` / `sl_reference` /
@@ -636,10 +636,10 @@ Then:
 - [`quant_rl/config/default.yaml`](../quant_rl/config/default.yaml) —
   base configuration (split dates, FTMO limits, live risk overrides).
 - Strategy semantics: [`quant_rl/envs/strategies/`](../quant_rl/envs/strategies/),
-  [`config/idea1_po3_ifvg.yaml`](../config/idea1_po3_ifvg.yaml),
-  [`config/idea2_distribution.yaml`](../config/idea2_distribution.yaml).
+  [`config/2_po3_ifvg.yaml`](../config/2_po3_ifvg.yaml),
+  [`config/3_distribution.yaml`](../config/3_distribution.yaml).
 - Feature diagnostics:
-  [`scripts/verify_strategy_features.py`](../scripts/verify_strategy_features.py).
+  [`scripts/utility/verify_strategy_features.py`](../scripts/utility/verify_strategy_features.py).
 
 Contract tests:
 

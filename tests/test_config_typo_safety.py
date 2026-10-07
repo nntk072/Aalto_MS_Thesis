@@ -46,9 +46,9 @@ def test_null_valued_leaf_override_is_allowed() -> None:
     assert cfg.backtest.validation.take_profit_per_trade_usd == 50.0
 
 
-def test_idea1_config_merges_and_sets_strategy() -> None:
-    """config/idea1_po3_ifvg.yaml enables the Idea 1 stack (Agent.md §10)."""
-    cfg = load_config(config_path="config/idea1_po3_ifvg.yaml")
+def test_po3_ifvg_config_merges_and_sets_strategy() -> None:
+    """config/2_po3_ifvg.yaml enables the Idea 1 stack (Agent.md §10)."""
+    cfg = load_config(config_path="config/2_po3_ifvg.yaml")
     assert cfg.features.include_strategy_state is True
     assert cfg.env.strategy_actions is True
     assert cfg.strategy.name == "po3_ifvg"
@@ -58,8 +58,8 @@ def test_idea1_config_merges_and_sets_strategy() -> None:
 
 
 def test_idea2_config_merges_and_sets_strategy() -> None:
-    """config/idea2_distribution.yaml selects the distribution strategy."""
-    cfg = load_config(config_path="config/idea2_distribution.yaml")
+    """config/3_distribution.yaml selects the distribution strategy."""
+    cfg = load_config(config_path="config/3_distribution.yaml")
     assert cfg.features.include_strategy_state is True
     assert cfg.env.strategy_actions is True
     assert cfg.strategy.name == "distribution"

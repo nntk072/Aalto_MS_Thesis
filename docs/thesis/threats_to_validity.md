@@ -20,7 +20,7 @@ Examiner-facing note for the MSc. Maps claim risks to mitigations on
 1. Broker server time for session/PD features is **`Etc/GMT-3`** (UTC+3 fixed).
 2. Primary thesis tables use **`TradingEnv`** episode evaluation unless a table caption says `run_backtest`.
 3. Locked OOS dates in `config/default.yaml` / `experiments.yaml` are a **final holdout**, not a free hyperparameter tuner.
-4. Cost-stressed results (see `scripts/test_oos.py` and eval pack) bound default-cost claims.
+4. Cost-stressed results (see `scripts/eval/test_oos.py` and eval pack) bound default-cost claims.
 
 ## Related docs
 

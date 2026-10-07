@@ -41,7 +41,7 @@ def _sample_bars(n: int = 400) -> pd.DataFrame:
 
 def test_full_strategy_pipeline_runs() -> None:
     """Agent.md §31: bars -> features -> env -> reset -> step."""
-    cfg = load_config(config_path="config/idea1_po3_ifvg.yaml")
+    cfg = load_config(config_path="config/2_po3_ifvg.yaml")
     bars = _sample_bars()
     features = build_features(bars, cfg=cfg)
 

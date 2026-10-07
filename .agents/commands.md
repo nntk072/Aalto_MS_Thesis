@@ -36,7 +36,7 @@ uv run python -m quant_rl.train.train_rl --mvp              # MVP smoke test (30
 uv run python -m quant_rl.train.train_rl                    # full training run
 uv run python -m quant_rl.train.train_rl --algo sac --arch gru
 uv run python -m quant_rl.train.train_rl --strategy po3_ifvg  # Idea 1 overlay
-uv run python -m quant_rl.train.train_rl --config config/features_full_po3_mtf.yaml
+uv run python -m quant_rl.train.train_rl --config config/features/full_po3_mtf.yaml
 uv run python -m quant_rl.train.train_rl --walk-forward --wf-splits 5 --purge-bars 60
 uv run python -m quant_rl.train.run_backtest                # random policy backtest
 uv run python -m quant_rl.train.run_baselines                 # baseline strategies

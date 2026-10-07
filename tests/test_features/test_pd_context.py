@@ -235,15 +235,15 @@ class TestBuildFeaturesPdContext:
 
 
 class TestConfigYaml:
-    def test_idea1_enables_pd_context(self) -> None:
+    def test_po3_ifvg_enables_pd_context(self) -> None:
         from quant_rl.config import load_config
 
-        cfg = load_config(config_path="config/idea1_po3_ifvg.yaml")
+        cfg = load_config(config_path="config/2_po3_ifvg.yaml")
         assert cfg.features.include_pd_context is True
         assert cfg.features.structure.enabled is True
 
     def test_features_pd_context_yaml(self) -> None:
         from quant_rl.config import load_config
 
-        cfg = load_config(config_path="config/features_pd_context.yaml")
+        cfg = load_config(config_path="config/features/pd_context.yaml")
         assert cfg.features.include_pd_context is True

@@ -15,7 +15,7 @@ Default dates live in `quant_rl/config/default.yaml` and `config/experiments.yam
 
 1. Do **not** tune architecture, seeds-to-keep, or feature flags by repeatedly
     reading locked-OOS Sharpe.
-2. `scripts/ablation_runner.py` writes `oos_role: final_report_only` by default.
+2. `scripts/matrix/ablation_runner.py` writes `oos_role: final_report_only` by default.
     Pass `--allow-locked-oos-for-selection` only if you knowingly rank on the
     locked holdout (recorded in the JSON).
 3. `train_rl.py` requires `--allow-locked-oos-for-selection` when used with

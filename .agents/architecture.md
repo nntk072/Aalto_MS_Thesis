@@ -73,9 +73,9 @@ changing opt-in feature flags without a version bump.
 ```
 quant_rl/config/default.yaml     ← base config (all defaults)
     ↓ override (--config or --strategy)
-config/idea1_po3_ifvg.yaml       ← PO3 + IFVG strategy overlay
-config/idea2_distribution.yaml   ← Distribution strategy overlay
-config/features_*_mtf.yaml       ← MTF feature expansion variants
+config/2_po3_ifvg.yaml           ← PO3 + IFVG strategy overlay
+config/3_distribution.yaml       ← Distribution strategy overlay
+config/features/*.yaml           ← MTF feature expansion variants
 ```
 
 All config read via `cfg.<path>` in code. Adding a feature flag? Add YAML key first.

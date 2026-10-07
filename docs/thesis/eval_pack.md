@@ -63,8 +63,8 @@ Old seed-50 Idea 1 had **no** trailing-DD key and Gaussian `std` exploded
 | Role | Config / flags | Seed |
 |------|----------------|------|
 | Idea 3 baseline | `quant_rl/config/default.yaml` | **50** |
-| Idea 1 PO3/IFVG + PD | `--config config/features_full_po3_mtf.yaml --strategy po3_ifvg` + session/liquidity/PO3/IFVG flags | **50** |
-| Idea 2 distribution | `--config config/idea2_distribution.yaml --strategy distribution` | **50** |
+| Idea 1 PO3/IFVG + PD | `--config config/features/full_po3_mtf.yaml --strategy po3_ifvg` + session/liquidity/PO3/IFVG flags | **50** |
+| Idea 2 distribution | `--config config/2_po3_ifvg.yaml --strategy distribution` | **50** |
 | Ablation matrix | `config/experiments.yaml` | `defaults.seeds` |
 
 ## Commands

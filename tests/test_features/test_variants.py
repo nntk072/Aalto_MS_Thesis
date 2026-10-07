@@ -288,9 +288,9 @@ def test_variant_config_files_merge():
     """The three variant YAMLs load and set the right flags over default.yaml."""
     base = OmegaConf.load("quant_rl/config/default.yaml")
     variants = [
-        ("config/features_technical_mtf.yaml", False, False),
-        ("config/features_po3_mtf.yaml", True, False),
-        ("config/features_fvg_ifvg_mtf.yaml", False, True),
+        ("config/features/technical_mtf.yaml", False, False),
+        ("config/features/po3_mtf.yaml", True, False),
+        ("config/features/fvg_ifvg_mtf.yaml", False, True),
     ]
     for fname, want_po3, want_fvg in variants:
         merged = OmegaConf.merge(base, OmegaConf.load(fname))
@@ -345,9 +345,9 @@ def test_po3_full_no_lookahead_on_entries(m1_bars):
 
 
 def test_combined_config_merges_all_blocks():
-    """config/features_full_po3_mtf.yaml enables all three additive blocks."""
+    """config/features/full_po3_mtf.yaml enables all three additive blocks."""
     base = OmegaConf.load("quant_rl/config/default.yaml")
-    merged = OmegaConf.merge(base, OmegaConf.load("config/features_full_po3_mtf.yaml"))
+    merged = OmegaConf.merge(base, OmegaConf.load("config/features/full_po3_mtf.yaml"))
     assert merged.features.include_po3 is True
     assert merged.features.include_fvg_ifvg is True
     assert merged.features.include_po3_full is True

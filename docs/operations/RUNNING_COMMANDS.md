@@ -42,10 +42,10 @@ Local shortcut (not the merge bar): `pytest -m "not slow"`
 
 ```bash
 # Raw CSV → parquet bar cache → feature cache
-python scripts/prepare_data.py
+python scripts/data/prepare_data.py
 
 # Force rebuild (ignore cache)
-python scripts/prepare_data.py --force
+python scripts/data/prepare_data.py --force
 # or: uv run python -m quant_rl.train.train_rl --force
 ```
 
@@ -120,7 +120,7 @@ uv run python -m quant_rl.train.train_rl --mvp --use-vae \
 
 # Feature variant config (MTF expansion)
 uv run python -m quant_rl.train.train_rl --mvp \
-    --config config/features_full_po3_mtf.yaml --seed=42
+    --config config/features/full_po3_mtf.yaml --seed=42
 
 # Purged walk-forward validation
 uv run python -m quant_rl.train.train_rl --walk-forward --wf-splits 5 \
@@ -169,7 +169,7 @@ uv run python -m quant_rl.backtest.cross_validation.run
 ## Encoder comparison
 
 ```bash
-uv run python scripts/compare_encoders.py
+uv run python scripts/train/compare_encoders.py
 ```
 
 ---
@@ -184,18 +184,18 @@ includes `oos_role: final_report_only` unless
 ```bash
 # Declarative variant matrix (algo / arch / VAE / PD-context / strategy).
 # Features CSV must match the variant flags (e.g. include_pd_context).
-uv run python scripts/ablation_runner.py \
+uv run python scripts/matrix/ablation_runner.py \
     --bars-csv data/us100_2025.csv \
     --features-csv data/us100_feat.csv \
     --experiments config/experiments.yaml \
     --steps 8192 --seeds 42 \
     --variants ablation_baseline_unconditional ablation_pd_context
 
-uv run python scripts/report_ablations.py --ablations-dir results/ablations
+uv run python scripts/eval/report_ablations.py --ablations-dir results/ablations
 
 # Cost-sensitivity grid on a saved SB3 zip (CostModel spread_points + slippage).
 # --cost-multipliers scales both (TI-7); default 0.5 1 2 3.
-uv run python scripts/test_oos.py \
+uv run python scripts/eval/test_oos.py \
     --model-path outputs/<run>/model/ppo_final.zip \
     --bars-csv data/us100_2025.csv \
     --features-csv data/us100_feat.csv \
@@ -206,7 +206,7 @@ uv run python scripts/test_oos.py \
     --out results/oos_report.json
 
 # Leak detectors (label-shuffle + time-shift)
-uv run python scripts/leak_detectors.py \
+uv run python scripts/utility/leak_detectors.py \
     --features-csv data/us100_feat.csv \
     --target-col ret_1 --feature-col rsi \
     --out results/leak_detectors.json
@@ -214,7 +214,7 @@ uv run python scripts/leak_detectors.py \
 # Thin orchestration (ablation smoke → walk-forward → optional OOS)
 BARS_CSV=data/us100_2025.csv STEPS=8192 SEEDS=42 \
   MODEL_PATH=outputs/<run>/model/ppo_final.zip \
-  bash scripts/run_all_experiments.sh
+  bash scripts/matrix/run_18variant_matrix.sh
 ```
 
 Do **not** use the retired `quant_rl/validation/` package or
@@ -226,7 +226,7 @@ Do **not** use the retired `quant_rl/validation/` package or
 ## Run-report gate (G3)
 
 ```bash
-uv run python scripts/report_g3.py --runs-dir outputs --sharpe-threshold 1.0
+uv run python scripts/eval/report_g3.py --runs-dir outputs --sharpe-threshold 1.0
 ```
 
 ---

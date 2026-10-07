@@ -26,7 +26,7 @@ cd "$REPO"
 # Permanent Idea 1 / Idea 2 launch: strategy-owned side (5-D), no 10-bar open block.
 train_line() {
   local strategy="$1" log="$2" device="$3"
-  printf '%s' "source $REPO/scripts/triton/activate_venv.sh && cd $REPO && CUDA_VISIBLE_DEVICES=${device} QUANT_RL_MAX_N_ENVS=64 python -u -m quant_rl.train.train_rl --config config/features_full_po3_mtf.yaml --strategy $strategy --seed $SEED --arch tcn --out outputs features.include_session_ohlc=true features.liquidity.enabled=true features.po3_state_mtf.enabled=true features.ifvg_mtf.enabled=true env.n_envs=64 env.open_manipulation_bars=0 env.peak_trailing_dd_limit=0 ftmo.trailing_dd_limit=0.07 2>&1 | tee outputs/$log"
+  printf '%s' "source $REPO/scripts/triton/activate_venv.sh && cd $REPO && CUDA_VISIBLE_DEVICES=${device} QUANT_RL_MAX_N_ENVS=64 python -u -m quant_rl.train.train_rl --config config/features/full_po3_mtf.yaml --strategy $strategy --seed $SEED --arch tcn --out outputs features.include_session_ohlc=true features.liquidity.enabled=true features.po3_state_mtf.enabled=true features.ifvg_mtf.enabled=true env.n_envs=64 env.open_manipulation_bars=0 env.peak_trailing_dd_limit=0 ftmo.trailing_dd_limit=0.07 2>&1 | tee outputs/$log"
 }
 
 if [[ "$REPLACE" != "1" ]]; then

@@ -73,8 +73,8 @@ log = logging.getLogger(__name__)
 _CONFIG_DIR = Path(__file__).parent.parent.parent / "config"
 
 _STRATEGY_CONFIGS = {
-    "po3_ifvg": _CONFIG_DIR / "idea1_po3_ifvg.yaml",
-    "distribution": _CONFIG_DIR / "idea2_distribution.yaml",
+    "po3_ifvg": _CONFIG_DIR / "2_po3_ifvg.yaml",
+    "distribution": _CONFIG_DIR / "3_distribution.yaml",
 }
 
 _RUN_LOG_NAME = "train.log"

@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from scripts.report_g3 import main as report_g3_main
+from scripts.eval.report_g3 import main as report_g3_main
 
 FLAT_LOG = {
     "seed": 42,

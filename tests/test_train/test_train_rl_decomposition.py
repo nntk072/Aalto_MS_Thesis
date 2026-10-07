@@ -148,7 +148,7 @@ class TestLoadMergedConfig:
     def test_overrides_win_over_strategy_overlay(self) -> None:
         """CLI overrides apply after the Idea 1 variant merge.
 
-        ``config/idea1_po3_ifvg.yaml`` pins ``env.reward_mode: pnl``; an
+        ``config/2_po3_ifvg.yaml`` pins ``env.reward_mode: pnl``; an
         explicit ``env.reward_mode=rr`` override must survive the merge
         instead of being silently reverted to pnl.
         """

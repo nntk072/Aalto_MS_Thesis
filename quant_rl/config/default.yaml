@@ -346,7 +346,7 @@ auxiliary:
   lr: 0.0001             # auxiliary optimizer lr (head + encoder)
   grad_steps: 4          # gradient steps per rollout
 # Idea 1 / Idea 2 strategy semantics (Agent.md §10). All keys default to
-# the Idea 1 (PO3 + IFVG) values; config/idea2_distribution.yaml overrides.
+# the Idea 1 (PO3 + IFVG) values; config/3_distribution.yaml overrides.
 strategy:
   name: "po3_ifvg"              # "baseline" | "po3_ifvg" | "distribution"
   manipulation_filter: "against"  # "against" | "follow"

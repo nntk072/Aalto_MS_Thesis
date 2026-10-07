@@ -198,8 +198,8 @@ Mapping for `level_type` reuses `pretty_ref()`:
 
 Notes:
 
-- **Gate is diagnostic only.** Both `config/idea1_po3_ifvg.yaml:42` and
-  `config/idea2_distribution.yaml:35` set `strategy.entry.enforce_gate: false`,
+- **Gate is diagnostic only.** Both `config/2_po3_ifvg.yaml:42` and
+  `config/3_distribution.yaml:35` set `strategy.entry.enforce_gate: false`,
   and both strategies' `validate_entry` return `True` immediately when the gate
   is off (`po3_ifvg.py:79-81`, `distribution.py:98-100`). So the entry reason
   describes the **setup the strategy offered**, not a hard filter that blocked

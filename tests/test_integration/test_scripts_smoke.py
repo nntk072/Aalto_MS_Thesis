@@ -17,11 +17,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from scripts.compare_encoders import main as compare_encoders_main
-from scripts.report_g3 import main as report_g3_main
-from scripts.run_baseline_eval import main as run_baseline_eval_main
-from scripts.train_lstm_baseline import main as train_lstm_main
-from scripts.train_rl import main as train_rl_main
+from scripts.eval.report_g3 import main as report_g3_main
+from scripts.eval.run_baseline_eval import main as run_baseline_eval_main
+from scripts.train.compare_encoders import main as compare_encoders_main
+from scripts.train.train_lstm_baseline import main as train_lstm_main
+from scripts.train.train_rl import main as train_rl_main
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG = str(REPO_ROOT / "quant_rl" / "config" / "default.yaml")

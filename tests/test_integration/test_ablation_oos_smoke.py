@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 import yaml
-from scripts.ablation_runner import _average_seed_reports, load_experiments
-from scripts.report_ablations import format_table, load_ablation_reports
-from scripts.test_oos import make_cost_model
+from scripts.eval.report_ablations import format_table, load_ablation_reports
+from scripts.eval.test_oos import make_cost_model
+from scripts.matrix.ablation_runner import _average_seed_reports, load_experiments
 
 from quant_rl.config import load_config
 from quant_rl.train.ablation_utils import merge_variant_cfg
