@@ -27,15 +27,40 @@ export CUDA_VISIBLE_DEVICES="$GPU_ID"
 export QUANT_RL_MAX_N_ENVS="${QUANT_RL_MAX_N_ENVS:-64}"
 export PYTHONUNBUFFERED=1
 
-echo "=== train $VARIANT seed=$SEED gpu=$GPU_ID log=$LOG ==="
+STRATEGY=$(python -c "
+from quant_rl.train.ablation_utils import load_variant_config
+import sys
+variant = load_variant_config(sys.argv[1])
+print(variant.get('strategy', 'baseline'))
+" "$VARIANT")
+
+if [[ "$STRATEGY" == "po3_ifvg" || "$STRATEGY" == "distribution" ]]; then
+  BASE_CONFIG="config/features_full_po3_mtf.yaml"
+  EXTRA_OVERRIDES=(
+    "features.include_session_ohlc=true"
+    "features.liquidity.enabled=true"
+    "features.po3_state_mtf.enabled=true"
+    "features.ifvg_mtf.enabled=true"
+    "env.open_manipulation_bars=0"
+    "env.peak_trailing_dd_limit=0"
+    "ftmo.trailing_dd_limit=0.07"
+  )
+else
+  BASE_CONFIG="quant_rl/config/default.yaml"
+  EXTRA_OVERRIDES=()
+fi
+
+echo "=== train $VARIANT strategy=$STRATEGY seed=$SEED gpu=$GPU_ID log=$LOG ==="
 
 set +e
 python -u -m quant_rl.train.train_rl \
   --variant "$VARIANT" \
+  --config "$BASE_CONFIG" \
   --seed "$SEED" \
   --seeds "$SEED" \
   --arch tcn \
-  --out "$OUT_DIR" \
+  --out "$OUT_DIR/$VARIANT" \
+  "${EXTRA_OVERRIDES[@]}" \
   ppo.total_timesteps="$STEPS" \
   2>&1 | tee "$LOG"
 STATUS=${PIPESTATUS[0]}
