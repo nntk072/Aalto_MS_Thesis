@@ -779,6 +779,23 @@ class TestSLMode:
         assert env._selected_sl_mode == "breakeven"
         assert env._sl_mode_explicit is True
 
+    def test_sl_mode_selection_trailing_at_upper_action_bound(self) -> None:
+        bars, feats = _bars(), _features(_bars())
+        env = TradingEnv(
+            bars,
+            feats,
+            strategy_actions=True,
+            strategy=PO3IFVGStrategy(enforce_gate=False),
+            obs_window=10,
+            allow_agent_sl_mode=True,
+        )
+        env.reset()
+        env._decode_action(
+            np.array([0.9, 0.0, 0.5, 0.5, 1.0, 0.5], dtype=np.float32), feats.iloc[10]
+        )
+        assert env._selected_sl_mode == "trailing"
+        assert env._sl_mode_explicit is True
+
     def test_sl_mode_defer_to_state_machine(self) -> None:
         bars, feats = _bars(), _features(_bars())
         env = TradingEnv(

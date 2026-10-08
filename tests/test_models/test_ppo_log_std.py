@@ -281,3 +281,55 @@ def test_build_agent_discrete_keeps_categorical_ent_coef() -> None:
     model = build_agent(env, _ppo_cfg(), arch="tcn", algo="ppo")
     assert model.ent_coef == pytest.approx(0.01)
     assert getattr(model.policy, "log_std", None) is None
+
+
+def test_build_agent_width_11_multi_tp_sl_tp_simplex() -> None:
+    """A4b/A4a entry-FSM variants produce action width 11.
+
+    5 base + sl_mode + tp_mode + 2*multi_tp + 2*simplex = 11. The env step
+    decoder handles it, but the policy layout table did not, so build_agent
+    raised ValueError: unsupported action width 11.
+    """
+    env = make_env(continuous=True)
+    env = TradingEnv(
+        env.bars,
+        env.features,
+        obs_window=10,
+        strategy_actions=True,
+        allow_agent_sl_mode=True,
+        allow_agent_tp_mode=True,
+        allow_multi_tp=True,
+        allow_simplex=True,
+        entry_state_machine=True,
+        entry_state_observation=True,
+        episodic=True,
+    )
+    assert env.action_space.shape == (11,)
+    model = build_agent(env, _ppo_cfg(), arch="tcn", algo="ppo")
+    assert model.policy._action_layout_key == "11"
+    assert mode_index("stop", 11) == 1
+    assert mode_index("risk", 11) == 2
+    assert mode_index("tp1_sel", 11) == 3
+    assert mode_index("tp2_sel", 11) == 4
+    assert mode_index("tp3_sel", 11) == 5
+    assert mode_index("sl_mode", 11) == 6
+    assert mode_index("tp_mode", 11) == 7
+    assert mode_index("z1", 11) == 8
+    assert mode_index("z2", 11) == 9
+    assert mode_index("exit", 11) == 10
+
+
+def test_policy_account_value_weight_matches_observation_width() -> None:
+    env = make_env(continuous=True)
+    env = TradingEnv(
+        env.bars,
+        env.features,
+        obs_window=10,
+        strategy_actions=True,
+        entry_state_machine=True,
+        entry_state_observation=True,
+        episodic=True,
+    )
+    model = build_agent(env, _ppo_cfg(), arch="tcn", algo="ppo")
+    account_dim = env.observation_space["account"].shape[0]
+    assert model.policy.account_value_weight.shape == (account_dim,)

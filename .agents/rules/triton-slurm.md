@@ -173,6 +173,65 @@ only when a node has both GPUs free. If `AllocTRES` already shows `gh200=2`
 on both `gpuarm` nodes, the wait is occupancy, not a wrong size — do not
 submit it.
 
+## Verified 18-variant matrix notes
+
+The unified matrix launcher is
+[`scripts/matrix/run_18variant_matrix.sh`](../../scripts/matrix/run_18variant_matrix.sh).
+Select the GPU family with `GPU_KIND=gh200|h100|h200` and the allocation shape
+with `MODE=1|2|3|4`:
+
+| Mode | Allocation | Trainers | `n_envs` |
+| --- | --- | ---: | ---: |
+| 1 | 1 GPU, 12h, 900G | 4 on one GPU | 32 |
+| 2 | 2 GPUs on one node, 6h, 900G | 2 per GPU | 32 |
+| 3 | 1 GPU on each of 2 nodes, 6h, 900G per node | 2 per node | 64 |
+| 4 | 1 GPU on each of 2 nodes, 6h, 600G per node | 2 per node | 32 |
+
+The ordered subset can be selected with a whitespace-separated `VARIANTS`
+value; when omitted, all entries in `scripts/variant_list.txt` are used.
+The tmux entrypoint passes these options through:
+
+```bash
+MODE=2 GPU_KIND=gh200 OUT_DIR=outputs/gpu_matrix_18_mode2 \
+  bash scripts/matrix/run_18variant_matrix_gh200_tmux.sh
+```
+
+Each run keeps logs under `<OUT_DIR>/logs/`: `all.log` contains the combined
+launcher and Slurm output, `orchestrator.log` contains the tmux wrapper output,
+and one `<variant>.log` file is written per trainer. Model artifacts and
+checkpoints remain under `<OUT_DIR>/<variant>/`.
+
+When the launcher is running inside an existing Slurm allocation, it checks
+the remaining allocation time before every batch. If fewer than 4.5 hours
+remain, it submits the unstarted variants with the same resource shape and
+the same output/checkpoint directory, then retires the old allocation after
+the replacement completes. A batch already in progress is never interrupted
+by this check.
+
+These points were verified on Triton on 2026-10-08 and should be checked before
+redesigning the matrix:
+
+- The working four-trainer shape is **one `gpu-grace-h200-141g` allocation**:
+  `--gpus=gh200:2 --mem=900G --cpus-per-task=128 --time=6:00:00`.
+  Run two trainers on each GPU and set `QUANT_RL_MAX_N_ENVS=32` for every
+  trainer. Four `n_envs=64` trainers exceed the node's approximately 1.1 TB
+  RAM; four `n_envs=32` trainers reached PPO startup successfully.
+- `--exclusive` reserves the whole node. On H100 nodes this reports/reserves
+  all 192 CPUs even when `--cpus-per-task` is lower. Omit `--exclusive` when
+  sharing is intentional. Two independent one-GPU allocations can target
+  different nodes, but each allocation may still wait for priority.
+- A node can be physically mixed and still have no free GPU. Check
+  `AllocTRES`, not only CPU/RAM (`gpu45` showed all four H100 GPUs allocated
+  while CPU/RAM remained free).
+- `srun --test-only` validates shape and gives an estimate; it does not reserve
+  resources. A pending job with `Reason=Priority` is not a malformed request.
+- The project's current `.venv-x86` uses `torch==2.14.0+cu130`, which does not
+  contain kernels for V100 compute capability 7.0. Do not use V100 partitions
+  for this training without changing and validating the PyTorch CUDA build.
+- H100/H200/B300 hardware may be compatible, but availability is separate from
+  compatibility. If two high-end nodes are not immediately allocatable, use
+  the verified two-GH200 shape rather than substituting V100.
+
 ## Reuse (when a GPU shell already exists)
 
 1. Confirm via `status.sh` / `find_gpu_session.sh`.

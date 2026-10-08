@@ -15,6 +15,7 @@ from quant_rl.train.dashboard import (
     action_stats,
     close_shares,
     format_dashboard,
+    format_dashboard_table,
     policy_from_logger,
     position_mix,
     ppo_log_interval,
@@ -296,3 +297,81 @@ def test_step_info_carries_reward_parts_and_direction() -> None:
     assert "pnl" in info["reward_parts"]
     assert "dsr" in info["reward_parts"]
     assert info["close_reason"] == ""
+
+def test_format_dashboard_table() -> None:
+    """The dashboard table is a flat section/key/value table."""
+    snap = {
+        "timesteps": 106496,
+        "total_timesteps": 20_000_000,
+        "train_reward_mean": 0.0,
+        "reward_parts": {"pnl": 0.0, "dsr": 0.0, "soft_daily": 0.0, "soft_year": 0.0, "soft_trailing": 0.0, "strategy": 0.0, "breach": 0.0, "sweep": 0.0, "peak_dd": 0.0},
+        "reward_per_1k": {"pnl": 0.0, "dsr": 0.0, "soft_daily": 0.0, "soft_year": 0.0, "soft_trailing": 0.0, "strategy": 0.0, "breach": 0.0, "sweep": 0.0, "peak_dd": 0.0},
+        "breach_events": 0,
+        "position": {"long": 0.0, "short": 0.0, "flat": 1.0},
+        "action": {"mean": 0.0, "std": 1.001},
+        "closes": {"daily_loss": 0.0, "trailing_dd": 0.0, "max_drawdown": 0.0, "structure_sl": 0.0, "structure_tp": 0.0, "session_end": 0.0, "peak_dd_behavior": 0.0},
+        "n_closes": 0,
+        "critic": {"ret_mean": 0.0, "val_mean": 0.0, "adv_mean": 0.0, "adv_std": 0.0},
+        "policy": {"explained_variance": 0.0, "value_loss": 0.0, "approx_kl": 0.0001, "clip_fraction": 0.0, "entropy": 15.608, "std": 1.0, "grad_norm": "0.003"},
+        "eval": {
+            "return_pct": 0.26, "sharpe": 4.02, "sortino": 31.09, "max_drawdown": 0.03,
+            "profit_factor": 29.39, "win_rate": 0.667, "avg_trade": 87.03, "n_trades": 3,
+            "turnover": 0.0006, "reward_mean": -0.0003, "diversity_text": "", "diversity_table": "",
+            "prior_names": [],
+        },
+        "prior_names": [],
+        "sl_rank_median": None,
+        "tp_rank_median": None,
+    }
+    text = format_dashboard_table(snap)
+    assert "TRAINING" in text
+    assert "timesteps" in text
+    assert "106,496" in text
+    assert "win_rate" in text
+    assert "66.7%" in text
+    assert "REWARD" in text
+    assert "---" in text
+    assert "|" in text
+    # Every line must share one width so borders close exactly.
+    lengths = {len(line) for line in text.split("\n") if line}
+    assert len(lengths) == 1
+    # The diversity blob must never widen the boxes.
+    assert max(lengths) < 400
+
+
+def test_format_diversity_table() -> None:
+    """The diversity table is a DIVERSITY box with --- borders."""
+    from quant_rl.eval.decision_diversity import format_diversity_table
+    from quant_rl.eval.decision_diversity import DiversityThresholds
+    import pandas as pd
+
+    trades = pd.DataFrame({
+        "sl_ref": ["htf", "po3_manipulation_low", "po3_manipulation_low"],
+        "tp_ref": ["htf", "htf", "htf"],
+        "n_sl": [2, 2, 2],
+        "sl_index": [0.5, 0.0, 1.0],
+        "n_tp": [2, 2, 2],
+        "tp_index": [0.5, 0.0, 0.0],
+        "exit_mode": ["structural", "structural", "ema_21"],
+        "planned_rr": [1.54, 1.54, 1.54],
+        "stop_u": [1.0, 1.5, 0.5],
+        "direction": [1, -1, 1],
+        "strategy": ["po3_ifvg", "po3_manipulation_low", "po3_manipulation_low"],
+        "session": ["ny", "ny", "ny"],
+        "manipulation": ["done", "against", "against"],
+        "volatility_regime": ["high", "high", "high"],
+        "trend_regime": ["flat", "flat", "flat"],
+    })
+    thresholds = DiversityThresholds()
+    text = format_diversity_table(trades, thresholds)
+    assert "DIVERSITY: SL/TP" in text
+    assert "unique" in text
+    assert "family" in text
+    assert "planned rr" in text
+    assert "TP COLLAPSE" in text
+    assert "BY DIRECTION" in text
+    assert "section" not in text
+    # Every line of every box must share one width so borders close exactly.
+    lengths = {len(line) for line in text.split("\n") if line}
+    assert len(lengths) == 1
+    assert max(lengths) < 400
