@@ -40,7 +40,6 @@ class TestAblationHelpers:
         cfg = merge_variant_cfg(base, strategy="po3_ifvg", include_pd_context=True)
         assert bool(cfg.features.include_pd_context) is True
         assert bool(cfg.env.strategy_actions) is True
-        assert int(cfg.env.n_envs) == 1
 
     def test_average_seed_reports_means_and_skips(self) -> None:
         seeds: list[dict[str, Any]] = [

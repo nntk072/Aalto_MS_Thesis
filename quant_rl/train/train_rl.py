@@ -966,6 +966,15 @@ def main() -> None:
     model_dir.mkdir(parents=True, exist_ok=True)
     obs_mmap = _publish_obs_memmap(train_feat, train_bars, cfg, run_dir / "obs_features.npy")
 
+    # Stage 2: Parent memory cleanup. Free full-history pipeline objects after slicing.
+    # train_feat and train_bars are still referenced downstream; data, features, primary_m1,
+    # and secondary_m1 are no longer used anywhere after this point.
+    del data, features, primary_m1, secondary_m1
+    import gc
+
+    gc.collect()
+    log.info("Parent memory cleanup: released full-history pipeline objects")
+
     # Seed loop: train + eval for each seed, collect results
     seed_results: list[dict[str, Any]] = []
     for seed in seeds:

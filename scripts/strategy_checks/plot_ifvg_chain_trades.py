@@ -25,7 +25,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from edge_harness import (  # type: ignore[import-not-found]
+from edge_harness import (  # type: ignore[import-not-found,unused-ignore]
     NY_TZ,
     OUT,
     atr_series,
@@ -40,7 +40,7 @@ from edge_harness import (  # type: ignore[import-not-found]
     sweep_pools,
     swing_levels,
 )
-from ifvg_chain_check import STOP_ATR  # type: ignore[import-not-found]
+from ifvg_chain_check import STOP_ATR  # type: ignore[import-not-found,unused-ignore]
 from matplotlib.patches import Rectangle
 
 FIG_DIR = OUT / "ifvg_chain_plots"

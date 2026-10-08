@@ -21,6 +21,7 @@ from quant_rl.eval.decision_diversity import (
     choice_rank_median,
     risk_mean_collapsed,
 )
+from quant_rl.utils.box_table import kv_lines, kv_widths, render_box_table
 
 log = logging.getLogger(__name__)
 
@@ -176,6 +177,97 @@ def format_dashboard(snapshot: dict[str, Any]) -> str:
         text = ", ".join(str(name) for name in names) if names else "none"
         lines.append(f"prior     {text}")
     return "\n".join(lines)
+
+
+def format_dashboard_table(snapshot: dict[str, Any]) -> str:
+    """A table of the dashboard metrics with box borders for readability.
+
+    Each section is a stacked box with --- borders. The diversity report
+    is rendered separately by ``format_diversity_table``.
+    """
+    rows: list[tuple[str, list[tuple[str, str]]]] = []
+    steps = int(snapshot["timesteps"])
+    total = int(snapshot["total_timesteps"])
+    parts = snapshot["reward_parts"]
+    action = snapshot["action"]
+    position = snapshot["position"]
+    closes = snapshot["closes"]
+    critic = snapshot["critic"]
+    policy = snapshot["policy"]
+    ev = snapshot.get("eval")
+
+    training_rows = [
+        ("timesteps", f"{steps:,}"),
+        ("total_timesteps", f"{total:,}"),
+        ("train_reward_mean", f"{snapshot['train_reward_mean']:+.4f}"),
+    ]
+    rows.append(("training", training_rows))
+
+    # Reward parts (raw + per-1k)
+    reward_rows: list[tuple[str, str]] = []
+    per1k_rows: list[tuple[str, str]] = []
+    per_1k = snapshot.get("reward_per_1k") or {}
+    for key, label in _PART_LABELS:
+        reward_rows.append((label, f"{parts.get(key, 0.0):+.4f}"))
+        per1k_rows.append((label, f"{per_1k.get(key, 0.0):+.4f}"))
+    rows.append(("reward", reward_rows))
+    rows.append(("per1k", per1k_rows))
+
+    behavior_rows = [
+        ("mean", f"{action['mean']:+.3f}"),
+        ("std", f"{action['std']:.3f}"),
+        ("long", f"{100.0 * position['long']:.1f}%"),
+        ("short", f"{100.0 * position['short']:.1f}%"),
+        ("flat", f"{100.0 * position['flat']:.1f}%"),
+    ]
+    rows.append(("behavior", behavior_rows))
+
+    risk_rows: list[tuple[str, str]] = [("closes", str(int(snapshot["n_closes"])))]
+    for key in _CLOSE_KEYS:
+        risk_rows.append((key, f"{100.0 * closes.get(key, 0.0):.1f}%"))
+    rows.append(("risk", risk_rows))
+
+    policy_rows = [
+        ("explained_variance", f"{policy['explained_variance']:.4f}"),
+        ("value_loss", f"{policy['value_loss']:.4f}"),
+        ("ret", f"{critic['ret_mean']:+.4f}"),
+        ("val", f"{critic['val_mean']:+.4f}"),
+        ("adv", f"{critic['adv_mean']:+.4f}"),
+        ("kl", f"{policy['approx_kl']:.4f}"),
+        ("clip", f"{policy['clip_fraction']:.4f}"),
+        ("entropy", f"{policy['entropy']:.3f}"),
+        ("std", f"{policy['std']:.3f}"),
+        ("grad_norm", str(policy.get("grad_norm", ""))),
+    ]
+    rows.append(("policy", policy_rows))
+
+    if ev:
+        eval_rows: list[tuple[str, str]] = [
+            ("breach_events", str(int(ev.get("breach_events", 0)))),
+        ]
+        if int(ev.get("n_trades", 0)) == 0:
+            eval_rows.append(("status", "FAILED  trades 0"))
+        else:
+            eval_rows.extend(
+                [
+                    ("return_pct", f"{ev['return_pct']:+.2f}%"),
+                    ("sharpe", f"{ev['sharpe']:.2f}"),
+                    ("sortino", f"{ev['sortino']:.2f}"),
+                    ("max_drawdown", f"{-100.0 * ev['max_drawdown']:.2f}%"),
+                    ("profit_factor", f"{ev['profit_factor']:.2f}"),
+                    ("win_rate", f"{100.0 * ev['win_rate']:.1f}%"),
+                    ("avg_trade", f"{ev['avg_trade']:+.2f}"),
+                    ("n_trades", str(int(ev["n_trades"]))),
+                    ("turnover", f"{ev['turnover']:.4f}"),
+                    ("reward_mean", f"{ev['reward_mean']:+.4f}"),
+                ]
+            )
+        rows.append(("eval", eval_rows))
+
+    all_pairs = [pair for _, pairs in rows for pair in pairs]
+    key_width, value_width = kv_widths(all_pairs)
+    boxes = [(title, kv_lines(pairs, key_width, value_width)) for title, pairs in rows]
+    return render_box_table(boxes)
 
 
 # Eval drawdown is ``eval_max_drawdown`` so it does not overwrite the close-reason
@@ -414,7 +506,19 @@ if _SB3_AVAILABLE:
                 )
                 if callback._eval_just_ran and callback._last_eval is not None:
                     snapshot["eval"] = callback._last_eval
-                print(format_dashboard(snapshot))
+                print(format_dashboard_table(snapshot))
+                if callback._eval_just_ran and callback._last_eval is not None:
+                    ev = snapshot.get("eval") or {}
+                    if ev.get("diversity_table"):
+                        print()
+                        print(ev["diversity_table"])
+                prior_names = snapshot.get("prior_names")
+                if prior_names is not None:
+                    text = ", ".join(str(name) for name in prior_names) or "none"
+                    pair = ("active", text)
+                    kw, vw = kv_widths([pair])
+                    print()
+                    print(render_box_table([("prior", kv_lines([pair], kw, vw))]))
                 if callback._log_path is not None:
                     append_dashboard_row(
                         callback._log_path,

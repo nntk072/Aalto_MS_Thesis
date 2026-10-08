@@ -11,7 +11,7 @@ Reward: Differential Sharpe Ratio (DSR) or Sweep Confirmation Reward.
 from __future__ import annotations
 
 import warnings
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import gymnasium as gym
 import numpy as np
@@ -39,7 +39,9 @@ from ..envs.reward import DSRReward, PnLReward, RMultipleReward
 from ..envs.strategies import BaselineStrategy, TradingStrategy
 from ..envs.sweep_reward import CompositeReward, SweepConfirmationReward
 from ..features.build import attach_reachable_r, select_obs_columns
-from ..models.vae import VAE
+
+if TYPE_CHECKING:
+    from ..models.vae import VAE
 from ..train.debug_trace import (
     DebugStepError,
     new_debug_window,
@@ -2330,7 +2332,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 if abs(u_sl - 0.5) < self.sl_mode_defer_threshold:
                     self._selected_sl_mode = self._default_sl_mode()
                 else:
-                    self._selected_sl_mode = ("fixed", "breakeven", "trailing")[int(u_sl * 3)]
+                    sl_mode_idx = min(2, int(u_sl * 3))
+                    self._selected_sl_mode = ("fixed", "breakeven", "trailing")[sl_mode_idx]
                     self._sl_mode_explicit = True
             else:
                 self._selected_sl_mode = self.sl_mode

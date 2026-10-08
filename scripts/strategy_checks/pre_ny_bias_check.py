@@ -18,7 +18,7 @@ import sys
 
 import numpy as np
 import pandas as pd
-from edge_harness import (  # type: ignore[import-not-found]
+from edge_harness import (  # type: ignore[import-not-found,unused-ignore]
     HORIZONS,
     OUT,
     build_ny_frame,

@@ -331,5 +331,5 @@ def test_policy_account_value_weight_matches_observation_width() -> None:
         episodic=True,
     )
     model = build_agent(env, _ppo_cfg(), arch="tcn", algo="ppo")
-    account_dim = env.observation_space["account"].shape[0]
+    account_dim = env.observation_space["account"].shape[0]  # type: ignore[index]
     assert model.policy.account_value_weight.shape == (account_dim,)

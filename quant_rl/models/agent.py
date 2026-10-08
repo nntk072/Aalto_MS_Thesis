@@ -142,7 +142,22 @@ def build_agent(
     n_envs: int = int(getattr(cfg.get("env", {}), "n_envs", 1))
     vec_env: Any
     if n_envs > 1 and env_fn is not None:
-        vec_env = SubprocVecEnv([env_fn] * n_envs)
+        # Stage 3: thread caps. Cap each worker to 1 thread to prevent
+        # OMP/MKL/torch thread-pool oversubscription (64 workers × default pools).
+        def _thread_capped_env_fn() -> Any:
+            import os as _os
+
+            for _var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+                _os.environ[_var] = "1"
+            try:
+                import torch as _torch
+
+                _torch.set_num_threads(1)
+            except ImportError:
+                pass
+            return env_fn()
+
+        vec_env = SubprocVecEnv([_thread_capped_env_fn] * n_envs)
     else:
         vec_env = DummyVecEnv([lambda: env])
 

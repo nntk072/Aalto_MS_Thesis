@@ -62,6 +62,20 @@ _MODE_INDEX: dict[str, dict[str, int]] = {
         "z2": 10,
         "exit": 11,
     },
+    "11": {
+        "intensity": 0,
+        "stop": 1,
+        "risk": 2,
+        "tp1_sel": 3,
+        "tp2_sel": 4,
+        "tp3_sel": 5,
+        "target": 4,
+        "sl_mode": 6,
+        "tp_mode": 7,
+        "z1": 8,
+        "z2": 9,
+        "exit": 10,
+    },
 }
 _PRIOR_ORDER: tuple[str, ...] = (
     "direction",
@@ -100,6 +114,8 @@ def _layout_key(
         return "8"
     if width == 10:
         return "10"
+    if width == 11:
+        return "11"
     if width == 12:
         return "12"
     raise ValueError(f"unsupported action width {width}")
@@ -236,7 +252,11 @@ class ClampedStdMultiInputPolicy(MultiInputActorCriticPolicy):
         self.reset_mode_prior_stats()
         # Optimizer is built inside super().__init__, so a parameter created
         # after that has to join the existing Adam group or it never moves.
-        self.account_value_weight = torch.nn.Parameter(torch.zeros(6, device=self.device))
+        account_space = self.observation_space.spaces.get("account")  # type: ignore[attr-defined]
+        if account_space is None or account_space.shape is None:
+            raise ValueError("policy observation space must define a vector 'account' Box")
+        account_dim = int(account_space.shape[0])
+        self.account_value_weight = torch.nn.Parameter(torch.zeros(account_dim, device=self.device))
         group = {
             key: value for key, value in self.optimizer.param_groups[0].items() if key != "params"
         }

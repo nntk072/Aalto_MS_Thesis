@@ -17,7 +17,7 @@ import sys
 
 import numpy as np
 import pandas as pd
-from edge_harness import (  # type: ignore[import-not-found]
+from edge_harness import (  # type: ignore[import-not-found,unused-ignore]
     OUT,
     build_ny_frame,
     displacement_flags,

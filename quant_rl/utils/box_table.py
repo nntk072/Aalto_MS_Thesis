@@ -56,8 +56,4 @@ def kv_lines(
     value_width: int,
 ) -> list[str]:
     """Align key/value pairs with shared widths (keys left, values right)."""
-    return [
-        f"{str(key).ljust(key_width)}{str(value).rjust(value_width)}"
-        for key, value in pairs
-    ]
-
+    return [f"{str(key).ljust(key_width)}{str(value).rjust(value_width)}" for key, value in pairs]

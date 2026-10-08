@@ -16,12 +16,15 @@ if [[ -z "$VARIANT" ]]; then
 fi
 
 mkdir -p "$OUT_DIR"
+LOG_DIR="${LOG_DIR:-$OUT_DIR/logs}"
+mkdir -p "$LOG_DIR"
 
 source "$REPO/scripts/triton/activate_venv.sh"
 
-LOG="$OUT_DIR/${VARIANT}.log"
+LOG="$LOG_DIR/${VARIANT}.log"
 DONE="$OUT_DIR/${VARIANT}.done"
 FAILED="$OUT_DIR/${VARIANT}.failed"
+RESUME="${RESUME:-}"
 
 export CUDA_VISIBLE_DEVICES="$GPU_ID"
 export QUANT_RL_MAX_N_ENVS="${QUANT_RL_MAX_N_ENVS:-64}"
@@ -59,15 +62,26 @@ else
 fi
 
 echo "=== train $VARIANT strategy=$STRATEGY seed=$SEED gpu=$GPU_ID log=$LOG ==="
+if [[ -n "$RESUME" ]]; then
+  echo "=== resuming checkpoint $RESUME ==="
+fi
+
+TRAIN_ARGS=(
+  --variant "$VARIANT"
+  --config "$BASE_CONFIG"
+  --seed "$SEED"
+  --seeds "$SEED"
+  --arch tcn
+  --out "$OUT_DIR/$VARIANT"
+)
+if [[ -n "$RESUME" ]]; then
+  TRAIN_ARGS+=(--resume "$RESUME")
+fi
 
 set +e
+rm -f "$FAILED"
 python -u -m quant_rl.train.train_rl \
-  --variant "$VARIANT" \
-  --config "$BASE_CONFIG" \
-  --seed "$SEED" \
-  --seeds "$SEED" \
-  --arch tcn \
-  --out "$OUT_DIR/$VARIANT" \
+  "${TRAIN_ARGS[@]}" \
   "${EXTRA_OVERRIDES[@]}" \
   ppo.total_timesteps="$STEPS" \
   2>&1 | tee "$LOG"
@@ -75,6 +89,7 @@ STATUS=${PIPESTATUS[0]}
 set -e
 
 if [[ "$STATUS" -eq 0 ]]; then
+  rm -f "$FAILED"
   touch "$DONE"
 else
   touch "$FAILED"
