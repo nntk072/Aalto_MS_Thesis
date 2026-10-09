@@ -11,6 +11,7 @@ Reward: Differential Sharpe Ratio (DSR) or Sweep Confirmation Reward.
 from __future__ import annotations
 
 import warnings
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import gymnasium as gym
@@ -232,8 +233,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
     def __init__(
         self,
-        bars: pd.DataFrame,
-        features: pd.DataFrame,
+        bars: pd.DataFrame | None,
+        features: pd.DataFrame | None,
         obs_window: int = 60,
         initial_balance: float = 100_000.0,
         cost_model: CostModel = COST_US100,
@@ -305,6 +306,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         candidate_max_age_bars: int = 5,
         arm_requires_retest: bool = False,
         entry_state_observation: bool = True,
+        bundle_data: Any | None = None,
     ):
         """Initialize trading environment.
 
@@ -447,8 +449,41 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             to restore gap-hold behaviour (mark-to-market across the
             session boundary; SL/TP checked on the next session's bars).
         """
-        self.bars = bars
-        self.features = features
+        self.bars: pd.DataFrame = cast(pd.DataFrame, bars)
+        self.features: pd.DataFrame = cast(pd.DataFrame, features)
+        self._bundle_arrays: dict[str, np.ndarray[Any, Any]] | None = (
+            {name: np.asarray(array) for name, array in bundle_data.arrays.items()}
+            if bundle_data is not None
+            else None
+        )
+        bundle_labels = bundle_data.manifest.get("labels", {}) if bundle_data is not None else {}
+        self._n_bars = (
+            len(self._bundle_arrays["bar_time_ns"])
+            if self._bundle_arrays is not None
+            else len(bars)
+            if bars is not None
+            else 0
+        )
+        if self._bundle_arrays is None:
+            assert bars is not None and features is not None
+            self._ny_indices = self._resolve_ny_indices(bars)
+        else:
+            times = pd.to_datetime(self._bundle_arrays["bar_time_ns"], utc=True)
+            timezone = bundle_labels.get("bar_timezone")
+            if timezone:
+                times = times.tz_convert(str(timezone))
+            if bundle_labels.get("has_session", False):
+                sessions = list(bundle_labels.get("session", []))
+                ny_codes = [idx for idx, label in enumerate(sessions) if label == "ny"]
+                ny_indices = np.flatnonzero(np.isin(self._bundle_arrays["bar_session"], ny_codes))
+                self._ny_indices = ny_indices if ny_indices.size else np.arange(self._n_bars)
+            else:
+                self._ny_indices = self._resolve_ny_indices(
+                    pd.DataFrame(index=pd.DatetimeIndex(times))
+                )
+        self._bundle_has_session = bool(bundle_labels.get("has_session", False))
+        self._session_labels = list(bundle_labels.get("session", []))
+        self._bundle_has_session_id = bool(bundle_labels.get("has_session_id", False))
         self.obs_window = obs_window
         self.initial_balance = initial_balance
         self.cost_model = cost_model
@@ -486,7 +521,6 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # 0 disables the rewrite.
         self._breakeven_trigger_r = float(eod.get("breakeven_trigger_r", 0.0))
         self._breakeven_buffer_pts = float(eod.get("breakeven_buffer_pts", 2.0))
-        self._ny_indices = self._resolve_ny_indices(bars)
         self._ny_pos = 0
         self.episodic = episodic
         self.use_sweep_reward = use_sweep_reward
@@ -614,18 +648,33 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._trigger_requested_this_step = False
         self._debug_trace = False
         self._debug_window: dict[str, Any] | None = None
+        feature_names = (
+            list(bundle_data.manifest["column_names"]["features_num"])
+            if bundle_data is not None
+            else list(features.columns)
+            if features is not None
+            else []
+        )
         bind = getattr(self.strategy, "bind_columns", None)
         if callable(bind):
-            bind(features.columns)
+            bind(feature_names)
         if self.strategy_actions:
-            missing = [c for c in self.strategy.required_features if c not in features.columns]
+            missing = [c for c in self.strategy.required_features if c not in feature_names]
             if missing:
                 raise ValueError(f"Missing strategy features: {missing}")
         self._max_tp_dist: np.ndarray[Any, Any] | None = None
-        if self.strategy_actions and "atr_5" in features.columns:
+        if self._bundle_arrays is not None and self.strategy_actions:
+            max_tp = self._bundle_arrays["max_tp_dist"]
+            self._max_tp_dist = max_tp if max_tp.size else None
+        elif (
+            self.strategy_actions
+            and bars is not None
+            and features is not None
+            and "atr_5" in features.columns
+        ):
             from quant_rl.backtest.tp_reach import max_tp_distance
 
-            dist = max_tp_distance(bars, features["atr_5"]).reindex(self.bars.index)
+            dist = max_tp_distance(bars, features["atr_5"]).reindex(bars.index)
             self._max_tp_dist = dist.to_numpy(dtype=float)
 
         # Model-facing observation frame: the strategy's raw price-level
@@ -636,11 +685,18 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # never reach the encoder.
         # Drop non-numeric columns (e.g. string ``session`` labels) — they cannot
         # be cast to float32 and are not part of the model's normalized observation.
-        self._obs_features = attach_reachable_r(
-            select_obs_columns(features, self.strategy.raw_columns),
-            bars,
-            features,
-        )
+        if self._bundle_arrays is None:
+            assert bars is not None and features is not None
+            self._obs_features: pd.DataFrame = attach_reachable_r(
+                select_obs_columns(features, self.strategy.raw_columns),
+                bars,
+                features,
+            )
+            self._obs_columns = list(self._obs_features.columns)
+        else:
+            assert bundle_data is not None
+            self._obs_features = cast(pd.DataFrame, None)
+            self._obs_columns = list(bundle_data.manifest["column_names"]["obs_features"])
         self._obs_features_mmap = obs_features_mmap
 
         # Cache numpy arrays for hot-path env stepping — avoids per-step pandas
@@ -649,20 +705,25 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         #   - OHLC/spread bar caches: rebuilt via ``_sync_bar_arrays()`` (call
         #     again after in-place ``env.bars`` mutations in tests)
         # A read-only memmap is one shared copy for every SubprocVecEnv worker.
-        if obs_features_mmap:
+        if self._bundle_arrays is not None:
+            self._obs_features_arr = self._bundle_arrays["obs_features"]
+        elif obs_features_mmap:
+            assert self._obs_features is not None
             shared = np.load(obs_features_mmap, mmap_mode="r")
+            assert self._obs_features is not None
             if shared.shape != self._obs_features.shape:
                 raise ValueError(
                     f"obs memmap shape {shared.shape} != obs columns {self._obs_features.shape}"
                 )
             self._obs_features_arr = shared
         else:
+            assert self._obs_features is not None
             self._obs_features_arr = self._obs_features.to_numpy(dtype=np.float32)
         self.mtf = bool(mtf)
         self._mtf_windows = dict(DEFAULT_HTF_WINDOWS)
         if mtf_windows:
             self._mtf_windows.update({str(k): int(v) for k, v in mtf_windows.items()})
-        self._m1_idx, self._htf_idx = split_obs_columns(list(self._obs_features.columns))
+        self._m1_idx, self._htf_idx = split_obs_columns(self._obs_columns)
         self._htf_starts: dict[str, np.ndarray[Any, Any]] = {}
         if self.mtf:
             for key, _, _ in HTF_BRANCHES:
@@ -673,18 +734,26 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     else np.zeros((len(self._obs_features_arr), 0), dtype=np.float32)
                 )
                 self._htf_starts[key] = run_starts(np.asarray(block, dtype=np.float64))
-        _feat_numeric = self.features.select_dtypes(include="number")
-        self._features_cols = list(_feat_numeric.columns)
-        self._features_col_to_idx: dict[str, int] = {
-            c: i for i, c in enumerate(self._features_cols)
-        }
-        self._features_arr = _feat_numeric.to_numpy()
-        self._bar_times = self.bars.index.to_numpy()
-        self._session_ids_arr = (
-            self.bars["session_id"].to_numpy(dtype=np.int64)
-            if "session_id" in self.bars.columns
-            else None
-        )
+        if self._bundle_arrays is not None:
+            assert bundle_data is not None
+            self._features_cols = list(bundle_data.manifest["column_names"]["features_num"])
+            self._features_arr = self._bundle_arrays["features_num"]
+            self._bar_times = self._bundle_arrays["bar_time_ns"].view("datetime64[ns]")
+            self._session_ids_arr = (
+                self._bundle_arrays["bar_session_id"] if self._bundle_has_session_id else None
+            )
+        else:
+            assert bars is not None and features is not None
+            _feat_numeric = features.select_dtypes(include="number")
+            self._features_cols = list(_feat_numeric.columns)
+            self._features_arr = _feat_numeric.to_numpy()
+            self._bar_times = bars.index.to_numpy()
+            self._session_ids_arr = (
+                bars["session_id"].to_numpy(dtype=np.int64)
+                if "session_id" in bars.columns
+                else None
+            )
+        self._features_col_to_idx = {c: i for i, c in enumerate(self._features_cols)}
         self._sync_bar_arrays()
 
         # Action space: strategy actions, continuous, or discrete
@@ -791,13 +860,20 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # env steps the M1 spine, so the old hard-coded *5 made
         # "minutes_since_open" five times too large and let the sweep
         # time-decay term dominate the reward.
-        self._minutes_per_step = _minutes_per_step(pd.DatetimeIndex(bars.index))
+        time_index = (
+            pd.DatetimeIndex(pd.to_datetime(self._bundle_arrays["bar_time_ns"], utc=True))
+            if self._bundle_arrays is not None
+            else pd.DatetimeIndex(bars.index)
+            if bars is not None
+            else pd.DatetimeIndex([])
+        )
+        self._minutes_per_step = _minutes_per_step(time_index)
 
         # Observation space: market sequence, account state, and optional entry state.
         # features: (obs_window, n_features)
         # account: [equity, position_direction, open_pnl, unrealised_r, dist_to_sl, trailing_dd]
         # vae_z: latent embedding from VAE (if use_vae=True)
-        n_features = self._obs_features.shape[1] if len(self._obs_features) > 0 else 1
+        n_features = len(self._obs_columns) if self._obs_columns else 1
         if self.mtf:
             n_features = max(int(self._m1_idx.size), 1)
         vae_latent_dim = vae.encoder.latent_dim if use_vae and vae is not None else 0
@@ -851,6 +927,31 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             )
 
         self.reset()
+
+    @classmethod
+    def from_bundle(cls, bundle_path: str | Path, **kwargs: Any) -> TradingEnv:
+        """Create an environment whose persistent market arrays are read-only mmaps."""
+        from datetime import date
+
+        from .shared_bundle import load_bundle
+
+        bundle = load_bundle(bundle_path)
+        arrays = {name: np.asarray(array) for name, array in bundle.arrays.items()}
+        manifest = bundle.manifest
+        labels = manifest.get("labels", {})
+        pre_ny_by_date = {
+            date.fromisoformat(day): arrays["pre_ny_seq"][row]
+            for day, row in labels.get("pre_ny_day_to_row", {}).items()
+        }
+        env = cls(
+            bars=None,
+            features=None,
+            bundle_data=bundle,
+            pre_ny_by_date=pre_ny_by_date,
+            tickbook=TickBook(arrays["tick_ts"], arrays["tick_bid"], arrays["tick_ask"]),
+            **kwargs,
+        )
+        return env
 
     def reset(
         self,
@@ -931,6 +1032,15 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         Call after construction and after any in-place mutation of ``env.bars``
         (tests that poke SL/TP levels via ``env.bars.loc[...] = ...``).
         """
+        if self._bundle_arrays is not None:
+            bars = self._bundle_arrays
+            self._open_arr = bars["bar_ohlc"][:, 0]
+            self._high_arr = bars["bar_ohlc"][:, 1]
+            self._low_arr = bars["bar_ohlc"][:, 2]
+            self._close_arr = bars["bar_ohlc"][:, 3]
+            self._spread_arr = bars["bar_spread"]
+            return
+        assert self.bars is not None
         n = len(self.bars)
         self._open_arr = self.bars["open"].to_numpy(dtype=np.float64, copy=True)
         self._high_arr = self.bars["high"].to_numpy(dtype=np.float64, copy=True)
@@ -1433,11 +1543,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 break
 
     def _ema21_at(self, idx: int) -> float:
-        if "ema_21" not in self.features.columns:
+        if idx < 0 or idx >= self._n_bars:
             return float("nan")
-        if idx < 0 or idx >= len(self.features):
+        if self._bundle_arrays is not None:
+            value = self._bundle_arrays["ema_21"][idx]
+            return float(value) if not np.isnan(value) else float("nan")
+        if "ema_21" not in self._features_col_to_idx:
             return float("nan")
-        value = self.features["ema_21"].iloc[idx]
+        value = self._features_arr[idx, self._features_col_to_idx["ema_21"]]
         if pd.isna(value):
             return float("nan")
         return float(value)
@@ -1978,7 +2091,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         stop_distance = (
             abs(float(entry_price) - float(stop_px)) if stop_px is not None else float("nan")
         )
-        if "session" in self.bars.columns:
+        if self._bundle_arrays is not None and self._bundle_has_session:
+            code = int(self._bundle_arrays["bar_session"][self.step_idx])
+            label = self._session_labels[code] if code >= 0 else ""
+            session = str(label) if label else ""
+        elif self.bars is not None and "session" in self.bars.columns:
             label = self.bars["session"].iloc[self.step_idx]
             session = str(label) if pd.notna(label) and str(label) else ""
         else:
@@ -2007,14 +2124,22 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
     def _volatility_regime(self) -> str:
         """Causal tertile of ``atr_5`` over bars already seen in this episode."""
-        if "atr_5" not in self.features.columns:
+        if self._bundle_arrays is not None:
+            values = self._bundle_arrays["atr_5"][: self.step_idx + 1]
+            finite = values[np.isfinite(values)]
+            if finite.size < 3:
+                return ""
+            current = float(finite[-1])
+            low, high = np.quantile(finite, [1.0 / 3.0, 2.0 / 3.0])
+            if current <= float(low):
+                return "low"
+            return "high" if current >= float(high) else "mid"
+        if "atr_5" not in self._features_col_to_idx:
             return ""
         end = self.step_idx + 1
         if end <= 0:
             return ""
-        values = pd.to_numeric(self.features["atr_5"].iloc[:end], errors="coerce").to_numpy(
-            dtype=float
-        )
+        values = self._features_arr[:end, self._features_col_to_idx["atr_5"]]
         finite = values[np.isfinite(values)]
         if finite.size < 3:
             return ""
@@ -2494,7 +2619,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             Discrete: 0=hold, 1-9=enter_long variants, 10-18=enter_short variants, 19=exit
             Continuous: Box(-1, 1) for proportional position sizing
         """
-        if self.step_idx >= len(self.bars) or self._ny_pos >= len(self._ny_indices):
+        if self.step_idx >= self._n_bars or self._ny_pos >= len(self._ny_indices):
             # Survived to data / last NY bar: truncated year end (not a fail).
             return self._get_observation(), 0.0, False, True, {}
 
@@ -3017,7 +3142,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         if self.position is not None:
             self.broker.mark_to_market(self.account, self.position, (bid, ask))
 
-        if fill_idx < len(self.bars):
+        if fill_idx < self._n_bars:
             fill_bid, fill_ask = self._bar_quote(self._bar_at(fill_idx))
         else:
             fill_bid, fill_ask = bid, ask
@@ -3487,8 +3612,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 else self.position.sl_price - self.position.entry_price
             )
 
-        if 0 <= self.step_idx < len(self.bars):
-            current_close = float(self.bars["close"].iloc[self.step_idx])
+        if 0 <= self.step_idx < self._n_bars:
+            current_close = float(self._close_arr[self.step_idx])
         else:
             current_close = 1.0
         trailing_dd = float(self.account.trailing_drawdown_pct())
@@ -3557,8 +3682,15 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             pre_ny_seq: np.ndarray[Any, Any] | None = None
 
             if self.pre_ny_by_date:
-                bar_ts = pd.Timestamp(self.bars.index[self.step_idx])
-                day_key = bar_ts.date()
+                if self._bundle_arrays is not None:
+                    from datetime import date
+
+                    day_key = date.fromordinal(
+                        int(self._bundle_arrays["bar_day_ord"][self.step_idx])
+                    )
+                else:
+                    assert self.bars is not None
+                    day_key = pd.Timestamp(self.bars.index[self.step_idx]).date()
                 pre_ny_seq = self.pre_ny_by_date.get(day_key)
             elif self.pre_ny_data is not None and len(self.pre_ny_data) > 0:
                 # Legacy: each row is a flattened (seq_len * n_features) vector
