@@ -32,6 +32,8 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--n-envs", type=int, default=32)
     parser.add_argument("--rollout-steps-per-env", type=int, default=32)
+    parser.add_argument("--iterations", type=int, default=1)
+    parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -64,9 +66,13 @@ def _prepare_bundle() -> tuple[Any, EnvSpec, Path]:
     )
 
 
-def _train_probe(n_envs: int, rollout_steps: int, output: Path) -> dict[str, Any]:
+def _train_probe(
+    n_envs: int, rollout_steps: int, iterations: int, device: str, output: Path
+) -> dict[str, Any]:
     import torch
 
+    if device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA was requested, but torch.cuda.is_available() is false")
     cfg, spec, bundle_path = _prepare_bundle()
     cfg.env.n_envs = n_envs
     cfg.env.data_source = "bundle"
@@ -75,19 +81,43 @@ def _train_probe(n_envs: int, rollout_steps: int, output: Path) -> dict[str, Any
     cfg.ppo.n_epochs = 1
     torch.set_num_threads(1)
 
+    gpu_before: dict[str, int | str] = {}
+    if device == "cuda":
+        torch.cuda.synchronize()
+        free_bytes, total_bytes = torch.cuda.mem_get_info()
+        gpu_before = {
+            "gpu_name": torch.cuda.get_device_name(),
+            "gpu_total_bytes": total_bytes,
+            "gpu_free_before_bytes": free_bytes,
+        }
+        torch.cuda.reset_peak_memory_stats()
+
     start_bytes = _cgroup_memory_bytes()
     parent_env = make_bundle_env(spec)
     env_fn = partial(make_bundle_env, spec)
-    model = build_agent(parent_env, cfg, arch="tcn", algo="ppo", device="cpu", env_fn=env_fn)
+    model = build_agent(parent_env, cfg, arch="tcn", algo="ppo", device=device, env_fn=env_fn)
     vecenv_bytes = _cgroup_memory_bytes()
-    training_steps = n_envs * rollout_steps
+    training_steps = n_envs * rollout_steps * iterations
     started = time.monotonic()
     model.learn(total_timesteps=training_steps, progress_bar=False)
     training_seconds = time.monotonic() - started
+    gpu_after: dict[str, int] = {}
+    if device == "cuda":
+        torch.cuda.synchronize()
+        free_bytes, _ = torch.cuda.mem_get_info()
+        gpu_after = {
+            "gpu_free_after_bytes": free_bytes,
+            "gpu_allocated_bytes": torch.cuda.memory_allocated(),
+            "gpu_reserved_bytes": torch.cuda.memory_reserved(),
+            "gpu_peak_allocated_bytes": torch.cuda.max_memory_allocated(),
+            "gpu_peak_reserved_bytes": torch.cuda.max_memory_reserved(),
+        }
     report = {
         "n_envs": n_envs,
         "training_steps": training_steps,
         "rollout_steps_per_env": rollout_steps,
+        "iterations": iterations,
+        "device": device,
         "bundle_size_bytes": sum(
             path.stat().st_size for path in bundle_path.iterdir() if path.is_file()
         ),
@@ -96,6 +126,8 @@ def _train_probe(n_envs: int, rollout_steps: int, output: Path) -> dict[str, Any
         "cgroup_after_training_bytes": _cgroup_memory_bytes(),
         "trainer_tree_pss_mib": _tree_pss_mib(os.getpid()),
         "training_seconds": training_seconds,
+        **gpu_before,
+        **gpu_after,
     }
     model.get_env().close()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -105,9 +137,11 @@ def _train_probe(n_envs: int, rollout_steps: int, output: Path) -> dict[str, Any
 
 def main() -> None:
     args = _parse_args()
-    if args.n_envs < 1 or args.rollout_steps_per_env < 1:
-        raise SystemExit("environment count and rollout steps must be positive")
-    report = _train_probe(args.n_envs, args.rollout_steps_per_env, args.output)
+    if args.n_envs < 1 or args.rollout_steps_per_env < 1 or args.iterations < 1:
+        raise SystemExit("environment count, rollout steps, and iterations must be positive")
+    report = _train_probe(
+        args.n_envs, args.rollout_steps_per_env, args.iterations, args.device, args.output
+    )
     print(json.dumps(report, indent=2))
 
 

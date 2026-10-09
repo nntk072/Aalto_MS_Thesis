@@ -107,6 +107,17 @@ Pick **1 or 2** GPUs from the job, not from habit. Login (`login4`: 40 CPUs,
 250 GB RAM, no GPU) cannot run `n_envs=64`. A PO3 worker is budgeted at 4 GB;
 64 workers OOM at 256 GB, so one 64-env train needs about **512 GB**.
 
+This 512 GB guidance is for the default `env.data_source: frames` path. The
+opt-in shared bundle path was measured separately on a GH200 (2026-10-09) with
+`scripts/bench/measure_shared_ppo_memory.py`: TCN PPO at `n_envs=64` processed
+10,240 steps over five iterations at about **3,811 FPS**, with PyTorch peak
+allocated/reserved VRAM of **261/302 MiB**. A sampled two-trainer run used about
+**2.2 GiB total** in `nvidia-smi` (about 1.09 GiB per process). An 18-trainer
+projection is roughly **19–20 GiB VRAM**; budget at least **30 GiB** until an
+18-trainer run confirms it. These short probes do not establish full-run host
+RAM requirements, so keep the 512 GB frames-path allocation guidance. Do not
+present the 18-trainer projection as a direct measurement.
+
 | Job | GPUs | Typical request | Why |
 |-----|------|-----------------|-----|
 | One model (one TCN / GRU / Transformer, 20M) | **1** | GH200: `--gpus=gh200:1 --mem=512G --cpus-per-task=48 --time=6:00:00` or `--time=12:00:00` | One process, one 141 GB GPU. 6h is the default 20M train. 12h when `MaxTime` allows and the user asks for the longer shell. |
