@@ -12,6 +12,8 @@ Usage
 
 from __future__ import annotations
 
+import multiprocessing
+import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -142,6 +144,17 @@ def build_agent(
     n_envs: int = int(getattr(cfg.get("env", {}), "n_envs", 1))
     vec_env: Any
     if n_envs > 1 and env_fn is not None:
+        bundle_workers = str(cfg.env.get("data_source", "frames")) == "bundle"
+        use_forkserver = bundle_workers and "forkserver" in multiprocessing.get_all_start_methods()
+        if use_forkserver:
+            multiprocessing.set_forkserver_preload(
+                [
+                    "stable_baselines3.common.vec_env.subproc_vec_env",
+                    "quant_rl.envs.worker",
+                    "quant_rl.envs.trading_env",
+                ]
+            )
+
         # Stage 3: thread caps. Cap each worker to 1 thread to prevent
         # OMP/MKL/torch thread-pool oversubscription (64 workers × default pools).
         def _thread_capped_env_fn() -> Any:
@@ -149,15 +162,13 @@ def build_agent(
 
             for _var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
                 _os.environ[_var] = "1"
-            try:
-                import torch as _torch
-
+            _torch = sys.modules.get("torch")
+            if _torch is not None:
                 _torch.set_num_threads(1)
-            except ImportError:
-                pass
             return env_fn()
 
-        vec_env = SubprocVecEnv([_thread_capped_env_fn] * n_envs)
+        start_method = "forkserver" if use_forkserver else None
+        vec_env = SubprocVecEnv([_thread_capped_env_fn] * n_envs, start_method=start_method)
     else:
         vec_env = DummyVecEnv([lambda: env])
 
