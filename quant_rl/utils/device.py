@@ -14,7 +14,10 @@ _GiB = 1024**3
 # state. Steady-state 32-worker RSS was ~2.4 GiB/worker, but forkserver pickle
 # spawn peaks higher: 64 workers @ 256G Slurm OOM'd mid-unpickle on the PO3
 # full feature matrix. Plan at 4 GiB/worker so 256G caps at 32 and 512G fits 64.
+# Keep the frames-path allowance conservative. The bundle path measured about
+# 90 MiB/worker on the full train split; 128 MiB retains headroom.
 _WORKER_RAM_BYTES = 4 * _GiB
+_BUNDLE_WORKER_RAM_BYTES = 128 * 1024**2
 _RAM_HEADROOM_BYTES = int(1.5 * _GiB)
 # Main process holds the policy, Adam states, and the source env (~3 GiB observed).
 _PARENT_RAM_BYTES = 3 * _GiB
@@ -68,6 +71,7 @@ def suggest_n_envs(
     available_ram_bytes: int,
     cpu_count: int,
     vram_bytes: int | None,
+    worker_ram_bytes: int | None = None,
 ) -> int:
     """Pick a SubprocVecEnv width that fits RAM (power of two).
 
@@ -100,9 +104,10 @@ def suggest_n_envs(
 
     # Required allocation ~= parent + headroom + (workers * worker estimate).
     # The power-of-two result is the largest rollout width that satisfies it.
+    per_worker_ram = _WORKER_RAM_BYTES if worker_ram_bytes is None else worker_ram_bytes
     max_from_avail = max(
         1,
-        (available_ram_bytes - _RAM_HEADROOM_BYTES - _PARENT_RAM_BYTES) // _WORKER_RAM_BYTES,
+        (available_ram_bytes - _RAM_HEADROOM_BYTES - _PARENT_RAM_BYTES) // per_worker_ram,
     )
     gpu_target = (
         requested if vram_bytes is None else _gpu_n_envs_target(vram_bytes, available_ram_bytes)
@@ -197,12 +202,15 @@ def scale_training_cfg(cfg: Any, device: torch.device, arch: str) -> None:
         vram = int(torch.cuda.get_device_properties(idx).total_memory)
 
     requested = int(getattr(cfg.get("env", {}), "n_envs", 1))
+    data_source = str(getattr(cfg.get("env", {}), "data_source", "frames"))
+    worker_ram = _BUNDLE_WORKER_RAM_BYTES if data_source == "bundle" else _WORKER_RAM_BYTES
     n_envs = suggest_n_envs(
         requested=requested,
         total_ram_bytes=total_ram,
         available_ram_bytes=avail_ram,
         cpu_count=cpu_count,
         vram_bytes=vram,
+        worker_ram_bytes=worker_ram,
     )
     max_envs_env = os.environ.get("QUANT_RL_MAX_N_ENVS")
     if max_envs_env is not None:

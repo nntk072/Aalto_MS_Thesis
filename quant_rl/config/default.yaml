@@ -143,6 +143,7 @@ features:
 
 env:
   obs_window: 60                       # T in [T, F] obs
+  data_source: frames                   # frames remains default until bundle gates pass
   n_envs: 8                           # train_rl RAM-caps this (powers of two); 1 = DummyVecEnv
   action_type: "discrete"              # "discrete" | "continuous"
   # null = full train-split year (last NY bar truncates; FTMO fail terminates).

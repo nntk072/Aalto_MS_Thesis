@@ -127,6 +127,17 @@ class TestSuggestNEnvs:
         )
         assert n == 4
 
+    def test_bundle_worker_budget_uses_measured_shared_array_cost(self) -> None:
+        n = suggest_n_envs(
+            requested=64,
+            total_ram_bytes=16 * _GiB,
+            available_ram_bytes=10 * _GiB,
+            cpu_count=16,
+            vram_bytes=142 * _GiB,
+            worker_ram_bytes=128 * 1024**2,
+        )
+        assert n == 32
+
 
 class TestSuggestBatchSize:
     """Minibatch must divide the PPO rollout buffer."""
@@ -206,6 +217,31 @@ def test_scale_training_cfg_cpu_keeps_n_envs(monkeypatch: pytest.MonkeyPatch) ->
     assert int(cfg.env.n_envs) == 4
     assert int(cfg.ppo.batch_size) == 256
     assert int(cfg.ppo.n_epochs) == 10
+
+
+def test_scale_training_cfg_uses_bundle_worker_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bundle mode passes the measured per-worker allowance into RAM scaling."""
+    import torch
+
+    from quant_rl.utils import device as device_mod
+
+    observed: dict[str, int | None] = {}
+    original = device_mod.suggest_n_envs
+
+    def capture_worker_budget(**kwargs: int | None) -> int:
+        observed["worker_ram_bytes"] = kwargs.get("worker_ram_bytes")
+        return original(**kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(device_mod, "suggest_n_envs", capture_worker_budget)
+    monkeypatch.setattr(device_mod, "_read_meminfo", lambda: (256 * _GiB, 200 * _GiB))
+    cfg = OmegaConf.create(
+        {
+            "env": {"n_envs": 4, "data_source": "bundle"},
+            "ppo": {"n_steps": 2048, "batch_size": 256, "n_epochs": 10},
+        }
+    )
+    scale_training_cfg(cfg, torch.device("cpu"), "tcn")
+    assert observed["worker_ram_bytes"] == device_mod._BUNDLE_WORKER_RAM_BYTES
 
 
 def test_enable_extractor_autocast_skips_transformer() -> None:

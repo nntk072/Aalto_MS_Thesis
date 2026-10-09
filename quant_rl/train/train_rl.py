@@ -243,11 +243,10 @@ def _publish_obs_memmap(
     """
     if int(cfg.env.get("n_envs", 1)) <= 1:
         return None
-    from quant_rl.features.build import attach_reachable_r, select_obs_columns
-
     strategy, _, _ = _strategy_from_cfg(cfg)
-    frame = attach_reachable_r(select_obs_columns(features, strategy.raw_columns), bars, features)
-    array = np.ascontiguousarray(frame.to_numpy(dtype=np.float32))
+    from quant_rl.envs.env_bundle_builder import observation_features
+
+    array, _ = observation_features(bars, features, strategy.raw_columns)
     path.parent.mkdir(parents=True, exist_ok=True)
     np.save(path, array)
     return str(path)
@@ -964,16 +963,95 @@ def main() -> None:
     run_dir = build_run_dir(args.out, run_name)
     model_dir = run_dir / "model"
     model_dir.mkdir(parents=True, exist_ok=True)
-    obs_mmap = _publish_obs_memmap(train_feat, train_bars, cfg, run_dir / "obs_features.npy")
+    data_source = str(cfg.env.get("data_source", "frames"))
+    obs_mmap: str | None
+    bundle_path: Path | None = None
+    test_bundle_path: Path | None = None
+    train_env_spec: Any | None = None
+    train_eval_spec: Any | None = None
+    test_eval_spec: Any | None = None
+    train_bar_count = len(train_bars)
+    test_bar_count = len(test_bars)
+    best_bars: pd.DataFrame | None = None
+    best_features: pd.DataFrame | None = None
+    dashboard_bars: pd.DataFrame | None = None
+    dashboard_features: pd.DataFrame | None = None
+    if data_source == "bundle":
+        from quant_rl.envs.env_bundle_builder import build_env_bundle
+        from quant_rl.envs.env_spec import EnvSpec
 
-    # Stage 2: Parent memory cleanup. Free full-history pipeline objects after slicing.
-    # train_feat and train_bars are still referenced downstream; data, features, primary_m1,
-    # and secondary_m1 are no longer used anywhere after this point.
+        if args.use_vae:
+            raise ValueError(
+                "env.data_source=bundle with --use-vae requires the VAE latent-table phase"
+            )
+
+        bundle_path = build_env_bundle(
+            cache_dir,
+            train_bars,
+            train_feat,
+            cfg,
+            raw_columns=list(_strategy_from_cfg(cfg)[0].raw_columns),
+            feature_config_hash=feat_cache.stem,
+            tickbook=ticks_covering(primary_ticks, train_bars),
+            pre_ny_by_date=pre_ny_by_date,
+        )
+        obs_mmap = str(bundle_path / "obs_features.npy")
+        train_env_spec = EnvSpec.from_cfg(
+            cfg,
+            algo=args.algo,
+            reward=args.reward,
+            arch=args.arch,
+            bundle_dir=str(bundle_path),
+        )
+        train_eval_spec = EnvSpec.from_cfg(
+            cfg,
+            algo=args.algo,
+            reward=args.reward,
+            arch=args.arch,
+            bundle_dir=str(bundle_path),
+            episodic=False,
+        )
+        test_bundle_path = build_env_bundle(
+            cache_dir,
+            test_bars,
+            test_feat,
+            cfg,
+            raw_columns=list(_strategy_from_cfg(cfg)[0].raw_columns),
+            feature_config_hash=feat_cache.stem,
+            tickbook=ticks_covering(primary_ticks, test_bars),
+            pre_ny_by_date=None,
+        )
+        test_eval_spec = EnvSpec.from_cfg(
+            cfg,
+            algo=args.algo,
+            reward=args.reward,
+            arch=args.arch,
+            bundle_dir=str(test_bundle_path),
+            episodic=False,
+        )
+        best_count = min(20_000, train_bar_count)
+        best_bars = train_bars.iloc[:best_count]
+        best_features = train_feat.iloc[:best_count]
+        dash_cfg = _dashboard_block(cfg)
+        dashboard_count = min(int(dash_cfg.get("eval_bars", 20_000)), train_bar_count)
+        dashboard_bars = train_bars.iloc[:dashboard_count]
+        dashboard_features = train_feat.iloc[:dashboard_count]
+        log.info("Built shared environment bundle: %s", bundle_path)
+    elif data_source == "frames":
+        obs_mmap = _publish_obs_memmap(train_feat, train_bars, cfg, run_dir / "obs_features.npy")
+    else:
+        raise ValueError(f"env.data_source must be 'frames' or 'bundle', got {data_source!r}")
+
+    # Release full-history feature pipeline objects after the train/test split is ready.
     del data, features, primary_m1, secondary_m1
     import gc
 
     gc.collect()
     log.info("Parent memory cleanup: released full-history pipeline objects")
+    if data_source == "bundle" and not args.walk_forward:
+        del train_bars, train_feat, test_bars, test_feat
+        gc.collect()
+        log.info("Released train/test frames; bundle workers now map the shared arrays")
 
     # Seed loop: train + eval for each seed, collect results
     seed_results: list[dict[str, Any]] = []
@@ -992,19 +1070,39 @@ def main() -> None:
 
         # Create training environment
         log.info("Creating training environment...")
-        train_env = make_env(
-            train_bars,
-            train_feat,
-            cfg,
-            algo=args.algo,
-            reward=args.reward,
-            use_vae=args.use_vae,
-            vae=env_vae,
-            pre_ny_by_date=pre_ny_by_date,
-            obs_features_mmap=obs_mmap,
-            tickbook=ticks_covering(primary_ticks, train_bars),
-            arch=args.arch,
-        )
+        if train_env_spec is not None:
+            from quant_rl.envs.worker import make_bundle_env
+
+            train_env = make_bundle_env(train_env_spec)
+            env_factory = partial(make_bundle_env, train_env_spec)
+        else:
+            train_env = make_env(
+                train_bars,
+                train_feat,
+                cfg,
+                algo=args.algo,
+                reward=args.reward,
+                use_vae=args.use_vae,
+                vae=env_vae,
+                pre_ny_by_date=pre_ny_by_date,
+                obs_features_mmap=obs_mmap,
+                tickbook=ticks_covering(primary_ticks, train_bars),
+                arch=args.arch,
+            )
+            env_factory = partial(
+                make_env,
+                train_bars,
+                train_feat,
+                cfg,
+                algo=args.algo,
+                reward=args.reward,
+                use_vae=args.use_vae,
+                vae=env_vae,
+                pre_ny_by_date=pre_ny_by_date,
+                obs_features_mmap=obs_mmap,
+                tickbook=ticks_covering(primary_ticks, train_bars),
+                arch=args.arch,
+            )
 
         checkpoint_callback = _periodic_checkpoint_callback(cfg, seed_model_dir)
 
@@ -1020,19 +1118,7 @@ def main() -> None:
             device=device,
             use_vae=args.use_vae,
             vae=vae_model,
-            env_fn=partial(
-                make_env,
-                train_bars,
-                train_feat,
-                cfg,
-                algo=args.algo,
-                reward=args.reward,
-                use_vae=args.use_vae,
-                vae=env_vae,
-                pre_ny_by_date=pre_ny_by_date,
-                obs_features_mmap=obs_mmap,
-                arch=args.arch,
-            ),
+            env_fn=env_factory,
         )
         _log_effective_ppo(model, cfg)
 
@@ -1070,12 +1156,36 @@ def main() -> None:
 
         # Best checkpoint: one short prefix of the train calendar, scored by
         # end equity. A full-year replay is the post-train gate, not this callback.
-        short_n = min(20_000, len(train_bars))
-        short_bars = train_bars.iloc[:short_n]
-        short_feat = train_feat.iloc[:short_n]
-        best_eval_freq = max(1, timesteps)  # once at the end
-        best_cb = BestCheckpointEvalCallback(
-            eval_env_factory=lambda: make_env(
+        short_n = min(20_000, train_bar_count)
+        short_bars = best_bars if best_bars is not None else train_bars.iloc[:short_n]
+        short_feat = best_features if best_features is not None else train_feat.iloc[:short_n]
+        if bundle_path is not None and train_env_spec is not None:
+            from quant_rl.envs.env_bundle_builder import build_env_bundle
+            from quant_rl.envs.env_spec import EnvSpec
+            from quant_rl.envs.worker import make_bundle_env
+
+            short_bundle = build_env_bundle(
+                cache_dir,
+                short_bars,
+                short_feat,
+                cfg,
+                raw_columns=list(_strategy_from_cfg(cfg)[0].raw_columns),
+                feature_config_hash=feat_cache.stem,
+                tickbook=ticks_covering(primary_ticks, short_bars),
+                pre_ny_by_date=None,
+            )
+            best_eval_spec = EnvSpec.from_cfg(
+                cfg,
+                algo=args.algo,
+                reward=args.reward,
+                arch=args.arch,
+                bundle_dir=str(short_bundle),
+                episodic=False,
+            )
+            best_eval_factory = partial(make_bundle_env, best_eval_spec)
+        else:
+            best_eval_factory = partial(
+                make_env,
                 short_bars,
                 short_feat,
                 cfg,
@@ -1087,7 +1197,11 @@ def main() -> None:
                 pre_ny_by_date=pre_ny_by_date,
                 tickbook=ticks_covering(primary_ticks, short_bars),
                 arch=args.arch,
-            ),
+            )
+
+        best_eval_freq = max(1, timesteps)  # once at the end
+        best_cb = BestCheckpointEvalCallback(
+            eval_env_factory=best_eval_factory,
             eval_freq=best_eval_freq,
             best_model_path=seed_model_dir / "ppo_best",
         )
@@ -1109,9 +1223,11 @@ def main() -> None:
         dash = _dashboard_block(cfg)
         if bool(dash.get("enabled", True)):
             eval_bars = int(dash.get("eval_bars", 20_000))
-            slice_n = min(eval_bars, len(train_bars))
-            dash_bars = train_bars.iloc[:slice_n]
-            dash_feat = train_feat.iloc[:slice_n]
+            slice_n = min(eval_bars, train_bar_count)
+            dash_bars = dashboard_bars if dashboard_bars is not None else train_bars.iloc[:slice_n]
+            dash_feat = (
+                dashboard_features if dashboard_features is not None else train_feat.iloc[:slice_n]
+            )
 
             def _dashboard_eval() -> dict[str, Any]:
                 result = evaluate_model(
@@ -1221,13 +1337,26 @@ def main() -> None:
 
         # Evaluate the trained model on the held-out test set (out-of-sample).
         log.info("Evaluating trained model on test set...")
+        if test_eval_spec is not None:
+            from quant_rl.envs.worker import make_bundle_env
+
+            test_eval_env = make_bundle_env(test_eval_spec)
+            empty_bars = pd.DataFrame()
+            empty_features = pd.DataFrame()
+            test_ticks = None
+        else:
+            test_eval_env = None
+            empty_bars = test_bars
+            empty_features = test_feat
+            test_ticks = ticks_covering(primary_ticks, test_bars)
         test_result = evaluate_model(
             model,
-            bars=test_bars,
-            features=test_feat,
+            bars=empty_bars,
+            features=empty_features,
             max_episode_steps=None,
             deterministic=False,
-            tickbook=ticks_covering(primary_ticks, test_bars),
+            tickbook=test_ticks,
+            env=test_eval_env,
             **eval_common,
         )
         test_result["initial_balance"] = cfg.account.initial_balance
@@ -1257,13 +1386,26 @@ def main() -> None:
         # In-sample evaluation on the training split so the run dir carries the same
         # training/ + testing/ artifact layout as the baseline runners.
         log.info("Evaluating trained model on training set (in-sample)...")
+        if train_eval_spec is not None:
+            from quant_rl.envs.worker import make_bundle_env
+
+            train_eval_env = make_bundle_env(train_eval_spec)
+            empty_bars = pd.DataFrame()
+            empty_features = pd.DataFrame()
+            train_ticks = None
+        else:
+            train_eval_env = None
+            empty_bars = train_bars
+            empty_features = train_feat
+            train_ticks = ticks_covering(primary_ticks, train_bars)
         train_result = evaluate_model(
             model,
-            bars=train_bars,
-            features=train_feat,
+            bars=empty_bars,
+            features=empty_features,
             max_episode_steps=None,
             deterministic=False,
-            tickbook=ticks_covering(primary_ticks, train_bars),
+            tickbook=train_ticks,
+            env=train_eval_env,
             **eval_common,
         )
         train_result["initial_balance"] = cfg.account.initial_balance
@@ -1299,15 +1441,23 @@ def main() -> None:
         )
 
         # Export both splits for this seed
+        if bundle_path is not None:
+            from quant_rl.envs.env_bundle_builder import bars_for_export
+
+            train_export_bars = bars_for_export(bundle_path)
+            test_export_bars = bars_for_export(test_bundle_path) if test_bundle_path else None
+        else:
+            train_export_bars = train_bars
+            test_export_bars = test_bars
         save_run(
             run_dir=seed_dir,
             train_result=train_result,
             train_metrics=train_m,
-            train_bars=train_bars,
+            train_bars=train_export_bars,
             train_secondary=train_sec,
             test_result=test_result,
             test_metrics=test_m,
-            test_bars=test_bars,
+            test_bars=test_export_bars,
             test_secondary=test_sec,
             cfg=cfg,
             save_plots=getattr(cfg.output, "save_plots", True),
@@ -1315,6 +1465,8 @@ def main() -> None:
             save_csv=getattr(cfg.output, "save_csv", True),
             dpi=getattr(cfg.output, "dpi", 150),
         )
+        if bundle_path is not None:
+            del train_export_bars, test_export_bars
 
         # Save config snapshot for this seed
         try:
@@ -1382,8 +1534,8 @@ def main() -> None:
             arch=args.arch,
             reward=args.reward,
             timesteps=timesteps,
-            train_bars=len(train_bars),
-            test_bars=len(test_bars),
+            train_bars=train_bar_count,
+            test_bars=test_bar_count,
             strategy=strategy_name,
             strategy_actions=strategy_actions,
             cfg=cfg,
@@ -1400,8 +1552,8 @@ def main() -> None:
             arch=args.arch,
             reward=args.reward,
             timesteps=timesteps,
-            train_bars=len(train_bars),
-            test_bars=len(test_bars),
+            train_bars=train_bar_count,
+            test_bars=test_bar_count,
             test_m=single["test_m"],
             test_result=single["test_result"],
             strategy=strategy_name,
