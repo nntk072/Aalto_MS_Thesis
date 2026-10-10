@@ -24,7 +24,9 @@ In `train_rl.py` (lines 231-237):
 ```python
 features = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
 train_end, test_start = get_split_config(cfg)
-train_bars, test_bars, train_feat, test_feat = split_train_test(primary_m1, features, train_end, test_start)
+train_bars, test_bars, train_feat, test_feat = split_train_test(
+    primary_m1, features, train_end, test_start
+)
 ```
 
 Features are built on the FULL dataset, then split. This is safe ONLY if all feature computations are causal.

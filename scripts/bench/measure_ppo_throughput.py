@@ -81,6 +81,14 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
+        "--variant",
+        default=None,
+        help=(
+            "Measure an experiments.yaml variant: its base config, overrides, algo and "
+            "arch are taken from quant_rl.train.variant_resolver. Requires --bundle-dir."
+        ),
+    )
+    parser.add_argument(
         "--bundle-dir",
         type=Path,
         default=None,
@@ -92,22 +100,34 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _prepare_bundle(bundle_dir: Path | None) -> tuple[Any, EnvSpec, Path]:
+def _prepare_bundle(
+    bundle_dir: Path | None, variant: str | None = None
+) -> tuple[Any, EnvSpec, Path]:
     """Return cfg + EnvSpec, reusing an existing bundle when *bundle_dir* is given.
 
     Building a bundle from scratch loads the whole train-split frame set (which
     peaked around 473 GiB and OOMs below 256 GiB), so a throughput probe that
     only needs the training loop can point at an already-built bundle instead.
     """
+    if variant is not None and bundle_dir is None:
+        raise SystemExit("--variant needs --bundle-dir: rebuilding a bundle is not variant-aware")
     if bundle_dir is not None:
-        cfg = load_config()
+        if variant is not None:
+            from quant_rl.train.variant_resolver import resolve_variant
+
+            resolved = resolve_variant(variant)
+            cfg = load_config(overrides=resolved["overrides"], config_path=resolved["base_config"])
+            algo, arch = resolved["algo"], resolved["arch"]
+        else:
+            cfg = load_config()
+            algo, arch = "ppo", "tcn"
         return (
             cfg,
             EnvSpec.from_cfg(
                 cfg,
-                algo="ppo",
+                algo=algo,
                 reward="dsr",
-                arch="tcn",
+                arch=arch,
                 bundle_dir=str(bundle_dir),
             ),
             bundle_dir,
@@ -162,13 +182,14 @@ def _train_probe(
     device: str,
     output: Path,
     bundle_dir: Path | None = None,
+    variant: str | None = None,
 ) -> dict[str, Any]:
     import torch
 
     if device == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA was requested, but torch.cuda.is_available() is false")
 
-    cfg, spec, bundle_path = _prepare_bundle(bundle_dir)
+    cfg, spec, bundle_path = _prepare_bundle(bundle_dir, variant)
     _apply_production_cfg(cfg, n_envs, device)
 
     torch.set_num_threads(1)
@@ -293,6 +314,7 @@ def main() -> None:
         args.device,
         args.output,
         args.bundle_dir,
+        args.variant,
     )
     print(json.dumps(report, indent=2))
 

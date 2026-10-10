@@ -1,3 +1,5 @@
+> **SUPERSEDED (see CHANGES.md).** Written against an earlier snapshot. The bug described below is already fixed in code (minutes-per-step now comes from the bar index; run directories use microsecond timestamps). Re-run the audit before relying on it.
+
 # A3 — TradingEnv Correctness Audit
 
 **Date**: 2026-09-10

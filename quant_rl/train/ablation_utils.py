@@ -85,6 +85,10 @@ def merge_variant_cfg(
             cfg.env[key] = variant[key]
     if variant is not None and bool(variant.get("strategy_actions", False)):
         cfg.features.include_strategy_state = True
+    # A baseline rung must not inherit default.yaml's po3_ifvg strategy block, which
+    # strategy_actions would otherwise activate (plan A1). Mirrors variant_resolver.
+    if strategy == "baseline" and "strategy" in cfg:
+        cfg.strategy.name = "baseline"
     return cfg
 
 

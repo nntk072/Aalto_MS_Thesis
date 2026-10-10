@@ -24,21 +24,25 @@ defaults:
 variants:
   # ===== LADDER: additive architecture layers (TCN) =====
   - name: ladder_a0_flat
+    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: tcn
     strategy_actions: true
 
   - name: ladder_a1_sl
+    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: tcn
     strategy_actions: true
     allow_agent_sl_mode: true
 
   - name: ladder_a2_tp
+    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: tcn
     strategy_actions: true
     allow_agent_sl_mode: true
     allow_agent_tp_mode: true
 
   - name: ladder_a3_multi_tp
+    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: tcn
     strategy_actions: true
     allow_agent_sl_mode: true
@@ -46,6 +50,7 @@ variants:
     allow_multi_tp: true
 
   - name: ladder_a4b_entry_fsm
+    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: tcn
     strategy_actions: true
     allow_agent_sl_mode: true
@@ -55,6 +60,7 @@ variants:
     entry_state_observation: true
 
   - name: ladder_a4a_entry_fsm_hidden
+    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: tcn
     strategy_actions: true
     allow_agent_sl_mode: true
@@ -65,6 +71,7 @@ variants:
 
   # ===== LADDER x STRATEGY (A4b under each strategy) =====
   - name: ladder_a4b_po3_ifvg
+    reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md
     strategy: po3_ifvg
     include_pd_context: true
     arch: tcn
@@ -76,6 +83,7 @@ variants:
     entry_state_observation: true
 
   - name: ladder_a4b_distribution
+    reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md
     strategy: distribution
     include_pd_context: true
     arch: tcn
@@ -88,12 +96,14 @@ variants:
 
   # ===== LADDER x po3_ifvg (full A0-A4.2 ladder) =====
   - name: ladder_a0_flat_po3
+    reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md
     strategy: po3_ifvg
     include_pd_context: true
     arch: tcn
     strategy_actions: true
 
   - name: ladder_a1_sl_po3
+    reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md
     strategy: po3_ifvg
     include_pd_context: true
     arch: tcn
@@ -101,6 +111,7 @@ variants:
     allow_agent_sl_mode: true
 
   - name: ladder_a2_tp_po3
+    reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md
     strategy: po3_ifvg
     include_pd_context: true
     arch: tcn
@@ -109,6 +120,7 @@ variants:
     allow_agent_tp_mode: true
 
   - name: ladder_a3_multi_tp_po3
+    reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md
     strategy: po3_ifvg
     include_pd_context: true
     arch: tcn
@@ -118,6 +130,7 @@ variants:
     allow_multi_tp: true
 
   - name: ladder_a4a_entry_fsm_hidden_po3
+    reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md
     strategy: po3_ifvg
     include_pd_context: true
     arch: tcn
@@ -130,12 +143,14 @@ variants:
 
   # ===== LADDER x distribution (full A0-A4.2 ladder) =====
   - name: ladder_a0_flat_dist
+    reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md
     strategy: distribution
     include_pd_context: true
     arch: tcn
     strategy_actions: true
 
   - name: ladder_a1_sl_dist
+    reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md
     strategy: distribution
     include_pd_context: true
     arch: tcn
@@ -143,6 +158,7 @@ variants:
     allow_agent_sl_mode: true
 
   - name: ladder_a2_tp_dist
+    reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md
     strategy: distribution
     include_pd_context: true
     arch: tcn
@@ -151,6 +167,7 @@ variants:
     allow_agent_tp_mode: true
 
   - name: ladder_a3_multi_tp_dist
+    reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md
     strategy: distribution
     include_pd_context: true
     arch: tcn
@@ -160,6 +177,7 @@ variants:
     allow_multi_tp: true
 
   - name: ladder_a4a_entry_fsm_hidden_dist
+    reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md
     strategy: distribution
     include_pd_context: true
     arch: tcn
@@ -172,6 +190,7 @@ variants:
 
   # ===== CONTROL KNOBS (A4b sensitivity) =====
   - name: knob_retest_true
+    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: tcn
     strategy_actions: true
     allow_agent_sl_mode: true
@@ -182,6 +201,7 @@ variants:
     arm_requires_retest: true
 
   - name: knob_age_20
+    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: tcn
     strategy_actions: true
     allow_agent_sl_mode: true
@@ -192,6 +212,7 @@ variants:
     candidate_max_age_bars: 20
 
   - name: knob_age_60
+    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: tcn
     strategy_actions: true
     allow_agent_sl_mode: true
@@ -203,31 +224,39 @@ variants:
 
   # ===== EXISTING MATRIX (control group, unchanged by A4) =====
   - name: ablation_baseline_unconditional
+    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     use_vae: 0
 
   - name: ablation_conditional_narrative
+    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     use_vae: 1
 
   - name: ablation_transformer_encoder
+    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: transformer
 
   - name: ablation_sac_agent
+    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     algo: sac
 
   - name: ablation_discrete_actions
+    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     algo: ppo
     arch: tcn
 
   - name: ablation_pd_context
+    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     include_pd_context: true
     arch: tcn
 
   - name: ablation_po3_ifvg
+    reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md
     strategy: po3_ifvg
     include_pd_context: true
     arch: tcn
 
   - name: ablation_distribution
+    reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md
     strategy: distribution
     include_pd_context: true
     arch: tcn

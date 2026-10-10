@@ -1,6 +1,6 @@
 """Aggregate ablation JSON reports into a comparison table.
 
-Reads ``results/ablations/*.json`` produced by ``scripts/ablation_runner.py``
+Reads ``results/ablations/*.json`` produced by ``scripts/matrix/ablation_runner.py``
 and prints a markdown-friendly table of mean OOS metrics (Sharpe, MaxDD,
 trades, win rate, key ``pnl_dist_*`` extras when present).
 

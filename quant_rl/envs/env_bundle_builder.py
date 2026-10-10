@@ -111,6 +111,19 @@ def _bundle_source_fingerprints(cfg: DictConfig) -> dict[str, dict[str, Any]]:
     return fingerprints
 
 
+def _bars_digest(bars: pd.DataFrame) -> str:
+    """SHA-256 over every stored price/volume value of the train bars."""
+    import hashlib
+
+    digest = hashlib.sha256()
+    for column in ("open", "high", "low", "close", "volume", "tickvol", "spread"):
+        if column in bars:
+            values = bars[column].to_numpy(dtype=np.float64, copy=False)
+            digest.update(column.encode())
+            digest.update(np.ascontiguousarray(values).tobytes())
+    return digest.hexdigest()
+
+
 def build_env_bundle(
     cache_dir: Path | str,
     bars: pd.DataFrame,
@@ -181,6 +194,8 @@ def build_env_bundle(
         "rows": len(bars),
         "first_bar_ns": int(index[0].value) if len(index) else None,
         "last_bar_ns": int(index[-1].value) if len(index) else None,
+        # Content digest: endpoints alone miss corrected bars in the middle (plan E3).
+        "bars_sha256": _bars_digest(bars),
     }
     fingerprints = _bundle_source_fingerprints(cfg)
     fingerprints["bundle_input"] = input_signature

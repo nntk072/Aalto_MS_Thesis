@@ -99,8 +99,8 @@ def feature_cache_content_hash(
     """Stable short hash for feature-cache invalidation (TI-3).
 
     Inputs: ``FEATURE_CACHE_VERSION``, resolved ``cfg.features`` (plus tz keys
-    that affect PD/session), primary length / index bounds / close endpoints,
-    and optional ``train_mask`` summary.
+    that affect PD/session), primary length / index bounds, every OHLCV/spread
+    value, and the full ``train_mask``.
     """
     h = hashlib.sha256()
     h.update(FEATURE_CACHE_VERSION.encode())
@@ -123,14 +123,17 @@ def feature_cache_content_hash(
     if len(primary) > 0:
         h.update(str(primary.index[0]).encode())
         h.update(str(primary.index[-1]).encode())
-        closes = primary["close"].to_numpy(dtype=np.float64, copy=False)
-        h.update(closes[:64].tobytes())
-        h.update(closes[-64:].tobytes())
+        # Hash every price/volume value, not just endpoints: a corrected bar in the
+        # middle of the series must invalidate the cache (see plan item B3).
+        for column in ("open", "high", "low", "close", "volume", "tickvol", "spread"):
+            if column in primary:
+                values = primary[column].to_numpy(dtype=np.float64, copy=False)
+                h.update(column.encode())
+                h.update(np.ascontiguousarray(values).tobytes())
     if train_mask is not None:
-        mask_arr = np.asarray(train_mask, dtype=bool)
+        mask_arr = np.ascontiguousarray(np.asarray(train_mask, dtype=bool))
         h.update(str(int(mask_arr.sum())).encode())
-        h.update(mask_arr[:64].tobytes())
-        h.update(mask_arr[-64:].tobytes())
+        h.update(mask_arr.tobytes())
     return h.hexdigest()[:16]
 
 

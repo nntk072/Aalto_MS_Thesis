@@ -588,6 +588,16 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             bool(trader_actions) if trader_actions is not None else bool(strategy_actions)
         )
 
+        # CompositeReward zeroes both dsr and sweep weights in pnl mode, so sweep
+        # inputs would drop the realized-PnL term entirely. Refuse the combination
+        # instead of training on a signal that is only strategy shaping (plan E5).
+        if self.reward_mode == "pnl" and use_sweep_reward:
+            raise ValueError(
+                "reward_mode='pnl' is incompatible with use_sweep_reward=True: the "
+                "composite reward would drop the PnL term. Use reward_mode='dsr' for "
+                "sweep reward."
+            )
+
         # Initialize reward function. Training breaches are a small terminal
         # spike; eval keeps the -10 report. The guardrail still ends the episode.
         self.reward_fn: DSRReward | CompositeReward | PnLReward | RMultipleReward

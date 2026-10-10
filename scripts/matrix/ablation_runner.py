@@ -284,6 +284,14 @@ def load_experiments(path: Path) -> dict[str, Any]:
 
 
 def main() -> None:
+    import sys as _sys
+
+    print(
+        "WARNING: ablation_runner.py does not use quant_rl.train.variant_resolver and runs "
+        "one shared features CSV for every variant. Prefer scripts/train/train_one_variant.sh "
+        "for comparable results (see CHANGES.md).",
+        file=_sys.stderr,
+    )
     """Train and score every selected variant, writing one JSON report each."""
     args = parse_args()
     spec = load_experiments(Path(args.experiments))

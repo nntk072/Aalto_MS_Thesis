@@ -17,12 +17,13 @@ set -euo pipefail
 # With no argument, all variants in scripts/variant_list.txt are selected.
 # Use "list" as the argument to print the available variants and exit.
 
-REPO="${TRITON_REPO:-/scratch/work/nguyenl37/Aalto_MS_Thesis}"
+REPO="${TRITON_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 RUN_STAMP="${RUN_STAMP:-$(date +%Y%m%d_%H%M%S)}"
 OUT_DIR="${OUT_DIR:-$REPO/outputs/gpu_matrix_auto_${RUN_STAMP}}"
 LOG_DIR="${LOG_DIR:-$OUT_DIR/logs}"
 SEED="${SEED:-42}"
-STEPS="${STEPS:-20000000}"
+# Empty = steps declared per variant in config/experiments.yaml (resolved by the launcher).
+STEPS="${STEPS:-}"
 VARIANT_LIST="$REPO/scripts/variant_list.txt"
 SELECTION="${1:-all}"
 
@@ -55,7 +56,7 @@ done
 
 REMAINING_VARIANTS=()
 for variant in "${SELECTED_VARIANTS[@]}"; do
-  if [[ -f "$OUT_DIR/$variant.done" ]]; then
+  if [[ -f "$OUT_DIR/${variant}__seed${SEED}.done" ]]; then
     echo "SKIP completed variant=$variant"
   else
     REMAINING_VARIANTS+=("$variant")
@@ -387,11 +388,11 @@ if [[ "$IN_CURRENT_ALLOCATION" -eq 2 ]]; then
 fi
 
 run_variant() {
+  # No resume: train_rl has no checkpoint-restore path. A rolled-over job restarts
+  # its variant from scratch, and the seed-keyed .done marker keeps finished seeds.
   local variant="$1" gpu_id="$2"
-  local resume=""
-  resume="$(find "$OUT_DIR/$variant" -type f -name ppo_latest.zip -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-)"
   VARIANT="$variant" SEED="$SEED" STEPS="$STEPS" GPU_ID="$gpu_id" \
-    QUANT_RL_MAX_N_ENVS="$ENVS" OUT_DIR="$OUT_DIR" LOG_DIR="$LOG_DIR" RESUME="$resume" \
+    QUANT_RL_MAX_N_ENVS="$ENVS" OUT_DIR="$OUT_DIR" LOG_DIR="$LOG_DIR" \
     bash "$REPO/scripts/train/train_one_variant.sh"
 }
 

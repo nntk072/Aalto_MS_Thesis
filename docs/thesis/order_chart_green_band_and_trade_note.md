@@ -24,7 +24,7 @@ Root cause (verified, **not** a plotting regression):
   246–249:
 
   ```python
-  red   = _clip_band(metrics.entry_price, metrics.sl_price, y0, y1) if show_sl_tp else None
+  red = _clip_band(metrics.entry_price, metrics.sl_price, y0, y1) if show_sl_tp else None
   green = _clip_band(metrics.entry_price, metrics.tp_price, y0, y1) if show_sl_tp else None
   ```
 
@@ -224,7 +224,7 @@ In `order_levels()`, when `ema_exit` is true and there is no `tp_price`, build t
 green band from **entry -> exit_price** instead of leaving `green = None`:
 
 ```python
-red   = _clip_band(metrics.entry_price, metrics.sl_price, y0, y1) if show_sl_tp else None
+red = _clip_band(metrics.entry_price, metrics.sl_price, y0, y1) if show_sl_tp else None
 green = _clip_band(metrics.entry_price, metrics.tp_price, y0, y1) if show_sl_tp else None
 if show_sl_tp and green is None and ema_exit and metrics.exit_price is not None:
     green = _clip_band(metrics.entry_price, metrics.exit_price, y0, y1)

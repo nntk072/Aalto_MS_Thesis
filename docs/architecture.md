@@ -581,8 +581,7 @@ class MyReward:
 
     def reset(self) -> None: ...
 
-    def __call__(self, *, position_changed: bool, direction: int,
-                 my_sweep_flag: bool) -> float:
+    def __call__(self, *, position_changed: bool, direction: int, my_sweep_flag: bool) -> float:
         if not position_changed or direction == 0:
             return 0.0
         ...
