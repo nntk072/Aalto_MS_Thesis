@@ -58,3 +58,15 @@ All measurements ran on allocated GH200 GPU compute node in Slurm 20877341; exis
 | 861.6 MB | 32 | 8192 | 9.01 | 908.7 | 12.24 |
 
 Cgroup values are point-in-time, not monitored peaks. Probe memory includes baseline allocation. Workers scale memory even with mmap, and increased n_envs can cause CPU contention. Compare matched production configurations and collect peaks before choosing workers/parallelism. Hold campaign core-18x5 suspended pending full parity and workload comparisons.
+
+## Matched seven-day frames/bundle memory comparison (2026-10-10)
+GPU-node Slurm 20877341, same feature pipeline and seven-day train slice, environment-only vector step probe (128 steps), no PPO gradient phases. Full raw JSON is at outputs/gpu_campaigns/core-18x5/reports/{frames,bundle}_memory_matched.json (ignored run outputs).
+
+| Backend | n_envs | cgroup start GB | cgroup steady GB | added cgroup GB | tree PSS MiB | startup s |
+|---|---:|---:|---:|---:|---:|---:|
+| frames | 8 | 10.63 | 13.84 | 3.20 | 6873 | 13.78 |
+| bundle | 8 | 13.25 | 14.37 | 1.12 | 5886 | 1.94 |
+| frames | 16 | 10.54 | 17.14 | 6.60 | 10011 | 26.61 |
+| bundle | 16 | 13.62 | 15.14 | 1.51 | 6590 | 0.66 |
+
+The different starting memory indicates cache/cgroup effects; incremental cgroup growth is more informative than absolute steady memory here, but not a peak. Bundles reduced incremental memory in this matched short-slice experiment by about 2.08 GB (8 envs) and 5.09 GB (16 envs), and reduced process PSS. Results do not extrapolate to 90 production runs. Next gates remain full train-split parity with all strategies, peak profiling of concurrent PPO gradient phases, and small end-to-end pilot with checkpoint and OOS validation. Do not restart core-18x5 on these findings alone.
