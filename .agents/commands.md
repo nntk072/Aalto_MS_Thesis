@@ -1,5 +1,9 @@
 # Commands Reference — Aalto_MS_Thesis
 
+> Agent-oriented examples. The canonical command catalog is
+> [RUNNING_COMMANDS](../docs/operations/RUNNING_COMMANDS.md); CI policy
+> lives in [ci-verification](rules/ci-verification.md).
+
 ## Setup
 
 ```bash
@@ -25,8 +29,8 @@ Merge CI bar (GitHub / Orchestra phase 9) still runs `pytest tests/ -v`.
 ## Data Pipeline
 
 ```bash
-python scripts/prepare_data.py             # raw CSV → parquet → features
-python scripts/prepare_data.py --force     # ignore cache, reprocess
+python scripts/data/prepare_data.py             # raw CSV → parquet → features
+python scripts/data/prepare_data.py --force     # ignore cache, reprocess
 ```
 
 ## Training
@@ -40,14 +44,14 @@ uv run python -m quant_rl.train.train_rl --config config/features/full_po3_mtf.y
 uv run python -m quant_rl.train.train_rl --walk-forward --wf-splits 5 --purge-bars 60
 uv run python -m quant_rl.train.run_backtest                # random policy backtest
 uv run python -m quant_rl.train.run_baselines                 # baseline strategies
-uv run python scripts/compare_encoders.py                     # encoder comparison
+uv run python scripts/train/compare_encoders.py                     # encoder comparison
 ```
 
 ## Evaluation
 
 ```bash
 uv run python -m quant_rl.eval.eval_run --run outputs/<run_dir>
-uv run python scripts/report_g3.py --runs-dir outputs
+uv run python scripts/eval/report_g3.py --runs-dir outputs
 ```
 
 ## Testing
@@ -101,6 +105,6 @@ make deps-check
 ## Config Overrides
 
 ```bash
-python scripts/prepare_data.py data.cache_dir=my_cache env.obs_window=30
+python scripts/data/prepare_data.py data.cache_dir=my_cache env.obs_window=30
 uv run python -m quant_rl.train.train_rl training.max_days=60
 ```

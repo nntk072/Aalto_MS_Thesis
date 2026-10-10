@@ -1,5 +1,9 @@
 # Architecture Map — Aalto_MS_Thesis
 
+> Historical agent navigation snapshot. The authoritative architecture is
+> [docs/architecture.md](../docs/architecture.md). Consult the
+> [domain maps](domain_maps/) and current source for module responsibilities.
+
 ## Dependency Graph
 
 ```

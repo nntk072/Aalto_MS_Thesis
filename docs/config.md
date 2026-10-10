@@ -157,3 +157,7 @@ train/live parity.
 - [architecture.md](architecture.md) — pipeline contracts and overlay invariant
 - [RUNNING_COMMANDS.md](operations/RUNNING_COMMANDS.md) — CLI examples
 - [DEPLOYMENT.md](operations/DEPLOYMENT.md) — live risk alignment (`ftmo` vs `live_risk_overrides`)
+
+## Current action-vector and TP contract
+
+See [implementation-verified research reference](research_reference.md#action-space-layout-current-implementation) for the dimension formula, ordering, and opt-in TP/SL behavior. The base config sets `env.strategy_actions: false` and `env.action_type: "discrete"`, so the default action space is `Discrete(20)`. If `env.strategy_actions: true`, `allow_agent_sl_mode: true`, and direction control, TP mode and multi-TP are disabled, the overlay has six Box dimensions. With baseline continuous actions, the action space is a one-dimensional Box. See `quant_rl/envs/trading_env.py`.

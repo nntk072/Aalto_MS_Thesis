@@ -143,7 +143,7 @@ def test_launcher_dry_run_prints_every_seed() -> None:
         "VARIANT": "ablation_sac_agent",
         "DRY_RUN": "1",
         "OUT_DIR": out_dir,
-        "PYTHON": "python3",
+        "PYTHON": sys.executable,
     }
     proc = subprocess.run(
         ["bash", str(LAUNCHER)], env=env, capture_output=True, text=True, check=False, timeout=120
@@ -163,7 +163,7 @@ def test_launcher_refuses_vae_variant_without_vae_path() -> None:
         "VARIANT": "ablation_conditional_narrative",
         "DRY_RUN": "1",
         "OUT_DIR": tempfile.mkdtemp(),
-        "PYTHON": "python3",
+        "PYTHON": sys.executable,
     }
     proc = subprocess.run(
         ["bash", str(LAUNCHER)], env=env, capture_output=True, text=True, check=False, timeout=120

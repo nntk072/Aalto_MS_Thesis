@@ -7,7 +7,7 @@ using structure-aware features (SMT divergence, PO3 state, liquidity sweeps, FVG
 
 ```bash
 uv sync                              # install deps
-python scripts/prepare_data.py       # raw CSV → parquet → features
+python scripts/data/prepare_data.py       # raw CSV → parquet → features
 python -m quant_rl.train.train_rl --mvp   # smoke test (30 days)
 
 # Local (implementation): scoped checks only

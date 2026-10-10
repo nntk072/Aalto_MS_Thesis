@@ -17,6 +17,12 @@
 - [Adding a strategy](#adding-a-strategy)
 - [References](#references)
 
+> **Terminology:** The historical "Idea 1/2/3" labels refer to specific
+> strategy variants in earlier experiments. Actual behavior is selected by
+> merged configuration and the `--strategy` / `--variant` options. See
+> [research reference](research_reference.md) and
+> [reproducibility](reproducibility.md) before interpreting results.
+
 ## Introduction
 
 This describes how the repository turns raw M1 price files into a trained
@@ -667,4 +673,14 @@ Contract tests:
 
 
 
+
+> Agent navigation: the [legacy architecture map](../.agents/architecture.md)
+> documents historical module boundaries. The current core data flow is
+> `quant_rl/data/` (M1 ingestion, alignment, splits) →
+> `quant_rl/features/` (indicators, PO3) →
+> `quant_rl/envs/` and `quant_rl/backtest/` (observations, execution,
+> position/risk mechanics) → `quant_rl/models/` and `quant_rl/train/`
+> (policy and training) → `quant_rl/evaluation/` and `quant_rl/eval/`
+> (evaluation). Agents should use the [domain maps](../.agents/domain_maps/)
+> for file discovery and verify the actual implementation.
 

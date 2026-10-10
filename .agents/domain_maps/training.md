@@ -47,7 +47,7 @@
 ## Consumers (Callers)
 
 - `scripts/train_rl.py` (CLI wrapper)
-- `scripts/compare_encoders.py` (encoder comparison)
+- `scripts/train/compare_encoders.py` (encoder comparison)
 
 ## Tests
 

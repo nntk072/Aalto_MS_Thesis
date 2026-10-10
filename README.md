@@ -4,7 +4,7 @@
 built on cleaned US100 (Nasdaq-100) M1 data and trained with Stable-Baselines3 PPO/SAC.
 
 This repository implements the full pipeline: data ingestion → multi-timeframe feature
-engineering → PO3 (Price Order Block 3) / FVG / IFVG signal detection → backtesting →
+engineering → PO3 (Power of Three) / FVG / IFVG signal detection → backtesting →
 RL training → out-of-sample evaluation → chart visualization → optional live MT5 bridge.
 
 ---
@@ -32,7 +32,7 @@ RL training → out-of-sample evaluation → chart visualization → optional li
 ## Overview
 
 This project builds a reinforcement learning agent that trades US100 using **multi-timeframe
-PO3 (Price Order Block 3) signals** — a price-action methodology combining:
+PO3 (Power of Three) signals** — a price-action methodology combining:
 
 | Layer | Timeframe | What it detects |
 |-------|-----------|-----------------|
@@ -50,6 +50,8 @@ learns position sizing, entry timing, and stop-loss/take-profit placement.
 | Page | Purpose |
 |------|---------|
 | [docs/README.md](docs/README.md) | Documentation index |
+| [docs/reproducibility.md](docs/reproducibility.md) | Training/evaluation pipeline and evidence requirements |
+| [docs/research_reference.md](docs/research_reference.md) | Implementation-verified action, data, reward and risk contracts |
 | [docs/architecture.md](docs/architecture.md) | Pipeline, contracts, invariants, adding a strategy |
 | [docs/config.md](docs/config.md) | YAML config catalog and cache versioning |
 | [docs/operations/RUNNING_COMMANDS.md](docs/operations/RUNNING_COMMANDS.md) | Command reference for research sessions |
@@ -91,8 +93,8 @@ The project uses **arch-matching virtualenvs** on Triton (shared NFS):
 
 | Architecture | Host | Venv | Setup |
 |--------------|------|------|-------|
-| **aarch64** | GH200 GPU nodes | `.venv` | `uv sync` or `scripts/setup_venv.sh` |
-| **x86_64** | H200, local, CI | `.venv-x86` | `scripts/setup_venv_x86.sh` |
+| **aarch64** | GH200 GPU nodes | `.venv` | `uv sync` or `scripts/setup/setup_venv.sh` |
+| **x86_64** | H200, local, CI | `.venv-x86` | `scripts/setup/setup_venv_x86.sh` |
 
 Do not cross-activate (sourcing the wrong-arch venv gives "Exec format error").
 
@@ -101,7 +103,7 @@ git clone https://github.com/nntk072/Aalto_MS_Thesis.git
 cd Aalto_MS_Thesis
 
 # x86_64 (local, H200, CI)
-scripts/setup_venv_x86.sh
+scripts/setup/setup_venv_x86.sh
 source scripts/triton/activate_venv.sh
 
 # aarch64 (GH200) — run on an aarch64 node
@@ -117,14 +119,14 @@ source .venv/bin/activate
 
 ```bash
 cd Aalto_MS_Thesis
-scripts/setup_venv.sh          # auto-detects arch (.venv or .venv-x86)
+scripts/setup/setup_venv.sh          # auto-detects arch (.venv or .venv-x86)
 source scripts/triton/activate_venv.sh
 ```
 
 ### Prepare data
 
 ```bash
-python scripts/prepare_data.py
+python scripts/data/prepare_data.py
 ```
 
 ### Run tests
@@ -348,7 +350,7 @@ Standard merge bar (mirrors `.github/workflows/ci.yml` and `orchestra/ci_gate.py
 ## Known Limitations / Future Work
 
 - **VAE feature extractor:** optional via `--use-vae --vae-path <checkpoint.pth>`
-  (train the VAE first with `scripts/train_vae.py`). Default training path leaves VAE off.
+  (train the VAE first with `scripts/train/train_vae.py`). Default training path leaves VAE off.
 - **Rule-based live baseline (`live_trading.py`):** uses simplified guardrail criteria compared to the full RL promotion protocol.
 - **Multi-timeframe alignment:** some higher-timeframe feature alignment edge cases may benefit from additional validation.
 

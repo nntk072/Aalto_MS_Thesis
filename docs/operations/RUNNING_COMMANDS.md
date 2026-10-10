@@ -1,5 +1,15 @@
 # Running Commands
 
+The [agent command quick reference](../../.agents/commands.md) is a
+convenience index; this page owns executable research and operations
+commands. Agent-specific commit checks belong to
+[CI verification rules](../../.agents/rules/ci-verification.md).
+Additional command discovery (read-only, check the actual CLI help):
+
+```bash
+uv run python scripts/train/compare_encoders.py --help
+uv run python scripts/eval/report_g3.py --help
+```
 Command catalog for research, evaluation, and live sessions. For architecture
 and config details see [architecture.md](../architecture.md) and
 [config.md](../config.md).
@@ -12,14 +22,14 @@ Arch-matching venvs (Triton shared NFS):
 
 ```bash
 cd Aalto_MS_Thesis
-scripts/setup_venv.sh                    # aarch64 -> .venv, x86_64 -> .venv-x86
+scripts/setup/setup_venv.sh                    # aarch64 -> .venv, x86_64 -> .venv-x86
 source scripts/triton/activate_venv.sh   # use inside GPU shell on Triton
 ```
 
 | Arch | Venv | One-time setup |
 |------|------|----------------|
 | aarch64 (GH200) | `.venv` | `uv sync` on aarch64 node |
-| x86_64 (H200, local) | `.venv-x86` | `scripts/setup_venv_x86.sh` |
+| x86_64 (H200, local) | `.venv-x86` | `scripts/setup/setup_venv_x86.sh` |
 
 ---
 
@@ -114,7 +124,7 @@ uv run python -m quant_rl.train.train_rl --mvp --algo sac --arch gru --reward sw
 uv run python -m quant_rl.train.train_rl --mvp --strategy po3_ifvg --seed=42
 uv run python -m quant_rl.train.train_rl --mvp --strategy distribution --seed=42
 
-# Optional frozen VAE narrative latent (train checkpoint first via scripts/train_vae.py)
+# Optional frozen VAE narrative latent (train checkpoint first via scripts/train/train_vae.py)
 uv run python -m quant_rl.train.train_rl --mvp --use-vae \
     --vae-path output/vae/vae_best.pth --vae-config config/vae.yaml --seed=42
 
@@ -265,7 +275,7 @@ orchestra doctor              # Tier-0 health check (no inference)
 orchestra run "task description"   # full pipeline (verify runs CI gate)
 ```
 
-See [orchestra/README.md](../orchestra/README.md).
+See [orchestra/README.md](../../orchestra/README.md).
 
 ---
 
@@ -294,3 +304,5 @@ uv run python -m quant_rl.train.train_rl --mvp env.obs_window=30 \
 | `train_rl` (no `--mvp`) | Full RL training | 10+ min |
 | `eval_run --run outputs/...` | Re-evaluate checkpoint | ~1 min |
 | `orchestra run "task"` | Multi-model pipeline | varies |
+
+For provenance and command validity, see [reproducibility](../reproducibility.md).

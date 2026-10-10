@@ -1,9 +1,22 @@
 # Thesis Eval Pack (T-04.1)
 
+> Provenance status: the historical metrics below are reported values;
+> this documentation consolidation did not reproduce or independently
+> validate the checkpoints, trade logs or evaluation outputs. For thesis
+> claims require the evidence ledger in [reproducibility](../reproducibility.md)
+> and obey the [validation protocol](validation_protocol.md).
+
 Frozen commands and artifact locations for chapter tables. Engine default:
 **TradingEnv** (see [validation_protocol.md](validation_protocol.md)).
 
 Locked OOS (`test_start: 2026-01-01`) is **final report only**.
+
+> **Historical evidence only (2026-09-21 seed-50 campaign).** The tables below
+> describe the recorded run directories and may be superseded by newer campaigns.
+> They are not a verified current multi-seed comparison. Before using any values
+> in the thesis, re-evaluate the exact checkpoint and raw artifacts following
+> [reproducibility and provenance](../reproducibility.md). Zero-trade overlay
+> arms are failed comparisons, not successful strategies.
 
 ## Frozen three-arm 20M campaign (seed 50)
 
@@ -71,7 +84,7 @@ Old seed-50 Idea 1 had **no** trailing-DD key and Gaussian `std` exploded
 
 ```bash
 # Full three-arm 20M (login tmux + one GH200 srun)
-bash scripts/run_encoder_slot_tmux.sh
+# Historical launcher unavailable in current checkout
 
 # MVP smoke (not used for chapter tables)
 uv run python -m quant_rl.train.train_rl --mvp --seed=50

@@ -29,7 +29,7 @@
 ## Consumers (Callers)
 
 - `quant_rl/train/train_rl.py` (calls `build_agent`)
-- `scripts/compare_encoders.py` (encoder comparison)
+- `scripts/train/compare_encoders.py` (encoder comparison)
 - `quant_rl/train/auxiliary_training.py` (auxiliary head training)
 - `quant_rl/live/rl_strategy.py` (model loading for live)
 

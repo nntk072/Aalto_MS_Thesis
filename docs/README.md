@@ -2,6 +2,10 @@
 
 | Page | Purpose |
 |------|---------|
+| [reproducibility.md](reproducibility.md) | Data flow, training/evaluation CLI, artifact provenance and limitations |
+| [operations/triton.md](operations/triton.md) | Triton SSH, HPC environment, scheduling and logs |
+| [operations/live-status.md](operations/live-status.md) | MT5 paper/live boundaries and implementation status |
+| [research_reference.md](research_reference.md) | Source-verified environment, action-space, split, reward and risk contracts |
 | [architecture.md](architecture.md) | Pipeline stages, contracts, invariants, adding a strategy |
 | [architecture/thesis_audit_2026.md](architecture/thesis_audit_2026.md) | Thesis F3–F8/F10 audit citations |
 | [config.md](config.md) | YAML config catalog, feature flags, cache versioning |

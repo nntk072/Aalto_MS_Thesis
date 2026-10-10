@@ -103,3 +103,5 @@ knowledge**:
       `live_risk_overrides` (defaults assume $100k)
 - [ ] Kill-switch limits re-checked against `ftmo:` block
 - [ ] First live session supervised end-to-end, then reviewed before unattended runs
+
+For provenance and command validity, see [reproducibility](../reproducibility.md).

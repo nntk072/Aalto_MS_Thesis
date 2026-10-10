@@ -41,7 +41,7 @@ Two packages: `quant_rl/evaluation/` (metrics, walk-forward, reporting) and
 ## Consumers (Callers)
 
 - `quant_rl/train/train_rl.py` (evaluates after training)
-- `scripts/report_g3.py` (report generation)
+- `scripts/eval/report_g3.py` (report generation)
 
 ## Tests
 

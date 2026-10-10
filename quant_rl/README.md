@@ -11,7 +11,7 @@ model wiring, training, evaluation, and the live MT5 bridge.
 uv sync
 
 # 2. Prepare data (raw CSV → parquet → feature cache)
-python scripts/prepare_data.py
+python scripts/data/prepare_data.py
 
 # 3. Verify baselines run on real data
 uv run python -m quant_rl.train.run_baselines
@@ -46,10 +46,10 @@ quant_rl/
   live/           RLStrategyAdapter (MT5 bridge)
   utils/          device helpers
 scripts/
-  prepare_data.py           raw → parquet → features
-  compare_encoders.py       encoder architecture comparison
-  verify_strategy_features.py  strategy column contract check
-  report_g3.py              run-report gate
+  data/prepare_data.py      raw → parquet → features
+  train/compare_encoders.py encoder architecture comparison
+  utility/verify_strategy_features.py  strategy column contract check
+  eval/report_g3.py         run-report gate
 tests/            causal features, guardrails, envs, integration, live bridge
 ```
 
@@ -76,12 +76,12 @@ obs["account"] : float32  [batch, 5]      (normalised account state vector)
    `arch` argument (`tcn` / `gru` / `transformer`).
 2. **`quant_rl/models/agent.py`** — `build_agent(env, cfg, arch, algo,
    use_vae)` returns the SB3 `PPO` / `SAC` model wired to that encoder, used
-   by `quant_rl/train/train_rl.py` and `scripts/compare_encoders.py`.
+   by `quant_rl/train/train_rl.py` and `scripts/train/compare_encoders.py`.
 
 ## Config overrides (key=value)
 
 ```bash
-python scripts/prepare_data.py data.cache_dir=my_cache env.obs_window=30
+python scripts/data/prepare_data.py data.cache_dir=my_cache env.obs_window=30
 uv run python -m quant_rl.train.train_rl --mvp --strategy po3_ifvg
 ```
 

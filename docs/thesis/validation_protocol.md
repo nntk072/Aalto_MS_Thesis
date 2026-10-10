@@ -30,3 +30,5 @@ Default dates live in `quant_rl/config/default.yaml` and `config/experiments.yam
 
 Unless a table caption says otherwise, thesis metrics come from **`TradingEnv`**
 episode evaluation (`run_episode` / `evaluate_model`), not `run_backtest`.
+
+For provenance and checkpoint validity, see [reproducibility](../reproducibility.md).
