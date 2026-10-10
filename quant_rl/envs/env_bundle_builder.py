@@ -142,6 +142,16 @@ def build_env_bundle(
             if "spread" in bars
             else np.full(len(bars), np.nan, dtype=np.float64)
         ),
+        "bar_volume": (
+            bars["volume"].to_numpy(dtype=np.float64, copy=True)
+            if "volume" in bars
+            else np.full(len(bars), np.nan, dtype=np.float64)
+        ),
+        "bar_tickvol": (
+            bars["tickvol"].to_numpy(dtype=np.float64, copy=True)
+            if "tickvol" in bars
+            else np.full(len(bars), np.nan, dtype=np.float64)
+        ),
         "bar_time_ns": index.to_numpy(dtype="datetime64[ns]").view(np.int64).copy(),
         "bar_session": session_codes,
         "bar_session_id": session_ids,
@@ -209,6 +219,12 @@ def bars_for_export(bundle_path: Path | str) -> pd.DataFrame:
         "close": ohlc[:, 3],
         "spread": arrays["bar_spread"],
     }
+    # Guard for bundles built before volume/tickvol were stored (see
+    # BUNDLE_VERSION): older caches lack these arrays and must still export.
+    if "bar_volume" in arrays:
+        values["volume"] = arrays["bar_volume"]
+    if "bar_tickvol" in arrays:
+        values["tickvol"] = arrays["bar_tickvol"]
     if labels.get("has_session_id", False):
         values["session_id"] = arrays["bar_session_id"]
     return pd.DataFrame(values, index=index, copy=False)

@@ -1030,12 +1030,15 @@ def main() -> None:
             episodic=False,
         )
         best_count = min(20_000, train_bar_count)
-        best_bars = train_bars.iloc[:best_count]
-        best_features = train_feat.iloc[:best_count]
+        # .copy() detaches these from the full train arrays so that the
+        # `del train_bars, train_feat` below actually frees the base (a bare
+        # .iloc slice would keep the whole 351k-row frame alive).
+        best_bars = train_bars.iloc[:best_count].copy()
+        best_features = train_feat.iloc[:best_count].copy()
         dash_cfg = _dashboard_block(cfg)
         dashboard_count = min(int(dash_cfg.get("eval_bars", 20_000)), train_bar_count)
-        dashboard_bars = train_bars.iloc[:dashboard_count]
-        dashboard_features = train_feat.iloc[:dashboard_count]
+        dashboard_bars = train_bars.iloc[:dashboard_count].copy()
+        dashboard_features = train_feat.iloc[:dashboard_count].copy()
         log.info("Built shared environment bundle: %s", bundle_path)
     elif data_source == "frames":
         obs_mmap = _publish_obs_memmap(train_feat, train_bars, cfg, run_dir / "obs_features.npy")

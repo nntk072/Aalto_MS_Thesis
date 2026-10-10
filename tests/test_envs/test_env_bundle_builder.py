@@ -106,3 +106,34 @@ def test_bundled_observation_matrix_matches_frames_path(tmp_path: Path) -> None:
     np.testing.assert_array_equal(bundle["tick_ask"], tick_ask)
     np.testing.assert_array_equal(bundle["pre_ny_seq"][0], next(iter(pre_ny.values())))
     assert bundle.manifest["labels"]["session"] == ["ny", "off"]
+
+
+def test_bundle_stores_volume_and_export_includes_it(tmp_path: Path) -> None:
+    """Volume and tickvol survive the bundle round trip for chart exports."""
+    from quant_rl.envs.env_bundle_builder import bars_for_export, build_env_bundle
+    from quant_rl.envs.strategies import BaselineStrategy
+
+    bars = _make_deterministic_bars(n=64)
+    features = _make_features(bars)
+    config = OmegaConf.create(
+        {"env": {"strategy_actions": False, "obs_window": 10}, "data": {"raw_dir": str(tmp_path)}}
+    )
+    bundle_path = build_env_bundle(
+        tmp_path,
+        bars,
+        features,
+        config,
+        raw_columns=BaselineStrategy().raw_columns,
+        feature_config_hash="volume-v1",
+        tickbook=None,
+        pre_ny_by_date=None,
+    )
+    exported = bars_for_export(bundle_path)
+    assert "volume" in exported.columns
+    assert "tickvol" in exported.columns
+    np.testing.assert_array_equal(
+        exported["volume"].to_numpy(), bars["volume"].to_numpy(dtype=np.float64)
+    )
+    np.testing.assert_array_equal(
+        exported["tickvol"].to_numpy(), bars["tickvol"].to_numpy(dtype=np.float64)
+    )

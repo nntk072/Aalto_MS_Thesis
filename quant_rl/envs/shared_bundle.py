@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-BUNDLE_VERSION = 1
+BUNDLE_VERSION = 2
 _ARRAY_NAME = re.compile(r"^[A-Za-z0-9_]+$")
 _RELEVANT_CONFIG_PATHS = (
     "env.obs_window",

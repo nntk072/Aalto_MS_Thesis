@@ -66,6 +66,11 @@ from .observation import (
 #: default rather than the old hard-coded five.
 _DEFAULT_MINUTES_PER_STEP = 1.0
 
+# Broker session clock used for wall-clock timestamps (trade log, equity curve).
+# Frames mode indexes are tz-aware in this zone; the bundle mode stores the same
+# UTC epoch as a naive datetime64[ns] array, so both paths are normalised here.
+BAR_TIME_TZ = "Etc/GMT-3"
+
 
 def _minutes_per_step(index: pd.DatetimeIndex) -> float:
     """Median bar spacing in minutes, read from the index itself.
@@ -969,7 +974,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.position: Position | None = None
         self.equity_curve = [self.initial_balance]
         # Wall-clock stamps for each equity_curve point (NY-stepped; not dense M1).
-        t0 = self._bar_times[self.step_idx] if len(self._bar_times) else None
+        t0 = self._bar_time(self.step_idx) if len(self._bar_times) else None
         self.equity_times: list[Any] = [t0]
         self.pnl_history = [0.0]
         self.trade_log: list[dict[str, Any]] = []
@@ -1016,11 +1021,27 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._ep_start_equity = float(self.initial_balance)
         self._ep_reward_sum = 0.0
         self._entry_diag = _empty_entry_diag(self.entry_state_machine is not None)
+
         if self.entry_state_machine is not None:
             self.entry_state_machine.reset()
 
         obs = self._get_observation()
         return obs, {}
+
+    def _bar_time(self, idx: int) -> pd.Timestamp:
+        """Return bar ``idx`` as a tz-aware Timestamp in the broker timezone.
+
+        Frames mode stores tz-aware Timestamps; bundle mode stores a naive
+        ``datetime64[ns]`` array whose values are the UTC epoch of each bar, so
+        the naive value is localised to UTC and converted to the broker
+        timezone. This keeps the two data paths emitting identical (value +
+        timezone) timestamps for the equity curve and trade log.
+        """
+        value = self._bar_times[idx]
+        ts = pd.Timestamp(value)
+        if ts.tzinfo is None:
+            ts = ts.tz_localize("UTC")
+        return ts.tz_convert(BAR_TIME_TZ)
 
     def _create_account(self) -> AccountState:
         """Factory for fresh account state."""
@@ -1258,9 +1279,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             return
         idx = self.step_idx if bar_idx is None else bar_idx
         log_time = (
-            self._bar_times[idx]
+            self._bar_time(idx)
             if 0 <= idx < len(self._bar_times)
-            else self._bar_times[self.step_idx]
+            else self._bar_time(self.step_idx)
         )
         # Touch detection uses the bar range. The next quote must not be the fill.
         _ = (fill_bid, fill_ask)
@@ -2625,7 +2646,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         bar = self._bar_at(self.step_idx)
         feat_row = self._feature_row_at(self.step_idx)
-        bar_time = self._bar_times[self.step_idx]
+        bar_time = self._bar_time(self.step_idx)
         session_id = (
             int(self._session_ids_arr[self.step_idx]) if self._session_ids_arr is not None else 0
         )
@@ -3307,7 +3328,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             bid, ask = self._bar_quote(bar)
             self._apply_position_guards(
                 bar,
-                self._bar_times[cur],
+                self._bar_time(cur),
                 bid,
                 ask,
                 eod=True,
@@ -3330,7 +3351,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             self.broker.mark_to_market(self.account, self.position, (bid, ask))
             self._apply_position_guards(
                 bar,
-                self._bar_times[i],
+                self._bar_time(i),
                 bid,
                 ask,
                 eod=False,
