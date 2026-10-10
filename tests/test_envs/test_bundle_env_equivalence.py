@@ -17,7 +17,10 @@ from tests.test_envs.test_trading_env_golden_traces import (
 
 
 @pytest.mark.parametrize("strategy_actions", [False, True])
-def test_bundle_env_step_trace_matches_frames(tmp_path: Path, strategy_actions: bool) -> None:
+@pytest.mark.parametrize("action_pattern", ["hold", "mixed"])
+def test_bundle_env_step_trace_matches_frames(
+    tmp_path: Path, strategy_actions: bool, action_pattern: str
+) -> None:
     """The same seeded actions produce exactly the same observations and trace."""
     from quant_rl.envs.env_bundle_builder import build_env_bundle
     from quant_rl.envs.strategies import BaselineStrategy
@@ -52,7 +55,8 @@ def test_bundle_env_step_trace_matches_frames(tmp_path: Path, strategy_actions: 
     obs_frames, _ = frames.reset(seed=41)
     obs_shared, _ = shared.reset(seed=41)
     ended = False
-    for action in [0] * 200:
+    actions = [0] * 200 if action_pattern == "hold" else [i % 20 for i in range(200)]
+    for action in actions:
         for key in obs_frames:
             np.testing.assert_array_equal(obs_frames[key], obs_shared[key])
         left = frames.step(action)
@@ -60,7 +64,18 @@ def test_bundle_env_step_trace_matches_frames(tmp_path: Path, strategy_actions: 
         for key in left[0]:
             np.testing.assert_array_equal(left[0][key], right[0][key])
         assert left[1:4] == right[1:4]
-        assert left[4] == right[4]
+        for key, value in left[4].items():
+            other = right[4][key]
+            if isinstance(value, dict):
+                assert isinstance(other, dict)
+                for subkey, subvalue in value.items():
+                    subother = other[subkey]
+                    if isinstance(subvalue, (float, np.floating)) and np.isnan(subvalue):
+                        assert isinstance(subother, (float, np.floating)) and np.isnan(subother)
+                    else:
+                        assert subvalue == subother, (key, subkey)
+            else:
+                assert value == other, key
         obs_frames, obs_shared = left[0], right[0]
         if left[2] or left[3]:
             ended = True

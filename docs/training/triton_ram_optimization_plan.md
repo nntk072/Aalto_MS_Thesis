@@ -45,3 +45,16 @@ Pilot a separately named campaign (baseline, PO3/IFVG, distribution, varied acti
 - Lower cgroup peak memory for matched workloads (not merely lower RSS) and validated aggregate PPO training throughput.
 - No new OOM, reproducible checkpoints, durable logs, resume and auditable scientific provenance.
 
+
+## GPU bundle probe evidence (2026-10-10; exploratory)
+All measurements ran on allocated GH200 GPU compute node in Slurm 20877341; existing prebuilt immutable bundles, CUDA PPO with 15 epochs, n_steps=2048, batch_size=512, and short runs. Saved raw JSON at outputs/gpu_campaigns/core-18x5/reports. These are NOT production throughput or peak RAM comparisons against frames and cannot authorize full rollout.
+
+| Bundle | envs | steps | elapsed seconds | steps/sec | cgroup post-train GB decimal |
+|---|---:|---:|---:|---:|---:|
+| 26.8 MB | 8 | 4096 | 9.34 | 438.5 | 9.87 |
+| 26.8 MB | 16 | 4096 | 5.82 | 703.2 | 10.63 |
+| 26.8 MB | 32 | 4096 | 4.60 | 890.5 | 12.16 |
+| 26.8 MB | 64 | 4096 | 3.55 | 1154.1 | 15.25 |
+| 861.6 MB | 32 | 8192 | 9.01 | 908.7 | 12.24 |
+
+Cgroup values are point-in-time, not monitored peaks. Probe memory includes baseline allocation. Workers scale memory even with mmap, and increased n_envs can cause CPU contention. Compare matched production configurations and collect peaks before choosing workers/parallelism. Hold campaign core-18x5 suspended pending full parity and workload comparisons.
