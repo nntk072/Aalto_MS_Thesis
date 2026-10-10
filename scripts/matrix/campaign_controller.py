@@ -139,6 +139,7 @@ def main() -> int:
     parser.add_argument("--timesteps", type=int, default=20_000_000)
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--n-envs", type=int, default=8)
+    parser.add_argument("--data-source", choices=("frames", "bundle"), default="frames")
     parser.add_argument("--campaign-id", default="core-18x5")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--resume", action="store_true")
@@ -166,6 +167,7 @@ def main() -> int:
                     "total_timesteps": len(jobs) * args.timesteps,
                     "workers": args.workers,
                     "n_envs": args.n_envs,
+                    "data_source": args.data_source,
                     "keys": [j["key"] for j in jobs],
                 },
                 indent=2,
@@ -201,17 +203,19 @@ def main() -> int:
     manifest_path = out / "campaign.json"
     started_time = time.monotonic()
     git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    fingerprint = hashlib.sha256(
-        json.dumps(
-            {"jobs": [x["key"] for x in jobs], "steps": args.timesteps}, sort_keys=True
-        ).encode()
-    ).hexdigest()
+    identity = {"jobs": [x["key"] for x in jobs], "steps": args.timesteps}
+    # Preserve the fingerprint of campaigns created before bundle opt-in.
+    if args.data_source != "frames":
+        identity["data_source"] = args.data_source
+    fingerprint = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
     if manifest_path.exists():
         manifest = read_manifest(manifest_path)
         if not args.resume:
             raise RuntimeError("campaign exists: use --resume")
         if manifest["fingerprint"] != fingerprint:
             raise RuntimeError("resume fingerprint mismatch")
+        if manifest.get("data_source", "frames") != args.data_source:
+            raise RuntimeError("resume data-source mismatch")
         if manifest.get("n_envs") != args.n_envs:
             raise RuntimeError("resume n-envs mismatch")
         jobs = manifest["jobs"]
@@ -232,6 +236,7 @@ def main() -> int:
             "fingerprint": fingerprint,
             "timesteps": args.timesteps,
             "n_envs": args.n_envs,
+            "data_source": args.data_source,
             "workers": args.workers,
             "jobs": jobs,
             "resources": available_resources(),
@@ -279,6 +284,7 @@ def main() -> int:
             OUT_DIR=str(run_out),
             LOG_DIR=str(out / "logs" / "workers"),
             QUANT_RL_MAX_N_ENVS=str(args.n_envs),
+            QUANT_RL_DATA_SOURCE=args.data_source,
             PYTHONUNBUFFERED="1",
         )
         handle = logpath.open("a", encoding="utf-8")

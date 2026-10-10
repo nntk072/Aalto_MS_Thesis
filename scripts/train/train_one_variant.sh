@@ -94,6 +94,12 @@ run_seed() {
   args_txt="$(resolver args "$VARIANT" --seed "$seed" "${RESOLVE_OPTS[@]}")"
   local -a train_args=()
   mapfile -t train_args <<< "$args_txt"
+  if [[ -n "${QUANT_RL_DATA_SOURCE:-}" ]]; then
+    case "$QUANT_RL_DATA_SOURCE" in
+      frames|bundle) train_args+=("env.data_source=$QUANT_RL_DATA_SOURCE") ;;
+      *) echo "ERROR: invalid QUANT_RL_DATA_SOURCE=$QUANT_RL_DATA_SOURCE" >&2; return 2 ;;
+    esac
+  fi
 
   mkdir -p "$run_out" "$LOG_DIR"
   resolver manifest "$VARIANT" --seed "$seed" --out "$run_out/resolved_config.json" \
