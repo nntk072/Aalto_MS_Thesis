@@ -27,17 +27,20 @@ variants:
     reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: tcn
     strategy_actions: true
+    agent_direction_control: true
 
   - name: ladder_a1_sl
     reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: tcn
     strategy_actions: true
+    agent_direction_control: true
     allow_agent_sl_mode: true
 
   - name: ladder_a2_tp
     reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: tcn
     strategy_actions: true
+    agent_direction_control: true
     allow_agent_sl_mode: true
     allow_agent_tp_mode: true
 
@@ -45,6 +48,7 @@ variants:
     reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: tcn
     strategy_actions: true
+    agent_direction_control: true
     allow_agent_sl_mode: true
     allow_agent_tp_mode: true
     allow_multi_tp: true
@@ -53,6 +57,7 @@ variants:
     reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: tcn
     strategy_actions: true
+    agent_direction_control: true
     allow_agent_sl_mode: true
     allow_agent_tp_mode: true
     allow_multi_tp: true
@@ -63,6 +68,7 @@ variants:
     reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
     arch: tcn
     strategy_actions: true
+    agent_direction_control: true
     allow_agent_sl_mode: true
     allow_agent_tp_mode: true
     allow_multi_tp: true
