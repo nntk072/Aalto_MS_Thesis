@@ -132,6 +132,22 @@ def sample_resources(path: pathlib.Path) -> None:
         f.flush()
 
 
+def verify_run_artifacts(run_out: pathlib.Path, key: str) -> tuple[bool, str]:
+    """Require a completed model and training record."""
+    for path in (run_out / key).glob("**/training_log.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            continue
+        if (
+            isinstance(payload, dict)
+            and payload.get("timesteps_completed")
+            and (path.parent / "model").is_dir()
+        ):
+            return True, ""
+    return False, "missing completed training_log.json or model directory"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--variant-file", type=pathlib.Path, default=DEFAULT_VARIANTS)
@@ -323,8 +339,17 @@ def main() -> int:
                 continue
             handle.write(f"{utc()} END key={key} exit={ret}\n")
             handle.close()
-            job.update(status="succeeded" if ret == 0 else "failed", exit_code=ret, ended=utc())
-            if ret == 0:
+            verified, reason = (
+                (True, "") if args.test_worker else verify_run_artifacts(out / "runs", key)
+            )
+            success = ret == 0 and verified
+            job.update(
+                status="succeeded" if success else "failed",
+                exit_code=ret,
+                ended=utc(),
+                artifact_error=reason if ret == 0 else "",
+            )
+            if success:
                 (out / "markers" / f"{key}.done").touch()
             else:
                 record(
