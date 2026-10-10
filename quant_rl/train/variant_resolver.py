@@ -190,8 +190,6 @@ def train_args(resolved: dict[str, Any], seed: int) -> list[str]:
         resolved["arch"],
         "--seed",
         str(seed),
-        "--seeds",
-        str(seed),
     ]
     if resolved["use_vae"]:
         args += ["--use-vae", "--vae-path", str(resolved["vae_path"])]

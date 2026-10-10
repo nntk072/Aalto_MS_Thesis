@@ -112,6 +112,7 @@ def test_steps_and_seeds_overrides_flow_into_args() -> None:
     assert resolved["seeds"] == [7]
     args = train_args(resolved, 7)
     assert args[args.index("--seed") + 1] == "7"
+    assert "--seeds" not in args
 
 
 def test_overrides_come_after_strategy_and_have_no_duplicates() -> None:
