@@ -139,13 +139,17 @@ def verify_run_artifacts(run_out: pathlib.Path, key: str) -> tuple[bool, str]:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (ValueError, OSError):
             continue
+        if not isinstance(payload, dict):
+            continue
         if (
-            isinstance(payload, dict)
-            and payload.get("timesteps_completed")
-            and (path.parent / "model").is_dir()
+            not isinstance(payload.get("timesteps_completed"), int)
+            or payload["timesteps_completed"] < 1
         ):
+            continue
+        model_file = path.parent / "model" / "ppo_final.zip"
+        if model_file.is_file() and model_file.stat().st_size > 0:
             return True, ""
-    return False, "missing completed training_log.json or model directory"
+    return False, "missing completed training_log.json or nonempty ppo_final.zip"
 
 
 def main() -> int:
