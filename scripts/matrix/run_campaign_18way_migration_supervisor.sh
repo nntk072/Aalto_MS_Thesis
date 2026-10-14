@@ -14,7 +14,10 @@ echo "$(date --iso-8601=seconds) migration supervisor start host=$(hostname -s)"
 
 read_state() {
   [[ -s "$OUT_DIR/campaign.json" ]] || { echo missing; return; }
-  python3 - "$OUT_DIR/campaign.json" <<'PY'
+  # This supervisor runs on a login host, which may inherit the campaign's
+  # architecture-specific venv path. Prefer the host interpreter for state
+  # parsing so an AArch64 venv cannot break an x86_64 login supervisor.
+  PATH=/usr/bin:/bin python3 - "$OUT_DIR/campaign.json" <<'PY'
 import json, sys
 from collections import Counter
 counts = Counter(job["status"] for job in json.load(open(sys.argv[1], encoding="utf-8"))["jobs"])

@@ -127,6 +127,49 @@ def validate_model_action_schema(
     return None
 
 
+def _build_vector_env(
+    env: Any,
+    cfg: DictConfig,
+    env_fn: Callable[[], Any] | None,
+) -> Any:
+    """Build the VecEnv described by config for fresh or resumed PPO runs.
+
+    Keeping this wiring shared matters when loading checkpoints: SB3 otherwise
+    wraps the supplied raw environment in a single-env ``DummyVecEnv``, even
+    when the resolved config requests many parallel environments.
+    """
+    if not _SB3_AVAILABLE:
+        raise ImportError("stable-baselines3 is required: pip install stable-baselines3")
+
+    n_envs = int(getattr(cfg.get("env", {}), "n_envs", 1))
+    if n_envs <= 1 or env_fn is None:
+        return DummyVecEnv([lambda: env])
+
+    bundle_workers = str(cfg.env.get("data_source", "frames")) == "bundle"
+    use_forkserver = bundle_workers and "forkserver" in multiprocessing.get_all_start_methods()
+    if use_forkserver:
+        multiprocessing.set_forkserver_preload(
+            [
+                "stable_baselines3.common.vec_env.subproc_vec_env",
+                "quant_rl.envs.worker",
+                "quant_rl.envs.trading_env",
+            ]
+        )
+
+    def _thread_capped_env_fn() -> Any:
+        import os as _os
+
+        for _var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+            _os.environ[_var] = "1"
+        _torch = sys.modules.get("torch")
+        if _torch is not None:
+            _torch.set_num_threads(1)
+        return env_fn()
+
+    start_method = "forkserver" if use_forkserver else None
+    return SubprocVecEnv([_thread_capped_env_fn] * n_envs, start_method=start_method)
+
+
 class LegacyFourToFiveActionAdapter:
     """Append the explicit structural-exit coordinate for a legacy 4D policy."""
 
@@ -254,36 +297,8 @@ def build_agent(
         net_arch=net_arch,
     )
 
-    n_envs: int = int(getattr(cfg.get("env", {}), "n_envs", 1))
-    vec_env: Any
-    if n_envs > 1 and env_fn is not None:
-        bundle_workers = str(cfg.env.get("data_source", "frames")) == "bundle"
-        use_forkserver = bundle_workers and "forkserver" in multiprocessing.get_all_start_methods()
-        if use_forkserver:
-            multiprocessing.set_forkserver_preload(
-                [
-                    "stable_baselines3.common.vec_env.subproc_vec_env",
-                    "quant_rl.envs.worker",
-                    "quant_rl.envs.trading_env",
-                ]
-            )
-
-        # Stage 3: thread caps. Cap each worker to 1 thread to prevent
-        # OMP/MKL/torch thread-pool oversubscription (64 workers × default pools).
-        def _thread_capped_env_fn() -> Any:
-            import os as _os
-
-            for _var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
-                _os.environ[_var] = "1"
-            _torch = sys.modules.get("torch")
-            if _torch is not None:
-                _torch.set_num_threads(1)
-            return env_fn()
-
-        start_method = "forkserver" if use_forkserver else None
-        vec_env = SubprocVecEnv([_thread_capped_env_fn] * n_envs, start_method=start_method)
-    else:
-        vec_env = DummyVecEnv([lambda: env])
+    n_envs = int(getattr(cfg.get("env", {}), "n_envs", 1))
+    vec_env = _build_vector_env(env, cfg, env_fn)
 
     if algo == "sac":
         # SAC requires continuous action space

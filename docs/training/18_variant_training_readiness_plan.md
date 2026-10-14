@@ -1194,6 +1194,14 @@ The report builder now includes per-run full-training-split episode counts by en
 
 The updated campaign controller and report builder are fingerprinted source files. They apply only to a new source snapshot such as the separately named checkpoint-migration campaign; do not force-resume the original `937bae5` campaign under a changed fingerprint. The older workers do not emit the new episode columns, and their full-year episode history cannot be reconstructed from checkpoints.
 
+### Resume vectorization correction — 2026-10-14 18:58 EEST
+
+The first policy-migration attempt, `ladder18_seed42_20m_policy_migration_20261014`, was stopped after its logs showed that all 18 checkpoint-resumed PPO models had effective `n_envs=1`, despite the resolved campaign and saved configs requesting 64. The resume branch loaded each checkpoint with one raw environment and bypassed the shared vector-environment builder. The controller received a graceful `SIGTERM`; no `scancel` was issued. Its manifest records 18 interrupted attempts. No new numbered checkpoints were written by that short attempt; the verified 18-entry map still points to prior 5M–8M checkpoints.
+
+The same allocation then ended with Slurm job `20962662`; its login-side supervisor exited because an inherited AArch64 `.venv/bin/python3` could not execute on the x86 login host. The fix shares vector-environment construction between fresh and resumed PPO models, and the effective-PPO logger now rejects an `n_envs` mismatch. The supervisor parser pins the login host's system Python. A new, separately fingerprinted campaign spec and allocation supervisor are prepared at `config/campaigns/18_variant_seed42_20m_policy_migration_nenv64_20261014.yaml` and `scripts/matrix/run_campaign_18way_vector_resume_supervisor.sh`.
+
+The checkpoint reload regression test passes, as do full-tree format, lint, and Mypy checks. The corrected campaign has not started yet; no final train/test evaluations exist. Research review and confirmatory-holdout gates remain open; overall status remains **NOT READY**.
+
 Focused campaign-report and artifact tests passed **23/23**; full-tree Ruff format/lint and Mypy passed. The current allocation remains in progress; the primary manifest records 16 running and two initial Idea 1/Idea 2 cache-sidecar startup failures, while the separate two-run cache-recovery manifest records both replacements running. Their results remain exploratory. This work does not close the final train/test reports, successful continuation, independent reviews, fresh confirmatory holdout, strategy viability, resource sizing, or overall **NOT READY** decision.
 
 ### Interim resource refresh — 2026-10-14 15:09 UTC

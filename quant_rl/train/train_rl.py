@@ -405,6 +405,12 @@ def _log_effective_ppo(model: Any, cfg: Any) -> None:
     """Print the PPO settings the run actually uses, after the n_envs split."""
     n_steps = int(model.n_steps)
     n_envs = int(model.n_envs)
+    requested_n_envs = int(cfg.env.get("n_envs", 1))
+    if n_envs != requested_n_envs:
+        raise RuntimeError(
+            f"effective PPO n_envs={n_envs} does not match resolved config "
+            f"n_envs={requested_n_envs}"
+        )
     strategy_name = (
         str(cfg.strategy.get("name", "strategy"))
         if bool(cfg.env.get("strategy_actions", False))
@@ -1403,10 +1409,13 @@ def main() -> None:
         if args.resume_checkpoint:
             from stable_baselines3 import PPO
 
+            from quant_rl.models.agent import _build_vector_env
+
             resume_path = Path(args.resume_checkpoint)
             if not resume_path.is_file():
                 raise FileNotFoundError(f"resume checkpoint not found: {resume_path}")
-            model = PPO.load(resume_path, env=train_env, device=device)
+            resume_env = _build_vector_env(train_env, cfg, env_factory)
+            model = PPO.load(resume_path, env=resume_env, device=device)
             if int(model.num_timesteps) > int(timesteps):
                 raise ValueError(
                     f"resume checkpoint has {model.num_timesteps} steps, exceeding requested {timesteps}"
