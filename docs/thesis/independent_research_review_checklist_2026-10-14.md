@@ -96,6 +96,15 @@ failed workers. Independent review remains OPEN pending a signed reviewer
 disposition, final train/test reports, a fresh confirmatory holdout, and
 resolution of the policy-boundary and resource-sizing questions.
 
+The latest selected checkpoint from each of the 18 lineages subsequently passed
+CPU deserialization and saved-timestep validation (18/18; 3M–4M steps). The
+report is
+`outputs/gpu_campaigns/readiness_reaudit_20261014/reports/checkpoint_load_cpu_18_seed42_live_20261014_1316.json`
+(SHA-256 `2ecff25d092504db675dcceb0ab38b08d996a81c31a63be89af471ca989fb9f7`).
+At 13:28 UTC the same Slurm job remained RUNNING at 4:03/6:00, and worker logs
+spanned 3.146M–5.112M steps. This does not verify GH200 loading or any final
+train/test outcome; the reviewer gate remains OPEN.
+
 ## Campaign and evaluation status addendum — 2026-10-14
 
 The primary 18-run campaign is still active under its pinned source revision
