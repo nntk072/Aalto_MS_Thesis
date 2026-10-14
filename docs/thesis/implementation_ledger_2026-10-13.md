@@ -2510,3 +2510,8 @@ The source-blob and per-run config comparison is saved at `outputs/gpu_campaigns
 ### Extended live resource sample — 2026-10-14 12:48 UTC
 
 The allocation sampler now covers approximately 2.97 hours. Process-tree CPU averaged 3.83/4.89 cores on gpuarm1/gpuarm2; allocation-scoped cgroup RAM averaged 139.7/140.0 GiB and peaked at 154.9/157.8 GiB against 512 GiB/node. GPU utilization averaged 56.3%/55.6%, with GPU memory peaks of 48.5/55.3 GiB. All sampled OOM-related counters remained zero. The derivation and raw CSV hashes are in `outputs/gpu_campaigns/readiness_reaudit_20261014/reports/resource_sample_20261014_1248.json` (SHA-256 `352745c81160d4ef73fd557922c8fcfbb00b4b2376c225f5514b550c978183dd`). CPU use remains low relative to allocation; this observation is not a full-run sizing guarantee. The campaign remains in progress and readiness remains **NOT READY**.
+
+
+### Live training monitor refresh — 2026-10-14 12:51 UTC
+
+The same Slurm allocation remains RUNNING with 18 active unique seed-42 lineages. Their latest logs span 2,654,208–4,227,072 of 20,000,000 steps; no worker has logged `EARLY_ABORT`. Seven of 18 latest 20,000-bar training-prefix monitors show zero trades. This is a rising but still interim monitor count; it is not the four completed training-episode condition used by the pinned old callback, and it is not a final full-year result. The checksummed per-run snapshot is `outputs/gpu_campaigns/readiness_reaudit_20261014/reports/train_prefix_monitor_snapshot_20261014_1251.json` (SHA-256 `e91e660b09f3c168e050374b8e885eed16cfcd30b33dfebb96dd05e613a2c17e`). Final train/test evaluation artifacts remain absent. Readiness remains **NOT READY**.
