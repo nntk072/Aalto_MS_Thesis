@@ -2173,3 +2173,29 @@ separate recovery spec fails the pinned controller's in-repository path check
 through the shared-output symlink; automatic recovery resume was removed from
 the launcher and remains open for explicit migration. The active training
 still uses acceptance semantics predating `16b13ae`.
+
+### Live campaign follow-up — 2026-10-14 10:49 UTC
+
+Slurm allocation `20954895` is RUNNING on gpuarm1/gpuarm2 with 4 h 37 m
+remaining at the latest query. Main campaign status is 16 running and two
+preserved stale-cache failures; the separate recovery campaign is 2 running.
+The current primary worker logs show 786,432–1,277,952 PPO steps (median
+1,081,344), and both recovery worker logs show 983,040. No worker has reached
+the 20M budget and no final evaluations are present.
+
+The user's confirmed reporting contract is implemented in the trainer:
+deterministic final evaluation on the complete 2025 training split and the
+following 2026 test split, written separately as
+`evaluations/train_in_sample.json` and
+`evaluations/test_report_only.json`. This is a source-level verification of
+the output path, not evidence that the running workers completed either
+replay. The test period was previously inspected and remains exploratory.
+
+The current allocation supervisor monitors only the primary manifest. It does
+not include the separate two-variant cache-recovery manifest in its completion
+decision or automatically resume those runs after the allocation ends. The
+current allocation and workers were left untouched. Fixing this continuity
+gap requires a provenance-preserving coordinator that resumes both manifests
+and reports their combined status; do not merge, rewrite, or mark either
+manifest complete by hand. All active workers also remain under the older
+`937bae5` acceptance semantics, not the later policy in `16b13ae`.

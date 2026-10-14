@@ -1011,3 +1011,31 @@ controller's repository-boundary check through the shared-output symlink.
 The launcher therefore resumes only the primary campaign; recovery-run
 migration remains open. The active run still uses pre-`16b13ae` acceptance
 semantics and must not be presented as following the updated policy.
+
+### Live campaign follow-up — 2026-10-14 10:49 UTC
+
+Slurm allocation `20954895` is still RUNNING on gpuarm1/gpuarm2, with 4 h 37 m
+remaining at the latest query. The primary manifest has 16 running workers
+and two preserved cache failures; the separate recovery manifest has two
+running workers. The 16 current primary logs report 786,432–1,277,952 steps
+(median 1,081,344); both recovery logs report 983,040 steps. These are partial
+training records only. No full-budget checkpoint, final in-sample evaluation,
+or test evaluation exists yet.
+
+The final evaluation implementation does run deterministic replays on both
+the complete one-year training split and following test split and writes
+separate `evaluations/train_in_sample.json` and
+`evaluations/test_report_only.json` reports. The configured split is training
+through 2025-12-31 and test through 2026-07-03. This satisfies the requested
+evaluation coverage once training finishes; no current run has reached that
+stage.
+
+The allocation manager has a recovery continuity gap: the two recovery runs
+are in their own manifest and were started in a separate Slurm step. The
+durable two-node supervisor currently reads only the primary manifest, and its
+allocation launcher resumes only that campaign. If this allocation ends
+before recovery finishes, those two workers will need an explicit
+provenance-preserving resume path; the main supervisor alone does not resume
+them. Do not stop or rewrite either live run. Also retain the acceptance
+policy caveat: these workers use pinned source `937bae5`, before the approved
+policy in `16b13ae`.
