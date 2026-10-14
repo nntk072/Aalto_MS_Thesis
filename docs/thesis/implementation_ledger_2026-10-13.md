@@ -2109,7 +2109,7 @@ files, worker logs, and both campaign manifests.
 The main campaign identity remains pinned to
 `937bae529fdf5d6c17db6174880ef448320e2883` with fingerprint
 `b19cf865ae01a900c425b9e7ab45fd922b5ac14b54364171cca34574ea270556`; current
-repository HEAD is `1effb2e`. Do not alter campaign provenance to force a
+repository HEAD is `6d13698`. Do not alter campaign provenance to force a
 resume. Overall readiness remains **NOT READY** pending completed training
 and train/test evaluations, independent research review, a pristine holdout
 for confirmatory claims, and full-phase resource evidence.
@@ -2129,3 +2129,13 @@ semantics and do not interpret them as evidence for the updated acceptance
 policy. Any resume must retain the exact source fingerprint and this caveat;
 a campaign under the updated policy requires a new identity and source
 fingerprint. The current running allocation was left untouched.
+
+To preserve exact-source continuation for the existing campaign, created the
+detached worktree
+`/scratch/work/nguyenl37/Aalto_MS_Thesis_pinned_937bae` at the manifest's
+`937bae5` revision. Its 201 source files match the launch archive's
+`source_manifest.json`; shared data, caches, outputs, and `.venv` are linked
+to the existing paths. Updated the two-node allocation launcher to detect a
+manifest/current-checkout SHA mismatch and dispatch through this pinned
+worktree. Shell syntax and file/hash checks pass. This retry path is prepared
+but not yet exercised; the active allocation and workers were not touched.

@@ -8,6 +8,29 @@ CAMPAIGN_ID="ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014"
 OUT_DIR="$REPO/outputs/gpu_campaigns/$CAMPAIGN_ID"
 PREFLIGHT="$OUT_DIR/reports/preflight_complete.json"
 DONE_MARKER="$OUT_DIR/allocation_controller.exit"
+
+# A resumed campaign must run under the source revision recorded in its
+# manifest. Use the shared pinned worktree when the active checkout has moved.
+MANIFEST="$OUT_DIR/campaign.json"
+if [[ -s "$MANIFEST" ]]; then
+  expected_sha="$(python3 - "$MANIFEST" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1], encoding="utf-8")).get("git_sha", ""))
+PY
+)"
+  current_sha="$(git -C "$REPO" rev-parse HEAD)"
+  if [[ -n "$expected_sha" && "$expected_sha" != "$current_sha" ]]; then
+    PINNED_REPO="${CAMPAIGN_PINNED_SOURCE_REPO:-/scratch/work/nguyenl37/Aalto_MS_Thesis_pinned_937bae}"
+    if [[ ! -d "$PINNED_REPO" || "$(git -C "$PINNED_REPO" rev-parse HEAD)" != "$expected_sha" ]]; then
+      echo "campaign source mismatch: expected=$expected_sha current=$current_sha; no matching pinned checkout" >&2
+      exit 2
+    fi
+    echo "resuming campaign with pinned source $expected_sha at $PINNED_REPO"
+    exec env TRITON_REPO="$PINNED_REPO" CAMPAIGN_SPEC="$SPEC" \
+      bash "$PINNED_REPO/scripts/matrix/run_campaign_18way_two_node_allocation.sh"
+  fi
+fi
+
 cd "$REPO"
 
 if [[ "${SLURM_PROCID:-0}" != "0" ]]; then

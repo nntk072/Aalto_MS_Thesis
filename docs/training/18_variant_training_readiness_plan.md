@@ -941,7 +941,7 @@ resource peaks. Low sampled CPU use does not establish that allocating more
 CPUs would improve throughput. Evidence is in the two campaign
 `logs/resources_gpuarm*.csv` files and worker logs.
 
-The current repository HEAD is `1effb2e`, while the main campaign identity is
+The current repository HEAD is `6d13698`, while the main campaign identity is
 pinned to `937bae5` and fingerprint
 `b19cf865ae01a900c425b9e7ab45fd922b5ac14b54364171cca34574ea270556`. Do not
 rewrite either campaign's fingerprint to resume. Before another allocation,
@@ -962,3 +962,13 @@ do not represent it as having trained under the updated acceptance policy.
 Any continuation from its checkpoints must use its exact pinned source and
 retain this caveat; evaluating under the newer policy requires a separately
 identified campaign with the newer source and fingerprint.
+
+To protect source fidelity for any later retry, a detached worktree was
+prepared at `/scratch/work/nguyenl37/Aalto_MS_Thesis_pinned_937bae`. All 201
+files in the campaign's `source_manifest.json` match commit `937bae5`; its
+data, cache, output and virtual-environment paths point to the existing shared
+artifacts. The allocation launcher now routes a future resume through that
+worktree when the active checkout SHA differs from the campaign manifest.
+This path has passed shell syntax and worktree/hash checks but has not yet
+been exercised by a later allocation. It does not alter the currently running
+job.
