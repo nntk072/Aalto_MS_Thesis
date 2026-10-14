@@ -1647,6 +1647,25 @@ def main() -> int:
                     os.getenv("SLURM_JOB_ID", ""),
                 ]
             )
+    try:
+        summary_script = pathlib.Path(__file__).resolve().with_name("summarize_campaign_results.py")
+        summary_result = subprocess.run(
+            [sys.executable, str(summary_script), "--campaign-dir", str(out)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if summary_result.returncode == 0:
+            print(summary_result.stdout.rstrip(), flush=True)
+        else:
+            print(
+                "WARNING: campaign results summary generation failed: "
+                f"{summary_result.stderr.strip() or summary_result.stdout.strip()}",
+                flush=True,
+            )
+    except OSError as exc:
+        print(f"WARNING: campaign results summary could not start: {exc}", flush=True)
     return 1 if STOP or any(j["status"] != "succeeded" for j in jobs) else 0
 
 

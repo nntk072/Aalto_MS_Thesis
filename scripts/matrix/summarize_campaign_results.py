@@ -212,6 +212,88 @@ def _split_log(log_path: Path, label: str) -> dict[str, Any]:
     return result
 
 
+def _episode_coverage(path: Path | None) -> dict[str, Any]:
+    """Summarize training episode completion telemetry without inferring missing rows."""
+    result: dict[str, Any] = {
+        "status": "missing",
+        "artifact": str(path) if path is not None else None,
+        "sha256": _sha256(path) if path is not None else None,
+        "episode_count": 0,
+        "full_split_episode_count": 0,
+        "environments_with_full_split_episode": 0,
+        "completion_unknown_count": 0,
+        "invalid_episode_rows": 0,
+        "per_environment": [],
+    }
+    if path is None or not path.is_file():
+        return result
+    try:
+        with path.open(newline="", encoding="utf-8") as stream:
+            reader = csv.DictReader(stream)
+            fields = set(reader.fieldnames or ())
+            required = {
+                "environment_index",
+                "episode_steps",
+                "completed_data_split",
+                "episode_end_reason",
+            }
+            missing_fields = sorted(required - fields)
+            if missing_fields:
+                result.update(status="legacy_schema", missing_fields=missing_fields)
+                return result
+            rows = list(reader)
+    except (OSError, csv.Error):
+        result["status"] = "unreadable"
+        return result
+
+    environments: dict[int, dict[str, Any]] = {}
+    unknown_completion = 0
+    invalid_rows = 0
+    full_split_episodes = 0
+    for row in rows:
+        try:
+            env_index = int(row["environment_index"])
+        except (KeyError, TypeError, ValueError):
+            invalid_rows += 1
+            continue
+        coverage = environments.setdefault(
+            env_index,
+            {"episode_count": 0, "full_split_episode_count": 0, "max_episode_steps": None},
+        )
+        coverage["episode_count"] += 1
+        try:
+            episode_steps = int(row["episode_steps"])
+        except (KeyError, TypeError, ValueError):
+            episode_steps = None
+            invalid_rows += 1
+        if episode_steps is not None:
+            current_max = coverage["max_episode_steps"]
+            coverage["max_episode_steps"] = (
+                episode_steps if current_max is None else max(current_max, episode_steps)
+            )
+        completed = str(row.get("completed_data_split", "")).strip().lower()
+        if completed in {"true", "1", "yes"}:
+            full_split_episodes += 1
+            coverage["full_split_episode_count"] += 1
+        elif completed not in {"false", "0", "no"}:
+            unknown_completion += 1
+
+    result.update(
+        status="available",
+        episode_count=len(rows),
+        full_split_episode_count=full_split_episodes,
+        environments_with_full_split_episode=sum(
+            item["full_split_episode_count"] > 0 for item in environments.values()
+        ),
+        completion_unknown_count=unknown_completion,
+        invalid_episode_rows=invalid_rows,
+        per_environment=[
+            {"environment_index": index, **values} for index, values in sorted(environments.items())
+        ],
+    )
+    return result
+
+
 def _finite_metrics(value: dict[str, Any] | None) -> dict[str, Any] | None:
     if value is None:
         return None
@@ -240,6 +322,15 @@ def build_summary(campaign_dir: Path) -> dict[str, Any]:
         attempt_number = int(job.get("attempts", 1))
         attempt_dir = campaign_dir / "runs" / "attempts" / run_key / f"attempt{attempt_number}"
         run_dir = _run_dir(attempt_dir, run_key)
+        episode_candidates = (
+            (run_dir / "model" / "episode_equity.csv", run_dir / "episode_equity.csv")
+            if run_dir
+            else ()
+        )
+        episode_path = next((path for path in episode_candidates if path.is_file()), None)
+        episode_coverage = _episode_coverage(episode_path)
+        if episode_path is not None:
+            episode_coverage["artifact"] = episode_path.relative_to(campaign_dir).as_posix()
         train_path = run_dir / "training" / "metrics.json" if run_dir else Path()
         test_path = run_dir / "testing" / "metrics.json" if run_dir else Path()
         gate_path = run_dir / "train_equity_gate.json" if run_dir else Path()
@@ -266,6 +357,7 @@ def build_summary(campaign_dir: Path) -> dict[str, Any]:
                 run_dir, "testing", test_metrics, initial_balance
             ),
             "train_equity_gate": gate,
+            "training_episode_coverage": episode_coverage,
             "train_metrics": _finite_metrics(train_metrics),
             "test_metrics_report_only": _finite_metrics(test_metrics),
             "train_replay": _split_log(log_path, "train"),
@@ -281,6 +373,7 @@ def build_summary(campaign_dir: Path) -> dict[str, Any]:
                 if run_dir
                 else None,
                 "train_equity_gate.json": _sha256(gate_path) if run_dir else None,
+                "episode_equity.csv": _sha256(episode_path) if episode_path else None,
                 "worker_log": _sha256(log_path),
             },
             "run_artifact_dir": str(run_dir.relative_to(campaign_dir)) if run_dir else None,
@@ -323,6 +416,21 @@ def build_summary(campaign_dir: Path) -> dict[str, Any]:
         for key in ("train_pnl_reconciliation", "test_pnl_reconciliation"):
             status_value = item[key]["status"]
             pnl_reconciliation_counts[status_value] += 1
+    episode_coverage_summary = {
+        "telemetry_available_runs": sum(
+            item["training_episode_coverage"]["status"] == "available" for item in jobs
+        ),
+        "telemetry_unavailable_runs": sum(
+            item["training_episode_coverage"]["status"] != "available" for item in jobs
+        ),
+        "full_split_episode_count": sum(
+            item["training_episode_coverage"]["full_split_episode_count"] for item in jobs
+        ),
+        "environments_with_full_split_episode": sum(
+            item["training_episode_coverage"]["environments_with_full_split_episode"]
+            for item in jobs
+        ),
+    }
     return {
         "schema_version": 1,
         "campaign_dir": str(campaign_dir),
@@ -346,6 +454,7 @@ def build_summary(campaign_dir: Path) -> dict[str, Any]:
         "test_non_survival_count": test_not_survived,
         "test_survived_low_activity_count": test_low_activity,
         "pnl_reconciliation_counts": pnl_reconciliation_counts,
+        "training_episode_coverage_summary": episode_coverage_summary,
         "campaign_manifest_sha256": _sha256(campaign_dir / "campaign.json"),
         "controller_status_sha256": _sha256(campaign_dir / "reports" / "campaign_status.json"),
         "summary_script_sha256": _sha256(Path(__file__).resolve()),
@@ -377,7 +486,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
         f"**Evaluation role:** {summary.get('evaluation_protocol', {}).get('locked_oos_role')} "
         f"({summary.get('evaluation_protocol', {}).get('locked_oos_exposure')}).",
         "",
-        "This is a descriptive snapshot, not a ranking. Training values are in-sample. Test values are report-only on the previously inspected split and are not confirmatory evidence.",
+        "This is a descriptive snapshot, not a ranking. Training values are in-sample. Test values follow the declared evaluation role and do not become confirmatory without a valid holdout protocol and provenance.",
         "",
         "## Outcomes",
         "",
@@ -394,18 +503,20 @@ def render_markdown(summary: dict[str, Any]) -> str:
         f"- Test replays that did not survive the full period: **{summary.get('test_non_survival_count')} / {len(jobs)}**",
         f"- Test replays that survived with at most two trades: **{summary.get('test_survived_low_activity_count')} / {len(jobs)}**",
         f"- Split PnL reconciled against final equity: **{summary.get('pnl_reconciliation_counts', {}).get('verified', 0)} verified**, **{summary.get('pnl_reconciliation_counts', {}).get('mismatch', 0)} mismatched**, **{summary.get('pnl_reconciliation_counts', {}).get('unavailable', 0)} unavailable**",
+        f"- Completed full-training-split episodes: **{summary.get('training_episode_coverage_summary', {}).get('full_split_episode_count', 0)}** across **{summary.get('training_episode_coverage_summary', {}).get('environments_with_full_split_episode', 0)} environments**; telemetry available for **{summary.get('training_episode_coverage_summary', {}).get('telemetry_available_runs', 0)} / {len(jobs)} runs**",
         "",
         "## Per-variant metrics",
         "",
         f"PnL is in the account currency ({pnl_label}). `Survived / days` comes from the matching worker log.",
         "",
-        f"| Variant | Controller | Train survival | Train return | Train PnL ({pnl_label}) | Train trades | Test return | Test PnL ({pnl_label}) | Test max DD | Test Sharpe | Test PF | Test trades | Test survived / days | Evidence |",
-        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
+        f"| Variant | Controller | Train survival | Full-year episodes | Envs reached year end | Train return | Train PnL ({pnl_label}) | Train trades | Test return | Test PnL ({pnl_label}) | Test max DD | Test Sharpe | Test PF | Test trades | Test survived / days | Evidence |",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for job in jobs:
         train = job.get("train_metrics") or {}
         test = job.get("test_metrics_report_only") or {}
         gate = job.get("train_equity_gate") or {}
+        coverage = job.get("training_episode_coverage") or {}
         replay = job.get("test_replay_report_only") or {}
         days = "—"
         if replay.get("days_traded") is not None and replay.get("days_total") is not None:
@@ -416,6 +527,9 @@ def render_markdown(summary: dict[str, Any]) -> str:
         worker_log = job.get("worker_log")
         if worker_log:
             evidence_links.append(f"[worker log](../{worker_log})")
+        episode_artifact = coverage.get("artifact")
+        if episode_artifact:
+            evidence_links.append(f"[episode coverage](../{episode_artifact})")
         run_artifact_dir = job.get("run_artifact_dir")
         if run_artifact_dir:
             evidence_links.append(f"[run files](../{run_artifact_dir})")
@@ -428,7 +542,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
                 )
         evidence = " · ".join(evidence_links) or "—"
         lines.append(
-            "| {variant} | {status} | {gate} | {tr} | {tpnl} | {tn} | {er} | {epnl} | {edd} | {esharpe} | {epf} | {en} | {survived} / {days} | {evidence} |".format(
+            "| {variant} | {status} | {gate} | {full_year} | {full_year_envs} | {tr} | {tpnl} | {tn} | {er} | {epnl} | {edd} | {esharpe} | {epf} | {en} | {survived} / {days} | {evidence} |".format(
                 variant=job.get("variant") or job.get("run_key"),
                 status=job.get("controller_status", "—"),
                 gate="PASS"
@@ -436,6 +550,12 @@ def render_markdown(summary: dict[str, Any]) -> str:
                 else "FAIL"
                 if gate.get("ok") is False
                 else "—",
+                full_year=coverage.get("full_split_episode_count", "—")
+                if coverage.get("status") == "available"
+                else "unavailable",
+                full_year_envs=coverage.get("environments_with_full_split_episode", "—")
+                if coverage.get("status") == "available"
+                else "unavailable",
                 tr=_fmt_percent(train.get("total_return_pct")),
                 tpnl=_fmt_money(train.get("total_pnl")),
                 tn=train.get("n_trades", "—"),
@@ -487,7 +607,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
             f"- Summary script SHA-256: `{summary.get('summary_script_sha256')}`",
             "- Profit and trade counts are reported as metrics. The train survival gate covers risk-limit breach and peak trailing drawdown; evidence hashes are listed in the adjacent JSON file.",
             "- Launch-time source-hash comparison with the current repository is recorded in [the source-fidelity audit](source_fidelity_audit.md).",
-            "- This is a 100k-step seed-42 resource probe, not the frozen 20M thesis campaign. It cannot establish strategy viability, statistical significance, or confirmatory OOS performance.",
+            f"- This report covers the declared {summary.get('requested_steps_per_variant')} steps per variant and campaign data role. It cannot establish statistical significance or strategy viability beyond the evidence and seed shown above.",
             "- Do not select a variant from this report. Preserve all failed gates and low/no-trade outcomes.",
             "",
         ]

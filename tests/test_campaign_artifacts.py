@@ -363,6 +363,8 @@ def test_failed_attempt_artifacts_are_hashed_and_remain_terminal_on_resume(
     assert controller.main() == 1
 
     out = root / "outputs" / "gpu_campaigns" / "test_failed_attempt_resume"
+    assert (out / "reports" / "campaign_results_summary.json").is_file()
+    assert (out / "reports" / "campaign_results_summary.md").is_file()
     first_manifest = controller.read_manifest(out / "campaign.json")
     source_snapshot = first_manifest["source_snapshot"]
     snapshot_valid, snapshot_reason = controller.verify_campaign_source_snapshot(

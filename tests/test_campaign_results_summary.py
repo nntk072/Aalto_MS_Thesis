@@ -85,6 +85,15 @@ def test_campaign_summary_reads_metrics_logs_and_legacy_gpu_samples(tmp_path: Pa
     _write_json(
         run_dir / "train_equity_gate.json", {"ok": False, "reason": "max_loss_stopped_trading"}
     )
+    episode_path = run_dir / "model" / "episode_equity.csv"
+    episode_path.parent.mkdir(parents=True)
+    episode_path.write_text(
+        "environment_index,episode_steps,completed_data_split,episode_end_reason\n"
+        "0,99504,true,data_split_end\n"
+        "0,21000,false,risk_limit\n"
+        "1,99504,true,data_split_end\n",
+        encoding="utf-8",
+    )
     (run_dir / "config.yaml").write_text(
         "account:\n  currency: USD\n  initial_balance: 100000.0\n", encoding="utf-8"
     )
@@ -125,9 +134,19 @@ def test_campaign_summary_reads_metrics_logs_and_legacy_gpu_samples(tmp_path: Pa
     assert job["test_pnl_reconciliation"]["equity_delta"] == -100.0
     assert job["evidence_sha256"]["training/equity.csv"] is not None
     assert job["evidence_sha256"]["testing/equity.csv"] is not None
+    assert job["evidence_sha256"]["episode_equity.csv"] is not None
+    assert job["training_episode_coverage"]["full_split_episode_count"] == 2
+    assert job["training_episode_coverage"]["environments_with_full_split_episode"] == 2
+    assert summary["training_episode_coverage_summary"]["telemetry_available_runs"] == 1
+    assert summary["training_episode_coverage_summary"]["full_split_episode_count"] == 2
     assert job["test_replay_report_only"]["days_traded"] == 2
     assert summary["resource_profiles"][0]["gpu_devices"][1]["mean_utilization_pct"] == 80
-    assert "Train survival | Train return" in report
+    assert "Train survival | Full-year episodes | Envs reached year end" in report
+    assert "Completed full-training-split episodes: **2** across **2 environments**" in report
+    assert (
+        "[episode coverage](../runs/attempts/variant__seed42/attempt1/variant__seed42/20261014_000000_run/model/episode_equity.csv)"
+        in report
+    )
     assert "PnL (USD)" in report
     assert "[worker log](../logs/workers/variant__seed42.log)" in report
     assert (
@@ -154,3 +173,34 @@ def test_pnl_reconciliation_exposes_saved_equity_mismatch(tmp_path: Path) -> Non
 
     assert result["status"] == "mismatch"
     assert result["difference"] == 1.0
+
+
+def test_episode_coverage_reports_missing_and_legacy_telemetry(tmp_path: Path) -> None:
+    from scripts.matrix.summarize_campaign_results import _episode_coverage
+
+    assert _episode_coverage(None)["status"] == "missing"
+    legacy = tmp_path / "legacy.csv"
+    legacy.write_text("environment_index,episode_steps\n0,123\n", encoding="utf-8")
+    result = _episode_coverage(legacy)
+    assert result["status"] == "legacy_schema"
+    assert result["full_split_episode_count"] == 0
+    assert "completed_data_split" in result["missing_fields"]
+
+
+def test_episode_coverage_exposes_unknown_and_invalid_rows(tmp_path: Path) -> None:
+    from scripts.matrix.summarize_campaign_results import _episode_coverage
+
+    path = tmp_path / "episodes.csv"
+    path.write_text(
+        "environment_index,episode_steps,completed_data_split,episode_end_reason\n"
+        "0,100,true,data_split_end\n"
+        "1,not-an-int,unknown,unknown\n"
+        "bad,20,false,risk_limit\n",
+        encoding="utf-8",
+    )
+    result = _episode_coverage(path)
+    assert result["status"] == "available"
+    assert result["episode_count"] == 3
+    assert result["full_split_episode_count"] == 1
+    assert result["completion_unknown_count"] == 1
+    assert result["invalid_episode_rows"] == 2
