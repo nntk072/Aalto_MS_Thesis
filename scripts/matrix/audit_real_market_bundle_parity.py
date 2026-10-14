@@ -394,13 +394,14 @@ def main() -> int:
                 episodic=False,
             )
             shared = make_bundle_env(spec)
+            action_schema = getattr(frames, "action_schema", None)
             item.update(
                 status="passed",
                 feature_cache=str(cache.resolve().relative_to(ROOT)),
                 feature_cache_sha256=_digest(cache),
                 feature_columns=int(features.shape[1]),
                 bar_rows=int(len(episode_bars)),
-                action_schema=frames.action_schema.to_dict() if frames.action_schema else None,
+                action_schema=action_schema.to_dict() if action_schema else None,
                 observation_space={
                     key: list(value.shape)
                     for key, value in getattr(frames.observation_space, "spaces", {}).items()
