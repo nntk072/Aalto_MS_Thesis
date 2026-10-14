@@ -13,6 +13,8 @@
 
 **Checkpoint recovery refresh — 2026-10-14 13:28 UTC:** the latest selected checkpoint for all 18 lineages passed CPU deserialization and saved-timestep validation (18/18; 3M–4M-step checkpoints). Audit: `outputs/gpu_campaigns/readiness_reaudit_20261014/reports/checkpoint_load_cpu_18_seed42_live_20261014_1316.json` (SHA-256 `2ecff25d092504db675dcceb0ab38b08d996a81c31a63be89af471ca989fb9f7`). Job `20954895` remains RUNNING at 4:03/6:00, with logged worker progress 3.146M–5.112M steps and the migration watcher waiting. CPU loading does not establish GH200 resume or final model validity. Readiness stays **NOT READY**.
 
+**Live worker refresh — 2026-10-14 13:32 UTC:** Slurm job `20954895` is RUNNING at 4:06:32/6:00. All 18 unique worker logs are advancing at 3.244M–5.210M PPO timesteps; seven latest 20,000-bar training-prefix monitors report zero trades. No `EARLY_ABORT` marker or final train/test evaluation artifact was found. These monitors are interim diagnostics, not final outcomes. Hashed log-level evidence is in `docs/thesis/live_campaign_snapshot_2026-10-14_1332.json` (SHA-256 `05eb275738e408b2b1c47d84c54eba2e7ded9d8eb3d94be1e6bc913f0a810c91`). Readiness stays **NOT READY**.
+
 The independent-review gate is prepared but not satisfied. See the
 [`independent research review checklist`](../thesis/independent_research_review_checklist_2026-10-14.md);
 it requires a qualified external reviewer and an explicit disposition.
