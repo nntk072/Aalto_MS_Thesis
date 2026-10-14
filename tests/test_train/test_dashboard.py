@@ -119,6 +119,19 @@ def test_eval_block_prints_metrics_from_a_short_equity_curve() -> None:
     assert np.isfinite(metrics.sharpe)
 
 
+def test_zero_trade_prefix_monitor_is_not_labeled_as_a_worker_failure() -> None:
+    snapshot = _sample_snapshot(with_eval=True)
+    snapshot["eval"]["n_trades"] = 0
+
+    rendered = (format_dashboard(snapshot), format_dashboard_table(snapshot))
+
+    for text in rendered:
+        assert "NO TRADES" in text
+        assert "not worker status" in text
+        assert "FAILED" not in text
+    assert "metrics unavailable" in rendered[0]
+
+
 def _sample_snapshot(*, with_eval: bool) -> dict[str, Any]:
     snap = {
         "timesteps": 8192,

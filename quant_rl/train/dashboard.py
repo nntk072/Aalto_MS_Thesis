@@ -181,7 +181,8 @@ def format_dashboard(snapshot: dict[str, Any]) -> str:
         pnl_currency = str(ev.get("account_currency", "account currency"))
         if int(ev.get("n_trades", 0)) == 0:
             lines.append(
-                "TRAIN-PREFIX MONITOR  FAILED  trades 0  empty replay is not a flat return"
+                "TRAIN-PREFIX MONITOR (not final evaluation)  NO TRADES  "
+                "metrics unavailable; not worker status"
             )
         else:
             lines.append(
@@ -277,7 +278,7 @@ def format_dashboard_table(snapshot: dict[str, Any]) -> str:
             ("breach_events", str(int(ev.get("breach_events", 0)))),
         ]
         if int(ev.get("n_trades", 0)) == 0:
-            eval_rows.append(("status", "FAILED  trades 0"))
+            eval_rows.append(("status", "NO TRADES (not worker status)"))
         else:
             eval_rows.extend(
                 [
