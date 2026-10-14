@@ -105,6 +105,15 @@ At 13:28 UTC the same Slurm job remained RUNNING at 4:03/6:00, and worker logs
 spanned 3.146M–5.112M steps. This does not verify GH200 loading or any final
 train/test outcome; the reviewer gate remains OPEN.
 
+At 13:48 UTC, a fresh audit of the latest resumable checkpoint for each of the
+18 lineages passed provenance/hash checks and CPU deserialization (18/18;
+3M–5M steps). The report is
+`docs/thesis/checkpoint_load_cpu_18_seed42_live_20261014_1338.json` (SHA-256
+`75581ab0b06107c232e458479673d57134dfcac167884a2f080cfdd31e41f1e3`). The
+concurrent campaign remained RUNNING at 4:23/6:00, with six zero-trade
+20,000-bar training-prefix monitors and no final train/test reports. This is
+interim operational evidence only; independent review remains OPEN.
+
 ## Campaign and evaluation status addendum — 2026-10-14
 
 The primary 18-run campaign is still active under its pinned source revision
