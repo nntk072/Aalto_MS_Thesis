@@ -1039,3 +1039,35 @@ provenance-preserving resume path; the main supervisor alone does not resume
 them. Do not stop or rewrite either live run. Also retain the acceptance
 policy caveat: these workers use pinned source `937bae5`, before the approved
 policy in `16b13ae`.
+
+### Checkpoint-preserving policy migration prepared — 2026-10-14
+
+Added `scripts/matrix/build_campaign_checkpoint_map.py` and explicit initial
+checkpoint handling to `campaign_controller.py`. The map builder verifies each
+parent manifest/source snapshot, attempt provenance, numbered checkpoint
+checksum, ZIP integrity, and the checkpoint's embedded PPO timestep. The
+successor controller archives each selected checkpoint and includes its
+lineage in the new campaign identity; later allocation resumes prefer that
+campaign's own checkpoints. A checkpoint at the target budget is accepted for
+final train/test reevaluation; checkpoints above the target are excluded.
+
+Prepared a separate seed-42, 18-run, 20M-step shared-bundle campaign spec under
+the current acceptance policy, plus allocation and durable-supervisor scripts.
+A live-artifact dry-run built a complete 18-key map from the primary and cache-
+recovery manifests and passed controller validation for two GH200 nodes,
+`n_envs=64`, and five CPUs/worker. Focused migration/artifact tests passed
+24/24; full-tree Ruff format/lint and Mypy passed. No checkpoint was copied to
+the successor output and no training or Slurm allocation was launched.
+
+The existing organizer remains active under the older pinned campaign; the
+new supervisor must not be started beside it. The migration supervisor checks
+for that organizer and its `thesis18x2` Slurm job before allocating and fails
+closed if it cannot query Slurm. After the old organizer is terminal, build a
+fresh map from its latest intact checkpoints and the recovery manifest, then
+use the migration supervisor. This is a checkpoint
+continuation with explicit old/new source lineage, not a fresh-from-zero run.
+The controller now has a CPU `PPO.load` preflight for every mapped checkpoint,
+but it has not run on the GH200 runtime. The current dry-run proves map and
+artifact integrity, not model deserialization. Keep campaign readiness
+**NOT READY** until checkpoint loading, full training, both final evaluations,
+and independent research review are verified.

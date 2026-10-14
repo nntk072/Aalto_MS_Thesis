@@ -2199,3 +2199,38 @@ gap requires a provenance-preserving coordinator that resumes both manifests
 and reports their combined status; do not merge, rewrite, or mark either
 manifest complete by hand. All active workers also remain under the older
 `937bae5` acceptance semantics, not the later policy in `16b13ae`.
+
+### Provenance-preserving policy migration tooling — 2026-10-14
+
+Implemented a checkpoint-map builder and optional initial-checkpoint input in
+`scripts/matrix/campaign_controller.py`. The map requires exact run-key
+coverage, validates each source campaign snapshot and attempt identity,
+checks the checkpoint hash/ZIP CRC and embedded `num_timesteps`, and selects
+only checkpoints at or below the requested budget. The controller archives
+the checkpoint bytes in the successor campaign and includes parent fingerprints,
+attempt provenance hashes, and step counts in the new campaign identity. On
+later interruption, it prefers a successor-attempt checkpoint and falls back
+to the archived parent checkpoint. A full-budget checkpoint can therefore be
+re-evaluated under the newer survival gate without claiming additional PPO
+steps.
+
+Prepared a distinct seed-42, 18-run, 20M shared-bundle campaign spec using the
+current survival-only acceptance policy and a two-node allocation/supervisor
+pair. Building a map from the live primary plus recovery manifests and running
+the controller dry-run validated all 18 keys and the requested GH200/CPU/env
+placement. Focused tests passed 24/24; full-tree Ruff format, Ruff lint, Mypy
+(404 source files), both launcher syntax checks, and `git diff --check` passed.
+No Slurm request was made and no live process or manifest was modified.
+
+This migration is not yet launched. Do not start its supervisor while the old
+supervisor continues to allocate for the primary manifest. The migration
+supervisor checks the existing organizer process and `thesis18x2` Slurm job,
+waiting rather than requesting a competing allocation; it also fails closed
+if `squeue` cannot be queried. Once the old organizer is terminal, rebuild the
+map from the newest intact checkpoints across both manifests. The new
+controller runs a CPU `PPO.load` preflight for
+every initial checkpoint before worker launch, but this has not run on the
+GH200 runtime yet. Current evidence verifies map construction and file
+integrity, not real model deserialization. Keep the old attempt history and the new
+lineage distinct, and label any resulting training as a checkpoint continuation
+with the source-policy boundary recorded.
