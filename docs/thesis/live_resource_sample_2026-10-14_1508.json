@@ -1,0 +1,59 @@
+{
+  "allocation_shape": {
+    "cpus": 96,
+    "gpus": 2,
+    "memory_gib_per_node": 512,
+    "nodes": 2
+  },
+  "method_note": "Interim, incomplete-campaign interval. RAM and GPU samples come from the allocation-scoped Slurm job cgroup and physical GPU; these include the two separate cache-recovery workers. CPU is the primary sampler process-tree CPU-time delta and may exclude the separately supervised recovery controller. The last incomplete CSV line, if any, is omitted. This is not a full-run sizing guarantee. Exact raw CSV bytes through the last complete row are preserved as gzip snapshots and checksummed.",
+  "nodes": {
+    "gpuarm1": {
+      "cgroup_limit_gib": 512.0,
+      "cgroup_ram_avg_gib": 150.70365014032487,
+      "cgroup_ram_latest_gib": 176.91282653808594,
+      "cgroup_ram_peak_gib": 180.5508575439453,
+      "cpu_avg_cores_from_counter_deltas": 3.8177755266993008,
+      "end_utc": "2026-10-14T15:09:28.029483+00:00",
+      "gpu_util_avg_pct": 57.007339449541284,
+      "gpu_util_last_hour_avg_pct": 56.95,
+      "gpu_util_last_pct": 34,
+      "gpu_vram_peak_gib": 54.5859375,
+      "oom_event_peak": 0,
+      "process_pss_avg_gib": 115.3218061832113,
+      "process_pss_peak_gib": 142.59832286834717,
+      "ram_scope": "slurm_job",
+      "samples": 545,
+      "source_csv": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/resources_gpuarm1.csv",
+      "source_csv_sha256": "6da517681b3b858332c7999fdc7c3c1208d546608f59bcf80d198e25a59383bf",
+      "source_snapshot_gzip": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/reports/resource_snapshot_20261014_1508/resources_gpuarm1.csv.gz",
+      "source_snapshot_sha256": "95b2e5cddcf91a7a2dab1d23d5558578746210a75cd72f82ca12d4fcd8bd949f",
+      "start_utc": "2026-10-14T09:50:03.927380+00:00",
+      "window_hours": 5.3234
+    },
+    "gpuarm2": {
+      "cgroup_limit_gib": 512.0,
+      "cgroup_ram_avg_gib": 152.44592809406706,
+      "cgroup_ram_latest_gib": 181.3075714111328,
+      "cgroup_ram_peak_gib": 183.99736785888672,
+      "cpu_avg_cores_from_counter_deltas": 4.8851464973333805,
+      "end_utc": "2026-10-14T15:09:10.834651+00:00",
+      "gpu_util_avg_pct": 56.42722117202268,
+      "gpu_util_last_hour_avg_pct": 57.97938144329897,
+      "gpu_util_last_pct": 61,
+      "gpu_vram_peak_gib": 65.916015625,
+      "oom_event_peak": 0,
+      "process_pss_avg_gib": 146.5780183903887,
+      "process_pss_peak_gib": 178.84844398498535,
+      "ram_scope": "slurm_job",
+      "samples": 529,
+      "source_csv": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/resources_gpuarm2.csv",
+      "source_csv_sha256": "f66eb3187908eaa46bb5cef4e1657a9f9694cc5a326819656abf936961ea21b9",
+      "source_snapshot_gzip": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/reports/resource_snapshot_20261014_1508/resources_gpuarm2.csv.gz",
+      "source_snapshot_sha256": "858a18ca446ea882c8c14c794621b7689056941b1a4acea23c574a809289073b",
+      "start_utc": "2026-10-14T09:50:04.137607+00:00",
+      "window_hours": 5.3185
+    }
+  },
+  "observed_at_utc": "2026-10-14T15:09:40.723342+00:00",
+  "schema_version": 1
+}
