@@ -216,3 +216,38 @@ placement. The 3M baseline checkpoint separately passed CPU `PPO.load` with
 its timestep matching 3,000,000; its hash/provenance report is
 `outputs/gpu_campaigns/readiness_reaudit_20261014/checkpoint_load_cpu_ladder_a0_flat_3m_20261014.json`.
 This does not verify GH200 loading or model quality.
+
+### Live exploratory campaign evidence refresh — 2026-10-14 12:26 UTC
+
+Slurm job `20954895` is still RUNNING on `gpuarm[1-2]`; the original campaign
+supervisor and migration watcher remain alive, with the watcher waiting and no
+new allocation requested. The primary manifest records 16 running workers and
+two preserved startup failures caused by prebuilt-cache hash mismatches. The
+separate recovery manifest has those two run keys running, so there are 18
+active unique variants across both manifests. Their latest worker logs show
+2.26M–3.64M of 20M steps. Eight latest short train-prefix monitors report
+zero trades; these are interim training monitors, not final split evaluations
+or worker terminal states. No final train-in-sample or report-only test report
+exists yet.
+
+A freshly rebuilt lineage map covers all 18 variants from the primary plus
+recovery campaigns. All 18 selected checkpoints passed local CPU
+deserialization and embedded-timestep validation (one at 3M and 17 at 2M).
+The report is
+`outputs/gpu_campaigns/readiness_reaudit_20261014/reports/checkpoint_load_cpu_18_seed42_latest_20261014_1216.json`;
+the map is
+`outputs/gpu_campaigns/readiness_reaudit_20261014/checkpoint_map_snapshot_20261014_1216.json`.
+The migration controller dry-run accepted those 18 lineages for the specified
+20M, shared-bundle, `n_envs=64`, two-GH200-node configuration; its saved result
+is
+`outputs/gpu_campaigns/readiness_reaudit_20261014/reports/campaign_migration_dry_run_20261014_1216.json`.
+These results do not verify GH200 loading or final model quality.
+
+The zero-trade train-prefix dashboard wording was clarified in commit
+`c80a36c`; current workers remain pinned to source commit `937bae5`, so their
+historical logs are preserved. The clearer label will apply to a later
+migration run. The 2026 calendar remains previously exposed development data;
+no fresh locked holdout is available in this scope. The independent reviewer
+record remains unsigned. Do not infer survival, viability, or confirmatory
+performance from these partial checkpoints and monitor outputs. Overall
+readiness remains **NOT READY**.
