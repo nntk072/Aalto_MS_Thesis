@@ -114,6 +114,15 @@ concurrent campaign remained RUNNING at 4:23/6:00, with six zero-trade
 20,000-bar training-prefix monitors and no final train/test reports. This is
 interim operational evidence only; independent review remains OPEN.
 
+The 13:52 UTC resource refresh covers 4.02 hours: process-tree CPU averaged
+3.82/4.89 cores on the 48-core nodes, cgroup RAM averaged 144.4/145.5 GiB and
+peaked at 166.5/170.0 GiB, GPU utilization averaged 57.0%/55.9%, VRAM peaked
+at 51.2/60.0 GiB, and sampled OOM counters were zero. The raw CSV hashes and
+worker state are recorded in
+`docs/thesis/live_campaign_snapshot_2026-10-14_1352.json` (SHA-256
+`fc11afa4ac1779fb1179bbac452e369fa3fbfce262a536c010483d058082f209`). This
+interim sample does not close full-run resource sizing or the review gate.
+
 ## Campaign and evaluation status addendum — 2026-10-14
 
 The primary 18-run campaign is still active under its pinned source revision

@@ -1,0 +1,629 @@
+{
+  "captured_at_utc": "2026-10-14T13:52:10+00:00",
+  "configuration": {
+    "n_envs": 64,
+    "nodes": 2,
+    "requested_timesteps_per_variant": 20000000,
+    "shared_bundle": true,
+    "slurm_cpus": 96,
+    "slurm_memory_per_node_gib": 512,
+    "unique_seed42_lineages": 18
+  },
+  "latest_checkpoint_cpu_audit": {
+    "failed": 0,
+    "loaded_steps_max": 5000000,
+    "loaded_steps_min": 3000000,
+    "passed": 18,
+    "path": "docs/thesis/checkpoint_load_cpu_18_seed42_live_20261014_1338.json",
+    "sha256": "75581ab0b06107c232e458479673d57134dfcac167884a2f080cfdd31e41f1e3"
+  },
+  "resource_summary": [
+    {
+      "cgroup_limit_gib": 512.0,
+      "cgroup_ram_avg_gib": 144.5,
+      "cgroup_ram_peak_gib": 166.5,
+      "cpu_avg_cores_from_counter_deltas": 3.82,
+      "csv_path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/resources_gpuarm1.csv",
+      "csv_sha256": "cdc41b94de701df7a423fe3c5657bea020c976778698a9e262726451add2a997",
+      "end_utc": "2026-10-14T13:51:48.921925+00:00",
+      "gpu_util_avg_pct": 57.0,
+      "gpu_util_last_hour_avg_pct": 59.2,
+      "gpu_util_last_pct": 16.0,
+      "gpu_vram_peak_gib": 51.2,
+      "node": "gpuarm1",
+      "oom_event_peak": 0,
+      "sample_span_hours": 4.029,
+      "samples": 416,
+      "start_utc": "2026-10-14T09:50:03.927380+00:00"
+    },
+    {
+      "cgroup_limit_gib": 512.0,
+      "cgroup_ram_avg_gib": 145.6,
+      "cgroup_ram_peak_gib": 170.0,
+      "cpu_avg_cores_from_counter_deltas": 4.89,
+      "csv_path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/resources_gpuarm2.csv",
+      "csv_sha256": "b64e9b7a5a56291f6bf4b5753a445d150e0c241688d798009aaad9f7bd506a0f",
+      "end_utc": "2026-10-14T13:51:34.855559+00:00",
+      "gpu_util_avg_pct": 55.9,
+      "gpu_util_last_hour_avg_pct": 57.1,
+      "gpu_util_last_pct": 92.0,
+      "gpu_vram_peak_gib": 60.0,
+      "node": "gpuarm2",
+      "oom_event_peak": 0,
+      "sample_span_hours": 4.025,
+      "samples": 404,
+      "start_utc": "2026-10-14T09:50:04.137607+00:00"
+    }
+  ],
+  "runs": [
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 5799936,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a0_flat__seed42/attempt1/ladder_a0_flat__seed42/20261014_125018_106971_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": -46.07172382293185,
+          "diversity_text": "TRADE DECISION DIVERSITY\nSL:  unique 0  effective nan  entropy nan  top nan%  \nTP:  unique 3  effective 3.00  entropy 1.10  top 33%  swing 33%  deviation 33%  session 33%\nExit:  n/a\nPlanned RR:  n/a\nSL rank:  n/a\nTP rank:  n/a\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.004125000000002932,
+          "n_trades": 6.0,
+          "profit_factor": 0.3298658353032712,
+          "return_pct": -0.2764303429376014,
+          "reward_mean": 0.00013411840527809027,
+          "role": "training_prefix_monitor",
+          "sharpe": -2.7935461339629652,
+          "sortino": -2.8591910302894927,
+          "timestep": 5701632,
+          "total_pnl": -276.4303429376014,
+          "turnover": 0.0011333585190782018,
+          "win_rate": 0.8333333333333334
+        },
+        "sha256": "fa57fbac2e96bcb2adb9c1e38e6156d4ac516a06b4652dd8495cb474f8c0b026"
+      },
+      "run_key": "ladder_a0_flat__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a0_flat__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:52:02+03:00",
+      "worker_log_sha256": "389af6d1064b53c03fde5b282847299deeac96628855a937dea0295fd4b29fce"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 4423680,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder2_cache_recovery_seed42_20m_shared_bundle_n64_20261014/runs/attempts/ladder_a0_flat_dist__seed42/attempt1/ladder_a0_flat_dist__seed42/20261014_125522_833417_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": -111.24904900022467,
+          "diversity_text": "TRADE DECISION DIVERSITY\nSL:  unique 5  effective 2.99  entropy 1.10  top 64%  fvg 64%  htf 18%  deviation 9%  yesterday_low 5%  swing 5%\nTP:  unique 5  effective 3.68  entropy 1.30  top 50%  htf 50%  session 25%  swing 10%  deviation 10%  fvg 5%\nExit:  structural 91%  ema_21 9%\nPlanned RR:  P10 1.66  P25 2.42  P50 2.94  P75 4.39  P90 5.48  P95 10.97\nSL rank:  median 0.00  P90 0.37\nTP rank:  median 0.31  P90 1.00\nstop_u std 0.286  unique sl families 5\nby strategy:\n  distribution  fvg 64%  htf 18%  deviation 9%  swing 5%\nby session:\n  ny  fvg 64%  htf 18%  deviation 9%  swing 5%\nby manipulation:\n  done  fvg 100%\n  none  fvg 62%  htf 19%  deviation 10%  swing 5%\nby volatility_regime:\n  high  fvg 74%  htf 16%  swing 5%  yesterday_low 5%\n  mid  deviation 67%  htf 33%\nby trend_regime:\n  down  fvg 50%  deviation 25%  htf 25%\n  up  fvg 71%  htf 14%  swing 7%  yesterday_low 7%\nby direction:\n  -1.0  fvg 50%  deviation 25%  htf 25%\n  1.0  fvg 71%  htf 14%  swing 7%  yesterday_low 7%\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.027585753182703954,
+          "n_trades": 22.0,
+          "profit_factor": 0.2740067368830325,
+          "return_pct": -2.4474790780049225,
+          "reward_mean": -4.000527258652829e-06,
+          "role": "training_prefix_monitor",
+          "sharpe": -8.096956185193642,
+          "sortino": -10.114636588795486,
+          "timestep": 4407296,
+          "total_pnl": -2447.4790780049225,
+          "turnover": 0.00415564790328674,
+          "win_rate": 0.18181818181818182
+        },
+        "sha256": "7e8d57e2c9068d46c99903201fba86858235f904fd6468e78628911230d089a0"
+      },
+      "run_key": "ladder_a0_flat_dist__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder2_cache_recovery_seed42_20m_shared_bundle_n64_20261014/logs/workers/ladder_a0_flat_dist__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:50:44+03:00",
+      "worker_log_sha256": "2f81ead5450ee7a9f05160caa83e88fc9b5f6f692c6a88f683332db20f9a291d"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 4423680,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder2_cache_recovery_seed42_20m_shared_bundle_n64_20261014/runs/attempts/ladder_a0_flat_po3__seed42/attempt1/ladder_a0_flat_po3__seed42/20261014_125523_514311_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": 68.41071554854409,
+          "diversity_text": "TRADE DECISION DIVERSITY\nSL:  unique 3  effective 2.83  entropy 1.04  top 50%  fvg 50%  htf 25%  swing 25%\nTP:  unique 2  effective 1.75  entropy 0.56  top 75%  htf 75%  session 25%\nExit:  structural 100%\nPlanned RR:  P10 2.95  P25 3.95  P50 4.60  P75 6.60  P90 10.02  P95 11.17\nSL rank:  median 0.00  P90 0.00\nTP rank:  median 0.50  P90 0.62\nstop_u std 0.209  unique sl families 3\nby strategy:\n  po3_ifvg  fvg 50%  htf 25%  swing 25%\nby session:\n  ny  fvg 50%  htf 25%  swing 25%\nby manipulation:\n  none  fvg 50%  htf 25%  swing 25%\nby volatility_regime:\n  high  fvg 50%  htf 25%  swing 25%\nby trend_regime:\n  down  swing 100%\n  up  fvg 67%  htf 33%\nby direction:\n  -1.0  fvg 50%  swing 50%\n  1.0  fvg 50%  htf 50%\nWARNING  EXIT COLLAPSE  structural 100.0%\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.005524297480107854,
+          "n_trades": 4.0,
+          "profit_factor": 1.552487069558032,
+          "return_pct": 0.27364286219418865,
+          "reward_mean": 6.303473685890352e-07,
+          "role": "training_prefix_monitor",
+          "sharpe": 1.7313298148828007,
+          "sortino": 2.4127222574451728,
+          "timestep": 4407296,
+          "total_pnl": 273.64286219418864,
+          "turnover": 0.0007555723460521345,
+          "win_rate": 0.25
+        },
+        "sha256": "d12e548e0429b89a931ad3ecce3777a1191963ca6509fd9af41d94e15325d739"
+      },
+      "run_key": "ladder_a0_flat_po3__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder2_cache_recovery_seed42_20m_shared_bundle_n64_20261014/logs/workers/ladder_a0_flat_po3__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:50:51+03:00",
+      "worker_log_sha256": "61b680425633fc3954be6a6b292ab0b895bc3570b5f2ac97c3077aaae125ad48"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 4620288,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a1_sl__seed42/attempt1/ladder_a1_sl__seed42/20261014_125039_797024_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": 16.01593783762829,
+          "diversity_text": "TRADE DECISION DIVERSITY\nSL:  unique 4  effective 1.56  entropy 0.44  top 89%  deviation 89%  yesterday_high 7%  lastweek_high 3%  yesterday_low 1%\nTP:  unique 5  effective 4.62  entropy 1.53  top 29%  htf 29%  swing 29%  session 18%  fvg 12%  deviation 12%\nExit:  ema_21 77%  structural 23%\nPlanned RR:  P10 1.23  P25 1.57  P50 2.01  P75 3.14  P90 3.81  P95 5.12\nSL rank:  median 0.00  P90 0.50\nTP rank:  median 0.00  P90 1.00\nstop_u std 0.334  unique sl families 4\nby strategy:\n  baseline  deviation 89%  yesterday_high 7%  lastweek_high 3%  yesterday_low 1%\nby session:\n  ny  deviation 89%  yesterday_high 7%  lastweek_high 3%  yesterday_low 1%\nby manipulation:\n  done  deviation 89%  lastweek_high 11%\n  none  deviation 89%  yesterday_high 9%  yesterday_low 2%\nby volatility_regime:\n  high  deviation 88%  yesterday_high 8%  lastweek_high 3%  yesterday_low 2%\n  mid  deviation 100%\nby trend_regime:\n  flat  deviation 89%  yesterday_high 7%  lastweek_high 3%  yesterday_low 1%\nby direction:\n  -1.0  deviation 89%  yesterday_high 8%  lastweek_high 3%\n  1.0  deviation 88%  yesterday_low 12%\nWARNING  SL COLLAPSE  top deviation 89%\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.017147179208278684,
+          "n_trades": 73.0,
+          "profit_factor": 1.1710176778052848,
+          "return_pct": 1.1691634621468547,
+          "reward_mean": -0.003735288440971016,
+          "role": "training_prefix_monitor",
+          "sharpe": 2.155066802827716,
+          "sortino": 3.2268958795150584,
+          "timestep": 4603904,
+          "total_pnl": 1169.1634621468547,
+          "turnover": 0.013789195315451454,
+          "win_rate": 0.5616438356164384
+        },
+        "sha256": "48f53e612ab1437e3ec2819783e14427ee31934e839be0d21137b356f8a8c3f4"
+      },
+      "run_key": "ladder_a1_sl__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a1_sl__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:51:25+03:00",
+      "worker_log_sha256": "5bc7d10626843b4a9101c5202f80f85fe5166d8e07f29bc73ba017573becea85"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 4620288,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a1_sl_dist__seed42/attempt1/ladder_a1_sl_dist__seed42/20261014_125042_734259_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": -8.30765239527163,
+          "diversity_text": "TRADE DECISION DIVERSITY\nSL:  unique 1  effective 1.00  entropy -0.00  top 100%  fvg 100%\nTP:  unique 1  effective 1.00  entropy -0.00  top 100%  fvg 100%\nExit:  structural 100%\nPlanned RR:  P10 4.61  P25 4.61  P50 4.61  P75 4.61  P90 4.61  P95 4.61\nSL rank:  median 0.00  P90 0.00\nTP rank:  median 0.00  P90 0.00\nstop_u std 0.000  unique sl families 1\nby strategy:\n  distribution  fvg 100%\nby session:\n  ny  fvg 100%\nby manipulation:\n  done  fvg 100%\nby volatility_regime:\n  high  fvg 100%\nby trend_regime:\n  up  fvg 100%\nby direction:\n  1.0  fvg 100%\nWARNING  SL COLLAPSE  top fvg 100%\nWARNING  TP COLLAPSE  top fvg 100%\nWARNING  EXIT COLLAPSE  structural 100.0%\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.001218800535375375,
+          "n_trades": 1.0,
+          "profit_factor": 0.0,
+          "return_pct": -0.008307652395276817,
+          "reward_mean": 1.2643770271544244e-08,
+          "role": "training_prefix_monitor",
+          "sharpe": -0.21590059156533167,
+          "sortino": -0.2924671355062252,
+          "timestep": 4603904,
+          "total_pnl": -8.307652395276818,
+          "turnover": 0.00018889308651303362,
+          "win_rate": 0.0
+        },
+        "sha256": "7d20b4e3fb16bab4862048f2c6522df1fa723850f8dd0960963b68a410268427"
+      },
+      "run_key": "ladder_a1_sl_dist__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a1_sl_dist__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:51:00+03:00",
+      "worker_log_sha256": "0df70551a8733e8397a8474eeca0640c30fffc2c27ce05dff5c4d2a3b9eba6dd"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 4718592,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a1_sl_po3__seed42/attempt1/ladder_a1_sl_po3__seed42/20261014_125039_839101_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": 95.9024189444075,
+          "diversity_text": "TRADE DECISION DIVERSITY\nSL:  unique 4  effective 3.46  entropy 1.24  top 50%  fvg 50%  po3_manipulation_low 17%  deviation 17%  htf 17%\nTP:  unique 2  effective 1.75  entropy 0.56  top 75%  htf 75%  prev_week 25%\nExit:  structural 67%  ema_21 33%\nPlanned RR:  P10 1.96  P25 2.20  P50 2.41  P75 4.18  P90 7.21  P95 8.22\nSL rank:  median 0.29  P90 0.46\nTP rank:  median 0.75  P90 1.00\nstop_u std 0.015  unique sl families 4\nby strategy:\n  po3_ifvg  fvg 50%  deviation 17%  htf 17%  po3_manipulation_low 17%\nby session:\n  ny  fvg 50%  deviation 17%  htf 17%  po3_manipulation_low 17%\nby manipulation:\n  done  fvg 33%  htf 33%  po3_manipulation_low 33%\n  none  fvg 67%  deviation 33%\nby volatility_regime:\n  high  fvg 60%  htf 20%  po3_manipulation_low 20%\n  mid  deviation 100%\nby trend_regime:\n  down  fvg 60%  deviation 20%  po3_manipulation_low 20%\n  up  htf 100%\nby direction:\n  -1.0  deviation 33%  fvg 33%  htf 33%\n  1.0  fvg 67%  po3_manipulation_low 33%\nWARNING  ACTION COLLAPSE  stop_u std 0.015\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.004491877948331169,
+          "n_trades": 6.0,
+          "profit_factor": 10.906326717397016,
+          "return_pct": 0.5754145136664592,
+          "reward_mean": 1.2571594817049782e-06,
+          "role": "training_prefix_monitor",
+          "sharpe": 5.061752102021402,
+          "sortino": 7.743350014550434,
+          "timestep": 4702208,
+          "total_pnl": 575.4145136664592,
+          "turnover": 0.0011333585190782018,
+          "win_rate": 0.5
+        },
+        "sha256": "7034a4155e7a300b6503b005c29d74950c0c7970daf191d2929b77355899a360"
+      },
+      "run_key": "ladder_a1_sl_po3__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a1_sl_po3__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:50:05+03:00",
+      "worker_log_sha256": "8efc984f133cba2ce9b4364b572f8cac3ede53669a233fe7e672b6e434de2846"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 4718592,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a2_tp__seed42/attempt1/ladder_a2_tp__seed42/20261014_125018_136933_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": 0.3988141828220375,
+          "diversity_text": "TRADE DECISION DIVERSITY\nSL:  unique 2  effective 1.18  entropy 0.17  top 96%  deviation 96%  yesterday_high 4%\nTP:  unique 2  effective 1.89  entropy 0.64  top 67%  htf 67%  session 33%\nExit:  ema_21 94%  structural 6%\nPlanned RR:  P10 1.58  P25 1.64  P50 1.73  P75 2.51  P90 2.98  P95 3.14\nSL rank:  median 0.00  P90 0.33\nTP rank:  median 0.00  P90 0.40\nstop_u std 0.307  unique sl families 2\nby strategy:\n  baseline  deviation 96%  yesterday_high 4%\nby session:\n  ny  deviation 96%  yesterday_high 4%\nby manipulation:\n  done  deviation 100%\n  none  deviation 95%  yesterday_high 5%\nby volatility_regime:\n  high  deviation 96%  yesterday_high 4%\n  mid  deviation 100%\nby trend_regime:\n  flat  deviation 96%  yesterday_high 4%\nby direction:\n  -1.0  deviation 96%  yesterday_high 4%\n  1.0  deviation 100%\nWARNING  SL COLLAPSE  top deviation 96%\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.012351517310004279,
+          "n_trades": 51.0,
+          "profit_factor": 1.004225790351289,
+          "return_pct": 0.020339523323928008,
+          "reward_mean": -0.001217797829004082,
+          "role": "training_prefix_monitor",
+          "sharpe": 0.09364085706811508,
+          "sortino": 0.1347655533330079,
+          "timestep": 4702208,
+          "total_pnl": 20.339523323928006,
+          "turnover": 0.009633547412164715,
+          "win_rate": 0.5294117647058824
+        },
+        "sha256": "74a879e045c1a9116e0e3de2b75c83695872be7c7a1c5b6e5976eab81b38d0eb"
+      },
+      "run_key": "ladder_a2_tp__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a2_tp__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:51:22+03:00",
+      "worker_log_sha256": "e8814d231a10b19cc409474ac3def90eb6cc936a48c26e01bf2233d2e048523b"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 4521984,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a2_tp_dist__seed42/attempt1/ladder_a2_tp_dist__seed42/20261014_125020_969913_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": -64.77344065643038,
+          "diversity_text": "TRADE DECISION DIVERSITY\nSL:  unique 6  effective 5.12  entropy 1.63  top 33%  swing 33%  fvg 25%  deviation 17%  htf 8%  session 8%  prev_day 8%\nTP:  unique 2  effective 2.00  entropy 0.69  top 50%  session 50%  htf 50%\nExit:  ema_21 83%  structural 17%\nPlanned RR:  P10 2.07  P25 2.35  P50 2.82  P75 3.29  P90 3.57  P95 3.66\nSL rank:  median 0.37  P90 0.50\nTP rank:  median 0.55  P90 0.59\nstop_u std 0.000  unique sl families 6\nby strategy:\n  distribution  swing 33%  fvg 25%  deviation 17%  htf 8%\nby session:\n  ny  swing 33%  fvg 25%  deviation 17%  htf 8%\nby manipulation:\n  done  fvg 100%\n  none  swing 36%  deviation 18%  fvg 18%  htf 9%\nby volatility_regime:\n  high  swing 36%  fvg 27%  deviation 9%  htf 9%\n  mid  deviation 100%\nby trend_regime:\n  down  deviation 29%  fvg 29%  prev_day 14%  session 14%\n  up  swing 60%  fvg 20%  htf 20%\nby direction:\n  -1.0  deviation 29%  fvg 29%  prev_day 14%  session 14%\n  1.0  swing 60%  fvg 20%  htf 20%\nWARNING  ACTION COLLAPSE  stop_u std 0.000\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.012738113699258147,
+          "n_trades": 12.0,
+          "profit_factor": 0.3765272985617267,
+          "return_pct": -0.7772812878771365,
+          "reward_mean": -1.128436213635301e-06,
+          "role": "training_prefix_monitor",
+          "sharpe": -4.738419158310952,
+          "sortino": -6.136504998577403,
+          "timestep": 4505600,
+          "total_pnl": -777.2812878771365,
+          "turnover": 0.0022667170381564035,
+          "win_rate": 0.25
+        },
+        "sha256": "ed0f88f92e1372ad84c7e3bb2ee19f6db0a07a5ed61bca8744359683e75ca6a8"
+      },
+      "run_key": "ladder_a2_tp_dist__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a2_tp_dist__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:51:21+03:00",
+      "worker_log_sha256": "2deb7b5efd26ab3d042a55d992899e99e806f0e67d7562636253c628f21e116e"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 4423680,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a2_tp_po3__seed42/attempt1/ladder_a2_tp_po3__seed42/20261014_125018_771768_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": 249.67005772952953,
+          "diversity_text": "TRADE DECISION DIVERSITY\nSL:  unique 4  effective 3.78  entropy 1.33  top 33%  po3_manipulation_low 33%  swing 33%  fvg 17%  session 17%\nTP:  unique 3  effective 2.38  entropy 0.87  top 67%  htf 67%  session 17%  swing 17%\nExit:  structural 100%\nPlanned RR:  P10 3.62  P25 3.88  P50 4.27  P75 4.40  P90 4.67  P95 4.81\nSL rank:  median 0.25  P90 0.67\nTP rank:  median 1.00  P90 1.00\nstop_u std 0.000  unique sl families 4\nby strategy:\n  po3_ifvg  po3_manipulation_low 33%  swing 33%  fvg 17%  session 17%\nby session:\n  ny  po3_manipulation_low 33%  swing 33%  fvg 17%  session 17%\nby manipulation:\n  done  po3_manipulation_low 100%\n  none  swing 40%  fvg 20%  po3_manipulation_low 20%  session 20%\nby volatility_regime:\n  high  po3_manipulation_low 33%  swing 33%  fvg 17%  session 17%\nby trend_regime:\n  up  po3_manipulation_low 33%  swing 33%  fvg 17%  session 17%\nby direction:\n  -1.0  swing 100%\n  1.0  po3_manipulation_low 40%  fvg 20%  session 20%  swing 20%\nWARNING  EXIT COLLAPSE  structural 100.0%\nWARNING  ACTION COLLAPSE  stop_u std 0.000\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.005379335728776025,
+          "n_trades": 6.0,
+          "profit_factor": 7.43552516043458,
+          "return_pct": 1.4980203463771613,
+          "reward_mean": 3.0002273689347774e-06,
+          "role": "training_prefix_monitor",
+          "sharpe": 7.827820769118005,
+          "sortino": 11.916552119863177,
+          "timestep": 4407296,
+          "total_pnl": 1498.0203463771613,
+          "turnover": 0.0011333585190782018,
+          "win_rate": 0.6666666666666666
+        },
+        "sha256": "11eac024e36393c061440f09367e02d54754fda502038804dedf6652fbb46da7"
+      },
+      "run_key": "ladder_a2_tp_po3__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a2_tp_po3__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:51:53+03:00",
+      "worker_log_sha256": "437b48ff2845b0713b8f9a82f2f54cdc0ac4bb82ac4de8783bed10c623553773"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 4521984,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a3_multi_tp__seed42/attempt1/ladder_a3_multi_tp__seed42/20261014_125040_425645_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": 82.05857083361975,
+          "diversity_text": "TRADE DECISION DIVERSITY\nSL:  unique 3  effective 1.43  entropy 0.35  top 90%  deviation 90%  yesterday_high 9%  lastweek_high 1%\nTP:  unique 4  effective 2.83  entropy 1.04  top 62%  htf 62%  swing 19%  session 12%  fvg 6%\nExit:  ema_21 83%  structural 17%\nPlanned RR:  P10 1.38  P25 1.75  P50 2.36  P75 3.78  P90 4.41  P95 4.64\nSL rank:  median 0.00  P90 0.50\nTP rank:  median 0.00  P90 0.75\nstop_u std 0.352  unique sl families 3\nby strategy:\n  baseline  deviation 90%  yesterday_high 9%  lastweek_high 1%\nby session:\n  ny  deviation 90%  yesterday_high 9%  lastweek_high 1%\nby manipulation:\n  done  deviation 86%  yesterday_high 11%  lastweek_high 4%\n  none  deviation 92%  yesterday_high 8%\nby volatility_regime:\n  high  deviation 89%  yesterday_high 9%  lastweek_high 1%\n  mid  deviation 100%\nby trend_regime:\n  flat  deviation 90%  yesterday_high 9%  lastweek_high 1%\nby direction:\n  -1.0  deviation 89%  yesterday_high 10%  lastweek_high 1%\n  1.0  deviation 100%\nWARNING  SL COLLAPSE  top deviation 90%\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.014413279846711924,
+          "n_trades": 92.0,
+          "profit_factor": 1.9244319481390193,
+          "return_pct": 7.549388516692983,
+          "reward_mean": -0.0008981946221499993,
+          "role": "training_prefix_monitor",
+          "sharpe": 9.441202680344512,
+          "sortino": 16.327828522360612,
+          "timestep": 4505600,
+          "total_pnl": 7549.388516692983,
+          "turnover": 0.017378163959199094,
+          "win_rate": 0.532608695652174
+        },
+        "sha256": "f73bb6708b1e75c38e7fb8876ceff8441cb8d19bd50c2371ff0f074a17b65cb6"
+      },
+      "run_key": "ladder_a3_multi_tp__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a3_multi_tp__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:51:20+03:00",
+      "worker_log_sha256": "866d5a57cb83ec23cc91ccff5e74d5841eb1d12a7b08f25261141469cf848753"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 4718592,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a3_multi_tp_dist__seed42/attempt1/ladder_a3_multi_tp_dist__seed42/20261014_125043_003659_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": -282.65969289671284,
+          "diversity_text": "TRADE DECISION DIVERSITY\nSL:  unique 1  effective 1.00  entropy -0.00  top 100%  fvg 100%\nTP:  unique 1  effective 1.00  entropy -0.00  top 100%  htf 100%\nExit:  structural 100%\nPlanned RR:  P10 1.52  P25 1.52  P50 1.52  P75 1.52  P90 1.52  P95 1.52\nSL rank:  median 0.00  P90 0.00\nTP rank:  median 0.00  P90 0.00\nstop_u std 0.000  unique sl families 1\nby strategy:\n  distribution  fvg 100%\nby session:\n  ny  fvg 100%\nby manipulation:\n  none  fvg 100%\nby volatility_regime:\n  high  fvg 100%\nby trend_regime:\n  up  fvg 100%\nby direction:\n  1.0  fvg 100%\nWARNING  SL COLLAPSE  top fvg 100%\nWARNING  TP COLLAPSE  top htf 100%\nWARNING  EXIT COLLAPSE  structural 100.0%\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.00282659692896714,
+          "n_trades": 1.0,
+          "profit_factor": 0.0,
+          "return_pct": -0.2826596928967192,
+          "reward_mean": -5.05686175886478e-07,
+          "role": "training_prefix_monitor",
+          "sharpe": -6.070357703653052,
+          "sortino": -6.069793200758894,
+          "timestep": 4702208,
+          "total_pnl": -282.6596928967192,
+          "turnover": 0.00018889308651303362,
+          "win_rate": 0.0
+        },
+        "sha256": "d68add18bf699bbb3d5ead01f3c7de03d9897e58563da64de3cc2ea09f3d9eee"
+      },
+      "run_key": "ladder_a3_multi_tp_dist__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a3_multi_tp_dist__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:51:29+03:00",
+      "worker_log_sha256": "cf8aa2d85e508bac729f07341f27961a696c55e7d029d6af0d584cc10218f1c1"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 4325376,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a3_multi_tp_po3__seed42/attempt1/ladder_a3_multi_tp_po3__seed42/20261014_125039_701376_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": -153.89733893772933,
+          "diversity_text": "TRADE DECISION DIVERSITY\nSL:  unique 5  effective 3.71  entropy 1.31  top 55%  fvg 55%  htf 14%  swing 14%  po3_manipulation_low 9%  po3_manipulation_high 9%\nTP:  unique 4  effective 3.71  entropy 1.31  top 33%  htf 33%  deviation 33%  session 22%  fvg 11%\nExit:  ema_21 59%  structural 41%\nPlanned RR:  P10 1.74  P25 1.97  P50 2.35  P75 2.63  P90 3.53  P95 3.82\nSL rank:  median 0.00  P90 0.65\nTP rank:  median 0.00  P90 0.47\nstop_u std 0.319  unique sl families 5\nby strategy:\n  po3_ifvg  fvg 55%  htf 14%  swing 14%  po3_manipulation_high 9%\nby session:\n  ny  fvg 55%  htf 14%  swing 14%  po3_manipulation_high 9%\nby manipulation:\n  done  fvg 50%  swing 50%\n  none  fvg 55%  htf 15%  po3_manipulation_high 10%  po3_manipulation_low 10%\nby volatility_regime:\n  high  fvg 55%  htf 15%  po3_manipulation_high 10%  po3_manipulation_low 10%\n  mid  fvg 50%  swing 50%\nby trend_regime:\n  down  fvg 64%  swing 18%  htf 9%  po3_manipulation_high 9%\n  up  fvg 45%  htf 18%  po3_manipulation_low 18%  po3_manipulation_high 9%\nby direction:\n  -1.0  fvg 60%  po3_manipulation_high 20%  htf 10%  swing 10%\n  1.0  fvg 50%  htf 17%  po3_manipulation_low 17%  swing 17%\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.03385741456630076,
+          "n_trades": 22.0,
+          "profit_factor": 0.1353782976998897,
+          "return_pct": -3.3857414566300723,
+          "reward_mean": -5.773174866106264e-06,
+          "role": "training_prefix_monitor",
+          "sharpe": -11.210269509630782,
+          "sortino": -12.185560270324492,
+          "timestep": 4300800,
+          "total_pnl": -3385.741456630072,
+          "turnover": 0.00415564790328674,
+          "win_rate": 0.3181818181818182
+        },
+        "sha256": "08229408281b5cec3acbe7a3f13d9526f7d889b1a63552ad8cec997128ca4d7f"
+      },
+      "run_key": "ladder_a3_multi_tp_po3__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a3_multi_tp_po3__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:50:49+03:00",
+      "worker_log_sha256": "d13fe1a04f39da9153e436ae28d8ce96b56837e7a02e32a5f7dbfaa0cb18da75"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 4030464,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a4a_entry_fsm_hidden__seed42/attempt1/ladder_a4a_entry_fsm_hidden__seed42/20261014_125041_864494_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": 0.0,
+          "diversity_text": "TRADE DECISION DIVERSITY\nno strategy opens\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.0,
+          "n_trades": 0.0,
+          "profit_factor": 0.0,
+          "return_pct": 0.0,
+          "reward_mean": 0.0,
+          "role": "training_prefix_monitor",
+          "sharpe": 0.0,
+          "sortino": 0.0,
+          "timestep": 4005888,
+          "total_pnl": 0.0,
+          "turnover": 0.0,
+          "win_rate": 0.0
+        },
+        "sha256": "4b5bfd3ba8814de88304df8c20fbe81079b70a080120f0ffcf175a913da04e59"
+      },
+      "run_key": "ladder_a4a_entry_fsm_hidden__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a4a_entry_fsm_hidden__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:50:12+03:00",
+      "worker_log_sha256": "115883eef9abba0978862bb8035b4e1f4fc4479d052636cde60c147d120c737b"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 3538944,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a4a_entry_fsm_hidden_dist__seed42/attempt1/ladder_a4a_entry_fsm_hidden_dist__seed42/20261014_125042_454337_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": 0.0,
+          "diversity_text": "TRADE DECISION DIVERSITY\nno strategy opens\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.0,
+          "n_trades": 0.0,
+          "profit_factor": 0.0,
+          "return_pct": 0.0,
+          "reward_mean": 0.0,
+          "role": "training_prefix_monitor",
+          "sharpe": 0.0,
+          "sortino": 0.0,
+          "timestep": 3506176,
+          "total_pnl": 0.0,
+          "turnover": 0.0,
+          "win_rate": 0.0
+        },
+        "sha256": "6d0eeadf991bf3aff8724e5446f149d39579fe7c69910ab1158b8353ac0c160b"
+      },
+      "run_key": "ladder_a4a_entry_fsm_hidden_dist__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a4a_entry_fsm_hidden_dist__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:49:21+03:00",
+      "worker_log_sha256": "990c8f02454d08dcf31afd277ca6ac020aa2323731de19e9b5d61af01f619e4c"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 3735552,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a4a_entry_fsm_hidden_po3__seed42/attempt1/ladder_a4a_entry_fsm_hidden_po3__seed42/20261014_125043_123223_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": 0.0,
+          "diversity_text": "TRADE DECISION DIVERSITY\nno strategy opens\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.0,
+          "n_trades": 0.0,
+          "profit_factor": 0.0,
+          "return_pct": 0.0,
+          "reward_mean": 0.0,
+          "role": "training_prefix_monitor",
+          "sharpe": 0.0,
+          "sortino": 0.0,
+          "timestep": 3801088,
+          "total_pnl": 0.0,
+          "turnover": 0.0,
+          "win_rate": 0.0
+        },
+        "sha256": "1b1d53557bdb6fca8807a07b5b1441b4f231fafe95f25d2f33f854a267cdb79c"
+      },
+      "run_key": "ladder_a4a_entry_fsm_hidden_po3__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a4a_entry_fsm_hidden_po3__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:52:05+03:00",
+      "worker_log_sha256": "0a03bfb58beb39cc424a5f9642775f52cc4d803e917a316eedcfa54a44ba0727"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 3637248,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a4b_distribution__seed42/attempt1/ladder_a4b_distribution__seed42/20261014_125025_299885_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": 0.0,
+          "diversity_text": "TRADE DECISION DIVERSITY\nno strategy opens\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.0,
+          "n_trades": 0.0,
+          "profit_factor": 0.0,
+          "return_pct": 0.0,
+          "reward_mean": 0.0,
+          "role": "training_prefix_monitor",
+          "sharpe": 0.0,
+          "sortino": 0.0,
+          "timestep": 3604480,
+          "total_pnl": 0.0,
+          "turnover": 0.0,
+          "win_rate": 0.0
+        },
+        "sha256": "e4b329947aed21aa3befeb36c1872d9855be07b9d05d336f17573f50d90af8ad"
+      },
+      "run_key": "ladder_a4b_distribution__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a4b_distribution__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:50:32+03:00",
+      "worker_log_sha256": "164aa5ede396642a6a01b58c81bbb68c2b52a0eb6755e1cb349ede679f713e09"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 3932160,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a4b_entry_fsm__seed42/attempt1/ladder_a4b_entry_fsm__seed42/20261014_125019_978669_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": 0.0,
+          "diversity_text": "TRADE DECISION DIVERSITY\nno strategy opens\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.0,
+          "n_trades": 0.0,
+          "profit_factor": 0.0,
+          "return_pct": 0.0,
+          "reward_mean": 0.0,
+          "role": "training_prefix_monitor",
+          "sharpe": 0.0,
+          "sortino": 0.0,
+          "timestep": 3907584,
+          "total_pnl": 0.0,
+          "turnover": 0.0,
+          "win_rate": 0.0
+        },
+        "sha256": "eafd795b724608129915927d32864ae9b5e1b170965ab22a3eabc09c486ff5af"
+      },
+      "run_key": "ladder_a4b_entry_fsm__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a4b_entry_fsm__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:51:06+03:00",
+      "worker_log_sha256": "351b6670e27f7af07a24ae9f077799f50686872a5d6177693dbfede398e437ba"
+    },
+    {
+      "early_abort_markers": 0,
+      "latest_ppo_timestep": 3637248,
+      "latest_train_prefix_monitor": {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a4b_po3_ifvg__seed42/attempt1/ladder_a4b_po3_ifvg__seed42/20261014_125021_016377_rl_train_seed42_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "record": {
+          "account_currency": "USD",
+          "avg_trade": 0.0,
+          "diversity_text": "TRADE DECISION DIVERSITY\nno strategy opens\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.0,
+          "n_trades": 0.0,
+          "profit_factor": 0.0,
+          "return_pct": 0.0,
+          "reward_mean": 0.0,
+          "role": "training_prefix_monitor",
+          "sharpe": 0.0,
+          "sortino": 0.0,
+          "timestep": 3702784,
+          "total_pnl": 0.0,
+          "turnover": 0.0,
+          "win_rate": 0.0
+        },
+        "sha256": "7552308a17c2f7797d783237659f7949a5f2bf0c90775aca3fc53297d8b69049"
+      },
+      "run_key": "ladder_a4b_po3_ifvg__seed42",
+      "worker_log": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a4b_po3_ifvg__seed42.log",
+      "worker_log_mtime_local": "2026-10-14T16:51:26+03:00",
+      "worker_log_sha256": "84823344d751182f1441c51e0c31f7baf6ae525e28f01baad5082aab8dd2236a"
+    }
+  ],
+  "scope": "live exploratory campaign progress and interim resources; not final model evaluation",
+  "slurm_job_20954895": "20954895|RUNNING|4:26:45|2|gpuarm[1-2]",
+  "worker_summary": {
+    "early_abort_marker_count": 0,
+    "final_evaluation_files": [],
+    "latest_ppo_steps_max": 5799936,
+    "latest_ppo_steps_min": 3538944,
+    "monitors_count": 18,
+    "observed_variant_logs": 18,
+    "zero_trade_latest_20000_bar_train_prefix_monitors": 6
+  }
+}

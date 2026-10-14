@@ -17,6 +17,8 @@
 
 **Live checkpoint and worker refresh — 2026-10-14 13:48 UTC:** latest resumable checkpoints for all 18 unique lineages passed provenance/hash checks and CPU deserialization (18/18; selected checkpoints at 3M–5M steps). The audit is `docs/thesis/checkpoint_load_cpu_18_seed42_live_20261014_1338.json` (SHA-256 `75581ab0b06107c232e458479673d57134dfcac167884a2f080cfdd31e41f1e3`). Slurm job `20954895` remained RUNNING at 4:23:13/6:00, with live worker progress at 3.441M–5.702M steps. Six latest 20,000-bar training-prefix monitors show zero trades; no `EARLY_ABORT` marker or final train/test evaluation was found. Snapshot: `docs/thesis/live_campaign_snapshot_2026-10-14_1348.json` (SHA-256 `efdf664e4d32320d601fdc41f3ac581d19fcdb1d947b9fa01e40b9428aac17d9`). These are interim exploratory observations; readiness stays **NOT READY**.
 
+**Four-hour resource refresh — 2026-10-14 13:52 UTC:** over 4.02 hours, process-tree CPU averaged 3.82/4.89 cores on the 48-core nodes; cgroup RAM averaged 144.4/145.5 GiB and peaked at 166.5/170.0 GiB against 512 GiB per node. GPU utilization averaged 57.0%/55.9%, VRAM peaked at 51.2/60.0 GiB, and sampled OOM counters were zero. See the raw resource CSV hashes in `docs/thesis/live_campaign_snapshot_2026-10-14_1352.json` (SHA-256 `fc11afa4ac1779fb1179bbac452e369fa3fbfce262a536c010483d058082f209`). This remains bounded interim resource evidence; final evaluations and full-run sizing are still open.
+
 The independent-review gate is prepared but not satisfied. See the
 [`independent research review checklist`](../thesis/independent_research_review_checklist_2026-10-14.md);
 it requires a qualified external reviewer and an explicit disposition.
