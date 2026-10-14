@@ -131,6 +131,44 @@ def test_bundle_env_without_session_id_matches_frames(tmp_path: Path) -> None:
         left, right = left_step[0], right_step[0]
 
 
+def test_account_state_v2_bundle_observation_matches_frames(tmp_path: Path) -> None:
+    """Versioned account coordinates remain identical on the shared-bundle path."""
+    from quant_rl.envs.env_bundle_builder import build_env_bundle
+    from quant_rl.envs.strategies import BaselineStrategy
+    from quant_rl.envs.trading_env import TradingEnv
+
+    bars = _make_deterministic_bars(n=96)
+    features = _make_features(bars)
+    common: dict[str, Any] = {
+        "obs_window": 10,
+        "observation_schema_version": "account-state-v2",
+        "strategy": BaselineStrategy(),
+    }
+    frames = TradingEnv(bars=bars, features=features, **common)
+    path = build_env_bundle(
+        tmp_path,
+        bars,
+        features,
+        OmegaConf.create(
+            {
+                "env": {"strategy_actions": False, "obs_window": 10},
+                "data": {"raw_dir": str(tmp_path)},
+            }
+        ),
+        raw_columns=BaselineStrategy().raw_columns,
+        feature_config_hash="state-v2-parity",
+        tickbook=None,
+        pre_ny_by_date=None,
+    )
+    shared = TradingEnv.from_bundle(path, **common)
+    frame_obs, _ = frames.reset(seed=22)
+    shared_obs, _ = shared.reset(seed=22)
+    for _ in range(12):
+        np.testing.assert_array_equal(frame_obs["account"], shared_obs["account"])
+        frame_obs = frames.step(0)[0]
+        shared_obs = shared.step(0)[0]
+
+
 def test_bundle_env_uses_read_only_ndarray_views(tmp_path: Path) -> None:
     """The hot path uses plain ndarray views backed by shared read-only mmaps."""
     from quant_rl.envs.env_bundle_builder import build_env_bundle

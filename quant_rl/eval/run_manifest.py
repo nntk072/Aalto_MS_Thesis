@@ -145,12 +145,15 @@ def build_training_run_manifest(
     seed: int,
     completed_steps: int,
     action_schema: dict[str, Any] | None,
+    observation_schema: dict[str, Any] | None = None,
     feature_cache_path: Path | None,
     feature_cache_hash: str | None,
     checkpoint_path: Path | None,
     execution_protocol: dict[str, Any],
     metrics_protocol: dict[str, Any],
     artifact_paths: dict[str, str],
+    training_architecture: dict[str, Any] | None = None,
+    training_protocol: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a source/data/config/checkpoint/runtime manifest for one trial."""
     resolved_dataset_records = dict(dataset_records or {})
@@ -194,7 +197,7 @@ def build_training_run_manifest(
             f"missing {sorted(missing_artifacts)}"
         )
     return {
-        "manifest_version": 2,
+        "manifest_version": 3,
         "repository": str(repository.resolve()),
         "source": _source_state(repository),
         "config": {
@@ -206,6 +209,9 @@ def build_training_run_manifest(
         "seed": int(seed),
         "completed_steps": int(completed_steps),
         "action_schema": action_schema,
+        "observation_schema": observation_schema,
+        "training_architecture": dict(training_architecture or {}),
+        "training_protocol": dict(training_protocol or {}),
         "feature_fit_scope": "train_mask_only",
         "feature_cache": {
             "path": None if feature_cache_path is None else str(feature_cache_path.resolve()),

@@ -127,6 +127,20 @@ def validate_model_action_schema(
     return None
 
 
+def validate_model_observation_schema(
+    model: Any,
+    expected_schema: Any,
+    *,
+    allow_legacy_v1: bool = False,
+) -> None:
+    """Reject checkpoints whose account-state coordinate meanings differ."""
+    from quant_rl.observation_schema import validate_observation_schema
+
+    actual = getattr(model, "_observation_schema", None)
+    validate_observation_schema(actual, expected_schema, allow_legacy_v1=allow_legacy_v1)
+    setattr(model, "_observation_schema", expected_schema.to_dict())
+
+
 def _build_vector_env(
     env: Any,
     cfg: DictConfig,
@@ -142,6 +156,11 @@ def _build_vector_env(
         raise ImportError("stable-baselines3 is required: pip install stable-baselines3")
 
     n_envs = int(getattr(cfg.get("env", {}), "n_envs", 1))
+    vector_backend = str(getattr(cfg.get("env", {}), "vector_backend", "subproc"))
+    if vector_backend not in {"subproc", "serial"}:
+        raise ValueError(
+            f"env.vector_backend must be 'subproc' or 'serial', got {vector_backend!r}"
+        )
     if n_envs <= 1 or env_fn is None:
         return DummyVecEnv([lambda: env])
 
@@ -165,6 +184,9 @@ def _build_vector_env(
         if _torch is not None:
             _torch.set_num_threads(1)
         return env_fn()
+
+    if vector_backend == "serial":
+        return DummyVecEnv([_thread_capped_env_fn] * n_envs)
 
     start_method = "forkserver" if use_forkserver else None
     return SubprocVecEnv([_thread_capped_env_fn] * n_envs, start_method=start_method)
@@ -190,7 +212,7 @@ class LegacyFourToFiveActionAdapter:
 
 def encoder_for(arch: str) -> type[Any]:
     """Feature extractor selected by ``agent.arch``. Unknown names stay on the TCN."""
-    from .encoder import GRUEncoder, MTFEncoder, TCNEncoder, TransformerEncoder
+    from .encoder import GRUEncoder, LiteTCNEncoder, MTFEncoder, TCNEncoder, TransformerEncoder
 
     if arch == "transformer":
         return TransformerEncoder
@@ -198,7 +220,26 @@ def encoder_for(arch: str) -> type[Any]:
         return GRUEncoder
     if arch == "mtf":
         return MTFEncoder
+    if arch == "lite_tcn":
+        return LiteTCNEncoder
     return TCNEncoder
+
+
+def validate_model_architecture(model: Any, expected_arch: str, *, use_vae: bool = False) -> None:
+    """Fail closed when a checkpoint encoder differs from the requested lineage."""
+    if use_vae:
+        return
+    expected = encoder_for(expected_arch)
+    extractor = getattr(getattr(model, "policy", None), "features_extractor", None)
+    if extractor is None:
+        raise ValueError(
+            "checkpoint does not expose a feature extractor for architecture validation"
+        )
+    if not isinstance(extractor, expected):
+        raise ValueError(
+            f"checkpoint encoder {type(extractor).__name__} does not match requested "
+            f"architecture {expected_arch!r} ({expected.__name__})"
+        )
 
 
 def build_agent(
@@ -210,6 +251,7 @@ def build_agent(
     vae: Any | None = None,
     device: str | torch.device | None = None,
     env_fn: Callable[[], Any] | None = None,
+    seed: int | None = None,
 ) -> Any:
     """Build an SB3 PPO or SAC agent wired to the sequence encoder.
 
@@ -277,6 +319,19 @@ def build_agent(
         latent_dim = 128
         if arch == "mtf":
             extractor_kwargs = dict(latent_dim=latent_dim, account_dim=account_dim)
+        elif arch == "lite_tcn":
+            lite_cfg = cfg.agent.get("lite_tcn", {})
+            latent_dim = int(lite_cfg.get("latent_dim", 128))
+            extractor_kwargs = dict(
+                seq_len=cfg.env.obs_window,
+                n_features=n_features,
+                latent_dim=latent_dim,
+                channels=int(lite_cfg.get("channels", 96)),
+                dilations=tuple(int(value) for value in lite_cfg.get("dilations", [1, 4, 10])),
+                kernel_size=int(lite_cfg.get("kernel_size", 3)),
+                dropout=float(lite_cfg.get("dropout", 0.1)),
+                account_dim=account_dim,
+            )
         else:
             extractor_kwargs = dict(
                 seq_len=cfg.env.obs_window,
@@ -286,16 +341,29 @@ def build_agent(
             )
 
     # Two hidden layers after the encoder. SAC uses ``qf`` for the critic.
+    head_cfg = cfg.agent.get("head_arch", {})
+    head_arch = [int(value) for value in head_cfg.get(arch, [256, 128])]
     if algo == "sac":
-        net_arch: dict[str, Any] = dict(pi=[256, 128], qf=[256, 128])
+        net_arch: dict[str, Any] = dict(pi=head_arch, qf=head_arch)
     else:
-        net_arch = dict(pi=[256, 128], vf=[256, 128])
+        net_arch = dict(pi=head_arch, vf=head_arch)
 
     policy_kwargs: dict[str, Any] = dict(
         features_extractor_class=extractor_cls,
         features_extractor_kwargs=extractor_kwargs,
         net_arch=net_arch,
     )
+    actor_arch = str(cfg.ppo.get("actor_arch", "shared")) if algo == "ppo" else "shared"
+    if actor_arch == "semantic_heads":
+        if not isinstance(env.action_space, spaces.Box):
+            raise ValueError("semantic actor heads require a continuous Box action space")
+        schema = getattr(env, "action_schema", None)
+        if not isinstance(schema, ActionSchema):
+            raise ValueError("semantic actor heads require a declared strategy ActionSchema")
+        policy_kwargs["semantic_action_coordinates"] = schema.names
+        policy_kwargs["semantic_head_width"] = int(cfg.ppo.get("semantic_head_width", 64))
+    elif actor_arch != "shared":
+        raise ValueError(f"unknown PPO actor_arch: {actor_arch!r}")
 
     n_envs = int(getattr(cfg.get("env", {}), "n_envs", 1))
     vec_env = _build_vector_env(env, cfg, env_fn)
@@ -316,6 +384,7 @@ def build_agent(
             gradient_steps=sac_cfg.get("gradient_steps", 1),
             ent_coef=sac_cfg.get("ent_coef", "auto"),
             learning_starts=sac_cfg.get("learning_starts", 500),
+            seed=seed,
             verbose=1,
         )
         if device is not None:
@@ -342,6 +411,7 @@ def build_agent(
         gae_lambda=cfg.ppo.gae_lambda,
         clip_range=cfg.ppo.clip_range,
         ent_coef=cfg.ppo.ent_coef,
+        seed=seed,
         verbose=1,
     )
     if device is not None:
@@ -355,6 +425,11 @@ def build_agent(
         policy_kwargs=policy_kwargs,
         **ppo_kwargs,
     )
+    observation_schema = getattr(env, "observation_schema", None)
+    if observation_schema is not None:
+        schema_manifest = observation_schema.to_dict()
+        setattr(ppo_model, "_observation_schema", schema_manifest)
+        setattr(ppo_model.policy, "_observation_schema", schema_manifest)
     from .ppo_policy import _layout_key
 
     if isinstance(env.action_space, spaces.Box):
@@ -405,12 +480,23 @@ def _ppo_policy_and_ent_coef(
         return "MultiInputPolicy", policy_kwargs, ent_coef
     from .ppo_policy import ClampedStdMultiInputPolicy
 
+    actor_arch = str(cfg.ppo.get("actor_arch", "shared"))
+    policy_cls: Any
+    if actor_arch == "semantic_heads":
+        from .semantic_actor import SemanticClampedStdMultiInputPolicy
+
+        policy_cls = SemanticClampedStdMultiInputPolicy
+    elif actor_arch == "shared":
+        policy_cls = ClampedStdMultiInputPolicy
+    else:
+        raise ValueError(f"unknown PPO actor_arch: {actor_arch!r}")
+
     kwargs = dict(policy_kwargs)
     kwargs["log_std_init"] = float(cfg.ppo.get("log_std_init", 0.0))
     kwargs["log_std_min"] = float(cfg.ppo.get("log_std_min", -0.7))
     kwargs["log_std_max"] = float(cfg.ppo.get("log_std_max", 0.0))
     kwargs["mode_prior_coef"] = float(cfg.ppo.get("mode_prior_coef", 1e-3))
-    return ClampedStdMultiInputPolicy, kwargs, float(cfg.ppo.get("ent_coef_continuous", 0.001))
+    return policy_cls, kwargs, float(cfg.ppo.get("ent_coef_continuous", 0.001))
 
 
 def _finalize_cuda_policy(model: Any, device: str | torch.device | None) -> Any:

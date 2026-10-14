@@ -140,6 +140,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Explicitly opt in to an unversioned checkpoint using the selected legacy layout",
     )
     parser.add_argument(
+        "--allow-legacy-observation-schema",
+        action="store_true",
+        help="Explicitly opt in to an unversioned account-state-v1 checkpoint",
+    )
+    parser.add_argument(
         "--legacy-action-layout",
         default=None,
         help=(
@@ -233,6 +238,21 @@ def main() -> None:
     log.info("Loading model: %s", ckpt_path)
     _ = ClampedStdMultiInputPolicy
     model: Any = _load_checkpoint(ckpt_path, legacy_layout_key=args.legacy_action_layout)
+    from quant_rl.models.agent import validate_model_observation_schema
+    from quant_rl.observation_schema import build_observation_schema
+
+    expected_observation_schema = build_observation_schema(
+        str(cfg.env.get("observation_schema_version", "account-state-v1")),
+        entry_state_visibility=bool(
+            cfg.env.get("entry_state_machine", False)
+            and cfg.env.get("entry_state_observation", True)
+        ),
+    )
+    validate_model_observation_schema(
+        model,
+        expected_observation_schema,
+        allow_legacy_v1=bool(args.allow_legacy_observation_schema),
+    )
     is_overlay = bool(cfg.env.get("strategy_actions", False))
     if is_overlay:
         if not isinstance(model.action_space, spaces.Box):
@@ -421,6 +441,7 @@ def main() -> None:
         "action_layout_key": getattr(model, "_action_layout_key", None),
         "action_schema": getattr(model, "_action_schema", None),
         "legacy_action_schema_opt_in": bool(args.allow_legacy_action_schema),
+        "legacy_observation_schema_opt_in": bool(args.allow_legacy_observation_schema),
         "legacy_action_layout_selected": args.legacy_action_layout,
         "feature_cache_identity": feat_cache.name,
         "train_end": train_end,

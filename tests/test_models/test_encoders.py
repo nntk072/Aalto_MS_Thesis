@@ -9,7 +9,13 @@ import torch
 from gymnasium import spaces
 
 from quant_rl.models.agent import encoder_for
-from quant_rl.models.encoder import GRUEncoder, MTFEncoder, TCNEncoder, TransformerEncoder
+from quant_rl.models.encoder import (
+    GRUEncoder,
+    LiteTCNEncoder,
+    MTFEncoder,
+    TCNEncoder,
+    TransformerEncoder,
+)
 
 
 class TestTCNEncoder:
@@ -61,6 +67,91 @@ class TestTCNEncoder:
         output = encoder(obs)
 
         assert output.shape == (batch_size, 128 + 32)
+
+
+class TestLiteTCNEncoder:
+    @staticmethod
+    def _space(n_features: int = 194) -> spaces.Dict:
+        return spaces.Dict(
+            {
+                "seq": spaces.Box(low=-1.0, high=1.0, shape=(60, n_features), dtype=np.float32),
+                "seq_mask": spaces.Box(low=0.0, high=1.0, shape=(60,), dtype=np.float32),
+                "account": spaces.Box(low=-1.0, high=1.0, shape=(6,), dtype=np.float32),
+            }
+        )
+
+    def test_shape_and_receptive_field_match_observation_contract(self) -> None:
+        encoder = LiteTCNEncoder(self._space(), seq_len=60, n_features=194)
+        output = encoder({"seq": torch.randn(3, 60, 194), "account": torch.randn(3, 6)})
+        assert output.shape == (3, 160)
+        assert encoder.receptive_field == 61
+        assert encoder.receptive_field >= encoder.seq_len
+
+    def test_left_padding_values_do_not_change_output(self) -> None:
+        encoder = LiteTCNEncoder(self._space(), seq_len=60, n_features=194).eval()
+        seq = torch.randn(2, 60, 194)
+        mask = torch.ones(2, 60)
+        mask[0, :20] = 0.0
+        changed = seq.clone()
+        changed[0, :20] = torch.randn_like(changed[0, :20]) * 1000.0
+        account = torch.randn(2, 6)
+
+        original_output = encoder({"seq": seq, "seq_mask": mask, "account": account})
+        changed_output = encoder({"seq": changed, "seq_mask": mask, "account": account})
+
+        torch.testing.assert_close(original_output, changed_output, rtol=0.0, atol=0.0)
+
+    def test_causal_hidden_states_do_not_depend_on_future_inputs(self) -> None:
+        encoder = LiteTCNEncoder(self._space(), seq_len=60, n_features=194).eval()
+        seq = torch.randn(2, 60, 194)
+        changed = seq.clone()
+        changed[:, 31:, :] = torch.randn_like(changed[:, 31:, :]) * 100.0
+
+        original_hidden = encoder._encode_hidden(seq)
+        changed_hidden = encoder._encode_hidden(changed)
+
+        torch.testing.assert_close(
+            original_hidden[:, :31], changed_hidden[:, :31], rtol=0.0, atol=0.0
+        )
+
+    def test_parameter_count_is_substantially_below_tcn(self) -> None:
+        space = self._space()
+        tcn = TCNEncoder(space, seq_len=60, n_features=194)
+        lite = LiteTCNEncoder(space, seq_len=60, n_features=194)
+        tcn_count = sum(parameter.numel() for parameter in tcn.parameters())
+        lite_count = sum(parameter.numel() for parameter in lite.parameters())
+        assert lite_count <= 0.30 * tcn_count
+
+    def test_fp32_forward_and_gradients_are_finite(self) -> None:
+        encoder = LiteTCNEncoder(self._space(), seq_len=60, n_features=194)
+        output = encoder({"seq": torch.randn(4, 60, 194), "account": torch.randn(4, 6)})
+        output.square().mean().backward()
+
+        assert torch.isfinite(output).all()
+        assert all(
+            parameter.grad is None or torch.isfinite(parameter.grad).all()
+            for parameter in encoder.parameters()
+        )
+
+    def test_cuda_bf16_forward_and_gradients_are_finite_when_available(self) -> None:
+        if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
+            return
+        encoder = LiteTCNEncoder(self._space(), seq_len=60, n_features=194).cuda()
+        obs = {
+            "seq": torch.randn(2, 60, 194, device="cuda"),
+            "account": torch.randn(2, 6, device="cuda"),
+        }
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            output = encoder(obs)
+            loss = output.float().square().mean()
+        loss.backward()
+
+        assert torch.isfinite(output).all()
+        assert torch.isfinite(loss)
+        assert all(
+            parameter.grad is None or torch.isfinite(parameter.grad).all()
+            for parameter in encoder.parameters()
+        )
 
     def test_account_mlp_uses_runtime_observation_dimension(self) -> None:
         observation_space = spaces.Dict(

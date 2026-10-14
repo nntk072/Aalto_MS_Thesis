@@ -73,6 +73,7 @@ from quant_rl.train.callbacks import (
     ClipLogStdCallback,
     EarlyAbortCallback,
     EpisodeEquityCallback,
+    LearningDiagnosticsCallback,
     PeriodicCheckpointCallback,
     ProgressLoggerCallback,
     save_ppo_checkpoint,
@@ -373,6 +374,12 @@ def _build_eval_common(
         "open_manipulation_bars": int(cfg.env.get("open_manipulation_bars", 10)),
         "entry_cooldown_bars": int(cfg.env.get("entry_cooldown_bars", 0)),
         "reward_mode": str(cfg.env.get("reward_mode", "dsr")),
+        "fixed_risk_usd": float(cfg.env.get("fixed_risk_usd", 0.0)),
+        "risk_mode": str(cfg.env.get("risk_mode", "dynamic")),
+        "observation_schema_version": str(
+            cfg.env.get("observation_schema_version", "account-state-v1")
+        ),
+        "observation_age_scale_bars": float(cfg.env.get("observation_age_scale_bars", 60.0)),
         "entry_intensity_threshold": float(cfg.env.get("entry_intensity_threshold", 0.0)),
         "peak_trailing_dd_limit": float(cfg.env.get("peak_trailing_dd_limit", 0.0)),
         "agent_direction_control": bool(cfg.env.get("agent_direction_control", False)),
@@ -405,6 +412,9 @@ def _log_effective_ppo(model: Any, cfg: Any) -> None:
     """Print the PPO settings the run actually uses, after the n_envs split."""
     n_steps = int(model.n_steps)
     n_envs = int(model.n_envs)
+    aggregate_rollout_steps = n_steps * n_envs
+    batch_size = int(cfg.ppo.batch_size)
+    minibatches_per_epoch = (aggregate_rollout_steps + batch_size - 1) // batch_size
     requested_n_envs = int(cfg.env.get("n_envs", 1))
     if n_envs != requested_n_envs:
         raise RuntimeError(
@@ -417,13 +427,17 @@ def _log_effective_ppo(model: Any, cfg: Any) -> None:
         else "baseline"
     )
     log.info(
-        "PPO effective: n_envs=%d n_steps=%d rollout=%d batch=%s epochs=%s lr=%s "
+        "PPO effective: logical_n_envs=%d sb3_n_steps_per_env=%d "
+        "aggregate_rollout_steps=%d batch_size=%d n_epochs=%s minibatches_per_epoch=%d "
+        "updates_per_rollout=%d lr=%s "
         "gamma=%s clip=%s ent_coef=%s log_std=[%s,%s] reward_mode=%s strategy=%s",
         n_envs,
         n_steps,
-        n_steps * n_envs,
-        cfg.ppo.batch_size,
+        aggregate_rollout_steps,
+        batch_size,
         cfg.ppo.n_epochs,
+        minibatches_per_epoch,
+        minibatches_per_epoch * int(cfg.ppo.n_epochs),
         cfg.ppo.learning_rate,
         cfg.ppo.gamma,
         cfg.ppo.clip_range,
@@ -433,6 +447,54 @@ def _log_effective_ppo(model: Any, cfg: Any) -> None:
         cfg.env.get("reward_mode", "dsr"),
         strategy_name,
     )
+
+
+def _training_architecture_provenance(model: Any, cfg: Any, arch: str) -> dict[str, Any]:
+    """Describe the actual encoder, policy heads, and vectorization used."""
+    extractor = model.policy.features_extractor
+    env = model.get_env()
+    remotes = getattr(env, "remotes", None)
+    physical_workers = len(remotes) if remotes is not None else 1
+    head_cfg = cfg.agent.get("head_arch", {})
+    encoder_spec = {
+        "arch": arch,
+        "encoder_class": type(extractor).__name__,
+        "encoder_channels": getattr(extractor, "channels", None),
+        "encoder_dilations": list(extractor.dilations) if hasattr(extractor, "dilations") else None,
+        "encoder_kernel_size": getattr(extractor, "kernel_size", None),
+        "encoder_latent_dim": int(getattr(extractor, "latent_dim", 128)),
+        "encoder_parameters": {
+            key: getattr(extractor, key)
+            for key in ("hidden_size", "num_layers", "d_model", "nhead", "dim_feedforward")
+            if hasattr(extractor, key)
+        },
+    }
+    return {
+        **encoder_spec,
+        "quality_variant_id": str(cfg.get("quality_variant_id", "")) or None,
+        "actor_architecture": str(cfg.ppo.get("actor_arch", "shared")),
+        "semantic_head_width": int(cfg.ppo.get("semantic_head_width", 64)),
+        "policy_head_architecture": [int(width) for width in head_cfg.get(arch, [256, 128])],
+        "policy_parameter_count": sum(parameter.numel() for parameter in model.policy.parameters()),
+        "configured_vector_backend": str(cfg.env.get("vector_backend", "subproc")),
+        "vector_backend": type(env).__name__,
+        "logical_n_envs": int(model.n_envs),
+        "sb3_n_steps_per_env": int(model.n_steps),
+        "aggregate_rollout_steps": int(model.n_envs * model.n_steps),
+        "batch_size": int(cfg.ppo.batch_size),
+        "n_epochs": int(cfg.ppo.n_epochs),
+        "minibatches_per_epoch": int(
+            (model.n_envs * model.n_steps + int(cfg.ppo.batch_size) - 1) // int(cfg.ppo.batch_size)
+        ),
+        "updates_per_rollout": int(
+            (
+                (model.n_envs * model.n_steps + int(cfg.ppo.batch_size) - 1)
+                // int(cfg.ppo.batch_size)
+            )
+            * int(cfg.ppo.n_epochs)
+        ),
+        "physical_worker_count": int(physical_workers),
+    }
 
 
 def _fill_delay_ms(cfg: Any) -> int:
@@ -528,6 +590,10 @@ def make_env(
         candidate_max_age_bars=int(cfg.env.get("candidate_max_age_bars", 5)),
         arm_requires_retest=bool(cfg.env.get("arm_requires_retest", False)),
         entry_state_observation=bool(cfg.env.get("entry_state_observation", True)),
+        observation_schema_version=str(
+            cfg.env.get("observation_schema_version", "account-state-v1")
+        ),
+        observation_age_scale_bars=float(cfg.env.get("observation_age_scale_bars", 60.0)),
         strict_research_eligibility=bool(cfg.env.get("strict_research_eligibility", False)),
         sl_buffer_pts=float(cfg.env.get("sl_buffer_pts", 0.0)),
         strategy_reward=strategy_reward,
@@ -540,6 +606,8 @@ def make_env(
         open_manipulation_bars=int(cfg.env.get("open_manipulation_bars", 10)),
         entry_cooldown_bars=int(cfg.env.get("entry_cooldown_bars", 0)),
         reward_mode=str(cfg.env.get("reward_mode", "dsr")),
+        fixed_risk_usd=float(cfg.env.get("fixed_risk_usd", 0.0)),
+        risk_mode=str(cfg.env.get("risk_mode", "dynamic")),
         entry_intensity_threshold=float(cfg.env.get("entry_intensity_threshold", 0.0)),
         peak_trailing_dd_limit=float(cfg.env.get("peak_trailing_dd_limit", 0.0)),
         agent_direction_control=bool(cfg.env.get("agent_direction_control", False)),
@@ -586,6 +654,11 @@ def parse_train_args() -> argparse.Namespace:
         default=None,
         help="Variant name from config/experiments.yaml (overrides --strategy if set in variant)",
     )
+    parser.add_argument(
+        "--quality-variant",
+        default=None,
+        help="New staged variant from config/quality_experiments.yaml",
+    )
     parser.add_argument("--mvp", action="store_true", help="MVP mode: first 30 days only")
     parser.add_argument("--force", action="store_true", help="Force data pipeline rerun")
     parser.add_argument("--out", default="outputs", help="Base output directory")
@@ -594,11 +667,16 @@ def parse_train_args() -> argparse.Namespace:
         default=None,
         help="Continue PPO optimizer/policy state from an intact periodic checkpoint",
     )
+    parser.add_argument(
+        "--allow-legacy-observation-schema",
+        action="store_true",
+        help="Explicitly resume an unversioned account-state-v1 checkpoint",
+    )
     parser.add_argument("--algo", choices=["ppo", "sac"], default="ppo", help="RL algorithm")
     parser.add_argument(
         "--arch",
-        choices=["tcn", "gru", "transformer", "mtf"],
-        default="tcn",
+        choices=["tcn", "lite_tcn", "gru", "transformer", "mtf"],
+        default=None,
         help="Encoder architecture",
     )
     parser.add_argument("--reward", choices=["dsr", "sweep"], default="dsr", help="Reward function")
@@ -693,6 +771,18 @@ def _load_merged_config(args: argparse.Namespace) -> DictConfig:
             include_pd,
         )
 
+    quality_variant = getattr(args, "quality_variant", None)
+    if quality_variant:
+        if getattr(args, "variant", None) or args.strategy != "baseline":
+            raise ValueError(
+                "--quality-variant cannot be combined with historical --variant or a "
+                "non-baseline --strategy"
+            )
+        from quant_rl.train.quality_registry import apply_quality_variant
+
+        cfg = apply_quality_variant(cfg, str(quality_variant))
+        log.info("Applied staged RL quality variant: %s", quality_variant)
+
     return apply_overrides(cfg, args.overrides)
 
 
@@ -716,6 +806,7 @@ def _build_training_log(
     observation_account_dim: int | None = None,
     observation_space_shapes: dict[str, list[int]] | None = None,
     action_schema: dict[str, Any] | None = None,
+    observation_schema: dict[str, Any] | None = None,
     env_flags: dict[str, Any] | None = None,
     oos_role: str = "final_report_only",
 ) -> dict[str, Any]:
@@ -757,6 +848,8 @@ def _build_training_log(
         log_dict["observation_space_shapes"] = observation_space_shapes
     if action_schema is not None:
         log_dict["action_schema"] = action_schema
+    if observation_schema is not None:
+        log_dict["observation_schema"] = observation_schema
     if env_flags is not None:
         log_dict["env_flags"] = env_flags
     log_dict["oos_role"] = oos_role
@@ -783,6 +876,83 @@ def _action_schema_manifest(env: Any) -> dict[str, Any] | None:
         return None
     result = to_dict()
     return result if isinstance(result, dict) else None
+
+
+def _observation_schema_manifest(env: Any) -> dict[str, Any] | None:
+    """Return explicit account observation coordinate meanings."""
+    schema = getattr(env, "observation_schema", None)
+    to_dict = getattr(schema, "to_dict", None)
+    if not callable(to_dict):
+        return None
+    result = to_dict()
+    return result if isinstance(result, dict) else None
+
+
+def _training_protocol_manifest(
+    *, model: Any, cfg: Any, args: Any, seed: int, requested_steps: int
+) -> dict[str, Any]:
+    """Persist the effective PPO/reward/risk protocol for later reproduction."""
+    n_envs = int(model.n_envs)
+    n_steps = int(model.n_steps)
+    batch_size = int(cfg.ppo.batch_size)
+    minibatches = (n_envs * n_steps + batch_size - 1) // batch_size
+    quality_variant = str(cfg.get("quality_variant_id", ""))
+    quality_lineage = None
+    if quality_variant:
+        from quant_rl.train.quality_registry import quality_variant_metadata
+
+        quality_lineage = quality_variant_metadata(quality_variant)
+    ftmo = OmegaConf.to_container(cfg.get("ftmo", {}), resolve=True)
+    return {
+        "quality_variant": quality_lineage,
+        "seed": int(seed),
+        "worker_seeds": [int(seed + index) for index in range(n_envs)],
+        "requested_steps": int(requested_steps),
+        "completed_steps": int(model.num_timesteps),
+        "data_source": str(cfg.env.get("data_source", "frames")),
+        "walk_forward": {
+            "enabled": bool(getattr(args, "walk_forward", False)),
+            "folds": int(getattr(args, "wf_splits", 0)),
+            "purge_bars": int(getattr(args, "purge_bars", 0)),
+            "embargo_bars": int(getattr(args, "embargo_bars", 0)),
+        },
+        "observation_schema_version": str(
+            cfg.env.get("observation_schema_version", "account-state-v1")
+        ),
+        "observation_age_scale_bars": float(cfg.env.get("observation_age_scale_bars", 60.0)),
+        "action_distribution": str(cfg.ppo.get("policy_distribution", "clamped_diagonal_gaussian")),
+        "reward": {
+            "mode": str(cfg.env.get("reward_mode", "dsr")),
+            "dsr_eta": float(cfg.env.get("reward_dsr_eta", 0.01)),
+            "fixed_risk_usd": float(cfg.env.get("fixed_risk_usd", 0.0)),
+        },
+        "risk": {
+            "mode": str(cfg.env.get("risk_mode", "dynamic")),
+            "ftmo": ftmo,
+            "risk_per_trade_limit": float(cfg.get("ftmo", {}).get("risk_per_trade_limit", 1000.0)),
+        },
+        "ppo": {
+            "logical_n_envs": n_envs,
+            "n_steps_per_env": n_steps,
+            "aggregate_rollout_steps": int(n_envs * n_steps),
+            "batch_size": batch_size,
+            "epochs": int(cfg.ppo.n_epochs),
+            "minibatches_per_epoch": minibatches,
+            "updates_per_rollout": int(minibatches * int(cfg.ppo.n_epochs)),
+            "learning_rate": float(cfg.ppo.learning_rate),
+            "gamma": float(cfg.ppo.gamma),
+            "gae_lambda": float(cfg.ppo.gae_lambda),
+            "clip_range": float(cfg.ppo.clip_range),
+            "entropy_coefficient": float(model.ent_coef),
+            "actor_architecture": str(cfg.ppo.get("actor_arch", "shared")),
+        },
+        "environment": {
+            "vector_backend": str(cfg.env.get("vector_backend", "subproc")),
+            "strategy_actions": bool(cfg.env.get("strategy_actions", False)),
+            "entry_state_machine": bool(cfg.env.get("entry_state_machine", False)),
+            "entry_state_observation": bool(cfg.env.get("entry_state_observation", True)),
+        },
+    }
 
 
 def _observation_account_dim(env: Any) -> int:
@@ -1057,6 +1227,15 @@ def _aggregate_seed_results(
     ]
     if observation_shapes:
         aggregated["observation_space_shapes"] = observation_shapes[0]
+    observation_schemas = [
+        result.get("observation_schema")
+        for result in seed_results
+        if result.get("observation_schema") is not None
+    ]
+    if observation_schemas:
+        if any(schema != observation_schemas[0] for schema in observation_schemas[1:]):
+            raise ValueError("multi-seed run produced inconsistent observation schemas")
+        aggregated["observation_schema"] = observation_schemas[0]
 
     return aggregated
 
@@ -1075,6 +1254,13 @@ def main() -> None:
     _setup_rngs(args.seed)
 
     cfg = _load_merged_config(args)
+    if args.arch is None:
+        args.arch = str(cfg.agent.get("arch", "tcn"))
+    elif getattr(args, "quality_variant", None) and args.arch != str(cfg.agent.get("arch", "tcn")):
+        raise SystemExit(
+            f"--arch={args.arch} conflicts with the selected quality variant encoder "
+            f"{cfg.agent.get('arch', 'tcn')}"
+        )
 
     device = get_device(cfg.get("device"))
     scale_training_cfg(cfg, device, args.arch)
@@ -1245,7 +1431,14 @@ def main() -> None:
     if args.resume_checkpoint and (args.algo != "ppo" or len(seeds) != 1):
         raise SystemExit("--resume-checkpoint currently supports one PPO seed per run")
     is_multi_seed = len(seeds) > 1
-    if is_multi_seed:
+    quality_variant = str(cfg.get("quality_variant_id", ""))
+    if quality_variant:
+        run_name = (
+            f"quality_{quality_variant}_seeds_{args.arch}"
+            if is_multi_seed
+            else f"quality_{quality_variant}_seed{args.seed}_{args.arch}"
+        )
+    elif is_multi_seed:
         run_name = f"rl_train_seeds_{args.arch}"
     else:
         run_name = f"rl_train_seed{args.seed}_{args.arch}"
@@ -1409,13 +1602,21 @@ def main() -> None:
         if args.resume_checkpoint:
             from stable_baselines3 import PPO
 
-            from quant_rl.models.agent import _build_vector_env
+            from quant_rl.models.agent import _build_vector_env, validate_model_architecture
 
             resume_path = Path(args.resume_checkpoint)
             if not resume_path.is_file():
                 raise FileNotFoundError(f"resume checkpoint not found: {resume_path}")
             resume_env = _build_vector_env(train_env, cfg, env_factory)
             model = PPO.load(resume_path, env=resume_env, device=device)
+            validate_model_architecture(model, args.arch, use_vae=args.use_vae)
+            from quant_rl.models.agent import validate_model_observation_schema
+
+            validate_model_observation_schema(
+                model,
+                train_env.observation_schema,
+                allow_legacy_v1=bool(args.allow_legacy_observation_schema),
+            )
             if int(model.num_timesteps) > int(timesteps):
                 raise ValueError(
                     f"resume checkpoint has {model.num_timesteps} steps, exceeding requested {timesteps}"
@@ -1438,6 +1639,7 @@ def main() -> None:
                 use_vae=args.use_vae,
                 vae=vae_model,
                 env_fn=env_factory,
+                seed=int(seed),
             )
             learning_timesteps = int(timesteps)
         _log_effective_ppo(model, cfg)
@@ -1463,6 +1665,7 @@ def main() -> None:
             | AuxiliaryTrainerCallback
             | BestCheckpointEvalCallback
             | ProgressLoggerCallback
+            | LearningDiagnosticsCallback
             | ClipLogStdCallback
             | EpisodeEquityCallback
             | EarlyAbortCallback
@@ -1470,6 +1673,10 @@ def main() -> None:
         ] = [c for c in (checkpoint_callback, aux_cb) if c is not None]
 
         callbacks.append(EpisodeEquityCallback(log_path=seed_model_dir / "episode_equity.csv"))
+        if bool(cfg.get("quality_diagnostics", {}).get("enabled", False)):
+            callbacks.append(
+                LearningDiagnosticsCallback(log_path=seed_model_dir / "learning_diagnostics.csv")
+            )
         abort_cb = _early_abort_callback(cfg)
         if abort_cb is not None:
             callbacks.append(abort_cb)
@@ -1855,6 +2062,7 @@ def main() -> None:
             seed=int(seed),
             completed_steps=int(model.num_timesteps),
             action_schema=_action_schema_manifest(train_env),
+            observation_schema=_observation_schema_manifest(train_env),
             feature_cache_path=feat_cache,
             feature_cache_hash=cache_hash,
             checkpoint_path=checkpoint_path,
@@ -1869,6 +2077,14 @@ def main() -> None:
                 "tick_data_configured": bool(primary_ticks is not None),
                 "primary_symbol": str(primary_sym),
             },
+            training_architecture=_training_architecture_provenance(model, cfg, args.arch),
+            training_protocol=_training_protocol_manifest(
+                model=model,
+                cfg=cfg,
+                args=args,
+                seed=int(seed),
+                requested_steps=int(timesteps),
+            ),
             metrics_protocol={
                 "annualization": cfg.evaluation.get("annualization", None)
                 if "evaluation" in cfg
@@ -1904,6 +2120,7 @@ def main() -> None:
         action_schema = _action_schema_manifest(train_env)
         observation_account_dim = _observation_account_dim(train_env)
         observation_space_shapes = _observation_space_shapes(train_env)
+        observation_schema = _observation_schema_manifest(train_env)
         env_flags = {
             key: bool(cfg.env.get(key, False))
             for key in (
@@ -1938,6 +2155,7 @@ def main() -> None:
                 "action_schema": action_schema,
                 "observation_account_dim": observation_account_dim,
                 "observation_space_shapes": observation_space_shapes,
+                "observation_schema": observation_schema,
                 "env_flags": env_flags,
                 "oos_role": oos_role,
                 "phase_timings_seconds": phase_timings_seconds,
@@ -1990,6 +2208,7 @@ def main() -> None:
             observation_account_dim=single.get("observation_account_dim"),
             observation_space_shapes=single.get("observation_space_shapes"),
             action_schema=single.get("action_schema"),
+            observation_schema=single.get("observation_schema"),
             env_flags=single.get("env_flags"),
             oos_role=single.get("oos_role", "final_report_only"),
         )
@@ -2143,6 +2362,7 @@ def main() -> None:
                     tickbook=ticks_covering(primary_ticks, fold_train_bars),
                     arch=args.arch,
                 ),
+                seed=int(seed),
             )
             fold_model.learn(total_timesteps=wf_steps, callback=None, progress_bar=False)
 

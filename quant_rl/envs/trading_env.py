@@ -29,7 +29,6 @@ from ..backtest.risk import compute_lots, compute_sl_tp_long, compute_sl_tp_shor
 from ..data.session import ny_session_mask
 from ..data.ticks import TickBook
 from ..envs.entry_state import (
-    BASE_ACCOUNT_DIM,
     ENTRY_STATE_DIM,
     EntryCandidate,
     EntryEvidence,
@@ -38,13 +37,20 @@ from ..envs.entry_state import (
     immutable_setup_levels,
 )
 from ..envs.feature_row import BarView, FeatureRow
-from ..envs.reward import DSRReward, PnLReward, RMultipleReward
+from ..envs.reward import DSRReward, EquityDeltaReward, PnLReward, RMultipleReward
 from ..envs.strategies import BaselineStrategy, TradingStrategy
 from ..envs.sweep_reward import CompositeReward, SweepConfirmationReward
 from ..features.build import attach_reachable_r, select_obs_columns
 
 if TYPE_CHECKING:
     from ..models.vae import VAE
+from quant_rl.observation_schema import (
+    OBSERVATION_SCHEMA_V1,
+    OBSERVATION_SCHEMA_V2,
+    account_state_v2,
+    build_observation_schema,
+)
+
 from ..train.debug_trace import (
     DebugStepError,
     new_debug_window,
@@ -302,6 +308,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         candidate_max_age_bars: int = 5,
         arm_requires_retest: bool = False,
         entry_state_observation: bool = True,
+        observation_schema_version: str = OBSERVATION_SCHEMA_V1,
+        observation_age_scale_bars: float = 60.0,
         bundle_data: Any | None = None,
         strict_research_eligibility: bool = False,
     ):
@@ -577,6 +585,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             else None
         )
         self.entry_state_observation = bool(entry_state_machine and entry_state_observation)
+        self.observation_schema = build_observation_schema(
+            observation_schema_version,
+            entry_state_visibility=self.entry_state_observation,
+        )
+        self.observation_age_scale_bars = float(observation_age_scale_bars)
+        if self.observation_age_scale_bars <= 0.0:
+            raise ValueError("observation_age_scale_bars must be positive")
         self.risk_floor = float(risk_floor)
         self._tickbook = tickbook
         self._fill_delay_ms = int(fill_delay_ms)
@@ -597,14 +612,32 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         # A hard risk breach receives the same terminal penalty in training and
         # evaluation. The guardrail also ends the episodic training trajectory.
-        self.reward_fn: DSRReward | CompositeReward | PnLReward | RMultipleReward
+        self.reward_fn: (
+            DSRReward | CompositeReward | PnLReward | RMultipleReward | EquityDeltaReward
+        )
         breach_penalty = -10.0
+        if self.reward_mode == "equity_delta_r":
+            if self.risk_mode != "fixed" or self.fixed_risk_usd <= 0.0:
+                raise ValueError(
+                    "reward_mode='equity_delta_r' requires risk_mode='fixed' and fixed_risk_usd > 0"
+                )
+            if use_sweep_reward or strategy_reward is not None:
+                raise ValueError(
+                    "reward_mode='equity_delta_r' cannot be combined with sweep or "
+                    "strategy reward shaping"
+                )
+            self.reward_fn = EquityDeltaReward(self.fixed_risk_usd, breach_penalty=breach_penalty)
+            self.dsr_reward = DSRReward(eta=dsr_eta, breach_penalty=breach_penalty)
+        else:
+            self.reward_fn = DSRReward(eta=dsr_eta, breach_penalty=breach_penalty)
         base_pnl = (
             PnLReward(soft_loss_frac=0.01, dsr_weight=0.0, breach_penalty=breach_penalty)
             if self.reward_mode in ("pnl", "rr")
             else None
         )
-        if (
+        if self.reward_mode == "equity_delta_r":
+            pass
+        elif (
             use_sweep_reward
             or (_strategy_actions and strategy_reward is not None)
             or (self.reward_mode == "pnl" and strategy_reward is not None)
@@ -791,6 +824,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # Whether to rescale the account vector so its per-element magnitudes
         # are comparable with the z-scored seq features. See __init__ docstring.
         self.normalize_account = bool(normalize_account)
+        if self.observation_schema.version == OBSERVATION_SCHEMA_V2 and not self.normalize_account:
+            raise ValueError("account-state-v2 requires normalize_account=True")
 
         if use_vae:
             if vae is None:
@@ -858,6 +893,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         # Per-step entry diagnostics (strategy_actions); reset each episode.
         self._entry_diag: dict[str, int] = _empty_entry_diag(self.entry_state_machine is not None)
+        self._previous_constraint_ratios: dict[str, float] = {
+            "daily": 0.0,
+            "max_loss": 0.0,
+            "trailing": 0.0,
+        }
 
         # NY session start index for time decay penalty. Default to the first
         # tradable NY bar, which is what "minutes since open" measures from.
@@ -890,7 +930,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             n_features = max(int(self._m1_idx.size), 1)
         vae_latent_dim = vae.encoder.latent_dim if use_vae and vae is not None else 0
 
-        account_dim = BASE_ACCOUNT_DIM + (ENTRY_STATE_DIM if self.entry_state_observation else 0)
+        account_dim = self.observation_schema.width
         self.observation_space = spaces.Dict(
             {
                 "seq": spaces.Box(
@@ -1031,6 +1071,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._ep_start_equity = float(self.initial_balance)
         self._ep_reward_sum = 0.0
         self._entry_diag = _empty_entry_diag(self.entry_state_machine is not None)
+        self._previous_constraint_ratios = {"daily": 0.0, "max_loss": 0.0, "trailing": 0.0}
 
         if self.entry_state_machine is not None:
             self.entry_state_machine.reset()
@@ -2976,6 +3017,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         feat_row = self._feature_row_at(self.step_idx)
         bar_time = self._bar_time(self.step_idx)
         step_trade_log_start = len(self.trade_log)
+        entry_diag_before = dict(self._entry_diag)
         session_id = (
             int(self._session_ids_arr[self.step_idx]) if self._session_ids_arr is not None else 0
         )
@@ -3372,10 +3414,39 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             reward -= 1.0
             reward_parts["peak_dd"] = float(reward_parts.get("peak_dd", 0.0)) - 1.0
 
+        entry_funnel: dict[str, int] = {"bars_seen": 1}
         if entry_machine is not None:
-            entry_machine.observe(self.entry_evidence_context(feat_row))
+            prior_state = entry_machine.state
+            prior_candidates = entry_machine.candidate_created
+            evidence = self.entry_evidence_context(feat_row)
+            entry_machine.observe(evidence)
             if entry_machine.state == "IN_POSITION" and self.position is None:
                 entry_machine.mark_closed()
+            entry_funnel.update(
+                {
+                    "strategy_context_available": int(evidence.direction in (-1, 1)),
+                    "entry_evidence": int(evidence.evidence_detected),
+                    "candidate_created": int(entry_machine.candidate_created > prior_candidates),
+                    "candidate_armed": int(
+                        entry_machine.state == "ARMED" and prior_state != "ARMED"
+                    ),
+                    "trigger_requested": int(self._trigger_requested_this_step),
+                    "hold_low_intensity": int(
+                        self._entry_diag["hold_low_intensity"]
+                        > entry_diag_before.get("hold_low_intensity", 0)
+                    ),
+                    "hold_no_context": int(
+                        self._entry_diag["hold_no_context"]
+                        > entry_diag_before.get("hold_no_context", 0)
+                    ),
+                    "hold_risk_floor": int(
+                        self._entry_diag["hold_risk_floor"]
+                        > entry_diag_before.get("hold_risk_floor", 0)
+                    ),
+                    "entry_rejected": int(bool(self._entry_rejection_reason)),
+                    "position_opened": int(self._opened_this_step),
+                }
+            )
 
         obs = self._get_observation()
         close_reason = ""
@@ -3416,7 +3487,56 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             "entry_rejected_total": sum(
                 v for k, v in self._entry_diag.items() if k.startswith("rejected_")
             ),
+            "entry_funnel": entry_funnel,
         }
+        constraint_ratios = {
+            "daily": (
+                self.account.daily_loss / self.guardrails.daily_loss_limit
+                if self.guardrails.daily_loss_limit > 0.0
+                else 0.0
+            ),
+            "max_loss": (
+                self.account.loss_from_initial() / self.guardrails.max_loss_limit
+                if self.guardrails.max_loss_limit > 0.0
+                else 0.0
+            ),
+            "trailing": (
+                self.account.trailing_drawdown_pct() / self.guardrails.trailing_dd_limit
+                if self.guardrails.trailing_dd_limit > 0.0
+                else 0.0
+            ),
+        }
+        breach_reason = str(self.breach_log[-1]) if done and self.breach_log else ""
+        daily_breach = breach_reason == "daily_loss"
+        max_loss_breach = breach_reason == "max_drawdown"
+        trailing_breach = breach_reason == "trailing_dd"
+        info["constraints"] = {
+            "daily_ratio": float(constraint_ratios["daily"]),
+            "max_loss_ratio": float(constraint_ratios["max_loss"]),
+            "trailing_ratio": float(constraint_ratios["trailing"]),
+            "daily_cost": max(
+                0.0, constraint_ratios["daily"] - self._previous_constraint_ratios["daily"]
+            )
+            + float(daily_breach),
+            "max_loss_cost": max(
+                0.0,
+                constraint_ratios["max_loss"] - self._previous_constraint_ratios["max_loss"],
+            )
+            + float(max_loss_breach),
+            "trailing_cost": max(
+                0.0,
+                constraint_ratios["trailing"] - self._previous_constraint_ratios["trailing"],
+            )
+            + float(trailing_breach),
+            "daily_breach": daily_breach,
+            "max_loss_breach": max_loss_breach,
+            "trailing_breach": trailing_breach,
+            "breach_reason": breach_reason,
+            "previous_daily_ratio": self._previous_constraint_ratios["daily"],
+            "previous_max_loss_ratio": self._previous_constraint_ratios["max_loss"],
+            "previous_trailing_ratio": self._previous_constraint_ratios["trailing"],
+        }
+        self._previous_constraint_ratios = constraint_ratios
         if entry_machine is not None:
             info["entry_state"] = entry_machine.state
             info["entry_state_action"] = entry_state_for_action
@@ -3433,7 +3553,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 entry_machine.mark_closed()
                 info["entry_state"] = entry_machine.state
                 if self.entry_state_observation:
-                    obs["account"][BASE_ACCOUNT_DIM:] = np.asarray(
+                    entry_start = self.observation_schema.width - ENTRY_STATE_DIM
+                    obs["account"][entry_start:] = np.asarray(
                         entry_state_one_hot(entry_machine.state), dtype=np.float32
                     )
         self.episode_step_count += 1
@@ -4447,7 +4568,55 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             if self.entry_state_observation and self.entry_state_machine is not None
             else None
         )
-        if self.normalize_account:
+        if self.observation_schema.version == OBSERVATION_SCHEMA_V2:
+            if not self.normalize_account:
+                raise ValueError("account-state-v2 requires normalize_account=True")
+            position = self.position
+            position_age_bars = 0.0
+            if position is not None and position.entry_timestamp is not None:
+                entry_time = pd.Timestamp(cast(Any, position.entry_timestamp))
+                now = self._bar_time(self.step_idx)
+                minutes = max(float(self._minutes_per_step), 1.0)
+                position_age_bars = max((now - entry_time).total_seconds() / 60.0 / minutes, 0.0)
+            account_state = account_state_v2(
+                equity=float(self.account.equity),
+                initial_balance=float(self.initial_balance),
+                position_direction=pos_dir,
+                open_pnl=open_pnl,
+                planned_risk_usd=float(position.planned_risk_usd or 0.0)
+                if position is not None
+                else 0.0,
+                trailing_drawdown_pct=trailing_dd,
+                trailing_drawdown_limit=float(self.guardrails.trailing_dd_limit),
+                daily_loss=float(self.account.daily_loss),
+                daily_loss_limit=float(self.guardrails.daily_loss_limit),
+                loss_from_initial=float(self.account.loss_from_initial()),
+                max_loss_limit=float(self.guardrails.max_loss_limit),
+                risk_per_trade_limit=float(self.guardrails.risk_per_trade_limit),
+                current_price=current_close,
+                entry_price=float(position.entry_price) if position is not None else 0.0,
+                initial_sl_price=(position.sl_initial_price or position.sl_price)
+                if position is not None
+                else None,
+                active_sl_price=position.sl_price if position is not None else None,
+                remaining_size=float(position.size) if position is not None else 0.0,
+                initial_size=float(position.initial_size or position.size)
+                if position is not None
+                else 0.0,
+                position_age_bars=position_age_bars,
+                position_age_scale_bars=self.observation_age_scale_bars,
+                tp_hit_mask=int(position.tp_hit_mask) if position is not None else 0,
+                tp_prices=(
+                    (position.tp1_price, position.tp2_price, position.tp3_price)
+                    if position is not None
+                    else (None, None, None)
+                ),
+                sl_mode=position.sl_mode if position is not None else "fixed",
+                tp_mode=position.tp_mode if position is not None else "fixed",
+                exit_mode=position.exit_mode if position is not None else "structural",
+                entry_state=exposed_entry_state,
+            )
+        elif self.normalize_account:
             # Rescale so the account vector matches the ~O(1) magnitude of
             # the z-scored seq features. Without this, equity (1e5) and
             # raw open_pnl dwarf the time-series signal.

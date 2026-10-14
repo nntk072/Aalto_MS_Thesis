@@ -149,8 +149,11 @@ features:
 
 env:
   obs_window: 60                       # T in [T, F] obs
+  observation_schema_version: account-state-v1 # account-state-v2 is an opt-in new lineage
+  observation_age_scale_bars: 60       # v2 position-age normalization scale
   data_source: frames                   # frames remains default until bundle gates pass
   n_envs: 8                           # train_rl RAM-caps this (powers of two); 1 = DummyVecEnv
+  vector_backend: subproc             # subproc or serial; logical n_envs is unchanged
   action_type: "discrete"              # "discrete" | "continuous"
   # null = full train-split year (last NY bar truncates; FTMO fail terminates).
   max_episode_steps: null
@@ -164,7 +167,7 @@ env:
   # Overlay: intensity does not gate entry (0 = follow context_direction).
   # A positive band lets PPO park at "never trade"; seed-50 20M did that at 0.1.
   entry_intensity_threshold: 0.0
-  reward_mode: dsr                     # baseline stays dsr; idea configs set pnl
+  reward_mode: dsr                     # dsr | rr | pnl | equity_delta_r; default stays dsr
   # "rr" scores the agent on cumulative realized R instead of Sharpe or dollar PnL.
   # Only meaningful with `fixed_risk_usd`: under fractional sizing the same edge
   # yields different dollar PnL as equity drifts, so the reward would partly pay
@@ -223,6 +226,8 @@ env:
   direction_override_threshold: 0.0
 
 ppo:
+  actor_arch: shared                # shared | semantic_heads; opt-in Q4A treatment
+  semantic_head_width: 64
   n_steps: 2048
   batch_size: 512
   n_epochs: 15
@@ -261,10 +266,25 @@ encoder:
 
 agent:
   type: "ppo"                 # "ppo" | "sac"
-  arch: "tcn"                 # "tcn" | "gru" | "transformer" | "mtf"
+  arch: "tcn"                 # "tcn" | "lite_tcn" | "gru" | "transformer" | "mtf"
+  lite_tcn:
+    channels: 96
+    dilations: [1, 4, 10]
+    kernel_size: 3
+    dropout: 0.1
+    latent_dim: 128
+  head_arch:
+    tcn: [256, 128]
+    lite_tcn: [128, 64]
+    gru: [256, 128]
+    transformer: [256, 128]
+    mtf: [256, 128]
   use_narrative: false        # true to condition on the VAE narrative embedding
 
 device: "auto"
+
+quality_diagnostics:
+  enabled: false                    # per-rollout action/funnel/reward report, no policy effect
 
 output:
   report_profile: "full"             # full or campaign_fast (skip optional order PNG and HTML)

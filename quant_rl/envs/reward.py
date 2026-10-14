@@ -391,3 +391,29 @@ class RMultipleReward:
         clipped = float(np.clip(raw, -10.0, 10.0))
         self.last_parts = fit_reward_parts(parts, raw, clipped)
         return clipped
+
+
+class EquityDeltaReward:
+    """Dense incremental R reward using mark-to-market equity changes."""
+
+    def __init__(self, fixed_risk_usd: float, *, breach_penalty: float = -10.0) -> None:
+        if not np.isfinite(fixed_risk_usd) or fixed_risk_usd <= 0.0:
+            raise ValueError("equity_delta_r requires fixed_risk_usd > 0")
+        self.fixed_risk_usd = float(fixed_risk_usd)
+        self.breach_penalty = float(breach_penalty)
+        self.last_parts: dict[str, float] = empty_reward_parts()
+
+    def reset(self) -> None:
+        self.last_parts = empty_reward_parts()
+
+    def __call__(self, step_pnl: float, *, breach: bool = False, **_: object) -> float:
+        if breach:
+            reward = self.breach_penalty
+            self.last_parts = fit_reward_parts({"breach": reward}, reward, reward)
+            return reward
+        raw = float(step_pnl) / self.fixed_risk_usd
+        if not np.isfinite(raw):
+            raise ValueError("equity_delta_r received a non-finite equity change")
+        reward = raw
+        self.last_parts = fit_reward_parts({"pnl": raw}, raw, reward)
+        return reward

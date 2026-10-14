@@ -1,0 +1,54 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from omegaconf import OmegaConf
+from scripts.bench.measure_ppo_throughput import (
+    _apply_profile_overrides,
+    _prepare_bundle,
+)
+
+
+def test_profile_overrides_are_explicit_and_preserve_production_defaults() -> None:
+    cfg = OmegaConf.create(
+        {
+            "env": {"n_envs": 64},
+            "ppo": {"n_steps": 8192, "batch_size": 4096},
+        }
+    )
+
+    _apply_profile_overrides(cfg, n_envs=None, rollout_steps_per_env=None)
+
+    assert cfg.env.n_envs == 64
+    assert cfg.ppo.n_steps == 8192
+    assert cfg.ppo.batch_size == 4096
+
+
+def test_rollout_override_is_global_steps_times_logical_envs() -> None:
+    cfg = OmegaConf.create(
+        {
+            "env": {"n_envs": 32},
+            "ppo": {"n_steps": 8192},
+        }
+    )
+
+    _apply_profile_overrides(cfg, n_envs=None, rollout_steps_per_env=128)
+
+    assert cfg.ppo.n_steps == 4096
+
+
+def test_variant_config_uses_production_strategy_merge_and_cli_override(
+    tmp_path: Path,
+) -> None:
+    cfg, bundle_path, algo, arch = _prepare_bundle(
+        tmp_path,
+        variant="ladder_a0_flat",
+        overrides=["ppo.n_epochs=7"],
+    )
+
+    assert bundle_path == tmp_path
+    assert algo == "ppo"
+    assert arch == "tcn"
+    assert cfg.strategy.name == "baseline"
+    assert cfg.ppo.n_epochs == 7
+    assert cfg.ppo.total_timesteps > 0

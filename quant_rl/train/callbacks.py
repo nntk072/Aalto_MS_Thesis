@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from gymnasium import spaces
 
 from quant_rl.models.ppo_policy import clip_policy_log_std
 from quant_rl.train.equity_gate import decide_early_abort
@@ -30,6 +31,111 @@ except ImportError:
 
 
 if _SB3_AVAILABLE:
+
+    class LearningDiagnosticsCallback(_Base):
+        """Write per-PPO-rollout action, advantage, reward, and funnel diagnostics."""
+
+        def __init__(self, log_path: str | Path, verbose: int = 0) -> None:
+            super().__init__(verbose=verbose)
+            self._log_path = Path(log_path)
+            self._log_path.parent.mkdir(parents=True, exist_ok=True)
+            self._rows: list[dict[str, float]] = []
+            self._funnel: dict[str, float] = {}
+            self._reward_parts: dict[str, float] = {}
+            self._constraints: dict[str, float] = {}
+            self._window_steps = 0
+
+        def _on_step(self) -> bool:
+            infos = self.locals.get("infos") or []
+            for info in infos:
+                if not isinstance(info, dict):
+                    continue
+                self._window_steps += 1
+                funnel = info.get("entry_funnel", {})
+                if isinstance(funnel, dict):
+                    for key, value in funnel.items():
+                        self._funnel[str(key)] = self._funnel.get(str(key), 0.0) + float(value)
+                parts = info.get("reward_parts", {})
+                if isinstance(parts, dict):
+                    for key, value in parts.items():
+                        self._reward_parts[str(key)] = self._reward_parts.get(
+                            str(key), 0.0
+                        ) + float(value)
+                constraints = info.get("constraints", {})
+                if isinstance(constraints, dict):
+                    for key, value in constraints.items():
+                        if isinstance(value, (int, float, np.integer, np.floating)):
+                            metric_key = str(key)
+                            self._constraints[metric_key] = self._constraints.get(
+                                metric_key, 0.0
+                            ) + float(value)
+            return True
+
+        def _on_rollout_end(self) -> None:
+            model: Any = self.model
+            buffer = model.rollout_buffer
+            raw_actions = np.asarray(buffer.actions, dtype=np.float64)
+            if isinstance(model.action_space, spaces.Box):
+                actions = raw_actions.reshape(-1, raw_actions.shape[-1])
+            else:
+                actions = raw_actions.reshape(-1, 1)
+            rewards = np.asarray(buffer.rewards, dtype=np.float64)
+            advantages = np.asarray(buffer.advantages, dtype=np.float64)
+            row: dict[str, float] = {
+                "timestep": float(self.num_timesteps),
+                "rollout/reward_mean": float(np.mean(rewards)),
+                "rollout/reward_std": float(np.std(rewards)),
+                "advantages/mean": float(np.mean(advantages)),
+                "advantages/std": float(np.std(advantages)),
+                "action/saturation_fraction": float(np.mean(np.abs(actions) >= 0.99)),
+                "action/near_minus_one_fraction": float(np.mean(actions <= -0.95)),
+                "action/near_plus_one_fraction": float(np.mean(actions >= 0.95)),
+            }
+            schema = getattr(model, "_action_schema", {})
+            raw_names = (
+                schema.get("coordinates", schema.get("names", []))
+                if isinstance(schema, dict)
+                else []
+            )
+            names = raw_names if isinstance(raw_names, list) else []
+            if len(names) != actions.shape[1]:
+                names = [f"coordinate_{index}" for index in range(actions.shape[1])]
+            for index, name in enumerate(names):
+                coordinate = actions[:, index]
+                row[f"action/{name}_mean"] = float(np.mean(coordinate))
+                row[f"action/{name}_std"] = float(np.std(coordinate))
+                if "mode" in str(name) or "exit" in str(name):
+                    bins = np.digitize(coordinate, [-1.0 / 3.0, 1.0 / 3.0])
+                    for bin_index, label in enumerate(("low", "mid", "high")):
+                        row[f"action/{name}_hist/{label}"] = float(np.mean(bins == bin_index))
+            for key, value in self._funnel.items():
+                row[f"entry_funnel/{key}"] = float(value)
+                model.logger.record(f"entry_funnel/{key}", float(value))
+            for key, value in self._reward_parts.items():
+                row[f"reward_parts/cumulative_{key}"] = float(value)
+                row[f"reward_parts/mean_{key}"] = float(value / max(1, self._window_steps))
+                model.logger.record(f"reward_parts/cumulative_{key}", float(value))
+                model.logger.record(
+                    f"reward_parts/mean_{key}", float(value / max(1, self._window_steps))
+                )
+            for key, value in self._constraints.items():
+                row[f"constraints/sum_{key}"] = float(value)
+                row[f"constraints/mean_{key}"] = float(value / max(1, self._window_steps))
+                model.logger.record(
+                    f"constraints/mean_{key}", float(value / max(1, self._window_steps))
+                )
+            for key, value in row.items():
+                if key.startswith(("action/", "rollout/", "advantages/")):
+                    model.logger.record(f"quality/{key}", value)
+            self._rows.append(row)
+            self._funnel.clear()
+            self._reward_parts.clear()
+            self._constraints.clear()
+            self._window_steps = 0
+
+        def _on_training_end(self) -> None:
+            if self._rows:
+                pd.DataFrame(self._rows).to_csv(self._log_path, index=False)
 
     class ProgressLoggerCallback(_Base):
         """Record per-rollout training metrics and save them to a CSV.
@@ -369,6 +475,12 @@ if _SB3_AVAILABLE:
             return False
 
 else:
+
+    class LearningDiagnosticsCallback:  # type: ignore[no-redef]
+        """Stub — stable-baselines3 is not installed."""
+
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            raise ImportError("stable-baselines3 is required for LearningDiagnosticsCallback")
 
     class ProgressLoggerCallback:  # type: ignore[no-redef]
         """Stub — stable-baselines3 is not installed."""

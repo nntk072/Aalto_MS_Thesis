@@ -1,0 +1,105 @@
+# New research lineages for the RL Learning Quality Program.
+# This registry is deliberately separate from config/experiments.yaml; no
+# historical campaign entry is altered or automatically launched.
+registry_version: 1
+development_control: ladder_a3_multi_tp
+status: implementation_in_progress
+locked_oos_policy: never_select_from_fresh_oos
+stages:
+  - id: q1_state
+    control: q0_control_a3
+    variants:
+      - id: q0_control_a3
+        parent: null
+        status: control
+        overrides:
+          env.strategy_actions: true
+          env.agent_direction_control: true
+          env.allow_agent_sl_mode: true
+          env.allow_agent_tp_mode: true
+          env.allow_multi_tp: true
+          env.allow_simplex: true
+          env.entry_state_machine: false
+          env.observation_schema_version: account-state-v1
+          env.reward_mode: dsr
+          agent.arch: tcn
+          quality_diagnostics.enabled: true
+      - id: q1_state_v2
+        parent: q0_control_a3
+        status: implemented_unit_tested
+        overrides:
+          env.observation_schema_version: account-state-v2
+          quality_diagnostics.enabled: true
+  - id: q2_rollout
+    control: q1_state_v2
+    variants:
+      - id: q2_state_v2_nenv16
+        parent: q1_state_v2
+        status: planned
+        overrides: {env.n_envs: 16}
+      - id: q2_state_v2_nenv32
+        parent: q1_state_v2
+        status: planned
+        overrides: {env.n_envs: 32}
+      - id: q2_state_v2_nenv64
+        parent: q1_state_v2
+        status: planned
+        overrides: {env.n_envs: 64}
+  - id: q3_reward
+    control: q2_winner
+    variants:
+      - id: q3a_rr_fixed500
+        parent: q2_winner
+        status: planned
+        overrides: {env.reward_mode: rr, env.risk_mode: fixed, env.fixed_risk_usd: 500}
+      - id: q3a_rr_fixed1000
+        parent: q2_winner
+        status: planned
+        overrides: {env.reward_mode: rr, env.risk_mode: fixed, env.fixed_risk_usd: 1000}
+      - id: q3b_equity_delta_r_fixed500
+        parent: q2_winner
+        status: implemented_unit_tested
+        overrides:
+          env.reward_mode: equity_delta_r
+          env.risk_mode: fixed
+          env.fixed_risk_usd: 500
+  - id: q4_action
+    control: q3_winner
+    variants:
+      - id: q4a_semantic_heads
+        parent: q3_winner
+        status: implemented_unit_tested
+        overrides: {ppo.actor_arch: semantic_heads}
+      - id: q4b_hybrid_distribution
+        parent: q3_winner
+        status: planned
+        overrides: {ppo.policy_distribution: hybrid_v1}
+  - id: q5_constraints
+    control: q4_winner
+    variants:
+      - id: q5_lagrangian
+        parent: q4_winner
+        status: planned
+        overrides: {constrained_rl.enabled: true}
+  - id: q6_entry_fsm
+    control: q5_winner
+    variants:
+      - id: q6_fsm_visible
+        parent: q5_winner
+        status: planned
+        overrides: {env.entry_state_machine: true, env.entry_state_observation: true}
+      - id: q6_no_fsm_control
+        parent: q5_winner
+        status: planned
+        overrides: {env.entry_state_machine: false}
+  - id: q7_encoder
+    control: q6_winner
+    variants:
+      - id: q7_litetcn
+        parent: q6_winner
+        status: existing_encoder_implementation
+        overrides: {agent.arch: lite_tcn}
+      - id: q7_tcn_control
+        parent: q6_winner
+        status: control
+        overrides: {agent.arch: tcn}

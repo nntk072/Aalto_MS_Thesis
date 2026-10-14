@@ -49,11 +49,30 @@ def test_manifest_records_config_dataset_checkpoint_and_split_hashes(tmp_path) -
         seed=7,
         completed_steps=100,
         action_schema={"version": 1, "key": "6_dir"},
+        observation_schema={
+            "version": "account-state-v2",
+            "observation_width": 28,
+            "observation_coordinates": [f"coordinate_{i}" for i in range(28)],
+            "entry_state_visibility": False,
+        },
+        training_protocol={"seed": 7, "requested_steps": 100, "completed_steps": 100},
         feature_cache_path=cache,
         feature_cache_hash="cache-identity",
         checkpoint_path=checkpoint,
         execution_protocol={"fill_delay_ms": 0},
         metrics_protocol={"frequency": "bar_close_equity"},
+        training_architecture={
+            "arch": "lite_tcn",
+            "encoder_class": "LiteTCNEncoder",
+            "encoder_channels": 96,
+            "encoder_dilations": [1, 4, 10],
+            "encoder_latent_dim": 128,
+            "policy_head_architecture": [128, 64],
+            "policy_parameter_count": 12345,
+            "vector_backend": "serial",
+            "logical_n_envs": 64,
+            "physical_worker_count": 1,
+        },
         artifact_paths={
             "checkpoint": "model.zip",
             "training_log": "training_log.csv",
@@ -66,7 +85,12 @@ def test_manifest_records_config_dataset_checkpoint_and_split_hashes(tmp_path) -
     assert manifest["datasets"]["train_bars"]["sha256"] == dataframe_sha256(frame)
     assert manifest["split"] == {"train_end": "2024-01-01", "test_start": "2024-01-02"}
     assert manifest["action_schema"]["key"] == "6_dir"
+    assert manifest["observation_schema"]["version"] == "account-state-v2"
+    assert manifest["training_protocol"]["requested_steps"] == 100
     assert manifest["feature_cache"]["sha256"] == "cache-identity"
+    assert manifest["manifest_version"] == 3
+    assert manifest["training_architecture"]["physical_worker_count"] == 1
+    assert manifest["training_architecture"]["encoder_channels"] == 96
 
     output = repository / "run_manifest.json"
     write_run_manifest(output, manifest)

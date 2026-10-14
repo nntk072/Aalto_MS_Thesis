@@ -204,9 +204,11 @@ class TestTrainingScriptSmoke:
         compare_encoders_main()
 
         # Assert
-        results = json.loads(out.read_text())
-        assert "gru" in results
-        assert np.isfinite(results["gru"]["out_of_sample"]["sharpe"])
+        report = json.loads(out.read_text())
+        assert "gru" in report
+        assert np.isfinite(report["gru"]["out_of_sample"]["sharpe"])
+        assert report["_meta"]["architecture_selection_authority"] is False
+        assert report["_meta"]["held_out_role"] == "descriptive_only"
 
 
 def test_smoke_fixture_spans_default_split(tmp_path: Path) -> None:

@@ -31,6 +31,12 @@ from omegaconf import OmegaConf
 
 from ..envs.observation import normalized_account_vector, pad_observation_window
 from ..features.build import attach_reachable_r, select_obs_columns
+from ..observation_schema import (
+    OBSERVATION_SCHEMA_V2,
+    account_state_v2,
+    build_observation_schema,
+    validate_observation_schema,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from mt5_trading.adapters import TradingData
@@ -52,6 +58,7 @@ class RLStrategyAdapter:
         config_path: str | Path = DEFAULT_CONFIG,
         features_config_path: str | Path | None = None,
         obs_window: int = 60,
+        allow_legacy_observation_schema: bool = False,
     ) -> None:
         self.model = model
         cfg = OmegaConf.create(OmegaConf.load(config_path))
@@ -62,6 +69,18 @@ class RLStrategyAdapter:
         self.obs_window = int(getattr(env_cfg, "obs_window", obs_window))
         account_cfg = getattr(self.cfg, "account", None)
         self._initial_balance = float(getattr(account_cfg, "initial_balance", 100_000.0))
+        self._observation_schema = build_observation_schema(
+            str(getattr(env_cfg, "observation_schema_version", "account-state-v1")),
+            entry_state_visibility=bool(
+                getattr(env_cfg, "entry_state_machine", False)
+                and getattr(env_cfg, "entry_state_observation", True)
+            ),
+        )
+        validate_observation_schema(
+            getattr(model, "_observation_schema", None),
+            self._observation_schema,
+            allow_legacy_v1=allow_legacy_observation_schema,
+        )
         self._features: pd.DataFrame | None = None
         self._bars: pd.DataFrame | None = None
         self._last_close = 1.0
@@ -122,7 +141,7 @@ class RLStrategyAdapter:
         return ()
 
     def build_observation(
-        self, account_state: dict[str, float] | None = None
+        self, account_state: dict[str, Any] | None = None
     ) -> dict[str, np.ndarray[Any, Any]]:
         """Construct the dict observation with the same contract as the env."""
         if self._features is None:
@@ -142,15 +161,81 @@ class RLStrategyAdapter:
         dist_to_sl = float(st.get("dist_to_sl", 0.0))
         trailing_dd = float(st.get("trailing_dd", 0.0))
         close = float(st.get("close", self._last_close))
-        account = normalized_account_vector(
-            equity=equity,
-            initial_balance=self._initial_balance,
-            pos_dir=pos_dir,
-            open_pnl=open_pnl,
-            dist_to_sl=dist_to_sl,
-            trailing_dd=trailing_dd,
-            close=close,
-        )
+        if self._observation_schema.version == OBSERVATION_SCHEMA_V2:
+            required = {
+                "planned_risk_usd",
+                "trailing_drawdown_limit",
+                "daily_loss",
+                "daily_loss_limit",
+                "loss_from_initial",
+                "max_loss_limit",
+                "risk_per_trade_limit",
+                "entry_price",
+                "initial_sl_price",
+                "active_sl_price",
+                "remaining_size",
+                "initial_size",
+                "position_age_bars",
+                "tp_hit_mask",
+                "tp1_price",
+                "tp2_price",
+                "tp3_price",
+                "sl_mode",
+                "tp_mode",
+                "exit_mode",
+            }
+            missing = sorted(required.difference(st))
+            if self._observation_schema.entry_state_visibility and "entry_state" not in st:
+                missing.append("entry_state")
+            if missing:
+                raise ValueError(
+                    "account-state-v2 live inference requires complete account state; "
+                    f"missing {missing}"
+                )
+            account = account_state_v2(
+                equity=equity,
+                initial_balance=self._initial_balance,
+                position_direction=pos_dir,
+                open_pnl=open_pnl,
+                planned_risk_usd=float(st["planned_risk_usd"]),
+                trailing_drawdown_pct=trailing_dd,
+                trailing_drawdown_limit=float(st["trailing_drawdown_limit"]),
+                daily_loss=float(st["daily_loss"]),
+                daily_loss_limit=float(st["daily_loss_limit"]),
+                loss_from_initial=float(st["loss_from_initial"]),
+                max_loss_limit=float(st["max_loss_limit"]),
+                risk_per_trade_limit=float(st["risk_per_trade_limit"]),
+                current_price=close,
+                entry_price=float(st["entry_price"]),
+                initial_sl_price=float(st["initial_sl_price"]),
+                active_sl_price=float(st["active_sl_price"]),
+                remaining_size=float(st["remaining_size"]),
+                initial_size=float(st["initial_size"]),
+                position_age_bars=float(st["position_age_bars"]),
+                position_age_scale_bars=float(
+                    getattr(self.cfg.env, "observation_age_scale_bars", 60.0)
+                ),
+                tp_hit_mask=int(st["tp_hit_mask"]),
+                tp_prices=(
+                    float(st["tp1_price"]),
+                    float(st["tp2_price"]),
+                    float(st["tp3_price"]),
+                ),
+                sl_mode=str(st["sl_mode"]),
+                tp_mode=str(st["tp_mode"]),
+                exit_mode=str(st["exit_mode"]),
+                entry_state=str(st["entry_state"]) if "entry_state" in st else None,
+            )
+        else:
+            account = normalized_account_vector(
+                equity=equity,
+                initial_balance=self._initial_balance,
+                pos_dir=pos_dir,
+                open_pnl=open_pnl,
+                dist_to_sl=dist_to_sl,
+                trailing_dd=trailing_dd,
+                close=close,
+            )
         return {"seq": seq, "seq_mask": seq_mask, "account": account}
 
     def predict_signal(self, account_state: dict[str, float] | None = None) -> int:

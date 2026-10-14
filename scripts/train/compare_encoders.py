@@ -1,10 +1,10 @@
-"""Compare GRU vs Transformer encoders on the same data and step budget.
+"""Run descriptive encoder comparisons on train and held-out data.
 
 Trains a short-horizon RL run per architecture on the in-sample slice
 (≤ --train-end), evaluates each through the shared evaluation pipeline on
-the held-out out-of-sample slice (≥ --test-start) and reports Sharpe plus
-Sweep Delay — the metric that decides whether the Transformer replaces the
-GRU (delay > 3s rule).
+the held-out slice (≥ --test-start) and reports both sets of metrics. The
+held-out results are descriptive only and must not be used to select an
+architecture; use train-calendar walk-forward or designated development data.
 
 Example:
     python scripts/compare_encoders.py --bars-csv data/us100_2025.csv \
@@ -40,7 +40,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", default="quant_rl/config/default.yaml", help="Env config YAML")
     parser.add_argument("--steps", type=int, default=50_000, help="Training steps per arch")
     parser.add_argument(
-        "--archs", nargs="+", default=["gru", "transformer"], choices=["tcn", "gru", "transformer"]
+        "--archs",
+        nargs="+",
+        default=["gru", "transformer"],
+        choices=["tcn", "lite_tcn", "gru", "transformer"],
     )
     parser.add_argument("--algo", default="ppo", choices=["ppo", "sac"])
     parser.add_argument("--seed", type=int, default=42)
@@ -67,7 +70,7 @@ def evaluate_split(
 
 
 def main() -> None:
-    """Train one agent per encoder on the train slice and compare OOS results."""
+    """Train one agent per encoder and report held-out metrics descriptively."""
     args = parse_args()
     bars = pd.read_csv(args.bars_csv, index_col=0, parse_dates=True)
     if args.features_csv:
@@ -117,12 +120,17 @@ def main() -> None:
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(results, indent=2))
-
-    gru = results.get("gru", {}).get("out_of_sample", {}).get("sweep_delay", {})
-    gru_delay = float(gru.get("sweep_delay_mean_s", 0.0))
-    if "gru" in results and "transformer" in results and gru_delay > 3.0:
-        print("GRU mean out-of-sample Sweep Delay > 3s -> prioritise the Transformer encoder.")
+    report = {
+        "_meta": {
+            "architecture_selection_authority": False,
+            "held_out_role": "descriptive_only",
+        },
+        **results,
+    }
+    out_path.write_text(json.dumps(report, indent=2))
+    print(
+        "Held-out metrics are descriptive only; use train-calendar development data for selection."
+    )
     print(f"saved comparison to {out_path}")
 
 

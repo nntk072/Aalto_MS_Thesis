@@ -1,35 +1,35 @@
 """Measure PPO training throughput (FPS) on the read-only env bundle.
 
-This probe follows the production training configuration so the measured
-environment-steps-per-second is representative of a real run:
-
-    env.n_envs       -> 64 (production)
-    ppo.n_steps      -> 2048  (production, = n_envs * rollout_steps)
-    ppo.batch_size   -> 512   (production)
-    ppo.n_epochs     -> 15    (production CUDA default)
-    ppo.gamma        -> 0.99
-    ppo.learning_rate-> 3.0e-4
+This probe resolves the requested variant/config and applies the same hardware
+scaling function as production training. It reports both configured and
+effective SB3 values so a probe is not mistaken for a production match when
+the requested profile differs.
 
 ``total_timesteps`` is configurable and defaults to a longer (not short-probe)
 amount of work. It is not a training-quality run -- it only measures throughput.
 
-The report separates the two halves of PPO wall-clock: ``rollout_seconds`` (the
-VecEnv stepping phase, which is what a raw ``env.step()`` microbenchmark
-measures) and ``update_seconds`` (the ``n_epochs`` minibatch gradient loop,
-which the short probe skipped by running ``n_epochs=1``). ``env_steps_per_second``
-divides the steps SB3 actually collected by total wall-clock.
+This is a PPO-core benchmark. It resolves the same PPO configuration and uses
+the production bundle environment factory, but does not install production
+dashboard, checkpoint, or evaluation callbacks. Callback and checkpoint timing
+remain unmeasured, so this is not an end-to-end campaign benchmark.
 """
 
 from __future__ import annotations
 
 import argparse
 import gc
+import hashlib
 import json
 import os
+import platform
+import subprocess
 import time
 from functools import partial
 from pathlib import Path
 from typing import Any
+
+from gymnasium import spaces
+from omegaconf import OmegaConf
 
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
@@ -41,37 +41,41 @@ from scripts.bench.measure_env_memory import (
     _tree_pss_mib,
 )
 
-from quant_rl.config import load_config
 from quant_rl.envs.env_bundle_builder import build_env_bundle
 from quant_rl.envs.env_spec import EnvSpec
 from quant_rl.envs.worker import make_bundle_env
 from quant_rl.models.agent import build_agent
-from quant_rl.train.train_rl import _strategy_from_cfg
-
-# Production PPO defaults (quant_rl/config/default.yaml), CUDA path.
-_PROD_N_STEPS = 2048
-_PROD_BATCH_SIZE = 512
-_PROD_N_EPOCHS = 15
-_PROD_GAMMA = 0.99
-_PROD_LR = 3.0e-4
-_PROD_ENT_COEF = 0.01
-_PROD_GAE_LAMBDA = 0.95
-_PROD_CLIP_RANGE = 0.2
-_PROD_EPOCHS_CPU = 1
+from quant_rl.train.train_rl import _load_merged_config, _setup_rngs, _strategy_from_cfg
+from quant_rl.utils.device import scale_training_cfg
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--n-envs", type=int, default=64)
-    parser.add_argument("--rollout-steps-per-env", type=int, default=32)
+    parser.add_argument(
+        "--n-envs",
+        type=int,
+        default=None,
+        help="Override the resolved/scaled environment count for a separate profile.",
+    )
+    parser.add_argument(
+        "--rollout-steps-per-env",
+        type=int,
+        default=None,
+        help="Override rollout length per environment; this changes PPO update geometry.",
+    )
     parser.add_argument(
         "--total-timesteps",
         type=int,
-        default=200_000,
-        help="Total env steps to train for (default: 200k, production full run is 20M).",
+        default=None,
+        help="Total env steps (default: resolved config ppo.total_timesteps).",
     )
+    parser.add_argument("--config", type=Path, default=None, help="Production base config.")
+    parser.add_argument("--seed", type=int, default=42, help="Training RNG seed (default: 42).")
     parser.add_argument(
-        "--iterations", type=int, default=1, help="Multiplicity of the rollout window."
+        "--overrides",
+        nargs="*",
+        default=None,
+        help="key=value overrides, applied after strategy config merge.",
     )
     parser.add_argument(
         "--device",
@@ -101,101 +105,139 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _prepare_bundle(
-    bundle_dir: Path | None, variant: str | None = None
-) -> tuple[Any, EnvSpec, Path]:
-    """Return cfg + EnvSpec, reusing an existing bundle when *bundle_dir* is given.
+    bundle_dir: Path | None,
+    variant: str | None = None,
+    config_path: Path | None = None,
+    overrides: list[str] | None = None,
+) -> tuple[Any, Path, str, str]:
+    """Return resolved config and bundle identity for the production backend.
 
     Building a bundle from scratch loads the whole train-split frame set (which
     peaked around 473 GiB and OOMs below 256 GiB), so a throughput probe that
     only needs the training loop can point at an already-built bundle instead.
     """
-    if variant is not None and bundle_dir is None:
-        raise SystemExit("--variant needs --bundle-dir: rebuilding a bundle is not variant-aware")
-    if bundle_dir is not None:
-        if variant is not None:
-            from quant_rl.train.variant_resolver import resolve_variant
+    strategy = "baseline"
+    algo, arch = "ppo", "tcn"
+    resolved_overrides = list(overrides or [])
+    if variant is not None:
+        from quant_rl.train.variant_resolver import resolve_variant
 
-            resolved = resolve_variant(variant)
-            cfg = load_config(overrides=resolved["overrides"], config_path=resolved["base_config"])
-            algo, arch = resolved["algo"], resolved["arch"]
-        else:
-            cfg = load_config()
-            algo, arch = "ppo", "tcn"
+        resolved = resolve_variant(variant)
+        if bundle_dir is None:
+            raise SystemExit(
+                "--variant needs --bundle-dir: rebuilding a bundle is not variant-aware"
+            )
+        config_path = Path(resolved["base_config"])
+        strategy = str(resolved["strategy"])
+        algo, arch = str(resolved["algo"]), str(resolved["arch"])
+        resolved_overrides = [*resolved["overrides"], *resolved_overrides]
+
+    if config_path is None and bundle_dir is None and not resolved_overrides:
+        cfg, bars, features, tickbook = _load_train_slice(None)
+        strategy_obj = _strategy_from_cfg(cfg)[0]
+        bundle_path = build_env_bundle(
+            cfg.data.cache_dir,
+            bars,
+            features,
+            cfg,
+            raw_columns=list(strategy_obj.raw_columns),
+            feature_config_hash="phase4-share-ppo",
+            tickbook=tickbook,
+            pre_ny_by_date=None,
+        )
+        del bars, features, tickbook
+        gc.collect()
         return (
             cfg,
-            EnvSpec.from_cfg(
-                cfg,
-                algo=algo,
-                reward="dsr",
-                arch=arch,
-                bundle_dir=str(bundle_dir),
-            ),
-            bundle_dir,
+            bundle_path,
+            algo,
+            arch,
         )
 
-    cfg, bars, features, tickbook = _load_train_slice(None)
-    strategy = _strategy_from_cfg(cfg)[0]
-    bundle_path = build_env_bundle(
-        cfg.data.cache_dir,
-        bars,
-        features,
-        cfg,
-        raw_columns=list(strategy.raw_columns),
-        feature_config_hash="phase4-share-ppo",
-        tickbook=tickbook,
-        pre_ny_by_date=None,
+    if bundle_dir is None:
+        raise SystemExit("custom configs/overrides require --bundle-dir")
+    config_name = str(config_path or "quant_rl/config/default.yaml")
+    # This is the same merge routine used by the production CLI: base config,
+    # strategy overlay, then explicit overrides.
+    cfg = _load_merged_config(
+        argparse.Namespace(
+            config=config_name,
+            strategy=strategy,
+            variant=None,
+            overrides=resolved_overrides,
+        )
     )
-    del bars, features, tickbook
-    gc.collect()
+    if algo != "ppo":
+        raise SystemExit(f"PPO throughput probe does not support algo={algo!r}")
+    if variant is None:
+        arch = str(cfg.agent.get("arch", arch))
     return (
         cfg,
-        EnvSpec.from_cfg(
-            cfg,
-            algo="ppo",
-            reward="dsr",
-            arch="tcn",
-            bundle_dir=str(bundle_path),
-        ),
-        bundle_path,
+        bundle_dir,
+        algo,
+        arch,
     )
 
 
-def _apply_production_cfg(cfg: Any, n_envs: int, device: str) -> None:
-    """Apply the production PPO configuration to the probe."""
-    cfg.env.n_envs = n_envs
-    cfg.env.data_source = "bundle"
-    cfg.ppo.n_steps = _PROD_N_STEPS
-    cfg.ppo.batch_size = _PROD_BATCH_SIZE
-    cfg.ppo.n_epochs = _PROD_N_EPOCHS if device == "cuda" else _PROD_EPOCHS_CPU
-    cfg.ppo.gamma = _PROD_GAMMA
-    cfg.ppo.learning_rate = _PROD_LR
-    cfg.ppo.ent_coef = _PROD_ENT_COEF
-    cfg.ppo.gae_lambda = _PROD_GAE_LAMBDA
-    cfg.ppo.clip_range = _PROD_CLIP_RANGE
-    cfg.ppo.total_timesteps = cfg.ppo.get("total_timesteps", 20_000_000)
+def _apply_profile_overrides(
+    cfg: Any,
+    *,
+    n_envs: int | None,
+    rollout_steps_per_env: int | None,
+) -> None:
+    """Apply explicit benchmark overrides after production hardware scaling."""
+    if n_envs is not None:
+        cfg.env.n_envs = n_envs
+    if rollout_steps_per_env is not None:
+        cfg.ppo.n_steps = int(cfg.env.n_envs) * rollout_steps_per_env
 
 
 def _train_probe(
-    n_envs: int,
-    total_timesteps: int,
-    iterations: int,
+    n_envs: int | None,
+    rollout_steps_per_env: int | None,
+    total_timesteps: int | None,
     device: str,
     output: Path,
     bundle_dir: Path | None = None,
     variant: str | None = None,
+    config_path: Path | None = None,
+    overrides: list[str] | None = None,
+    seed: int = 42,
 ) -> dict[str, Any]:
     import torch
 
     if device == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA was requested, but torch.cuda.is_available() is false")
 
-    cfg, spec, bundle_path = _prepare_bundle(bundle_dir, variant)
-    _apply_production_cfg(cfg, n_envs, device)
+    cfg, bundle_path, algo, arch = _prepare_bundle(bundle_dir, variant, config_path, overrides)
+    # This probe always instantiates the shared-bundle backend; make the
+    # hardware scaler use the same worker memory estimate as that backend.
+    cfg.env.data_source = "bundle"
+    scale_training_cfg(cfg, torch.device(device), arch)
+    _apply_profile_overrides(
+        cfg,
+        n_envs=n_envs,
+        rollout_steps_per_env=rollout_steps_per_env,
+    )
+    n_envs = int(cfg.env.n_envs)
+    total_timesteps = int(
+        total_timesteps if total_timesteps is not None else cfg.ppo.total_timesteps
+    )
+    spec = EnvSpec.from_cfg(
+        cfg,
+        algo=algo,
+        reward=str(cfg.env.get("reward_mode", "dsr")),
+        arch=arch,
+        bundle_dir=str(bundle_path),
+    )
+    cfg_text = OmegaConf.to_yaml(cfg, resolve=True)
+    config_sha256 = hashlib.sha256(cfg_text.encode("utf-8")).hexdigest()
 
     torch.set_num_threads(1)
     os.environ["OMP_NUM_THREADS"] = "1"
     os.environ["MKL_NUM_THREADS"] = "1"
     os.environ["OPENBLAS_NUM_THREADS"] = "1"
+    _setup_rngs(seed)
 
     gpu_before: dict[str, int | str] = {}
     if device == "cuda":
@@ -210,13 +252,19 @@ def _train_probe(
 
     start_bytes = _cgroup_memory_bytes()
     parent_env = make_bundle_env(spec)
+    if not isinstance(parent_env.observation_space, spaces.Dict):
+        raise TypeError("PPO throughput probe requires a Dict observation space")
     env_fn = partial(make_bundle_env, spec)
-    model = build_agent(parent_env, cfg, arch="tcn", algo="ppo", device=device, env_fn=env_fn)
+    model = build_agent(parent_env, cfg, arch=arch, algo=algo, device=device, env_fn=env_fn)
+    vec_env = model.get_env()
+    vector_backend = type(vec_env).__name__
+    remotes = getattr(vec_env, "remotes", None)
+    physical_worker_count = len(remotes) if remotes is not None else 1
     vecenv_bytes = _cgroup_memory_bytes()
 
     # n_steps is split by n_envs inside build_agent (n_steps // n_envs per env).
-    rollout_steps_per_env = _PROD_N_STEPS // n_envs
-    nominal_env_steps = n_envs * rollout_steps_per_env * iterations
+    rollout_steps_per_env = int(model.n_steps)
+    nominal_env_steps = int(model.n_envs * model.n_steps)
 
     # Time PPO's gradient phase separately from the env rollout phase, so the
     # reported FPS can be split into "how fast can the envs step" and "how much
@@ -249,7 +297,8 @@ def _train_probe(
     # last rollout overshoots).
     actual_env_steps = int(model.num_timesteps)
     update_seconds = float(update_timing["update_seconds"])
-    rollout_seconds = max(training_seconds - update_seconds, 0.0)
+    rollout_and_framework_seconds = max(training_seconds - update_seconds, 0.0)
+    head_cfg = cfg.agent.get("head_arch", {})
 
     gpu_after: dict[str, int] = {}
     if device == "cuda":
@@ -264,13 +313,78 @@ def _train_probe(
         }
 
     report = {
-        "n_envs": n_envs,
+        "profile_scope": "ppo_core_without_production_callbacks",
+        "production_callbacks_included": False,
+        "callback_evaluation_seconds": None,
+        "checkpoint_seconds": None,
+        "git_sha": subprocess.run(
+            ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+        ).stdout.strip(),
+        "working_tree_dirty": bool(
+            subprocess.run(
+                ["git", "status", "--porcelain"], check=True, capture_output=True, text=True
+            ).stdout.strip()
+        ),
+        "benchmark_source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "python_version": platform.python_version(),
+        "torch_version": torch.__version__,
+        "config_sha256": config_sha256,
+        "bundle_manifest_sha256": (
+            hashlib.sha256((bundle_path / "manifest.json").read_bytes()).hexdigest()
+            if (bundle_path / "manifest.json").is_file()
+            else None
+        ),
+        "arch": arch,
+        "algo": algo,
+        "seed": seed,
+        "n_envs": int(model.n_envs),
+        "vector_backend": vector_backend,
+        "configured_vector_backend": str(cfg.env.get("vector_backend", "subproc")),
+        "physical_worker_count": physical_worker_count,
         "total_timesteps": total_timesteps,
         "rollout_steps_per_env": rollout_steps_per_env,
-        "n_epochs": cfg.ppo.n_epochs,
-        "batch_size": cfg.ppo.batch_size,
-        "n_steps": cfg.ppo.n_steps,
-        "iterations": iterations,
+        "aggregate_rollout_size": nominal_env_steps,
+        "n_epochs": int(model.n_epochs),
+        "batch_size": int(model.batch_size),
+        "configured_ppo_n_steps": int(cfg.ppo.n_steps),
+        "effective_ppo_n_steps_per_env": int(model.n_steps),
+        "learning_rate": float(cfg.ppo.learning_rate),
+        "gamma": float(cfg.ppo.gamma),
+        "gae_lambda": float(cfg.ppo.gae_lambda),
+        "clip_range": float(cfg.ppo.clip_range),
+        "ent_coef": float(cfg.ppo.ent_coef),
+        "effective_ent_coef": float(model.ent_coef),
+        "parameter_count": sum(p.numel() for p in model.policy.parameters()),
+        "feature_extractor_class": type(model.policy.features_extractor).__name__,
+        "encoder_spec": {
+            "channels": getattr(model.policy.features_extractor, "channels", None),
+            "dilations": list(model.policy.features_extractor.dilations)
+            if hasattr(model.policy.features_extractor, "dilations")
+            else None,
+            "kernel_size": getattr(model.policy.features_extractor, "kernel_size", None),
+            "latent_dim": int(getattr(model.policy.features_extractor, "latent_dim", 128)),
+            "parameters": {
+                key: getattr(model.policy.features_extractor, key)
+                for key in ("hidden_size", "num_layers", "d_model", "nhead", "dim_feedforward")
+                if hasattr(model.policy.features_extractor, key)
+            },
+            "receptive_field": getattr(model.policy.features_extractor, "receptive_field", None),
+        },
+        "policy_head_architecture": [int(width) for width in head_cfg.get(arch, [256, 128])],
+        "observation_shapes": {
+            key: list(space.shape or ())
+            for key, space in parent_env.observation_space.spaces.items()
+        },
+        "action_space": {
+            "class": type(parent_env.action_space).__name__,
+            "shape": list(getattr(parent_env.action_space, "shape", ()) or ()),
+            "n": getattr(parent_env.action_space, "n", None),
+        },
+        "action_schema": (
+            parent_env.action_schema.to_dict()
+            if hasattr(parent_env, "action_schema") and hasattr(parent_env.action_schema, "to_dict")
+            else None
+        ),
         "device": device,
         "bundle_size_bytes": sum(
             path.stat().st_size for path in bundle_path.iterdir() if path.is_file()
@@ -280,14 +394,15 @@ def _train_probe(
         "cgroup_after_training_bytes": _cgroup_memory_bytes(),
         "trainer_tree_pss_mib": _tree_pss_mib(os.getpid()),
         "training_seconds": training_seconds,
+        "total_wallclock_seconds": training_seconds,
         "env_steps_per_second": actual_env_steps / max(training_seconds, 1e-9),
         "effective_total_timesteps": total_timesteps,
         "actual_env_steps": actual_env_steps,
         "nominal_env_steps_per_rollout_window": nominal_env_steps,
         "update_seconds": update_seconds,
         "update_calls": update_timing["update_calls"],
-        "rollout_seconds": rollout_seconds,
-        "rollout_steps_per_second": actual_env_steps / max(rollout_seconds, 1e-9),
+        "rollout_and_framework_overhead_seconds": rollout_and_framework_seconds,
+        "rollout_steps_per_second": actual_env_steps / max(rollout_and_framework_seconds, 1e-9),
         "update_share_of_wallclock": update_seconds / max(training_seconds, 1e-9),
         **gpu_before,
         **gpu_after,
@@ -301,20 +416,22 @@ def _train_probe(
 def main() -> None:
     args = _parse_args()
     if (
-        args.n_envs < 1
-        or args.rollout_steps_per_env < 1
-        or args.iterations < 1
-        or args.total_timesteps < 1
+        (args.n_envs is not None and args.n_envs < 1)
+        or (args.rollout_steps_per_env is not None and args.rollout_steps_per_env < 1)
+        or (args.total_timesteps is not None and args.total_timesteps < 1)
     ):
-        raise SystemExit("n_envs, rollout steps, iterations, and total_timesteps must be positive")
+        raise SystemExit("n_envs, rollout steps, and total_timesteps must be positive")
     report = _train_probe(
         args.n_envs,
+        args.rollout_steps_per_env,
         args.total_timesteps,
-        args.iterations,
         args.device,
         args.output,
         args.bundle_dir,
         args.variant,
+        args.config,
+        args.overrides,
+        args.seed,
     )
     print(json.dumps(report, indent=2))
 

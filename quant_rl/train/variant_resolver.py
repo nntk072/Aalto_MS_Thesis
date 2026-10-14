@@ -40,7 +40,7 @@ PREBUILT_FEATURE_CACHES = {
 
 STRATEGIES = ("baseline", "po3_ifvg", "distribution")
 ALGOS = ("ppo", "sac")
-ARCHS = ("tcn", "gru", "transformer", "mtf")
+ARCHS = ("tcn", "lite_tcn", "gru", "transformer", "mtf")
 REWARD_MODES = ("dsr", "pnl", "rr")
 
 LADDER_FLAGS: tuple[str, ...] = (
