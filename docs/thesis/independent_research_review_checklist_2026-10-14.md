@@ -76,10 +76,26 @@ The primary 18-run campaign is still active under its pinned source revision
 Slurm job `20954895` was `RUNNING` on `gpuarm[1-2]`; the primary manifest had 16
 running runs and two failed cache attempts, while the separate recovery
 manifest had both replacement runs running. Their logs showed training progress
-of roughly 1.4–1.6M timesteps for several workers; no run had produced final
-train/test evaluation artifacts. The old workers use the earlier acceptance
-rules, including the no-trade early-abort and PnL/slope training gates. Do not
-reinterpret their outcome under the newer survival-only acceptance rule.
+of roughly 1.18–1.87M timesteps in the primary campaign and 1.47M in each
+recovery worker; no run had produced final train/test evaluation artifacts.
+The old workers use the earlier acceptance rules, including the no-trade
+early-abort and PnL/slope training gates. Do not reinterpret their outcome
+under the newer survival-only acceptance rule.
+
+The live resource CSVs cover about 78–83 minutes (142–150 samples). Allocation
+cgroup high-water marks were 152.9 GiB on gpuarm1 and 142.1 GiB on gpuarm2,
+against 512 GiB per node; current cgroup use was about 136.8/138.7 GiB, with
+zero OOM events. The per-GPU utilization sample means were about 56% and 55%,
+with observed peaks of 98% and 97%. Process-tree CPU time averaged about 3.86
+and 4.89 cores for the primary campaign; the recovery campaign added about
+1.09 cores on gpuarm1, for roughly 4.95 and 4.89 measured cores against 48
+allocated cores per node. The CPU figures are calculated from each CSV's
+cumulative process-tree CPU-time delta divided by its sample-window duration;
+the cgroup figures cover the whole Slurm allocation. These early samples show
+substantial CPU and RAM headroom and moderate GPU use, but cover only the early
+training phase and do not establish full-run resource peaks or justify a
+different `n_envs` setting by themselves. Source measurements are in the
+primary and recovery `logs/resources_gpuarm*.csv` files.
 
 A successor campaign has been prepared and pushed at repository commit
 `2739387` (`Add provenance-safe campaign checkpoint migration`). Its seed-42,
