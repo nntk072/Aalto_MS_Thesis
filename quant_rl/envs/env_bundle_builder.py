@@ -134,6 +134,7 @@ def build_env_bundle(
     feature_config_hash: str,
     tickbook: TickBook | None,
     pre_ny_by_date: Mapping[Any, NDArray[Any]] | None,
+    reuse_only: bool = False,
 ) -> Path:
     """Build the complete read-only data bundle for one train split."""
     obs_features, obs_columns = observation_features(bars, features, raw_columns)
@@ -214,6 +215,7 @@ def build_env_bundle(
             else None,
             "pre_ny_day_to_row": pre_ny_rows,
         },
+        reuse_only=reuse_only,
     )
 
 

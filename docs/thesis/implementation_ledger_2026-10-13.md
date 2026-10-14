@@ -2234,3 +2234,25 @@ GH200 runtime yet. Current evidence verifies map construction and file
 integrity, not real model deserialization. Keep the old attempt history and the new
 lineage distinct, and label any resulting training as a checkpoint continuation
 with the source-policy boundary recorded.
+
+The successor preflight now first attempts a strict reuse of the existing
+primary campaign's content-keyed shared-environment bundles. It places new
+observation memmaps in the successor output and checks existing bundle key,
+version, config, source fingerprints, labels, columns, array metadata and
+array values against freshly prepared current inputs. It never repairs or
+overwrites a parent bundle in reuse-only mode. If any bundle is absent or
+mismatched, the launcher falls back to a fresh parity cache in the successor
+output. This avoids rebuilding the 7.7 GiB shared-env portion of the current
+13 GiB parity cache when exact reuse succeeds; actual compute-node reuse has
+not yet been exercised.
+
+Before adding this path, rechecked the parent parity report: all 18 variants
+and 36 traces had passed, all four configured raw-data SHA-256 hashes still
+matched, and all 167 source paths in the old report were present. Of those,
+163 hashes still match; the only four changed files are the training default,
+early-abort callback, survival gate, and train-loop reporting/gate behavior.
+The feature, data pipeline, trading environment, shared-bundle, environment
+specification, worker, and parity-audit source hashes are unchanged. The new
+parity audit still runs both traces and validates freshly prepared arrays; it
+does not merely accept the old report as a current-source pass. If runtime
+data/config/cache identity differs, it falls back to a fresh successor cache.

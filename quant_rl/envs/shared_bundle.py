@@ -188,24 +188,74 @@ def build_bundle(
     column_names: Mapping[str, Any] | None = None,
     labels: Mapping[str, Any] | None = None,
     bundle_version: int = BUNDLE_VERSION,
+    reuse_only: bool = False,
 ) -> Path:
     """Build or reuse a content-keyed bundle under ``cache_dir/shared_env``.
 
     Builders for the same key serialize with ``flock``. The manifest is the
     final file written in a private temporary directory, which is renamed into
-    place atomically only after every file has reached disk.
+    place atomically only after every file has reached disk. ``reuse_only``
+    requires an existing bundle and checks its identity and arrays without
+    writing or repairing the cached bundle.
     """
     _validate_arrays(arrays)
     key = bundle_key(config, source_fingerprints, bundle_version)
     root = Path(cache_dir) / "shared_env"
     root.mkdir(parents=True, exist_ok=True)
     bundle_path = root / key
+    if reuse_only and not bundle_path.is_dir():
+        raise FileNotFoundError(f"required reusable bundle does not exist: {bundle_path}")
     lock_path = root / f"{key}.lock"
     with lock_path.open("a+b") as lock_handle:
         fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
         if bundle_path.exists():
-            load_bundle(bundle_path)
+            loaded = load_bundle(bundle_path)
+            if reuse_only:
+                if (
+                    loaded.manifest.get("key") != key
+                    or loaded.manifest.get("bundle_version") != bundle_version
+                ):
+                    raise ValueError(f"cached bundle key does not match its path: {bundle_path}")
+                expected_config = _json_compatible(_relevant_config(config))
+                expected_sources = _json_compatible(source_fingerprints)
+                expected_columns = _json_compatible(dict(column_names or {}))
+                expected_labels = _json_compatible(dict(labels or {}))
+                if loaded.manifest.get("config") != expected_config:
+                    raise ValueError(
+                        f"cached bundle config differs from current inputs: {bundle_path}"
+                    )
+                if loaded.manifest.get("source_fingerprints") != expected_sources:
+                    raise ValueError(
+                        f"cached bundle source identity differs from current inputs: {bundle_path}"
+                    )
+                if loaded.manifest.get("column_names") != expected_columns:
+                    raise ValueError(
+                        f"cached bundle column names differ from current inputs: {bundle_path}"
+                    )
+                if loaded.manifest.get("labels") != expected_labels:
+                    raise ValueError(
+                        f"cached bundle labels differ from current inputs: {bundle_path}"
+                    )
+                if set(loaded.arrays) != set(arrays):
+                    raise ValueError(
+                        f"cached bundle array names differ from current inputs: {bundle_path}"
+                    )
+                for name, expected in arrays.items():
+                    actual = loaded.arrays[name]
+                    if actual.shape != expected.shape or actual.dtype != expected.dtype:
+                        raise ValueError(
+                            f"cached bundle array metadata differs for {name}: {bundle_path}"
+                        )
+                    equal = (
+                        np.array_equal(actual, expected, equal_nan=True)
+                        if actual.dtype.kind in "fc"
+                        else np.array_equal(actual, expected)
+                    )
+                    if not equal:
+                        raise ValueError(f"cached bundle array differs for {name}: {bundle_path}")
             return bundle_path
+        if reuse_only:
+            raise FileNotFoundError(f"required reusable bundle does not exist: {bundle_path}")
         temp_path = Path(tempfile.mkdtemp(prefix=f"{key}.tmp-", dir=root))
         try:
             _write_bundle_directory(

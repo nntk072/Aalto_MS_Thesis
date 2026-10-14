@@ -9,6 +9,7 @@ OUT_DIR="$REPO/outputs/gpu_campaigns/$CAMPAIGN_ID"
 CHECKPOINT_MAP="$OUT_DIR/checkpoint_migration_map.json"
 PREFLIGHT="$OUT_DIR/reports/preflight_complete.json"
 DONE_MARKER="$OUT_DIR/allocation_controller.exit"
+PARENT_PARITY_CACHE="$REPO/outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/artifacts/parity_bundle_cache"
 
 cd "$REPO"
 if [[ "${SLURM_PROCID:-0}" != "0" ]]; then
@@ -33,10 +34,21 @@ if [[ ! -s "$CHECKPOINT_MAP" ]]; then
 fi
 
 if [[ ! -s "$PREFLIGHT" ]]; then
-  python "$REPO/scripts/matrix/audit_real_market_bundle_parity.py" \
+  if python "$REPO/scripts/matrix/audit_real_market_bundle_parity.py" \
     --out "$OUT_DIR/reports/frames_bundle_parity.json" \
-    --bundle-cache "$OUT_DIR/artifacts/parity_bundle_cache" \
-    2>&1 | tee -a "$OUT_DIR/logs/preflight.log"
+    --bundle-cache "$PARENT_PARITY_CACHE" \
+    --obs-mmap-dir "$OUT_DIR/artifacts/parity_obs_mmap" \
+    --require-existing-bundles \
+    2>&1 | tee -a "$OUT_DIR/logs/preflight.log"; then
+    echo "Validated and reused the parent campaign's content-keyed shared bundles."
+  else
+    echo "Parent bundle reuse validation failed; rebuilding parity bundles in successor output."
+    python "$REPO/scripts/matrix/audit_real_market_bundle_parity.py" \
+      --out "$OUT_DIR/reports/frames_bundle_parity.json" \
+      --bundle-cache "$OUT_DIR/artifacts/parity_bundle_cache" \
+      --obs-mmap-dir "$OUT_DIR/artifacts/parity_bundle_cache/obs_mmap" \
+      2>&1 | tee -a "$OUT_DIR/logs/preflight.log"
+  fi
   python - "$OUT_DIR/reports/frames_bundle_parity.json" "$PREFLIGHT" <<'PY'
 import json, pathlib, sys
 source = pathlib.Path(sys.argv[1])

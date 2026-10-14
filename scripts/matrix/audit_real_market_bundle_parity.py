@@ -277,6 +277,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--bundle-cache", type=Path, required=True)
+    parser.add_argument(
+        "--obs-mmap-dir",
+        type=Path,
+        help="observation memmap output directory; defaults to <bundle-cache>/obs_mmap",
+    )
+    parser.add_argument(
+        "--require-existing-bundles",
+        action="store_true",
+        help="validate and reuse every existing bundle without creating or changing bundles",
+    )
     parser.add_argument("--active-bars", type=int, default=10_000)
     args = parser.parse_args()
     out = args.out.resolve()
@@ -357,7 +367,8 @@ def main() -> int:
                 from quant_rl.data.ticks import ticks_covering
 
                 raw_ticks = ticks_covering(tickbook, episode_bars)
-            obs_mmap_path = args.bundle_cache / "obs_mmap" / f"{name}.npy"
+            obs_mmap_dir = args.obs_mmap_dir or args.bundle_cache / "obs_mmap"
+            obs_mmap_path = obs_mmap_dir / f"{name}.npy"
             obs_mmap = _publish_obs_memmap(
                 episode_features,
                 episode_bars,
@@ -384,6 +395,7 @@ def main() -> int:
                 feature_config_hash=cache.stem,
                 tickbook=raw_ticks,
                 pre_ny_by_date=None,
+                reuse_only=args.require_existing_bundles,
             )
             spec = EnvSpec.from_cfg(
                 cfg,

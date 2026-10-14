@@ -97,6 +97,58 @@ def test_build_is_idempotent(tmp_path: Path) -> None:
     assert {path.name: path.stat().st_mtime_ns for path in second.iterdir()} == mtimes
 
 
+def test_reuse_only_validates_and_reuses_existing_bundle(tmp_path: Path) -> None:
+    """Reuse-only mode checks identity and data without writing bundle files."""
+    from quant_rl.envs.shared_bundle import build_bundle
+
+    arrays, config = _fixture_bundle_inputs()
+    sources = {"bars": {"size": 32}}
+    first = build_bundle(
+        tmp_path,
+        arrays=arrays,
+        config=config,
+        source_fingerprints=sources,
+    )
+    mtimes = {path.name: path.stat().st_mtime_ns for path in first.iterdir()}
+
+    reused = build_bundle(
+        tmp_path,
+        arrays=arrays,
+        config=config,
+        source_fingerprints=sources,
+        reuse_only=True,
+    )
+
+    assert reused == first
+    assert {path.name: path.stat().st_mtime_ns for path in reused.iterdir()} == mtimes
+
+    altered = {name: value.copy() for name, value in arrays.items()}
+    altered["bar_ohlc"][0, 0] += 1.0
+    with pytest.raises(ValueError, match="cached bundle array differs"):
+        build_bundle(
+            tmp_path,
+            arrays=altered,
+            config=config,
+            source_fingerprints=sources,
+            reuse_only=True,
+        )
+
+
+def test_reuse_only_fails_when_bundle_is_missing(tmp_path: Path) -> None:
+    """Reuse-only mode never silently builds a missing bundle."""
+    from quant_rl.envs.shared_bundle import build_bundle
+
+    arrays, config = _fixture_bundle_inputs()
+    with pytest.raises(FileNotFoundError, match="required reusable bundle"):
+        build_bundle(
+            tmp_path,
+            arrays=arrays,
+            config=config,
+            source_fingerprints={"bars": {"size": 32}},
+            reuse_only=True,
+        )
+
+
 def test_build_is_atomic_on_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A failed array write leaves neither a final bundle nor temporary files."""
     import quant_rl.envs.shared_bundle as shared_bundle

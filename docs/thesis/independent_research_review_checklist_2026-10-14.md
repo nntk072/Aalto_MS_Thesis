@@ -117,13 +117,31 @@ training-survival failures are a max-loss breach or peak trailing drawdown above
 The successor controller's dry-run validated exact 18-key checkpoint lineage
 from the primary and recovery manifests and the two-node, one-GH200-per-node,
 48-CPU/512-GiB-per-node placement with `n_envs=64`. Full-tree Ruff format and
-lint, full-tree Mypy (404 source files), and 24 focused migration/artifact tests
-passed. The successor supervisor has **not** been launched because the old
-organizer and allocation remain active. The controller includes a CPU
-`PPO.load` preflight for each migrated checkpoint, but no real migrated model
+lint, full-tree Mypy (404 source files), and 35 focused bundle/migration tests
+passed. The migration preflight now attempts strict reuse of the existing
+primary campaign's content-keyed shared-environment bundles, while writing new
+observation maps under successor output. It checks bundle identity and exact
+array values and falls back to a fresh successor cache on any mismatch; it
+does not repair or overwrite parent bundles. This could avoid rebuilding the
+7.7 GiB shared-env portion of the current parity cache, but has not yet been
+exercised on the compute runtime. The successor supervisor has **not** been
+launched because the old organizer and allocation remain active. The
+controller includes a CPU `PPO.load` preflight for each migrated checkpoint,
+but no real migrated model
 has yet passed that preflight on the compute runtime. This is tooling and
 dry-run evidence, not completed training, final evaluation, or model-quality
 evidence. The two campaigns and their source lineages must remain distinct.
+
+The reuse decision is limited to the parent parity cache: all 18 variants and
+36 traces in its report passed; all four configured raw-data hashes still
+match; and all 167 old report source paths are present, with 163 hashes
+unchanged. The four changed source files are limited to training early-abort,
+survival-gate, and reporting behavior; the feature/data pipeline, environment,
+bundle, worker, and parity-audit files are byte-identical. The successor audit
+still rebuilds current features, compares them element-by-element with the
+cached arrays, and runs both traces. A missing or mismatched cache triggers a
+fresh successor-local bundle build. Actual compute-node reuse remains
+unverified.
 
 The active 2026 test calendar is previously exposed development data. Any
 successor result on it is exploratory/report-only and cannot satisfy the fresh
