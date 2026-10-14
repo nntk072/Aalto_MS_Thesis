@@ -2385,3 +2385,37 @@ The report is
 `outputs/gpu_campaigns/readiness_reaudit_20261014/checkpoint_load_cpu_ladder_a0_flat_3m_20261014.json`.
 This verifies one current checkpoint on CPU, not GH200 runtime, policy quality,
 or completed train/test evaluation.
+
+### Live 18-worker campaign refresh — 2026-10-14 12:10 UTC
+
+Read-only verification on the login host found Slurm allocation `20954895`
+still RUNNING on `gpuarm[1-2]` (6-hour limit; 96 CPUs, 2 GH200 GPUs and 1 TiB
+aggregate memory). The existing two-node campaign supervisor and the
+login-side migration watcher are both alive. The migration watcher remains
+waiting for the original supervisor/allocation; it has not requested a new
+allocation. No Slurm job or worker was stopped.
+
+The primary campaign manifest still records 16 running workers and two
+startup failures. Both failures are the Idea 1/Idea 2 prebuilt-cache hash
+mismatch at 12:50 Helsinki time and have no checkpoint. The separate recovery
+manifest has those same two run keys running, each with a verified 2M
+checkpoint. Together, the manifests therefore represent 18 active unique
+trainers: 16 primary workers plus the two recovery workers. The newest primary
+checkpoint files are at 3M for `ladder_a0_flat` and 2M for each of the other
+15 active primary runs; the two recovery checkpoints are also at 2M. The
+primary and recovery source SHA is `937bae529fdf5d6c17db6174880ef448320e2883`.
+This is partial training progress, not 20M completion. Neither the training
+in-sample nor report-only test final evaluation JSON exists yet.
+
+The failed primary attempts remain preserved in their logs and manifest; the
+recovery campaign is a separate lineage and should not be merged or marked
+complete by hand. The migration watcher is configured to rebuild a
+provenance-checked 18-key checkpoint map after the original supervisor ends.
+This handoff has not been exercised by a completed allocation boundary. The
+previous resource sample remains the only recorded full-node utilization
+window; it is not updated by this check. Scratch quota reported 139 GiB used
+of 536 GiB and 457k files of 1.048m, with no quota pressure. Thesis readiness
+remains **NOT READY**: the 20M campaign and both final evaluations are
+incomplete, the 2026 test period is selection-acknowledged rather than a fresh
+holdout, independent research review is unsigned, and sustained full-run
+resource sizing remains open.
