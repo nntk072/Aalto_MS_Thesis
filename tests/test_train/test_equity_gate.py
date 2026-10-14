@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from quant_rl.train.callbacks import EpisodeEquityCallback
 from quant_rl.train.equity_gate import assess_train_equity, decide_early_abort, equity_slope
 
 
@@ -59,10 +60,52 @@ def test_episode_equity_recorded_when_the_episode_ends() -> None:
     assert ep["start_equity"] == pytest.approx(env.initial_balance)
     assert ep["end_equity"] == pytest.approx(env.account.equity)
     assert ep["n_trades"] == 0
+    assert ep["episode_steps"] == 1
+    assert ep["completed_data_split"] is False
+    assert ep["episode_end_reason"] == "max_episode_steps"
     assert "reward_sum" in ep
     assert np.isfinite(ep["reward_sum"])
     assert np.isfinite(ep["slope"])
     assert np.isfinite(ep["max_peak_trailing_dd"])
+
+
+@pytest.mark.unit
+def test_episode_equity_callback_persists_full_split_coverage(tmp_path, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    callback = EpisodeEquityCallback(tmp_path / "episode_equity.csv")
+    monkeypatch.setattr(callback, "model", SimpleNamespace(num_timesteps=99_504), raising=False)
+    monkeypatch.setattr(
+        callback,
+        "locals",
+        {
+            "dones": np.asarray([True]),
+            "infos": [
+                {
+                    "episode_equity": {
+                        "end_equity": 100_100.0,
+                        "start_equity": 100_000.0,
+                        "reward_sum": 0.1,
+                        "n_trades": 3,
+                        "episode_steps": 99_504,
+                        "completed_data_split": True,
+                        "episode_end_reason": "data_end",
+                        "breach_reason": "",
+                    }
+                }
+            ],
+        },
+        raising=False,
+    )
+
+    assert callback._on_step() is True
+    assert (tmp_path / "episode_equity.csv").is_file()
+    callback._on_training_end()
+    recorded = pd.read_csv(tmp_path / "episode_equity.csv").iloc[0]
+    assert recorded["environment_index"] == 0
+    assert recorded["episode_steps"] == 99_504
+    assert bool(recorded["completed_data_split"])
+    assert recorded["episode_end_reason"] == "data_end"
 
 
 @pytest.mark.unit

@@ -75,13 +75,26 @@ if _SB3_AVAILABLE:
             super().__init__(verbose=verbose)
             self._log_path = Path(log_path)
             self._log_path.parent.mkdir(parents=True, exist_ok=True)
-            self._rows: list[dict[str, Any]] = []
+            self._columns = [
+                "timestep",
+                "environment_index",
+                "end_equity",
+                "start_equity",
+                "equity_delta",
+                "reward_sum",
+                "n_trades",
+                "episode_steps",
+                "completed_data_split",
+                "episode_end_reason",
+                "breach_reason",
+            ]
 
         def _on_step(self) -> bool:
             dones = self.locals.get("dones")
             infos = self.locals.get("infos") or []
             if dones is None:
                 return True
+            rows: list[dict[str, Any]] = []
             for i, done in enumerate(np.asarray(dones).reshape(-1)):
                 if not done or i >= len(infos):
                     continue
@@ -94,14 +107,18 @@ if _SB3_AVAILABLE:
                 equity_delta = end_equity - start_equity
                 row = {
                     "timestep": int(self.num_timesteps),
+                    "environment_index": int(i),
                     "end_equity": end_equity,
                     "start_equity": start_equity,
                     "equity_delta": equity_delta,
                     "reward_sum": reward_sum,
                     "n_trades": int(ep["n_trades"]),
+                    "episode_steps": int(ep.get("episode_steps", 0)),
+                    "completed_data_split": bool(ep.get("completed_data_split", False)),
+                    "episode_end_reason": str(ep.get("episode_end_reason") or ""),
                     "breach_reason": str(ep.get("breach_reason") or ""),
                 }
-                self._rows.append(row)
+                rows.append(row)
                 if reward_sum > 0.0 and end_equity < start_equity:
                     log.warning(
                         "episode reward %.4f is positive but equity fell %.2f (breach=%s)",
@@ -109,11 +126,18 @@ if _SB3_AVAILABLE:
                         -equity_delta,
                         row["breach_reason"] or "none",
                     )
+            if rows:
+                pd.DataFrame(rows, columns=self._columns).to_csv(
+                    self._log_path,
+                    mode="a",
+                    header=not self._log_path.exists(),
+                    index=False,
+                )
             return True
 
         def _on_training_end(self) -> None:
-            if self._rows:
-                pd.DataFrame(self._rows).to_csv(self._log_path, index=False)
+            if not self._log_path.exists():
+                pd.DataFrame(columns=self._columns).to_csv(self._log_path, index=False)
 
     class BestCheckpointEvalCallback(_Base):
         """Save the policy with the highest end equity on a train-calendar rollout.

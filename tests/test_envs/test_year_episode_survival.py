@@ -99,14 +99,18 @@ def test_max_episode_steps_null_reaches_last_session() -> None:
     done = truncated = False
     steps = 0
     last_sid = None
+    last_info: dict[str, Any] = {}
     while not (done or truncated) and steps < 50_000:
         last_sid = int(env.bars["session_id"].iloc[min(env.step_idx, len(env.bars) - 1)])
-        _, _, done, truncated, _ = env.step(0)
+        _, _, done, truncated, last_info = env.step(0)
         steps += 1
     assert truncated is True
     assert done is False
     assert last_sid == int(env.bars["session_id"].iloc[-1])
     assert steps > 50  # walked well past a single short cap
+    assert last_info["episode_equity"]["completed_data_split"] is True
+    assert last_info["episode_equity"]["episode_steps"] == steps
+    assert last_info["episode_equity"]["episode_end_reason"] == "data_end"
 
 
 @pytest.mark.unit
@@ -176,11 +180,13 @@ def test_hard_max_loss_terminates_not_truncates() -> None:
     env.account._update_loss_from_initial()
     assert env.account.loss_from_initial() >= 10_000.0
 
-    _, reward, done, truncated, _ = env.step(0)
+    _, reward, done, truncated, info = env.step(0)
     assert done is True
     assert truncated is False
     assert reward == pytest.approx(-10.0)
     assert env.breach_events and env.breach_events[0]["reason"] == "max_drawdown"
+    assert info["episode_equity"]["completed_data_split"] is False
+    assert info["episode_equity"]["episode_end_reason"] == "risk_breach"
 
 
 @pytest.mark.unit

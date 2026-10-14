@@ -3485,11 +3485,25 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 initial=float(self._ep_start_equity),
                 breached=bool(self.breach_log),
             )
+            completed_data_split = self._ny_pos >= len(self._ny_indices)
+            if done:
+                episode_end_reason = "risk_breach" if self.breach_log else "terminated"
+            elif completed_data_split:
+                episode_end_reason = "data_end"
+            elif self.max_episode_steps is not None and (
+                self.episode_step_count >= self.max_episode_steps
+            ):
+                episode_end_reason = "max_episode_steps"
+            else:
+                episode_end_reason = "truncated"
             info["episode_equity"] = {
                 "end_equity": float(self.account.equity),
                 "start_equity": float(self._ep_start_equity),
                 "reward_sum": float(self._ep_reward_sum),
                 "n_trades": int(n_trades),
+                "episode_steps": int(self.episode_step_count),
+                "completed_data_split": bool(completed_data_split),
+                "episode_end_reason": episode_end_reason,
                 "breach_reason": str(self.breach_log[-1]) if self.breach_log else "",
                 "slope": float(gate["slope"]),
                 "max_peak_trailing_dd": float(gate["max_peak_trailing_dd"]),
