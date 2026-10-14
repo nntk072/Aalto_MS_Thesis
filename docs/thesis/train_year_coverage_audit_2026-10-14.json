@@ -1,0 +1,52 @@
+{
+  "campaign": "ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014",
+  "captured_at_utc": "2026-10-14T14:28:24+00:00",
+  "evaluation_contract": {
+    "current_final_train_test_artifacts_present": false,
+    "test_evaluation": "deterministic report-only replay over the complete test split after the training target is reached",
+    "train_evaluation": "deterministic replay over the complete train split after the training target is reached"
+  },
+  "evidence_scope_limit": "This audit establishes the available calendar/session length and configured nominal transition budget. It does not establish actual episode-by-episode full-year traversal, because episodes may end on risk breaches and episode_equity.csv is written at training end. Final train/test reports remain authoritative for full-split evaluation and survival.",
+  "schema_version": 1,
+  "source_hashes_sha256": {
+    "config/campaigns/18_variant_seed42_20m_purelegacy_shared_bundle_n64_20261014.yaml": "8127ab2501a0244ed87a3b4e577468dba23b553a357a3d9880ccf68211316f60",
+    "data/US100.cash_M1_202412300105_202607031959.csv": "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/workers/ladder_a0_flat__seed42.log": "88acbb4e3acdd3cc9d85c93651f3654f92d7c90e96828a9377a0efa626b40ec8",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/runs/attempts/ladder_a0_flat__seed42/attempt1/ladder_a0_flat__seed42/20261014_125018_106971_rl_train_seed42_tcn/config.yaml": "b8db48a27e2fef07c0b79b38e434b7698cbbbc63e2efb033bb7974529ca0c413",
+    "quant_rl/data/pipeline.py": "092772a9e1db4463912d25c64b3b252e872e746845c6d3adeb6215b9b0d6ec71",
+    "quant_rl/data/session.py": "b9cfb04b2b98ee3c8b4faf282040f04861a095e6f9ba04f8a14fd0e54e072129",
+    "quant_rl/envs/trading_env.py": "dddf8d53cb5457a94c8a9c45a5e67027f26cd51a2df96f8f0e8a12ddad7dc455",
+    "quant_rl/train/callbacks.py": "8f48bf46d95166c8f33b659d752c854a1ae0bf77b36b1c481fc3084f186f0f68",
+    "quant_rl/train/train_rl.py": "d218a8cd33d8323e9e95eb5b34cc8be9464207971fa3bcc1d4751ca43c511b38"
+  },
+  "status": "bounded protocol audit; active 20M campaign is incomplete",
+  "training_budget": {
+    "full_ny_calendar_pass_equivalents_if_no_early_risk_termination": 3.140577263225599,
+    "interpretation": "20M PPO timesteps are aggregate across 64 vector environments. The nominal budget can cover about 3.16 full NY-session traversals per environment if episodes reach the end of the training split. Guardrail breaches terminate episodic training episodes early, so this ratio is capacity, not observed coverage.",
+    "max_episode_steps": null,
+    "n_envs": 64,
+    "nominal_steps_per_env": 312500.0,
+    "timesteps_per_variant": 20000000
+  },
+  "training_data": {
+    "campaign_logged_train_rows": 351550,
+    "count_method": "Count rows in the hashed raw M1 file with date <= 2025-12-31 and clock time 16:30 through 23:00 inclusive; this matches quant_rl/data/session.py session labeling and TradingEnv bundle NY-session indexing.",
+    "eligible_ny_bars_per_full_episode": 99504,
+    "first_row_in_split": [
+      "2024.12.30",
+      "01:05:00"
+    ],
+    "last_row_in_split": [
+      "2025.12.31",
+      "23:49:00"
+    ],
+    "m1_raw_path": "data/US100.cash_M1_202412300105_202607031959.csv",
+    "ny_session_window_broker_time_inclusive": [
+      "16:30",
+      "23:00"
+    ],
+    "symbol": "US100.cash",
+    "train_end_inclusive": "2025-12-31",
+    "train_rows_from_raw_through_end": 351550
+  }
+}
