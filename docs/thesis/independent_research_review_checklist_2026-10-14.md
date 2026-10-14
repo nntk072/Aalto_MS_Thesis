@@ -377,6 +377,12 @@ Source review confirms migrated checkpoints count toward, rather than add to, th
 
 The allocation-scoped sampler now covers 3.05 hours. Per-node cgroup RAM averaged 140.0/140.4 GiB and peaked at 154.9/158.1 GiB against 512 GiB; process-tree CPU averaged 3.83/4.89 cores; GPU utilization averaged 56.3%/55.7%; GPU memory peaked at 48.7/55.7 GiB. Latest OOM counters remain zero. The derivation and raw CSV hashes are in `outputs/gpu_campaigns/readiness_reaudit_20261014/reports/resource_sample_20261014_1253.json` (SHA-256 `880911df2770f74d87c4ab145ca2df418d366f00f821a9d6376cdd80cfc7c349`). This extends the bounded resource sample; it still does not measure a complete training/evaluation cycle or establish full-run peak requirements. Overall readiness remains **NOT READY**.
 
+### Reporting change and live-state note — 2026-10-14 15:03 UTC
+
+Current repository `main` is `a5e8e5f` (pushed). The campaign report now reads and hashes per-environment full-training-split episode telemetry, and the controller renders the JSON/Markdown summary after an allocation-boundary or terminal snapshot. The current `20954895` workers remain pinned to `937bae5`, so this feature applies to the distinct checkpoint-migration campaign and cannot reconstruct prior episodes.
+
+At this observation Slurm job `20954895` was RUNNING at 5:38/6:00 on gpuarm[1-2]. The primary campaign manifest showed 16 workers running and two initial cache-sidecar failures; the separate cache-recovery manifest showed two replacement lineages running. The initial failures occurred before training because the Idea 1/Idea 2 cache sidecars differed from the effective expected hashes. Latest saved primary checkpoints reached 6M/20M; no complete train/test report was present. The migration watcher was still waiting for the original allocation. These are interim operational facts; they do not indicate viability or full-year episode completion. The external research reviewer has not signed this checklist, and the overall readiness decision remains **NOT READY**.
+
 ### Live campaign and resource refresh — 2026-10-14 14:06 UTC
 
 Slurm job `20954895` was RUNNING at 4:41:15 on `gpuarm[1-2]`; the migration watcher remained waiting for the original allocation, and no successor allocation had been requested. Latest saved PPO checkpoints cover all 18 unique lineages at 3M–6M of 20M steps (median 4M). No `EARLY_ABORT` markers or final train/test evaluation JSON files were found. These are partial checkpoints and interim status only.
