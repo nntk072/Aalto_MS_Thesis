@@ -2075,3 +2075,41 @@ lineaged campaign from a validated checkpoint migration. Do not claim the
 readiness remains **NOT READY**: independent research review, a pristine
 confirmatory holdout, final campaign evidence, and sustained training resource
 sizing remain open.
+
+### Live 18-worker progress and resource sample — 2026-10-14 10:30 UTC
+
+Slurm job `20954895` remains RUNNING on gpuarm1/gpuarm2 (one GH200, 48 CPUs,
+512 GiB RAM per node; six-hour limit). The main 18-variant manifest currently
+records 16 running jobs and two failed first attempts. The failures are
+`ladder_a0_flat_po3` and `ladder_a0_flat_dist`; both stopped before PPO because
+their configured Idea 1/Idea 2 prebuilt feature-cache hashes differed from
+the effective data/config hashes. The failures remain preserved. Those
+variants are active in the separate
+`outputs/gpu_campaigns/ladder2_cache_recovery_seed42_20m_shared_bundle_n64_20261014`
+manifest. Therefore 18 variant workers are running across the two manifests,
+with the original failures still visible. At the latest worker-log sample,
+16 workers had logged between 491,520 and 884,736 PPO steps; the two stale-
+cache attempts logged no training steps. No final evaluations or outcomes
+exist.
+
+The resource CSVs contain 70–71 samples over about 39–40 minutes. Process-tree
+PSS averaged 91.9 GiB on gpuarm1 and 118.7 GiB on gpuarm2, with peaks of 98.8
+and 128.7 GiB. Slurm-job cgroup memory averaged 135.8 and 126.6 GiB; sampled
+current maxima were 151.2 and 134.9 GiB, and recorded cgroup high-water marks
+were 152.9 and 136.5 GiB against 512 GiB per node. OOM counters were zero.
+Process-tree CPU averaged 3.91 and 4.87 cores against 48 CPUs per node.
+Sampled GPU utilization averaged 56.2% and 52.1% (peaks 96% and 92%); GPU
+memory averaged 38.0 and 40.2 GiB (peaks 43.3 and 45.7 GiB). This is sustained
+early-phase evidence for shared-bundle `n_envs=64` at 18 workers, not final
+phase sizing or evidence that more CPUs would improve throughput. It does not
+establish final checkpoint/evaluation peaks or scratch-I/O needs. Sources are
+the two `outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/resources_gpuarm*.csv`
+files, worker logs, and both campaign manifests.
+
+The main campaign identity remains pinned to
+`937bae529fdf5d6c17db6174880ef448320e2883` with fingerprint
+`b19cf865ae01a900c425b9e7ab45fd922b5ac14b54364171cca34574ea270556`; current
+repository HEAD is `1effb2e`. Do not alter campaign provenance to force a
+resume. Overall readiness remains **NOT READY** pending completed training
+and train/test evaluations, independent research review, a pristine holdout
+for confirmatory claims, and full-phase resource evidence.

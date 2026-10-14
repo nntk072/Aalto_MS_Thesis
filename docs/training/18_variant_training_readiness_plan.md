@@ -910,3 +910,42 @@ frames/shared-bundle parity before relying on that evidence for the corrected
 registry. Do not launch the frozen 20M campaign: the pilot's other 17 gates
 still fail, and the pure baseline has not yet been trained. Readiness remains
 **NOT READY**.
+
+### Live campaign and resource update — 2026-10-14 10:30 UTC
+
+Slurm job `20954895` remains RUNNING on two GH200 nodes (48 CPUs and 512 GiB
+per node, six-hour limit). The main manifest has 16 running jobs and two
+failed first attempts. `ladder_a0_flat_po3` and `ladder_a0_flat_dist` failed
+before PPO because their Idea 1/Idea 2 prebuilt cache hashes did not match the
+effective data/config hashes. The failed outputs are preserved; those variants
+are running in the separate
+`ladder2_cache_recovery_seed42_20m_shared_bundle_n64_20261014` campaign. Thus
+18 variant workers are currently active across two manifests, while the main
+manifest correctly retains its 16-running/2-failed history. Sixteen workers
+had emitted PPO progress from 491,520 to 884,736 steps at the latest log
+sample; the two failed attempts logged no training steps. No final evaluation
+or completed result exists yet.
+
+The resource samplers recorded 70–71 samples over approximately 39–40 minutes
+after startup. On gpuarm1/gpuarm2, process-tree PSS averaged 91.9/118.7 GiB
+and peaked at 98.8/128.7 GiB. Slurm-job cgroup memory averaged 135.8/126.6
+GiB; sampled current-memory maxima were 151.2/134.9 GiB and recorded cgroup
+high-water marks were 152.9/136.5 GiB, against 512 GiB per node. The cgroup
+scope is `slurm_job`; all OOM event counters remain zero. Process-tree CPU
+averaged 3.91/4.87 cores against 48 assigned per node. Sampled GPU utilization
+averaged 56.2%/52.1%, peaked at 96%/92%, and GPU memory averaged 38.0/40.2
+GiB with peaks of 43.3/45.7 GiB. This is early-phase sustained evidence for
+the actual shared-bundle `n_envs=64`, 18-worker allocation. It does not
+establish final training, checkpoint, evaluation, scratch-I/O or maximum
+resource peaks. Low sampled CPU use does not establish that allocating more
+CPUs would improve throughput. Evidence is in the two campaign
+`logs/resources_gpuarm*.csv` files and worker logs.
+
+The current repository HEAD is `1effb2e`, while the main campaign identity is
+pinned to `937bae5` and fingerprint
+`b19cf865ae01a900c425b9e7ab45fd922b5ac14b54364171cca34574ea270556`. Do not
+rewrite either campaign's fingerprint to resume. Before another allocation,
+verify exact-source resume behavior and preserve checkpoints and both campaign
+manifests. Readiness remains **NOT READY**: no candidate has completed
+training and both final split evaluations; the exposed 2026 interval is not
+confirmatory; independent research review and a pristine holdout remain open.
