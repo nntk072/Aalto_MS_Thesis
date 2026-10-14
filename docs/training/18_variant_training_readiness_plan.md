@@ -969,6 +969,8 @@ files in the campaign's `source_manifest.json` match commit `937bae5`; its
 data, cache, output and virtual-environment paths point to the existing shared
 artifacts. The allocation launcher now routes a future resume through that
 worktree when the active checkout SHA differs from the campaign manifest.
+The launcher also resumes the separate two-variant cache-recovery manifest
+alongside the primary campaign in later allocations.
 This path has passed shell syntax and worktree/hash checks but has not yet
 been exercised by a later allocation. It does not alter the currently running
 job.

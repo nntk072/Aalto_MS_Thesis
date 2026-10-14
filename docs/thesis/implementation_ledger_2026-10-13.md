@@ -2137,5 +2137,7 @@ detached worktree
 `source_manifest.json`; shared data, caches, outputs, and `.venv` are linked
 to the existing paths. Updated the two-node allocation launcher to detect a
 manifest/current-checkout SHA mismatch and dispatch through this pinned
-worktree. Shell syntax and file/hash checks pass. This retry path is prepared
-but not yet exercised; the active allocation and workers were not touched.
+worktree. The launcher also resumes the separate two-variant cache-recovery
+manifest alongside the primary campaign in later allocations. Shell syntax
+and file/hash checks pass. This retry path is prepared but not yet exercised;
+the active allocation and workers were not touched.
