@@ -225,10 +225,12 @@ new allocation requested. The primary manifest records 16 running workers and
 two preserved startup failures caused by prebuilt-cache hash mismatches. The
 separate recovery manifest has those two run keys running, so there are 18
 active unique variants across both manifests. Their latest worker logs show
-2.26M–3.64M of 20M steps. Eight latest short train-prefix monitors report
-zero trades; these are interim training monitors, not final split evaluations
-or worker terminal states. No final train-in-sample or report-only test report
-exists yet.
+2.26M–3.64M of 20M steps. A JSONL-based snapshot at 12:28 UTC found 8/18
+latest 20,000-bar train-prefix monitors with zero trades; these are interim
+training monitors, not final split evaluations or worker terminal states.
+The per-variant metrics and source hashes are in
+`outputs/gpu_campaigns/readiness_reaudit_20261014/reports/train_prefix_monitor_snapshot_20261014_1228.json`.
+No final train-in-sample or report-only test report exists yet.
 
 A freshly rebuilt lineage map covers all 18 variants from the primary plus
 recovery campaigns. All 18 selected checkpoints passed local CPU
