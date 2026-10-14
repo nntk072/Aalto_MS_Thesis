@@ -97,12 +97,13 @@ training phase and do not establish full-run resource peaks or justify a
 different `n_envs` setting by themselves. Source measurements are in the
 primary and recovery `logs/resources_gpuarm*.csv` files.
 
-At the same live check, `df` reported 500 GiB total and 371 GiB available on
-`/scratch`; `lfs quota` showed default block/file quota settings with no
-explicit numeric limit. The primary and recovery campaign directories used
-about 14 GiB and 99 MiB respectively; roughly 13 GiB of the primary total was
-the parity cache. These are point-in-time storage figures, not a forecast of
-final checkpoint/report growth or a Lustre I/O throughput benchmark.
+At the same live check, `quota -s` reported 138 GiB of the user's 536 GiB
+scratch quota used, with 456k of 1.048m files. This leaves roughly 398 GiB of
+user quota headroom; the aggregate Lustre `df` capacity is not the applicable
+per-user limit. The primary and recovery campaign directories used about
+14 GiB and 100 MiB respectively; roughly 13 GiB of the primary total was the
+parity cache. These are point-in-time storage figures, not a forecast of final
+checkpoint/report growth or a Lustre I/O throughput benchmark.
 
 A successor campaign has been prepared and pushed at repository commit
 `2739387` (`Add provenance-safe campaign checkpoint migration`). Its seed-42,

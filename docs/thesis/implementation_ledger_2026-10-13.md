@@ -2256,3 +2256,11 @@ specification, worker, and parity-audit source hashes are unchanged. The new
 parity audit still runs both traces and validates freshly prepared arrays; it
 does not merely accept the old report as a current-source pass. If runtime
 data/config/cache identity differs, it falls back to a fresh successor cache.
+
+### User scratch quota recheck — 2026-10-14
+
+`quota -s` reports 138 GiB of the user's 536 GiB scratch quota used and
+456k/1.048m files, leaving about 398 GiB and 592k files of quota headroom.
+The aggregate `/scratch` filesystem capacity is not the applicable personal
+limit. The active primary/recovery campaign outputs occupy about 14 GiB and
+100 MiB. No active campaign cache or training output was removed.
