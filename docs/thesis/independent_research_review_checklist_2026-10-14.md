@@ -68,3 +68,41 @@ campaign decision and evidence boundary are in
 Until a qualified reviewer fills this record and resolves the open items, the
 independent-review gate remains **OPEN** and overall campaign readiness remains
 **NOT READY**.
+
+## Campaign and evaluation status addendum — 2026-10-14
+
+The primary 18-run campaign is still active under its pinned source revision
+`937bae529fdf5d6c17db6174880ef448320e2883`. At the latest status check,
+Slurm job `20954895` was `RUNNING` on `gpuarm[1-2]`; the primary manifest had 16
+running runs and two failed cache attempts, while the separate recovery
+manifest had both replacement runs running. Their logs showed training progress
+of roughly 1.4–1.6M timesteps for several workers; no run had produced final
+train/test evaluation artifacts. The old workers use the earlier acceptance
+rules, including the no-trade early-abort and PnL/slope training gates. Do not
+reinterpret their outcome under the newer survival-only acceptance rule.
+
+A successor campaign has been prepared and pushed at repository commit
+`2739387` (`Add provenance-safe campaign checkpoint migration`). Its seed-42,
+18-variant, 20M-step specification retains the 2025 training and exposed 2026
+report-only test split. The training entry point writes distinct
+`train_in_sample.json` and `test_report_only.json` reports after training; the
+same behavior is present in the current worker source pinned by the active
+campaign. PnL, equity slope, and activity remain metrics; the updated hard
+training-survival failures are a max-loss breach or peak trailing drawdown above
+10%.
+
+The successor controller's dry-run validated exact 18-key checkpoint lineage
+from the primary and recovery manifests and the two-node, one-GH200-per-node,
+48-CPU/512-GiB-per-node placement with `n_envs=64`. Full-tree Ruff format and
+lint, full-tree Mypy (404 source files), and 24 focused migration/artifact tests
+passed. The successor supervisor has **not** been launched because the old
+organizer and allocation remain active. The controller includes a CPU
+`PPO.load` preflight for each migrated checkpoint, but no real migrated model
+has yet passed that preflight on the compute runtime. This is tooling and
+dry-run evidence, not completed training, final evaluation, or model-quality
+evidence. The two campaigns and their source lineages must remain distinct.
+
+The active 2026 test calendar is previously exposed development data. Any
+successor result on it is exploratory/report-only and cannot satisfy the fresh
+locked-OOS requirement. The independent review record above remains unsigned;
+the overall readiness decision remains **NOT READY**.
