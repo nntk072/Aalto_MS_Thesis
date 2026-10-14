@@ -148,3 +148,16 @@ The active 2026 test calendar is previously exposed development data. Any
 successor result on it is exploratory/report-only and cannot satisfy the fresh
 locked-OOS requirement. The independent review record above remains unsigned;
 the overall readiness decision remains **NOT READY**.
+
+### Checkpoint-load audit update — 2026-10-14
+
+All 18 currently available seed-42 checkpoints passed the CPU `PPO.load`
+deserialization and embedded-timestep check (`18 passed, 0 failed`). Their
+recorded checkpoints are 1M–2M steps. The report is
+`outputs/gpu_campaigns/readiness_reaudit_20261014/reports/checkpoint_load_cpu_18_seed42_20261014.json`;
+it records checkpoint hashes and lineage provenance. This is a bounded CPU
+compatibility result. It does not verify loading on GH200, final-budget model
+compatibility, continued training, completed train/test evaluation, or policy
+quality. Slurm job `20954895` was still running at the latest status query;
+the old campaign and recovery runs remain active and unchanged. Overall
+readiness remains **NOT READY**.

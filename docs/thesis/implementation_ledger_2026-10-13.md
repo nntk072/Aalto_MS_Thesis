@@ -2264,3 +2264,25 @@ data/config/cache identity differs, it falls back to a fresh successor cache.
 The aggregate `/scratch` filesystem capacity is not the applicable personal
 limit. The active primary/recovery campaign outputs occupy about 14 GiB and
 100 MiB. No active campaign cache or training output was removed.
+
+### Initial checkpoint deserialization audit — 2026-10-14 11:43 UTC
+
+The read-only initial-checkpoint audit completed successfully for all 18
+current seed-42 lineages (`passed=18`, `failed=0`) using CPU `PPO.load`; each
+loaded model's embedded timestep matched its expected value. The checkpoints
+were between 1M and 2M steps, so this is an early-checkpoint compatibility
+check, not a final 20M checkpoint validation. The machine-readable report is
+`outputs/gpu_campaigns/readiness_reaudit_20261014/reports/checkpoint_load_cpu_18_seed42_20261014.json`
+and the execution log is
+`outputs/gpu_campaigns/readiness_reaudit_20261014/logs/checkpoint_load_cpu_18_seed42_20261014.log`.
+The report records checkpoint and source-provenance hashes, source campaign
+fingerprints, runtime, repository SHA `602f5cbe40e007169e7dd826d8c0c164b08586bb`,
+and a clean working tree. This does not establish GH200 deserialization,
+continued training, final train/test evaluations, or policy quality.
+
+At the latest live query, Slurm job `20954895` remained RUNNING on
+`gpuarm[1-2]`; no workers or allocation were stopped. The old campaign remains
+in progress, its two stale-cache attempts remain preserved, and the separate
+recovery workers remain a distinct lineage. The provenance-safe successor is
+still not launched. Readiness remains **NOT READY** pending final training and
+both evaluations, the independent research review, and a fresh locked holdout.
