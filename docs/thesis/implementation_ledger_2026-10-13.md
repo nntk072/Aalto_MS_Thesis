@@ -2318,3 +2318,15 @@ planned continuation, not completed training. The successor remains subject
 to the current 20M total-step budget, separate train/test evaluations, and
 report-only treatment of the exposed 2026 test window. Readiness remains
 **NOT READY**.
+
+The approximately 1.98-hour resource-sampler window through 11:48 UTC measured
+process-tree CPU averages of 3.84 and 4.89 cores on nodes with 48 allocated
+CPUs each (8.0% and 10.2%). GPU utilization averaged 55.6% and 55.5%; VRAM
+averaged 42.5 and 45.6 GiB, with peaks of 46.2 and 51.1 GiB. Cgroup memory
+averaged 135.9 and 134.9 GiB and peaked at 152.9 and 147.8 GiB, against
+512 GiB/node; OOM counters remained zero. This sample indicates substantial
+CPU and RAM headroom with moderate GPU utilization. It does not establish
+full-run peaks or justify changing `n_envs` mid-campaign; changing vector
+environment count would change PPO rollout/update semantics and comparability.
+Measurements are in the campaign's `logs/resources_gpuarm1.csv` and
+`logs/resources_gpuarm2.csv`.

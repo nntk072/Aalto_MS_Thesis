@@ -180,3 +180,10 @@ not started another allocation, and the live jobs remain untouched. The
 worker source still uses the earlier acceptance policy; continuation under
 the successor's current policy must retain that lineage boundary. No policy
 quality or confirmatory evidence is available yet.
+
+The latest approximately 1.98-hour resource window averaged 3.84/4.89 CPU
+cores against 48 allocated per node, 55.6%/55.5% GPU utilization, and
+135.9/134.9 GiB cgroup RAM against 512 GiB per node; peaks were 152.9/147.8
+GiB with zero OOM events. These are early campaign measurements, not a
+full-budget sizing guarantee. Preserve `n_envs=64` for the active and
+checkpoint-continuation runs so PPO rollout/update behavior remains comparable.
