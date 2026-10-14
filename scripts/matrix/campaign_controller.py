@@ -933,7 +933,7 @@ def choose_resume_checkpoint(
 
 def verify_initial_checkpoint_models(
     archived: dict[str, pathlib.Path], lineage: dict[str, dict[str, Any]]
-) -> None:
+) -> dict[str, int]:
     """Deserialize migrated PPO checkpoints on CPU and check saved step counts."""
     import gc
 
@@ -942,6 +942,7 @@ def verify_initial_checkpoint_models(
         sys.path.insert(0, root_path)
     from stable_baselines3 import PPO
 
+    loaded_steps: dict[str, int] = {}
     for key, path in archived.items():
         model = PPO.load(path, device="cpu")
         actual_steps = int(model.num_timesteps)
@@ -951,8 +952,10 @@ def verify_initial_checkpoint_models(
                 f"loaded checkpoint step mismatch for {key}: "
                 f"expected {expected_steps}, got {actual_steps}"
             )
+        loaded_steps[key] = actual_steps
         del model
         gc.collect()
+    return loaded_steps
 
 
 def runtime_metadata() -> dict[str, Any]:

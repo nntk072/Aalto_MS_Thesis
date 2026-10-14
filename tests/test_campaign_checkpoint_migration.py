@@ -237,10 +237,11 @@ def test_migrated_checkpoint_model_load_checks_embedded_steps(
     monkeypatch.setitem(sys.modules, "stable_baselines3", SimpleNamespace(PPO=FakePPO))
     checkpoint = tmp_path / "checkpoint.zip"
     checkpoint.touch()
-    controller.verify_initial_checkpoint_models(
+    loaded_steps = controller.verify_initial_checkpoint_models(
         {"variant__seed42": checkpoint},
         {"variant__seed42": {"source_num_timesteps": 1_000_000}},
     )
+    assert loaded_steps == {"variant__seed42": 1_000_000}
 
     with pytest.raises(ValueError, match="loaded checkpoint step mismatch"):
         controller.verify_initial_checkpoint_models(
