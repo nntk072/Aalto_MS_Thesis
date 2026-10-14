@@ -1190,7 +1190,7 @@ Focused coverage tests passed 24/24 (`tests/test_train/test_equity_gate.py` and 
 
 ### Standardized episode-coverage report — 2026-10-14
 
-The report builder now includes per-run full-training-split episode counts by environment, hashes and links to each episode telemetry CSV, and explicit unavailable/legacy-schema states. The controller generates the Markdown and JSON summary after each allocation-boundary or terminal status snapshot. This is output-only; it does not change learning, risk rules, gates, or worker scheduling. The report identifies budget and evaluation role from the campaign manifest and cannot treat an exploratory previously inspected split as confirmatory evidence.
+The report builder now includes per-run full-training-split episode counts by environment, hashes and links to each episode telemetry CSV, explicit unavailable/legacy-schema states, and attempt/failure detail in the per-variant table. Full failure text remains in JSON and worker logs. The controller generates the Markdown and JSON summary after each allocation-boundary or terminal status snapshot. This is output-only; it does not change learning, risk rules, gates, or worker scheduling. The report identifies budget and evaluation role from the campaign manifest and cannot treat an exploratory previously inspected split as confirmatory evidence.
 
 The updated campaign controller and report builder are fingerprinted source files. They apply only to a new source snapshot such as the separately named checkpoint-migration campaign; do not force-resume the original `937bae5` campaign under a changed fingerprint. The older workers do not emit the new episode columns, and their full-year episode history cannot be reconstructed from checkpoints.
 

@@ -142,6 +142,7 @@ def test_campaign_summary_reads_metrics_logs_and_legacy_gpu_samples(tmp_path: Pa
     assert job["test_replay_report_only"]["days_traded"] == 2
     assert summary["resource_profiles"][0]["gpu_devices"][1]["mean_utilization_pct"] == 80
     assert "Train survival | Full-year episodes | Envs reached year end" in report
+    assert "| variant | failed | 1 — training equity gate failed |" in report
     assert "Completed full-training-split episodes: **2** across **2 environments**" in report
     assert (
         "[episode coverage](../runs/attempts/variant__seed42/attempt1/variant__seed42/20261014_000000_run/model/episode_equity.csv)"

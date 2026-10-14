@@ -509,8 +509,8 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "",
         f"PnL is in the account currency ({pnl_label}). `Survived / days` comes from the matching worker log.",
         "",
-        f"| Variant | Controller | Train survival | Full-year episodes | Envs reached year end | Train return | Train PnL ({pnl_label}) | Train trades | Test return | Test PnL ({pnl_label}) | Test max DD | Test Sharpe | Test PF | Test trades | Test survived / days | Evidence |",
-        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
+        f"| Variant | Controller | Attempt / failure | Train survival | Full-year episodes | Envs reached year end | Train return | Train PnL ({pnl_label}) | Train trades | Test return | Test PnL ({pnl_label}) | Test max DD | Test Sharpe | Test PF | Test trades | Test survived / days | Evidence |",
+        "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for job in jobs:
         train = job.get("train_metrics") or {}
@@ -523,6 +523,16 @@ def render_markdown(summary: dict[str, Any]) -> str:
             days = f"{replay['days_traded']}/{replay['days_total']}"
         survived = replay.get("survived_full_period")
         survived_label = "—" if survived is None else ("yes" if survived else "no")
+        failure_reason = job.get("failure_reason")
+        if failure_reason:
+            failure_detail = str(failure_reason).replace("|", "\\|").replace("\n", " ").strip()
+            if len(failure_detail) > 180:
+                failure_detail = failure_detail[:177] + "..."
+        elif job.get("controller_status") in {"failed", "interrupted"}:
+            failure_detail = f"exit {job.get('exit_code')}"
+        else:
+            failure_detail = "—"
+        attempt_failure = f"{job.get('attempt', '—')} — {failure_detail}"
         evidence_links: list[str] = []
         worker_log = job.get("worker_log")
         if worker_log:
@@ -542,9 +552,10 @@ def render_markdown(summary: dict[str, Any]) -> str:
                 )
         evidence = " · ".join(evidence_links) or "—"
         lines.append(
-            "| {variant} | {status} | {gate} | {full_year} | {full_year_envs} | {tr} | {tpnl} | {tn} | {er} | {epnl} | {edd} | {esharpe} | {epf} | {en} | {survived} / {days} | {evidence} |".format(
+            "| {variant} | {status} | {attempt_failure} | {gate} | {full_year} | {full_year_envs} | {tr} | {tpnl} | {tn} | {er} | {epnl} | {edd} | {esharpe} | {epf} | {en} | {survived} / {days} | {evidence} |".format(
                 variant=job.get("variant") or job.get("run_key"),
                 status=job.get("controller_status", "—"),
+                attempt_failure=attempt_failure,
                 gate="PASS"
                 if gate.get("ok") is True
                 else "FAIL"
