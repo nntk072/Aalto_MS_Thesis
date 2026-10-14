@@ -2286,3 +2286,35 @@ in progress, its two stale-cache attempts remain preserved, and the separate
 recovery workers remain a distinct lineage. The provenance-safe successor is
 still not launched. Readiness remains **NOT READY** pending final training and
 both evaluations, the independent research review, and a fresh locked holdout.
+
+### Live campaign continuity check and migration watcher — 2026-10-14 11:45 UTC
+
+Revalidated live state instead of using the stale `reports/campaign_status.json`
+snapshots (primary timestamp 09:50 UTC; recovery 09:55 UTC). Slurm job
+`20954895` is RUNNING on gpuarm1/gpuarm2, with a 6-hour limit and 96 CPUs,
+2 GH200 GPUs and 1 TiB aggregate requested memory. The existing primary
+controller has 16 active runs and two cache-failed entries; the separate
+recovery controller has two active runs. Worker logs last written around
+14:45 Europe/Helsinki show approximately 1.6–2.7M steps in primary and
+2.0–2.1M in recovery. No train or test final-evaluation JSON exists yet.
+
+The primary supervisor's completion loop reads only the primary manifest and
+has a three-allocation-error limit. Its controller changes interrupted runs
+back to pending on resume, but leaves the two failed primary entries failed.
+Recovery was launched as a distinct overlapping step after its initial
+12-CPU attempt failed the `n_envs=64` CPU guard; the retry launched both runs,
+but that manifest is outside the primary supervisor's status/exit decision.
+These are continuity limits, not a reason to interrupt the live allocation.
+
+Started the already-prepared migration supervisor as a background watcher in
+the existing tmux server; it added no tmux window and has not requested an
+allocation. Its log is
+`outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_20261014/logs/allocation_supervisor.log`.
+At startup it reported that it is waiting for the original supervisor and
+allocation to stop. It will then build one provenance-checked 18-key map from
+the latest primary and recovery checkpoints and request the successor
+two-node allocation, preserving the existing job and all output. This is a
+planned continuation, not completed training. The successor remains subject
+to the current 20M total-step budget, separate train/test evaluations, and
+report-only treatment of the exposed 2026 test window. Readiness remains
+**NOT READY**.

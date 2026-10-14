@@ -161,3 +161,22 @@ compatibility, continued training, completed train/test evaluation, or policy
 quality. Slurm job `20954895` was still running at the latest status query;
 the old campaign and recovery runs remain active and unchanged. Overall
 readiness remains **NOT READY**.
+
+### Live progress and continuity update — 2026-10-14 11:45 UTC
+
+Slurm job `20954895` remains active on two GH200 nodes (48 CPUs and 512 GiB
+per node, 6-hour limit). The primary campaign has 16 active workers and two
+failed stale-cache attempts; two replacement runs are active in a separate
+recovery campaign. Recent logs show roughly 1.6–2.7M and 2.0–2.1M steps,
+respectively; neither manifest has final train/test evaluations. The saved
+campaign status JSON timestamps are stale, so current state was checked from
+Slurm, tmux, worker logs, and checkpoints.
+
+The current organizer does not coordinate the recovery manifest and stops
+after three allocation errors. A migration supervisor is now watching in the
+existing tmux server and waits for the original organizer/allocation before
+continuing all 18 checkpoint lineages under the prepared successor. It has
+not started another allocation, and the live jobs remain untouched. The
+worker source still uses the earlier acceptance policy; continuation under
+the successor's current policy must retain that lineage boundary. No policy
+quality or confirmatory evidence is available yet.
