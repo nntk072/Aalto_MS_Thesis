@@ -1071,3 +1071,37 @@ but it has not run on the GH200 runtime. The current dry-run proves map and
 artifact integrity, not model deserialization. Keep campaign readiness
 **NOT READY** until checkpoint loading, full training, both final evaluations,
 and independent research review are verified.
+
+### Current continuity and lineage verification — 2026-10-14 12:04 UTC
+
+**Researcher authorization supersedes the earlier pre-launch stop for this
+exploratory run only.** The 20M/variant campaign is now active under Slurm job
+`20954895`; this does not change the NOT READY decision for production or
+confirmatory use. The job remains RUNNING on gpuarm1/gpuarm2, with 16 workers in
+the primary manifest and two recovery workers in a separate manifest. The
+primary manifest still preserves two failed stale-cache attempts; the
+replacement attempts remain separate and provenance-linked. Recent logs are
+partial training only. There are no final train/test evaluation artifacts.
+
+The prepared migration supervisor is running as a login-side watcher in the
+existing tmux server. It has not requested an allocation; its log says it is
+waiting for the original organizer/allocation. It will build a fresh map from
+both manifests after that organizer stops. The watcher now treats checkpoint
+progress across an allocation boundary as progress rather than a retry error;
+it stops only after three consecutive nonzero allocations without a changed
+checkpoint signature. This repairs the successor retry behavior without
+stopping or rewriting the current allocation.
+
+A read-only 12:04 UTC map snapshot validated all 18 keys, currently selecting
+one 3M, 16 2M, and one 1M checkpoint. The successor dry-run accepted the
+specified 20M total-step target, shared-bundle backend, `n_envs=64`, 18 workers,
+two GH200 nodes, one GPU/node, and five CPUs/worker. The map is
+`outputs/gpu_campaigns/readiness_reaudit_20261014/checkpoint_map_snapshot_20261014_latest.json`;
+the supervisor will rebuild rather than reuse this snapshot. The 3M pure
+baseline checkpoint was separately CPU-loaded with a matching embedded
+timestep; see
+`outputs/gpu_campaigns/readiness_reaudit_20261014/checkpoint_load_cpu_ladder_a0_flat_3m_20261014.json`.
+This does not establish GH200 compatibility or model quality. The exposed
+2026 test interval remains selection-acknowledged/report-only, and a fresh
+locked period is still needed for confirmatory claims. The independent review
+remains unsigned and overall readiness remains **NOT READY**.
