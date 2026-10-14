@@ -2412,10 +2412,28 @@ recovery campaign is a separate lineage and should not be merged or marked
 complete by hand. The migration watcher is configured to rebuild a
 provenance-checked 18-key checkpoint map after the original supervisor ends.
 This handoff has not been exercised by a completed allocation boundary. The
-previous resource sample remains the only recorded full-node utilization
-window; it is not updated by this check. Scratch quota reported 139 GiB used
+the resource sampler remains active; its updated 09:50–12:11 UTC window is
+recorded below. Scratch quota reported 139 GiB used
 of 536 GiB and 457k files of 1.048m, with no quota pressure. Thesis readiness
 remains **NOT READY**: the 20M campaign and both final evaluations are
 incomplete, the 2026 test period is selection-acknowledged rather than a fresh
 holdout, independent research review is unsigned, and sustained full-run
 resource sizing remains open.
+
+### Live campaign resource sample — 2026-10-14 12:11 UTC
+
+The existing per-node sampler produced 247 samples on gpuarm1 and 239 on
+gpuarm2 from 09:50 to 12:11 UTC. Process-tree CPU averaged 3.83 and 4.89
+cores, respectively, out of 48 allocated per node. GPU utilization averaged
+56.1% and 55.7%. Cgroup RAM averaged 137.2 and 136.8 GiB and peaked at 152.9
+and 152.7 GiB; GPU memory averaged 43.1 and 46.6 GiB and peaked at 47.0 and
+52.6 GiB. The recorded cgroup `oom`, `oom_kill`, and `oom_group_kill` counters
+were zero throughout both sample files. The CSV evidence is in
+`outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/resources_gpuarm1.csv`
+and `.../resources_gpuarm2.csv`.
+
+This is a fresh, measured 2-hour-21-minute profile of the current shared-bundle
+campaign and confirms that CPU and RAM are not near their allocation limits in
+this interval; the GPUs are moderately utilized. It is not a full-run peak or
+a completed throughput benchmark, and does not justify changing the current
+PPO rollout configuration mid-run. Sustained resource sizing remains open.
