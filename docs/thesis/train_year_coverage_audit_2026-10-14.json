@@ -42,7 +42,8 @@
   },
   "training_data": {
     "campaign_logged_train_rows": 351550,
-    "count_method": "Count rows in the hashed raw M1 file with date <= 2025-12-31 and clock time 16:30 through 23:00 inclusive; this matches quant_rl/data/session.py session labeling and TradingEnv bundle NY-session indexing.",
+    "raw_train_rows_count_method": "Count all data rows in the hashed raw M1 file with DATE <= 2025.12.31 inclusive; this reproduces the campaign log's 351550 train bars.",
+    "eligible_ny_bars_count_method": "From those train-period rows, count TIME >= 16:30:00 and TIME <= 23:00:00 inclusive. This matches ny_session_mask defaults and add_session_labels in quant_rl/data/session.py.",
     "eligible_ny_bars_per_full_episode": 99504,
     "first_row_in_split": [
       "2024.12.30",
