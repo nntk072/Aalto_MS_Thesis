@@ -2330,3 +2330,19 @@ full-run peaks or justify changing `n_envs` mid-campaign; changing vector
 environment count would change PPO rollout/update semantics and comparability.
 Measurements are in the campaign's `logs/resources_gpuarm1.csv` and
 `logs/resources_gpuarm2.csv`.
+
+### Latest-checkpoint CPU compatibility refresh — 2026-10-14 11:56 UTC
+
+Repeated the checkpoint deserialization audit against the newest intact
+checkpoints available from the two active source manifests. All 18 distinct
+variant/seed lineages passed (`passed=18`, `failed=0`), with embedded model
+timesteps matching provenance: 13 checkpoints at 2M and 5 at 1M. The report
+is `outputs/gpu_campaigns/readiness_reaudit_20261014/reports/checkpoint_load_cpu_18_seed42_latest_20261014.json`;
+it records the exact checkpoint hashes, parent campaign fingerprints,
+attempt-provenance hashes, current HEAD `ef58a49b10a95a9f7fa60b52745fa5579497aeea`,
+and a clean tree. The active workers have continued beyond these checkpoint
+levels in their logs; these are the newest checkpoint files available at the
+audit snapshot, not their final models. CPU loading does not prove GH200
+compatibility or strategy performance. The live allocation and waiting
+migration supervisor remain unchanged; final train/test evaluations are
+still absent and readiness remains **NOT READY**.

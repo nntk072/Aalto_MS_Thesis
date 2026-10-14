@@ -187,3 +187,11 @@ cores against 48 allocated per node, 55.6%/55.5% GPU utilization, and
 GiB with zero OOM events. These are early campaign measurements, not a
 full-budget sizing guarantee. Preserve `n_envs=64` for the active and
 checkpoint-continuation runs so PPO rollout/update behavior remains comparable.
+
+The refreshed checkpoint audit loaded the newest available checkpoint from
+all 18 seed-42 lineages on CPU: 18 passed, 0 failed; 13 were at 2M steps and
+5 at 1M. The hash/provenance report is
+`outputs/gpu_campaigns/readiness_reaudit_20261014/reports/checkpoint_load_cpu_18_seed42_latest_20261014.json`.
+These were not final-budget models, and worker logs showed progress beyond the
+saved checkpoint levels. Treat this as migration-input compatibility evidence
+only.
