@@ -2361,3 +2361,27 @@ worker or Slurm allocation was stopped or requested. Validation: `bash -n`
 passed, the focused campaign checkpoint migration tests passed 5/5, full-tree
 Ruff format/lint and Mypy passed, and `git diff --check` passed. The retry
 contract is about safe continuation; it is not evidence of training quality.
+
+### Live checkpoint-lineage dry-run refresh — 2026-10-14 12:04 UTC
+
+Built a fresh, read-only migration map from the current primary and recovery
+manifests and ran the successor controller in `--dry-run` mode. The map
+contains 18 distinct seed-42 keys with verified source hashes and step counts:
+one at 3M, 16 at 2M, and one at 1M. The dry-run accepted all 18 for the
+prepared 20M target, with shared-bundle data, `n_envs=64`, 18 workers, two
+GH200 nodes, 5 CPUs per worker, one GPU per node, and fast reports. The map is
+`outputs/gpu_campaigns/readiness_reaudit_20261014/checkpoint_map_snapshot_20261014_latest.json`.
+This snapshot is only a readiness audit artifact; the migration supervisor
+will rebuild its own map after the original organizer/allocation ends, so it
+will capture newer checkpoints. The dry-run verifies lineage and placement,
+not CPU/GH200 deserialization of the new 3M checkpoint, completed training,
+evaluations, or policy quality. The live Slurm job remained RUNNING and the
+watcher remained waiting; no allocation was requested or stopped.
+
+Separately loaded the selected 3M `ladder_a0_flat__seed42` checkpoint with
+`PPO.load(device="cpu")`; the embedded timestep matched 3,000,000. Its
+SHA-256 is `dcd573a8dbbfc2bbd313e10539d8005f5b65d396e34b39a294beaeda43e16787`.
+The report is
+`outputs/gpu_campaigns/readiness_reaudit_20261014/checkpoint_load_cpu_ladder_a0_flat_3m_20261014.json`.
+This verifies one current checkpoint on CPU, not GH200 runtime, policy quality,
+or completed train/test evaluation.

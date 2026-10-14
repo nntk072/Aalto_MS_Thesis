@@ -203,3 +203,16 @@ focused checkpoint-migration tests passed 5/5; the watcher was restarted with
 this change and is still waiting for the original allocation. This protects
 continuity across allocation limits; it is not evidence that the strategy
 learns or survives.
+
+At 12:04 UTC, a fresh read-only successor dry-run validated 18 current
+checkpoint lineages from the primary and recovery manifests: 1 checkpoint at
+3M steps, 16 at 2M, and 1 at 1M. It accepted the intended 20M target, shared
+bundle, `n_envs=64`, 18 workers, two GH200 nodes, and 5 CPUs per worker. The
+snapshot map is
+`outputs/gpu_campaigns/readiness_reaudit_20261014/checkpoint_map_snapshot_20261014_latest.json`.
+It is not the successor's launch map and will be superseded by a fresh map
+when the waiting migration supervisor starts. This checks source lineage and
+placement. The 3M baseline checkpoint separately passed CPU `PPO.load` with
+its timestep matching 3,000,000; its hash/provenance report is
+`outputs/gpu_campaigns/readiness_reaudit_20261014/checkpoint_load_cpu_ladder_a0_flat_3m_20261014.json`.
+This does not verify GH200 loading or model quality.
