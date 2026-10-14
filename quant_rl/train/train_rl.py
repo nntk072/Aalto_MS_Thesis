@@ -312,7 +312,7 @@ def _early_abort_callback(cfg: Any) -> EarlyAbortCallback | None:
         min_timesteps=int(block.get("min_timesteps", 5_000_000)),
         window=int(block.get("window", 4)),
         stop_on_nonfinite=bool(block.get("stop_on_nonfinite", True)),
-        stop_on_no_trades=bool(block.get("stop_on_no_trades", True)),
+        stop_on_no_trades=bool(block.get("stop_on_no_trades", False)),
         stop_on_equity_gate=bool(block.get("stop_on_equity_gate", False)),
     )
 
@@ -1466,7 +1466,8 @@ def main() -> None:
             callbacks.append(abort_cb)
 
         # Best checkpoint: one short prefix of the train calendar, scored by
-        # end equity. A full-year replay is the post-train gate, not this callback.
+        # end equity. Full replay risk checks run after training; PnL and trade
+        # counts are reported as metrics and do not stop this callback.
         short_n = min(20_000, train_bar_count)
         short_bars = best_bars if best_bars is not None else train_bars.iloc[:short_n]
         short_feat = best_features if best_features is not None else train_feat.iloc[:short_n]
@@ -1756,7 +1757,7 @@ def main() -> None:
         )
         (seed_dir / "train_equity_gate.json").write_text(json.dumps(train_gate, indent=2))
         if not train_gate["ok"]:
-            log.error("TRAIN_EQUITY_FAILED %s", train_gate)
+            log.error("TRAIN_SURVIVAL_FAILED %s", train_gate)
         log.info(
             "[train/in-sample] NetPnL=%.2f %s  Return=%.2f%%  "
             "MaxDD=%.2f%%  Sharpe=%.3f  ProfitFactor=%.3f  WinRate=%.1f%%  Trades=%d  "
@@ -2012,7 +2013,7 @@ def main() -> None:
     (run_dir / "training_log.json").write_text(json.dumps(training_log, indent=2))
     if not seed_results[-1]["train_gate"]["ok"]:
         raise SystemExit(
-            f"TRAIN_EQUITY_FAILED: train-year equity did not rise ({seed_results[-1]['train_gate']['reason']})"
+            f"TRAIN_SURVIVAL_FAILED: train-year risk gate failed ({seed_results[-1]['train_gate']['reason']})"
         )
 
     # Optional wandb logging — the sweep (config/wandb_sweep.yaml) reads

@@ -54,7 +54,7 @@ def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path
         test_result={"n_sessions": 130, "days_traded": 32, "fail_time": "2026-02-16"},
         train_metrics=train_metrics,
         test_metrics=test_metrics,
-        train_gate={"ok": False, "reason": "end_not_above_start"},
+        train_gate={"ok": False, "reason": "peak_trailing_dd"},
         account_currency="USD",
     )
 

@@ -270,7 +270,7 @@ if _SB3_AVAILABLE:
             min_timesteps: int = 5_000_000,
             window: int = 4,
             stop_on_nonfinite: bool = True,
-            stop_on_no_trades: bool = True,
+            stop_on_no_trades: bool = False,
             stop_on_equity_gate: bool = False,
             verbose: int = 0,
         ) -> None:

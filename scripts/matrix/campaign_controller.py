@@ -523,7 +523,7 @@ def verify_run_artifacts(
         ):
             continue
         if not payload["train_equity_ok"]:
-            reason = "training equity acceptance gate failed"
+            reason = "training risk-survival gate failed"
             gate_path = path.parent / "train_equity_gate.json"
             try:
                 gate = json.loads(gate_path.read_text(encoding="utf-8"))
@@ -1241,7 +1241,7 @@ def main() -> int:
                 )
             )
             success = ret == 0 and verified
-            gate_failure = not verified and "training equity acceptance gate failed" in reason
+            gate_failure = not verified and "training risk-survival gate failed" in reason
             interrupted = STOP and not success and not gate_failure
             artifact_hashes = hash_run_artifacts(attempt_out)
             failure_reason = None

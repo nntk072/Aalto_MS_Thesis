@@ -134,7 +134,7 @@ def test_campaign_source_snapshot_fails_if_source_changes_during_snapshot(
         (0, b"checkpoint", True, None, False),
         (-1, b"checkpoint", True, None, False),
         ("8192", b"checkpoint", True, None, False),
-        (8192, b"checkpoint", False, "end_not_above_start,peak_trailing_dd", False),
+        (8192, b"checkpoint", False, "peak_trailing_dd,max_loss_stopped_trading", False),
     ],
 )
 def test_verify_run_artifacts(
@@ -221,7 +221,7 @@ def test_verify_run_artifacts(
     )
     assert success is expected
     if gate_reason is not None:
-        assert reason == f"training equity acceptance gate failed: {gate_reason}"
+        assert reason == f"training risk-survival gate failed: {gate_reason}"
 
 
 def test_verify_run_artifacts_invalid_json(tmp_path: Path) -> None:

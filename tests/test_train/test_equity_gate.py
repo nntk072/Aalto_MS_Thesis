@@ -16,11 +16,21 @@ def test_slope_positive_when_equity_trends_up() -> None:
 
 
 @pytest.mark.unit
-def test_gate_allows_a_losing_day_when_the_year_rises() -> None:
+def test_gate_allows_a_losing_day_when_risk_limits_hold() -> None:
     # +1000 then -500, still above the start, still trading.
     eq = pd.Series([100_000.0, 101_000.0, 100_500.0, 101_200.0])
     result = assess_train_equity(eq, initial=100_000.0, breached=False)
     assert result["ok"] is True
+    assert result["reason"] == "ok"
+
+
+@pytest.mark.unit
+def test_net_loss_and_negative_slope_are_metrics_not_gate_failures() -> None:
+    eq = pd.Series([100_000.0, 99_500.0, 99_200.0, 98_900.0])
+    result = assess_train_equity(eq, initial=100_000.0, breached=False)
+    assert result["ok"] is True
+    assert result["equity_delta"] == pytest.approx(-1_100.0)
+    assert result["slope"] < 0.0
     assert result["reason"] == "ok"
 
 
@@ -30,8 +40,9 @@ def test_gate_fails_when_the_account_dies_on_the_cap() -> None:
     result = assess_train_equity(eq, initial=100_000.0, breached=True)
     assert result["ok"] is False
     assert "max_loss_stopped_trading" in result["reason"]
-    assert "end_not_above_start" in result["reason"]
     assert "peak_trailing_dd" in result["reason"]
+    assert "end_not_above_start" not in result["reason"]
+    assert "slope_not_positive" not in result["reason"]
     assert result["max_peak_trailing_dd"] > 0.10
     assert equity_slope(eq) < 0.0
 
@@ -131,7 +142,7 @@ def test_early_abort_keeps_going_when_equity_does_not_rise() -> None:
 
 
 @pytest.mark.unit
-def test_early_abort_stops_when_the_window_fails_equity() -> None:
+def test_early_abort_stops_when_the_window_fails_survival_gate() -> None:
     reason = decide_early_abort(
         [_failing_episode() for _ in range(4)],
         num_timesteps=5_000_000,
@@ -144,14 +155,48 @@ def test_early_abort_stops_when_the_window_fails_equity() -> None:
 
 
 @pytest.mark.unit
-def test_early_abort_stops_when_the_window_never_trades() -> None:
-    idle = [_failing_episode(trades=0) for _ in range(4)]
+def test_early_abort_keeps_going_when_the_window_never_trades() -> None:
+    idle = [
+        {
+            "end_equity": 100_000.0,
+            "start_equity": 100_000.0,
+            "slope": 0.0,
+            "max_peak_trailing_dd": 0.0,
+            "n_trades": 0,
+            "breach_reason": "",
+        }
+        for _ in range(4)
+    ]
     reason = decide_early_abort(
         idle,
         num_timesteps=5_000_000,
         min_timesteps=5_000_000,
         window=4,
         nonfinite=False,
+    )
+    assert reason is None
+
+
+@pytest.mark.unit
+def test_no_trade_early_abort_remains_an_explicit_opt_in() -> None:
+    idle = [
+        {
+            "end_equity": 100_000.0,
+            "start_equity": 100_000.0,
+            "slope": 0.0,
+            "max_peak_trailing_dd": 0.0,
+            "n_trades": 0,
+            "breach_reason": "",
+        }
+        for _ in range(4)
+    ]
+    reason = decide_early_abort(
+        idle,
+        num_timesteps=5_000_000,
+        min_timesteps=5_000_000,
+        window=4,
+        nonfinite=False,
+        stop_on_no_trades=True,
     )
     assert reason == "no_trades"
 

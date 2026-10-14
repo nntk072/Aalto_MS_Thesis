@@ -399,7 +399,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "",
         f"PnL is in the account currency ({pnl_label}). `Survived / days` comes from the matching worker log.",
         "",
-        f"| Variant | Controller | Train gate | Train return | Train PnL ({pnl_label}) | Train trades | Test return | Test PnL ({pnl_label}) | Test max DD | Test Sharpe | Test PF | Test trades | Test survived / days | Evidence |",
+        f"| Variant | Controller | Train survival | Train return | Train PnL ({pnl_label}) | Train trades | Test return | Test PnL ({pnl_label}) | Test max DD | Test Sharpe | Test PF | Test trades | Test survived / days | Evidence |",
         "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for job in jobs:
@@ -485,7 +485,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
             f"- Campaign manifest SHA-256: `{summary.get('campaign_manifest_sha256')}`",
             f"- Controller status SHA-256: `{summary.get('controller_status_sha256')}`",
             f"- Summary script SHA-256: `{summary.get('summary_script_sha256')}`",
-            "- Each row includes SHA-256 values for its attempt provenance, split metrics and equity curves, train gate, and worker log in the adjacent JSON file.",
+            "- Profit and trade counts are reported as metrics. The train survival gate covers risk-limit breach and peak trailing drawdown; evidence hashes are listed in the adjacent JSON file.",
             "- Launch-time source-hash comparison with the current repository is recorded in [the source-fidelity audit](source_fidelity_audit.md).",
             "- This is a 100k-step seed-42 resource probe, not the frozen 20M thesis campaign. It cannot establish strategy viability, statistical significance, or confirmatory OOS performance.",
             "- Do not select a variant from this report. Preserve all failed gates and low/no-trade outcomes.",

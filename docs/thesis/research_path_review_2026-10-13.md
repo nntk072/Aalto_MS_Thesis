@@ -276,3 +276,19 @@ parser default/opt-in and action-mode wiring; scoped Ruff format/lint and
 metric or scientific conclusion changes. This does not close independent
 research review, real-data causal certification, final-holdout evidence, or
 the failed strategy acceptance gates.
+
+## Evaluation protocol and metric-gate clarification — 2026-10-14
+
+The user confirmed a chronological one-year training window followed by a
+five-to-six-month test window. After the requested training budget completes,
+the final frozen policy is replayed deterministically on both the full
+in-sample training window and the report-only test window. Test results do not
+feed back into model weights. The current historical test period was previously
+inspected, so it remains exploratory rather than pristine confirmation.
+
+Profitability and activity are metrics, not hard acceptance gates: report net
+PnL, equity slope, and trade count, but do not reject or stop a run solely for
+negative PnL, a negative slope, or low/zero trade count. The train survival
+gate remains hard for a max-loss breach or peak trailing drawdown above 10%.
+This supersedes the earlier sentence requiring positive train-year equity and
+slope; historical probe outcomes are not retroactively reclassified.

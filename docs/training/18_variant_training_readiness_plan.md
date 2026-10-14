@@ -159,6 +159,15 @@ Keep legitimate variant-specific reward, direction, PD-context and FSM visibilit
 
 ## 6. One-seed scientific training/evaluation protocol
 
+**Protocol clarification (2026-10-14):** profitability and activity are
+reported metrics, not hard acceptance criteria. Complete one seed per variant
+through the requested training budget, then evaluate the frozen policy on both
+the full one-year training split and the following five-to-six-month test
+split. The train survival gate rejects risk-limit breaches and peak trailing
+drawdown above 10%; PnL, equity slope, and trade count remain reported metrics.
+The currently inspected historical test split supports exploratory reporting
+only. Do not reinterpret earlier probe gate results under this later protocol.
+
 1. The researcher selected **20,000,000 steps** and seed **42** for all variants; the frozen campaign spec records both. One seed permits controlled comparison but cannot establish variance or significance.
 2. Freeze source/data/splits, checksum raw market/tick inputs and features, train-only normalization, cache identity, exact timestamp alignment, warmup and purge/embargo. Verify independent locked OOS is reserved for final report; do not select checkpoints or variants on it.
 3. Resolve and instantiate all 18 to prove exact observations, action heads, reward, risk/SL/TP/FSM flags and strategy differences. Assert A0/A1 intended relationship, decode staged TP levels and fractions, and include missing-entry-gate feature inspection.

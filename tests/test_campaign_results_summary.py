@@ -82,7 +82,9 @@ def test_campaign_summary_reads_metrics_logs_and_legacy_gpu_samples(tmp_path: Pa
             "n_trades": 2,
         },
     )
-    _write_json(run_dir / "train_equity_gate.json", {"ok": False, "reason": "end_not_above_start"})
+    _write_json(
+        run_dir / "train_equity_gate.json", {"ok": False, "reason": "max_loss_stopped_trading"}
+    )
     (run_dir / "config.yaml").write_text(
         "account:\n  currency: USD\n  initial_balance: 100000.0\n", encoding="utf-8"
     )
@@ -111,7 +113,7 @@ def test_campaign_summary_reads_metrics_logs_and_legacy_gpu_samples(tmp_path: Pa
 
     job = summary["jobs"][0]
     assert summary["gate_failure_count"] == 1
-    assert summary["train_gate_failure_reason_counts"] == {"end_not_above_start": 1}
+    assert summary["train_gate_failure_reason_counts"] == {"max_loss_stopped_trading": 1}
     assert summary["test_survived_low_activity_count"] == 1
     assert summary["pnl_reconciliation_counts"] == {
         "verified": 2,
@@ -125,7 +127,7 @@ def test_campaign_summary_reads_metrics_logs_and_legacy_gpu_samples(tmp_path: Pa
     assert job["evidence_sha256"]["testing/equity.csv"] is not None
     assert job["test_replay_report_only"]["days_traded"] == 2
     assert summary["resource_profiles"][0]["gpu_devices"][1]["mean_utilization_pct"] == 80
-    assert "Train gate | Train return" in report
+    assert "Train survival | Train return" in report
     assert "PnL (USD)" in report
     assert "[worker log](../logs/workers/variant__seed42.log)" in report
     assert (
@@ -133,7 +135,7 @@ def test_campaign_summary_reads_metrics_logs_and_legacy_gpu_samples(tmp_path: Pa
         in report
     )
     assert "2 verified**, **0 mismatched**, **0 unavailable" in report
-    assert "Gate failure reasons (overlapping): `end_not_above_start` 1/1" in report
+    assert "Gate failure reasons (overlapping): `max_loss_stopped_trading` 1/1" in report
     assert "[the source-fidelity audit](source_fidelity_audit.md)" in report
     assert "reconstructed from the sampler's raw two-row" in report
 

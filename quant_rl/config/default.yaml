@@ -304,14 +304,14 @@ training:
   primary_only: false    # true = ignore secondary symbol entirely
   max_days: null         # null = all data; integer = last N calendar days for training
   total_timesteps_mvp: 8192   # short timestep count used in mvp mode
-  # Stop before total_timesteps when the run is invalid. A flat or falling
-  # train-year equity does not stop the run. No-trade stops wait until 5M steps.
+  # Stop before total_timesteps only for non-finite state by default.
+  # Profitability and trade counts remain reported metrics, not stop conditions.
   early_abort:
     enabled: true
     min_timesteps: 5000000
     window: 4
     stop_on_nonfinite: true
-    stop_on_no_trades: true
+    stop_on_no_trades: false
     stop_on_equity_gate: false
   # Terminal block during learn(). Eval is a short deterministic train prefix.
   dashboard:

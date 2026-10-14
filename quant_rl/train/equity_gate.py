@@ -1,8 +1,7 @@
-"""Train-year equity gate: net rise across the trading calendar.
+"""Train-year survival gate, with profitability retained as reported metrics.
 
-Losing trades and losing days are allowed. The replay fails when the
-account does not finish above its start, the equity-versus-time slope is
-not positive, or a max-loss breach stops trading.
+The replay fails on a risk-limit breach or excessive peak trailing drawdown.
+Net PnL and equity slope are recorded but are not acceptance requirements.
 """
 
 from __future__ import annotations
@@ -31,14 +30,10 @@ def assess_equity_snapshot(
     max_peak_trailing_dd: float,
     breached: bool,
 ) -> dict[str, Any]:
-    """Same pass/fail as the train-year gate, from scalars already computed."""
+    """Evaluate risk survival from scalars; profit and slope remain metrics."""
     end = float(end_equity)
     start = float(initial)
     reasons: list[str] = []
-    if not (end > start):
-        reasons.append("end_not_above_start")
-    if not (float(slope) > 0.0):
-        reasons.append("slope_not_positive")
     if float(max_peak_trailing_dd) > 0.10:
         reasons.append("peak_trailing_dd")
     if breached:
@@ -60,11 +55,10 @@ def assess_train_equity(
     initial: float,
     breached: bool,
 ) -> dict[str, Any]:
-    """Return the train-year gate result.
+    """Return the train-year risk-survival gate plus PnL/slope metrics.
 
-    ``ok`` is true only when end equity is above ``initial``, the path
-    slopes up, peak trailing drawdown stays within 10%, and trading was
-    not stopped by a loss-cap breach.
+    ``ok`` depends only on the 10% peak trailing drawdown cap and loss-cap
+    breach. End equity and slope are included in the result for reporting.
     """
     if equity is None or len(equity) == 0:
         return {
@@ -94,14 +88,14 @@ def decide_early_abort(
     window: int,
     nonfinite: bool,
     stop_on_nonfinite: bool = True,
-    stop_on_no_trades: bool = True,
+    stop_on_no_trades: bool = False,
     stop_on_equity_gate: bool = True,
 ) -> str | None:
     """Return a stop reason, or ``None`` to keep training.
 
-    Non-finite metrics stop immediately. No-trade stops, and equity stops
-    when enabled, wait until ``min_timesteps`` and require every episode
-    in the last ``window`` to fail. One rising episode keeps the run going.
+    Non-finite metrics stop immediately. Optional no-trade stops and survival
+    gate stops wait until ``min_timesteps`` and require every episode in the
+    last ``window`` to fail. One episode that passes survival keeps training.
     """
     if stop_on_nonfinite and nonfinite:
         return "nonfinite"
