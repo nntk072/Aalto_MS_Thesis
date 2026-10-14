@@ -2137,7 +2137,10 @@ detached worktree
 `source_manifest.json`; shared data, caches, outputs, and `.venv` are linked
 to the existing paths. Updated the two-node allocation launcher to detect a
 manifest/current-checkout SHA mismatch and dispatch through this pinned
-worktree. The launcher also resumes the separate two-variant cache-recovery
-manifest alongside the primary campaign in later allocations. Shell syntax
-and file/hash checks pass. This retry path is prepared but not yet exercised;
-the active allocation and workers were not touched.
+worktree. Shell syntax, primary campaign dry-run, and source/hash checks pass.
+This retry path is prepared but not yet exercised; the active allocation and
+workers were not touched. The separate cache-recovery campaign does not yet
+have an automatic resume path: its spec lives under a symlinked output
+directory, and a pinned-source dry-run rejects it as outside the repository.
+Retain those partial outputs; do not claim the two recovery runs will resume
+automatically. A provenance-preserving migration remains open.
