@@ -28,6 +28,18 @@
     "nominal_steps_per_env": 312500.0,
     "timesteps_per_variant": 20000000
   },
+  "environment_step_semantics": {
+    "agent_decision_step_unit": "one TradingEnv.step advances from the current NY-eligible index to the next NY-eligible index; off-session M1 rows are not separate agent decision steps",
+    "full_train_episode_steps": 99504,
+    "raw_train_m1_rows_are_not_episode_steps": true,
+    "source_locations": {
+      "TradingEnv._resolve_ny_indices": "quant_rl/envs/trading_env.py:3882-3892",
+      "TradingEnv._advance_ny_step": "quant_rl/envs/trading_env.py:3901-3924"
+    },
+    "source_sha256": "dddf8d53cb5457a94c8a9c45a5e67027f26cd51a2df96f8f0e8a12ddad7dc455",
+    "campaign_block_overnight": true,
+    "interpretation": "The 351550 raw M1 rows describe calendar coverage; 99504 NY-eligible bars are the agent-step denominator for one complete environment episode. 312500 nominal steps per environment allow about 3.14 full episodes only if each reaches the final NY bar. Risk termination may prevent any given episode from completing the year."
+  },
   "training_data": {
     "campaign_logged_train_rows": 351550,
     "count_method": "Count rows in the hashed raw M1 file with date <= 2025-12-31 and clock time 16:30 through 23:00 inclusive; this matches quant_rl/data/session.py session labeling and TradingEnv bundle NY-session indexing.",
