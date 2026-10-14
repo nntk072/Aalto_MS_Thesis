@@ -32,9 +32,13 @@ def _strategy(config: dict[str, Any], strategy_actions: bool) -> tuple[Any, Any,
     reward: Any
     if name == "po3_ifvg":
         ifvg = values.get("ifvg", {}) or {}
+        env_values = _block(config, "env")
         strategy = PO3IFVGStrategy(
             enforce_gate=gate,
             require_price_retest=bool(ifvg.get("require_price_retest", True)),
+            entry_mode=str(entry_cfg.get("mode", "legacy")),
+            candidate_max_age_bars=int(env_values.get("candidate_max_age_bars", 5)),
+            variant_id=str(values.get("variant_id", "po3_ifvg_legacy")),
         )
         strategy.manipulation_filter = manipulation
         reward = PO3Reward(
@@ -46,7 +50,20 @@ def _strategy(config: dict[str, Any], strategy_actions: bool) -> tuple[Any, Any,
         )
         return strategy, reward, weight
     if name == "distribution":
-        strategy = DistributionStrategy(enforce_gate=gate)
+        features = _block(config, "features")
+        pd_gate = bool(entry_cfg.get("previous_session_pd_gate", False))
+        if pd_gate and not bool(features.get("include_previous_session_pd", False)):
+            raise ValueError(
+                "strategy.entry.previous_session_pd_gate requires "
+                "features.include_previous_session_pd=true"
+            )
+        strategy = DistributionStrategy(
+            enforce_gate=gate,
+            entry_mode=str(entry_cfg.get("mode", "legacy")),
+            candidate_max_age_bars=int(_block(config, "env").get("candidate_max_age_bars", 5)),
+            previous_session_pd_gate=pd_gate,
+            variant_id=str(values.get("variant_id", "distribution_legacy")),
+        )
         strategy.manipulation_filter = manipulation
         reward = DistributionReward(
             entry_bonus=float(reward_cfg.get("entry_bonus", 0.01)),
@@ -139,6 +156,7 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
         candidate_max_age_bars=int(env.get("candidate_max_age_bars", 5)),
         arm_requires_retest=bool(env.get("arm_requires_retest", False)),
         entry_state_observation=bool(env.get("entry_state_observation", True)),
+        strict_research_eligibility=bool(env.get("strict_research_eligibility", False)),
         sl_buffer_pts=float(env.get("sl_buffer_pts", 0.0)),
         strategy_reward=strategy_reward,
         strategy_weight=strategy_weight,
@@ -159,6 +177,7 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
         allow_agent_tp_mode=bool(env.get("allow_agent_tp_mode", False)),
         tp_mode_defer_threshold=float(env.get("tp_mode_defer_threshold", 0.1)),
         allow_multi_tp=bool(env.get("allow_multi_tp", False)),
+        allow_simplex=bool(env.get("allow_simplex", True)),
         tp_breakeven_alpha=float(env.get("tp_breakeven_alpha", 0.5)),
         risk_floor=float(env.get("risk_floor", 0.0005)),
         fill_delay_ms=int(_block(cfg, "execution").get("fill_delay_ms", 0)),

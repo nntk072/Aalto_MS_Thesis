@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
+from omegaconf import OmegaConf
 
 from quant_rl.eval.export import save_run
 from quant_rl.evaluation import PerformanceMetrics, calculate_metrics
@@ -686,3 +687,109 @@ def test_save_run_no_overwrite(synthetic_result, metrics, tmp_path):
         save_html=False,
     )
     assert d1 != d2
+
+
+def test_report_profiles_preserve_numerical_exports(tmp_path, synthetic_result):
+    """Fast rendering preserves identical numerical metrics and trade history."""
+    metrics = calculate_metrics(synthetic_result["equity"], trades=synthetic_result["trades"])
+    full = save_run(
+        run_dir=tmp_path / "full",
+        train_result=synthetic_result,
+        train_metrics=metrics,
+        save_plots=False,
+        save_html=False,
+        save_csv=True,
+        report_profile="full",
+    )
+    fast = save_run(
+        run_dir=tmp_path / "fast",
+        train_result=synthetic_result,
+        train_metrics=metrics,
+        save_plots=False,
+        save_html=True,
+        save_csv=True,
+        max_order_charts=200,
+        report_profile="campaign_fast",
+    )
+    for filename in (
+        "equity.csv",
+        "trades.csv",
+        "metrics.json",
+        "summary.txt",
+        "session_activity.json",
+        "direction_summary.json",
+    ):
+        assert (full / "training" / filename).read_bytes() == (
+            fast / "training" / filename
+        ).read_bytes()
+    report = json.loads((fast / "report_export_timing.json").read_text())
+    assert report["profile"] == "campaign_fast"
+    assert report["deferred_artifacts"] == ["per_trade_png", "interactive_html"]
+    assert report["max_order_charts"] == 0
+    assert report["save_html"] is False
+    assert report["phase_seconds"]["total_export"] >= 0
+
+
+def test_export_records_declared_action_coordinate_schema(tmp_path, synthetic_result) -> None:
+    metrics = calculate_metrics(synthetic_result["equity"], trades=synthetic_result["trades"])
+    cfg = OmegaConf.create(
+        {
+            "env": {
+                "strategy_actions": True,
+                "agent_direction_control": True,
+                "allow_agent_sl_mode": False,
+                "allow_agent_tp_mode": False,
+                "allow_multi_tp": False,
+                "allow_simplex": False,
+            }
+        }
+    )
+    run_dir = save_run(
+        run_dir=tmp_path / "schema_export",
+        train_result=synthetic_result,
+        train_metrics=metrics,
+        cfg=cfg,
+        save_plots=False,
+        save_html=False,
+        save_csv=False,
+    )
+
+    report = json.loads((run_dir / "report_export_timing.json").read_text())
+    schema = report["action_schema"]
+    assert schema["version"] == "overlay-action-v2"
+    assert schema["key"] == "6_dir"
+    assert schema["coordinates"] == [
+        "direction",
+        "intensity",
+        "stop",
+        "risk",
+        "target",
+        "exit",
+    ]
+
+
+def test_campaign_fast_skips_optional_order_rendering(
+    tmp_path, synthetic_result, synthetic_bars, monkeypatch
+):
+    from quant_rl.eval import plots
+
+    invoked = []
+
+    def record_orders(*args, **kwargs):
+        invoked.append(kwargs.get("max_charts"))
+
+    monkeypatch.setattr(plots, "plot_per_trade_orders", record_orders)
+    metrics = calculate_metrics(synthetic_result["equity"], trades=synthetic_result["trades"])
+    save_run(
+        run_dir=tmp_path / "fast_charts",
+        train_result=synthetic_result,
+        train_metrics=metrics,
+        train_bars=synthetic_bars,
+        save_plots=True,
+        save_html=False,
+        max_order_charts=200,
+        report_profile="campaign_fast",
+    )
+    assert not invoked
+    assert (tmp_path / "fast_charts" / "training" / "metrics.json").exists()
+    assert (tmp_path / "fast_charts" / "training" / "equity.png").exists()

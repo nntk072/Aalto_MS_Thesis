@@ -87,6 +87,8 @@ class TestDetectIFVGConfirmation:
         assert "ifvg_bullish_high" in ifvg_result.columns
         assert "ifvg_bearish_low" in ifvg_result.columns
         assert "ifvg_bearish_high" in ifvg_result.columns
+        assert "ifvg_bullish_origin_bar" in ifvg_result.columns
+        assert "ifvg_bearish_origin_bar" in ifvg_result.columns
 
     def test_ifvg_output_shape(self, sample_bars: pd.DataFrame) -> None:
         """Test that output has same length as input."""
@@ -394,6 +396,61 @@ class TestIFVGConfirmationBehavior:
         # Bearish FVG zone is [bar3.high, bar1.low] = [9, 10].
         assert confirmed["ifvg_bearish_low"] == 9.0
         assert confirmed["ifvg_bearish_high"] == 10.0
+
+    def test_zero_threshold_still_requires_strictly_beyond_far_edge(self) -> None:
+        bars = pd.DataFrame(
+            {
+                "high": [10.0, 11.0, 13.0, 13.0],
+                "low": [9.0, 10.5, 12.0, 11.0],
+                "close": [9.5, 10.8, 12.0, 10.0],
+            },
+            index=pd.date_range("2025-01-01", periods=4, freq="min"),
+        )
+        fvg = detect_fvg(bars)
+        ifvg = detect_ifvg_confirmation(bars, fvg, config=IFVGConfig(close_through_threshold=0.0))
+
+        assert ifvg["ifvg_bullish_confirmed"].iloc[2] == 0
+        assert ifvg["ifvg_bullish_confirmed"].iloc[3] == 0
+
+    def test_bullish_ifvg_inverts_a_bearish_fvg(self) -> None:
+        bars = pd.DataFrame(
+            {
+                "high": [10.0, 9.5, 8.8, 9.5],
+                "low": [9.0, 8.5, 8.0, 8.7],
+                "close": [9.5, 9.0, 8.9, 9.1],
+            },
+            index=pd.date_range("2025-01-01", periods=4, freq="min"),
+        )
+        result = detect_ifvg_confirmation(
+            bars,
+            detect_fvg(bars),
+            IFVGConfig(close_through_threshold=0.0, inverse_opposing_fvg=True),
+        )
+
+        assert result["ifvg_bullish_confirmed"].iloc[3] == 1
+        assert result["ifvg_bullish_low"].iloc[3] == 8.8
+        assert result["ifvg_bullish_high"].iloc[3] == 9.0
+        assert result["ifvg_bullish_origin_bar"].iloc[3] == 2
+
+    def test_bearish_ifvg_inverts_a_bullish_fvg(self) -> None:
+        bars = pd.DataFrame(
+            {
+                "high": [10.0, 10.5, 11.0, 10.5],
+                "low": [9.0, 9.5, 10.2, 9.8],
+                "close": [9.5, 10.0, 10.1, 9.9],
+            },
+            index=pd.date_range("2025-01-01", periods=4, freq="min"),
+        )
+        result = detect_ifvg_confirmation(
+            bars,
+            detect_fvg(bars),
+            IFVGConfig(close_through_threshold=0.0, inverse_opposing_fvg=True),
+        )
+
+        assert result["ifvg_bearish_confirmed"].iloc[3] == 1
+        assert result["ifvg_bearish_low"].iloc[3] == 10.0
+        assert result["ifvg_bearish_high"].iloc[3] == 10.2
+        assert result["ifvg_bearish_origin_bar"].iloc[3] == 2
 
 
 class TestBuildFVGZones:

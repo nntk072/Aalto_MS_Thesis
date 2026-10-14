@@ -120,7 +120,8 @@ if _SB3_AVAILABLE:
 
         The score is the account equity at the end of the rollout, not the
         shaped episode reward. A higher reward with a lower balance does not
-        replace the saved checkpoint.
+        replace the saved checkpoint. The rollout uses deterministic actions
+        so a repeated evaluation of a fixed policy and data slice is stable.
 
         Parameters
         ----------
@@ -169,7 +170,7 @@ if _SB3_AVAILABLE:
                 obs, _ = env.reset()
                 done = truncated = False
                 while not (done or truncated):
-                    action, _ = self.model.predict(obs, deterministic=False)
+                    action, _ = self.model.predict(obs, deterministic=True)
                     obs, _reward, done, truncated, _ = env.step(action)
                 end_equities.append(float(env.account.equity))
             end_equity = float(np.mean(end_equities))
@@ -236,6 +237,9 @@ if _SB3_AVAILABLE:
 
         def _init_callback(self) -> None:
             self.save_path.mkdir(parents=True, exist_ok=True)
+            current = int(getattr(self.model, "num_timesteps", 0))
+            if self.save_freq > 0:
+                self._next_save = (current // self.save_freq + 1) * self.save_freq
 
         def _save(self) -> None:
             ckpt = self.save_path / f"{self.name_prefix}_{self.num_timesteps}_steps"

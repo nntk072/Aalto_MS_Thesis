@@ -1,0 +1,38 @@
+schema_version: 1
+campaign_id: ladder18_seed42_20m_frames
+variant_file: scripts/variant_list.txt
+variants:
+  - ladder_a0_flat
+  - ladder_a1_sl
+  - ladder_a2_tp
+  - ladder_a3_multi_tp
+  - ladder_a4b_entry_fsm
+  - ladder_a4a_entry_fsm_hidden
+  - ladder_a0_flat_po3
+  - ladder_a1_sl_po3
+  - ladder_a2_tp_po3
+  - ladder_a3_multi_tp_po3
+  - ladder_a4b_po3_ifvg
+  - ladder_a4a_entry_fsm_hidden_po3
+  - ladder_a0_flat_dist
+  - ladder_a1_sl_dist
+  - ladder_a2_tp_dist
+  - ladder_a3_multi_tp_dist
+  - ladder_a4b_distribution
+  - ladder_a4a_entry_fsm_hidden_dist
+seeds: [42]
+timesteps: 20000000
+data_source: frames
+split:
+  train_end: "2025-12-31"
+  test_start: "2026-01-01"
+
+# Resolution, effective configuration, source/data checksums and hardware details
+# are captured by the campaign controller and train_rl at execution time.
+# The configured test split is previously inspected development evidence. This
+# campaign records it deterministically for reporting but does not select from it.
+evaluation:
+  locked_oos_role: final_report_only
+  locked_oos_exposure: previously_inspected_holdout
+  selection_allowed: false
+  deterministic: true

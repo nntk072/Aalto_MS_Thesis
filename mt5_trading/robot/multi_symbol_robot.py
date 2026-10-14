@@ -134,6 +134,9 @@ class MultiSymbolRobot:
                 if total_buy == 0:
                     # Calculate position size
                     position_size = self.calculate_position_size(symbol)
+                    stop_price = self.risk_manager.calculate_stop_loss_price(
+                        symbol, mt5.ORDER_TYPE_BUY, self.stop_loss_pips
+                    )
 
                     # Check risk limits
                     is_allowed, reason = self.check_risk_before_trade(symbol, position_size)
@@ -145,7 +148,7 @@ class MultiSymbolRobot:
                     if self.paper_trading:
                         logger.info(
                             f"[PAPER] Would open buy position for {symbol}: "
-                            f"Volume: {position_size}, Price: current market"
+                            f"Volume: {position_size}, Price: current market, SL: {stop_price}"
                         )
                         return
                     result = self.trader.open_position(
@@ -154,7 +157,7 @@ class MultiSymbolRobot:
                         mt5.ORDER_TYPE_BUY,
                         f"{self.name} buy position",
                         self.magic_number,
-                        sl=None,  # Stop loss can be calculated based on ATR
+                        sl=stop_price,
                         tp=None,  # Take profit can be calculated based on ATR
                     )
 
@@ -187,6 +190,9 @@ class MultiSymbolRobot:
                 if total_sell == 0:
                     # Calculate position size
                     position_size = self.calculate_position_size(symbol)
+                    stop_price = self.risk_manager.calculate_stop_loss_price(
+                        symbol, mt5.ORDER_TYPE_SELL, self.stop_loss_pips
+                    )
 
                     # Check risk limits
                     is_allowed, reason = self.check_risk_before_trade(symbol, position_size)
@@ -198,7 +204,7 @@ class MultiSymbolRobot:
                     if self.paper_trading:
                         logger.info(
                             f"[PAPER] Would open sell position for {symbol}: "
-                            f"Volume: {position_size}, Price: current market"
+                            f"Volume: {position_size}, Price: current market, SL: {stop_price}"
                         )
                         return
                     result = self.trader.open_position(
@@ -207,7 +213,7 @@ class MultiSymbolRobot:
                         mt5.ORDER_TYPE_SELL,
                         f"{self.name} sell position",
                         self.magic_number,
-                        sl=None,
+                        sl=stop_price,
                         tp=None,
                     )
 

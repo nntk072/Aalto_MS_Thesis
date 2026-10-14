@@ -11,6 +11,7 @@ Reward: Differential Sharpe Ratio (DSR) or Sweep Confirmation Reward.
 from __future__ import annotations
 
 import warnings
+from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -19,6 +20,7 @@ import numpy as np
 import pandas as pd
 from gymnasium import spaces
 
+from ..action_schema import ActionSchema, build_action_schema
 from ..backtest.account import AccountState
 from ..backtest.broker import Broker, Position
 from ..backtest.costs import COST_US100, CostModel
@@ -130,6 +132,8 @@ def _empty_entry_diag(entry_state_machine: bool = False) -> dict[str, int]:
         "rejected_manipulation": 0,
         "rejected_gate": 0,
         "rejected_soft_brick": 0,
+        "rejected_terminal": 0,
+        "rejected_entry_pending": 0,
         # Order geometry rejected (place_strategy_order returned no survivor).
         "rejected_sl": 0,
         "rejected_rr": 0,
@@ -156,13 +160,40 @@ _REJECTION_COUNTERS: dict[str, str] = {
     "entry_cooldown": "rejected_cooldown",
     "manipulation_unconfirmed": "rejected_manipulation",
     "entry_gate": "rejected_gate",
+    "premium_block": "rejected_gate",
+    "discount_block": "rejected_gate",
+    "missing_previous_session": "rejected_gate",
     "soft_brick": "rejected_soft_brick",
     "entry_state_not_armed": "rejected_entry_state",
     "no_valid_sl": "rejected_sl",
     "no_valid_tp": "rejected_rr",
     "no_ema_exit": "rejected_ema",
     "sl_already_hit": "rejected_sl_already_hit",
+    "terminal_no_fill_bar": "rejected_terminal",
+    "entry_pending": "rejected_entry_pending",
 }
+
+
+def _previous_session_audit(
+    strategy: object, row: FeatureRow | pd.Series, decision_close: float
+) -> dict[str, Any]:
+    """Audit the Idea 2 reference on each accepted or rejected entry attempt."""
+    if not bool(getattr(strategy, "previous_session_pd_gate", False)):
+        return {}
+    code = float(row.get("previous_session_code", np.nan))
+    code_to_label = {1: "asian", 2: "london", 3: "ny"}
+    completed_ns = float(row.get("previous_session_completed_at_ns", np.nan))
+    return {
+        "decision_close": float(decision_close),
+        "previous_session_high": float(row.get("previous_session_high", np.nan)),
+        "previous_session_low": float(row.get("previous_session_low", np.nan)),
+        "previous_session_midpoint": float(row.get("previous_session_midpoint", np.nan)),
+        "previous_session_code": code,
+        "previous_session_label": code_to_label.get(int(code), "") if np.isfinite(code) else "",
+        "previous_session_completed_at_ns": int(completed_ns)
+        if np.isfinite(completed_ns)
+        else None,
+    }
 
 
 _PRICE_TOL = 1e-4
@@ -181,53 +212,13 @@ def _at(values: np.ndarray[Any, Any], index: int) -> float:
 def _decision_from_action(
     raw: np.ndarray[Any, Any],
     unit: np.ndarray[Any, Any],
-    direction_offset: int,
-    sl_mode_offset: int = 0,
-    tp_mode_offset: int = 0,
-    multi_tp_offset: int = 0,
-    simplex_offset: int = 0,
+    schema: ActionSchema,
 ) -> dict[str, float]:
-    """Raw box endpoints and the unit-interval coordinates of one action."""
-    off = int(direction_offset)
-    target_width = 3 if multi_tp_offset else 1
-    sm_off = int(sl_mode_offset)
-    tm_off = int(tp_mode_offset)
-    sim_off = int(simplex_offset)
-    sl_idx = 3 + off + target_width
-    tp_idx = sl_idx + sm_off
-    z_idx = tp_idx + tm_off
-    exit_idx = z_idx + sim_off
-
-    result = {
-        "action_direction": _at(raw, 0) if off else float("nan"),
-        "action_intensity": _at(raw, off),
-        "action_stop": _at(raw, 1 + off),
-        "action_risk": _at(raw, 2 + off),
-        "action_target": _at(raw, 3 + off),
-        "action_sl_mode": _at(raw, sl_idx) if sm_off else float("nan"),
-        "action_exit": _at(raw, exit_idx),
-        "intensity_u": _at(unit, off),
-        "stop_u": _at(unit, 1 + off),
-        "risk_u": _at(unit, 2 + off),
-        "target_u": _at(unit, 3 + off),
-        "sl_mode_u": _at(unit, sl_idx) if sm_off else float("nan"),
-        "exit_u": _at(unit, exit_idx),
-    }
-    if multi_tp_offset:
-        result["action_tp1_sel"] = _at(raw, 3 + off)
-        result["action_tp2_sel"] = _at(raw, 4 + off)
-        result["action_tp3_sel"] = _at(raw, 5 + off)
-        result["tp1_sel_u"] = _at(unit, 3 + off)
-        result["tp2_sel_u"] = _at(unit, 4 + off)
-        result["tp3_sel_u"] = _at(unit, 5 + off)
-    if tm_off:
-        result["action_tp_mode"] = _at(raw, tp_idx)
-        result["tp_mode_u"] = _at(unit, tp_idx)
-    if sim_off:
-        result["action_z1"] = _at(raw, z_idx)
-        result["action_z2"] = _at(raw, z_idx + 1)
-        result["z1_u"] = _at(unit, z_idx)
-        result["z2_u"] = _at(unit, z_idx + 1)
+    """Record raw/unit action coordinates using the versioned layout."""
+    result = _empty_decision()
+    for name, idx in schema.indices.items():
+        result[f"action_{name}"] = _at(raw, idx)
+        result[f"{name}_u"] = _at(unit, idx)
     return result
 
 
@@ -312,6 +303,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         arm_requires_retest: bool = False,
         entry_state_observation: bool = True,
         bundle_data: Any | None = None,
+        strict_research_eligibility: bool = False,
     ):
         """Initialize trading environment.
 
@@ -469,6 +461,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             if bars is not None
             else 0
         )
+        # Legacy permissive fallback remains available for old checkpoints.
+        # Confirmatory runs can explicitly prohibit missing eligibility data.
+        self.strict_research_eligibility = bool(strict_research_eligibility)
         if self._bundle_arrays is None:
             assert bars is not None and features is not None
             self._ny_indices = self._resolve_ny_indices(bars)
@@ -481,6 +476,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 sessions = list(bundle_labels.get("session", []))
                 ny_codes = [idx for idx, label in enumerate(sessions) if label == "ny"]
                 ny_indices = np.flatnonzero(np.isin(self._bundle_arrays["bar_session"], ny_codes))
+                if not ny_indices.size and self.strict_research_eligibility:
+                    raise ValueError("Strict research eligibility: no eligible NY session bars")
                 self._ny_indices = ny_indices if ny_indices.size else np.arange(self._n_bars)
             else:
                 self._ny_indices = self._resolve_ny_indices(
@@ -598,10 +595,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 "sweep reward."
             )
 
-        # Initialize reward function. Training breaches are a small terminal
-        # spike; eval keeps the -10 report. The guardrail still ends the episode.
+        # A hard risk breach receives the same terminal penalty in training and
+        # evaluation. The guardrail also ends the episodic training trajectory.
         self.reward_fn: DSRReward | CompositeReward | PnLReward | RMultipleReward
-        breach_penalty = 0.0 if episodic else -10.0
+        breach_penalty = -10.0
         base_pnl = (
             PnLReward(soft_loss_frac=0.01, dsr_weight=0.0, breach_penalty=breach_penalty)
             if self.reward_mode in ("pnl", "rr")
@@ -838,14 +835,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             # dimension" survives:
             #   5-D -> 6-D: [intensity, stop, risk, target, sl_mode, exit]
             #   6-D -> 7-D: [direction, intensity, stop, risk, target, sl_mode, exit]
-            n_dims = (
-                5
-                + (1 if self.agent_direction_control else 0)
-                + (1 if self.allow_agent_sl_mode else 0)
-                + (1 if self.allow_agent_tp_mode else 0)
-                + (2 if self.allow_multi_tp else 0)
-                + (2 if (self.allow_multi_tp and self.allow_simplex) else 0)
+            self.action_schema = build_action_schema(
+                has_direction=self.agent_direction_control,
+                has_sl_mode=self.allow_agent_sl_mode,
+                has_tp_mode=self.allow_agent_tp_mode,
+                has_multi_tp=self.allow_multi_tp,
+                has_simplex=self.allow_multi_tp and self.allow_simplex,
             )
+            n_dims = self.action_schema.width
             self.action_space = spaces.Box(
                 low=np.full(n_dims, -1.0, dtype=np.float32),
                 high=np.full(n_dims, 1.0, dtype=np.float32),
@@ -982,12 +979,15 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.step_idx = int(self._ny_indices[self._ny_pos]) if len(self._ny_indices) else 0
         self.account = self._create_account()
         self.position: Position | None = None
+        self._pending_entry_order: dict[str, Any] | None = None
         self.equity_curve = [self.initial_balance]
         # Wall-clock stamps for each equity_curve point (NY-stepped; not dense M1).
         t0 = self._bar_time(self.step_idx) if len(self._bar_times) else None
         self.equity_times: list[Any] = [t0]
         self.pnl_history = [0.0]
         self.trade_log: list[dict[str, Any]] = []
+        self._position_sequence = 0
+        self._episode_identity = getattr(self, "_episode_identity", 0) + 1
         # Step counter within the current episode (0 at reset). Distinct
         # from ``step_idx`` (the absolute bar index); used to enforce
         # ``max_episode_steps`` truncation.
@@ -1127,10 +1127,16 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             return True
 
         # Check if we have the required features
-        if not all(
-            col in feat_row.index
-            for col in ["london_high", "london_low", "asian_high", "asian_low", "volume_spike"]
-        ):
+        missing = [
+            col
+            for col in ("london_high", "london_low", "asian_high", "asian_low", "volume_spike")
+            if col not in feat_row.index
+        ]
+        if missing:
+            if self.strict_research_eligibility:
+                raise ValueError(
+                    "Strict research eligibility: missing entry gate columns: " + ", ".join(missing)
+                )
             # Features missing: the gate cannot evaluate, so it would silently
             # allow every entry. Warn once rather than spamming every step.
             if not self._entry_gate_warned:
@@ -1164,6 +1170,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         session_id: int,
         fill_bid: float,
         fill_ask: float,
+        fill_time: Any | None = None,
     ) -> tuple[str | None, bool, bool, bool]:
         """Check guardrail breaches and apply forced closes.
 
@@ -1205,6 +1212,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     "reason": reason,
                     "bar": self.step_idx,
                     "time": bar_time,
+                    "decision_time": bar_time,
+                    "fill_time": fill_time if fill_time is not None else bar_time,
                     "equity": self.account.equity,
                 }
                 self._stamp_exit(record, fill_price)
@@ -1219,6 +1228,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     "session_id": session_id,
                     "reason": reason,
                     "equity": self.account.equity,
+                    "fill_time": fill_time if fill_time is not None else bar_time,
                 }
             )
             # Year-fail: terminated (done), not truncated. Eval latch continues.
@@ -1233,7 +1243,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         return reason, session_blocked, done, truncated
 
-    def _apply_peak_trailing_dd(self, fill_bid: float, fill_ask: float, bar_time: Any) -> bool:
+    def _apply_peak_trailing_dd(
+        self, fill_bid: float, fill_ask: float, bar_time: Any, fill_time: Any | None = None
+    ) -> bool:
         """Keep peak trailing drawdown inside the training ceiling.
 
         This is strategy behavior, not an FTMO kill and not a breakeven stop.
@@ -1258,6 +1270,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 "reason": "peak_dd_behavior",
                 "bar": self.step_idx,
                 "time": bar_time,
+                "decision_time": bar_time,
+                "fill_time": fill_time if fill_time is not None else bar_time,
                 "equity": self.account.equity,
             }
             self._stamp_exit(record, fill_price)
@@ -1287,6 +1301,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         """
         if self.position is None:
             return
+        record: dict[str, Any]
         idx = self.step_idx if bar_idx is None else bar_idx
         log_time = (
             self._bar_time(idx)
@@ -1296,9 +1311,19 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # Touch detection uses the bar range. The next quote must not be the fill.
         _ = (fill_bid, fill_ask)
 
-        tick_hit = self._tick_exit_quote(log_time)
+        # Multi-level positions require a chronological tick replay. A single
+        # SL/TP lookup loses the slot identities and can liquidate the entire
+        # position at TP1 (or ignore TP1 when only tp1_price is populated).
+        has_tick_slots = any(
+            getattr(self.position, f"tp{slot}_price") is not None for slot in (1, 2, 3)
+        )
+        if has_tick_slots and self._tickbook is not None:
+            if self._check_multi_tp_ticks(log_time, idx):
+                return
+
+        tick_hit = None if has_tick_slots else self._tick_exit_quote(log_time)
         if tick_hit is not None:
-            kind, quote = tick_hit
+            kind, quote, fill_time = tick_hit
             pnl, fill_price = self.broker.close_position(self.account, self.position, quote)
             record = {
                 "type": "stop_close" if kind == "sl" else "tp_close",
@@ -1306,7 +1331,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 "price": fill_price,
                 "reason": "structure_sl" if kind == "sl" else "structure_tp",
                 "bar": idx,
-                "time": log_time,
+                "time": fill_time,
                 "equity": self.account.equity,
             }
             self._stamp_exit(record, fill_price)
@@ -1328,7 +1353,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             pnl, fill_price = self.broker.close_position(
                 self.account,
                 self.position,
-                self._sl_tp_fill_quote(int(self.position.direction), float(self.position.sl_price)),
+                self._stop_fill_quote(
+                    bar, int(self.position.direction), float(self.position.sl_price)
+                ),
             )
             record = {
                 "type": "stop_close",
@@ -1337,6 +1364,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 "reason": "structure_sl",
                 "bar": idx,
                 "time": log_time,
+                "fill_time": None,
+                "event_time_start": log_time,
+                "event_time_end": log_time
+                + pd.Timedelta(minutes=getattr(self, "_minutes_per_step", 1)),
+                "time_precision": "bar_interval",
                 "equity": self.account.equity,
             }
             self._stamp_exit(record, fill_price)
@@ -1417,6 +1449,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                         "reason": f"structure_tp{slot_num}",
                         "bar": idx,
                         "time": log_time,
+                        "fill_time": None,
+                        "event_time_start": log_time,
+                        "event_time_end": log_time
+                        + pd.Timedelta(minutes=getattr(self, "_minutes_per_step", 1)),
+                        "time_precision": "bar_interval",
                         "equity": self.account.equity,
                         "tp_slot": slot_num,
                         "size": close_size,
@@ -1472,6 +1509,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     "reason": "structure_tp",
                     "bar": idx,
                     "time": log_time,
+                    "fill_time": None,
+                    "event_time_start": log_time,
+                    "event_time_end": log_time
+                    + pd.Timedelta(minutes=getattr(self, "_minutes_per_step", 1)),
+                    "time_precision": "bar_interval",
                     "equity": self.account.equity,
                 }
                 self._stamp_exit(record, fill_price)
@@ -1483,7 +1525,155 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         self._maybe_ema_exit(bar, idx, log_time)
 
-    def _tick_exit_quote(self, bar_time: pd.Timestamp) -> tuple[str, tuple[float, float]] | None:
+    def _check_multi_tp_ticks(self, bar_time: pd.Timestamp, idx: int) -> bool:
+        """Replay observed bid/ask crossings in order, respecting remaining TP lots.
+
+        Return True when a tick produced any exit. The caller must then avoid
+        applying the bar's ambiguous OHLC crossings to the same position.
+        """
+        book = self._tickbook
+        pos = self.position
+        if book is None or pos is None:
+            return False
+        had_fill = False
+        last_fill_ns = -1
+        for tick_time, bid, ask in book.bar_quotes(bar_time):
+            if self.position is not pos or pos.size <= 0:
+                break
+            if tick_time.value < last_fill_ns:
+                continue
+            if pos.entry_timestamp is not None and tick_time < pd.Timestamp(
+                cast(Any, pos.entry_timestamp)
+            ):
+                continue
+            exit_side = bid if pos.direction == 1 else ask
+            sl = pos.sl_price
+            stop_hit = sl is not None and (
+                (pos.direction == 1 and exit_side <= sl)
+                or (pos.direction == -1 and exit_side >= sl)
+            )
+            if stop_hit:
+                fill_time = tick_time + pd.Timedelta(milliseconds=self._fill_delay_ms)
+                quote_event = book.quote_event_at(fill_time)
+                if quote_event is None:
+                    continue
+                quote_time, bid, ask = quote_event
+                execution_time = max(fill_time, quote_time)
+                remaining = pos.size
+                pnl, fill_price = self.broker.close_position(self.account, pos, (bid, ask))
+                record = {
+                    "type": "stop_close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "reason": "structure_sl",
+                    "bar": idx,
+                    "time": execution_time,
+                    "equity": self.account.equity,
+                    "size": remaining,
+                }
+                self._stamp_exit(record, fill_price)
+                self.trade_log.append(record)
+                self.position = None
+                self.sessions_with_trades.add(self._current_session_id())
+                self._note_close(pnl)
+                return True
+
+            for slot_num in (1, 2, 3):
+                if self.position is None or pos.size <= 0:
+                    return True
+                bit = 1 << (slot_num - 1)
+                slot_px = getattr(pos, f"tp{slot_num}_price")
+                if slot_px is None or pos.tp_hit_mask & bit:
+                    continue
+                target_hit = (pos.direction == 1 and exit_side >= slot_px) or (
+                    pos.direction == -1 and exit_side <= slot_px
+                )
+                if not target_hit:
+                    continue
+                fill_time = tick_time + pd.Timedelta(milliseconds=self._fill_delay_ms)
+                quote_event = book.quote_event_at(fill_time)
+                if quote_event is None:
+                    continue
+                quote_time, bid, ask = quote_event
+                execution_time = max(fill_time, quote_time)
+                last_fill_ns = max(last_fill_ns, execution_time.value)
+                remaining_slots = [
+                    slot
+                    for slot in (1, 2, 3)
+                    if slot > slot_num
+                    and getattr(pos, f"tp{slot}_price") is not None
+                    and not (pos.tp_hit_mask & (1 << (slot - 1)))
+                ]
+                if not remaining_slots:
+                    close_size = pos.size
+                else:
+                    init_size = float(pos.tp_initial_size or pos.initial_size or pos.size)
+                    active = [
+                        slot
+                        for slot in (1, 2, 3)
+                        if (pos.tp_hit_mask & (1 << (slot - 1)))
+                        or getattr(pos, f"tp{slot}_price") is not None
+                    ]
+                    frac_idx = active.index(slot_num)
+                    frac = (
+                        pos.tp_lot_fractions[frac_idx]
+                        if frac_idx < len(pos.tp_lot_fractions)
+                        else 1.0 / len(active)
+                    )
+                    close_size = min(round(float(frac) * init_size, 2), pos.size)
+                    if close_size <= 0:
+                        close_size = pos.size
+
+                pnl, fill_price = self.broker.close_position(
+                    self.account, pos, (bid, ask), size=close_size
+                )
+                pos.tp_hit_mask |= bit
+                setattr(pos, f"tp{slot_num}_price", None)
+                record = {
+                    "type": "tp_close" if pos.size <= 0 else "tp_partial_close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "reason": f"structure_tp{slot_num}",
+                    "bar": idx,
+                    "time": execution_time,
+                    "equity": self.account.equity,
+                    "tp_slot": slot_num,
+                    "size": close_size,
+                }
+                self._stamp_exit(record, fill_price)
+                self.trade_log.append(record)
+                self.sessions_with_trades.add(self._current_session_id())
+                had_fill = True
+                if pos.size <= 0:
+                    self.position = None
+                    self._note_close(pnl)
+                    return True
+
+                pos.tp_price = next(
+                    (
+                        getattr(pos, f"tp{slot}_price")
+                        for slot in (1, 2, 3)
+                        if getattr(pos, f"tp{slot}_price") is not None
+                    ),
+                    None,
+                )
+                if self._breakeven_trigger_r > 0.0:
+                    buffer = self._breakeven_buffer_pts
+                    if pos.direction == 1:
+                        new_sl = pos.entry_price + buffer
+                        if pos.sl_price is None or new_sl > pos.sl_price:
+                            pos.sl_price = new_sl
+                            pos.breakeven_done = True
+                    else:
+                        new_sl = pos.entry_price - buffer
+                        if pos.sl_price is None or new_sl < pos.sl_price:
+                            pos.sl_price = new_sl
+                            pos.breakeven_done = True
+        return had_fill
+
+    def _tick_exit_quote(
+        self, bar_time: pd.Timestamp
+    ) -> tuple[str, tuple[float, float], pd.Timestamp] | None:
         """Delayed tick quote for a stop or target, or ``None`` to use the level."""
         book = self._tickbook
         pos = self.position
@@ -1491,17 +1681,22 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             return None
         if pos.sl_price is None and pos.tp_price is None:
             return None
-        hit = book.delayed_exit_quote(
+        hit = book.delayed_exit_event(
             pd.Timestamp(bar_time),
             int(pos.direction),
             None if pos.sl_price is None else float(pos.sl_price),
             None if pos.tp_price is None else float(pos.tp_price),
             pd.Timedelta(milliseconds=self._fill_delay_ms),
+            earliest_time=(
+                None
+                if pos.entry_timestamp is None
+                else pd.Timestamp(cast(Any, pos.entry_timestamp))
+            ),
         )
         if hit is None:
             return None
-        kind, bid, ask = hit
-        return kind, (bid, ask)
+        kind, fill_time, bid, ask = hit
+        return kind, (bid, ask), fill_time
 
     def _sl_tp_fill_quote(self, direction: int, hit_price: float) -> tuple[float, float]:
         """Bid/ask that closes at *hit_price*, worsened only by adverse slippage.
@@ -1510,7 +1705,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         or target. The other side is one model spread away so
         ``Broker.close_position`` still sees a two-sided quote.
         """
-        spread = self.cost_model.spread_points * self.cost_model.point_size
+        # Configured spread is already in price units. point_size is only
+        # used to convert raw MT5 spread-column values and for price precision.
+        spread = float(self.cost_model.spread_points)
         # Slippage is quoted in price points, the same unit as ``min_sl_points``,
         # ``sl_buffer_pts`` and ``swing_buffer_pts``, so it is *not* scaled by
         # ``point_size`` the way the tick-denominated spread fallback is. It was
@@ -1526,6 +1723,23 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             bid = ask - spread
         return bid, ask
 
+    def _stop_fill_quote(
+        self, bar: BarView, direction: int, stop_price: float
+    ) -> tuple[float, float]:
+        """Price a bar stop at its level unless the bar opens through it."""
+        raw_spread = float(bar.spread)
+        spread = (
+            raw_spread * self.cost_model.point_size
+            if np.isfinite(raw_spread)
+            else self.cost_model.spread_points
+        )
+        if direction == 1:
+            trigger_price = min(stop_price, float(bar.open))
+        else:
+            opening_ask = float(bar.open) + spread
+            trigger_price = max(stop_price, opening_ask)
+        return self._sl_tp_fill_quote(direction, trigger_price)
+
     def _current_session_id(self) -> int:
         """Return the session_id for the current bar."""
         if self._session_ids_arr is not None and 0 <= self.step_idx < len(self._session_ids_arr):
@@ -1534,44 +1748,84 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
     def _note_close(self, pnl: float, realized_r: float | None = None) -> None:
         """Record realized close PnL/R and start the post-close entry cooldown."""
-        self._last_realized_close_pnl = float(pnl)
+        # The exit fill has already been counted by _stamp_exit. Retain the
+        # aggregate when several TP legs execute inside the same env.step().
+        if self._last_realized_close_pnl is None:
+            self._last_realized_close_pnl = float(pnl)
         if realized_r is None:
             realized_r = self._pending_realized_r
-        self._last_realized_close_r = None if realized_r is None else float(realized_r)
+        if self._last_realized_close_r is None and realized_r is not None:
+            self._last_realized_close_r = float(realized_r)
         self._pending_realized_r = None
         if self.strategy_actions and self.entry_cooldown_bars > 0:
             self._cooldown_until_bar = self.step_idx + self.entry_cooldown_bars
 
     def _stamp_exit(self, record: dict[str, Any], fill_price: float) -> None:
-        """Attach planned geometry and realized R while the position still exists."""
+        """Stamp one unique fill and accumulate its net realised PnL/R once."""
         pos = self.position
-        if pos is None or not pos.sl_ref:
+        if pos is None or "fill_id" in record:
             return
-        risk = float(pos.stop_distance)
-        if risk <= 1e-12 and pos.sl_price is not None:
-            risk = abs(float(pos.entry_price) - float(pos.sl_price))
-        realized = (
-            float(pos.direction) * (float(fill_price) - float(pos.entry_price)) / risk
-            if risk > 1e-12
-            else float("nan")
+        record.setdefault(
+            "order_submission_time",
+            record.get("decision_time", pos.entry_timestamp),
         )
+        if record.get("time_precision") == "bar_interval":
+            record.setdefault("fill_time", None)
+        else:
+            record.setdefault("fill_time", record.get("time"))
+        # close_position has already reduced pos.size. Derive each fill's size
+        # from immutable entry quantity and previously stamped exit quantities.
+        initial = float(pos.initial_size or pos.tp_initial_size or pos.size)
+        close_size = max(0.0, initial - float(pos.filled_size) - float(pos.size))
+        if close_size <= 1e-9 and "size" in record:
+            close_size = float(record["size"])
+        pos.filled_size += close_size
+        pos.fill_count += 1
+        record["position_id"] = pos.position_id
+        record["fill_id"] = f"{pos.position_id}:f{pos.fill_count}"
+        record["size"] = close_size
+        record["position_complete"] = bool(pos.size <= 1e-9)
+        # Broker pnl already includes exit commission. Entry commission was
+        # debited on open; allocate it exactly once, pro rata across fills.
+        entry_cost = float(self.broker.cost_model.total_cost(close_size))
+        net_pnl = float(record.get("pnl", 0.0)) - entry_cost
+        record["entry_commission_allocated"] = entry_cost
+        record["net_pnl"] = net_pnl
+        pos.position_net_pnl += net_pnl
+        risk_usd = pos.planned_risk_usd
+        if risk_usd is None or risk_usd <= 1e-12:
+            dist = float(pos.stop_distance)
+            if dist <= 1e-12 and pos.sl_initial_price is not None:
+                dist = abs(float(pos.entry_price) - float(pos.sl_initial_price))
+            risk_usd = dist * initial * float(getattr(self.broker, "contract_size", 1.0))
+        realized = net_pnl / risk_usd if risk_usd > 1e-12 else float("nan")
         planned = pos.planned_rr
         record["sl_ref"] = pos.sl_ref
         record["tp_ref"] = pos.tp_ref
         record["planned_rr"] = float("nan") if planned is None else float(planned)
         record["realized_r"] = realized
-        # Stash for the reward: _stamp_exit runs immediately before _note_close at
-        # every close site, so the R is already computed and need not be passed.
-        self._pending_realized_r = None if not np.isfinite(realized) else float(realized)
+        previous_pnl = self._last_realized_close_pnl
+        self._last_realized_close_pnl = (0.0 if previous_pnl is None else previous_pnl) + net_pnl
+        if np.isfinite(realized):
+            previous_r = self._last_realized_close_r
+            self._last_realized_close_r = (0.0 if previous_r is None else previous_r) + realized
+            self._pending_realized_r = self._last_realized_close_r
         record["exit_mode"] = pos.exit_mode
         record["sl_buffer"] = pos.sl_buffer
         record["manipulation"] = pos.manipulation
         record["n_sl"] = pos.n_sl
         record["n_tp"] = pos.n_tp
-        for row in reversed(self.trade_log):
-            if row.get("type") == "open" and "realized_r" not in row:
-                row["realized_r"] = realized
-                break
+        if record["position_complete"]:
+            record["position_net_pnl"] = pos.position_net_pnl
+            record["position_realized_r"] = (
+                pos.position_net_pnl / risk_usd if risk_usd > 1e-12 else float("nan")
+            )
+            for row in reversed(self.trade_log):
+                if row.get("type") == "open" and row.get("position_id") == pos.position_id:
+                    row["realized_r"] = record["position_realized_r"]
+                    row["position_net_pnl"] = pos.position_net_pnl
+                    row["position_complete"] = True
+                    break
 
     def _ema21_at(self, idx: int) -> float:
         if idx < 0 or idx >= self._n_bars:
@@ -1607,8 +1861,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         pos.best_favorable = max(float(pos.best_favorable), favorable)
         if pos.best_favorable + 1e-12 < risk or not crossed or not np.isfinite(self._ema21_at(idx)):
             return
-        close_px = float(bar.close)
-        pnl, fill_price = self.broker.close_position(self.account, pos, (close_px, close_px))
+        # The bar close is the bid. A short buy-to-cover executes at the ask.
+        pnl, fill_price = self.broker.close_position(self.account, pos, self._bar_quote(bar))
         record = {
             "type": "close",
             "pnl": pnl,
@@ -1616,6 +1870,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             "reason": "ema_21_exit",
             "bar": idx,
             "time": log_time,
+            "decision_time": log_time,
+            "fill_time": log_time + pd.Timedelta(minutes=self._minutes_per_step),
             "equity": self.account.equity,
         }
         self._stamp_exit(record, fill_price)
@@ -1635,7 +1891,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         session_id: int,
         fill_bid: float,
         fill_ask: float,
+        fill_time: Any,
         entry_candidate: EntryCandidate | None = None,
+        fill_bar_idx: int | None = None,
+        order_submission_time: Any | None = None,
+        decision_bar_idx: int | None = None,
+        signal_bar_idx: int | None = None,
     ) -> None:
         """Attempt to open or flip a position for the current bar.
 
@@ -1653,7 +1914,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 "pnl": pnl,
                 "price": fill_price,
                 "bar": self.step_idx,
-                "time": bar_time,
+                "time": fill_time,
+                "decision_time": bar_time,
+                "order_submission_time": (
+                    bar_time if order_submission_time is None else order_submission_time
+                ),
+                "fill_time": fill_time,
                 "equity": self.account.equity,
             }
             self._stamp_exit(record, fill_price)
@@ -1780,6 +2046,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     self._reject("sl_already_hit")
                 if self.position:
                     self._entry_diag["opened"] += 1
+                    self._position_sequence += 1
+                    self.position.position_id = (
+                        f"e{self._episode_identity}:p{self._position_sequence}"
+                    )
+                    self.position.initial_size = float(self.position.size)
                     self.position.sl_price = sl_price
                     self.position.sl_initial_price = sl_price
                     self.position.breakeven_done = False
@@ -1851,7 +2122,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     self.position.tp_mode_overridden = self._tp_mode_explicit
                     self.position.tp_breakeven_done = False
                     self.position.tp_hit_mask = 0
-                    self.position.entry_timestamp = bar_time
+                    self.position.entry_timestamp = fill_time
                     atr_val = feat_row.get("atr_5", feat_row.get("atr", np.nan))
                     self.position.entry_atr = (
                         float(atr_val) if pd.notna(atr_val) and float(atr_val) > 0 else 1.0
@@ -1899,15 +2170,50 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                         )
                     )
                     self._opened_this_step = True
+                    signal_bar = self.step_idx if signal_bar_idx is None else int(signal_bar_idx)
+                    signal_time = pd.Timestamp(cast(Any, bar_time)) + pd.Timedelta(
+                        minutes=self._minutes_per_step
+                    )
                     self.trade_log.append(
                         {
                             "type": "open",
+                            "position_id": self.position.position_id,
                             "strategy": self.strategy.name,
+                            "variant_id": str(
+                                getattr(self.strategy, "variant_id", self.strategy.name)
+                            ),
                             "direction": discrete_action,
                             "price": self.position.entry_price,
+                            "bar": self.step_idx if decision_bar_idx is None else decision_bar_idx,
+                            "signal_bar": signal_bar,
+                            "signal_time": signal_time,
+                            "order_submission_bar": signal_bar,
+                            "fill_bar": self.step_idx if fill_bar_idx is None else fill_bar_idx,
+                            "fill_phase": "bar_open",
+                            "entry_mode": str(getattr(self.strategy, "entry_mode", "legacy")),
+                            "time": fill_time,
+                            "decision_time": bar_time,
+                            "order_submission_time": (
+                                signal_time
+                                if order_submission_time is None
+                                else order_submission_time
+                            ),
+                            "fill_time": fill_time,
                             "lots": self.position.size,
                             "sl_price": sl_price,
                             "tp_price": tp_price,
+                            **_previous_session_audit(self.strategy, feat_row, float(bar.close)),
+                            "executed_target_prices": [
+                                float(price)
+                                for price in (
+                                    self.position.tp1_price,
+                                    self.position.tp2_price,
+                                    self.position.tp3_price,
+                                )
+                                if price is not None
+                            ]
+                            or ([float(tp_price)] if tp_price is not None else []),
+                            "tp_anchor_ref_price": self.position.entry_tp_ref_price,
                             "risk_frac": risk_frac,
                             "rr_ratio": self.position.rr_ratio,
                             "planned_rr": (
@@ -1925,6 +2231,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                             "sl_menu": (
                                 [] if placed is None else [list(pair) for pair in placed.sl_menu]
                             ),
+                            "sl_candidate_audit": (
+                                []
+                                if placed is None
+                                else [dict(candidate) for candidate in placed.sl_candidate_audit]
+                            ),
                             "tp_menu": (
                                 [] if placed is None else [list(pair) for pair in placed.tp_menu]
                             ),
@@ -1940,8 +2251,6 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                                 if placed is not None
                                 else {}
                             ),
-                            "bar": self.step_idx,
-                            "time": bar_time,
                             "equity": self.account.equity,
                             **(
                                 {
@@ -2134,6 +2443,33 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 session = get_session(pd.Timestamp(bar_time))
             except (TypeError, ValueError):
                 session = ""
+        tp_legs: list[dict[str, Any]] = []
+        fraction_index = 0
+        for leg_index, (price, reference) in enumerate(
+            (
+                (placed.tp1_price, placed.tp1_ref),
+                (placed.tp2_price, placed.tp2_ref),
+                (placed.tp3_price, placed.tp3_ref),
+            ),
+            start=1,
+        ):
+            if price is None:
+                continue
+            fractions = placed.tp_lot_fractions
+            fraction = (
+                float(fractions[fraction_index])
+                if fraction_index < len(fractions)
+                else float("nan")
+            )
+            fraction_index += 1
+            tp_legs.append(
+                {
+                    "leg": leg_index,
+                    "executed_price": float(price),
+                    "reference": str(reference),
+                    "lot_fraction": fraction,
+                }
+            )
         return {
             **self._decision_action,
             "sl_timeframe": reference_timeframe(str(placed.sl_ref)),
@@ -2144,6 +2480,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             "tp_index": float("nan") if int(placed.tp_index) < 0 else int(placed.tp_index),
             "stop_distance": stop_distance,
             "target_distance": target_distance,
+            "tp_references": [asdict(reference) for reference in placed.tp_references],
+            "tp_legs": tp_legs,
             # risk_cash is set unconditionally on the open row from the filled
             # lots, not here: reporting the requested budget let risk_cash read
             # 500.0 on trades that really risked $0.82, because min_lot and
@@ -2395,6 +2733,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         - Discrete (Discrete(20)): 0=hold, 1-9=long variants, 10-18=short
           variants, 19=exit. Those ids still use the fixed RR menu.
         """
+        if self.strategy_actions:
+            arr = np.asarray(action, dtype=np.float32).reshape(-1)
+            if arr.size != self.action_schema.width:
+                raise ValueError(
+                    f"action width {arr.size} disagrees with schema "
+                    f"{self.action_schema.version} {self.action_schema.names} "
+                    f"(expected {self.action_schema.width})"
+                )
         tp_mode = "rr"
         risk_frac = self.risk_frac_range[0]
         rr_ratio = self.rr_ratio_range[0]
@@ -2404,11 +2750,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._decision_action = _empty_decision()
         self._entry_rejection_reason = ""
         if self.strategy_actions:
-            arr = np.asarray(action, dtype=np.float32).reshape(-1)
             raw = np.clip(arr, -1.0, 1.0)
             u = 0.5 * (raw + 1.0)
-            direction_offset = 1 if self.agent_direction_control and u.size >= 6 else 0
-            intensity = float(u[direction_offset]) if u.size > direction_offset else 0.0
+            indices = self.action_schema.indices
+            direction_offset = int(self.action_schema.has_direction)
+            intensity = float(u[indices["intensity"]])
             entry_threshold = self.entry_intensity_threshold
             if feat_row is None:
                 discrete_action = 0
@@ -2424,52 +2770,32 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 )
                 if discrete_action == 0 and ctx not in (-1, 1):
                     self._entry_diag["hold_no_context"] += 1
-            # Calculate target width (1 for single TP, 3 for multi-tp)
-            target_width = 3 if self.allow_multi_tp else 1
-
-            # sl_mode: present if flag set AND the vector still fits exit after it
-            # (sl_mode comes after the TP dimensions, exit stays last)
-            sl_base = 3 + direction_offset + target_width
-            sl_mode_offset = 1 if self.allow_agent_sl_mode and u.size >= sl_base + 2 else 0
-            # tp_mode: present only if sl_mode also present (tp_mode comes after sl_mode)
-            tp_mode_offset = (
-                1 if self.allow_agent_tp_mode and u.size >= sl_base + sl_mode_offset + 2 else 0
-            )
-            # simplex z1/z2: present only with multi_tp enabled
-            simplex_offset = (
-                2
-                if (
-                    self.allow_multi_tp
-                    and self.allow_simplex
-                    and u.size >= sl_base + sl_mode_offset + tp_mode_offset + 3
-                )
-                else 0
-            )
-
-            # Compute indices
-            sl_idx = sl_base
-            tp_idx = sl_idx + sl_mode_offset
-            z_idx = tp_idx + tp_mode_offset
-            exit_idx = z_idx + simplex_offset
+            sl_idx = indices.get("sl_mode", -1)
+            tp_idx = indices.get("tp_mode", -1)
+            z_idx = indices.get("z1", -1)
+            sl_mode_offset = int(sl_idx >= 0)
+            tp_mode_offset = int(tp_idx >= 0)
+            simplex_offset = 2 if z_idx >= 0 else 0
+            exit_idx = indices["exit"]
 
             # Extract stop/risk (indices unchanged regardless of target_width)
-            if u.size >= 4 + direction_offset:
-                sl_raw = float(raw[1 + direction_offset])
-                self._selected_sl_anchor = sl_raw + 1.0
+            if u.size == self.action_schema.width:
+                sl_raw = float(raw[indices["stop"]])
+                self._selected_sl_anchor = float(np.clip(sl_raw + 1.0, 0.0, 2.0))
                 r_lo, r_hi = self.risk_frac_range
-                risk_frac = r_lo + float(u[2 + direction_offset]) * (r_hi - r_lo)
+                risk_frac = r_lo + float(u[indices["risk"]]) * (r_hi - r_lo)
                 if self.allow_multi_tp:
                     # Extract tp1_sel, tp2_sel, tp3_sel (raw unit-interval 0..1)
                     self._selected_tp_selections = (
-                        float(u[3 + direction_offset]),
-                        float(u[4 + direction_offset]),
-                        float(u[5 + direction_offset]),
+                        float(u[indices["tp1_sel"]]),
+                        float(u[indices["tp2_sel"]]),
+                        float(u[indices["tp3_sel"]]),
                     )
                     # rr_ratio from tp3 (primary TP slot) for legacy downstream use
-                    self._selected_tp_fraction = float(u[5 + direction_offset])
+                    self._selected_tp_fraction = float(u[indices["tp3_sel"]])
                     rr_ratio = self._selected_tp_fraction
                 else:
-                    self._selected_tp_fraction = float(u[3 + direction_offset])
+                    self._selected_tp_fraction = float(u[indices["target"]])
                     rr_ratio = self._selected_tp_fraction
                     self._selected_tp_selections = (-1.0, -1.0, -1.0)
             else:
@@ -2517,15 +2843,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             else:
                 self._selected_tp_z = (0.0, 0.0)
 
-            self._decision_action = _decision_from_action(
-                raw,
-                u,
-                direction_offset,
-                sl_mode_offset,
-                tp_mode_offset=tp_mode_offset,
-                multi_tp_offset=(target_width - 1),  # 2 if multi_tp else 0
-                simplex_offset=simplex_offset,
-            )
+            self._decision_action = _decision_from_action(raw, u, self.action_schema)
         elif self.continuous_actions:
             if isinstance(action, np.ndarray):
                 action_value = float(action[0]) if action.size > 0 else 0.0
@@ -2657,6 +2975,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         bar = self._bar_at(self.step_idx)
         feat_row = self._feature_row_at(self.step_idx)
         bar_time = self._bar_time(self.step_idx)
+        step_trade_log_start = len(self.trade_log)
         session_id = (
             int(self._session_ids_arr[self.step_idx]) if self._session_ids_arr is not None else 0
         )
@@ -2666,11 +2985,41 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._opened_this_step = False
         self._trigger_requested_this_step = False
 
-        # Fill quote for next action (latency-shifted: decision at bar t
-        # fills at the quote of bar t + fill_latency_bars, not t + 1)
-        fill_idx = self.step_idx + 1 + self.fill_latency_bars
+        # The environment advances over NY-tradable bars. Delayed entry orders
+        # target a future eligible bar, while existing-position marks and
+        # exits always use the next market bar so a future entry quote cannot
+        # leak into an earlier valuation.
+        next_market_idx = self.step_idx + 1
+        market_fill_idx = min(next_market_idx, self._n_bars - 1)
+        fill_idx = self.step_idx + 1
+        if self.fill_latency_bars > 0:
+            target_ny_pos = self._ny_pos + 1 + self.fill_latency_bars
+            fill_idx = (
+                int(self._ny_indices[target_ny_pos])
+                if target_ny_pos < len(self._ny_indices)
+                else self._n_bars
+            )
+        action_fill_time = self._bar_time(fill_idx) if fill_idx < self._n_bars else bar_time
+        entry_fill_time = (
+            self._bar_time(market_fill_idx)
+            if market_fill_idx < self._n_bars
+            else bar_time + pd.Timedelta(minutes=self._minutes_per_step)
+        )
+        fill_time = (
+            self._bar_time(next_market_idx) + pd.Timedelta(minutes=self._minutes_per_step)
+            if next_market_idx < self._n_bars
+            else bar_time + pd.Timedelta(minutes=self._minutes_per_step)
+        )
         fill_bid, fill_ask, next_bar = self._progress_market(
-            bar, feat_row, bar_time, session_id, fill_idx
+            bar, feat_row, bar_time, session_id, market_fill_idx
+        )
+        if market_fill_idx < self._n_bars:
+            entry_fill_bid, entry_fill_ask = self._bar_open_quote(self._bar_at(market_fill_idx))
+        else:
+            entry_fill_bid, entry_fill_ask = fill_bid, fill_ask
+        pending_order = self._pending_entry_order
+        pending_due = bool(
+            pending_order is not None and int(pending_order["fill_idx"]) == market_fill_idx
         )
 
         # Decode action (discrete or continuous)
@@ -2704,6 +3053,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 discrete_action = 0
                 risk_frac = 0.0
 
+        if pending_order is not None:
+            if discrete_action != 0:
+                self._reject("entry_pending")
+            discrete_action = 0
+            risk_frac = 0.0
+            entry_candidate = None
+
         # Check entry gate for new positions
         # Suppress new entries on the last bar of a session (overnight block
         # just closed a position or would have if there was one).
@@ -2714,7 +3070,6 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             discrete_action = 0
             if self.strategy_actions:
                 self._reject("overnight_boundary")
-
         # Session entry cap + post-close cooldown (trader / strategy actions).
         if self.strategy_actions and discrete_action != 0:
             if self._in_open_blackout(session_id):
@@ -2738,10 +3093,39 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 discrete_action, feat_row, risk_frac
             )
 
+        if self.block_overnight and discrete_action != 0 and fill_idx < self._n_bars:
+            fill_ny_pos = int(np.searchsorted(self._ny_indices, fill_idx, side="left"))
+            has_ny_fill = (
+                fill_ny_pos < len(self._ny_indices)
+                and int(self._ny_indices[fill_ny_pos]) == fill_idx
+            )
+            has_same_session_followup = False
+            if has_ny_fill and fill_ny_pos + 1 < len(self._ny_indices):
+                next_ny_idx = int(self._ny_indices[fill_ny_pos + 1])
+                fill_session = (
+                    int(self._session_ids_arr[fill_idx])
+                    if self._session_ids_arr is not None
+                    else session_id
+                )
+                next_session = (
+                    int(self._session_ids_arr[next_ny_idx])
+                    if self._session_ids_arr is not None
+                    else fill_session
+                )
+                has_same_session_followup = fill_session == next_session
+            if not has_ny_fill or not has_same_session_followup:
+                discrete_action = 0
+                risk_frac = 0.0
+                if self.strategy_actions:
+                    self._reject("overnight_boundary")
+
         # Check entry gate for new positions
         if discrete_action != 0:  # Only check for long/short entries
             if entry_machine is not None and entry_state_for_action == "ARMED":
                 gate_ok = self._check_entry_gate(float(bar.close), discrete_action, feat_row)
+                if bool(getattr(self.strategy, "previous_session_pd_gate", False)):
+                    pd_eligible = getattr(self.strategy, "previous_session_pd_eligible")
+                    gate_ok = gate_ok and bool(pd_eligible(feat_row, discrete_action))
             elif self.strategy_actions:
                 gate_ok = self.strategy.validate_entry(
                     direction=discrete_action,
@@ -2751,27 +3135,117 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 gate_ok = self._check_entry_gate(float(bar.close), discrete_action, feat_row)
             if not gate_ok:
                 # Gate not satisfied, force to hold
+                rejected_direction = discrete_action
                 discrete_action = 0
                 risk_frac = 0.0
                 if self.strategy_actions:
-                    self._reject("entry_gate")
+                    reason_getter = getattr(self.strategy, "entry_rejection_reason", None)
+                    reject_reason = (
+                        str(reason_getter(direction=rejected_direction, row=feat_row))
+                        if callable(reason_getter)
+                        else "entry_gate"
+                    )
+                    self._reject(reject_reason)
 
         # Check guardrails
         reason, session_blocked, done, truncated = self._check_guardrails(
-            bar_time, session_id, fill_bid, fill_ask
+            bar_time, session_id, fill_bid, fill_ask, fill_time=fill_time
         )
 
-        if not reason and not session_blocked:
+        position_has_completed_bar = True
+        if self.position is not None and self.position.entry_timestamp is not None:
+            bar_end = bar_time + pd.Timedelta(minutes=self._minutes_per_step)
+            position_has_completed_bar = (
+                pd.Timestamp(cast(Any, self.position.entry_timestamp)) < bar_end
+            )
+        if not reason and not session_blocked and position_has_completed_bar:
+            # A bar-close entry is effective at this bar's end. Its earlier
+            # high/low cannot trigger a stop/target or position guard.
             self._check_sl_tp(bar, fill_bid, fill_ask)
             self._apply_position_guards(
-                bar, bar_time, fill_bid, fill_ask, eod=False, feat_row=feat_row
+                bar,
+                bar_time,
+                fill_bid,
+                fill_ask,
+                eod=False,
+                feat_row=feat_row,
+                bar_idx=self.step_idx,
+                fill_time=fill_time,
             )
 
         self._peak_dd_fired = False
-        peak_dd_block = self._apply_peak_trailing_dd(fill_bid, fill_ask, bar_time)
+        peak_dd_block = self._apply_peak_trailing_dd(
+            fill_bid, fill_ask, bar_time, fill_time=fill_time
+        )
+
+        # A delayed entry becomes active only when its scheduled quote is the
+        # market bar being processed. It cannot be marked or stopped earlier.
+        if pending_due:
+            pending = self._pending_entry_order
+            self._pending_entry_order = None
+            pending_soft_block = self.guardrails.check_soft_daily(
+                self.account
+            ) or self.guardrails.check_soft_trailing_dd(self.account)
+            if (
+                pending is not None
+                and not done
+                and not session_blocked
+                and not peak_dd_block
+                and not pending_soft_block
+            ):
+                current_decision = self._decision_action
+                selected_names = (
+                    "_selected_sl_anchor",
+                    "_selected_tp_fraction",
+                    "_selected_exit_mode",
+                    "_selected_sl_mode",
+                    "_sl_mode_explicit",
+                    "_selected_tp_mode",
+                    "_tp_mode_explicit",
+                    "_selected_tp_selections",
+                    "_selected_tp_z",
+                )
+                current_selected = {name: getattr(self, name) for name in selected_names}
+                self._decision_action = dict(pending["decision_action"])
+                for name, value in pending["selected"].items():
+                    setattr(self, name, value)
+                self._try_enter_position(
+                    int(pending["direction"]),
+                    float(pending["risk_frac"]),
+                    float(pending["rr_ratio"]),
+                    bar,
+                    pending["feat_row"],
+                    pending["decision_time"],
+                    session_id,
+                    entry_fill_bid,
+                    entry_fill_ask,
+                    entry_fill_time,
+                    entry_candidate=pending["entry_candidate"],
+                    fill_bar_idx=market_fill_idx,
+                    order_submission_time=pending["order_submission_time"],
+                    decision_bar_idx=int(pending["decision_bar_idx"]),
+                    signal_bar_idx=int(pending["signal_bar_idx"]),
+                )
+                self._decision_action = current_decision
+                for name, value in current_selected.items():
+                    setattr(self, name, value)
+                if entry_machine is not None and self._opened_this_step:
+                    entry_machine.mark_entered()
+            elif pending is not None:
+                self.trade_log.append(
+                    {
+                        "type": "order_cancel",
+                        "reason": "execution_blocked_before_scheduled_fill",
+                        "decision_time": pending["decision_time"],
+                        "order_submission_time": pending["order_submission_time"],
+                        "time": fill_time,
+                        "fill_time": None,
+                        "bar": self.step_idx,
+                    }
+                )
 
         # Action handling
-        if not done:
+        if not done and not pending_due:
             if not self.strategy_actions and action == 19:  # exit action
                 if self.position is not None:
                     pnl, fill_price = self.broker.close_position(
@@ -2782,7 +3256,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                         "pnl": pnl,
                         "price": fill_price,
                         "bar": self.step_idx,
-                        "time": bar_time,
+                        "time": fill_time,
+                        "decision_time": bar_time,
+                        "order_submission_time": bar_time,
+                        "fill_time": fill_time,
                         "equity": self.account.equity,
                     }
                     self._stamp_exit(record, fill_price)
@@ -2790,6 +3267,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     self.position = None
                     self.sessions_with_trades.add(session_id)
                     self._note_close(pnl)
+            elif discrete_action != 0 and fill_idx >= self._n_bars:
+                self._reject("terminal_no_fill_bar")
             elif discrete_action != 0 and not session_blocked and not peak_dd_block:
                 # Soft brick: stop new entries on daily-loss or trailing-DD
                 # soft limits; hard breaches still use session_blocked.
@@ -2802,23 +3281,85 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     # was invisible in both the buckets and the trade log.
                     self._reject("soft_brick")
                 else:
-                    self._try_enter_position(
-                        discrete_action,
-                        risk_frac,
-                        rr_ratio,
-                        bar,
-                        feat_row,
-                        bar_time,
-                        session_id,
-                        fill_bid,
-                        fill_ask,
-                        entry_candidate=entry_candidate,
-                    )
-                    if entry_machine is not None and self._opened_this_step:
-                        entry_machine.mark_entered()
+                    if self.fill_latency_bars > 0:
+                        stored_feat_row: FeatureRow | pd.Series = feat_row
+                        if isinstance(feat_row, pd.Series):
+                            stored_feat_row = feat_row.copy()
+                        selected_names = (
+                            "_selected_sl_anchor",
+                            "_selected_tp_fraction",
+                            "_selected_exit_mode",
+                            "_selected_sl_mode",
+                            "_sl_mode_explicit",
+                            "_selected_tp_mode",
+                            "_tp_mode_explicit",
+                            "_selected_tp_selections",
+                            "_selected_tp_z",
+                        )
+                        self._pending_entry_order = {
+                            "fill_idx": fill_idx,
+                            "direction": discrete_action,
+                            "risk_frac": risk_frac,
+                            "rr_ratio": rr_ratio,
+                            "feat_row": stored_feat_row,
+                            "decision_time": bar_time,
+                            "decision_bar_idx": self.step_idx,
+                            "signal_bar_idx": self.step_idx,
+                            "signal_time": bar_time + pd.Timedelta(minutes=self._minutes_per_step),
+                            "order_submission_time": bar_time
+                            + pd.Timedelta(minutes=self._minutes_per_step),
+                            "entry_candidate": entry_candidate,
+                            "decision_action": dict(self._decision_action),
+                            "selected": {name: getattr(self, name) for name in selected_names},
+                        }
+                        self.trade_log.append(
+                            {
+                                "type": "order_submit",
+                                "direction": discrete_action,
+                                "time": bar_time,
+                                "decision_time": bar_time,
+                                "signal_bar": self.step_idx,
+                                "signal_time": bar_time
+                                + pd.Timedelta(minutes=self._minutes_per_step),
+                                "order_submission_bar": self.step_idx,
+                                "order_submission_time": bar_time
+                                + pd.Timedelta(minutes=self._minutes_per_step),
+                                "expected_fill_time": action_fill_time,
+                                "fill_time": None,
+                                "bar": self.step_idx,
+                            }
+                        )
+                    else:
+                        self._try_enter_position(
+                            discrete_action,
+                            risk_frac,
+                            rr_ratio,
+                            bar,
+                            feat_row,
+                            bar_time,
+                            session_id,
+                            entry_fill_bid,
+                            entry_fill_ask,
+                            entry_fill_time,
+                            entry_candidate=entry_candidate,
+                            fill_bar_idx=market_fill_idx,
+                            order_submission_time=bar_time
+                            + pd.Timedelta(minutes=self._minutes_per_step),
+                            decision_bar_idx=self.step_idx,
+                            signal_bar_idx=self.step_idx,
+                        )
+                        if entry_machine is not None and self._opened_this_step:
+                            entry_machine.mark_entered()
 
+        valuation_time = bar_time + pd.Timedelta(minutes=self._minutes_per_step)
+        for event in self.trade_log[step_trade_log_start:]:
+            event_time = event.get("fill_time")
+            if event_time is None and event.get("time_precision") == "bar_interval":
+                event_time = event.get("event_time_end")
+            if event_time is not None and pd.Timestamp(event_time) > valuation_time:
+                valuation_time = pd.Timestamp(event_time)
         self.equity_curve.append(self.account.equity)
-        self.equity_times.append(bar_time)
+        self.equity_times.append(valuation_time)
         pnl_step = self.account.equity - self.equity_curve[-2]
         self.pnl_history.append(pnl_step)
 
@@ -2843,6 +3384,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             if last_trade.get("bar") == self.step_idx and last_trade.get("type") not in (
                 "open",
                 "reject",
+                "sl_update",
             ):
                 close_reason = str(last_trade.get("reason") or "")
         if self._entry_rejection_reason and not self._opened_this_step:
@@ -2852,12 +3394,18 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     "entry_rejection_reason": self._entry_rejection_reason,
                     "bar": self.step_idx,
                     "time": bar_time,
+                    **(
+                        _previous_session_audit(self.strategy, feat_row, float(bar.close))
+                        if feat_row is not None
+                        else {}
+                    ),
                     **({"entry_state": entry_machine.state} if entry_machine is not None else {}),
                     **self._decision_action,
                 }
             )
         info: dict[str, Any] = {
             "equity": self.account.equity,
+            "valuation_time": valuation_time,
             "position": self.position is not None,
             "position_direction": 0 if self.position is None else int(self.position.direction),
             "close_reason": close_reason,
@@ -2899,6 +3447,21 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # (terminated) into a pure truncation when the cap also fires.
         if self.max_episode_steps is not None and self.episode_step_count >= self.max_episode_steps:
             truncated = True
+
+        if (done or truncated) and self._pending_entry_order is not None:
+            pending = self._pending_entry_order
+            self._pending_entry_order = None
+            self.trade_log.append(
+                {
+                    "type": "order_cancel",
+                    "reason": "episode_ended_before_scheduled_fill",
+                    "decision_time": pending["decision_time"],
+                    "order_submission_time": pending["order_submission_time"],
+                    "time": valuation_time,
+                    "fill_time": None,
+                    "bar": self.step_idx,
+                }
+            )
 
         if self._debug_trace and self._debug_window is not None:
             note_debug_step(
@@ -3129,6 +3692,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             bar_spread = None
         return self.cost_model.bar_quote(float(bar.close), bar_spread=bar_spread)
 
+    def _bar_open_quote(self, bar: BarView) -> tuple[float, float]:
+        """Get an executable bid/ask from a bar's opening price."""
+        if np.isfinite(bar.spread):
+            bar_spread = float(bar.spread) * self.cost_model.point_size
+        else:
+            bar_spread = None
+        return self.cost_model.bar_quote(float(bar.open), bar_spread=bar_spread)
+
     def _progress_market(
         self,
         bar: BarView,
@@ -3179,9 +3750,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             fill_bid, fill_ask = bid, ask
 
         if self.block_overnight and self.position is not None and self._is_ny_session_boundary():
-            pnl, fill_price = self.broker.close_position(
-                self.account, self.position, (fill_bid, fill_ask)
-            )
+            pnl, fill_price = self.broker.close_position(self.account, self.position, (bid, ask))
             record = {
                 "type": "eod_close",
                 "pnl": pnl,
@@ -3189,6 +3758,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 "reason": "session_end",
                 "bar": self.step_idx,
                 "time": bar_time,
+                "order_submission_time": bar_time,
+                "fill_time": bar_time + pd.Timedelta(minutes=self._minutes_per_step),
                 "equity": self.account.equity,
             }
             self._stamp_exit(record, fill_price)
@@ -3307,8 +3878,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         return float(self.reward_fn(pnl_step, **reward_kwargs))
 
-    @staticmethod
-    def _resolve_ny_indices(bars: pd.DataFrame) -> np.ndarray[Any, Any]:
+    def _resolve_ny_indices(self, bars: pd.DataFrame) -> np.ndarray[Any, Any]:
         """Absolute indices of NY tradable bars, or all bars if none match."""
         if "session" in bars.columns:
             mask = bars["session"].eq("ny").to_numpy()
@@ -3316,13 +3886,16 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             mask = ny_session_mask(pd.DatetimeIndex(bars.index)).to_numpy()
         ny = np.flatnonzero(mask)
         if ny.size == 0:
+            if self.strict_research_eligibility:
+                raise ValueError("Strict research eligibility: no eligible NY session bars")
             ny = np.arange(len(bars), dtype=int)
         return ny
 
     def _is_ny_session_boundary(self) -> bool:
         """True on the last NY bar of a session (next NY index jumps)."""
         if self._ny_pos + 1 >= len(self._ny_indices):
-            return False
+            # The final eligible bar is also the end of the available session.
+            return bool(len(self._ny_indices))
         return int(self._ny_indices[self._ny_pos + 1]) > int(self.step_idx) + 1
 
     def _advance_ny_step(self) -> None:
@@ -3343,6 +3916,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 ask,
                 eod=True,
                 feat_row=self._feature_row_at(cur),
+                bar_idx=cur,
+                fill_time=self._bar_time(cur) + pd.Timedelta(minutes=self._minutes_per_step),
             )
             self._replay_skipped_bars(cur + 1, nxt)
         self._ny_pos += 1
@@ -3366,6 +3941,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 ask,
                 eod=False,
                 feat_row=self._feature_row_at(i),
+                bar_idx=i,
+                fill_time=self._bar_time(i) + pd.Timedelta(minutes=self._minutes_per_step),
             )
 
     def _eod_adverse_cut_usd(self, pos: Position) -> float:
@@ -3419,55 +3996,152 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self,
         pos: Position,
         feat_row: FeatureRow | pd.Series | BarView | None,
+        *,
+        bar_idx: int | None = None,
+        event_time: Any = None,
     ) -> None:
-        """Structure trailing: follow the local swing formed during the move."""
+        """Tighten only against a confirmed swing on the protective side.
+
+        Swing feature values must already be available at the decision bar;
+        the current tradeable bar close constrains stop geometry when known.
+        """
         if pos.sl_mode != "trailing":
             return
         buf = self.sl_buffer_pts
+        previous = pos.sl_price
+        reference_name: str | None = None
+        reference_price: float | None = None
         if pos.direction == 1:
-            swing = self._finite(feat_row, "last_swing_high")
-            if swing is not None:
-                new_sl = float(swing) - buf
-                if pos.sl_price is None or new_sl > float(pos.sl_price):
-                    pos.sl_price = new_sl
-        elif pos.direction == -1:
             swing = self._finite(feat_row, "last_swing_low")
             if swing is not None:
-                new_sl = float(swing) + buf
-                if pos.sl_price is None or new_sl < float(pos.sl_price):
+                new_sl = float(swing) - buf
+                current = self._finite(feat_row, "close")
+                if (current is None or new_sl < current) and (
+                    pos.sl_price is None or new_sl > float(pos.sl_price)
+                ):
                     pos.sl_price = new_sl
+                    reference_name = "last_swing_low"
+                    reference_price = float(swing)
+        elif pos.direction == -1:
+            swing = self._finite(feat_row, "last_swing_high")
+            if swing is not None:
+                new_sl = float(swing) + buf
+                current = self._finite(feat_row, "close")
+                if (current is None or new_sl > current) and (
+                    pos.sl_price is None or new_sl < float(pos.sl_price)
+                ):
+                    pos.sl_price = new_sl
+                    reference_name = "last_swing_high"
+                    reference_price = float(swing)
+        if reference_name is not None and hasattr(self, "trade_log"):
+            effective_time = None
+            if bar_idx is not None and bar_idx + 1 < self._n_bars:
+                effective_time = self._bar_time(bar_idx + 1)
+            self.trade_log.append(
+                {
+                    "type": "sl_update",
+                    "position_id": pos.position_id,
+                    "time": event_time,
+                    "effective_time": effective_time,
+                    "direction": pos.direction,
+                    "previous_price": previous,
+                    "price": pos.sl_price,
+                    "reference": reference_name,
+                    "reference_price": reference_price,
+                    "buffer_points": buf,
+                    "reason": "confirmed_swing",
+                }
+            )
 
     def _reorder_tp_levels_safe(self, pos: Position) -> None:
-        """Ensure tp1 < tp2 < tp3 for long (or tp3 < tp2 < tp1 for short) after adjustment."""
-        if pos.direction == 1:
-            # Long: TP1 < TP2 < TP3
-            prices = [pos.tp1_price, pos.tp2_price, pos.tp3_price]
-            active = [i for i, p in enumerate(prices) if p is not None]
-            if len(active) >= 2:
-                for i in range(len(active) - 1):
-                    ai, bi = active[i], active[i + 1]
-                    p_ai = prices[ai]
-                    p_bi = prices[bi]
-                    if p_ai is not None and p_bi is not None and p_ai >= p_bi:
-                        # Clamp the nearer TP to be strictly less than the farther one
-                        prices[ai] = p_bi - _PRICE_TOL
-                        setattr(pos, f"tp{ai + 1}_price", p_ai)
-        elif pos.direction == -1:
-            # Short: TP3 < TP2 < TP1
-            prices = [pos.tp1_price, pos.tp2_price, pos.tp3_price]
-            active = [i for i, p in enumerate(prices) if p is not None]
-            if len(active) >= 2:
-                for i in range(len(active) - 1):
-                    ai, bi = active[i], active[i + 1]
-                    p_ai = prices[ai]
-                    p_bi = prices[bi]
-                    if p_ai is not None and p_bi is not None and p_ai <= p_bi:
-                        # Clamp the nearer TP to be strictly greater than the farther one
-                        prices[ai] = p_bi + _PRICE_TOL
-                        setattr(pos, f"tp{ai + 1}_price", p_ai)
+        """Disable invalid remaining slots without fabricating target prices.
 
-    def _apply_tp_breakeven(self, pos: Position, favorable: float) -> None:
-        """Tighten nearest active TP to entry + alpha*R. Only tightens; never widens."""
+        Slot identities and the already-hit mask are immutable. One remaining
+        valid target is preferable to inventing a duplicate-price offset.
+        """
+        cost_model = getattr(self, "cost_model", None)
+        tick_size = float(getattr(cost_model, "point_size", _PRICE_TOL))
+        tol = max(_PRICE_TOL, tick_size / 2)
+        last_price: float | None = None
+        for slot in (1, 2, 3):
+            bit = 1 << (slot - 1)
+            attr = f"tp{slot}_price"
+            level = getattr(pos, attr)
+            if level is None or (pos.tp_hit_mask & bit):
+                continue
+            price = float(level)
+            valid = np.isfinite(price) and (
+                (pos.direction == 1 and price > pos.entry_price + tol)
+                or (pos.direction == -1 and price < pos.entry_price - tol)
+            )
+            if valid and last_price is not None:
+                valid = price > last_price + tol if pos.direction == 1 else price < last_price - tol
+            if not valid:
+                setattr(pos, attr, None)
+            else:
+                last_price = price
+        if hasattr(pos, "tp_price"):
+            pos.tp_price = next(
+                (
+                    getattr(pos, f"tp{slot}_price")
+                    for slot in (1, 2, 3)
+                    if getattr(pos, f"tp{slot}_price") is not None
+                ),
+                None,
+            )
+
+    def _log_tp_update(
+        self,
+        pos: Position,
+        *,
+        slot: int,
+        previous: float,
+        price: float,
+        reference: str,
+        reference_price: float | None,
+        reason: str,
+        event_time: Any,
+        bar_idx: int | None,
+    ) -> None:
+        """Record the TP mutation and the first bar on which it can execute."""
+        if not hasattr(self, "trade_log"):
+            return
+        effective_time = None
+        if bar_idx is not None and bar_idx + 1 < self._n_bars:
+            effective_time = self._bar_time(bar_idx + 1)
+        setattr(pos, f"tp{slot}_ref", reference)
+        self.trade_log.append(
+            {
+                "type": "tp_update",
+                "position_id": pos.position_id,
+                "time": event_time,
+                "effective_time": effective_time,
+                "direction": pos.direction,
+                "tp_slot": slot,
+                "previous_price": previous,
+                "price": price,
+                "mode": pos.tp_mode,
+                "reference": reference,
+                "reference_price": reference_price,
+                "reason": reason,
+            }
+        )
+
+    def _apply_tp_breakeven(
+        self,
+        pos: Position,
+        favorable: float,
+        *,
+        current_price: float | None = None,
+        event_time: Any = None,
+        bar_idx: int | None = None,
+    ) -> None:
+        """Pull the nearest unhit TP to entry ± alpha*initial-R, at most once.
+
+        This legacy ``breakeven`` TP mode does not modify the stop. A pullback
+        level already crossed by the current market is left unchanged to avoid
+        creating a retroactive limit fill.
+        """
         if not self.allow_agent_tp_mode or pos.tp_breakeven_done:
             return
         sl0 = pos.sl_initial_price if pos.sl_initial_price is not None else pos.sl_price
@@ -3482,37 +4156,113 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         else:
             new_tp = pos.entry_price - alpha * risk_pts
         # Apply only to nearest active TP (tp1 if active, else tp2, else tp3)
-        for attr in ("tp1_price", "tp2_price", "tp3_price"):
+        for slot, attr in enumerate(("tp1_price", "tp2_price", "tp3_price"), start=1):
+            if pos.tp_hit_mask & (1 << (slot - 1)):
+                continue
             current = getattr(pos, attr)
-            if current is not None:
-                if pos.direction == 1 and new_tp < float(current):
-                    setattr(pos, attr, new_tp)
-                    pos.tp_breakeven_done = True
-                elif pos.direction == -1 and new_tp > float(current):
-                    setattr(pos, attr, new_tp)
-                    pos.tp_breakeven_done = True
-                break  # only nearest active TP
+            if current is None:
+                continue
+            pos.tp_breakeven_done = True
+            if pos.direction == 1:
+                tightens = new_tp < float(current)
+                still_ahead = current_price is None or new_tp > current_price
+            else:
+                tightens = new_tp > float(current)
+                still_ahead = current_price is None or new_tp < current_price
+            if tightens and still_ahead:
+                setattr(pos, attr, new_tp)
+                self._log_tp_update(
+                    pos,
+                    slot=slot,
+                    previous=float(current),
+                    price=float(new_tp),
+                    reference="legacy_tp_pullback_initial_r_v1",
+                    reference_price=float(sl0),
+                    reason="favorable_excursion_reached_alpha_initial_r",
+                    event_time=event_time,
+                    bar_idx=bar_idx,
+                )
+            break  # only the nearest remaining, unhit slot can be pulled
 
-    def _apply_tp_trailing(self, pos: Position, feat_row: Any) -> None:
-        """Monotonically move TPs toward profit following the local swing."""
+    def _apply_tp_trailing(
+        self,
+        pos: Position,
+        feat_row: Any,
+        *,
+        event_time: Any = None,
+        bar_idx: int | None = None,
+    ) -> None:
+        """Extend only the nearest unhit TP to a newer, executable swing."""
         if not self.allow_agent_tp_mode or pos.tp_mode != "trailing":
             return
+        reference: str
         if pos.direction == 1:
             swing = self._finite(feat_row, "last_swing_high")
-            if swing is not None:
-                # For each active TP: move toward profit monotonically (only increase for long)
-                for attr in ("tp1_price", "tp2_price", "tp3_price"):
-                    current = getattr(pos, attr)
-                    if current is not None and float(swing) > float(current):
-                        setattr(pos, attr, float(swing))
+            reference = "last_swing_high"
         elif pos.direction == -1:
             swing = self._finite(feat_row, "last_swing_low")
-            if swing is not None:
-                for attr in ("tp1_price", "tp2_price", "tp3_price"):
-                    current = getattr(pos, attr)
-                    if current is not None and float(swing) < float(current):
-                        setattr(pos, attr, float(swing))
-        # Revalidate ordering after trailing adjustment
+            reference = "last_swing_low"
+        else:
+            return
+        if swing is None:
+            return
+
+        close = self._finite(feat_row, "close")
+        cost_model = getattr(self, "cost_model", None)
+        increment = float(getattr(cost_model, "point_size", _PRICE_TOL))
+        if not np.isfinite(increment) or increment <= 0.0:
+            increment = _PRICE_TOL
+        scaled = float(swing) / increment
+        candidate = (
+            float(np.ceil(scaled - 1e-12) * increment)
+            if pos.direction == 1
+            else float(np.floor(scaled + 1e-12) * increment)
+        )
+        if close is not None and pos.direction * (candidate - close) <= 0:
+            return
+
+        # Target slot identities and allocated quantities are stable. One
+        # confirmed swing updates only the nearest remaining slot; later legs
+        # keep their original distinct references and ordering.
+        for slot in (1, 2, 3):
+            if pos.tp_hit_mask & (1 << (slot - 1)):
+                continue
+            attr = f"tp{slot}_price"
+            old = getattr(pos, attr)
+            if old is None:
+                continue
+            if pos.direction * (candidate - float(old)) > 0:
+                # Do not let this slot overtake a later active slot. A target
+                # update that would invalidate another slot would silently
+                # discard its allocated quantity, so wait for a distinct
+                # reference that preserves the original slot ordering.
+                tol = max(_PRICE_TOL, increment / 2)
+                for later_slot in range(slot + 1, 4):
+                    if pos.tp_hit_mask & (1 << (later_slot - 1)):
+                        continue
+                    later = getattr(pos, f"tp{later_slot}_price")
+                    if later is None:
+                        continue
+                    overtakes = (
+                        candidate >= float(later) - tol
+                        if pos.direction == 1
+                        else candidate <= float(later) + tol
+                    )
+                    if overtakes:
+                        return
+                setattr(pos, attr, candidate)
+                self._log_tp_update(
+                    pos,
+                    slot=slot,
+                    previous=float(old),
+                    price=candidate,
+                    reference=reference,
+                    reference_price=float(swing),
+                    reason="new_confirmed_favorable_swing",
+                    event_time=event_time,
+                    bar_idx=bar_idx,
+                )
+            break
         self._reorder_tp_levels_safe(pos)
 
     def _apply_position_guards(
@@ -3524,6 +4274,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         *,
         eod: bool,
         feat_row: FeatureRow | pd.Series | None = None,
+        bar_idx: int | None = None,
+        fill_time: Any | None = None,
     ) -> None:
         """Age, stale-progress, breakeven, and max-loss guards for a position."""
         pos = self.position
@@ -3534,7 +4286,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 pd.Timestamp(cast(Any, bar_time)) - pd.Timestamp(cast(Any, pos.entry_timestamp))
             ).total_seconds() / 3600.0
             if age_h > self._eod_max_age_hours:
-                self._force_close_guard(fill_bid, fill_ask, "max_age", bar_time)
+                self._force_close_guard(
+                    fill_bid, fill_ask, "max_age", bar_time, fill_time=fill_time
+                )
                 return
         if pos.direction == 1:
             favorable = float(bar.high) - pos.entry_price
@@ -3554,16 +4308,32 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 pos.sl_mode = default_mode
         if pos.sl_mode != "fixed":
             self._apply_breakeven(pos, pos.best_favorable)
-        self._apply_trailing_stop(pos, feat_row if feat_row is not None else bar)
+        self._apply_trailing_stop(
+            pos,
+            feat_row if feat_row is not None else bar,
+            bar_idx=bar_idx,
+            event_time=bar_time,
+        )
         # Advance the TP mode state machine (monotonic: fixed → breakeven → trailing).
         if self.allow_agent_tp_mode and not pos.tp_mode_overridden:
             default_tp = self._default_tp_mode(pos)
             if _TP_MODE_RANK.get(default_tp, 0) > _TP_MODE_RANK.get(pos.tp_mode, 0):
                 pos.tp_mode = default_tp
         if self.allow_agent_tp_mode and pos.tp_mode != "fixed":
-            self._apply_tp_breakeven(pos, pos.best_favorable)
+            self._apply_tp_breakeven(
+                pos,
+                pos.best_favorable,
+                current_price=float(bar.close),
+                event_time=bar_time,
+                bar_idx=bar_idx,
+            )
         if self.allow_agent_tp_mode:
-            self._apply_tp_trailing(pos, feat_row if feat_row is not None else bar)
+            self._apply_tp_trailing(
+                pos,
+                feat_row if feat_row is not None else bar,
+                event_time=bar_time,
+                bar_idx=bar_idx,
+            )
         thresh = self._eod_progress_atr * float(pos.entry_atr or 0.0)
         if thresh > 0.0 and (favorable - pos.last_progress_favorable) >= thresh:
             pos.last_progress_favorable = favorable
@@ -3572,13 +4342,21 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             pos.stale_counter += 1
         notional_adverse = adverse * pos.size * self.contract_size
         if notional_adverse >= self._eod_adverse_cut_usd(pos):
-            self._force_close_guard(fill_bid, fill_ask, "eod_max_loss", bar_time)
+            self._force_close_guard(
+                fill_bid, fill_ask, "eod_max_loss", bar_time, fill_time=fill_time
+            )
             return
         if eod and pos.stale_counter >= self._eod_stale_bars:
-            self._force_close_guard(fill_bid, fill_ask, "stale", bar_time)
+            self._force_close_guard(fill_bid, fill_ask, "stale", bar_time, fill_time=fill_time)
 
     def _force_close_guard(
-        self, fill_bid: float, fill_ask: float, reason: str, bar_time: Any
+        self,
+        fill_bid: float,
+        fill_ask: float,
+        reason: str,
+        bar_time: Any,
+        *,
+        fill_time: Any | None = None,
     ) -> None:
         if self.position is None:
             return
@@ -3592,6 +4370,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             "reason": reason,
             "bar": self.step_idx,
             "time": bar_time,
+            "decision_time": bar_time,
+            "fill_time": fill_time if fill_time is not None else bar_time,
             "equity": self.account.equity,
         }
         self._stamp_exit(record, fill_price)

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560">
+<title>Optional confirmed retest variant — separate from main entry</title><rect width="1000" height="560" fill="#fbfcfe"/>
+<style>text{font:14px sans-serif;fill:#152536} .small{font-size:12px} .axis{stroke:#8091a0;stroke-width:1} .bull{stroke:#18794e;fill:#18794e} .bear{stroke:#b42318;fill:#b42318} .ref{stroke:#7a5af8;stroke-dasharray:6 5} .zone{fill:#fdb022;fill-opacity:.19;stroke:#dc6803} .gate{stroke:#175cd3;stroke-dasharray:7 5}</style>
+<text x="44" y="34" font-size="20" font-weight="bold">Optional confirmed retest variant — separate from main entry</text>
+<text x="44" y="54" class="small">SYNTHETIC EXPLANATORY EXAMPLE — not historical data or a strategy result</text>
+<rect x="110" y="160" width="780" height="105" rx="8" fill="#eef4ff" stroke="#175cd3"/>
+<rect x="110" y="315" width="780" height="105" rx="8" fill="#ecfdf3" stroke="#18794e"/>
+<text x="140" y="195" font-weight="bold">Main: confirmed first eligible</text>
+<text x="140" y="230">IFVG confirmed at bar 21 close → submit → earliest fill at bar 22 open.</text>
+<text x="140" y="350" font-weight="bold">Optional: confirmed retest</text>
+<text x="140" y="385">Later touch at 114 inside [112,116] on bar 23 → submit after close → fill bar 24.</text>
+<text x="110" y="470" class="small">The interior touch is one synthetic example. The retest mode accepts any touch in the zone within its expiry.</text>
+<text x="110" y="495" class="small">The early exploratory variant is unconfirmed and is not depicted or labeled as an IFVG confirmation.</text></svg>

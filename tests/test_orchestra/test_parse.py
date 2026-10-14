@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from orchestra.parse import parse_complexity, parse_verdict
@@ -75,11 +76,13 @@ def test_classify_failure_rate_limit() -> None:
 def test_classify_codex_usage_limit_and_websocket_307() -> None:
     from orchestra.failures import FailureKind, classify_failure
 
+    resume_date = datetime.now(UTC).date() + timedelta(days=3)
     text = (
         "failed to connect to websocket: HTTP error: 307 Temporary Redirect, "
         "url: wss://chatgpt.com/backend-api/codex/responses\n"
         "ERROR: You've hit your usage limit. To continue using Codex ... "
-        "try again at Oct 13th, 2026 3:06 PM.\n"
+        f"try again at {resume_date.strftime('%b')} {resume_date.day}, "
+        f"{resume_date.year} 3:06 PM.\n"
     )
     result = classify_failure(text, cli="codex")
     assert result.kind == FailureKind.DAILY_EXHAUSTED

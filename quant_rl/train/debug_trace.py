@@ -350,8 +350,13 @@ def builtin_checks(thresholds: Mapping[str, Any] | None = None) -> list[Check]:
         row = records[-1] if records else {}
         if "breach_penalty" not in row and "pnl_dsr_weight" not in row:
             return ""
-        if float(row.get("breach_penalty", 0.0)) != 0.0:
-            return "training breach penalty"
+        if (
+            abs(
+                float(row.get("breach_penalty", 0.0)) - float(row.get("eval_breach_penalty", -10.0))
+            )
+            > 1e-9
+        ):
+            return "train/eval breach penalty mismatch"
         if float(row.get("pnl_dsr_weight", 0.0)) != 0.0:
             return "pnl dsr weight"
         return ""

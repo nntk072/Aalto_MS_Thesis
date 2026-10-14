@@ -32,6 +32,12 @@ EXPERIMENTS_PATH = PROJECT_ROOT / "config" / "experiments.yaml"
 DEFAULT_BASE = "quant_rl/config/default.yaml"
 FULL_PO3_BASE = "config/features/full_po3_mtf.yaml"
 
+PREBUILT_FEATURE_CACHES = {
+    "ladder_a0_flat": "data/prebuilt_feature_cache/baseline.parquet",
+    "ladder_a0_flat_po3": "data/prebuilt_feature_cache/idea1_po3_ifvg.parquet",
+    "ladder_a0_flat_dist": "data/prebuilt_feature_cache/idea2_distribution.parquet",
+}
+
 STRATEGIES = ("baseline", "po3_ifvg", "distribution")
 ALGOS = ("ppo", "sac")
 ARCHS = ("tcn", "gru", "transformer", "mtf")
@@ -154,6 +160,9 @@ def resolve_variant(
         overrides.append("strategy.name=baseline")
     overrides.append(f"env.reward_mode={reward_mode}")
     overrides.append(f"ppo.total_timesteps={resolved_steps}")  # train_rl uses this for SAC too
+    prebuilt_cache = PREBUILT_FEATURE_CACHES.get(name)
+    if prebuilt_cache is not None:
+        overrides.append(f"data.prebuilt_feature_cache={prebuilt_cache}")
 
     return {
         "variant": name,

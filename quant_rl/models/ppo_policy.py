@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from itertools import product
+from typing import Any, cast
 
 import torch
+
+from quant_rl.action_schema import build_action_schema
 
 try:
     from stable_baselines3.common.policies import MultiInputActorCriticPolicy
@@ -88,6 +91,27 @@ _PRIOR_ORDER: tuple[str, ...] = (
 )
 
 
+# Keep legacy bare-width lookups for existing callers and checkpoints, but use
+# flag-derived keys whenever the caller supplies a non-default feature set.
+
+_LAYOUT_BY_FLAGS: dict[tuple[bool, bool, bool, bool, bool], str] = {}
+for _values in product((False, True), repeat=5):
+    _dir, _sl, _tp, _multi, _simplex = _values
+    if _simplex and not _multi:
+        continue
+    _schema = build_action_schema(
+        has_direction=_dir,
+        has_sl_mode=_sl,
+        has_tp_mode=_tp,
+        has_multi_tp=_multi,
+        has_simplex=_simplex,
+    )
+    _LAYOUT_BY_FLAGS[cast(tuple[bool, bool, bool, bool, bool], _values)] = _schema.key
+    _MODE_INDEX[_schema.key] = {
+        name: idx for name, idx in _schema.indices.items() if name != "intensity"
+    }
+
+
 def _layout_key(
     width: int,
     has_direction: bool = False,
@@ -96,29 +120,29 @@ def _layout_key(
     has_multi_tp: bool = False,
     has_simplex: bool = False,
 ) -> str:
-    if width == 1:
+    flags = (has_direction, has_sl_mode, has_tp_mode, has_multi_tp, has_simplex)
+    if width == 1 and flags == (False,) * 5:
         return "1"
-    if width == 5:
-        return "5"
-    if width == 6:
-        if has_direction:
-            return "6_dir"
-        if has_tp_mode:
-            return "6_tp"
-        return "6_sl"
-    if width == 7:
-        if has_tp_mode and not has_sl_mode:
-            return "7_tp"
-        return "7"
-    if width == 8:
-        return "8"
-    if width == 10:
-        return "10"
-    if width == 11:
-        return "11"
-    if width == 12:
-        return "12"
-    raise ValueError(f"unsupported action width {width}")
+    # Compatibility with older tests/users passing a bare width: this is
+    # inherently ambiguous and should not be used for new model construction.
+    if flags == (False,) * 5 and width != 5:
+        if width == 6:
+            return "6_sl"
+        if str(width) in _MODE_INDEX:
+            return str(width)
+    key = _LAYOUT_BY_FLAGS.get(flags)
+    if key is None:
+        raise ValueError(f"invalid action flags {flags}")
+    schema = build_action_schema(
+        has_direction=has_direction,
+        has_sl_mode=has_sl_mode,
+        has_tp_mode=has_tp_mode,
+        has_multi_tp=has_multi_tp,
+        has_simplex=has_simplex,
+    )
+    if width != schema.width:
+        raise ValueError(f"action width {width} disagrees with {schema.names} ({schema.width})")
+    return key
 
 
 def mode_index(
@@ -359,3 +383,29 @@ class ClampedStdMultiInputPolicy(MultiInputActorCriticPolicy):
             self._note_mode_means(mean)
             attach_mode_prior(mean, self.mode_prior_coef, self._prior_dims(int(mean.shape[1])))
         return dist
+
+
+class LegacyClampedStdMultiInputPolicy(MultiInputActorCriticPolicy):
+    """Pre-account-value-head policy for explicit archived checkpoint loading."""
+
+    def __init__(
+        self,
+        *args: Any,
+        log_std_min: float = -0.7,
+        log_std_max: float = 0.0,
+        **kwargs: Any,
+    ) -> None:
+        if not _SB3_AVAILABLE:
+            raise ImportError("stable-baselines3 is required for legacy policy loading")
+        self.log_std_min = float(log_std_min)
+        self.log_std_max = float(log_std_max)
+        super().__init__(*args, **kwargs)
+
+    def _get_constructor_parameters(self) -> dict[str, Any]:
+        data = super()._get_constructor_parameters()
+        data.update(log_std_min=self.log_std_min, log_std_max=self.log_std_max)
+        return data
+
+    def _get_action_dist_from_latent(self, latent_pi: torch.Tensor) -> Any:
+        clip_policy_log_std(self, self.log_std_min, self.log_std_max)
+        return super()._get_action_dist_from_latent(latent_pi)

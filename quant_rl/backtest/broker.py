@@ -16,6 +16,7 @@ Mark-to-market also uses the close-side price:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 from typing import Literal
 
 from .account import AccountState
@@ -25,12 +26,27 @@ Direction = Literal[-1, 0, 1]
 Quote = tuple[float, float]  # (bid, ask)
 
 
+def _validate_quote(quote: Quote) -> Quote:
+    """Refuse impossible or non-finite executable prices before account mutation."""
+    bid, ask = quote
+    if not isfinite(bid) or not isfinite(ask) or bid <= 0.0 or ask < bid:
+        raise ValueError("Invalid bid/ask quote: prices must be finite, positive and ask >= bid")
+    return bid, ask
+
+
 @dataclass
 class Position:
     direction: int  # +1 long, -1 short
     size: float  # lots
     entry_price: float
     margin_used: float
+    # Identifiers and quantities describe the original position and its fills.
+    # They remain stable as size shrinks through partial target execution.
+    position_id: str = ""
+    initial_size: float = 0.0
+    filled_size: float = 0.0
+    fill_count: int = 0
+    position_net_pnl: float = 0.0
     sl_price: float | None = None  # stop loss price level
     tp_price: float | None = None  # take profit price level
     risk_frac: float | None = None  # risk fraction used for sizing
@@ -113,12 +129,12 @@ class Broker:
         Returns the new ``Position`` or ``None`` if margin is insufficient or
         *direction* is not a valid trade side (must be ``+1`` or ``-1``).
         """
-        if direction not in (1, -1):
+        if direction not in (1, -1) or not isfinite(lots) or lots <= 0.0:
             # Regression guard: engine action codes like exit_action (e.g. 2)
             # must never reach open_position. Reject rather than open a
             # bogus position with an undefined side.
             return None
-        bid, ask = quote
+        bid, ask = _validate_quote(quote)
         fill = self.cost_model.fill_price(bid, ask, direction)
         margin = self.required_margin(fill, lots)
         if acc.equity < margin:
@@ -130,6 +146,7 @@ class Broker:
             size=lots,
             entry_price=fill,
             margin_used=margin,
+            initial_size=lots,
         )
 
     def close_position(
@@ -147,7 +164,11 @@ class Broker:
         Returns:
             tuple of (realised_pnl, fill_price)
         """
-        bid, ask = quote
+        if not isfinite(position.size) or position.size <= 0.0:
+            raise ValueError("Cannot close a position with no remaining quantity")
+        if size is not None and (not isfinite(float(size)) or float(size) <= 0.0):
+            raise ValueError("Requested close quantity must be finite and positive")
+        bid, ask = _validate_quote(quote)
         # Closing direction is opposite to the position direction
         fill = self.cost_model.fill_price(bid, ask, -position.direction)
         close_size = position.size if size is None else min(float(size), position.size)
@@ -176,7 +197,7 @@ class Broker:
         * Long positions are valued at bid (what you'd receive if you sold now).
         * Short positions are valued at ask (what you'd pay to buy back now).
         """
-        bid, ask = quote
+        bid, ask = _validate_quote(quote)
         mtm_price = bid if position.direction == 1 else ask
         unrealised = (
             (mtm_price - position.entry_price)

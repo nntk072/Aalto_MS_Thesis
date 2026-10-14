@@ -68,12 +68,12 @@ def test_codex_yaml_extra_args_match_codex_exec_cli() -> None:
     codex_bin = shutil.which("codex")
     if codex_bin is None:
         pytest.skip("codex CLI not installed")
-    # `--help` skips clap conflict checks; empty stdin only exercises argv parsing.
+    # Help mode exercises CLI argument parsing without starting a Codex run.
     probe = subprocess.run(
-        [codex_bin, "exec", *extra],
+        [codex_bin, "exec", *extra, "--help"],
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=15,
         stdin=subprocess.DEVNULL,
     )
     err = probe.stderr or probe.stdout

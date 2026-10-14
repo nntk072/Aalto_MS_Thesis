@@ -17,14 +17,67 @@ from typing import Any
 import backtrader as bt
 import pandas as pd
 
-from quant_rl.backtest.costs import COST_US100
+from quant_rl.backtest.costs import CostModel
 from quant_rl.backtest.engine import run_backtest
-
-from .strategies.cross_over import CrossOverStrategy
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
+
+
+class _SignalFeed(bt.feeds.PandasData):
+    lines = ("signal",)
+    params = (("signal", "signal"),)
+
+
+class _DelayedSignalStrategy(bt.Strategy):
+    """Execute a precomputed action at the matching custom-engine close."""
+
+    params = (("last_bar", 0),)
+
+    def __init__(self) -> None:
+        self.order = None
+
+    def notify_order(self, order: bt.Order) -> None:
+        if order.status not in (order.Submitted, order.Accepted):
+            self.order = None
+
+    def next(self) -> None:
+        if self.order is not None:
+            return
+        if len(self) == self.p.last_bar + 1:
+            if self.position:
+                self.order = self.close()
+            return
+        if len(self) > self.p.last_bar + 1:
+            return
+        if len(self) < 3:
+            return
+
+        # The custom engine observes action[i - 1] on bar i and fills at
+        # bar i + 1 close. This delayed signal reaches the same close in
+        # Backtrader with cheat-on-close enabled.
+        action = int(self.data.signal[-2])
+        if action == 2 and self.position:
+            self.order = self.close()
+        elif action == 1 and not self.position:
+            self.order = self.buy(size=1)
+        elif action == -1 and not self.position:
+            self.order = self.sell(size=1)
+        elif len(self) == self.p.last_bar and self.position:
+            self.order = self.close()
+
+
+def _crossover_actions(close: pd.Series) -> pd.Series:
+    """Encode long-entry and flat-exit SMA crossovers as discrete actions."""
+    short = close.rolling(20, min_periods=20).mean()
+    long = close.rolling(50, min_periods=50).mean()
+    previous_difference = (short - long).shift(1)
+    difference = short - long
+    actions = pd.Series(0, index=close.index, dtype="int64")
+    actions.loc[(difference > 0) & (previous_difference <= 0)] = 1
+    actions.loc[(difference < 0) & (previous_difference >= 0)] = 2
+    return actions
 
 
 def load_data(data_path: str | Path) -> pd.DataFrame:
@@ -50,121 +103,89 @@ def load_data(data_path: str | Path) -> pd.DataFrame:
     return df
 
 
-def run_backtrader_engine(df: pd.DataFrame, tolerance: float = 0.01) -> dict[str, Any]:
-    """Run backtrader engine on the given data.
+def run_backtrader_engine(
+    df: pd.DataFrame,
+    tolerance: float = 0.01,
+    *,
+    actions: pd.Series | None = None,
+) -> dict[str, Any]:
+    """Run Backtrader with the same precomputed action trace as the custom engine.
 
     Returns dict with trade_count, total_pnl, max_drawdown.
     """
-    # Convert DataFrame to backtrader data feed
-    data_feed = bt.feeds.PandasData(
-        dataname=df,
-        datetime=None,
-        open=0,
-        high=1,
-        low=2,
-        close=3,
-        volume=4,
-        openinterest=-1,
+    del tolerance  # Kept for call compatibility with the CLI.
+    action_series = _crossover_actions(df["close"]) if actions is None else actions
+    if not action_series.index.equals(df.index):
+        raise ValueError("Cross-validation actions must align exactly with bar timestamps")
+    # Duplicate the final quote so a final liquidation submitted at the last
+    # real close gets one broker cycle to execute at that same close.
+    final_quote = df.iloc[[-1]].assign(signal=0)
+    feed_bars = pd.concat(
+        [df.assign(signal=action_series), final_quote, final_quote], ignore_index=False
     )
 
-    # Create cerebro
     cerebro = bt.Cerebro()
-    cerebro.adddata(data_feed)
-
-    # Add strategy
-    cerebro.addstrategy(CrossOverStrategy, ma_short_period=20, ma_long_period=50, printlog=False)
-
-    # Set cash
+    cerebro.adddata(_SignalFeed(dataname=feed_bars))
+    cerebro.addstrategy(_DelayedSignalStrategy, last_bar=len(df))
     cerebro.broker.setcash(100000.0)
-    cerebro.broker.setcommission(commission=0.001)
-
-    # Add analyzers
-    cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name="sharpe")
     cerebro.addanalyzer(bt.analyzers.DrawDown, _name="drawdown")
-    cerebro.addanalyzer(bt.analyzers.Returns, _name="returns")
     cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name="trades")
-
-    # Run backtest
+    cerebro.broker.set_coc(True)
     results = cerebro.run()
     strat = results[0]
 
-    # Extract metrics
     trade_analysis = strat.analyzers.trades.get_analysis()
-    total_trades = trade_analysis.get("total", {}).get("total", 0)
-    total_pnl = strat.analyzers.returns.get_analysis().get("rtot", 0.0) * 100000.0
-
-    # Get max drawdown
+    total_trades = trade_analysis.get("total", {}).get("closed", 0)
     dd_analysis = strat.analyzers.drawdown.get_analysis()
-    max_drawdown = dd_analysis.get("max", {}).get("drawdown", 0.0)
+    max_drawdown = dd_analysis.get("max", {}).get("drawdown", 0.0) / 100.0
 
     return {
         "engine": "backtrader",
         "trade_count": int(total_trades),
-        "total_pnl": float(total_pnl),
+        "total_pnl": float(cerebro.broker.getvalue() - 100000.0),
         "max_drawdown": float(max_drawdown),
     }
 
 
-def run_custom_engine(df: pd.DataFrame, tolerance: float = 0.01) -> dict[str, Any]:
-    """Run custom event-driven engine on the given data.
+def run_custom_engine(
+    df: pd.DataFrame,
+    tolerance: float = 0.01,
+    *,
+    actions: pd.Series | None = None,
+) -> dict[str, Any]:
+    """Run the custom engine with the shared precomputed action trace.
 
     Returns dict with trade_count, total_pnl, max_drawdown.
     """
-    # Create features DataFrame (empty for now - just use raw bars)
-    # The custom engine needs features, but for MACD crossover we can create dummy features
-    features_df = pd.DataFrame(index=df.index)
-
-    # Simple MACD-based policy function
-    def macd_policy(obs: Any) -> int:
-        """MACD crossover policy: returns 1 (long), -1 (short), or 0 (hold)."""
-        # For simplicity, we'll just return 0 for now - the real signal logic
-        # will be implemented in the comparison
-        # This is a placeholder to show the interface
-        if len(obs) < 2:
-            return 0
-        # Dummy logic - in practice this would compute MACD from the observation
-        return 0
-
-    try:
-        result = run_backtest(
-            bars=df,
-            features=features_df,
-            policy=macd_policy,
-            obs_window=60,
-            cost_model=COST_US100,
-            initial_balance=100000.0,
-            lots=1.0,
-        )
-
-        trade_count = len(result["trades"])
-        final_equity = result["account"].equity
-        total_pnl = final_equity - 100000.0
-
-        # Calculate max drawdown from equity curve
-        equity_series = result["equity"]
-        if len(equity_series) > 0:
-            running_max = equity_series.cummax()
-            drawdowns = (equity_series - running_max) / running_max
-            max_drawdown = float(drawdowns.min())
-        else:
-            max_drawdown = 0.0
-
-        return {
-            "engine": "custom",
-            "trade_count": int(trade_count),
-            "total_pnl": float(total_pnl),
-            "max_drawdown": float(max_drawdown),
-        }
-    except Exception as e:
-        log.error(f"Custom engine failed: {e}")
-        # Return placeholder values
-        return {
-            "engine": "custom",
-            "trade_count": 0,
-            "total_pnl": 0.0,
-            "max_drawdown": 0.0,
-            "error": str(e),
-        }
+    del tolerance  # Kept for call compatibility with the CLI.
+    action_series = _crossover_actions(df["close"]) if actions is None else actions
+    if not action_series.index.equals(df.index):
+        raise ValueError("Cross-validation actions must align exactly with bar timestamps")
+    features = pd.DataFrame({"signal": action_series}, index=df.index)
+    result = run_backtest(
+        bars=df,
+        features=features,
+        policy=lambda observation: int(observation[-1, 0]),
+        obs_window=1,
+        cost_model=CostModel(spread_points=0.0, slippage_points=0.0),
+        initial_balance=100000.0,
+        lots=1.0,
+        hold_on_zero=True,
+        exit_action=2,
+        block_overnight=False,
+    )
+    trade_count = int(result["trades"].get("position_complete", pd.Series(dtype=bool)).sum())
+    equity = result["equity"]
+    if equity.empty:
+        max_drawdown = 0.0
+    else:
+        max_drawdown = float((1.0 - equity / equity.cummax()).max())
+    return {
+        "engine": "custom",
+        "trade_count": trade_count,
+        "total_pnl": float(result["account"].equity - 100000.0),
+        "max_drawdown": max_drawdown,
+    }
 
 
 def compare_results(
@@ -278,12 +299,12 @@ def main() -> None:
         df = load_data(args.data_path)
         log.info(f"Loaded {len(df)} bars")
 
-        # Run both engines
+        actions = _crossover_actions(df["close"])
         log.info("Running backtrader engine...")
-        bt_result = run_backtrader_engine(df, args.tolerance)
+        bt_result = run_backtrader_engine(df, args.tolerance, actions=actions)
 
         log.info("Running custom engine...")
-        custom_result = run_custom_engine(df, args.tolerance)
+        custom_result = run_custom_engine(df, args.tolerance, actions=actions)
 
         # Compare results
         comparison = compare_results(bt_result, custom_result, args.tolerance)

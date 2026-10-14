@@ -225,16 +225,27 @@ def test_structure_bos_mtf_additive_and_causal(m1_bars):
     from quant_rl.features.build import build_features
 
     base = build_features(m1_bars, cfg=OmegaConf.create(_base_cfg()))
-    cfg = _mtf_cfg(structure={"enabled": True, "timeframes": ["M5"]})
+    timeframes = ["M5", "M15", "M30", "H1", "H4", "D1"]
+    cfg = _mtf_cfg(structure={"enabled": True, "timeframes": timeframes})
     mtf = build_features(m1_bars, cfg=cfg)
     cols = set(map(str, mtf.columns))
-    assert {"M5_last_swing_high", "M5_last_swing_low", "M5_bos_up", "M5_bos_down"} <= cols
-    assert {"M5_dist_to_swing_high_atr", "M5_dist_to_swing_low_atr"} <= cols
+    for tf in timeframes:
+        assert {
+            f"{tf}_last_swing_high",
+            f"{tf}_last_swing_low",
+            f"{tf}_bos_up",
+            f"{tf}_bos_down",
+        } <= cols
+        assert {f"{tf}_dist_to_swing_high_atr", f"{tf}_dist_to_swing_low_atr"} <= cols
     assert set(map(str, base.columns)) < cols
 
     trunc = build_features(m1_bars.iloc[:400], cfg=cfg)
     overlap = trunc.index[:300]
-    check = ["M5_last_swing_high", "M5_bos_up", "M5_dist_to_swing_high_atr"]
+    check = [
+        column
+        for tf in timeframes
+        for column in (f"{tf}_last_swing_high", f"{tf}_bos_up", f"{tf}_dist_to_swing_high_atr")
+    ]
     pd.testing.assert_frame_equal(mtf.loc[overlap, check], trunc.loc[overlap, check], rtol=1e-9)
 
 
@@ -271,16 +282,25 @@ def test_po3_state_mtf_behind_flag(m1_bars):
 
 
 def test_ifvg_mtf_behind_flag(m1_bars):
-    """IFVG zone MTF (§4.6): per-TF active zones, causal, off by default."""
+    """IFVG zones from M5/M15/H1 align causally and stay opt-in by default."""
     from quant_rl.features.build import build_features
 
-    cfg_on = _mtf_cfg(include_strategy_state=True, ifvg_mtf={"enabled": True, "timeframes": ["M5"]})
+    cfg_on = _mtf_cfg(
+        include_strategy_state=True,
+        po3_phase_mode="reclaim_then_ifvg",
+        ifvg_mtf={"enabled": True, "timeframes": ["M5", "M15", "H1"]},
+    )
     mtf = build_features(m1_bars, cfg=cfg_on)
-    assert "M5_ifvg_bull_active" in set(map(str, mtf.columns))
+    assert {f"{tf}_ifvg_bull_active" for tf in ("M5", "M15", "H1")} <= set(map(str, mtf.columns))
+    assert {
+        "po3_ifvg_confirmation_tf_code",
+        "ifvg_bull_confirmation_tf_code",
+        "ifvg_bear_confirmation_tf_code",
+    } <= set(map(str, mtf.columns))
 
     trunc = build_features(m1_bars.iloc[:400], cfg=cfg_on)
     overlap = trunc.index[:300]
-    check = ["M5_ifvg_bull_active", "M5_ifvg_bear_active"]
+    check = [f"{tf}_ifvg_{side}_active" for tf in ("M5", "M15", "H1") for side in ("bull", "bear")]
     pd.testing.assert_frame_equal(mtf.loc[overlap, check], trunc.loc[overlap, check], rtol=1e-9)
 
 
@@ -297,6 +317,21 @@ def test_variant_config_files_merge():
         assert merged.features.include_po3 is want_po3
         assert merged.features.include_fvg_ifvg is want_fvg
         assert list(merged.features.htf_timeframes) == ["M5", "M15", "H1"]
+
+
+def test_idea_overlays_enable_synchronized_mtf_ifvg():
+    """The revised Idea variants consume M5/M15/H1 IFVGs on the M1 PO3 clock."""
+    base = OmegaConf.load("quant_rl/config/default.yaml")
+    expected_ids = {
+        "config/2_po3_ifvg.yaml": "po3_confirmed_ifvg_htf_mtf_v1",
+        "config/3_distribution.yaml": "distribution_prev_session_pd_mtf_v1",
+    }
+    for path, variant_id in expected_ids.items():
+        merged = OmegaConf.merge(base, OmegaConf.load(path))
+        assert list(merged.features.po3_reference_timeframes) == ["M5", "M15", "H1"]
+        assert merged.features.ifvg_mtf.enabled is True
+        assert list(merged.features.ifvg_mtf.timeframes) == ["M5", "M15", "H1"]
+        assert merged.strategy.variant_id == variant_id
 
 
 def test_po3_full_flag_additive(m1_bars):

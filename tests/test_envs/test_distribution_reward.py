@@ -7,6 +7,7 @@ import pytest
 
 from quant_rl.envs.distribution_reward import DistributionReward
 from quant_rl.envs.strategies.distribution import DistributionStrategy
+from quant_rl.envs.trading_env import _previous_session_audit
 
 
 def reward() -> DistributionReward:
@@ -129,6 +130,119 @@ def test_failure_bar_and_a_bias_mismatch_hold() -> None:
     assert strategy.validate_entry(direction=1, row=before) is False
     against = _long_leg(htf_day_bias=-1.0)
     assert strategy.context_direction(against) == 0
+
+
+def test_idea2_requires_all_direction_and_ifvg_gate_inputs() -> None:
+    required = set(DistributionStrategy.required_features)
+    assert {
+        "po3_distribution",
+        "po3_distribution_direction",
+        "htf_day_bias",
+        "po3_distribution_after_ifvg",
+    }.issubset(required)
+
+
+def test_idea2_accepts_post_confirmation_distribution_without_retest() -> None:
+    strategy = DistributionStrategy(enforce_gate=True)
+    row = _long_leg()
+    assert "ifvg_retest_bull" not in row.index
+    assert strategy.validate_entry(direction=1, row=row)
+    assert not strategy.validate_entry(direction=-1, row=row)
+
+
+def test_idea2_confirmed_mode_is_eligible_on_confirmation_close() -> None:
+    strategy = DistributionStrategy(enforce_gate=True, entry_mode="confirmed_first_eligible")
+    row = _long_leg(po3_distribution_after_ifvg=0.0, po3_ifvg_confirmed=1.0)
+    assert strategy.validate_entry(direction=1, row=row)
+
+
+def test_previous_session_pd_gate_is_strict_per_entry_and_reports_reasons() -> None:
+    strategy = DistributionStrategy(
+        enforce_gate=True,
+        entry_mode="confirmed_first_eligible",
+        previous_session_pd_gate=True,
+    )
+    long_discount = _long_leg(
+        po3_distribution_after_ifvg=0.0,
+        po3_ifvg_confirmed=1.0,
+        previous_session_midpoint=108.0,
+        decision_close=107.0,
+    )
+    assert strategy.validate_entry(direction=1, row=long_discount)
+    assert strategy.context_direction(long_discount) == 1
+
+    premium = long_discount.copy()
+    premium["decision_close"] = 112.0
+    assert not strategy.validate_entry(direction=1, row=premium)
+    # Context still proposes the setup direction; validate_entry rejects that
+    # specific new order and preserves the explicit premium_block reason.
+    assert strategy.context_direction(premium) == 1
+    assert strategy.entry_rejection_reason(direction=1, row=premium) == "premium_block"
+
+    equality = long_discount.copy()
+    equality["decision_close"] = 108.0
+    assert not strategy.validate_entry(direction=1, row=equality)
+    assert strategy.entry_rejection_reason(direction=1, row=equality) == "premium_block"
+
+    missing = long_discount.drop(labels=["previous_session_midpoint"])
+    assert not strategy.validate_entry(direction=1, row=missing)
+    assert strategy.entry_rejection_reason(direction=1, row=missing) == "missing_previous_session"
+
+
+def test_previous_session_pd_gate_mirrors_short_and_can_be_disabled() -> None:
+    short = pd.Series(
+        {
+            "po3_distribution": 1.0,
+            "po3_distribution_direction": -1.0,
+            "htf_day_bias": -1.0,
+            "po3_ifvg_confirmed": 1.0,
+            "previous_session_midpoint": 108.0,
+            "decision_close": 109.0,
+        }
+    )
+    strategy = DistributionStrategy(
+        entry_mode="confirmed_first_eligible", previous_session_pd_gate=True
+    )
+    assert strategy.validate_entry(direction=-1, row=short)
+    short["decision_close"] = 108.0
+    assert not strategy.validate_entry(direction=-1, row=short)
+    assert strategy.entry_rejection_reason(direction=-1, row=short) == "discount_block"
+
+    baseline = DistributionStrategy(entry_mode="confirmed_first_eligible")
+    assert baseline.validate_entry(direction=-1, row=short)
+
+
+def test_previous_session_audit_records_reference_and_decision_price() -> None:
+    strategy = DistributionStrategy(previous_session_pd_gate=True)
+    row = pd.Series(
+        {
+            "previous_session_high": 120.0,
+            "previous_session_low": 96.0,
+            "previous_session_midpoint": 108.0,
+            "previous_session_code": 3.0,
+            "previous_session_completed_at_ns": 1_800_000_000_000_000_000.0,
+        }
+    )
+    audit = _previous_session_audit(strategy, row, 112.0)
+    assert audit["decision_close"] == 112.0
+    assert audit["previous_session_label"] == "ny"
+    assert audit["previous_session_midpoint"] == 108.0
+    assert audit["previous_session_completed_at_ns"] > 0
+
+
+def test_idea2_retest_mode_requires_later_touch_inside_candidate_window() -> None:
+    strategy = DistributionStrategy(enforce_gate=True, entry_mode="confirmed_retest")
+    same_bar = _long_leg(
+        po3_distribution_after_ifvg=0.0,
+        ifvg_retest_bull=1.0,
+        ifvg_bull_age=0.0,
+    )
+    later = _long_leg(ifvg_retest_bull=1.0, ifvg_bull_age=3.0)
+    expired = _long_leg(ifvg_retest_bull=1.0, ifvg_bull_age=6.0)
+
+    assert not strategy.validate_entry(direction=1, row=same_bar)
+    assert strategy.validate_entry(direction=1, row=later)
+    assert not strategy.validate_entry(direction=1, row=expired)
 
 
 def test_stop_uses_a_respected_lower_gap_and_an_aligned_higher_one() -> None:

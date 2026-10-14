@@ -68,9 +68,9 @@
 
 ## Critical Invariants
 
-1. **Observation space**: `obs["seq"]` is `[T, F]` float32, `obs["account"]` is `[5]` float32
+1. **Observation space**: `obs["seq"]` is `[T, F]` float32. `obs["account"]` has 6 float32 values (equity, direction, open PnL, unrealised R, SL distance, trailing drawdown), plus 4 one-hot entry-state values when `entry_state_observation` is enabled with an entry-state machine.
 2. **Discrete actions**: `{hold=0, enter_long=1-9, enter_short=10-18, exit=19}`
 3. **Continuous actions**: `Box(-1, 1)` for proportional position sizing
-4. **Strategy mode**: 4-D `Box [direction, risk, rr, tp]` when `env.strategy_actions=true`
+4. **Strategy mode**: flag-derived `Box[-1,1]` action coordinates are defined by `quant_rl/action_schema.py:build_action_schema` (schema version `overlay-action-v2`). Base: `[intensity, stop, risk, target, exit]` (5-D); optional direction is first; multi-TP replaces `target` with `tp1_sel, tp2_sel, tp3_sel`; optional SL/TP mode coordinates precede optional `z1,z2` simplex logits; `exit` is last. With every option enabled, the layout is 12-D. A width alone cannot identify semantics; retain the schema flags and version in model/checkpoint metadata.
 5. **Overlay invariant**: with `strategy_actions=false`, baseline behaviour is bit-for-bit unchanged
 6. **Block overnight**: `block_overnight=True` closes positions at last NY bar

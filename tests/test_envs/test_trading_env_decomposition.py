@@ -14,7 +14,12 @@ from quant_rl.envs.feature_row import FeatureRow
 from quant_rl.envs.trading_env import TradingEnv
 
 
-def _make_simple_env(episodic: bool = True) -> TradingEnv:
+def _make_simple_env(
+    episodic: bool = True,
+    *,
+    strategy_actions: bool = False,
+    strategy=None,
+) -> TradingEnv:
     """Create a minimal TradingEnv for action decoding tests."""
     n = 100
     idx = pd.date_range("2025-01-06 16:30", periods=n, freq="1min", tz="Etc/GMT-3")
@@ -52,6 +57,9 @@ def _make_simple_env(episodic: bool = True) -> TradingEnv:
         features=features,
         obs_window=10,
         episodic=episodic,
+        strategy_actions=strategy_actions,
+        strategy=strategy,
+        allow_agent_sl_mode=False,
     )
 
 
@@ -163,30 +171,28 @@ class TestDecodeActionStrategy:
             def context_direction(self, row: pd.Series) -> int:
                 return self._direction
 
-        env = _make_simple_env()
-        env.strategy_actions = True
-        env.strategy = _CtxStrategy(ctx)
+        env = _make_simple_env(strategy_actions=True, strategy=_CtxStrategy(ctx))
         env.rr_ratio_range = (1.5, 5.0)
         env.risk_frac_range = (0.005, 0.01)
         return env
 
     def test_intensity_without_context_is_hold(self) -> None:
         env = self._make_strategy_env()
-        da, _, _, _ = env._decode_action(np.array([0.9, 0.5, 0.5, 0.5]))
+        da, _, _, _ = env._decode_action(np.array([0.9, 0.5, 0.5, 0.5, 0.5]))
         assert da == 0
 
     def test_zero_action_maps_to_intensity_half_and_opens(self) -> None:
         """PPO deterministic mean ~0 → affine intensity 0.5 → enter."""
         env = self._make_strategy_env(ctx=1)
         row = pd.Series({"context_trade_direction": 1.0, "htf_day_bias": 1.0})
-        da, _, _, _ = env._decode_action(np.zeros(4, dtype=np.float32), row)
+        da, _, _, _ = env._decode_action(np.zeros(5, dtype=np.float32), row)
         assert da == 1
 
     def test_intensity_with_long_context_opens_long(self) -> None:
         env = self._make_strategy_env(ctx=1)
         row = pd.Series({"context_trade_direction": 1.0, "htf_day_bias": 1.0})
         # a=0.9 → u=0.95 intensity
-        da, _, _, _ = env._decode_action(np.array([0.9, 0.5, 0.5, 0.5]), row)
+        da, _, _, _ = env._decode_action(np.array([0.9, 0.5, 0.5, 0.5, 0.5]), row)
         assert da == 1
 
     def test_weak_intensity_is_hold(self) -> None:
@@ -194,14 +200,14 @@ class TestDecodeActionStrategy:
         row = pd.Series({"context_trade_direction": 1.0})
         # a=-0.9 → u=0.05 < 0.1 threshold
         env.entry_intensity_threshold = 0.1
-        da, _, _, _ = env._decode_action(np.array([-0.9, 0.5, 0.5, 0.5]), row)
+        da, _, _, _ = env._decode_action(np.array([-0.9, 0.5, 0.5, 0.5, 0.5]), row)
         assert da == 0
 
     def test_zero_threshold_opens_on_weak_intensity(self) -> None:
         """Default threshold 0: PPO cannot park hold on dim 0."""
         env = self._make_strategy_env(ctx=1)
         row = pd.Series({"context_trade_direction": 1.0, "htf_day_bias": 1.0})
-        da, _, _, _ = env._decode_action(np.array([-1.0, 0.5, 0.5, 0.5]), row)
+        da, _, _, _ = env._decode_action(np.array([-1.0, 0.5, 0.5, 0.5, 0.5]), row)
         assert da == 1
         assert env.entry_intensity_threshold == pytest.approx(0.0)
 
@@ -210,7 +216,7 @@ class TestDecodeActionStrategy:
         env = self._make_strategy_env(ctx=1)
         row = pd.Series({"context_trade_direction": 1.0, "htf_day_bias": 1.0})
         # a=-0.566 → u≈0.217
-        da, _, _, _ = env._decode_action(np.array([-0.566, 0.5, 0.5, 0.5]), row)
+        da, _, _, _ = env._decode_action(np.array([-0.566, 0.5, 0.5, 0.5, 0.5]), row)
         assert da == 1
         assert env.entry_intensity_threshold == pytest.approx(0.0)
 
@@ -218,10 +224,10 @@ class TestDecodeActionStrategy:
         env = self._make_strategy_env(ctx=1)
         row = pd.Series({"context_trade_direction": 1.0})
         # a=-1 → u=0 → min risk and no extra reach; a=1 → u=1 → max risk, full reach
-        _, risk, frac, tp = env._decode_action(np.array([0.9, -1.0, -1.0, -1.0]), row)
+        _, risk, frac, tp = env._decode_action(np.array([0.9, -1.0, -1.0, -1.0, 0.5]), row)
         assert risk == pytest.approx(0.005)
         assert frac == pytest.approx(0.0)
         assert tp == "rr"
-        _, risk, frac, _ = env._decode_action(np.array([0.9, -1.0, 1.0, 1.0]), row)
+        _, risk, frac, _ = env._decode_action(np.array([0.9, -1.0, 1.0, 1.0, 0.5]), row)
         assert risk == pytest.approx(0.01)
         assert frac == pytest.approx(1.0)

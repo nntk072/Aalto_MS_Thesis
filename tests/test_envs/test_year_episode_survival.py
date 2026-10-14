@@ -110,6 +110,14 @@ def test_max_episode_steps_null_reaches_last_session() -> None:
 
 
 @pytest.mark.unit
+def test_training_and_evaluation_share_hard_breach_penalty() -> None:
+    train_env = _multi_day_env(episodic=True)
+    eval_env = _multi_day_env(episodic=False)
+    assert getattr(train_env.reward_fn, "breach_penalty") == pytest.approx(-10.0)
+    assert getattr(eval_env.reward_fn, "breach_penalty") == pytest.approx(-10.0)
+
+
+@pytest.mark.unit
 def test_session_scoped_seq_pads_at_ny_open() -> None:
     env = _multi_day_env(n_days=2, bars_per_day=100, obs_window=60)
     env.reset()
@@ -171,7 +179,7 @@ def test_hard_max_loss_terminates_not_truncates() -> None:
     _, reward, done, truncated, _ = env.step(0)
     assert done is True
     assert truncated is False
-    assert reward == pytest.approx(0.0)
+    assert reward == pytest.approx(-10.0)
     assert env.breach_events and env.breach_events[0]["reason"] == "max_drawdown"
 
 
@@ -194,7 +202,7 @@ def test_hard_daily_terminates_year_episode() -> None:
     _, reward, done, truncated, _ = env.step(0)
     assert done is True
     assert truncated is False
-    assert reward == pytest.approx(0.0)
+    assert reward == pytest.approx(-10.0)
     assert env.breach_events[0]["reason"] == "daily_loss"
 
 
@@ -221,7 +229,7 @@ def test_trailing_dd_terminates_year_episode() -> None:
     _, reward, done, truncated, _ = env.step(0)
     assert done is True
     assert truncated is False
-    assert reward == pytest.approx(0.0)
+    assert reward == pytest.approx(-10.0)
     assert env.breach_events[0]["reason"] == "trailing_dd"
 
 

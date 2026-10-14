@@ -140,14 +140,15 @@ class TestTradingEnvGoldenTraces:
     def test_no_naked_position_without_levels(self) -> None:
         """When swing levels are NaN, entries are rejected (no naked positions)."""
         bars = _make_deterministic_bars()
-        features = pd.DataFrame(
-            {
-                "last_swing_high": np.nan,
-                "last_swing_low": np.nan,
-                "volume_spike": 1.0,
-            },
-            index=bars.index,
-        )
+        features = _make_features(bars)
+        # Keep the independent entry gate eligible so this trace isolates the
+        # missing swing-stop rejection rather than exercising its legacy
+        # allow-on-missing-input fallback.
+        features["london_high"] = bars["close"] - 1.0
+        features["asian_high"] = bars["close"] - 1.0
+        features["volume_spike"] = 2.0
+        features["last_swing_high"] = np.nan
+        features["last_swing_low"] = np.nan
         env = TradingEnv(
             bars=bars,
             features=features,
@@ -187,7 +188,7 @@ class TestTradingEnvGoldenTraces:
         _, reward, done, truncated, _ = env.step(0)
         assert done is True
         assert truncated is False
-        assert reward == pytest.approx(0.0)
+        assert reward == pytest.approx(-10.0)
         assert env.breach_events and env.breach_events[0]["reason"] == "max_drawdown"
 
     def test_eval_mode_continues_after_breach(self) -> None:

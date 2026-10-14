@@ -2,22 +2,33 @@
 # Merged over default.yaml.
 features:
   include_strategy_state: true
+  po3_reference_mode: "htf_confirmed"
+  po3_reference_timeframes: ["M5", "M15", "H1"]
+  po3_phase_mode: "reclaim_then_ifvg"
+  ifvg_mtf: {enabled: true, timeframes: ["M5", "M15", "H1"]}
   include_pd_context: true
+  include_previous_session_pd: true
   structure: {enabled: true, timeframes: ["M5", "M15", "H1"]}
 
 env:
   strategy_actions: true
   reward_mode: pnl
-  sl_buffer_pts: 0.0           # exact-mode structural stops
+  sl_buffer_pts: 1.0           # effective stop buffer; matches strategy.risk.sl_buffer_pts
 
 strategy:
   name: "distribution"
+  variant_id: "distribution_prev_session_pd_mtf_v1"
   session:
     timezone: "Etc/GMT-3"
   liquidity:
     swing_period: 5
     require_reclaim: true
     max_age_bars: 120
+  ifvg:
+    enabled: true
+    max_age_bars: 50
+    close_through_threshold: 0.0
+    require_opposing_fvg: true
   risk:
     sl_mode: "exact"
     sl_buffer_pts: 1.0
@@ -32,7 +43,9 @@ strategy:
       - "previous_day_high_low"
     invalid_target_policy: "rr_fallback"
   entry:
-    enforce_gate: false
+    mode: "confirmed_first_eligible"
+    enforce_gate: true
+    previous_session_pd_gate: true
   reward:
     entry_bonus: 0.01
     sweep_penalty: 0.02

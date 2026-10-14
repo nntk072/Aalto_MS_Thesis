@@ -36,6 +36,7 @@ class TestAggregateSeeds:
         # Assert
         assert len(df) == 3
         assert list(df["seed"]) == [0, 1, 2]
+        assert list(df["activity_status"]) == ["ACTIVE", "ACTIVE", "INACTIVE"]
         assert {"sharpe", "max_drawdown", "n_trades", "breach_rate"} <= set(df.columns)
 
     def test_rejects_non_metrics(self) -> None:
@@ -84,6 +85,17 @@ class TestReportTables:
         assert data["n_trades"] == 2
         assert "breach_rate" in data
         assert "turnover" in data
+
+    def test_zero_trade_metrics_are_labeled_inactive(self, tmp_path: Path) -> None:
+        metrics = _metrics(0.0, 0)
+        table = build_summary_table(metrics)
+        path = tmp_path / "inactive_metrics.json"
+        save_metrics_json(metrics, path)
+        report = build_run_report(metrics)
+
+        assert "INACTIVE" in table
+        assert json.loads(path.read_text())["activity_status"] == "INACTIVE"
+        assert report["activity_status"] == "INACTIVE"
 
 
 @pytest.mark.unit

@@ -139,6 +139,13 @@ gives you structural context (callers, dependents, test coverage) that file sear
 3. Use `get_affected_flows_tool` to understand impact.
 4. Use `query_graph_tool` pattern="tests_for" to check coverage.
 <!-- /code-review-graph MCP tools -->
+For node architecture, virtual environments, Lustre versus local storage,
+installation and diagnostics, read
+[`docs/operations/triton_environment.md`](docs/operations/triton_environment.md).
+For intermittent Mypy startup stalls on Lustre (ARM64 or x86_64), follow
+[`docs/operations/triton_mypy_lustre.md`](docs/operations/triton_mypy_lustre.md);
+use the full-tree Mypy gate even when staging the executable on node-local storage.
+
 ## Triton (Aalto HPC)
 
 GPU training on Triton: see [`.agents/rules/triton-slurm.md`](.agents/rules/triton-slurm.md).

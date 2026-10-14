@@ -81,11 +81,35 @@ def _session_end_pos(idx: pd.DatetimeIndex, i: int) -> int:
     return j
 
 
+def _session_end_positions(idx: pd.DatetimeIndex) -> np.ndarray[Any, Any]:
+    """Map each NY-session bar to its session end, scanning the index once."""
+    from quant_rl.data.session import ny_session_mask
+
+    n = len(idx)
+    ends = np.arange(n, dtype=int)
+    if n == 0:
+        return ends
+    ny = ny_session_mask(idx).to_numpy()
+    days = idx.normalize().view("i8")
+    i = 0
+    while i < n:
+        if not ny[i]:
+            i += 1
+            continue
+        j = i
+        while j + 1 < n and ny[j + 1] and days[j + 1] == days[i]:
+            j += 1
+        ends[i : j + 1] = j
+        i = j + 1
+    return ends
+
+
 def _extract_window(
     bars: pd.DataFrame,
     t_open: pd.Timestamp,
     t_close: pd.Timestamp,
     context: int,
+    session_end_positions: np.ndarray[Any, Any] | None = None,
 ) -> pd.DataFrame:
     """Return M1 bars around a trade, with the order away from the axis edge.
 
@@ -114,7 +138,13 @@ def _extract_window(
     # Trailing context is measured in tradable bars, so cap it at the session
     # close. ``max(..., i_c)`` keeps the exit itself inside the window when the
     # trade runs past the session (overnight hold).
-    i_e = min(i_e, max(_session_end_pos(idx, max(i_o, i_c)), max(i_o, i_c)))
+    exit_pos = max(i_o, i_c)
+    session_end = (
+        int(session_end_positions[exit_pos])
+        if session_end_positions is not None
+        else _session_end_pos(idx, exit_pos)
+    )
+    i_e = min(i_e, max(session_end, exit_pos))
     return bars.iloc[i_s : i_e + 1]
 
 
@@ -210,6 +240,8 @@ def prepare_order_chart(
     show_mae_mfe: bool = True,
     show_sl_tp: bool = True,
     features: pd.DataFrame | None = None,
+    confirmed_events: OverlayEvents | None = None,
+    session_end_positions: np.ndarray[Any, Any] | None = None,
 ) -> PreparedOrderChart | None:
     """Build the window, metrics, clipped events, and position box for one trade.
 
@@ -222,7 +254,13 @@ def prepare_order_chart(
     """
     t_open = pd.Timestamp(open_row["time"])
     t_close = pd.Timestamp(close_row["time"])
-    window = _extract_window(bars, t_open, t_close, context_bars)
+    window = _extract_window(
+        bars,
+        t_open,
+        t_close,
+        context_bars,
+        session_end_positions=session_end_positions,
+    )
     if len(window) < 3:
         return None
     metrics = compute_trade_metrics(
@@ -234,7 +272,9 @@ def prepare_order_chart(
         lots=lots,
         contract_size=contract_size,
     )
-    marked = confirmed_pivots(overlay_events, bars)
+    marked = (
+        confirmed_events if confirmed_events is not None else confirmed_pivots(overlay_events, bars)
+    )
     levels = order_levels(
         window,
         metrics,

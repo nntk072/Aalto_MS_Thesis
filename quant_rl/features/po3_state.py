@@ -261,6 +261,10 @@ def build_ifvg_zone_features(
             "ifvg_retest_bear",
             "ifvg_bull_origin",
             "ifvg_bear_origin",
+            "ifvg_bull_age",
+            "ifvg_bear_age",
+            "ifvg_bull_fvg_origin_bar",
+            "ifvg_bear_fvg_origin_bar",
             "ifvg_bull_confirmed",
             "ifvg_bear_confirmed",
         ],
@@ -269,11 +273,16 @@ def build_ifvg_zone_features(
     out["ifvg_bear_distance_atr"] = 5.0
     out["ifvg_bull_origin"] = np.nan
     out["ifvg_bear_origin"] = np.nan
+    out["ifvg_bull_age"] = -1.0
+    out["ifvg_bear_age"] = -1.0
+    out["ifvg_bull_fvg_origin_bar"] = np.nan
+    out["ifvg_bear_fvg_origin_bar"] = np.nan
     if n == 0:
         return out
 
     fvg = detect_fvg(bars, fvg_config)
     conf = detect_ifvg_confirmation(bars, fvg, ifvg_config)
+    inverse_opposing = bool(ifvg_config and ifvg_config.inverse_opposing_fvg)
     atr_arr = atr(bars, atr_period).to_numpy(dtype=float)
     close = bars["close"].to_numpy(dtype=float)
     high = bars["high"].to_numpy(dtype=float)
@@ -307,6 +316,8 @@ def build_ifvg_zone_features(
     bull_high = conf["ifvg_bullish_high"].to_numpy(dtype=float)
     bear_low = conf["ifvg_bearish_low"].to_numpy(dtype=float)
     bear_high = conf["ifvg_bearish_high"].to_numpy(dtype=float)
+    bull_fvg_origin = conf["ifvg_bullish_origin_bar"].to_numpy(dtype=float)
+    bear_fvg_origin = conf["ifvg_bearish_origin_bar"].to_numpy(dtype=float)
 
     # Latest confirmed zone per side. Ends on a fill or at max_age_bars.
     bull_start, bull_zl, bull_zh = -1, np.nan, np.nan
@@ -314,29 +325,34 @@ def build_ifvg_zone_features(
     bull_dead = bear_dead = False
     bull_left = bear_left = False
     bull_origin = bear_origin = float("nan")
+    bull_origin_bar = bear_origin_bar = float("nan")
     for i in range(n):
         if conf_bull[i] == 1:
             bull_start, bull_zl, bull_zh = i, bull_low[i], bull_high[i]
             bull_dead = bull_left = False
-            bull_origin = _candle1(i, bull_zl, bull_zh, bull=True)
-            out.iat[i, 14] = 1.0
+            bull_origin = _candle1(i, bull_zl, bull_zh, bull=not inverse_opposing)
+            bull_origin_bar = bull_fvg_origin[i]
+            out.at[idx[i], "ifvg_bull_confirmed"] = 1.0
         if conf_bear[i] == 1:
             bear_start, bear_zl, bear_zh = i, bear_low[i], bear_high[i]
             bear_dead = bear_left = False
-            bear_origin = _candle1(i, bear_zl, bear_zh, bull=False)
-            out.iat[i, 15] = 1.0
+            bear_origin = _candle1(i, bear_zl, bear_zh, bull=inverse_opposing)
+            bear_origin_bar = bear_fvg_origin[i]
+            out.at[idx[i], "ifvg_bear_confirmed"] = 1.0
 
         a = atr_arr[i] if not np.isnan(atr_arr[i]) and atr_arr[i] > 0 else 1.0
         if bull_start >= 0 and not bull_dead and i - bull_start < max_age_bars:
             out.iat[i, 0] = 1.0
+            out.at[idx[i], "ifvg_bull_age"] = float(i - bull_start)
+            out.at[idx[i], "ifvg_bull_fvg_origin_bar"] = bull_origin_bar
             out.iat[i, 1] = bull_zl
             out.iat[i, 2] = bull_zh
             if bull_zl <= close[i] <= bull_zh:
                 out.iat[i, 3] = 1.0
             out.iat[i, 4] = min(abs(close[i] - bull_zl), abs(close[i] - bull_zh)) / a
-            # Near edge is the high. A retest tags it after price has left,
-            # and the close holds at or above that edge. A through-low is a fill.
-            if bull_left and bull_zl < low[i] <= bull_zh and close[i] >= bull_zh:
+            # Once price has left the zone, any later non-filling overlap is a
+            # retest; no fixed midpoint depth or near-edge close is required.
+            if bull_left and bull_zl < low[i] <= bull_zh:
                 out.iat[i, 5] = 1.0
             out.iat[i, 12] = bull_origin
             if low[i] > bull_zh:
@@ -345,12 +361,14 @@ def build_ifvg_zone_features(
                 bull_dead = True
         if bear_start >= 0 and not bear_dead and i - bear_start < max_age_bars:
             out.iat[i, 6] = 1.0
+            out.at[idx[i], "ifvg_bear_age"] = float(i - bear_start)
+            out.at[idx[i], "ifvg_bear_fvg_origin_bar"] = bear_origin_bar
             out.iat[i, 7] = bear_zl
             out.iat[i, 8] = bear_zh
             if bear_zl <= close[i] <= bear_zh:
                 out.iat[i, 9] = 1.0
             out.iat[i, 10] = min(abs(close[i] - bear_zl), abs(close[i] - bear_zh)) / a
-            if bear_left and bear_zl <= high[i] < bear_zh and close[i] <= bear_zl:
+            if bear_left and bear_zl <= high[i] < bear_zh:
                 out.iat[i, 11] = 1.0
             out.iat[i, 13] = bear_origin
             if high[i] < bear_zl:
@@ -359,3 +377,92 @@ def build_ifvg_zone_features(
                 bear_dead = True
 
     return out
+
+
+def align_ifvg_zone_timeframes(
+    primary_bars: pd.DataFrame,
+    primary_zones: pd.DataFrame,
+    higher: dict[str, tuple[pd.DataFrame, pd.DataFrame]],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Causally align HTF IFVG zones and merge their confirmation pulses.
+
+    ``higher`` maps timeframe names to (resampled bars, native zone features).
+    A confirmation from a higher timeframe is visible on the M1 row at the
+    next HTF boundary, after the confirming candle has closed. M1 wins when
+    confirmations of the same side coincide; otherwise the first timeframe
+    in mapping order wins. Origin bars are translated to M1 bar indexes before
+    passing the merged events to the M1 PO3 state machine.
+    """
+    from ..data.align import align_timeframes
+
+    if not primary_bars.index.equals(primary_zones.index):
+        raise ValueError("primary bars and IFVG zones must share an index")
+    merged = primary_zones.copy()
+    visible_blocks: dict[str, pd.DataFrame] = {}
+    # Native M1 confirmations and zone metadata have first priority.
+    for side in ("bull", "bear"):
+        merged[f"_ifvg_{side}_confirmation_tf_code"] = np.where(
+            merged[f"ifvg_{side}_confirmed"] > 0, 1.0, 0.0
+        )
+    tf_codes = {
+        "M1": 1.0,
+        "M5": 5.0,
+        "M15": 15.0,
+        "M30": 30.0,
+        "H1": 60.0,
+        "H4": 240.0,
+        "D1": 1440.0,
+    }
+    for tf, (tf_bars, tf_zones) in higher.items():
+        tf = tf.upper()
+        if tf not in tf_codes:
+            raise ValueError(f"unsupported IFVG timeframe code: {tf!r}")
+        if not tf_bars.index.equals(tf_zones.index):
+            raise ValueError(f"{tf} bars and IFVG zones must share an index")
+        zone_cols = tf_zones.drop(
+            columns=["ifvg_bull_confirmed", "ifvg_bear_confirmed"], errors="ignore"
+        )
+        aligned = align_timeframes(primary_bars.iloc[:, 0:0], {tf: zone_cols})
+        for side in ("bull", "bear"):
+            # Retest is an event pulse, not a state value: expose it once at
+            # source-bar completion instead of forward-filling it all period.
+            aligned[f"{tf}_ifvg_retest_{side}"] = (
+                tf_zones[f"ifvg_retest_{side}"].shift(1).reindex(primary_bars.index).fillna(0.0)
+            )
+        visible_blocks[tf] = aligned
+        pulses = {
+            side: tf_zones[f"ifvg_{side}_confirmed"]
+            .shift(1)
+            .reindex(primary_bars.index)
+            .fillna(0.0)
+            .to_numpy(dtype=float)
+            for side in ("bull", "bear")
+        }
+        for side in ("bull", "bear"):
+            confirm_col = f"ifvg_{side}_confirmed"
+            available = merged[confirm_col].to_numpy(dtype=float) <= 0.0
+            use = (pulses[side] > 0.0) & available
+            if not use.any():
+                continue
+            merged.loc[use, confirm_col] = 1.0
+            merged.loc[use, f"_ifvg_{side}_confirmation_tf_code"] = tf_codes[tf]
+            for edge in ("low", "high"):
+                aligned_col = f"{tf}_ifvg_{side}_{edge}"
+                merged.loc[use, f"ifvg_{side}_{edge}"] = aligned.loc[use, aligned_col]
+            origin_col = f"{tf}_ifvg_{side}_fvg_origin_bar"
+            native_origin = aligned.loc[use, origin_col].to_numpy(dtype=float)
+            mapped_origin = np.full(len(native_origin), np.nan)
+            for j, value in enumerate(native_origin):
+                if not np.isfinite(value):
+                    continue
+                native_i = int(value)
+                if native_i < 0 or native_i >= len(tf_bars):
+                    continue
+                origin_time = tf_bars.index[native_i]
+                m1_i = primary_bars.index.searchsorted(origin_time)
+                if m1_i < len(primary_bars) and primary_bars.index[m1_i] == origin_time:
+                    mapped_origin[j] = float(m1_i)
+            merged.loc[use, f"ifvg_{side}_fvg_origin_bar"] = mapped_origin
+    return merged, pd.concat(visible_blocks.values(), axis=1) if visible_blocks else pd.DataFrame(
+        index=primary_bars.index
+    )

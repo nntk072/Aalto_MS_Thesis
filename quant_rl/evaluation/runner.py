@@ -15,7 +15,12 @@ from typing import Any
 import numpy as np
 
 from .distributions import compute_distribution_metrics
-from .metrics import DEFAULT_PERIODS_PER_YEAR, PerformanceMetrics, compute_metrics
+from .metrics import (
+    DEFAULT_PERIODS_PER_YEAR,
+    PerformanceMetrics,
+    completed_position_trade_pnls,
+    compute_metrics,
+)
 
 
 def run_episode(
@@ -54,7 +59,8 @@ def run_episode(
     if not equities:
         raise ValueError("episode produced no steps; equity curve is empty")
 
-    trade_pnls = [float(trade["pnl"]) for trade in getattr(env, "trade_log", []) if "pnl" in trade]
+    log = getattr(env, "trade_log", [])
+    trade_pnls, fill_count, incomplete_positions = completed_position_trade_pnls(log)
     breach_count = len(getattr(env, "breach_events", []))
     initial_balance = float(getattr(env, "initial_balance", equities[0]))
 
@@ -62,6 +68,9 @@ def run_episode(
     extras = {
         f"pnl_dist_{k}": float(v) for k, v in asdict(dist).items() if isinstance(v, (int, float))
     }
+    extras["fill_count"] = float(fill_count)
+    extras["incomplete_positions"] = float(incomplete_positions)
+    extras["entry_active"] = float(bool(trade_pnls))
     # Entry-state lifecycle + refusal funnel, so a collapsing FSM is
     # distinguishable from a working one in the report (Tier 1 capture).
     entry_diag = getattr(env, "_entry_diag", None)

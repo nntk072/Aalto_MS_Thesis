@@ -357,6 +357,7 @@ def _strategy_env(**kwargs: object):
         contract_size=1.0,
         strategy_actions=True,
         strategy=PO3IFVGStrategy(),
+        allow_agent_sl_mode=bool(kwargs.pop("allow_agent_sl_mode", False)),
         **kwargs,  # type: ignore[arg-type]
     )
 

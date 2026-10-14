@@ -9,8 +9,13 @@ and [RAM optimization](../docs/training/triton_ram_optimization_plan.md) plans c
 run-specific scheduling, resource and parity requirements; they are
 historical planning records, not evidence that the proposed experiments ran.
 
-**Code baseline:** `main@76684a3` (2026-10-10). Always record actual HEAD, dataset
-identity, merged config and run artifacts before reproducing a study.
+**Historical code baseline:** `main@76684a3` (2026-10-10). This is a dated
+baseline reference, not the current checkout identity. The 2026-10-13
+implementation continuation inspected `main@b00b5e8` with a dirty working
+tree; see [the implementation ledger](thesis/implementation_ledger_2026-10-13.md)
+for the exact state, validation evidence, and remaining production gates.
+Always record actual HEAD, dataset identity, merged config and run artifacts
+before reproducing a study.
 
 ## Data-to-model execution
 

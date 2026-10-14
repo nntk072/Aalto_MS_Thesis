@@ -26,6 +26,7 @@ from omegaconf import DictConfig, OmegaConf
 
 from ..data.align import align_timeframes
 from ..data.resample import resample
+from .htf_sweeps import detect_confirmed_htf_sweeps
 from .indicators import (
     atr,
     build_indicators,
@@ -44,16 +45,25 @@ from .pd_context import (
 )
 from .po3_config import (
     FVGConfig,
+    IFVGConfig,
     build_fvg_zones,
     detect_fvg,
     detect_po3_entries,
 )
+from .po3_ifvg_state import build_po3_ifvg_state
 from .po3_state import (
+    align_ifvg_zone_timeframes,
     build_distribution_after_ifvg,
     build_ifvg_zone_features,
     build_po3_state,
 )
-from .session_ohlc import prev_ny_high_low, prior_period_high_low, range_quadrants, session_ohlc
+from .session_ohlc import (
+    prev_ny_high_low,
+    previous_labeled_session_ohlc,
+    prior_period_high_low,
+    range_quadrants,
+    session_ohlc,
+)
 from .smt import smt_divergence
 from .structure import (
     TIMEFRAME_CONFIG,
@@ -77,8 +87,8 @@ from .swings import swing_history
 # v7: MTF expansion (plan §§4.1-4.6) — per-TF SMT divergence (§4.1),
 # structure/BOS (§4.2) and liquidity sweeps (§4.3) via the Chain-A
 # resample → per-TF compute → align_timeframes pattern; FVG zones over the
-# full M1+HTF ladder (§4.5); PO3 state (§4.4) and IFVG zones (§4.6) on
-# M1/M5/M15.
+# full M1+HTF ladder (§4.5); PO3 state (§4.4) and IFVG zones (§4.6) use
+# configured supported timeframes and align onto the M1 spine.
 # v8: full-day M1 spine, completed-bar HTF ffill, confirmed ATR swings.
 # v10: PD context, VWAP off.
 # v11: content-hash cache key (config + data identity + optional train_mask).
@@ -88,22 +98,28 @@ from .swings import swing_history
 # v15: swing confirmation pulses and the distribution-after-IFVG latch.
 # v16: SL modes (state machine + agent veto), prev-NY session H/L, swing
 #      history columns (swing_high_{1..3}/swing_low_{1..3}), TF-SMT enablement.
-FEATURE_CACHE_VERSION = "v16-sl-modes"
+FEATURE_CACHE_VERSION = "v19-causal-mtf-ifvg"
 
 
 def feature_cache_content_hash(
     cfg: DictConfig | None,
     primary: pd.DataFrame,
     train_mask: pd.Series | None = None,
+    secondary: pd.DataFrame | None = None,
+    normalization_mode: str = "legacy_masked_window",
 ) -> str:
     """Stable short hash for feature-cache invalidation (TI-3).
 
     Inputs: ``FEATURE_CACHE_VERSION``, resolved ``cfg.features`` (plus tz keys
-    that affect PD/session), primary length / index bounds, every OHLCV/spread
-    value, and the full ``train_mask``.
+    that affect PD/session), both instruments' full indexes and OHLCV/spread
+    values, and the full ``train_mask``.
     """
     h = hashlib.sha256()
     h.update(FEATURE_CACHE_VERSION.encode())
+    # Retain legacy cache identities for existing experiments. A frozen-fold
+    # fit must never consume a cache produced with legacy rolling statistics.
+    if normalization_mode != "legacy_masked_window":
+        h.update(f"normalization:{normalization_mode}".encode())
     if cfg is not None:
         payload: dict[str, Any] = {}
         if hasattr(cfg, "features"):
@@ -121,13 +137,36 @@ def feature_cache_content_hash(
         h.update(json.dumps(payload, sort_keys=True, default=str).encode())
     h.update(str(len(primary)).encode())
     if len(primary) > 0:
-        h.update(str(primary.index[0]).encode())
-        h.update(str(primary.index[-1]).encode())
-        # Hash every price/volume value, not just endpoints: a corrected bar in the
-        # middle of the series must invalidate the cache (see plan item B3).
-        for column in ("open", "high", "low", "close", "volume", "tickvol", "spread"):
-            if column in primary:
-                values = primary[column].to_numpy(dtype=np.float64, copy=False)
+        primary_index_ns = (
+            pd.DatetimeIndex(primary.index).to_numpy(dtype="datetime64[ns]").view(np.int64)
+        )
+        h.update(np.ascontiguousarray(primary_index_ns).tobytes())
+    # SMT and optional per-timeframe SMT use the secondary bars. Hash both
+    # inputs so a corrected/missing/re-timestamped US500 bar invalidates cache.
+    for label, frame in (("primary", primary), ("secondary", secondary)):
+        if frame is None:
+            h.update(f"{label}:none".encode())
+            continue
+        h.update(label.encode())
+        h.update(str(len(frame)).encode())
+        if len(frame) > 0:
+            frame_index_ns = (
+                pd.DatetimeIndex(frame.index).to_numpy(dtype="datetime64[ns]").view(np.int64)
+            )
+            h.update(np.ascontiguousarray(frame_index_ns).tobytes())
+        for column in (
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "tickvol",
+            "spread",
+            "tick_count",
+            "activity",
+        ):
+            if column in frame:
+                values = frame[column].to_numpy(dtype=np.float64, copy=False)
                 h.update(column.encode())
                 h.update(np.ascontiguousarray(values).tobytes())
     if train_mask is not None:
@@ -143,9 +182,17 @@ def feature_cache_path(
     cfg: DictConfig | None,
     primary: pd.DataFrame,
     train_mask: pd.Series | None = None,
+    secondary: pd.DataFrame | None = None,
+    normalization_mode: str = "legacy_masked_window",
 ) -> Path:
     """Build ``{symbol}_features_{version}_{hash}.parquet`` under ``cache_dir``."""
-    digest = feature_cache_content_hash(cfg, primary, train_mask=train_mask)
+    digest = feature_cache_content_hash(
+        cfg,
+        primary,
+        train_mask=train_mask,
+        secondary=secondary,
+        normalization_mode=normalization_mode,
+    )
     return Path(cache_dir) / f"{symbol}_features_{FEATURE_CACHE_VERSION}_{digest}.parquet"
 
 
@@ -182,18 +229,36 @@ MTF_RAW_SUFFIXES = (
     "last_swing_low",
     "sweep_high_level",
     "sweep_low_level",
+    "sweep_high_pivot_time_ns",
+    "sweep_low_pivot_time_ns",
+    "sweep_high_confirmed_at_ns",
+    "sweep_low_confirmed_at_ns",
     "bos_up_level",
     "bos_down_level",
     "mss_up_level",
     "mss_down_level",
     "po3_manipulation_high",
     "po3_manipulation_low",
+    "po3_setup_id",
+    "po3_sweep_reference",
+    "po3_sweep_pivot_time_ns",
+    "po3_sweep_confirmed_at_ns",
+    "po3_sweep_time_ns",
+    "po3_reclaim_time_ns",
+    "po3_ifvg_time_ns",
+    "po3_ifvg_fvg_origin_bar",
+    "po3_ifvg_fvg_origin_time_ns",
+    "po3_ifvg_low",
+    "po3_ifvg_high",
+    "po3_ifvg_through_zone_extreme",
     "ifvg_bull_low",
     "ifvg_bull_high",
     "ifvg_bear_low",
     "ifvg_bear_high",
     "ifvg_bull_origin",
     "ifvg_bear_origin",
+    "ifvg_bull_fvg_origin_bar",
+    "ifvg_bear_fvg_origin_bar",
     "fvg_bull_low",
     "fvg_bull_high",
     "fvg_bear_low",
@@ -215,20 +280,24 @@ MTF_RAW_SUFFIXES = (
     "ctx_prev_day_low",
     "ctx_prev_week_high",
     "ctx_prev_week_low",
+    "previous_session_high",
+    "previous_session_low",
+    "previous_session_midpoint",
+    "previous_session_completed_at_ns",
+    "decision_close",
 )
 
 # Unprefixed raw price stems always dropped from model ``seq`` (baseline included).
 OBS_RAW_PRICE_COLUMNS = MTF_RAW_SUFFIXES
 
-# Scoped per-TF subsets for the state-heavy blocks (plan §8, option (b)):
-# PO3 (§4.4) and IFVG active-zones (§4.6) run only on M1/M5/M15 by default —
-# H1 rarely sweeps within one NY session and adds mostly-collinear columns.
-_MTF_STATE_TFS = ("M1", "M5", "M15")
+# Supported fallback timeframes for the state-heavy blocks (plan §8, option
+# (b)). Normal configs provide explicit subsets; IFVG can use any timeframe
+# supported by data.resample, while its M1 source is always included directly.
+_MTF_STATE_TFS = ("M1", "M5", "M15", "M30", "H1", "H4", "D1")
 
-# MTF subset for the lightweight per-TF blocks (plan §3): SMT divergence
-# (§4.1), structure/BOS (§4.2) and liquidity sweeps (§4.3) run on M5/M15/H1
-# by default (M1 already has the unprefixed block). M30 stays excluded until
-# htf_timeframes gains it, keeping column growth bounded.
+# Default MTF subset for SMT divergence (§4.1), structure/BOS (§4.2), and
+# liquidity sweeps (§4.3). Each block accepts an explicit list of any standard
+# resampled timeframe; the bounded default keeps column growth predictable.
 _MTF_LIGHT_TFS = ("M5", "M15", "H1")
 
 
@@ -395,6 +464,63 @@ def ensure_london_atr_distances(feat: pd.DataFrame, close: pd.Series) -> pd.Data
     feat["price_to_london_high_atr"] = (feat["london_high"] - aligned_close) / atr5
     feat["price_to_london_low_atr"] = (aligned_close - feat["london_low"]) / atr5
     return feat
+
+
+def build_walkforward_fold_features(
+    primary: pd.DataFrame,
+    secondary: pd.DataFrame | None,
+    cfg: DictConfig,
+    fold_train_bars: pd.DataFrame,
+    fold_validation_bars: pd.DataFrame,
+    cache_dir: Path | str,
+    symbol: str,
+) -> tuple[pd.DataFrame, pd.DataFrame, Path]:
+    """Refit normalization on one walk-forward fold with causal warm-up bars.
+
+    Keep all historical bars through the fold's validation end as indicator
+    context, but fit normalization only on the fold's train indices. Later
+    folds and the locked evaluation period cannot influence this fitted state.
+    """
+    if (
+        primary.empty
+        or fold_train_bars.empty
+        or fold_validation_bars.empty
+        or not primary.index.is_unique
+        or not primary.index.is_monotonic_increasing
+    ):
+        raise ValueError("Walk-forward requires nonempty, unique, ordered bars")
+    train_index = fold_train_bars.index
+    validation_index = fold_validation_bars.index
+    if (
+        not train_index.isin(primary.index).all()
+        or not validation_index.isin(primary.index).all()
+        or train_index.max() >= validation_index.min()
+        or train_index.intersection(validation_index).size
+    ):
+        raise ValueError("Walk-forward train/validation indices must be ordered and disjoint")
+
+    last_validation_bar = validation_index.max()
+    context_primary = primary.loc[:last_validation_bar]
+    context_secondary = secondary.loc[:last_validation_bar] if secondary is not None else None
+    fold_mask = pd.Series(context_primary.index.isin(train_index), index=context_primary.index)
+    cache = feature_cache_path(
+        cache_dir,
+        symbol,
+        cfg,
+        context_primary,
+        train_mask=fold_mask,
+        secondary=context_secondary,
+        normalization_mode="frozen_fold",
+    )
+    features = build_features(
+        context_primary,
+        secondary=context_secondary,
+        cfg=cfg,
+        train_mask=fold_mask,
+        cache_path=cache,
+        normalization_mode="frozen_fold",
+    )
+    return features.loc[train_index], features.loc[validation_index], cache
 
 
 def build_po3_phase_features(
@@ -589,6 +715,7 @@ def build_features(
     train_mask: pd.Series | None = None,
     cache_path: Path | None = None,
     force: bool = False,
+    normalization_mode: str = "legacy_masked_window",
 ) -> pd.DataFrame:
     """Build the full feature matrix for the primary instrument.
 
@@ -607,15 +734,34 @@ def build_features(
     force:
         Ignore existing cache.
     """
-    expected_hash = feature_cache_content_hash(cfg, primary, train_mask=train_mask)
+    expected_hash = feature_cache_content_hash(
+        cfg,
+        primary,
+        train_mask=train_mask,
+        secondary=secondary,
+        normalization_mode=normalization_mode,
+    )
+    requested_reference_mode = str(
+        (OmegaConf.select(cfg, "features.po3_reference_mode") if cfg is not None else None)
+        or "m1_legacy"
+    )
+    sweep_audit_path = Path(str(cache_path) + ".htf_sweeps.parquet") if cache_path else None
     if cache_path and Path(cache_path).exists() and not force:
         meta_path = Path(str(cache_path) + ".hash")
-        if meta_path.exists() and meta_path.read_text(encoding="utf-8").strip() == expected_hash:
+        audit_ready = requested_reference_mode != "htf_confirmed" or (
+            sweep_audit_path is not None and sweep_audit_path.exists()
+        )
+        if (
+            audit_ready
+            and meta_path.exists()
+            and meta_path.read_text(encoding="utf-8").strip() == expected_hash
+        ):
             return pd.read_parquet(cache_path)
         # Stale or pre-hash cache: rebuild rather than silently reuse.
 
     feat_cfg = cfg.features if cfg is not None else None
     secondary_m1: pd.DataFrame | None = secondary  # M1 copy kept for per-TF resampling
+    htf_sweep_audit = pd.DataFrame()
 
     # --- base indicators ---
     if feat_cfg is not None:
@@ -705,7 +851,7 @@ def build_features(
 
     # --- normalisation ---
     window = feat_cfg.zscore_window if feat_cfg is not None else 252
-    feat = rolling_zscore(feat, window=window, train_mask=train_mask)
+    feat = rolling_zscore(feat, window=window, train_mask=train_mask, mode=normalization_mode)
     if len(_fvg_raw.columns) > 0:
         feat = pd.concat([feat, _fvg_raw], axis=1)
 
@@ -873,7 +1019,21 @@ def build_features(
     # the causal Asian levels and the distance features can use atr_5.
     if feat_cfg is not None and bool(getattr(feat_cfg, "include_strategy_state", False)):
         swings = int(getattr(feat_cfg, "smt_swing_period", 5))
-        sweeps = detect_liquidity_sweeps(primary, swing_period=swings)
+        reference_mode = str(getattr(feat_cfg, "po3_reference_mode", "m1_legacy"))
+        if reference_mode == "htf_confirmed":
+            reference_timeframes = tuple(_htf_list(feat_cfg, "po3_reference", ("M5", "M15", "H1")))
+            sweeps, htf_sweep_audit = detect_confirmed_htf_sweeps(
+                primary,
+                timeframes=reference_timeframes,
+                return_audit=True,
+            )
+        elif reference_mode == "m1_legacy":
+            sweeps = detect_liquidity_sweeps(primary, swing_period=swings)
+        else:
+            raise ValueError(
+                "features.po3_reference_mode must be 'm1_legacy' or 'htf_confirmed', "
+                f"got {reference_mode!r}"
+            )
         bos = (
             detect_bos(primary, structure)
             if structure is not None
@@ -884,12 +1044,91 @@ def build_features(
                 ],
             )
         )
-        po3_state = build_po3_state(primary, sweeps, levels)
-        ifvg_zones = build_ifvg_zone_features(primary)
-        bull_conf = ifvg_zones["ifvg_bull_confirmed"].to_numpy(dtype=float)
-        bear_conf = ifvg_zones["ifvg_bear_confirmed"].to_numpy(dtype=float)
+        phase_mode = str(getattr(feat_cfg, "po3_phase_mode", "legacy"))
+        if phase_mode not in {"legacy", "reclaim_then_ifvg"}:
+            raise ValueError(
+                "features.po3_phase_mode must be 'legacy' or 'reclaim_then_ifvg', "
+                f"got {phase_mode!r}"
+            )
+        close_threshold = (
+            OmegaConf.select(cfg, "strategy.ifvg.close_through_threshold")
+            if cfg is not None
+            else None
+        )
+        inverse_opposing = bool(
+            (
+                OmegaConf.select(cfg, "strategy.ifvg.require_opposing_fvg")
+                if cfg is not None
+                else False
+            )
+            or False
+        )
+        ifvg_config = (
+            IFVGConfig(
+                close_through_threshold=float(close_threshold),
+                inverse_opposing_fvg=inverse_opposing,
+            )
+            if close_threshold is not None
+            else IFVGConfig(inverse_opposing_fvg=inverse_opposing)
+        )
+        ifvg_zones = build_ifvg_zone_features(primary, ifvg_config=ifvg_config)
+        state_ifvg_zones = ifvg_zones.copy()
+        state_ifvg_zones["_ifvg_bull_confirmation_tf_code"] = np.where(
+            state_ifvg_zones["ifvg_bull_confirmed"] > 0.0, 1.0, 0.0
+        )
+        state_ifvg_zones["_ifvg_bear_confirmation_tf_code"] = np.where(
+            state_ifvg_zones["ifvg_bear_confirmed"] > 0.0, 1.0, 0.0
+        )
+        ifvg_mtf_blocks = pd.DataFrame(index=primary.index)
+        if _enabled(feat_cfg, "ifvg_mtf", False):
+            higher_ifvg: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {}
+            for tf in _htf_list(feat_cfg, "ifvg_mtf", _MTF_STATE_TFS):
+                tf = str(tf).upper()
+                if tf == "M1":
+                    continue  # M1 zones are already the primary block.
+                pri_tf, _ = _resample_pair(primary, None, tf)
+                if pri_tf.empty:
+                    continue
+                higher_ifvg[tf] = (
+                    pri_tf,
+                    build_ifvg_zone_features(pri_tf, ifvg_config=ifvg_config),
+                )
+            state_ifvg_zones, ifvg_mtf_blocks = align_ifvg_zone_timeframes(
+                primary, ifvg_zones, higher_ifvg
+            )
+        if phase_mode == "reclaim_then_ifvg":
+            po3_state = build_po3_ifvg_state(
+                primary,
+                sweeps,
+                state_ifvg_zones,
+                max_ifvg_age_bars=int(
+                    (
+                        OmegaConf.select(cfg, "strategy.ifvg.max_age_bars")
+                        if cfg is not None
+                        else None
+                    )
+                    or 50
+                ),
+            )
+        else:
+            po3_state = build_po3_state(primary, sweeps, levels)
+        bull_conf = state_ifvg_zones["ifvg_bull_confirmed"].to_numpy(dtype=float)
+        bear_conf = state_ifvg_zones["ifvg_bear_confirmed"].to_numpy(dtype=float)
         zone_cols = [c for c in ifvg_zones.columns if not str(c).endswith("_confirmed")]
-        feat = pd.concat([feat, sweeps, bos, po3_state, ifvg_zones[zone_cols]], axis=1)
+        feat = pd.concat(
+            [feat, sweeps, bos, po3_state, ifvg_zones[zone_cols]],
+            axis=1,
+        )
+        feat["ifvg_bull_confirmed"] = bull_conf
+        feat["ifvg_bear_confirmed"] = bear_conf
+        feat["ifvg_bull_confirmation_tf_code"] = state_ifvg_zones[
+            "_ifvg_bull_confirmation_tf_code"
+        ].to_numpy(dtype=float)
+        feat["ifvg_bear_confirmation_tf_code"] = state_ifvg_zones[
+            "_ifvg_bear_confirmation_tf_code"
+        ].to_numpy(dtype=float)
+        if not ifvg_mtf_blocks.empty:
+            feat = pd.concat([feat, ifvg_mtf_blocks], axis=1)
 
         # ATR-normalised distances for the model; the raw levels in the frame
         # above stay available for the environment's structural SL/TP logic
@@ -932,35 +1171,14 @@ def build_features(
                 # per-TF frames beforehand would double-prefix (M5_M5_po3_*).
                 feat = align_timeframes(feat, po3_mtf_blocks)
 
-        # --- IFVG active-zone MTF (plan §4.6, opt-in, default off) ---
-        # Same resample-loop treatment as FVG. Timeframes come from config
-        # (M5/M15/H1 by default): a gap is not limited to the low timeframe.
-        if _enabled(feat_cfg, "ifvg_mtf", False):
-            ifvg_blocks: dict[str, pd.DataFrame] = {}
-            for tf in _htf_list(feat_cfg, "ifvg_mtf", _MTF_STATE_TFS):
-                if str(tf) == "M1":
-                    continue  # M1 already present unprefixed
-                pri_tf, _ = _resample_pair(primary, None, str(tf))
-                if pri_tf.empty:
-                    continue
-                zones_tf = build_ifvg_zone_features(pri_tf)
-                bull_pulse = zones_tf["ifvg_bull_confirmed"].shift(1).reindex(feat.index)
-                bear_pulse = zones_tf["ifvg_bear_confirmed"].shift(1).reindex(feat.index)
-                bull_conf = np.maximum(bull_conf, bull_pulse.fillna(0.0).to_numpy(dtype=float))
-                bear_conf = np.maximum(bear_conf, bear_pulse.fillna(0.0).to_numpy(dtype=float))
-                ifvg_blocks[str(tf)] = zones_tf.drop(
-                    columns=["ifvg_bull_confirmed", "ifvg_bear_confirmed"]
-                )
-            if ifvg_blocks:
-                feat = align_timeframes(feat, ifvg_blocks)
-
-        feat["po3_distribution_after_ifvg"] = build_distribution_after_ifvg(
-            po3_state["po3_distribution_direction"].to_numpy(dtype=float),
-            po3_state["po3_manipulation_active"].to_numpy(dtype=float),
-            po3_state["po3_manipulation_direction"].to_numpy(dtype=float),
-            bull_conf,
-            bear_conf,
-        )
+        if phase_mode == "legacy":
+            feat["po3_distribution_after_ifvg"] = build_distribution_after_ifvg(
+                po3_state["po3_distribution_direction"].to_numpy(dtype=float),
+                po3_state["po3_manipulation_active"].to_numpy(dtype=float),
+                po3_state["po3_manipulation_direction"].to_numpy(dtype=float),
+                bull_conf,
+                bear_conf,
+            )
 
     # --- LTF BOS + MSS decision stack ---
     # With include_strategy_state, BOS is already present; with include_pd_context
@@ -1032,6 +1250,23 @@ def build_features(
         ):
             feat["vwap"] = vwap_level(primary)
 
+    # Separate from running session levels: Idea 2 reads only the latest
+    # configured session whose final expected bar has already closed.
+    if feat_cfg is not None and bool(getattr(feat_cfg, "include_previous_session_pd", False)):
+        sess_cfg = feat_cfg.sessions
+        sess_tz = str(sess_cfg.get("tz", "America/Chicago"))
+        windows = {
+            name: {"start": str(sess_cfg[name]["start"]), "end": str(sess_cfg[name]["end"])}
+            for name in ("asian", "london", "ny")
+        }
+        feat = pd.concat(
+            [
+                feat,
+                previous_labeled_session_ohlc(primary, windows, session_tz=sess_tz),
+            ],
+            axis=1,
+        )
+
     # --- Trader-context HTF bias / manip reverse / trade direction ---
     # Wired when PD context or strategy state is on (Idea 1/2).
     need_trader_ctx = feat_cfg is not None and (
@@ -1044,6 +1279,10 @@ def build_features(
             feat[col] = trader_ctx[col]
 
     feat = ensure_london_atr_distances(feat, primary["close"])
+    # Raw decision price is retained only for the opt-in Idea 2 entry gate
+    # and excluded from the model observation sequence.
+    if feat_cfg is not None and bool(getattr(feat_cfg, "include_previous_session_pd", False)):
+        feat["decision_close"] = primary["close"].reindex(feat.index)
     session = OmegaConf.select(cfg, "session") if cfg is not None else None
     session_start = str(session.get("start", "16:30")) if session else "16:30"
     session_end = str(session.get("end", "23:00")) if session else "23:00"
@@ -1058,6 +1297,8 @@ def build_features(
         path = Path(cache_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         feat.to_parquet(path)
+        if requested_reference_mode == "htf_confirmed" and sweep_audit_path is not None:
+            htf_sweep_audit.to_parquet(sweep_audit_path)
         path.with_name(path.name + ".hash").write_text(expected_hash + "\n", encoding="utf-8")
 
     return feat

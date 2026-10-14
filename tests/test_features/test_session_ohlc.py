@@ -19,6 +19,7 @@ from omegaconf import DictConfig, OmegaConf
 
 from quant_rl.features.indicators import vwap_from_session, vwap_level
 from quant_rl.features.session_ohlc import (
+    previous_labeled_session_ohlc,
     prior_period_high_low,
     range_quadrants,
     session_mask,
@@ -479,3 +480,77 @@ def test_default_config_carries_sessions_block() -> None:
     assert cfg.features.sessions.ny.start == "08:30"
     assert cfg.features.sessions.ny.end == "15:00"
     assert list(cfg.features.sessions.quadrant_ranges) == ["yesterday", "lastweek"]
+
+
+@pytest.mark.unit
+def test_previous_labeled_session_uses_latest_completed_session_and_dst_clock() -> None:
+    """After the DST switch, the latest completed label is NY, then Asia."""
+    idx = pd.date_range("2026-03-09 00:00", periods=2 * 1440, freq="1min", tz=DATA_TZ)
+    values = np.arange(len(idx), dtype=float)
+    bars = pd.DataFrame({"high": values + 2.0, "low": values - 2.0}, index=idx)
+    windows = {
+        "asian": {"start": "19:00", "end": "23:00"},
+        "london": {"start": "02:00", "end": "05:00"},
+        "ny": {"start": "08:30", "end": "15:00"},
+    }
+    result = previous_labeled_session_ohlc(bars, windows, session_tz=SESSION_TZ)
+
+    ny_close = pd.Timestamp("2026-03-09 23:00", tz=DATA_TZ)
+    ny_close_pos = int(np.flatnonzero(idx == ny_close)[0])
+    ny_rows = (idx >= pd.Timestamp("2026-03-09 16:30", tz=DATA_TZ)) & (idx < ny_close)
+    london_positions = np.flatnonzero(session_mask(idx, "02:00", "05:00", SESSION_TZ).to_numpy())
+    assert result.loc[ny_rows, "previous_session_code"].eq(2).all()
+    result_values = result.to_numpy(dtype=float)
+    assert result_values[ny_close_pos, 3] == 3
+    ny_session = session_mask(idx, "08:30", "15:00", SESSION_TZ).to_numpy()
+    ny_session &= idx < ny_close
+    assert result_values[ny_close_pos, 0] == bars["high"].loc[ny_session].max()
+
+    # At the next configured session close, Asia is now the most recent label.
+    asia_close = pd.Timestamp("2026-03-10 07:00", tz=DATA_TZ)
+    asia_close_pos = int(np.flatnonzero(idx == asia_close)[0])
+    assert result_values[asia_close_pos, 3] == 1
+    previous_high = float(result_values[asia_close_pos, 0])
+    previous_low = float(result_values[asia_close_pos, 1])
+    previous_midpoint = float(result_values[asia_close_pos, 2])
+    assert previous_midpoint == pytest.approx((previous_high + previous_low) / 2.0)
+    assert london_positions.size > 0
+
+
+@pytest.mark.unit
+def test_previous_labeled_session_does_not_promote_truncated_tail() -> None:
+    idx = pd.date_range("2026-03-09 00:00", "2026-03-09 22:58", freq="1min", tz=DATA_TZ)
+    bars = pd.DataFrame({"high": 110.0, "low": 90.0}, index=idx)
+    result = previous_labeled_session_ohlc(
+        bars,
+        {
+            "asian": {"start": "19:00", "end": "23:00"},
+            "london": {"start": "02:00", "end": "05:00"},
+            "ny": {"start": "08:30", "end": "15:00"},
+        },
+        session_tz=SESSION_TZ,
+    )
+    # The current NY window is truncated before its last expected bar, so the
+    # completed London session remains the reference.
+    assert result.iloc[-1]["previous_session_code"] == 2
+    assert result.iloc[-1]["previous_session_midpoint"] == pytest.approx(100.0)
+
+
+@pytest.mark.unit
+def test_previous_labeled_session_skips_session_with_missing_interior_bar() -> None:
+    idx = pd.date_range("2026-03-09 00:00", "2026-03-10 00:00", freq="1min", tz=DATA_TZ)
+    bars = pd.DataFrame({"high": 110.0, "low": 90.0}, index=idx)
+    missing = pd.Timestamp("2026-03-09 18:00", tz=DATA_TZ)
+    bars = bars.drop(index=missing)
+    result = previous_labeled_session_ohlc(
+        bars,
+        {
+            "asian": {"start": "19:00", "end": "23:00"},
+            "london": {"start": "02:00", "end": "05:00"},
+            "ny": {"start": "08:30", "end": "15:00"},
+        },
+        session_tz=SESSION_TZ,
+    )
+    # Despite its final bar being present, NY has a hole and is not a complete
+    # reference. London remains the latest fully observed session.
+    assert result.loc[pd.Timestamp("2026-03-09 23:00", tz=DATA_TZ), "previous_session_code"] == 2

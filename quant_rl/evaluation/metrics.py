@@ -7,7 +7,7 @@ framework-free so they can be unit-tested against hand-computed fixtures.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -58,6 +58,97 @@ class PerformanceMetrics:
     max_consec_loss: int = 0
     avg_trade: float = 0.0
     extras: dict[str, float] = field(default_factory=dict)
+
+
+def completed_position_trade_pnls(
+    trade_records: Iterable[Mapping[str, Any]],
+) -> tuple[list[float], int, int]:
+    """Return completed-position PnLs, realized fill count, and open-position count.
+
+    Position-aware records aggregate all realized legs once per completed
+    position. Identified positions without a completion marker or final close
+    remain excluded from completed-trade statistics. Older records without a
+    position ID retain the legacy one-record-per-trade convention.
+    """
+
+    def finite_value(value: Any) -> float | None:
+        if value is None:
+            return None
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return number if np.isfinite(number) else None
+
+    position_pnls: dict[str, float] = {}
+    position_summaries: dict[str, float] = {}
+    position_ids: list[str] = []
+    seen_position_ids: set[str] = set()
+    completed_positions: set[str] = set()
+    legacy_pnls: list[float] = []
+    fill_count = 0
+
+    for record in trade_records:
+        position_id = record.get("position_id")
+        if position_id is None or (
+            isinstance(position_id, (float, np.floating)) and np.isnan(position_id)
+        ):
+            pnl = finite_value(record.get("pnl"))
+            if pnl is not None:
+                legacy_pnls.append(pnl)
+                fill_count += 1
+            continue
+
+        key = str(position_id)
+        if not key:
+            pnl = finite_value(record.get("pnl"))
+            if pnl is not None:
+                legacy_pnls.append(pnl)
+                fill_count += 1
+            continue
+
+        if key not in seen_position_ids:
+            position_ids.append(key)
+            seen_position_ids.add(key)
+        pnl = finite_value(record.get("pnl"))
+        net_pnl = finite_value(record.get("net_pnl"))
+        fill_pnl = net_pnl if net_pnl is not None else pnl
+        if fill_pnl is not None:
+            position_pnls[key] = position_pnls.get(key, 0.0) + fill_pnl
+            fill_count += 1
+
+        completion = record.get("position_complete")
+        explicit_completion: bool | None = None
+        if isinstance(completion, (bool, np.bool_)):
+            explicit_completion = bool(completion)
+        elif isinstance(completion, str):
+            normalized = completion.strip().lower()
+            if normalized in {"true", "1"}:
+                explicit_completion = True
+            elif normalized in {"false", "0"}:
+                explicit_completion = False
+        else:
+            completion_number = finite_value(completion)
+            if completion_number is not None:
+                explicit_completion = bool(completion_number)
+
+        event_type = str(record.get("type", "")).strip().lower()
+        is_final_event = event_type not in {"", "open", "reject", "tp_partial_close"}
+        if explicit_completion is True or (
+            explicit_completion is None and is_final_event and fill_pnl is not None
+        ):
+            completed_positions.add(key)
+            summary = finite_value(record.get("position_net_pnl"))
+            if summary is not None:
+                position_summaries[key] = summary
+
+    completed_pnls = legacy_pnls + [
+        position_summaries.get(key, position_pnls.get(key, 0.0))
+        for key in position_ids
+        if key in completed_positions
+    ]
+    incomplete_positions = len(seen_position_ids - completed_positions)
+    return completed_pnls, fill_count, incomplete_positions
 
 
 def sweep_delay_breakdown(
@@ -209,16 +300,24 @@ def compute_metrics(
     curve = np.asarray(equity_curve, dtype=float)
     if curve.size == 0:
         raise ValueError("equity_curve must contain at least one value")
-    if initial_balance <= 0:
+    if not np.isfinite(initial_balance) or initial_balance <= 0:
         raise ValueError("initial_balance must be positive")
+    if not np.all(np.isfinite(curve)):
+        raise ValueError("equity_curve values must be finite")
+    if np.any(curve <= 0):
+        raise ValueError("equity_curve values must be positive")
 
-    returns = _bar_returns(curve)
-    mdd = max_drawdown(curve)
+    # Callers may supply end-of-bar valuations without the opening capital.
+    # Preserve an explicitly included opening balance, otherwise count the
+    # first valuation's profit or loss in the return path and drawdown.
+    path = curve if curve[0] == initial_balance else np.concatenate(([initial_balance], curve))
+    returns = _bar_returns(path)
+    mdd = max_drawdown(path)
     total_pnl = float(curve[-1] - initial_balance)
     years = curve.size / periods_per_year
     annualised = ((curve[-1] / initial_balance) ** (1.0 / years) - 1.0) if years > 0 else 0.0
 
-    pnls = np.asarray(trade_pnls or [], dtype=float)
+    pnls = np.asarray(trade_pnls if trade_pnls is not None else [], dtype=float)
     stats = _trade_stats(pnls)
 
     calmar = float(annualised / mdd) if mdd > 0 else 0.0
@@ -285,10 +384,21 @@ def calculate_metrics(
         raise ValueError("equity must contain at least one value")
 
     trade_pnls: list[float] | None = None
-    if trades is not None and len(trades) > 0 and "pnl" in trades:
-        pnl = trades["pnl"]
-        pnl = pnl.dropna() if hasattr(pnl, "dropna") else pnl
-        trade_pnls = [float(v) for v in pnl]
+    fill_count = 0
+    incomplete_positions = 0
+    if trades is not None and len(trades) > 0:
+        if hasattr(trades, "to_dict") and hasattr(trades, "columns"):
+            records = trades.to_dict(orient="records")
+        elif isinstance(trades, Sequence) and all(isinstance(row, Mapping) for row in trades):
+            records = trades
+        else:
+            records = []
+        if records:
+            trade_pnls, fill_count, incomplete_positions = completed_position_trade_pnls(records)
+        elif "pnl" in trades:
+            pnl = trades["pnl"]
+            pnl = pnl.dropna() if hasattr(pnl, "dropna") else pnl
+            trade_pnls = [float(v) for v in pnl]
 
     init_bal = float(curve[0]) if initial_balance is None else float(initial_balance)
 
@@ -299,4 +409,9 @@ def calculate_metrics(
         periods_per_year=periods_per_year,
         breach_count=int(n_breach_sessions),
         n_sessions=n_sessions,
+        extras={
+            "fill_count": float(fill_count),
+            "incomplete_positions": float(incomplete_positions),
+            "entry_active": float(bool(trade_pnls)),
+        },
     )

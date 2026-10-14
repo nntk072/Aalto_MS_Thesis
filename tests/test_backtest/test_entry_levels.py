@@ -130,7 +130,7 @@ def test_exit_mode_split_at_one_half() -> None:
         index=idx,
     )
     feats = pd.DataFrame({"ema_21": np.full(n, 101.0)}, index=idx)
-    env = TradingEnv(bars, feats, strategy_actions=True, obs_window=5)
+    env = TradingEnv(bars, feats, strategy_actions=True, allow_agent_sl_mode=False, obs_window=5)
     env._decode_action(np.array([0.0, 0.0, 0.0, 0.0, -0.02], dtype=np.float32), feats.iloc[0])
     assert env._selected_exit_mode == "structural"
     env._decode_action(np.array([0.0, 0.0, 0.0, 0.0, 0.02], dtype=np.float32), feats.iloc[0])
@@ -315,3 +315,104 @@ def test_end_bar_restores_gap_stops_and_a_short_leg_drops_them() -> None:
     )
     assert short.sl_ref == "last_swing_high"
     assert "fvg" not in short.sl_ref
+
+
+def test_revised_ifvg_stop_menu_includes_zone_edge_and_observed_excursion() -> None:
+    from quant_rl.envs.strategies import PO3IFVGStrategy
+
+    placed = place_strategy_order(
+        PO3IFVGStrategy(
+            enforce_gate=False,
+            entry_mode="confirmed_first_eligible",
+            require_price_retest=False,
+        ),
+        direction=1,
+        entry_price=100.0,
+        feat_row=_row(
+            po3_ifvg_low=90.0,
+            po3_ifvg_high=95.0,
+            po3_ifvg_through_zone_extreme=88.0,
+            prev_day_high=130.0,
+        ),
+        min_dist=10.0,
+        sl_fraction=0.0,
+        tp_fraction=0.0,
+        exit_mode="structural",
+        buffer_pts=1.0,
+        max_tp_distance=float("nan"),
+    )
+
+    assert ("ifvg_far_edge", 89.0) in placed.sl_menu
+    assert ("ifvg_through_zone_extreme", 87.0) in placed.sl_menu
+    assert any(item["selected"] for item in placed.sl_candidate_audit)
+    assert {item["name"] for item in placed.sl_candidate_audit} >= {
+        "ifvg_far_edge",
+        "ifvg_through_zone_extreme",
+    }
+
+
+def test_revised_ifvg_stop_audit_records_minimum_distance_rejections() -> None:
+    from quant_rl.envs.strategies import PO3IFVGStrategy
+
+    placed = place_strategy_order(
+        PO3IFVGStrategy(
+            enforce_gate=False,
+            entry_mode="confirmed_first_eligible",
+            require_price_retest=False,
+        ),
+        direction=1,
+        entry_price=100.0,
+        feat_row=_row(
+            po3_ifvg_low=95.0,
+            po3_ifvg_high=97.0,
+            po3_ifvg_through_zone_extreme=92.0,
+            prev_day_high=130.0,
+        ),
+        min_dist=10.0,
+        sl_fraction=0.0,
+        tp_fraction=0.0,
+        exit_mode="structural",
+        buffer_pts=1.0,
+        max_tp_distance=float("nan"),
+    )
+
+    audit = {item["name"]: item for item in placed.sl_candidate_audit}
+    assert audit["ifvg_far_edge"]["reason"] == "below_min_distance"
+    assert audit["ifvg_through_zone_extreme"]["reason"] == "below_min_distance"
+
+
+@pytest.mark.parametrize(
+    ("targets", "expected_target", "expected_rr", "expected_fallback"),
+    [
+        ([112.0, 116.0], "prev_day_high", 1.6, None),
+        ([112.0, 114.0], "asian_high", 1.2, "no_structural_reference_within_rr_window"),
+    ],
+)
+def test_tp_prefers_rr_window_and_logs_nearest_admissible_fallback(
+    targets: list[float],
+    expected_target: str,
+    expected_rr: float,
+    expected_fallback: str | None,
+) -> None:
+    placed = place_strategy_order(
+        _Menu([("last_swing_low", 90.0)]),
+        direction=1,
+        entry_price=100.0,
+        feat_row=_row(
+            last_swing_low=90.0,
+            prev_day_high=max(targets),
+            asian_high=min(targets),
+        ),
+        min_dist=10.0,
+        sl_fraction=0.0,
+        tp_fraction=0.0,
+        exit_mode="structural",
+        buffer_pts=0.0,
+        max_tp_distance=float("nan"),
+        rr_bounds=(1.5, 5.0),
+    )
+
+    assert placed.tp_ref == expected_target
+    assert placed.planned_rr == pytest.approx(expected_rr)
+    assert placed.tp_references
+    assert {item.fallback_reason for item in placed.tp_references} == {expected_fallback}

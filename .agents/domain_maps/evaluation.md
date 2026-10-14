@@ -13,6 +13,8 @@ Two packages: `quant_rl/evaluation/` (metrics, walk-forward, reporting) and
 | `quant_rl/evaluation/bootstrap_ci.py` | Bootstrap confidence intervals |
 | `quant_rl/evaluation/report.py` | Multi-seed report generation |
 | `quant_rl/evaluation/walkforward.py` | Purged + embargoed walk-forward splits |
+| `quant_rl/evaluation/matched_comparison.py` | Timestamp-paired treatment/control intervals with fail-closed provenance |
+| `quant_rl/eval/run_manifest.py` | Per-trial dataset, source, config, cache and checkpoint provenance |
 | `quant_rl/eval/rollout.py` | RL model evaluation through TradingEnv |
 | `quant_rl/eval/export.py` | Run artifact saving |
 | `quant_rl/eval/eval_run.py` | Re-evaluate existing checkpoint (no retraining) |
@@ -50,6 +52,8 @@ Two packages: `quant_rl/evaluation/` (metrics, walk-forward, reporting) and
 | `tests/test_evaluation/test_runner.py` | Episode runner |
 | `tests/test_evaluation/test_metrics.py` | Metrics calculation |
 | `tests/test_evaluation/test_calibration_ci.py` | Calibration |
+| `tests/test_evaluation/test_matched_comparison_unittest.py` | Matched-run fields, timestamp windows and paired intervals |
+| `tests/test_eval/test_run_manifest.py` | Run-manifest identity and fail-closed artifact requirements |
 | `tests/test_evaluation/test_report.py` | Report generation |
 | `tests/test_eval/test_walkforward.py` | Walk-forward splits |
 | `tests/test_eval/test_evaluate_metrics_contract.py` | Metrics contract |
@@ -70,3 +74,6 @@ Two packages: `quant_rl/evaluation/` (metrics, walk-forward, reporting) and
 2. **Same risk params as training** — `risk_frac_range` and `rr_ratio_range` must match training env
 3. **Episodic=False for RL eval** — guardrail breach blocks new trading for session, not whole rollout
 4. **Deterministic=True** — evaluation uses deterministic policy predictions
+5. **Matched comparisons** — dataset, split, feature/reward/cost/execution,
+   training budget, seed, starting capital, model/environment settings, and
+   evaluation window must match; previously inspected OOS remains historical.

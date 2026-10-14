@@ -1,0 +1,538 @@
+{
+  "decision_id": "legacy_a2_a3_checkpoint_exclusion_2026-10-13",
+  "decision": "Exclude the 42 legacy A2/A3 archive files from future candidate ranking, checkpoint selection, comparative reanalysis, and confirmatory thesis claims unless their original provenance is recovered and independently validated.",
+  "scope": "Only the legacy archives listed here. Preserve every archive in place. This decision does not remove historical logs or affect fresh runs with complete provenance.",
+  "basis": [
+    "The read-only checkpoint inventory found no run config or run manifest for these archives; all are unversioned and lack a versioned action schema.",
+    "The 42 paths form two old seed-42 runs: 21 A2 files (20 unique SHA-256 contents) and 21 A3 files (20 unique contents). Each ppo_latest file duplicates the final numbered checkpoint byte-for-byte.",
+    "The old archives encode action widths 7 for A2 and 11 for A3; current real-data-instantiated variants encode widths 8 and 12 respectively.",
+    "Adjacent logs are partial and internally insufficient to recover an effective configuration: they show a 20,000,000-step target resumed from 19,000,000, while the launch line reports 64 environments and the effective PPO line reports one."
+  ],
+  "partial_log_sha256": {
+    "outputs/gpu_matrix_20261008_135458/logs/ladder_a2_tp.log": "734dcca9a08ae51fd34a474987d91f884d1d442b013fae9fa26fdc9fbac11507",
+    "outputs/gpu_matrix_20261008_135458/logs/ladder_a3_multi_tp.log": "c62d51c4cbeb7e45b6a732f15ce336ffa4917e81fac5efd4705738eb1e3fbe94"
+  },
+  "archive_run_evidence": {
+    "ladder_a2_tp": {
+      "archive_count": 21,
+      "unique_sha256_count": 20,
+      "checkpoint_action_width": 7,
+      "current_variant_action_width": 8,
+      "partial_launcher_log": "outputs/gpu_matrix_20261008_135458/logs/ladder_a2_tp.log"
+    },
+    "ladder_a3_multi_tp": {
+      "archive_count": 21,
+      "unique_sha256_count": 20,
+      "checkpoint_action_width": 11,
+      "current_variant_action_width": 12,
+      "partial_launcher_log": "outputs/gpu_matrix_20261008_135458/logs/ladder_a3_multi_tp.log"
+    }
+  },
+  "archives": [
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_10000000_steps.zip",
+      "sha256": "c15899492300c97315c74332e1f2dfd42213f7118f040858fd31ebb146f4f438",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "sha256": "ad1a0ae704e4f8b415efb0bdabd53fcaf3999eb72edc7b3e808e3cec87984c44",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_11000000_steps.zip",
+      "sha256": "7b723e5ad83559d6e5778b9b1433efa5da80cacd1da72785fefde65ea377770c",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_12000000_steps.zip",
+      "sha256": "f1867b76dfaa24dd31719e903a1241d27bf288b4f98811db6a7798f704424ee9",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_13000000_steps.zip",
+      "sha256": "d88b5bbce3c4469276530b54b1af1da5a93139a1df3768a8db53cd4b9b231d19",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_14000000_steps.zip",
+      "sha256": "512001cc9f0f07f5c0e6babbbfc4d957024cdc0e954cb0993c44eb70977e5e99",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_15000000_steps.zip",
+      "sha256": "0a8bb79ae611a23701d258c2a8dda782069f07f8601cec195c0fea8e7a4e8a32",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_16000000_steps.zip",
+      "sha256": "4657bb3244dfb1f16472a0762b2fb13ce9cb2ce740694e00e2d2743e77691011",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_17000000_steps.zip",
+      "sha256": "b4e1214feee7519c5145509c3b5946c44488a18b6e86deb430bfefb8cde159d4",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_18000000_steps.zip",
+      "sha256": "7e3eb71d2395f5c524a929f0842466c675f030abb9d7068b28bb6baa7711b7fe",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_19000000_steps.zip",
+      "sha256": "4460f6fcc27682baa5ac121385608a1ccb0a95ece89a05710382db3ed45ab0e1",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_19000001_steps.zip",
+      "sha256": "b5ddc24c21e3108838232486fe41fbcfae497a552e6d29154d3ec652988ce935",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_2000000_steps.zip",
+      "sha256": "ec5a83e492da0a0b5ec5cf0c25d7a5c318d67354973b9e94f56dcfda917ba6ea",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_3000000_steps.zip",
+      "sha256": "33515a1da2c02a4e5eb3d04023ffa07a5aa6d570320a63816bf59317d3c42718",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_4000000_steps.zip",
+      "sha256": "068027bd538ea14e59146c7aeb550fed5349e49db9ecd2fcfbbe352336782f86",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_5000000_steps.zip",
+      "sha256": "a1577fe4ee464ea86047f09920d208c5d1bf5b381ef93c45e585dc387a52a4d6",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_6000000_steps.zip",
+      "sha256": "ba6c4c927e101e96e509927a180ad500129ca30c0ad9396707f72c47f64c0a82",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+      "sha256": "4ab9ebc9334c0cda229ddb0fe1e4a92b0bdfe3d76193ee412b40854fe3c170b4",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_8000000_steps.zip",
+      "sha256": "e3554f8489ad4889023aa77eb6af14d06b7f92b5c9ade340d01d7e4248ff6e73",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_ckpt_9000000_steps.zip",
+      "sha256": "05ed0435ba45d5e0e86782a9a159e3b6d04488f5bf1812855ba3e9a5668fbd3a",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a2_tp/20261008_135512_372344_rl_train_seed42_tcn/model/ppo_latest.zip",
+      "sha256": "b5ddc24c21e3108838232486fe41fbcfae497a552e6d29154d3ec652988ce935",
+      "action_space_width": 7,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_10000000_steps.zip",
+      "sha256": "5eeb622888f8c4c87210fbbf9b0ad373c160ac28de243490165b75b8d91ca419",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "sha256": "87009b4ab05337be3024ff03b26801728d40741ebae294a44020890998a2a7b4",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_11000000_steps.zip",
+      "sha256": "45b0523c17809c9a1f8f0f4d9f12e710858a26cc1f362bbd46508aa2d9d6604b",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_12000000_steps.zip",
+      "sha256": "ebc435a5b0644c36a147a299fddca9ad3c81c1aa20a2079741af1044b4f64539",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_13000000_steps.zip",
+      "sha256": "489373e9f13865d5b0132df8a5355740fc2b69ef18356f303635500164ff2dbb",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_14000000_steps.zip",
+      "sha256": "6447c6379302ed9f22db3d3fc50bc138bdf615d98e7cb0158dbaaf3267606e9c",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_15000000_steps.zip",
+      "sha256": "42d214d9b35333d308f1c1ffbaca3d8620047eda0a027e2733e48bdea1a5da0f",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_16000000_steps.zip",
+      "sha256": "fe6eb04d270f5f1dac8b797c8c0122ba9faf653d97b646a2bad0499f9b73de00",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_17000000_steps.zip",
+      "sha256": "4950dbd819eb44af855585f8e50149448764f4f20c1c03eb24e9c745d39fb911",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_18000000_steps.zip",
+      "sha256": "b3c5012460264ffccaf0587f15003820df800bf8bd5cb93c1dd89b0f1b8d62e5",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_19000000_steps.zip",
+      "sha256": "67138cae55d15d228ee81bfff6cb7a635d75f252efb59aaffd29ac4ff492bcf9",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_19000001_steps.zip",
+      "sha256": "2865d48dd8994e04295108ab18026d166b06f3f77587f84a9031091ee989a336",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_2000000_steps.zip",
+      "sha256": "ebebda505ce7971081cdfd029b71b4451a0d71904e4b73f6b6ac573b054e4689",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_3000000_steps.zip",
+      "sha256": "ab426e91ebdb0ef7bafdb5d9e498c0c23f6f8c6b0550c5a1dee8281ced0a8222",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_4000000_steps.zip",
+      "sha256": "23a0b4e71591310beb7ae36a4596dbbc78c6ee266e30733b2dfc70cf42e35e3b",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_5000000_steps.zip",
+      "sha256": "41d26b8eafd1dc411374a0e3ac5fd64507f43d6ca7177d2b3ec369335396d6d7",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_6000000_steps.zip",
+      "sha256": "397a830a1f9aeded5c2649a20d33d5de7985937b08bfbcc9c416c860e0bfecd9",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+      "sha256": "b28fb8bac1de394cc8e799defb1968b96464e1ed8b0f6db1f00ecf85599bb8e6",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_8000000_steps.zip",
+      "sha256": "596b2c342f3d41c18c8d30c66921cb45f2d37af38fb7dbfa3edb932e19dae7d6",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_ckpt_9000000_steps.zip",
+      "sha256": "529c4ed47cb2cd8edc1ef5f21606e36b7fcf2aaa3d6171adbc53a48b49f210ba",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    },
+    {
+      "path": "outputs/gpu_matrix_20261008_135458/ladder_a3_multi_tp/20261008_135512_350674_rl_train_seed42_tcn/model/ppo_latest.zip",
+      "sha256": "2865d48dd8994e04295108ab18026d166b06f3f77587f84a9031091ee989a336",
+      "action_space_width": 11,
+      "excluded_from": [
+        "candidate_ranking",
+        "checkpoint_selection",
+        "comparative_reanalysis",
+        "confirmatory_thesis_claims"
+      ],
+      "preservation": "original archive remains untouched"
+    }
+  ],
+  "reversal_condition": "Reverse only if the original effective config, resolver/source state, input data and feature-cache identity, vectorization/scaling, seed/step provenance, and action layout are recovered and verified against archive hashes."
+}

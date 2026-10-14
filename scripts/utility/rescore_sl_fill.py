@@ -225,7 +225,12 @@ def rescore_one(name: str, source: Path, out_root: Path) -> dict:
     train_end, test_start = get_split_config(cfg)
     train_mask = make_train_mask(primary.index, train_end)
     cache = feature_cache_path(
-        Path(cfg.data.cache_dir), cfg.data.primary, cfg, primary, train_mask=train_mask
+        Path(cfg.data.cache_dir),
+        cfg.data.primary,
+        cfg,
+        primary,
+        train_mask=train_mask,
+        secondary=secondary,
     )
     features = build_features(
         primary,

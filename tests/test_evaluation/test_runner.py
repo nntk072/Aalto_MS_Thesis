@@ -54,6 +54,53 @@ class TestRunEpisode:
         assert metrics.expectancy == pytest.approx(100.0)
         assert metrics.total_pnl == pytest.approx(150.0)
 
+    def test_counts_completed_positions_and_reports_fill_counts(self) -> None:
+        env = _FakeEnv()
+        env.trade_log = [
+            {
+                "position_id": "p1",
+                "type": "open",
+                "pnl": None,
+                "position_complete": True,
+                "position_net_pnl": 150.0,
+            },
+            {
+                "position_id": "p1",
+                "type": "tp_partial_close",
+                "pnl": 200.0,
+                "net_pnl": 190.0,
+                "position_complete": False,
+            },
+            {
+                "position_id": "p1",
+                "type": "tp_close",
+                "pnl": -50.0,
+                "net_pnl": -40.0,
+                "position_complete": True,
+                "position_net_pnl": 150.0,
+            },
+            {
+                "position_id": "p2",
+                "type": "open",
+                "pnl": None,
+                "position_complete": False,
+            },
+            {
+                "position_id": "p2",
+                "type": "tp_partial_close",
+                "pnl": 300.0,
+                "net_pnl": 280.0,
+                "position_complete": False,
+            },
+        ]
+
+        metrics = run_episode(env, action_fn=lambda obs: 0.0)
+
+        assert metrics.n_trades == 1
+        assert metrics.expectancy == pytest.approx(150.0)
+        assert metrics.extras["fill_count"] == 3.0
+        assert metrics.extras["incomplete_positions"] == 1.0
+
     def test_passes_policy_actions_to_env(self) -> None:
         # Arrange
         env = _FakeEnv()

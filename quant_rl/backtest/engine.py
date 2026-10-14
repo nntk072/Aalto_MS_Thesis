@@ -4,18 +4,24 @@ Fill-price semantics
 --------------------
 Every order fill uses a ``(bid, ask)`` quote obtained in this priority:
 
-1. **Tick data** (``tickbook`` is not None): ``TickBook.quote_at(fill_instant)``
-   where ``fill_instant`` is the open time of the *next* bar.
-2. **Bar-spread fallback**: ``CostModel.bar_quote(close)``.
+1. **Tick data**: a valid quote at the next bar's open timestamp.
+2. **Bar-spread fallback**: the next bar's close quote, timestamped at its
+   close rather than at its open.
 
 Mark-to-market and per-trade stop checks use the bar-close quote (long @ bid,
 short @ ask).
+
+Bar indexes are left-labeled. Equity observations are marked at each bar's
+close timestamp, after current-bar protective events and session liquidation,
+but before policy orders that execute on a later quote. OHLC-only protective
+fills retain their triggering bar interval because their exact intrabar time
+is not observable without ticks.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pandas as pd
@@ -58,13 +64,16 @@ def _sl_tp_fill_quote(
     extended by the model spread so that ``Broker.close_position`` can
     deduct the round-turn spread cost.
     """
-    spread = cost_model.spread_points * cost_model.point_size
+    # CostModel spread_points is configured in price units; point_size is
+    # reserved for converting raw MT5 spread columns and price precision.
+    spread = float(cost_model.spread_points)
+    slippage = float(cost_model.slippage_points)
     if direction == 1:
-        bid = hit_price
-        ask = hit_price + spread
+        bid = hit_price - slippage
+        ask = bid + spread
     else:
-        ask = hit_price
-        bid = hit_price - spread
+        ask = hit_price + slippage
+        bid = ask - spread
     return bid, ask
 
 
@@ -72,6 +81,17 @@ def _bar_quote(row: pd.Series, cost_model: CostModel) -> tuple[float, float]:
     """Derive ``(bid, ask)`` from a bar row (MT5 close = bid)."""
     bar_spread = _bar_spread_price_units(row, cost_model)
     return cost_model.bar_quote(float(row["close"]), bar_spread=bar_spread)
+
+
+def _bar_duration(index: pd.DatetimeIndex) -> pd.Timedelta:
+    """Estimate bar duration from positive index deltas, defaulting to M1."""
+    if len(index) < 2:
+        return pd.Timedelta(minutes=1)
+    deltas = np.diff(index.to_numpy(dtype="datetime64[ns]").astype("int64"))
+    positive = deltas[deltas > 0]
+    if positive.size == 0:
+        return pd.Timedelta(minutes=1)
+    return pd.Timedelta(int(np.median(positive)), unit="ns")
 
 
 def _fill_quote(
@@ -93,6 +113,18 @@ def _fill_quote(
     fill is rejected in favour of a bar-based quote, so fills always land
     on/near a visible candle.
     """
+    return _fill_quote_event(fill_instant, row, cost_model, tickbook)[0]
+
+
+def _fill_quote_event(
+    fill_instant: pd.Timestamp,
+    row: pd.Series,
+    cost_model: CostModel,
+    tickbook: TickBook | None,
+    *,
+    bar_close_time: pd.Timestamp | None = None,
+) -> tuple[tuple[float, float], pd.Timestamp, str]:
+    """Return quote, execution timestamp and source for a delayed fill."""
     bar_spread = _bar_spread_price_units(row, cost_model)
     if tickbook is not None:
         q = tickbook.quote_at(fill_instant)
@@ -103,17 +135,23 @@ def _fill_quote(
             hi = float(row["high"])
             buffer = max(hi - lo, bar_spread or 0.0, cost_model.spread_points)
             if lo - buffer <= mid <= hi + buffer:
-                return q
+                return q, fill_instant, "tick"
             # Outlier/gap tick (mid far outside the executing bar's range):
             # fall through to the bar-based quote below instead of returning
             # a fill price disconnected from the visible candles.
-    return cost_model.bar_quote(float(row["close"]), bar_spread=bar_spread)
+    return (
+        cost_model.bar_quote(float(row["close"]), bar_spread=bar_spread),
+        fill_instant if bar_close_time is None else bar_close_time,
+        "bar_close",
+    )
 
 
 def _is_last_ny_bar(bars: pd.DataFrame, i: int, is_ny: bool) -> bool:
     """True on the last NY bar of a session (next bar is non-NY or a time jump)."""
-    if not is_ny or i + 1 >= len(bars):
+    if not is_ny:
         return False
+    if i + 1 >= len(bars):
+        return True
     nxt = bars.iloc[i + 1]
     next_ny = "session" not in nxt.index or str(nxt["session"]) == "ny"
     if not next_ny:
@@ -175,6 +213,7 @@ def run_backtest(
     acc = AccountState(initial_balance=initial_balance)
 
     equity_curve: list[float] = []
+    equity_times: list[pd.Timestamp] = []
     trade_log: list[dict[str, Any]] = []
     breach_log: list[str] = []
     breach_events: list[dict[str, Any]] = []
@@ -189,10 +228,43 @@ def run_backtest(
     bars = bars.loc[common_idx]
     features = features.loc[common_idx]
 
-    bar_times = bars.index
+    bar_times = pd.DatetimeIndex(bars.index)
+    bar_duration = _bar_duration(bar_times)
     feat_array: np.ndarray[Any, Any] = features.values.astype(np.float32)
     feat_array = np.nan_to_num(feat_array, nan=0.0).astype(np.float32)
     n_bars = len(bars)
+    position_sequence = 0
+
+    def stamp_exit(pos: Position, record: dict[str, Any], fill_price: float) -> None:
+        """Attach one exactly-once fill and completed-position accounting row."""
+        record.setdefault(
+            "order_submission_time",
+            record.get("decision_time", pos.entry_timestamp),
+        )
+        if record.get("time_precision") == "bar_interval":
+            # OHLC data locates the trigger in an interval, not at a known
+            # instant. Keep the legacy event time and explicit bounds, while
+            # leaving the precise fill time unknown.
+            record.setdefault("fill_time", None)
+        else:
+            record.setdefault("fill_time", record.get("time"))
+        initial = float(pos.initial_size or pos.size)
+        close_size = max(0.0, initial - float(pos.filled_size) - float(pos.size))
+        pos.filled_size += close_size
+        pos.fill_count += 1
+        pos.position_id = pos.position_id or f"bt:p{position_sequence}"
+        record["position_id"] = pos.position_id
+        record["fill_id"] = f"{pos.position_id}:f{pos.fill_count}"
+        record["size"] = close_size
+        record["price"] = float(fill_price)
+        record["position_complete"] = bool(pos.size <= 1e-9)
+        entry_commission = float(cost_model.total_cost(close_size))
+        net_pnl = float(record.get("pnl", 0.0)) - entry_commission
+        record["entry_commission_allocated"] = entry_commission
+        record["net_pnl"] = net_pnl
+        pos.position_net_pnl += net_pnl
+        if record["position_complete"]:
+            record["position_net_pnl"] = pos.position_net_pnl
 
     for i in range(obs_window, n_bars):
         row = bars.iloc[i]
@@ -211,47 +283,71 @@ def run_backtest(
 
         if position is not None:
             broker.mark_to_market(acc, position, bq)
+        bar_end = pd.Timestamp(bar_time) + bar_duration
+        entry_time = (
+            None
+            if position is None or position.entry_timestamp is None
+            else pd.Timestamp(cast(Any, position.entry_timestamp))
+        )
+        position_active_in_bar = entry_time is None or entry_time < bar_end
+        full_bar_available_after_entry = entry_time is None or entry_time <= pd.Timestamp(bar_time)
 
         if i + 1 < n_bars:
             fill_instant = bar_times[i + 1]
             fill_row = bars.iloc[i + 1]
+            fill_bar_close = fill_instant + bar_duration
         else:
-            fill_instant = bar_time + pd.Timedelta("1min")
+            fill_instant = bar_time
             fill_row = row
-        fq = _fill_quote(fill_instant, fill_row, cost_model, tickbook)
+            fill_bar_close = bar_time + bar_duration
+        fq, execution_time, fill_source = _fill_quote_event(
+            fill_instant,
+            fill_row,
+            cost_model,
+            tickbook,
+            bar_close_time=fill_bar_close,
+        )
 
         tick_hit = None
         if (
             position is not None
+            and position_active_in_bar
             and tickbook is not None
             and (position.sl_price is not None or position.tp_price is not None)
         ):
-            tick_hit = tickbook.delayed_exit_quote(
+            tick_hit = tickbook.delayed_exit_event(
                 bar_time,
                 int(position.direction),
                 None if position.sl_price is None else float(position.sl_price),
                 None if position.tp_price is None else float(position.tp_price),
                 pd.Timedelta(milliseconds=fill_delay_ms),
+                earliest_time=entry_time,
             )
         if tick_hit is not None and position is not None:
-            kind, bid, ask = tick_hit
-            pnl, fill_price = broker.close_position(acc, position, (bid, ask))
-            trade_log.append(
-                {
-                    "type": "stop_close" if kind == "sl" else "tp_close",
-                    "pnl": pnl,
-                    "price": fill_price,
-                    "reason": "structure_sl" if kind == "sl" else "structure_tp",
-                    "bar": i,
-                    "time": bar_time,
-                    "equity": acc.equity,
-                }
-            )
+            kind, fill_time, bid, ask = tick_hit
+            closed_position = position
+            pnl, fill_price = broker.close_position(acc, closed_position, (bid, ask))
+            record = {
+                "type": "stop_close" if kind == "sl" else "tp_close",
+                "pnl": pnl,
+                "price": fill_price,
+                "reason": "structure_sl" if kind == "sl" else "structure_tp",
+                "bar": i,
+                "time": fill_time,
+                "equity": acc.equity,
+            }
+            stamp_exit(closed_position, record, fill_price)
+            trade_log.append(record)
             sessions_with_trades.add(session)
             position = None
 
-        if position is not None and max_loss_per_trade_usd is not None and tick_hit is None:
-            # Check intrabar high/low vs SL
+        if (
+            position is not None
+            and position_active_in_bar
+            and full_bar_available_after_entry
+            and tick_hit is None
+        ):
+            # Structural stops are independent of the optional USD safety cap.
             sl_hit = False
             if position.sl_price is not None:
                 if position.direction == 1 and float(row["low"]) <= position.sl_price:
@@ -262,43 +358,65 @@ def run_backtest(
             if sl_hit:
                 assert position is not None
                 assert position.sl_price is not None
-                sl_fq = _sl_tp_fill_quote(position.direction, position.sl_price, cost_model)
-                pnl, fill_price = broker.close_position(acc, position, sl_fq)
-                trade_log.append(
-                    {
-                        "type": "stop_close",
-                        "pnl": pnl,
-                        "price": fill_price,
-                        "reason": "structure_sl",
-                        "bar": i,
-                        "time": bar_time,
-                        "equity": acc.equity,
-                    }
-                )
+                stop_price = float(position.sl_price)
+                bar_spread = _bar_spread_price_units(row, cost_model)
+                opening_spread = cost_model.spread_points if bar_spread is None else bar_spread
+                if position.direction == 1:
+                    stop_price = min(stop_price, float(row["open"]))
+                else:
+                    stop_price = max(stop_price, float(row["open"]) + opening_spread)
+                sl_fq = _sl_tp_fill_quote(position.direction, stop_price, cost_model)
+                closed_position = position
+                pnl, fill_price = broker.close_position(acc, closed_position, sl_fq)
+                record = {
+                    "type": "stop_close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "reason": "structure_sl",
+                    "bar": i,
+                    "time": bar_time,
+                    "event_time_start": bar_time,
+                    "event_time_end": bar_time + bar_duration,
+                    "time_precision": "bar_interval",
+                    "equity": acc.equity,
+                }
+                stamp_exit(closed_position, record, fill_price)
+                trade_log.append(record)
                 sessions_with_trades.add(session)
                 position = None
-            # Fallback: check safety cap
-            elif acc.open_pnl <= -abs(max_loss_per_trade_usd):
+            # Fallback: check the optional USD safety cap after the structural stop.
+            elif max_loss_per_trade_usd is not None and acc.open_pnl <= -abs(
+                max_loss_per_trade_usd
+            ):
                 assert position is not None
-                pnl, fill_price = broker.close_position(acc, position, fq)
-                trade_log.append(
-                    {
-                        "type": "stop_close",
-                        "pnl": pnl,
-                        "price": fill_price,
-                        "reason": "max_loss_cap",
-                        "bar": i,
-                        "time": bar_time,
-                        "equity": acc.equity,
-                    }
-                )
+                closed_position = position
+                pnl, fill_price = broker.close_position(acc, closed_position, fq)
+                record = {
+                    "type": "stop_close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "reason": "max_loss_cap",
+                    "bar": i,
+                    "time": execution_time,
+                    "decision_time": bar_time,
+                    "fill_time": execution_time,
+                    "fill_quote_source": fill_source,
+                    "equity": acc.equity,
+                }
+                stamp_exit(closed_position, record, fill_price)
+                trade_log.append(record)
                 sessions_with_trades.add(session)
                 position = None
 
         # Check TP (structure-based if available, else use global).
         # A tick fill already closed the position above.
         tp_hit = False
-        if position is not None and tick_hit is None:
+        if (
+            position is not None
+            and position_active_in_bar
+            and full_bar_available_after_entry
+            and tick_hit is None
+        ):
             if position.tp_price is not None:
                 if position.direction == 1 and float(row["high"]) >= position.tp_price:
                     tp_hit = True
@@ -309,36 +427,44 @@ def run_backtest(
             assert position is not None
             assert position.tp_price is not None
             tp_fq = _sl_tp_fill_quote(position.direction, position.tp_price, cost_model)
-            pnl, fill_price = broker.close_position(acc, position, tp_fq)
-            trade_log.append(
-                {
-                    "type": "tp_close",
-                    "pnl": pnl,
-                    "price": fill_price,
-                    "reason": "structure_tp",
-                    "bar": i,
-                    "time": bar_time,
-                    "equity": acc.equity,
-                }
-            )
+            closed_position = position
+            pnl, fill_price = broker.close_position(acc, closed_position, tp_fq)
+            record = {
+                "type": "tp_close",
+                "pnl": pnl,
+                "price": fill_price,
+                "reason": "structure_tp",
+                "bar": i,
+                "time": bar_time,
+                "event_time_start": bar_time,
+                "event_time_end": bar_time + bar_duration,
+                "time_precision": "bar_interval",
+                "equity": acc.equity,
+            }
+            stamp_exit(closed_position, record, fill_price)
+            trade_log.append(record)
             sessions_with_trades.add(session)
             position = None
         elif not use_structure_sl_tp and take_profit_per_trade_usd is not None:
             # Fallback: global USD-based TP
             if acc.open_pnl >= abs(take_profit_per_trade_usd):
                 assert position is not None
-                pnl, fill_price = broker.close_position(acc, position, fq)
-                trade_log.append(
-                    {
-                        "type": "tp_close",
-                        "pnl": pnl,
-                        "price": fill_price,
-                        "reason": "take_profit_per_trade",
-                        "bar": i,
-                        "time": bar_time,
-                        "equity": acc.equity,
-                    }
-                )
+                closed_position = position
+                pnl, fill_price = broker.close_position(acc, closed_position, fq)
+                record = {
+                    "type": "tp_close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "reason": "take_profit_per_trade",
+                    "bar": i,
+                    "time": execution_time,
+                    "decision_time": bar_time,
+                    "fill_time": execution_time,
+                    "fill_quote_source": fill_source,
+                    "equity": acc.equity,
+                }
+                stamp_exit(closed_position, record, fill_price)
+                trade_log.append(record)
                 sessions_with_trades.add(session)
                 position = None
 
@@ -356,41 +482,60 @@ def run_backtest(
             )
             if position is not None:
                 assert position is not None
-                pnl, fill_price = broker.close_position(acc, position, fq)
-                trade_log.append(
-                    {
-                        "type": "forced_close",
-                        "pnl": pnl,
-                        "price": fill_price,
-                        "reason": reason,
-                        "bar": i,
-                        "time": bar_time,
-                        "equity": acc.equity,
-                    }
-                )
+                closed_position = position
+                pnl, fill_price = broker.close_position(acc, closed_position, fq)
+                record = {
+                    "type": "forced_close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "reason": reason,
+                    "bar": i,
+                    "time": execution_time,
+                    "decision_time": bar_time,
+                    "fill_time": execution_time,
+                    "fill_quote_source": fill_source,
+                    "equity": acc.equity,
+                }
+                stamp_exit(closed_position, record, fill_price)
+                trade_log.append(record)
                 sessions_with_trades.add(session)
                 position = None
 
-        equity_curve.append(acc.equity)
-
         last_ny = _is_last_ny_bar(bars, i, is_ny)
         if block_overnight and last_ny and position is not None:
-            pnl, fill_price = broker.close_position(acc, position, fq)
-            trade_log.append(
-                {
-                    "type": "eod_close",
-                    "pnl": pnl,
-                    "price": fill_price,
-                    "reason": "session_end",
-                    "bar": i,
-                    "time": bar_time,
-                    "equity": acc.equity,
-                }
-            )
+            closed_position = position
+            session_close_time = bar_time + bar_duration
+            pnl, fill_price = broker.close_position(acc, closed_position, bq)
+            record = {
+                "type": "eod_close",
+                "pnl": pnl,
+                "price": fill_price,
+                "reason": "session_end",
+                "bar": i,
+                "time": session_close_time,
+                "fill_time": session_close_time,
+                "fill_quote_source": "permitted_session_bar_close",
+                "equity": acc.equity,
+            }
+            stamp_exit(closed_position, record, fill_price)
+            trade_log.append(record)
             sessions_with_trades.add(session)
             position = None
 
+        # Input bar indexes are left-labeled.  The mark above uses the bar
+        # close quote, so label its valuation at the bar close.  Session-end
+        # liquidation is also performed at that close and must be reflected
+        # in this same valuation point.  Policy orders below execute later
+        # and therefore first affect the next valuation point.
+        equity_curve.append(acc.equity)
+        equity_times.append(pd.Timestamp(bar_time) + bar_duration)
+
         if session in breached_sessions or not is_ny or (block_overnight and last_ny):
+            continue
+
+        # A policy decision needs a subsequent executable bar. The data-end
+        # row may close an existing position, but cannot open a new one.
+        if i + 1 >= n_bars:
             continue
 
         obs = feat_array[i - obs_window : i].copy()
@@ -399,38 +544,53 @@ def run_backtest(
         if action == exit_action and position is not None:
             # Explicit exit action (e.g., 2 for MACD)
             assert position is not None
-            pnl, fill_price = broker.close_position(acc, position, fq)
-            trade_log.append(
-                {
-                    "type": "close",
-                    "pnl": pnl,
-                    "price": fill_price,
-                    "bar": i,
-                    "time": bar_time,
-                    "equity": acc.equity,
-                }
-            )
+            closed_position = position
+            pnl, fill_price = broker.close_position(acc, closed_position, fq)
+            record = {
+                "type": "close",
+                "pnl": pnl,
+                "price": fill_price,
+                "bar": i,
+                "time": execution_time,
+                "decision_time": bar_time,
+                "fill_time": execution_time,
+                "fill_quote_source": fill_source,
+                "equity": acc.equity,
+            }
+            stamp_exit(closed_position, record, fill_price)
+            trade_log.append(record)
             sessions_with_trades.add(session)
             position = None
 
         elif action in (1, -1):
             if position is not None and position.direction != action:
                 assert position is not None
-                pnl, fill_price = broker.close_position(acc, position, fq)
-                trade_log.append(
-                    {
-                        "type": "close",
-                        "pnl": pnl,
-                        "price": fill_price,
-                        "bar": i,
-                        "time": bar_time,
-                        "equity": acc.equity,
-                    }
-                )
+                closed_position = position
+                pnl, fill_price = broker.close_position(acc, closed_position, fq)
+                record = {
+                    "type": "close",
+                    "pnl": pnl,
+                    "price": fill_price,
+                    "bar": i,
+                    "time": execution_time,
+                    "decision_time": bar_time,
+                    "fill_time": execution_time,
+                    "fill_quote_source": fill_source,
+                    "equity": acc.equity,
+                }
+                stamp_exit(closed_position, record, fill_price)
+                trade_log.append(record)
                 sessions_with_trades.add(session)
                 position = None
 
             if position is None:
+                if block_overnight and _is_last_ny_bar(
+                    bars,
+                    i + 1,
+                    "session" not in bars.iloc[i + 1].index
+                    or str(bars.iloc[i + 1]["session"]) == "ny",
+                ):
+                    continue
                 # Extract structure features if available
                 sl_price = None
                 tp_price = None
@@ -509,6 +669,9 @@ def run_backtest(
 
                 position = broker.open_position(acc, fq, actual_lots, action)
                 if position:
+                    position_sequence += 1
+                    position.position_id = f"bt:p{position_sequence}"
+                    position.entry_timestamp = execution_time
                     # Attach SL/TP/risk info
                     position.sl_price = sl_price
                     position.tp_price = tp_price
@@ -518,15 +681,21 @@ def run_backtest(
                     trade_log.append(
                         {
                             "type": "open",
+                            "position_id": position.position_id,
                             "direction": action,
                             "price": position.entry_price,
                             "lots": position.size,
+                            "entry_commission": cost_model.total_cost(position.size),
                             "sl_price": sl_price,
                             "tp_price": tp_price,
                             "risk_frac": risk_frac,
                             "rr_ratio": rr_ratio,
                             "bar": i,
-                            "time": bar_time,
+                            "time": execution_time,
+                            "decision_time": bar_time,
+                            "order_submission_time": bar_time,
+                            "fill_time": execution_time,
+                            "fill_quote_source": fill_source,
                             "equity": acc.equity,
                         }
                     )
@@ -534,42 +703,63 @@ def run_backtest(
 
         elif action == 0 and position is not None and not hold_on_zero:
             # Close position on action=0 (unless hold_on_zero is True)
-            pnl, fill_price = broker.close_position(acc, position, fq)
-            trade_log.append(
-                {
-                    "type": "close",
-                    "pnl": pnl,
-                    "price": fill_price,
-                    "bar": i,
-                    "time": bar_time,
-                    "equity": acc.equity,
-                }
-            )
+            closed_position = position
+            pnl, fill_price = broker.close_position(acc, closed_position, fq)
+            record = {
+                "type": "close",
+                "pnl": pnl,
+                "price": fill_price,
+                "bar": i,
+                "time": execution_time,
+                "decision_time": bar_time,
+                "fill_time": execution_time,
+                "fill_quote_source": fill_source,
+                "equity": acc.equity,
+            }
+            stamp_exit(closed_position, record, fill_price)
+            trade_log.append(record)
             sessions_with_trades.add(session)
             position = None
 
     if position is not None:
         last_row = bars.iloc[-1]
         last_time = bar_times[-1]
-        last_fq = _fill_quote(last_time, last_row, cost_model, tickbook)
+        last_fq = _bar_quote(last_row, cost_model)
+        terminal_close_time = last_time + bar_duration
         assert position is not None
-        pnl, fill_price = broker.close_position(acc, position, last_fq)
-        trade_log.append(
-            {
-                "type": "eod_close",
-                "pnl": pnl,
-                "price": fill_price,
-                "bar": n_bars - 1,
-                "time": last_time,
-                "equity": acc.equity,
-            }
-        )
+        closed_position = position
+        pnl, fill_price = broker.close_position(acc, closed_position, last_fq)
+        record = {
+            "type": "eod_close",
+            "pnl": pnl,
+            "price": fill_price,
+            "bar": n_bars - 1,
+            "time": terminal_close_time,
+            "fill_time": terminal_close_time,
+            "fill_quote_source": "terminal_bar_close",
+            "equity": acc.equity,
+        }
+        stamp_exit(closed_position, record, fill_price)
+        trade_log.append(record)
+        # The last bar has no later valuation point.  Its terminal close is
+        # priced at this bar's close, so replace the pre-liquidation mark at
+        # that same timestamp with the realized account value.
+        if equity_curve:
+            equity_curve[-1] = acc.equity
+        else:
+            equity_curve.append(acc.equity)
+            equity_times.append(pd.Timestamp(last_time) + bar_duration)
 
     trades_df = pd.DataFrame(trade_log)
-    equity_series = pd.Series(equity_curve, index=bar_times[obs_window:])
+    equity_series = pd.Series(
+        equity_curve,
+        index=pd.DatetimeIndex(equity_times, name=bar_times.name),
+        dtype=float,
+    )
 
     return {
         "equity": equity_series,
+        "equity_valuation_times": pd.DatetimeIndex(equity_times, name=bar_times.name),
         "trades": trades_df,
         "account": acc,
         "breaches": breach_log,

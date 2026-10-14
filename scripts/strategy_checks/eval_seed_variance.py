@@ -1,13 +1,15 @@
-"""Measure how much a run's metrics move when only the RNG seed changes.
+"""Measure action-sampling sensitivity for a fixed checkpoint.
 
-``train_rl.py`` evaluates with ``deterministic=False``, so the rollout samples
-actions from the policy distribution and every evaluation of the same
-checkpoint yields a different trade set. A single reported Sharpe is therefore
-one draw, not a property of the policy.
+Final train/test reports use deterministic policy actions. This separate
+diagnostic deliberately sets ``deterministic=False`` and varies only the RNG
+seed, measuring how much stochastic action sampling changes the trade set and
+metrics. Its sampled results are not interchangeable with the standard final
+reports.
 
 This re-evaluates one checkpoint across N seeds on each split and reports the
-spread. It writes no charts and no artifacts: it exists to quantify how much of
-a headline number is sampling noise.
+spread. It prints the per-seed rows and summary, writes no charts, and saves a
+JSON artifact when ``--out`` is provided. It quantifies action-sampling
+sensitivity, not the standard deterministic headline metrics.
 
 Usage (inside a GPU allocation, or anywhere the venv matches the arch):
     python -m scripts.strategy_checks.eval_seed_variance --run outputs/<run> --seeds 8
@@ -68,7 +70,7 @@ def _eval_kwargs(cfg: Any) -> dict[str, Any]:
         max_loss_per_trade_usd=_max_loss_per_trade(cfg),
         dsr_eta=cfg.env.reward_dsr_eta,
         continuous_actions=False,
-        # Matches train_rl.py: actions are sampled, so the seed is what varies.
+        # This diagnostic intentionally samples actions; only the RNG seed varies.
         deterministic=False,
         block_overnight=bool(cfg.env.get("block_overnight", True)),
         eod_risk=dict(cfg.env.get("eod_risk", {})),

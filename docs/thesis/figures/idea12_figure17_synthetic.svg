@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560">
+<title>Figure 17 — Confirmed PO3–IFVG entry timing</title><rect width="1000" height="560" fill="#fbfcfe"/>
+<style>text{font:14px sans-serif;fill:#152536} .small{font-size:12px} .axis{stroke:#8091a0;stroke-width:1} .bull{stroke:#18794e;fill:#18794e} .bear{stroke:#b42318;fill:#b42318} .ref{stroke:#7a5af8;stroke-dasharray:6 5} .zone{fill:#fdb022;fill-opacity:.19;stroke:#dc6803} .gate{stroke:#175cd3;stroke-dasharray:7 5}</style>
+<text x="44" y="34" font-size="20" font-weight="bold">Figure 17 — Confirmed PO3–IFVG entry timing</text>
+<text x="44" y="54" class="small">SYNTHETIC EXPLANATORY EXAMPLE — not historical data or a strategy result</text>
+<line class="axis" x1="210" y1="338.5" x2="210" y2="384.2"/>
+<rect class="bull" x="188" y="368.9" width="44" height="5.1" opacity=".78"/>
+<text x="205" y="462">19</text>
+<line class="axis" x1="390" y1="363.8" x2="390" y2="409.5"/>
+<rect class="bear" x="368" y="379.1" width="44" height="5.1" opacity=".78"/>
+<text x="385" y="462">20</text>
+<line class="axis" x1="570" y1="297.8" x2="570" y2="389.2"/>
+<rect class="bull" x="548" y="302.9" width="44" height="81.2" opacity=".78"/>
+<text x="565" y="462">21</text>
+<line class="axis" x1="750" y1="282.6" x2="750" y2="302.9"/>
+<rect class="bull" x="728" y="287.7" width="44" height="10.2" opacity=".78"/>
+<text x="745" y="462">22</text>
+<rect class="zone" x="120" y="308.0" width="720" height="20.3"/>
+<line class="ref" x1="100" y1="389.2" x2="850" y2="389.2"/>
+<line x1="110" y1="404.5" x2="850" y2="404.5" stroke="#b42318"/>
+<line x1="110" y1="135.4" x2="850" y2="135.4" stroke="#18794e"/>
+<text x="860" y="393.2">confirmed M5 low 100</text>
+<text x="860" y="322.2">bearish FVG [112,116]</text>
+<text x="860" y="408.5">SL 97</text>
+<text x="860" y="139.4">TP 150</text>
+<text x="520" y="90" fill="#175cd3">IFVG confirmation close</text>
+<line class="gate" x1="600" y1="96" x2="600" y2="485"/>
+<text x="710" y="500">next bar open: earliest fill 118</text>
+<text x="75" y="520" class="small">Causal order: pivot confirmation → sweep/reclaim (20) → IFVG close (21) → submit after close → fill (22)</text></svg>

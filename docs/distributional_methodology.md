@@ -7,9 +7,38 @@ PLAN 9 so it can be cited directly in the thesis.
 
 | Quantity | One observation means |
 |---|---|
-| Trade PnL | The realised PnL of one completed trade |
-| Holding time | Elapsed seconds from entry to exit of one completed trade |
+| Position PnL | Net realised PnL of one completed position, summing its partial and final fills once |
+| Holding time | Elapsed seconds from entry to final exit of one completed position |
 | Sweep delay | Seconds between the first close beyond a liquidity level and the agent's entry |
+
+Partial fills are execution events, not independent completed trades. A
+position that has realized a partial exit but remains open is excluded from
+completed-position trade statistics. Fill-level counts and realized-PnL
+reconciliation remain separate diagnostics.
+
+## Target reference and mode lifecycle
+
+Reference-selected targets retain their TP1/TP2/TP3 slot identities, allocated
+quantities, and source metadata. A valid set may contain one or two targets;
+disabled slots stay disabled, and duplicate prices are not repaired with
+artificial offsets. EMA exits remain a separate exit mechanism.
+
+The current versioned legacy mode contract is:
+
+- `fixed` leaves all targets at their entry-time references.
+- `breakeven` preserves the legacy TP pullback: once its favorable-excursion
+  threshold is reached, the nearest remaining target may move once toward
+  `entry ± alpha × initial risk`. It does not move the stop. A price already
+  crossed by the current bar is not installed as a retroactive target.
+- `trailing` may extend only the nearest remaining, unhit slot to a confirmed
+  favorable swing (high for long, low for short), rounded outward to the
+  instrument tick. The update is accepted only if it remains beyond the
+  current close and does not overtake a later active slot.
+
+Exit checks run before position guards. A target update is logged with its
+source, old and new prices, decision timestamp, and earliest effective next
+bar. Hit slots and their fills are immutable. Mode changes never alter the
+position size allocation, initial risk, or previously realized quantity.
 
 ## Statistics reported
 
@@ -37,7 +66,9 @@ the environment trade log.
 - Non-finite observations are excluded from statistics and their count is
   reported separately - never silently mixed in.
 - Empty or degenerate inputs yield count=0 with NaN fields rather than
-  raising, so batch evaluation cannot be derailed by one bad episode.
+  raising, so batch evaluation cannot be derailed by one bad episode. A run
+  with zero completed positions is labeled `INACTIVE`; it is not evidence of
+  successful trading performance.
 - Existing point-estimate metrics are unchanged by this layer; the
   distribution output is additive under the `pnl_distribution` key of the
   evaluation report.

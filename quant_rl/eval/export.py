@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -73,6 +74,29 @@ def _extract_ftmo_limits(cfg: Any) -> tuple[float | None, float | None, float | 
         except Exception:
             pass
     return daily_loss_limit, max_loss_limit, profit_target
+
+
+def _action_schema_manifest(cfg: Any) -> dict[str, Any] | None:
+    """Serialize configured overlay coordinates for the exported run."""
+    if cfg is None:
+        return None
+    try:
+        env = cfg.env
+        if not bool(env.get("strategy_actions", False)):
+            return None
+        from quant_rl.action_schema import build_action_schema
+
+        multi_tp = bool(env.get("allow_multi_tp", False))
+        schema = build_action_schema(
+            has_direction=bool(env.get("agent_direction_control", False)),
+            has_sl_mode=bool(env.get("allow_agent_sl_mode", True)),
+            has_tp_mode=bool(env.get("allow_agent_tp_mode", False)),
+            has_multi_tp=multi_tp,
+            has_simplex=multi_tp and bool(env.get("allow_simplex", True)),
+        )
+        return schema.to_dict()
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
 
 
 def _extract_trade_chart_config(cfg: Any) -> dict[str, Any]:
@@ -137,6 +161,8 @@ def _write_split(
     show_sl_tp: bool = True,
     secondary_bars: pd.DataFrame | None = None,
     features: pd.DataFrame | None = None,
+    phase_timings: dict[str, float] | None = None,
+    phase_prefix: str = "",
 ) -> None:
     """Write all data + charts for one split into *split_dir*."""
     split_dir.mkdir(parents=True, exist_ok=True)
@@ -146,6 +172,7 @@ def _write_split(
     breach_events: list[dict[str, Any]] = result.get("breach_events", [])
     initial_balance: float = result.get("initial_balance", 100_000.0)
 
+    phase_start = time.perf_counter()
     # ------------------------------------------------------------------
     # CSVs + diagnostics
     # ------------------------------------------------------------------
@@ -204,6 +231,9 @@ def _write_split(
                 direction_summary[key] += float(close_row.get("pnl", 0.0) or 0.0)
         (split_dir / "direction_summary.json").write_text(json.dumps(direction_summary, indent=2))
 
+    if phase_timings is not None:
+        phase_timings[f"{phase_prefix}numeric"] = time.perf_counter() - phase_start
+    phase_start = time.perf_counter()
     # ------------------------------------------------------------------
     # Static PNG charts
     # ------------------------------------------------------------------
@@ -245,7 +275,9 @@ def _write_split(
             equity, out_path=split_dir / "monthly_heatmap.png", dpi=dpi
         )
 
-        if bars is not None and not trades.empty:
+        if bars is not None and not trades.empty and max_order_charts > 0:
+            order_start = time.perf_counter()
+            log.info("REPORT_PROGRESS %s order_png_start cap=%d", phase_prefix, max_order_charts)
             _plt.plot_per_trade_orders(
                 bars,
                 trades,
@@ -261,7 +293,17 @@ def _write_split(
                 secondary_bars=secondary_bars,
                 features=features,
             )
+            if phase_timings is not None:
+                phase_timings[f"{phase_prefix}order_png"] = time.perf_counter() - order_start
+            log.info(
+                "REPORT_PROGRESS %s order_png_done seconds=%.3f",
+                phase_prefix,
+                time.perf_counter() - order_start,
+            )
 
+    if phase_timings is not None:
+        phase_timings[f"{phase_prefix}static_png_total"] = time.perf_counter() - phase_start
+    phase_start = time.perf_counter()
     # ------------------------------------------------------------------
     # Interactive HTML charts
     # ------------------------------------------------------------------
@@ -296,7 +338,7 @@ def _write_split(
             _pi.plot_returns_dist(equity, out_path=split_dir / "returns_hist.html")
             _pi.plot_monthly_returns_heatmap(equity, out_path=split_dir / "monthly_heatmap.html")
 
-            if bars is not None and not trades.empty:
+            if bars is not None and not trades.empty and max_order_charts > 0:
                 _pi.plot_per_trade_orders(
                     bars,
                     trades,
@@ -314,6 +356,9 @@ def _write_split(
         except ImportError:
             log.warning("plotly not available — skipping interactive HTML charts")
 
+    if phase_timings is not None:
+        phase_timings[f"{phase_prefix}interactive_html"] = time.perf_counter() - phase_start
+    phase_start = time.perf_counter()
     if not trades.empty and (save_plots or save_html):
         from .trade_plots import write_trade_diagnostics
 
@@ -342,13 +387,16 @@ def _write_split(
         )
         if not equity.empty:
             try:
-                write_bootstrap_cis(split_dir, equity, trades)
+                write_bootstrap_cis(split_dir, equity, trades, initial_balance=initial_balance)
             except Exception as exc:
                 log.warning("Bootstrap CIs skipped: %s", exc)
             try:
                 write_calibration_artifacts(split_dir, trades, dpi=dpi, save_plots=save_plots)
             except Exception as exc:
                 log.warning("Calibration diagram skipped: %s", exc)
+
+    if phase_timings is not None:
+        phase_timings[f"{phase_prefix}additional_diagnostics"] = time.perf_counter() - phase_start
 
 
 # ---------------------------------------------------------------------------
@@ -372,10 +420,11 @@ def save_run(
     test_features: pd.DataFrame | None = None,
     cfg: Any | None = None,
     save_plots: bool = True,
-    save_html: bool = True,
+    save_html: bool = False,
     save_csv: bool = True,
     dpi: int = 150,
-    max_order_charts: int = 200,
+    max_order_charts: int = 0,
+    report_profile: str = "full",
 ) -> Path:
     """Persist a complete train + test run.
 
@@ -413,6 +462,20 @@ def save_run(
         except Exception:
             pass
 
+    if report_profile not in ("full", "campaign_fast"):
+        raise ValueError(f"unknown report_profile: {report_profile}")
+    # The fast profile affects presentation artifacts only. Every evaluation,
+    # risk gate, trade, equity series, and mandatory report remains intact.
+    deferred = []
+    if report_profile == "campaign_fast":
+        if max_order_charts > 0:
+            deferred.append("per_trade_png")
+        if save_html:
+            deferred.append("interactive_html")
+        max_order_charts = 0
+        save_html = False
+    phase_timings: dict[str, float] = {}
+    export_started = time.perf_counter()
     split_kwargs: dict[str, Any] = dict(
         daily_loss_limit=daily_loss_limit,
         max_loss_limit=max_loss_limit,
@@ -422,6 +485,7 @@ def save_run(
         save_csv=save_csv,
         dpi=dpi,
         max_order_charts=max_order_charts,
+        phase_timings=phase_timings,
     )
 
     # Add trade chart configuration from config
@@ -436,6 +500,7 @@ def save_run(
             train_bars,
             secondary_bars=train_secondary,
             features=train_features,
+            phase_prefix="training_",
             **split_kwargs,
         )
 
@@ -447,6 +512,7 @@ def save_run(
             test_bars,
             secondary_bars=test_secondary,
             features=test_features,
+            phase_prefix="testing_",
             **split_kwargs,
         )
 
@@ -454,5 +520,22 @@ def save_run(
     if train_metrics is not None:
         (run_dir / "summary.txt").write_text(build_comparison_table(train_metrics, test_metrics))
 
+    phase_timings["total_export"] = time.perf_counter() - export_started
+    report = {
+        "schema_version": 1,
+        "action_schema": _action_schema_manifest(cfg),
+        "profile": report_profile,
+        "deferred_artifacts": deferred,
+        "phase_seconds": phase_timings,
+        "max_order_charts": max_order_charts,
+        "save_plots": save_plots,
+        "save_html": save_html,
+        "save_csv": save_csv,
+    }
+    tmp = run_dir / "report_export_timing.json.tmp"
+    tmp.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    tmp.replace(run_dir / "report_export_timing.json")
+    for phase, seconds in phase_timings.items():
+        log.info("REPORT_TIMING %s=%.3f", phase, seconds)
     log.info("Run saved: %s", run_dir)
     return run_dir

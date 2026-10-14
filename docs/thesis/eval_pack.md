@@ -9,7 +9,11 @@
 Frozen commands and artifact locations for chapter tables. Engine default:
 **TradingEnv** (see [validation_protocol.md](validation_protocol.md)).
 
-Locked OOS (`test_start: 2026-01-01`) is **final report only**.
+The configured period (`test_start: 2026-01-01`, available through 2026-07-03)
+was already inspected and has been explicitly reclassified as exposed
+development evidence. Exploratory tuning requires `selection_acknowledged`
+provenance and is non-confirmatory. It cannot serve as final OOS; see the
+[validation protocol](validation_protocol.md).
 
 > **Historical evidence only (2026-09-21 seed-50 campaign).** The tables below
 > describe the recorded run directories and may be superseded by newer campaigns.
@@ -56,7 +60,8 @@ trading comparison. Idea 3 did trade (all shorts) and survived; test Sharpe is
 poor.
 
 Further overlay work (if any) should target intensity / hold-band, not
-trailing DD. Do not retune on locked-OOS Sharpe.
+trailing DD. The 2026 exposed development period may inform exploratory
+adjustments only; do not tune on a future fresh locked-OOS Sharpe.
 
 ### Negative controls (do not use as the main Idea 1 number)
 

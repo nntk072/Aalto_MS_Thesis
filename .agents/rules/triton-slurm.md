@@ -250,6 +250,24 @@ redesigning the matrix:
    **inside** the GPU bash.
 3. Run train/eval/tests there. Leave the shell open when finished.
 
+### Node architecture, environments and storage
+
+Read [Triton environment guidance](../../docs/operations/triton_environment.md)
+before environment installation or diagnosis. It covers ARM64/x86_64
+selection, persistent Lustre versus ephemeral node storage, uv/venv checks,
+runtime profiling, process I/O symptoms, and reproducibility. Preserve
+current jobs and worktree changes.
+
+### Mypy startup on Lustre
+
+When `mypy --version` hangs in the architecture-matching venv, inspect
+the process/I/O state and follow
+[`docs/operations/triton_mypy_lustre.md`](../../docs/operations/triton_mypy_lustre.md).
+Node-local staging passed a 355-file full-tree check on aarch64/GH200
+(2026-10-11); x86_64 staging is documented but not yet verified.
+Do not skip the full-tree type gate, alter production environments, or
+allocate extra Slurm steps merely to diagnose startup latency.
+
 ## Login node vs GPU
 
 Login-node SSH: `ls`, `cat`, `tmux capture-pane`, `squeue`, `sinfo`, edits,
@@ -263,3 +281,18 @@ Never `source` the wrong-arch venv on login (`.venv` is aarch64-only). Use
 - `quant_rl.train.train_rl` already runs train **and** eval in one process.
 - Prefer one invocation inside an existing (or user-approved) GPU shell.
 - After train finishes, leave the GPU bash / tmux window running.
+
+### Mandatory preflight: `srun --test-only`
+
+Before requesting a new GPU allocation, run a Slurm dry-run on the login node with **the exact proposed partition, node, GPU type/count, CPU count, memory and walltime**:
+
+```bash
+squeue -u "$USER"
+scontrol show node gpuarm1 | grep -E 'State=|CfgTRES=|AllocTRES='
+srun --test-only -p gpu-grace-h200-141g -w gpuarm1 --gpus=gh200:1 --cpus-per-task=128 --mem=450G --time=12:00:00 /bin/true
+```
+
+Replace the example values with the intended request; never blindly submit the example. `--test-only` reports Slurm's **estimated schedulability/start time** and does not start a GPU training job. It is a forecast, **not a guarantee** of immediate allocation. An apparently free GPU or low `AllocTRES` alone does not prove that Slurm can start the request; reservations, priorities, CPU, memory and duration matter.
+
+If the forecast is delayed, test realistic CPU/memory/walltime alternatives with `srun --test-only` **before** any real `srun` or `sbatch`. Test a minimal resource shape if necessary to distinguish GPU scheduling constraints from excessive CPU/RAM requests. For example, when even one GH200, one CPU and 1 GiB with the same walltime is delayed, reducing CPU/RAM cannot by itself guarantee an immediate start. Check `squeue` and `scontrol` for real jobs; dry-run job IDs are not live allocations. Do not repeatedly submit and cancel real jobs to probe availability.
+\n\n### Compare priority and GPU alternatives before waiting\n\nFor CPU-heavy PPO campaigns, minimize estimated total completion time: scheduler wait + measured training runtime. Do not lock to GH200 if A100, H100, H200, or B300 can start sooner and the node meets CPU/RAM, GPU VRAM, CUDA, architecture, environment, and walltime requirements.\n\nInspect account eligibility (sacctmgr show assoc user= format=Account,Partition,QOS) and partition priority (scontrol show partition <name>). Partition PriorityTier differs: on 2026-10-11 H100 gpu-h100-80g was tier 50 while GH200 gpu-grace-h200-141g was tier 1; this is a historical observation, not a permanent entitlement. Higher priority does not imply an unallocated GPU.\n\nCompare matching dry-runs on the login node, adjusting walltime to each partition limit:\n\n`ash\nsrun --test-only -p gpu-a100-80g --gpus=a100:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true\nsrun --test-only -p gpu-h100-80g --gpus=h100:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true\nsrun --test-only -p gpu-h200-141g-short --gpus=h200:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true\nsrun --test-only -p gpu-b300-288g-short --gpus=b300:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true\nsrun --test-only -p gpu-grace-h200-141g --gpus=gh200:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true\n`\n\nUse scontrol show node <node> to distinguish configured GPUs (CfgTRES) from currently allocated GPUs (AllocTRES). sinfo MIXED mostly describes node resources; it does not mean GPUs are free. Check actual GPU allocation and dry-run estimates independently. Slurm forecasts may be inaccurate or extremely far in the future; do not treat them as reservations. Verify the architecture-matching environment (H100/A100/H200/B300 x86_64 versus GH200 aarch64) and benchmark a short representative PPO run before choosing trainer concurrency. No real allocation should be launched solely because a dry-run predicted a fast start.\n

@@ -735,7 +735,8 @@ def plot_per_trade_orders(
         draw_overlays_plotly,
     )
     from .order_chart import draw_order_levels_plotly
-    from .order_window import prepare_order_chart
+    from .order_window import _session_end_positions, prepare_order_chart
+    from .overlay_events import confirmed_pivots
     from .plots import _pair_trades, _trade_filename
 
     orders_dir = Path(orders_dir)
@@ -757,6 +758,8 @@ def plot_per_trade_orders(
     # warmed up and match the strategy's real signals, then slice per trade.
     full_overlays = compute_chart_overlays_full(bars)
     overlay_events = build_overlay_events(bars, secondary=secondary_bars)
+    confirmed_events = confirmed_pivots(overlay_events, bars)
+    session_end_positions = _session_end_positions(pd.DatetimeIndex(bars.index))
 
     for seq_i, (open_row, close_row) in enumerate(pairs):
         prepared = prepare_order_chart(
@@ -773,6 +776,8 @@ def plot_per_trade_orders(
             show_mae_mfe=show_mae_mfe,
             show_sl_tp=show_sl_tp,
             features=features,
+            confirmed_events=confirmed_events,
+            session_end_positions=session_end_positions,
         )
         if prepared is None:
             continue

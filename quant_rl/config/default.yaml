@@ -4,6 +4,7 @@
 data:
   raw_dir: "data"                      # relative to project root
   cache_dir: "cache"                   # parquet cache
+  prebuilt_feature_cache: null          # optional named cache path; content hash is verified
   tz: "Etc/GMT-3"                      # broker server timezone (UTC+3)
   symbols: ["US100.cash", "US500.cash"]
   primary: "US100.cash"
@@ -81,9 +82,9 @@ ftmo:
 # without the other.
 live_risk_overrides:
   risk_per_symbol: 0.01          # 1% of balance ≈ $1000 on a $100k account
-  max_total_risk: 0.02           # aggregate open-position risk cap (2%)
+  max_total_risk: 0.02           # broker-stop risk across open positions; unknown stops block entries
   default_lot_size: 0.1          # fallback if risk-based sizing fails
-  stop_loss_pips: 50.0           # stop distance used by RiskManager sizing
+  stop_loss_pips: 50.0           # distance used for sizing and attached broker-side stop
   interval_minutes: 1            # M1 policy cadence for live_trading_rl.py
 
 features:
@@ -115,6 +116,9 @@ features:
   include_fvg_ifvg: false       # per-TF FVG zone features (in-zone flag + ATR dist)
   include_po3_full: false       # full HTF FVG -> LTF IFVG -> entry-trigger pipeline
   include_strategy_state: false # Idea 1: sweeps + PO3 manip/distrib state + IFVG zones
+  po3_reference_mode: "m1_legacy" # Revised overlays opt into confirmed HTF pivots
+  po3_reference_timeframes: ["M5", "M15", "H1"] # Any standard resample TF above M1
+  po3_phase_mode: "legacy" # legacy or reclaim_then_ifvg
   include_pd_context: false     # session-routed Asia/London/prev-day-week PD context + LTF BOS/MSS
   po3_htf: "M15"                # HTF for the full PO3 pipeline
   po3_ltf: "M5"                 # primary (LTF) for the full PO3 pipeline
@@ -127,6 +131,8 @@ features:
   structure: {enabled: false, timeframes: ["M5", "M15", "H1"]}
   liquidity: {enabled: false, timeframes: ["M5", "M15", "H1"]}
   po3_state_mtf: {enabled: false, timeframes: ["M1", "M5", "M15"]}
+  # IFVG confirmations can be merged from any supported resample timeframe;
+  # every source is exposed only after its candle closes.
   ifvg_mtf: {enabled: false, timeframes: ["M5", "M15", "H1"]}
   # CT-anchored session levels (additive to the legacy broker-tz levels in
   # structure.detect_session_levels; new columns carry a _ct suffix).
@@ -154,6 +160,7 @@ env:
   candidate_max_age_bars: 5            # last valid candidate age, in bars
   arm_requires_retest: false           # require a current directional gap retest to arm
   entry_state_observation: true        # false supports the A4a hidden-state ablation
+  strict_research_eligibility: false   # opt-in: fail on missing gate inputs or no eligible NY bars
   # Overlay: intensity does not gate entry (0 = follow context_direction).
   # A positive band lets PPO park at "never trade"; seed-50 20M did that at 0.1.
   entry_intensity_threshold: 0.0
@@ -180,6 +187,7 @@ env:
   allow_agent_tp_mode: false          # opt-in TP mode dim
   tp_mode_defer_threshold: 0.1        # agent veto threshold
   allow_multi_tp: false               # opt-in multi-TP levels
+  allow_simplex: true                 # disable z1/z2 for 9-D multi-TP
   tp_breakeven_alpha: 0.5             # alpha for breakeven TP: TP = entry + alpha * R
   # Training behavior, not an FTMO kill. 0 = off. 0.10 = flatten at 10% from peak.
   peak_trailing_dd_limit: 0.0
@@ -259,10 +267,12 @@ agent:
 device: "auto"
 
 output:
+  report_profile: "full"             # full or campaign_fast (skip optional order PNG and HTML)
   dir: "outputs"                    # base directory for run artifacts
   save_plots: true                  # save static PNG figures
   save_html: false                  # save interactive plotly HTML (slow: ~1h per split)
   save_csv: true                    # save equity.csv + trades.csv
+  max_order_charts: 0               # fast default; set >0 to render per-trade price charts
   dpi: 150                          # PNG resolution
   candle_tf: "15min"                # resample TF for candlestick chart
   price_plot_max_points: 3000       # max candles in price+orders chart
@@ -364,6 +374,8 @@ strategy:
     enabled: true
     max_age_bars: 50
     require_price_retest: true
+    close_through_threshold: 0.5
+    require_opposing_fvg: false
   risk:
     sl_mode: "fixed"            # "fixed" | "breakeven" | "trailing"
     tp_mode: "fixed"            # "fixed" | "breakeven" | "trailing"
@@ -380,6 +392,7 @@ strategy:
       - "previous_day_high_low"
     invalid_target_policy: "rr_fallback"
   entry:
+    mode: "legacy"             # legacy | confirmed_first_eligible | confirmed_retest | preconfirmation_exploratory
     enforce_gate: false         # false = diagnostic; true = hard gate
   reward:
     entry_bonus: 0.01

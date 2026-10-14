@@ -51,6 +51,22 @@ class TestEngineCrossValidation:
 
         assert callable(run_backtrader_engine)
 
+    def test_both_engines_execute_shared_crossover_actions(self, synthetic_data):
+        from quant_rl.backtest.cross_validation.run import (
+            run_backtrader_engine,
+            run_custom_engine,
+        )
+
+        bt_result = run_backtrader_engine(synthetic_data)
+        custom_result = run_custom_engine(synthetic_data)
+
+        assert bt_result["trade_count"] > 0
+        assert custom_result["trade_count"] > 0
+        comparison = compare_results(bt_result, custom_result, tolerance=0.01)
+        assert comparison["agreement"]["overall_pass"] is True, (
+            f"BT={bt_result!r}; custom={custom_result!r}; agreement={comparison['agreement']!r}"
+        )
+
     def test_compare_results_exact_match(self):
         """Test comparison when results are exactly the same."""
         bt_result = {

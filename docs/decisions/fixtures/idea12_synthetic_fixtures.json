@@ -1,0 +1,30 @@
+{
+  "provenance": "Synthetic explanatory examples only; not historical market data or strategy results.",
+  "timezone": "America/Chicago",
+  "fixture_a_confirmed_long": {
+    "bars": [
+      {"bar": 19, "open": 103, "high": 110, "low": 101, "close": 104, "event": "confirmed M5 sell-side pivot at 100 was already available"},
+      {"bar": 20, "open": 102, "high": 105, "low": 96, "close": 101, "event": "sweep and same-candle reclaim of 100"},
+      {"bar": 21, "open": 101, "high": 118, "low": 100, "close": 117, "event": "close above bearish FVG [112,116]; IFVG confirmed"},
+      {"bar": 22, "open": 118, "high": 121, "low": 117, "close": 120, "event": "earliest illustrative fill at bar open after confirmation close"}
+    ],
+    "reference": {"timeframe": "M5", "pivot_price": 100, "confirmed_before_sweep": true},
+    "fvg": {"orientation": "bearish", "low": 112, "high": 116},
+    "entry": 118,
+    "stop": 97,
+    "target": 150,
+    "rr": 1.5238095238095237,
+    "causal_order": ["pivot confirmed", "sweep/reclaim bar 20", "IFVG confirmation close bar 21", "submission after bar 21 close", "fill at bar 22 open"],
+    "optional_retest_example": {"touch_bar": 23, "touch_price": 114, "zone": [112, 116], "submission": "after bar 23 close", "earliest_fill_bar": 24}
+  },
+  "fixture_b_idea2_gate": {
+    "previous_completed_session": {"label": "ny", "timezone": "America/Chicago", "high": 120, "low": 96, "midpoint": 108},
+    "decision_close": 112,
+    "new_long_eligible": false,
+    "new_long_rejection": "premium_block",
+    "existing_long_action": "remain managed by established exit rules",
+    "illustrative_trade": {"entry": 104, "stop": 92, "target": 122, "rr": 1.5},
+    "alternate_stop_check": {"entry": 104, "stop": 90, "target": 122, "rr": 1.2857142857142858}
+  },
+  "mirror_short_transform": {"rule": "p -> K-p for every price and level; preserve timestamps and swap direction inequalities", "status": "property tested in strategy and geometry tests; not a market observation"}
+}

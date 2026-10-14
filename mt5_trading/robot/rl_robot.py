@@ -57,7 +57,7 @@ class RLRobot:
         default_lot_size: float = 0.1,
         stop_loss_pips: float = 50.0,
         magic_number: int = 20240102,
-        paper_trading: bool = False,
+        paper_trading: bool = True,
     ) -> None:
         self.adapter = adapter
         self.data_source = data_source
@@ -97,6 +97,13 @@ class RLRobot:
     def _open(self, symbol: str, position_type: int) -> None:
         """Open a BUY/SELL position, or log it in paper mode."""
         position_size = self.calculate_position_size(symbol)
+        try:
+            stop_price = self.risk_manager.calculate_stop_loss_price(
+                symbol, position_type, self.stop_loss_pips
+            )
+        except Exception as exc:  # noqa: BLE001  (live loop must fail closed)
+            logger.error(f"Refusing to open {symbol}: cannot calculate broker stop loss: {exc}")
+            return
         is_allowed, reason = self.check_risk_before_trade(symbol, position_size)
         if not is_allowed:
             logger.warning(f"Trade not allowed for {symbol}: {reason}")
@@ -104,7 +111,8 @@ class RLRobot:
         direction = "BUY" if position_type == mt5.ORDER_TYPE_BUY else "SELL"
         if self.paper_trading:
             logger.info(
-                f"[PAPER] would open {direction} {symbol} vol={position_size:.2f} (risk: {reason})"
+                f"[PAPER] would open {direction} {symbol} vol={position_size:.2f} "
+                f"SL={stop_price} (risk: {reason})"
             )
             return
         result = self.trader.open_position(
@@ -115,7 +123,7 @@ class RLRobot:
             if position_type == mt5.ORDER_TYPE_BUY
             else f"{self.name} sell position",
             self.magic_number,
-            sl=None,
+            sl=stop_price,
             tp=None,
         )
         if result is None:

@@ -446,39 +446,80 @@ def save_training_plots(
 
 _DASH_COLORS = (_C0, _C1, _C2, _C3, _C4, "#00838f", "#6d4c41", "#ad1457", "#455a64")
 
-_EVAL_PLOT_COLS: tuple[tuple[str, str], ...] = (
-    ("return_pct", "return %"),
-    ("sharpe", "Sharpe"),
-    ("sortino", "Sortino"),
-    ("eval_max_drawdown", "max DD"),
-    ("profit_factor", "profit factor"),
-    ("win_rate", "win rate"),
-    ("avg_trade", "avg trade"),
-    ("n_trades", "trades"),
-    ("turnover", "turnover"),
-    ("eval_reward", "eval reward"),
+_EVALUATION_CHARTS: tuple[tuple[str, tuple[tuple[str, str], ...], str, str, float | None], ...] = (
+    (
+        "dashboard_return",
+        (("return_pct", "Return"), ("eval_max_drawdown_pct", "Max drawdown")),
+        "Training-prefix monitor: return and drawdown",
+        "Percent",
+        100.0,
+    ),
+    (
+        "dashboard_pnl",
+        (("eval_total_pnl", "Net PnL"), ("avg_trade", "Average trade PnL")),
+        "Training-prefix monitor: PnL",
+        "Account currency",
+        None,
+    ),
+    (
+        "dashboard_sharpe",
+        (("sharpe", "Sharpe"), ("sortino", "Sortino")),
+        "Training-prefix monitor: risk-adjusted ratios",
+        "Ratio",
+        None,
+    ),
+    (
+        "dashboard_profit_factor",
+        (("profit_factor", "Profit factor"),),
+        "Training-prefix monitor: profit factor",
+        "Ratio",
+        None,
+    ),
+    (
+        "dashboard_win_rate",
+        (("win_rate", "Win rate"),),
+        "Training-prefix monitor: win rate",
+        "Percent",
+        1.0,
+    ),
+    (
+        "dashboard_trade_count",
+        (("n_trades", "Completed trades"),),
+        "Training-prefix monitor: completed trades",
+        "Trades",
+        None,
+    ),
+    (
+        "dashboard_turnover",
+        (("turnover", "Turnover"),),
+        "Training-prefix monitor: turnover",
+        "Turnover per bar",
+        None,
+    ),
 )
 
-_REWARD_PLOT_COLS: tuple[str, ...] = (
-    "pnl",
-    "dsr",
-    "soft_daily",
-    "soft_year",
-    "soft_trailing",
-    "strategy",
-    "breach",
-    "sweep",
-    "peak_dd",
+_REWARD_PLOT_COLS: tuple[tuple[str, str], ...] = (
+    ("pnl", "PnL reward contribution"),
+    ("dsr", "Differential Sharpe reward"),
+    ("soft_daily", "Daily penalty"),
+    ("soft_year", "Year penalty"),
+    ("soft_trailing", "Trailing penalty"),
+    ("strategy", "Entry shaping reward"),
+    ("breach", "Breach penalty"),
+    ("sweep", "Sweep reward"),
+    ("peak_dd", "Peak drawdown penalty"),
 )
 
-_RISK_PLOT_COLS: tuple[str, ...] = (
-    "daily_loss",
-    "trailing_dd",
-    "max_drawdown",
-    "structure_sl",
-    "structure_tp",
-    "session_end",
-    "peak_dd_behavior",
+_RISK_PLOT_COLS: tuple[tuple[str, str], ...] = (
+    ("daily_loss", "Daily loss limit"),
+    ("trailing_dd", "Trailing DD limit"),
+    ("max_drawdown", "Max drawdown limit"),
+    ("structure_sl", "Structural stop"),
+    ("structure_tp", "Structural take profit"),
+    ("ema_21_exit", "EMA 21 exit"),
+    ("session_end", "Session end"),
+    ("peak_dd_behavior", "Peak DD behavior"),
+    ("other", "Other / unlisted"),
 )
 
 
@@ -501,6 +542,7 @@ def _line_chart(
     ylabel: str,
     out_path: Path,
     dpi: int,
+    percent_xmax: float | None = None,
 ) -> bool:
     present = [(col, label) for col, label in cols if len(_numeric(df, col)) > 0]
     if not present:
@@ -520,6 +562,8 @@ def _line_chart(
     ax.set_title(title, fontweight="bold")
     ax.set_xlabel("Timestep")
     ax.set_ylabel(ylabel)
+    if percent_xmax is not None:
+        ax.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=percent_xmax))
     ax.legend(fontsize=8, ncol=2)
     ax.grid(True)
     fig.tight_layout()
@@ -564,22 +608,43 @@ def save_dashboard_plots(
     if df.empty or "timestep" not in df.columns:
         return
 
-    charts: tuple[tuple[str, tuple[tuple[str, str], ...], str], ...] = (
-        ("dashboard_eval", _EVAL_PLOT_COLS, "Dashboard eval"),
+    charts = (
+        *_EVALUATION_CHARTS,
         (
             "dashboard_reward",
-            tuple((col, col) for col in _REWARD_PLOT_COLS),
+            _REWARD_PLOT_COLS,
             "Dashboard reward parts",
+            "Reward component",
+            None,
         ),
         (
             "dashboard_risk",
-            tuple((col, col) for col in _RISK_PLOT_COLS),
-            "Dashboard close reasons",
+            _RISK_PLOT_COLS,
+            "Close reasons (% of closes; includes other/unlisted)",
+            "Share of closes",
+            1.0,
         ),
-        ("dashboard_grad_norm", (("grad_norm", "grad norm"),), "Dashboard grad norm"),
+        (
+            "dashboard_grad_norm",
+            (("grad_norm", "grad norm"),),
+            "Dashboard grad norm",
+            "Gradient norm",
+            None,
+        ),
     )
-    for name, cols, title in charts:
-        if _line_chart(df, cols, title, "", out_dir / f"{name}.png", dpi) and save_html:
+    for name, cols, title, ylabel, percent_xmax in charts:
+        if (
+            _line_chart(
+                df,
+                cols,
+                title,
+                ylabel,
+                out_dir / f"{name}.png",
+                dpi,
+                percent_xmax,
+            )
+            and save_html
+        ):
             _html_lines(df, cols, title, out_dir / f"{name}.html")
 
     behavior = (

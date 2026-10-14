@@ -58,6 +58,7 @@ def aggregate_seeds(results: Sequence[PerformanceMetrics]) -> pd.DataFrame:
         row: dict[str, Any] = {"seed": seed}
         for _, attr in _TABLE_ROWS:
             row[attr] = getattr(m, attr)
+        row["activity_status"] = activity_status(m)
         rows.append(row)
     if not rows:
         raise ValueError("aggregate_seeds requires at least one result")
@@ -86,12 +87,18 @@ def _format_value(label: str, value: float) -> str:
     return f"{value:.4f}"
 
 
+def activity_status(metrics: PerformanceMetrics) -> str:
+    """Zero completed trades means the run was inactive, not profitable."""
+    return "INACTIVE" if metrics.n_trades == 0 else "ACTIVE"
+
+
 def build_summary_table(m: PerformanceMetrics) -> str:
     """Return a human-readable text table of a single PerformanceMetrics."""
     lines = [
         "=" * 42,
         f"  {'Metric':<22} {'Value':>12}",
         "-" * 42,
+        f"  {'Activity Status':<22} {activity_status(m):>12}",
     ]
     for label, attr in _TABLE_ROWS:
         lines.append(f"  {label:<22} {_format_value(label, float(getattr(m, attr))):>12}")
@@ -125,7 +132,9 @@ def build_comparison_table(
 
 def save_metrics_json(m: PerformanceMetrics, path: Path | str) -> None:
     """Persist a PerformanceMetrics instance to a JSON file."""
-    Path(path).write_text(json.dumps(asdict(m), indent=2))
+    payload = asdict(m)
+    payload["activity_status"] = activity_status(m)
+    Path(path).write_text(json.dumps(payload, indent=2))
 
 
 def build_run_report(
@@ -150,6 +159,7 @@ def build_run_report(
         A dict safe to pass to ``json.dumps``.
     """
     report: dict[str, Any] = asdict(metrics)
+    report["activity_status"] = activity_status(metrics)
     report["sweep_delay"] = sweep_delay_breakdown(trade_log or [])
     report.update(context)
     return report

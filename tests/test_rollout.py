@@ -146,6 +146,8 @@ def test_eval_mode_resumes_trading_after_breach_in_next_session():
         "second open must occur in session 1, after the breach in session 0 clears"
     )
 
-    assert result["n_breach_sessions"] == 1
-    assert len(result["breach_events"]) == 1
-    assert result["breach_events"][0]["session_id"] == 0
+    # The first session's realised loss blocks the remaining entries for that
+    # session. Trading resumes in session 1, whose terminal close also breaches
+    # the deliberately tiny per-session loss limit.
+    assert result["n_breach_sessions"] == 2
+    assert [event["session_id"] for event in result["breach_events"]] == [0, 1]

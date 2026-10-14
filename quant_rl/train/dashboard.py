@@ -7,6 +7,7 @@ A short deterministic slice adds return and risk metrics on the same cadence.
 from __future__ import annotations
 
 import csv
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -31,12 +32,25 @@ _CLOSE_KEYS: tuple[str, ...] = (
     "max_drawdown",
     "structure_sl",
     "structure_tp",
+    "ema_21_exit",
     "session_end",
     "peak_dd_behavior",
+    "other",
 )
+_CLOSE_LABELS: dict[str, str] = {
+    "daily_loss": "Daily loss limit",
+    "trailing_dd": "Trailing DD limit",
+    "max_drawdown": "Max drawdown limit",
+    "structure_sl": "Structural stop",
+    "structure_tp": "Structural take profit",
+    "ema_21_exit": "EMA 21 exit",
+    "session_end": "Session end",
+    "peak_dd_behavior": "Peak DD behavior",
+    "other": "Other / unlisted",
+}
 
 _PART_LABELS: tuple[tuple[str, str], ...] = (
-    ("pnl", "PnL"),
+    ("pnl", "PnL reward contribution"),
     ("dsr", "differential Sharpe"),
     ("soft_daily", "daily penalty"),
     ("soft_year", "year penalty"),
@@ -76,8 +90,13 @@ def close_shares(reasons: list[str]) -> dict[str, float]:
     if n == 0:
         return shares
     for reason in reasons:
-        if reason in shares:
-            shares[reason] += 1.0
+        if reason.startswith("structure_tp"):
+            key = "structure_tp"
+        elif reason in shares:
+            key = reason
+        else:
+            key = "other"
+        shares[key] += 1.0
     return {key: value / n for key, value in shares.items()}
 
 
@@ -129,7 +148,9 @@ def format_dashboard(snapshot: dict[str, Any]) -> str:
     reward = "  ".join(f"{label} {parts.get(key, 0.0):+.4f}" for key, label in _PART_LABELS)
     per_1k = snapshot.get("reward_per_1k") or {}
     per_line = "  ".join(f"{label} {per_1k.get(key, 0.0):+.4f}" for key, label in _PART_LABELS)
-    risk = "  ".join(f"{key} {100.0 * closes.get(key, 0.0):.1f}%" for key in _CLOSE_KEYS)
+    close_summary = "  ".join(
+        f"{_CLOSE_LABELS[key]} {100.0 * closes.get(key, 0.0):.1f}%" for key in _CLOSE_KEYS
+    )
     lines = [
         f"PPO {steps:,} / {total:,}   train_reward {snapshot['train_reward_mean']:+.4f}",
         f"reward    {reward}",
@@ -141,7 +162,7 @@ def format_dashboard(snapshot: dict[str, Any]) -> str:
             f"short {100.0 * position['short']:.1f}%  "
             f"flat {100.0 * position['flat']:.1f}%"
         ),
-        f"risk      closes {int(snapshot['n_closes'])}  {risk}",
+        f"CLOSE REASONS (% of closes)  n={int(snapshot['n_closes'])}  {close_summary}",
         (
             "policy    "
             f"expl {policy['explained_variance']:.4f}  "
@@ -155,14 +176,20 @@ def format_dashboard(snapshot: dict[str, Any]) -> str:
     ]
     ev = snapshot.get("eval")
     if ev:
+        eval_pnl = ev.get("total_pnl")
+        pnl_text = "n/a" if eval_pnl is None else f"{float(eval_pnl):+.2f}"
+        pnl_currency = str(ev.get("account_currency", "account currency"))
         if int(ev.get("n_trades", 0)) == 0:
-            lines.append("eval      FAILED  trades 0  empty replay is not a flat return")
+            lines.append(
+                "TRAIN-PREFIX MONITOR  FAILED  trades 0  empty replay is not a flat return"
+            )
         else:
             lines.append(
-                "eval      "
+                "TRAIN-PREFIX MONITOR (not final test)  "
                 f"return {ev['return_pct']:+.2f}%  sharpe {ev['sharpe']:.2f}  "
                 f"sortino {ev['sortino']:.2f}  "
-                f"maxdd {-100.0 * ev['max_drawdown']:.2f}%  "
+                f"maxdd {100.0 * ev['max_drawdown']:.2f}%  "
+                f"net PnL {pnl_text} {pnl_currency}  "
                 f"pf {ev['profit_factor']:.2f}  "
                 f"win {100.0 * ev['win_rate']:.1f}%  "
                 f"avg {ev['avg_trade']:+.2f}  trades {int(ev['n_trades'])}  "
@@ -224,8 +251,10 @@ def format_dashboard_table(snapshot: dict[str, Any]) -> str:
 
     risk_rows: list[tuple[str, str]] = [("closes", str(int(snapshot["n_closes"])))]
     for key in _CLOSE_KEYS:
-        risk_rows.append((key, f"{100.0 * closes.get(key, 0.0):.1f}%"))
-    rows.append(("risk", risk_rows))
+        share = closes.get(key, 0.0)
+        count = int(round(share * int(snapshot["n_closes"])))
+        risk_rows.append((_CLOSE_LABELS[key], f"{count} ({100.0 * share:.1f}%)"))
+    rows.append(("close reason share (% of closes)", risk_rows))
 
     policy_rows = [
         ("explained_variance", f"{policy['explained_variance']:.4f}"),
@@ -242,6 +271,8 @@ def format_dashboard_table(snapshot: dict[str, Any]) -> str:
     rows.append(("policy", policy_rows))
 
     if ev:
+        eval_pnl = ev.get("total_pnl")
+        pnl_currency = str(ev.get("account_currency", "account currency"))
         eval_rows: list[tuple[str, str]] = [
             ("breach_events", str(int(ev.get("breach_events", 0)))),
         ]
@@ -253,7 +284,11 @@ def format_dashboard_table(snapshot: dict[str, Any]) -> str:
                     ("return_pct", f"{ev['return_pct']:+.2f}%"),
                     ("sharpe", f"{ev['sharpe']:.2f}"),
                     ("sortino", f"{ev['sortino']:.2f}"),
-                    ("max_drawdown", f"{-100.0 * ev['max_drawdown']:.2f}%"),
+                    ("max_drawdown", f"{100.0 * ev['max_drawdown']:.2f}%"),
+                    (
+                        "net_pnl",
+                        "n/a" if eval_pnl is None else f"{float(eval_pnl):+.2f} {pnl_currency}",
+                    ),
                     ("profit_factor", f"{ev['profit_factor']:.2f}"),
                     ("win_rate", f"{100.0 * ev['win_rate']:.1f}%"),
                     ("avg_trade", f"{ev['avg_trade']:+.2f}"),
@@ -262,7 +297,7 @@ def format_dashboard_table(snapshot: dict[str, Any]) -> str:
                     ("reward_mean", f"{ev['reward_mean']:+.4f}"),
                 ]
             )
-        rows.append(("eval", eval_rows))
+        rows.append(("train-prefix monitor (not final test)", eval_rows))
 
     all_pairs = [pair for _, pairs in rows for pair in pairs]
     key_width, value_width = kv_widths(all_pairs)
@@ -274,6 +309,7 @@ def format_dashboard_table(snapshot: dict[str, Any]) -> str:
 # share stored in ``max_drawdown``.
 _EVAL_ROW_KEYS: tuple[tuple[str, str], ...] = (
     ("return_pct", "return_pct"),
+    ("total_pnl", "eval_total_pnl"),
     ("sharpe", "sharpe"),
     ("sortino", "sortino"),
     ("max_drawdown", "eval_max_drawdown"),
@@ -293,6 +329,9 @@ DASHBOARD_COLUMNS: tuple[str, ...] = (
     "breach_events",
     "action_mean",
     "action_std",
+    "action_schema_version",
+    "action_schema_key",
+    "action_schema_coordinates",
     "long",
     "short",
     "flat",
@@ -300,9 +339,13 @@ DASHBOARD_COLUMNS: tuple[str, ...] = (
     *_CLOSE_KEYS,
     "grad_norm",
     "return_pct",
+    "eval_total_pnl",
+    "eval_currency",
     "sharpe",
     "sortino",
     "eval_max_drawdown",
+    "eval_max_drawdown_pct",
+    "win_rate_pct",
     "profit_factor",
     "win_rate",
     "avg_trade",
@@ -340,6 +383,11 @@ def snapshot_row(snapshot: dict[str, Any], *, record_eval: bool = False) -> dict
     row["breach_events"] = int(snapshot.get("breach_events", 0))
     row["action_mean"] = float(action["mean"])
     row["action_std"] = float(action["std"])
+    schema = snapshot.get("action_schema") or {}
+    row["action_schema_version"] = str(schema.get("version", ""))
+    row["action_schema_key"] = str(schema.get("key", ""))
+    coordinates = schema.get("coordinates", ())
+    row["action_schema_coordinates"] = ",".join(str(item) for item in coordinates)
     row["long"] = float(position["long"])
     row["short"] = float(position["short"])
     row["flat"] = float(position["flat"])
@@ -351,6 +399,9 @@ def snapshot_row(snapshot: dict[str, Any], *, record_eval: bool = False) -> dict
         ev = snapshot["eval"]
         for src, dest in _EVAL_ROW_KEYS:
             row[dest] = float(ev[src])
+        row["eval_currency"] = str(ev.get("account_currency", ""))
+        row["eval_max_drawdown_pct"] = 100.0 * float(ev["max_drawdown"])
+        row["win_rate_pct"] = 100.0 * float(ev["win_rate"])
     active = set(snapshot.get("prior_names") or [])
     for name in _PRIOR_NAMES:
         row[f"prior_active_{name}"] = 1 if name in active else 0
@@ -358,14 +409,6 @@ def snapshot_row(snapshot: dict[str, Any], *, record_eval: bool = False) -> dict
         value = snapshot.get(key)
         row[key] = "" if value is None or not np.isfinite(float(value)) else float(value)
     return row
-
-
-def _action_width(model: Any) -> int | None:
-    space = getattr(model, "action_space", None)
-    shape = getattr(space, "shape", None)
-    if not shape:
-        return None
-    return int(shape[0])
 
 
 def _grad_norm_value(raw: Any) -> float | str:
@@ -448,6 +491,11 @@ if _SB3_AVAILABLE:
             self.log_every = int(log_every)
             self._eval_fn = eval_fn
             self._log_path = Path(log_path) if log_path is not None else None
+            self._eval_log_path = (
+                self._log_path.parent / "dashboard_train_prefix_evaluations.jsonl"
+                if self._log_path is not None
+                else None
+            )
             self._diversity = diversity
             self._prior_every = int(self.log_every if prior_every is None else prior_every)
             self._next_prior = self._prior_every if self._prior_every > 0 else 0
@@ -591,6 +639,7 @@ if _SB3_AVAILABLE:
                 "breach_events": breach_events,
                 "position": position_mix(self._directions),
                 "action": action_stats(self._actions),
+                "action_schema": getattr(self.model, "_action_schema", None),
                 "closes": close_shares(self._closes),
                 "n_closes": len(self._closes),
                 "critic": self._critic_from_buffer(),
@@ -628,8 +677,9 @@ if _SB3_AVAILABLE:
             risk_mean = self._risk_sum / risk_n if risk_n else float("nan")
             if risk_mean_collapsed(risk_mean, risk_n, self._diversity):
                 names.add("risk")
-            width = _action_width(self.model)
-            if width is not None and width < 6:
+            schema = getattr(self.model, "_action_schema", None)
+            coordinates = schema.get("coordinates", ()) if isinstance(schema, dict) else ()
+            if "direction" not in coordinates:
                 names.discard("direction")
             setter = getattr(self.model.policy, "set_active_prior", None)
             if callable(setter):
@@ -656,6 +706,15 @@ if _SB3_AVAILABLE:
             except Exception as exc:
                 log.warning("Dashboard eval skipped: %s", exc)
                 return
+            if self._eval_log_path is not None:
+                self._eval_log_path.parent.mkdir(parents=True, exist_ok=True)
+                record = {
+                    "role": "training_prefix_monitor",
+                    "timestep": int(self.num_timesteps),
+                    **self._last_eval,
+                }
+                with self._eval_log_path.open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps(record, default=str, allow_nan=True) + "\n")
             self._eval_just_ran = True
             crossed = 1 + (int(self.num_timesteps) - self._next_eval) // self.eval_every
             self._next_eval += self.eval_every * crossed

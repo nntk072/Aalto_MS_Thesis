@@ -71,6 +71,7 @@ def _default_cfg() -> dict[str, Any]:
             "include_fvg_ifvg": False,
             "include_po3_full": False,
             "include_strategy_state": False,
+            "po3_reference_mode": "m1_legacy",
             "include_session_ohlc": False,
         }
     }
@@ -138,6 +139,40 @@ class TestBuildFeaturesPipeline:
         """FEATURE_CACHE_VERSION is a non-empty string."""
         assert isinstance(FEATURE_CACHE_VERSION, str)
         assert len(FEATURE_CACHE_VERSION) > 0
+
+    def test_htf_sweep_metadata_and_audit_sidecar_are_cached(
+        self, deterministic_bars: pd.DataFrame, tmp_path: Any
+    ) -> None:
+        cfg_data = _default_cfg()
+        cfg_data["features"]["include_strategy_state"] = True
+        cfg_data["features"]["po3_reference_mode"] = "htf_confirmed"
+        cfg_data["features"]["po3_reference_timeframes"] = [
+            "M5",
+            "M15",
+            "M30",
+            "H1",
+            "H4",
+            "D1",
+        ]
+        cfg_data["features"]["po3_phase_mode"] = "reclaim_then_ifvg"
+        cfg_data["strategy"] = {
+            "ifvg": {
+                "max_age_bars": 50,
+                "close_through_threshold": 0.0,
+                "require_opposing_fvg": True,
+            }
+        }
+        cfg = OmegaConf.create(cfg_data)
+        cache_path = tmp_path / "features.parquet"
+
+        features = build_features(deterministic_bars, cfg=cfg, cache_path=cache_path)
+        cached = build_features(deterministic_bars, cfg=cfg, cache_path=cache_path)
+
+        assert "sweep_low_ref_tf_code" in features
+        assert "sweep_low_confirmed_at_ns" in features
+        assert "po3_distribution_started" in features
+        assert (tmp_path / "features.parquet.htf_sweeps.parquet").exists()
+        pd.testing.assert_frame_equal(features, cached, check_freq=False)
 
     def test_golden_hash_matches(self, deterministic_bars: pd.DataFrame) -> None:
         """Regression test: feature matrix SHA256 matches golden value."""

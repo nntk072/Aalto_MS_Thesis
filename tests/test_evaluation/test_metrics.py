@@ -97,6 +97,16 @@ class TestComputeMetrics:
         assert metrics.total_pnl == pytest.approx(2_000.0)
         assert metrics.total_return_pct == pytest.approx(2.0)
 
+    def test_first_valuation_loss_counts_toward_drawdown(self) -> None:
+        # The input can contain end-of-bar valuations only.  Its initial
+        # capital is known separately and must be present for drawdown.
+        metrics = compute_metrics([90_000.0, 95_000.0], initial_balance=100_000.0)
+        assert metrics.max_drawdown == pytest.approx(0.10)
+
+    def test_non_finite_equity_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="finite"):
+            compute_metrics([100_000.0, float("nan")], initial_balance=100_000.0)
+
     def test_trade_stats_mixed_outcomes(self) -> None:
         # Arrange
         equity = [100_000.0, 101_000.0]

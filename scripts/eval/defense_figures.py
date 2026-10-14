@@ -220,6 +220,7 @@ def main() -> None:
     cfg.features.include_session_ohlc = True
     train_end, test_start = get_split_config(cfg)
     data = run_pipeline(cfg, force=False)
+    secondary = data.get(str(cfg.data.secondary), {}).get("M1")
     bars = attach_activity(data[str(cfg.data.primary)]["M1"])
     if args.count_ticks:
         tick_rel = cfg.data.tick_files[cfg.data.primary]
@@ -232,34 +233,22 @@ def main() -> None:
             bars = attach_activity(bars)
     cache_dir = Path(cfg.data.cache_dir)
     mask = make_train_mask(cast(pd.DatetimeIndex, bars.index), train_end)
-    feat_path = feature_cache_path(cache_dir, str(cfg.data.primary), cfg, bars, train_mask=mask)
-    if feat_path.exists():
-        features = pd.read_parquet(feat_path)
-        log.info("Loaded features %s %s", feat_path, features.shape)
-    else:
-        existing = sorted(cache_dir.glob(f"{cfg.data.primary}_features_*.parquet"))
-        existing = [p for p in existing if p.suffix == ".parquet" and not p.name.endswith(".hash")]
-        preferred = sorted(
-            cache_dir.glob(f"{cfg.data.primary}_features_v12-trader-context*.parquet"),
-            key=lambda p: p.stat().st_mtime,
-        )
-        if preferred:
-            features = pd.read_parquet(preferred[-1])
-            log.info("Loaded existing features %s %s", preferred[-1], features.shape)
-        elif existing:
-            existing.sort(key=lambda p: p.stat().st_mtime)
-            features = pd.read_parquet(existing[-1])
-            log.info("Loaded existing features %s %s", existing[-1], features.shape)
-        else:
-            secondary = data.get(str(cfg.data.secondary), {}).get("M1")
-            features = build_features(
-                bars,
-                secondary=secondary,
-                cfg=cfg,
-                train_mask=mask,
-                cache_path=feat_path,
-                force=False,
-            )
+    feat_path = feature_cache_path(
+        cache_dir,
+        str(cfg.data.primary),
+        cfg,
+        bars,
+        train_mask=mask,
+        secondary=secondary,
+    )
+    features = build_features(
+        bars,
+        secondary=secondary,
+        cfg=cfg,
+        train_mask=mask,
+        cache_path=feat_path,
+        force=False,
+    )
     dpi = int(args.dpi)
     plot_coverage_with_gaps(bars, out_path=out / "coverage_gaps.png", dpi=dpi)
     plot_spread_regime(

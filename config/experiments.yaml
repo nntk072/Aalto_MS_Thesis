@@ -24,10 +24,13 @@ defaults:
 variants:
   # ===== LADDER: additive architecture layers (TCN) =====
   - name: ladder_a0_flat
-    reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
+    reward_mode: dsr
     arch: tcn
-    strategy_actions: true
-    agent_direction_control: true
+    # Pure legacy reference: keep Discrete(20) actions and do not apply the
+    # strategy-action PO3 manipulation guard. This is not a matched A1 ablation.
+    strategy_actions: false
+    agent_direction_control: false
+    allow_agent_sl_mode: false
 
   - name: ladder_a1_sl
     reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
@@ -107,6 +110,7 @@ variants:
     include_pd_context: true
     arch: tcn
     strategy_actions: true
+    allow_agent_sl_mode: false
 
   - name: ladder_a1_sl_po3
     reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md
@@ -154,6 +158,7 @@ variants:
     include_pd_context: true
     arch: tcn
     strategy_actions: true
+    allow_agent_sl_mode: false
 
   - name: ladder_a1_sl_dist
     reward_mode: pnl   # effective value before the resolver fix; see CHANGES.md

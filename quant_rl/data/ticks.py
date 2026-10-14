@@ -17,6 +17,7 @@ Typical use
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, cast
 
@@ -60,6 +61,14 @@ class TickBook:
         coverage yet — caller should fall back to ``CostModel.bar_quote``).
         Forward-fills with the last quote when *ts* is after the final tick.
         """
+        event = self.quote_event_at(ts)
+        if event is None:
+            return None
+        _quote_time, bid, ask = event
+        return bid, ask
+
+    def quote_event_at(self, ts: pd.Timestamp) -> tuple[pd.Timestamp, float, float] | None:
+        """Return the selected quote and its recorded tick timestamp."""
         n = len(self._ts)
         if n == 0:
             return None
@@ -69,10 +78,29 @@ class TickBook:
         i = int(np.searchsorted(self._ts, ts_ns, side="left"))
         if i >= n:
             i = n - 1
-        return float(self._bid[i]), float(self._ask[i])
+        return (
+            pd.Timestamp(int(self._ts[i]), unit="ns", tz="UTC"),
+            float(self._bid[i]),
+            float(self._ask[i]),
+        )
 
     def __len__(self) -> int:
         return len(self._ts)
+
+    def bar_quotes(
+        self, bar_start: pd.Timestamp, bar_minutes: int = 1
+    ) -> Iterator[tuple[pd.Timestamp, float, float]]:
+        """Yield recorded quotes in timestamp order within a half-open bar interval."""
+        start_ns = pd.Timestamp(bar_start).value
+        end_ns = start_ns + int(pd.Timedelta(minutes=bar_minutes).value)
+        i0 = int(np.searchsorted(self._ts, start_ns, side="left"))
+        i1 = int(np.searchsorted(self._ts, end_ns, side="left"))
+        for idx in range(i0, i1):
+            yield (
+                pd.Timestamp(int(self._ts[idx]), unit="ns", tz="UTC"),
+                float(self._bid[idx]),
+                float(self._ask[idx]),
+            )
 
     def delayed_exit_quote(
         self,
@@ -91,11 +119,32 @@ class TickBook:
         already through the level. Returns ``None`` when the bar has no
         crossing tick.
         """
+        event = self.delayed_exit_event(
+            bar_start, direction, sl, tp, delay, bar_minutes=bar_minutes
+        )
+        if event is None:
+            return None
+        kind, _fill_time, bid, ask = event
+        return kind, bid, ask
+
+    def delayed_exit_event(
+        self,
+        bar_start: pd.Timestamp,
+        direction: int,
+        sl: float | None,
+        tp: float | None,
+        delay: pd.Timedelta,
+        bar_minutes: int = 1,
+        earliest_time: pd.Timestamp | None = None,
+    ) -> tuple[str, pd.Timestamp, float, float] | None:
+        """Return trigger kind, actual fill time, and delayed executable quote."""
         n = len(self._ts)
         if n == 0 or direction not in (1, -1):
             return None
         start_ns = pd.Timestamp(bar_start).value
-        end_ns = start_ns + int(pd.Timedelta(minutes=bar_minutes).value)
+        if earliest_time is not None:
+            start_ns = max(start_ns, pd.Timestamp(earliest_time).value)
+        end_ns = pd.Timestamp(bar_start).value + int(pd.Timedelta(minutes=bar_minutes).value)
         i0 = int(np.searchsorted(self._ts, start_ns, side="left"))
         i1 = int(np.searchsorted(self._ts, end_ns, side="left"))
         if i0 >= i1:
@@ -122,10 +171,12 @@ class TickBook:
         if trigger < 0:
             return None
         fill_ns = int(self._ts[trigger]) + int(pd.Timedelta(delay).value)
-        quote = self.quote_at(pd.Timestamp(fill_ns, unit="ns"))
-        if quote is None:
+        fill_time = pd.Timestamp(fill_ns, unit="ns", tz="UTC")
+        quote_event = self.quote_event_at(fill_time)
+        if quote_event is None:
             return None
-        return kind, quote[0], quote[1]
+        quote_time, bid, ask = quote_event
+        return kind, max(fill_time, quote_time), bid, ask
 
     def slice(self, start: pd.Timestamp, end: pd.Timestamp) -> TickBook:
         """Return a sub-book covering the half-open interval [start, end)."""

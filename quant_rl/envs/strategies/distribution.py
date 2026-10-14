@@ -67,6 +67,9 @@ class DistributionStrategy(TradingStrategy):
         "sweep_low_reclaimed",
         "bos_up",
         "bos_down",
+        "po3_distribution",
+        "po3_distribution_direction",
+        "htf_day_bias",
         "po3_distribution_after_ifvg",
     )
     raw_columns = (
@@ -76,10 +79,32 @@ class DistributionStrategy(TradingStrategy):
         "bos_down_level",
         "last_swing_high",
         "last_swing_low",
+        "previous_session_high",
+        "previous_session_low",
+        "previous_session_midpoint",
+        "previous_session_completed_at_ns",
+        "decision_close",
     )
 
-    def __init__(self, *, enforce_gate: bool = True):
+    def __init__(
+        self,
+        *,
+        enforce_gate: bool = True,
+        entry_mode: str = "legacy",
+        candidate_max_age_bars: int = 5,
+        previous_session_pd_gate: bool = False,
+        variant_id: str = "distribution_legacy",
+    ):
+        allowed = {"legacy", "confirmed_first_eligible", "confirmed_retest"}
+        if entry_mode not in allowed:
+            raise ValueError(f"unsupported distribution entry mode: {entry_mode!r}")
+        if int(candidate_max_age_bars) < 1:
+            raise ValueError("candidate_max_age_bars must be positive")
         self.enforce_gate = enforce_gate
+        self.entry_mode = entry_mode
+        self.candidate_max_age_bars = int(candidate_max_age_bars)
+        self.previous_session_pd_gate = bool(previous_session_pd_gate)
+        self.variant_id = str(variant_id)
         self._lower_bull: tuple[tuple[str, str, str | None], ...] | None = None
         self._higher_bull: tuple[tuple[str, str, str | None], ...] | None = None
         self._lower_bear: tuple[tuple[str, str, str | None], ...] | None = None
@@ -96,9 +121,34 @@ class DistributionStrategy(TradingStrategy):
 
     def validate_entry(self, *, direction: int, row: pd.Series) -> bool:
         """Distribution after the opposing gap fails, when the gate is enforced."""
-        if not self.enforce_gate:
+        if self.enforce_gate and not self.distribution_ready(row, direction):
+            return False
+        return self.previous_session_pd_eligible(row, direction)
+
+    def entry_rejection_reason(self, *, direction: int, row: pd.Series) -> str:
+        """Return the explicit Idea 2 premium/discount rejection label."""
+        if self.previous_session_pd_gate:
+            midpoint = float(row.get("previous_session_midpoint", np.nan))
+            close = float(row.get("decision_close", np.nan))
+            if not np.isfinite(midpoint) or not np.isfinite(close):
+                return "missing_previous_session"
+            if direction == 1 and close >= midpoint:
+                return "premium_block"
+            if direction == -1 and close <= midpoint:
+                return "discount_block"
+        return "entry_gate"
+
+    def previous_session_pd_eligible(self, row: pd.Series, direction: int) -> bool:
+        """Per-entry strict discount/premium check; equality is ineligible."""
+        if not self.previous_session_pd_gate:
             return True
-        return self.distribution_ready(row, direction)
+        midpoint = float(row.get("previous_session_midpoint", np.nan))
+        close = float(row.get("decision_close", np.nan))
+        if not np.isfinite(midpoint) or not np.isfinite(close):
+            return False
+        return (
+            close < midpoint if direction == 1 else close > midpoint if direction == -1 else False
+        )
 
     def sl_reference(self, *, direction: int, row: FeatureRow | pd.Series) -> float | None:
         """Long -> swept low, short -> swept high (Agent.md §14).
@@ -151,6 +201,21 @@ class DistributionStrategy(TradingStrategy):
             return False
         if int(np.sign(dist)) != direction or int(np.sign(bias)) != direction:
             return False
+        if self.entry_mode == "confirmed_first_eligible":
+            confirmed = float(row.get("po3_ifvg_confirmed", 0.0) or 0.0) > 0.0
+            if not confirmed:
+                # The raw directional pulses are retained for individual IFVG sides.
+                suffix = "bull" if direction == 1 else "bear"
+                confirmed = float(row.get(f"ifvg_{suffix}_confirmed", 0.0) or 0.0) > 0.0
+            return confirmed
+        if self.entry_mode == "confirmed_retest":
+            if float(row.get("po3_distribution_after_ifvg", 0.0) or 0.0) <= 0.0:
+                return False
+            suffix = "bull" if direction == 1 else "bear"
+            if float(row.get(f"ifvg_retest_{suffix}", 0.0) or 0.0) <= 0.0:
+                return False
+            age = float(row.get(f"ifvg_{suffix}_age", -1.0) or -1.0)
+            return 1.0 <= age <= self.candidate_max_age_bars
         return float(row.get("po3_distribution_after_ifvg", 0.0) or 0.0) > 0.0
 
     def sl_candidates(self, *, direction: int, row: pd.Series) -> list[tuple[str, float]]:
@@ -197,4 +262,11 @@ class DistributionStrategy(TradingStrategy):
                 level = float(row.get(name, np.nan))
                 if np.isfinite(level):
                     out.append((name, level))
+        if self.entry_mode != "legacy":
+            edge = float(row.get("po3_ifvg_low" if direction == 1 else "po3_ifvg_high", np.nan))
+            through = float(row.get("po3_ifvg_through_zone_extreme", np.nan))
+            if np.isfinite(edge):
+                out.append(("ifvg_far_edge", edge))
+            if np.isfinite(through):
+                out.append(("ifvg_through_zone_extreme", through))
         return out

@@ -110,9 +110,14 @@ class IFVGConfig:
     close_through_threshold : float
         How far price must close beyond the FVG zone to confirm IFVG
         (as fraction of FVG size, e.g., 0.5 = 50% through the gap).
+    inverse_opposing_fvg : bool
+        When true, a bullish IFVG is a close above an existing bearish FVG;
+        a bearish IFVG is a close below an existing bullish FVG. False keeps
+        the historical same-orientation confirmation behavior.
     """
 
     close_through_threshold: float = 0.5
+    inverse_opposing_fvg: bool = False
 
 
 def detect_ifvg_confirmation(
@@ -174,6 +179,8 @@ def detect_ifvg_confirmation(
     out_bull_high = np.full(n, np.nan)
     out_bear_low = np.full(n, np.nan)
     out_bear_high = np.full(n, np.nan)
+    origin_bull = np.full(n, np.nan)
+    origin_bear = np.full(n, np.nan)
 
     threshold = config.close_through_threshold
     max_age = 50  # bars; zones older than this are dropped
@@ -189,27 +196,31 @@ def detect_ifvg_confirmation(
         # Check for IFVG confirmation (close-through)
         close_price = close_arr[i]
 
-        # Bullish confirmation: close above FVG zone
-        for fvg_start, fvg_low, fvg_high in active_fvg_bullish[:]:
+        # Revised mode inverts an opposing-direction gap. The false branch
+        # retains the pre-Idea same-orientation behavior for reproduction.
+        bullish_sources = active_fvg_bearish if config.inverse_opposing_fvg else active_fvg_bullish
+        bearish_sources = active_fvg_bullish if config.inverse_opposing_fvg else active_fvg_bearish
+        for fvg_start, fvg_low, fvg_high in bullish_sources[:]:
             fvg_size = fvg_high - fvg_low
             if fvg_size > 0:
                 close_through_pct = (close_price - fvg_high) / fvg_size
-                if close_through_pct >= threshold:
+                if close_price > fvg_high and close_through_pct >= threshold:
                     confirm_out_bull[i] = 1
                     out_bull_low[i] = fvg_low
                     out_bull_high[i] = fvg_high
-                    active_fvg_bullish.remove((fvg_start, fvg_low, fvg_high))
+                    origin_bull[i] = float(fvg_start)
+                    bullish_sources.remove((fvg_start, fvg_low, fvg_high))
 
-        # Bearish confirmation: close below FVG zone
-        for fvg_start, fvg_low, fvg_high in active_fvg_bearish[:]:
+        for fvg_start, fvg_low, fvg_high in bearish_sources[:]:
             fvg_size = fvg_high - fvg_low
             if fvg_size > 0:
                 close_through_pct = (fvg_low - close_price) / fvg_size
-                if close_through_pct >= threshold:
+                if close_price < fvg_low and close_through_pct >= threshold:
                     confirm_out_bear[i] = 1
                     out_bear_low[i] = fvg_low
                     out_bear_high[i] = fvg_high
-                    active_fvg_bearish.remove((fvg_start, fvg_low, fvg_high))
+                    origin_bear[i] = float(fvg_start)
+                    bearish_sources.remove((fvg_start, fvg_low, fvg_high))
 
         # Remove old FVGs (older than lookback period)
         active_fvg_bullish = [(s, lo, h) for s, lo, h in active_fvg_bullish if i - s < max_age]
@@ -223,6 +234,8 @@ def detect_ifvg_confirmation(
             "ifvg_bullish_high": out_bull_high,
             "ifvg_bearish_low": out_bear_low,
             "ifvg_bearish_high": out_bear_high,
+            "ifvg_bullish_origin_bar": origin_bull,
+            "ifvg_bearish_origin_bar": origin_bear,
         },
         index=df.index,
     )

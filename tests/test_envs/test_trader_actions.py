@@ -78,6 +78,13 @@ def _features(bars: pd.DataFrame, *, ctx_dir: float = 1.0) -> pd.DataFrame:
     )
 
 
+def _default_schema_action(
+    intensity: float, stop: float, risk: float, target: float
+) -> np.ndarray[Any, Any]:
+    """Build a default no-direction v2 action, including SL-mode and exit slots."""
+    return np.array([intensity, stop, risk, target, 0.0, -1.0], dtype=np.float32)
+
+
 class TestTraderActionSpace:
     def test_box_is_symmetric_unit(self) -> None:
         bars = _bars()
@@ -129,7 +136,7 @@ class TestZeroActionOpens:
         env.reset()
         opened = False
         for _ in range(40):
-            env.step(np.zeros(4, dtype=np.float32))
+            env.step(_default_schema_action(0.0, 0.0, 0.0, 0.0))
             if env.position is not None:
                 opened = True
                 assert env.position.direction == 1
@@ -157,7 +164,7 @@ class TestContextDirectionForcesSide:
         env.reset()
         # Intensity high; context is long — should open long.
         for _ in range(30):
-            env.step(np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32))
+            env.step(_default_schema_action(0.9, 0.0, 0.5, 0.0))
             if env.position is not None:
                 assert env.position.direction == 1
                 break
@@ -183,7 +190,7 @@ class TestContextDirectionForcesSide:
         # Intensity in Box[-1,1]: a=-0.9 → u=0.05; explicit 0.1 band still holds.
         env.entry_intensity_threshold = 0.1
         for _ in range(20):
-            obs, _, done, truncated, _ = env.step(np.array([-0.9, 0.0, 0.5, 0.0], dtype=np.float32))
+            obs, _, done, truncated, _ = env.step(_default_schema_action(-0.9, 0.0, 0.5, 0.0))
             assert env.position is None  # hold (intensity < entry_intensity_threshold)
             if done or truncated:
                 break
@@ -205,7 +212,7 @@ class TestRRMapping:
         )
         for t in (0.0, 0.25, 0.5, 0.75, 1.0):
             _d, _r, frac, _tp = env._decode_action(
-                np.array([0.9, 0.0, 0.5, t], dtype=np.float32),
+                _default_schema_action(0.9, 0.0, 0.5, t),
                 feats.iloc[10],
             )
             assert frac == pytest.approx(0.5 * (t + 1.0))
@@ -232,7 +239,7 @@ class TestMinSL:
         )
         env.reset()
         for _ in range(40):
-            env.step(np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32))
+            env.step(_default_schema_action(0.9, 0.0, 0.5, 0.0))
             assert env.position is None
 
 
@@ -266,7 +273,7 @@ class TestLotsScaleWithSL:
         for env, sink in ((env_w, "w"), (env_t, "t")):
             env.reset()
             for _ in range(40):
-                env.step(np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32))
+                env.step(_default_schema_action(0.9, 0.0, 0.5, 0.0))
                 if env.position is not None:
                     if sink == "w":
                         lots_w = env.position.size
@@ -312,11 +319,11 @@ class TestSessionCaps:
                 env.trade_log.append({"type": "close", "pnl": pnl})
                 env.position = None
                 env._note_close(pnl)
-            env.step(np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32))
+            env.step(_default_schema_action(0.9, 0.0, 0.5, 0.0))
             if env._session_entry_counts.get(0, 0) >= 3 and env.position is None:
                 # Fourth attempt must not open.
                 before = env._session_entry_counts.get(0, 0)
-                env.step(np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32))
+                env.step(_default_schema_action(0.9, 0.0, 0.5, 0.0))
                 assert env.position is None
                 assert env._session_entry_counts.get(0, 0) == before == 3
                 return
@@ -356,7 +363,7 @@ class TestSessionCaps:
                 env.trade_log.append({"type": "close", "pnl": pnl})
                 env.position = None
                 env._note_close(pnl)
-            env.step(np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32))
+            env.step(_default_schema_action(0.9, 0.0, 0.5, 0.0))
             if env._session_entry_counts.get(0, 0) >= 4:
                 return
         pytest.fail("session stayed capped below 4 entries")
@@ -381,7 +388,7 @@ class TestSessionCaps:
         )
         env.reset()
         for _ in range(20):
-            env.step(np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32))
+            env.step(_default_schema_action(0.9, 0.0, 0.5, 0.0))
             assert env.position is None
 
     def test_post_open_manipulation_end_allows_the_trade(self) -> None:
@@ -410,7 +417,7 @@ class TestSessionCaps:
         env.reset()
         opened_at = None
         for _ in range(n - 5):
-            env.step(np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32))
+            env.step(_default_schema_action(0.9, 0.0, 0.5, 0.0))
             if env.position is not None:
                 opened_at = env.step_idx
                 break
@@ -432,7 +439,7 @@ class TestSessionCaps:
         )
         env.reset()
         for _ in range(10):
-            env.step(np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32))
+            env.step(_default_schema_action(0.9, 0.0, 0.5, 0.0))
             assert env.position is None
 
 
@@ -460,7 +467,7 @@ def test_risk_at_the_floor_does_not_open() -> None:
     )
     env.reset()
     for _ in range(15):
-        env.step(np.array([0.9, 0.0, -1.0, 0.0], dtype=np.float32))
+        env.step(_default_schema_action(0.9, 0.0, -1.0, 0.0))
         assert env.position is None
 
 
@@ -499,9 +506,7 @@ def test_confirmed_entry_is_shaped_once() -> None:
     env.reset()
     opened = False
     for _ in range(n - 5):
-        _obs, _reward, _done, _trunc, info = env.step(
-            np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32)
-        )
+        _obs, _reward, _done, _trunc, info = env.step(_default_schema_action(0.9, 0.0, 0.5, 0.0))
         shaped = float(info["reward_parts"]["strategy"])
         if env.position is not None and not opened:
             assert shaped > 0.0
@@ -527,6 +532,7 @@ def _policy_env(
         strategy_actions=True,
         strategy=strategy or PO3IFVGStrategy(enforce_gate=False),
         agent_direction_control=direction_control,
+        allow_agent_sl_mode=False,
         obs_window=5,
         risk_frac_range=(0.01, 0.01),
         min_sl_points=0.0,
@@ -826,7 +832,7 @@ class TestSLMode:
             sl_mode="breakeven",
         )
         env.reset()
-        env._decode_action(np.array([0.9, 0.0, 0.5, 0.5], dtype=np.float32), feats.iloc[10])
+        env._decode_action(np.array([0.9, 0.0, 0.5, 0.5, -1.0], dtype=np.float32), feats.iloc[10])
         assert env._selected_sl_mode == "breakeven"
 
     def test_default_sl_mode_fixed_when_no_position(self) -> None:

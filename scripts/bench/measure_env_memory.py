@@ -100,7 +100,12 @@ def _load_train_slice(days: int | None) -> tuple[Any, pd.DataFrame, pd.DataFrame
     train_end, test_start = get_split_config(cfg)
     train_mask = make_train_mask(cast(pd.DatetimeIndex, primary_bars.index), train_end)
     cache_path = feature_cache_path(
-        Path(cfg.data.cache_dir), primary, cfg, primary_bars, train_mask=train_mask
+        Path(cfg.data.cache_dir),
+        primary,
+        cfg,
+        primary_bars,
+        train_mask=train_mask,
+        secondary=secondary_bars,
     )
     features = build_features(
         primary_bars,

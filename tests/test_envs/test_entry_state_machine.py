@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import numpy as np
@@ -169,6 +170,7 @@ def test_env_uses_armed_candidate_after_per_bar_setup_disappears(
     execution_direction: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     bars, features = _market_fixture(execution_direction)
+    bars.loc[bars.index[13], "open"] = 102.0
     env = TradingEnv(
         bars,
         features,
@@ -229,6 +231,34 @@ def test_env_uses_armed_candidate_after_per_bar_setup_disappears(
     open_trade = next(row for row in env.trade_log if row.get("type") == "open")
     assert open_trade["direction"] == 1
     assert open_trade["entry_origin_bar"] == 10
+    assert open_trade["decision_time"] < open_trade["fill_time"]
+    assert open_trade["signal_bar"] == open_trade["bar"]
+    assert open_trade["signal_time"] == open_trade["order_submission_time"]
+    assert open_trade["fill_bar"] == open_trade["signal_bar"] + 1
+    assert open_trade["fill_phase"] == "bar_open"
+    assert open_trade["fill_time"] == open_trade["signal_time"]
+    assert open_trade["price"] >= 102.0
+    assert open_trade["time"] == open_trade["fill_time"]
+    assert open_trade["tp_references"]
+    assert {
+        "name",
+        "timeframe",
+        "original_price",
+        "adjusted_price",
+        "confirmed_at",
+        "reason",
+        "fallback_reason",
+    } <= set(open_trade["tp_references"][0])
+    serialized_references = json.loads(json.dumps(open_trade["tp_references"]))
+    assert serialized_references[0]["name"] == open_trade["tp_references"][0]["name"]
+    assert serialized_references[0]["sources"] == list(open_trade["tp_references"][0]["sources"])
+    assert env.position.entry_timestamp == open_trade["fill_time"]
+    assert env.equity_times[-1] == open_trade["fill_time"]
+
+    # The entry filled at this bar's close; its earlier high/low cannot close
+    # the position on the next environment transition.
+    observation, _, _, _, _ = env.step(action)
+    assert env.position is not None
 
     assert env.position is not None
     env.position.sl_price = 101.0

@@ -11,6 +11,7 @@ from omegaconf import OmegaConf
 
 from quant_rl.features.build import (
     build_features,
+    build_walkforward_fold_features,
     feature_cache_content_hash,
     feature_cache_path,
 )
@@ -119,3 +120,48 @@ def test_fit_scoped_zscore_ignores_future_poison() -> None:
     first_test = ~train_mask
     assert np.isfinite(scoped.loc[first_test, "x"].iloc[0])
     assert scoped.loc[first_test, "x"].iloc[0] == clean.loc[first_test, "x"].iloc[0]
+
+
+def test_fold_cache_separates_normalization_conventions() -> None:
+    bars = _bars(180)
+    mask = pd.Series(np.arange(len(bars)) < 100, index=bars.index)
+    legacy = feature_cache_content_hash(_cfg(), bars, train_mask=mask)
+    frozen = feature_cache_content_hash(
+        _cfg(), bars, train_mask=mask, normalization_mode="frozen_fold"
+    )
+    assert frozen != legacy
+
+
+def test_walkforward_fold_rebuilds_using_only_fold_train_fit(tmp_path: Path) -> None:
+    bars = _bars(400)
+    train = bars.iloc[:220]
+    validation = bars.iloc[245:310]
+    cfg = _cfg()
+    fitted_train, fitted_val, cache_path = build_walkforward_fold_features(
+        bars, None, cfg, train, validation, tmp_path, "US100"
+    )
+    assert cache_path.exists()
+    assert fitted_train.index.equals(train.index)
+    assert fitted_val.index.equals(validation.index)
+
+    # The later-fold training period is extreme; it must not influence the
+    # fit of an earlier fold, even when supplied in the primary data frame.
+    altered = bars.copy()
+    altered.loc[altered.index[310:], "close"] *= 50
+    altered.loc[altered.index[310:], "open"] *= 50
+    altered.loc[altered.index[310:], "high"] *= 50
+    altered.loc[altered.index[310:], "low"] *= 50
+    other_train, other_val, other_cache = build_walkforward_fold_features(
+        altered, None, cfg, train, validation, tmp_path, "US100"
+    )
+    pd.testing.assert_frame_equal(fitted_train, other_train, check_freq=False)
+    pd.testing.assert_frame_equal(fitted_val, other_val, check_freq=False)
+    assert other_cache == cache_path
+
+    # Changing which observations belong to the fold changes fitted state
+    # and the cache identity even though the bars are identical.
+    wider_train = bars.iloc[:235]
+    _, _, wider_cache = build_walkforward_fold_features(
+        bars, None, cfg, wider_train, validation, tmp_path, "US100"
+    )
+    assert wider_cache != cache_path

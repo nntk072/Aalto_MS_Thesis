@@ -56,17 +56,46 @@ class PO3IFVGStrategy(TradingStrategy):
         *,
         enforce_gate: bool = True,
         require_asian_context: bool = True,
-        require_price_retest: bool = True,
+        require_price_retest: bool | None = None,
+        entry_mode: str = "legacy",
+        candidate_max_age_bars: int = 5,
+        variant_id: str = "po3_ifvg_legacy",
     ):
+        allowed_modes = {
+            "legacy",
+            "confirmed_first_eligible",
+            "confirmed_retest",
+            "preconfirmation_exploratory",
+        }
+        if entry_mode not in allowed_modes:
+            raise ValueError(f"unsupported PO3/IFVG entry mode: {entry_mode!r}")
+        if int(candidate_max_age_bars) < 1:
+            raise ValueError("candidate_max_age_bars must be positive for PO3/IFVG modes")
+        expected_retest = entry_mode == "confirmed_retest"
+        if entry_mode != "legacy" and require_price_retest is not None:
+            if bool(require_price_retest) != expected_retest:
+                raise ValueError(
+                    "strategy.ifvg.require_price_retest conflicts with "
+                    f"strategy.entry.mode={entry_mode!r}"
+                )
         self.enforce_gate = enforce_gate
         self.require_asian_context = require_asian_context
+        self.entry_mode = entry_mode
+        self.variant_id = str(variant_id)
+        self.candidate_max_age_bars = int(candidate_max_age_bars)
         # IFVG may enter on a retest or, when this is off, inside a live zone.
         # An FVG entry is always a retest. Either gap may sit on any timeframe.
-        self.require_price_retest = require_price_retest
+        self.require_price_retest = (
+            (True if require_price_retest is None else bool(require_price_retest))
+            if entry_mode == "legacy"
+            else expected_retest
+        )
         self._sweep_low: tuple[str, ...] | None = None
         self._sweep_high: tuple[str, ...] | None = None
         self._swing_low: tuple[str, ...] | None = None
         self._swing_high: tuple[str, ...] | None = None
+        self._ifvg_bull_confirmed: tuple[str, ...] | None = None
+        self._ifvg_bear_confirmed: tuple[str, ...] | None = None
 
     def bind_columns(self, columns: Iterable[object]) -> None:
         """Resolve sweep and swing columns once for the step loop."""
@@ -74,6 +103,8 @@ class PO3IFVGStrategy(TradingStrategy):
         self._sweep_high = columns_matching(columns, "sweep_high")
         self._swing_low = columns_matching(columns, "swing_low_event")
         self._swing_high = columns_matching(columns, "swing_high_event")
+        self._ifvg_bull_confirmed = columns_matching(columns, "ifvg_bull_confirmed")
+        self._ifvg_bear_confirmed = columns_matching(columns, "ifvg_bear_confirmed")
 
     def validate_entry(self, *, direction: int, row: pd.Series) -> bool:
         """Sweep or protected swing on this side when the gate is enforced."""
@@ -147,6 +178,16 @@ class PO3IFVGStrategy(TradingStrategy):
         They do not have to be true for the side to be offered. A sweep on
         both sides, or a swing confirmation on both sides, offers nothing.
         """
+        if self.entry_mode == "confirmed_first_eligible":
+            return self._confirmed_ifvg_direction(row)
+        if self.entry_mode == "confirmed_retest":
+            confirmed = self._confirmed_ifvg_direction(row)
+            if confirmed != 0:
+                return 0  # The retest, if any, must occur on a later candle.
+            return self._retest_direction(row)
+        if self.entry_mode == "preconfirmation_exploratory":
+            return self._fvg_candidate_direction(row)
+
         swept_low = self._flag_any(row, self._sweep_low, "sweep_low")
         swept_high = self._flag_any(row, self._sweep_high, "sweep_high")
         if swept_low or swept_high:
@@ -166,6 +207,43 @@ class PO3IFVGStrategy(TradingStrategy):
     def entry_setup(self, row: pd.Series, direction: int) -> bool:
         """True when this bar's sweep or protected swing matches ``direction``."""
         return self.context_direction(row) == direction and direction != 0
+
+    def _confirmed_ifvg_direction(self, row: pd.Series) -> int:
+        confirmed = _flag(row, "po3_ifvg_confirmed")
+        direction = float(row.get("po3_distribution_direction", 0.0) or 0.0)
+        if not confirmed or not np.isfinite(direction):
+            return 0
+        return int(np.sign(direction))
+
+    def _retest_direction(self, row: pd.Series) -> int:
+        if not _flag(row, "po3_distribution_after_ifvg"):
+            return 0
+        direction = float(row.get("po3_distribution_direction", 0.0) or 0.0)
+        if not np.isfinite(direction) or direction == 0.0:
+            return 0
+        bull = _any(row, "ifvg_retest_bull") and self._candidate_age_ok(row, "bull")
+        bear = _any(row, "ifvg_retest_bear") and self._candidate_age_ok(row, "bear")
+        retest_direction = 0 if bull == bear else (1 if bull else -1)
+        return retest_direction if retest_direction == int(np.sign(direction)) else 0
+
+    def _candidate_age_ok(self, row: pd.Series, side: str) -> bool:
+        names = columns_matching(row.index, f"ifvg_{side}_age")
+        if not names:
+            return False
+        for name in names:
+            try:
+                age = float(row.get(name, -1.0))
+            except (TypeError, ValueError):
+                continue
+            if np.isfinite(age) and 1.0 <= age <= self.candidate_max_age_bars:
+                return True
+        return False
+
+    @staticmethod
+    def _fvg_candidate_direction(row: pd.Series) -> int:
+        bull = _any(row, "fvg_retest_bull")
+        bear = _any(row, "fvg_retest_bear")
+        return 0 if bull == bear else (1 if bull else -1)
 
     def _flag_any(self, row: pd.Series, bound: tuple[str, ...] | None, stem: str) -> bool:
         names = bound if bound is not None else columns_matching(row.index, stem)
@@ -220,6 +298,13 @@ class PO3IFVGStrategy(TradingStrategy):
                     row, active="fvg_bear_active", area="fvg_bear_high", origin="fvg_bear_origin"
                 )
             )
+        if self.entry_mode != "legacy":
+            edge = float(row.get("po3_ifvg_low" if direction == 1 else "po3_ifvg_high", np.nan))
+            through = float(row.get("po3_ifvg_through_zone_extreme", np.nan))
+            if np.isfinite(edge):
+                out.append(("ifvg_far_edge", edge))
+            if np.isfinite(through):
+                out.append(("ifvg_through_zone_extreme", through))
         return out
 
 

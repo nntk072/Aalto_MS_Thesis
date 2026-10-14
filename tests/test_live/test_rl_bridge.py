@@ -86,26 +86,44 @@ def test_latency_env_constructs_and_steps(trending_bars, latency):
 
 
 def test_latency_changes_fill_price(trending_bars):
-    """In an uptrend, a latency-injected long entry fills at a higher price."""
+    """A delayed entry stays pending until its future quote time."""
 
     env0 = _make_env(trending_bars, 0)
     env2 = _make_env(trending_bars, 2)
     env0.reset(seed=42)
     env2.reset(seed=42)
 
-    # Drive both to the same step, then compare the fill quote for a long.
+    # Drive both to the same step, then submit a long.
     for _ in range(10):
         env0.step(0)
         env2.step(0)
     env0.step(3)  # open long, discrete action
+    scheduled_bar = env2.step_idx + 3
     env2.step(3)
     p0 = env0.position
-    p2 = env2.position
-    if p0 is None or p2 is None:  # action mapping guard
+    if p0 is None:  # action mapping guard
         pytest.skip("long entry action did not open a position")
+    assert env2.position is None
+    assert not any(row.get("type") == "open" for row in env2.trade_log)
+    # Source timestamps label bar opens. The pending fill is the scheduled
+    # bar's open, which is the same instant as the preceding bar's close.
+    expected_fill_time = trending_bars.index[scheduled_bar]
+    assert pd.Timestamp(env2.equity_times[-1]) < expected_fill_time
+
+    while env2.step_idx < scheduled_bar - 1:
+        env2.step(0)
+        assert env2.position is None
+    env2.step(0)
+    p2 = env2.position
+    if p2 is None:
+        pytest.fail("pending latency order did not fill at its scheduled bar")
+
     assert p2.entry_price > p0.entry_price, (
         "latency-injected fill should be later (pricier) in an uptrend"
     )
+    open_row = next(row for row in env2.trade_log if row.get("type") == "open")
+    assert pd.Timestamp(open_row["fill_time"]) == expected_fill_time
+    assert pd.Timestamp(open_row["order_submission_time"]) < expected_fill_time
 
 
 def test_zero_latency_matches_legacy_default(trending_bars):
@@ -116,6 +134,23 @@ def test_zero_latency_matches_legacy_default(trending_bars):
     # step once with hold; the internal fill quote must equal bar t+1 quote
     env.step(0)
     assert env.fill_latency_bars == 0
+
+
+def test_pending_latency_order_is_cancelled_when_episode_ends(trending_bars):
+    env = _make_env(trending_bars, 2)
+    env.reset(seed=42)
+    env.max_episode_steps = 1
+
+    _, _, _, truncated, _ = env.step(3)
+
+    assert truncated
+    assert env.position is None
+    assert env._pending_entry_order is None
+    assert any(
+        row.get("type") == "order_cancel"
+        and row.get("reason") == "episode_ended_before_scheduled_fill"
+        for row in env.trade_log
+    )
 
 
 class _StubModel:

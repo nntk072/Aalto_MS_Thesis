@@ -11,6 +11,30 @@ from quant_rl.evaluation import (
     plot_reliability_diagram,
     sharpe_stat,
 )
+from quant_rl.evaluation.bootstrap_ci import metrics_with_ci, paired_metric_difference_ci
+
+
+def test_ci_includes_opening_capital_for_first_bar_loss():
+    result = metrics_with_ci(
+        np.array([90_000.0, 95_000.0]),
+        np.array([], dtype=float),
+        n_boot=0,
+        initial_balance=100_000.0,
+    )
+    assert result["max_drawdown"].estimate == pytest.approx(0.10)
+
+
+def test_paired_bootstrap_identical_returns_has_zero_difference():
+    treatment = np.array([0.01, -0.02, 0.015, 0.005, -0.01, 0.004])
+    ci = paired_metric_difference_ci(treatment, treatment.copy(), np.mean, n_boot=100)
+    assert ci.estimate == pytest.approx(0.0)
+    assert ci.lower == pytest.approx(0.0)
+    assert ci.upper == pytest.approx(0.0)
+
+
+def test_paired_bootstrap_rejects_mismatched_return_periods():
+    with pytest.raises(ValueError, match="same length"):
+        paired_metric_difference_ci(np.array([0.1]), np.array([0.1, 0.2]), np.mean)
 
 
 def test_bootstrap_ci_covers_true_mean():

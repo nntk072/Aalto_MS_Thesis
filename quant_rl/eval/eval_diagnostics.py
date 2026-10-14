@@ -29,6 +29,7 @@ def write_bootstrap_cis(
     *,
     n_boot: int = 500,
     level: float = 0.95,
+    initial_balance: float | None = None,
 ) -> dict[str, Any]:
     """Compute and persist bootstrap CIs for Sharpe / Sortino / MDD / win-rate."""
     split_dir = Path(split_dir)
@@ -39,7 +40,7 @@ def write_bootstrap_cis(
         [float(c["pnl"]) for _, c in pairs if pd.notna(c.get("pnl"))],
         dtype=np.float64,
     )
-    cis = metrics_with_ci(eq, pnls, n_boot=n_boot, level=level)
+    cis = metrics_with_ci(eq, pnls, n_boot=n_boot, level=level, initial_balance=initial_balance)
     payload = {
         name: {
             "estimate": ci.estimate,

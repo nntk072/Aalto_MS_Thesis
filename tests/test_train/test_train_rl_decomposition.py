@@ -6,17 +6,88 @@ _build_training_log behave correctly after the main() decomposition.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
+import torch
 
+from quant_rl.evaluation.metrics import PerformanceMetrics
 from quant_rl.train.train_rl import (
     _build_training_log,
     _cost_model,
+    _initialize_value_head,
     _load_merged_config,
     _setup_rngs,
+    _write_evaluation_artifacts,
     parse_train_args,
 )
+
+
+def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path) -> None:
+    train_metrics = PerformanceMetrics(
+        total_return_pct=-1.0,
+        total_pnl=-1000.0,
+        max_drawdown=0.04,
+        sharpe=-0.5,
+        profit_factor=0.8,
+        win_rate=0.4,
+        n_trades=10,
+    )
+    test_metrics = PerformanceMetrics(
+        total_return_pct=-6.76,
+        total_pnl=-6760.0,
+        max_drawdown=0.087,
+        sharpe=-4.25,
+        profit_factor=0.75,
+        win_rate=0.459,
+        n_trades=122,
+    )
+
+    _write_evaluation_artifacts(
+        run_dir=tmp_path,
+        seed=42,
+        completed_timesteps=106_496,
+        train_result={"n_sessions": 100, "days_traded": 80},
+        test_result={"n_sessions": 130, "days_traded": 32, "fail_time": "2026-02-16"},
+        train_metrics=train_metrics,
+        test_metrics=test_metrics,
+        train_gate={"ok": False, "reason": "end_not_above_start"},
+        account_currency="USD",
+    )
+
+    evaluation_dir = tmp_path / "evaluations"
+    train = json.loads((evaluation_dir / "train_in_sample.json").read_text())
+    test = json.loads((evaluation_dir / "test_report_only.json").read_text())
+    summary = (evaluation_dir / "summary.md").read_text()
+
+    assert train["role"] == "in_sample_training_evaluation"
+    assert train["policy_action_mode"] == "deterministic"
+    assert train["metrics"]["total_pnl"] == -1000.0
+    assert train["equity_gate"]["ok"] is False
+    assert test["role"] == "report_only_test_evaluation"
+    assert test["policy_action_mode"] == "deterministic"
+    assert test["metrics"]["total_pnl"] == -6760.0
+    assert test["oos_role"].startswith("previously_inspected_holdout")
+    assert "| Test (report-only; previously inspected) | -6.76% | -6760.00 USD |" in summary
+    assert "Both final replays use deterministic policy actions." in summary
+
+
+def test_resuming_preserves_loaded_value_head_while_fresh_runs_zero_it() -> None:
+    model = SimpleNamespace(policy=SimpleNamespace(value_net=torch.nn.Linear(2, 1)))
+    with torch.no_grad():
+        model.policy.value_net.weight.fill_(3.0)
+        model.policy.value_net.bias.fill_(4.0)
+
+    _initialize_value_head(model, resumed=True)
+    assert torch.all(model.policy.value_net.weight == 3.0)
+    assert torch.all(model.policy.value_net.bias == 4.0)
+
+    _initialize_value_head(model, resumed=False)
+    assert torch.all(model.policy.value_net.weight == 0.0)
+    assert torch.all(model.policy.value_net.bias == 0.0)
 
 
 class TestParseTrainArgs:
@@ -97,6 +168,12 @@ class TestBuildTrainingLog:
             test_bars=49925,
             test_m=test_m,
             test_result=test_result,
+            action_schema={
+                "version": "overlay-action-v2",
+                "key": "6_dir",
+                "width": 6,
+                "coordinates": ["direction", "intensity", "stop", "risk", "target", "exit"],
+            },
         )
         assert log["seed"] == 42
         assert log["mvp"] is True
@@ -113,6 +190,7 @@ class TestBuildTrainingLog:
         assert log["test_breaches"] == 0
         assert log["strategy"] == "baseline"
         assert log["strategy_actions"] is False
+        assert log["action_schema"]["coordinates"][0] == "direction"
         assert "timestamp" in log
 
     def test_log_breaches_default_zero(self) -> None:

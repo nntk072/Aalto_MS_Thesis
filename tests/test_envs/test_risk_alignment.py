@@ -95,6 +95,7 @@ def _make_env(**kwargs: Any) -> TradingEnv:
     kwargs.setdefault("max_entries_per_session", 0)
     kwargs.setdefault("open_manipulation_bars", 0)
     kwargs.setdefault("entry_cooldown_bars", 0)
+    kwargs.setdefault("allow_agent_sl_mode", False)
     return TradingEnv(
         bars,
         _features(bars),
@@ -108,7 +109,7 @@ def _open_a_position(env: TradingEnv) -> None:
     """Step until a position exists, then return with it still open."""
     env.reset()
     for _ in range(40):
-        env.step(np.array([0.9, 0.0, 0.5, 0.0], dtype=np.float32))
+        env.step(np.array([0.9, 0.0, 0.5, 0.0, -1.0], dtype=np.float32))
         if env.position is not None:
             return
     pytest.fail("expected a position to open")
@@ -266,21 +267,21 @@ class TestAgentDirectionControl:
         env = _make_env(agent_direction_control=True)
         row = env._feature_row_at(env.step_idx)
         # a[0] = +1 -> u[0] = 1 -> conviction +0.5 -> long (context is long too).
-        da, _, _, _ = env._decode_action(np.array([1.0, 0.5, 0.5, 0.5, 0.5]), row)
+        da, _, _, _ = env._decode_action(np.array([1.0, 0.5, 0.5, 0.5, 0.5, 0.5]), row)
         assert da == 1
 
     def test_neutral_conviction_defers_to_the_heuristic(self) -> None:
         env = _make_env(agent_direction_control=True)
         row = env._feature_row_at(env.step_idx)
         # a[0] = 0 -> u[0] = 0.5 -> exactly neutral -> context_direction.
-        da, _, _, _ = env._decode_action(np.array([0.0, 0.5, 0.5, 0.5, 0.5]), row)
+        da, _, _, _ = env._decode_action(np.array([0.0, 0.5, 0.5, 0.5, 0.5, 0.5]), row)
         assert da == 1
 
     def test_positive_threshold_narrows_the_override_band(self) -> None:
         env = _make_env(agent_direction_control=True, direction_override_threshold=0.4)
         row = env._feature_row_at(env.step_idx)
         # conviction = -0.1, inside the 0.4 band -> defer to long context.
-        da, _, _, _ = env._decode_action(np.array([-0.2, 0.5, 0.5, 0.5, 0.5]), row)
+        da, _, _, _ = env._decode_action(np.array([-0.2, 0.5, 0.5, 0.5, 0.5, 0.5]), row)
         assert da == 1
 
     def test_last_four_dims_keep_their_meaning(self) -> None:
@@ -293,12 +294,12 @@ class TestAgentDirectionControl:
         assert reward_frac == pytest.approx(1.0)
         assert env._selected_sl_anchor == pytest.approx(1.0)
 
-    def test_disabled_control_ignores_an_extra_dim(self) -> None:
-        """An exit-mode dim on the 5-D layout must not shift intensity, stop, or risk."""
-        env = _make_env()
+    def test_exit_dim_does_not_shift_other_coordinates(self) -> None:
+        """Changing the declared exit coordinate leaves sizing coordinates fixed."""
+        env = _make_env(allow_agent_sl_mode=False)
         row = env._feature_row_at(env.step_idx)
-        da_4, risk_4, reward_4, _ = env._decode_action(np.array([1.0, 1.0, 1.0, 1.0]), row)
-        da_5, risk_5, reward_5, _ = env._decode_action(np.array([1.0, 1.0, 1.0, 1.0, 1.0]), row)
-        assert da_4 == da_5
-        assert risk_4 == pytest.approx(risk_5)
-        assert reward_4 == pytest.approx(reward_5)
+        da_a, risk_a, reward_a, _ = env._decode_action(np.array([1.0, 1.0, 1.0, 1.0, -1.0]), row)
+        da_b, risk_b, reward_b, _ = env._decode_action(np.array([1.0, 1.0, 1.0, 1.0, 1.0]), row)
+        assert da_a == da_b
+        assert risk_a == pytest.approx(risk_b)
+        assert reward_a == pytest.approx(reward_b)

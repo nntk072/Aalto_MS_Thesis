@@ -90,6 +90,7 @@ def _policy_env(
 ) -> TradingEnv:
     env_kwargs: dict[str, Any] = {
         "strategy_actions": True,
+        "allow_agent_sl_mode": False,  # These funnel tests use legacy 5-D actions.
         "strategy": strategy or PO3IFVGStrategy(enforce_gate=False),
         "obs_window": 5,
         "risk_frac_range": (0.01, 0.01),
@@ -301,10 +302,10 @@ def test_config_slippage_reaches_sl_tp_fills() -> None:
 
     bid, ask = env._sl_tp_fill_quote(direction=1, hit_price=100.0)
     assert bid == 100.0 - 5.0
-    assert ask == bid + model.spread_points * model.point_size
+    assert ask == bid + model.spread_points
     bid_s, ask_s = env._sl_tp_fill_quote(direction=-1, hit_price=100.0)
     assert ask_s == 100.0 + 5.0
-    assert bid_s == ask_s - model.spread_points * model.point_size
+    assert bid_s == ask_s - model.spread_points
 
     us500_cfg = OmegaConf.merge(cfg, {"data": {"primary": "US500.cash"}})
     assert _cost_model(us500_cfg).spread_points == float(cfg.costs.spread_us500)

@@ -62,5 +62,22 @@
 
 ```python
 obs["seq"]     : float32  [batch, T, F]   (T = cfg.env.obs_window, F = n_features)
-obs["account"] : float32  [batch, 5]      (normalised account state vector)
+obs["account"] : float32  [batch, 6]      (normalised account state vector)
 ```
+
+When `entry_state_observation` and the entry-state machine are both enabled,
+four one-hot entry-state values are appended to the account vector. Strategy
+overlay actions use the flag-derived `overlay-action-v2` schema from
+`quant_rl/action_schema.py`; their width and coordinate meanings depend on the
+enabled direction, stop mode, TP mode, multi-TP, and simplex flags. Persist and
+validate those flags and the schema version with checkpoints. Width alone is
+not sufficient to recover coordinate meanings.
+
+Unversioned SB3 checkpoints must be loaded only with the explicit legacy
+schema opt-in and a layout key taken from their original run configuration.
+The `legacy4_no_exit_v1` migration is a narrowly scoped exception for the
+archived 4D TCN policy: it restores that checkpoint's original encoder and
+policy, then appends the structural-exit coordinate required by the current
+5D base overlay schema. It does not infer missing run configuration or apply
+to other action layouts. See `quant_rl/models/agent.py` and
+`quant_rl/eval/eval_run.py`.

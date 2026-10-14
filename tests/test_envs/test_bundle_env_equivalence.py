@@ -55,7 +55,16 @@ def test_bundle_env_step_trace_matches_frames(
     obs_frames, _ = frames.reset(seed=41)
     obs_shared, _ = shared.reset(seed=41)
     ended = False
-    actions = [0] * 200 if action_pattern == "hold" else [i % 20 for i in range(200)]
+    actions: list[Any]
+    if strategy_actions:
+        width = frames.action_schema.width
+        if action_pattern == "hold":
+            actions = [np.zeros(width, dtype=np.float32) for _ in range(200)]
+        else:
+            base = np.linspace(-1.0, 1.0, width, dtype=np.float32)
+            actions = [base if i % 2 else -base for i in range(200)]
+    else:
+        actions = [0] * 200 if action_pattern == "hold" else [i % 20 for i in range(200)]
     for action in actions:
         for key in obs_frames:
             np.testing.assert_array_equal(obs_frames[key], obs_shared[key])
@@ -246,3 +255,65 @@ def test_equity_times_and_trade_log_match_frames_and_bundle(tmp_path: Path) -> N
 
     _assert_same_equity_times(left["equity_times"], right["equity_times"])
     _assert_same_trade_log(left["trade_log"], right["trade_log"])
+
+
+def test_bundle_worker_preserves_strict_eligibility_and_simplex_flags(tmp_path: Path) -> None:
+    """Worker reconstruction keeps configuration that changes research behavior."""
+    from quant_rl.config import load_config
+    from quant_rl.envs.env_bundle_builder import build_env_bundle
+    from quant_rl.envs.env_spec import EnvSpec
+    from quant_rl.envs.strategies import BaselineStrategy
+    from quant_rl.envs.worker import make_bundle_env
+    from quant_rl.train.train_rl import make_env
+
+    bars = _make_deterministic_bars(n=120)
+    features = _make_features(bars)
+    cfg = load_config()
+    cfg.data.raw_dir = str(tmp_path)
+    cfg.data.m1_files = {}
+    cfg.data.tick_files = {}
+    cfg.env.obs_window = 10
+    cfg.env.strategy_actions = True
+    cfg.env.strict_research_eligibility = True
+    cfg.env.allow_agent_tp_mode = True
+    cfg.env.allow_multi_tp = True
+    cfg.env.allow_simplex = False
+    cfg.strategy.name = "baseline"
+
+    frames = make_env(
+        bars,
+        features,
+        cfg,
+        algo="ppo",
+        reward="dsr",
+        episodic=False,
+    )
+    bundle_path = build_env_bundle(
+        tmp_path,
+        bars,
+        features,
+        cfg,
+        raw_columns=BaselineStrategy().raw_columns,
+        feature_config_hash="worker-env-flags-v1",
+        tickbook=None,
+        pre_ny_by_date=None,
+    )
+    spec = EnvSpec.from_cfg(
+        cfg,
+        algo="ppo",
+        reward="dsr",
+        arch="tcn",
+        bundle_dir=str(bundle_path),
+        episodic=False,
+    )
+    shared = make_bundle_env(spec)
+
+    assert frames.strict_research_eligibility is True
+    assert shared.strict_research_eligibility is True
+    assert frames.allow_simplex is False
+    assert shared.allow_simplex is False
+    assert frames.action_schema.to_dict() == shared.action_schema.to_dict()
+    frames_obs, _ = frames.reset(seed=41)
+    shared_obs, _ = shared.reset(seed=41)
+    for key in frames_obs:
+        np.testing.assert_array_equal(frames_obs[key], shared_obs[key])

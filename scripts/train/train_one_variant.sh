@@ -17,6 +17,8 @@
 #   GPU_ID    CUDA device index (default 0)
 #   OUT_DIR   output root (default outputs/gpu_matrix)
 #   DRY_RUN   1 = print the resolved commands and exit without training
+#   Reports default to summaries and metrics without per-trade charts.
+#   QUANT_RL_FULL_REPORTS=1 enables up to 200 per-trade charts and HTML.
 set -euo pipefail
 
 REPO="${TRITON_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
@@ -35,6 +37,7 @@ GPU_ID="${GPU_ID:-0}"
 OUT_DIR="${OUT_DIR:-$REPO/outputs/gpu_matrix}"
 LOG_DIR="${LOG_DIR:-$OUT_DIR/logs}"
 VAE_PATH="${VAE_PATH:-}"
+RESUME_CHECKPOINT="${RESUME_CHECKPOINT:-}"
 DRY_RUN="${DRY_RUN:-0}"
 
 if [[ "$DRY_RUN" == "1" ]]; then
@@ -45,6 +48,12 @@ else
     source "$REPO/scripts/triton/activate_venv.sh"
   fi
   PYTHON="${PYTHON:-python}"
+fi
+
+if [[ -n "${CAMPAIGN_WORKER_PID_FILE:-}" ]]; then
+  mkdir -p "$(dirname "$CAMPAIGN_WORKER_PID_FILE")"
+  printf '{"hostname":"%s","pid":%s}\n' \
+    "$(hostname -s)" "$$" > "$CAMPAIGN_WORKER_PID_FILE"
 fi
 
 RESOLVE_OPTS=()
@@ -94,19 +103,33 @@ run_seed() {
   args_txt="$(resolver args "$VARIANT" --seed "$seed" "${RESOLVE_OPTS[@]}")"
   local -a train_args=()
   mapfile -t train_args <<< "$args_txt"
+  local -a resume_args=()
+  if [[ -n "$RESUME_CHECKPOINT" ]]; then
+    resume_args+=(--resume-checkpoint "$RESUME_CHECKPOINT")
+  fi
+  if [[ "${QUANT_RL_FULL_REPORTS:-0}" == "1" ]]; then
+    train_args+=("output.report_profile=full" "output.max_order_charts=200" "output.save_html=true")
+  elif [[ "${QUANT_RL_FAST_REPORTS:-0}" == "1" ]]; then
+    train_args+=("output.report_profile=campaign_fast" "output.max_order_charts=0" "output.save_html=false")
+  fi
   if [[ -n "${QUANT_RL_DATA_SOURCE:-}" ]]; then
     case "$QUANT_RL_DATA_SOURCE" in
       frames|bundle) train_args+=("env.data_source=$QUANT_RL_DATA_SOURCE") ;;
       *) echo "ERROR: invalid QUANT_RL_DATA_SOURCE=$QUANT_RL_DATA_SOURCE" >&2; return 2 ;;
     esac
   fi
+  case "${QUANT_RL_ALLOW_OOS_SELECTION:-0}" in
+    0) ;;
+    1) train_args+=(--allow-locked-oos-for-selection) ;;
+    *) echo "ERROR: QUANT_RL_ALLOW_OOS_SELECTION must be 0 or 1" >&2; return 2 ;;
+  esac
 
   mkdir -p "$run_out" "$LOG_DIR"
   resolver manifest "$VARIANT" --seed "$seed" --out "$run_out/resolved_config.json" \
     "${RESOLVE_OPTS[@]}"
 
   if [[ "$DRY_RUN" == "1" ]]; then
-    echo "DRY_RUN $tag: $PYTHON -m quant_rl.train.train_rl --out $run_out ${train_args[*]}"
+    echo "DRY_RUN $tag: $PYTHON -m quant_rl.train.train_rl ${resume_args[*]} --out $run_out ${train_args[*]}"
     return 0
   fi
   if [[ -f "$done_marker" ]]; then
@@ -121,7 +144,7 @@ run_seed() {
 
   local status=0
   set +e
-  "$PYTHON" -u -m quant_rl.train.train_rl "${train_args[@]}" --out "$run_out" 2>&1 | tee "$log"
+  "$PYTHON" -u -m quant_rl.train.train_rl "${resume_args[@]}" "${train_args[@]}" --out "$run_out" 2>&1 | tee -a "$log"
   status=${PIPESTATUS[0]}
   set -e
 

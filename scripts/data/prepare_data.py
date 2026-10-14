@@ -56,7 +56,14 @@ def main() -> None:
     cache_dir = Path(cfg.data.cache_dir)
     train_end, test_start = get_split_config(cfg)
     train_mask = make_train_mask(cast(pd.DatetimeIndex, primary_m1.index), train_end)
-    feat_cache = feature_cache_path(cache_dir, primary_sym, cfg, primary_m1, train_mask=train_mask)
+    feat_cache = feature_cache_path(
+        cache_dir,
+        primary_sym,
+        cfg,
+        primary_m1,
+        train_mask=train_mask,
+        secondary=secondary_m1,
+    )
 
     log.info("Building features (cache=%s) …", feat_cache)
     features = build_features(

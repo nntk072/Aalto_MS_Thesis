@@ -124,7 +124,14 @@ def main():
         train_end = train_end.tz_localize(primary_m1.index.tz)
     train_mask = primary_m1.index <= train_end
     cache_dir = Path(cfg.data.cache_dir)
-    feat_cache = feature_cache_path(cache_dir, primary_sym, cfg, primary_m1, train_mask=train_mask)
+    feat_cache = feature_cache_path(
+        cache_dir,
+        primary_sym,
+        cfg,
+        primary_m1,
+        train_mask=train_mask,
+        secondary=secondary_m1,
+    )
     features = build_features(
         primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache, train_mask=train_mask
     )

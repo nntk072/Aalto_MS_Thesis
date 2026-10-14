@@ -12,7 +12,7 @@
 | `quant_rl/features/liquidity.py` | Liquidity sweeps and BOS detection |
 | `quant_rl/features/po3_config.py` | PO3 FVG zone detection and configuration |
 | `quant_rl/features/po3_state.py` | PO3 manipulation/distribution state, IFVG zones |
-| `quant_rl/features/normalize.py` | Rolling z-score normalization (train-only) |
+| `quant_rl/features/normalize.py` | Rolling z-score normalization with legacy masked-window and frozen-fold modes |
 | `quant_rl/features/session_ohlc.py` | CT-anchored session OHLC, prior period H/L, quadrants |
 | `quant_rl/data/align.py` | HTF → M1 alignment (used by features) |
 
@@ -35,7 +35,7 @@
 | `detect_po3_entries()` | `po3_config.py` | Detect PO3 entry signals |
 | `build_po3_state()` | `po3_state.py` | PO3 manipulation/distribution state |
 | `build_ifvg_zone_features()` | `po3_state.py` | IFVG active zone features |
-| `rolling_zscore()` | `normalize.py` | Rolling z-score (train_mask for no leakage) |
+| `rolling_zscore()` | `normalize.py` | Train-mask normalization; `frozen_fold` holds final training statistics through validation |
 | `align_timeframes()` | `align.py` | Forward-fill HTF features onto M1 spine |
 | `MTF_RAW_SUFFIXES` | `build.py` | Raw price-level suffixes excluded from model seq |
 
@@ -79,6 +79,6 @@
 
 1. **Causal only** — no `.shift(-1)` or future reference in any indicator
 2. **HTF alignment uses ffill** — `align_timeframes` forward-fills only (never bfill)
-3. **Train-only normalization** — `rolling_zscore` fits on `train_mask` only
+3. **Fold fit scope** — `frozen_fold` fits rolling statistics on fold training rows and holds the final training statistics through validation; `legacy_masked_window` remains a separately named compatibility mode
 4. **Cache version bump** — `FEATURE_CACHE_VERSION` must change when columns change
 5. **Raw price levels excluded from model seq** — `MTF_RAW_SUFFIXES` lists stems to exclude

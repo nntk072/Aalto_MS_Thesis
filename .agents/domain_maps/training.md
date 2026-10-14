@@ -66,7 +66,7 @@
 ```
 1. load_config() → cfg
 2. run_pipeline(cfg) → bars
-3. build_features(bars, cfg) → features  (cached by FEATURE_CACHE_VERSION)
+3. build_features(bars, cfg, train_mask) → features (fit scope enters the cache identity)
 4. split_train_test(bars, features, cfg) → train/test
 5. make_env(train_bars, train_feat, cfg) → env
 6. build_agent(env, cfg, arch, algo) → model
@@ -75,6 +75,15 @@
 9. calculate_metrics(equity, trades) → metrics
 10. save_run(run_dir, results, metrics) → artifacts
 ```
+
+Walk-forward folds rebuild features through `build_walkforward_fold_features`:
+causal bars through the fold validation end provide indicator context, while
+`frozen_fold` normalization is fitted only on that fold's training indices.
+Per-seed training manifests record exact train/test bar and feature hashes,
+split boundaries, action schema, feature-cache identity, checkpoint digest,
+runtime, and execution/metric protocols. These records are emitted by the
+training path and are covered by helper tests; no full campaign artifact is
+implied by the documentation.
 
 ## Config Overrides
 

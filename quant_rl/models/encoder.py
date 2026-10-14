@@ -154,6 +154,53 @@ class _TemporalBlock(nn.Module):
         return cast(torch.Tensor, self.relu(out + res))
 
 
+class LegacyTCNEncoderV1(BaseFeaturesExtractor):
+    """Archived Sep-2026 TCN layout retained for explicit 4D checkpoint migration.
+
+    This reproduces the pre-valid-window/account-embedding extractor: three
+    convolution blocks and the normalized six-value account vector appended
+    directly to the 128-value sequence latent. It is used only when loading a
+    checkpoint declared as ``legacy4_no_exit_v1``.
+    """
+
+    def __init__(
+        self,
+        observation_space: spaces.Space[Any],
+        seq_len: int = 60,
+        n_features: int = 64,
+        latent_dim: int = 128,
+        channels: tuple[int, ...] = (128, 128, 256),
+        kernel_size: int = 3,
+        dropout: float = 0.1,
+    ) -> None:
+        account_space = getattr(observation_space, "spaces", {}).get("account")
+        account_dim = int(account_space.shape[0]) if account_space is not None else ACCOUNT_DIM
+        super().__init__(observation_space, features_dim=latent_dim + account_dim)
+        self.seq_len = seq_len
+        self.n_features = n_features
+        self.latent_dim = latent_dim
+        self.tcn = nn.Sequential(
+            *(
+                _TemporalBlock(
+                    n_features if index == 0 else channels[index - 1],
+                    out_channels,
+                    kernel_size,
+                    2**index,
+                    dropout,
+                )
+                for index, out_channels in enumerate(channels)
+            )
+        )
+        self.proj = nn.Linear(channels[-1], latent_dim)
+
+    def forward(self, observations: dict[str, torch.Tensor]) -> torch.Tensor:
+        seq = observations["seq"]
+        account = observations["account"]
+        hidden = self.tcn(seq.transpose(1, 2))
+        latent = cast(torch.Tensor, self.proj(hidden[:, :, -1]))
+        return torch.cat((latent, account), dim=1)
+
+
 # ---------------------------------------------------------------------------
 # TCNEncoder
 # ---------------------------------------------------------------------------

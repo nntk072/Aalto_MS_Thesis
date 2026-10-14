@@ -10,7 +10,9 @@ import pytest
 from omegaconf import DictConfig, OmegaConf
 
 from quant_rl.features.build import build_features
+from quant_rl.features.po3_ifvg_state import build_po3_ifvg_state
 from quant_rl.features.po3_state import (
+    align_ifvg_zone_timeframes,
     build_distribution_after_ifvg,
     build_ifvg_zone_features,
     build_po3_state,
@@ -44,6 +46,59 @@ def empty_sweeps(index: pd.Index) -> pd.DataFrame:
             "sweep_low_age",
         ],
     )
+
+
+def test_configured_ifvg_timeframes_align_and_merge_causally() -> None:
+    """M5/M15/H1 confirmations join M1 only at source-bar completion."""
+    index = pd.date_range("2025-01-06 00:00", periods=130, freq="1min", tz="UTC")
+    close = np.full(len(index), 100.0)
+    bars = pd.DataFrame(
+        {"open": close, "high": close + 1.0, "low": close - 1.0, "close": close}, index=index
+    )
+    primary_zones = build_ifvg_zone_features(bars)
+    source_specs = {"M5": ("5min", 5), "M15": ("15min", 15), "H1": ("1h", 60)}
+    higher: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {}
+    for tf, (frequency, _) in source_specs.items():
+        tf_index = pd.date_range(index[0], periods=4, freq=frequency, tz="UTC")
+        tf_bars = pd.DataFrame(
+            {"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0}, index=tf_index
+        )
+        zones = pd.DataFrame(0.0, index=tf_index, columns=primary_zones.columns)
+        zones["ifvg_bull_low"] = 99.5
+        zones["ifvg_bull_high"] = 100.5
+        zones["ifvg_bull_fvg_origin_bar"] = 0.0
+        higher[tf] = (tf_bars, zones)
+
+    # Two M15 confirmations create one same-side collision with M5 at minute 15.
+    higher["M5"][1].loc[higher["M5"][0].index[[0, 2]], "ifvg_bull_confirmed"] = 1.0
+    higher["M5"][1].loc[higher["M5"][0].index[0], "ifvg_retest_bull"] = 1.0
+    higher["M15"][1].loc[higher["M15"][0].index[[0, 1]], "ifvg_bull_confirmed"] = 1.0
+    higher["H1"][1].loc[higher["H1"][0].index[0], "ifvg_bull_confirmed"] = 1.0
+    merged, visible = align_ifvg_zone_timeframes(bars, primary_zones, higher)
+
+    event_rows = np.asarray([5, 15, 30, 60], dtype=int)
+    assert merged["ifvg_bull_confirmed"].iloc[event_rows].tolist() == [1.0] * 4
+    assert merged["_ifvg_bull_confirmation_tf_code"].iloc[event_rows].tolist() == [
+        5.0,
+        5.0,
+        15.0,
+        60.0,
+    ]
+    assert merged["ifvg_bull_confirmed"].iloc[:5].sum() == 0.0
+    assert merged["ifvg_bull_fvg_origin_bar"].iloc[event_rows].tolist() == [0.0] * 4
+    assert merged["ifvg_bull_low"].iloc[event_rows].tolist() == [99.5] * 4
+    assert {"M5_ifvg_bull_active", "M15_ifvg_bull_active", "H1_ifvg_bull_active"} <= set(
+        map(str, visible.columns)
+    )
+    assert visible["M5_ifvg_retest_bull"].iloc[5] == 1.0
+    assert visible["M5_ifvg_retest_bull"].iloc[6:10].sum() == 0.0
+
+    sweeps = empty_sweeps(index)
+    sweeps.loc[index[0], ["sweep_low", "sweep_low_level"]] = [1.0, 99.0]
+    state = build_po3_ifvg_state(bars, sweeps, merged)
+    assert state["po3_ifvg_confirmed"].iloc[5] == 1.0
+    assert state["po3_ifvg_confirmation_tf_code"].iloc[5] == 5.0
+    assert state["po3_ifvg_low"].iloc[5] == pytest.approx(99.5)
 
 
 def flat_asian(index: pd.Index, high: float, low: float) -> pd.DataFrame:
@@ -171,6 +226,9 @@ class TestIFVGZones:
         confirmed = zones["ifvg_bull_active"] == 1
         assert confirmed.any()
         start = int(np.argmax(confirmed.to_numpy()))
+        assert zones["ifvg_bull_confirmed"].iloc[start] == 1
+        assert zones["ifvg_bull_age"].iloc[start] == 0
+        assert zones["ifvg_bull_age"].iloc[start + 1] == 1
         zone_low = zones["ifvg_bull_low"].iloc[start]
         zone_high = zones["ifvg_bull_high"].iloc[start]
         assert zone_low == pytest.approx(100.5)
@@ -237,6 +295,19 @@ class TestIFVGZones:
         assert zones["price_in_ifvg_bull"].iloc[8] == 0
         assert zones["ifvg_retest_bull"].iloc[8] == 1
         assert zones["ifvg_bull_origin"].iloc[8] == pytest.approx(99.5)
+
+    def test_retest_accepts_a_touch_deep_inside_the_zone(self) -> None:
+        bars = self.build_frame()
+        bars.loc[bars.index[7], "low"] = 101.2
+        bars.loc[bars.index[7], "high"] = 103.0
+        bars.loc[bars.index[7], "close"] = 102.0
+        bars.loc[bars.index[8], "low"] = 100.6
+        bars.loc[bars.index[8], "high"] = 102.0
+        bars.loc[bars.index[8], "close"] = 100.7
+
+        zones = build_ifvg_zone_features(bars, max_age_bars=50)
+
+        assert zones["ifvg_retest_bull"].iloc[8] == 1
 
     def test_causality(self) -> None:
         bars = self.build_frame()

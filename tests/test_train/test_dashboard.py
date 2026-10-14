@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from quant_rl.action_schema import build_action_schema
 from quant_rl.envs.reward import REWARD_PART_KEYS, DSRReward, PnLReward
 from quant_rl.evaluation.metrics import calculate_metrics
 from quant_rl.train.dashboard import (
@@ -52,6 +53,16 @@ def test_position_mix_and_close_shares() -> None:
     assert shares["daily_loss"] == 0.0
 
 
+def test_close_shares_classify_slot_targets_and_unlisted_reasons() -> None:
+    shares = close_shares(["structure_sl", "structure_tp1", "ema_21_exit", "mystery"])
+
+    assert shares["structure_sl"] == pytest.approx(0.25)
+    assert shares["structure_tp"] == pytest.approx(0.25)
+    assert shares["ema_21_exit"] == pytest.approx(0.25)
+    assert shares["other"] == pytest.approx(0.25)
+    assert sum(shares.values()) == pytest.approx(1.0)
+
+
 def test_action_stats_and_part_sums() -> None:
     stats = action_stats([1.0, -1.0, 1.0, -1.0])
     assert stats["mean"] == pytest.approx(0.0)
@@ -83,6 +94,8 @@ def test_eval_block_prints_metrics_from_a_short_equity_curve() -> None:
             ),
             "eval": {
                 "return_pct": float(metrics.total_return_pct),
+                "total_pnl": float(metrics.total_pnl),
+                "account_currency": "USD",
                 "sharpe": float(metrics.sharpe),
                 "sortino": float(metrics.sortino),
                 "max_drawdown": float(metrics.max_drawdown),
@@ -95,7 +108,9 @@ def test_eval_block_prints_metrics_from_a_short_equity_curve() -> None:
             },
         }
     )
-    assert "eval      " in text
+    assert "TRAIN-PREFIX MONITOR (not final test)" in text
+    assert "net PnL" in text
+    assert "USD" in text
     assert "sharpe" in text
     assert "expl" in text
     assert "+0.0000" in text
@@ -112,6 +127,11 @@ def _sample_snapshot(*, with_eval: bool) -> dict[str, Any]:
         "reward_parts": sum_parts([{"pnl": 0.002, "dsr": -0.1}]),
         "position": position_mix([1, 0, -1]),
         "action": action_stats([0.2, -0.1, 0.0]),
+        "action_schema": {
+            "version": "overlay-action-v2",
+            "key": "6_dir",
+            "coordinates": ["direction", "intensity", "stop", "risk", "target", "exit"],
+        },
         "closes": close_shares(["structure_sl", "structure_tp"]),
         "n_closes": 2,
         "critic": {"ret_mean": 0.1, "val_mean": 0.0, "adv_mean": 0.1, "adv_std": 0.2},
@@ -121,6 +141,8 @@ def _sample_snapshot(*, with_eval: bool) -> dict[str, Any]:
     if with_eval:
         snap["eval"] = {
             "return_pct": 1.5,
+            "total_pnl": 1500.0,
+            "account_currency": "USD",
             "sharpe": 0.8,
             "sortino": 1.1,
             "max_drawdown": 0.04,
@@ -159,6 +181,8 @@ def test_snapshot_row_keeps_behavior_and_omits_eval_until_recorded() -> None:
     assert row["long"] == pytest.approx(1 / 3)
     assert row["structure_sl"] == pytest.approx(0.5)
     assert row["grad_norm"] == pytest.approx(1.25)
+    assert row["action_schema_key"] == "6_dir"
+    assert row["action_schema_coordinates"] == "direction,intensity,stop,risk,target,exit"
     assert "return_pct" not in row
     assert "eval_reward" not in row
 
@@ -256,6 +280,36 @@ def test_training_interval_sets_the_prior_and_eval_does_not() -> None:
     assert cb.model.policy.names == set()
 
 
+def test_prior_direction_coordinate_uses_schema_names_not_action_width(monkeypatch) -> None:
+    class _Policy:
+        def __init__(self) -> None:
+            self.names: set[str] = set()
+
+        def set_active_prior(self, names: set[str]) -> None:
+            self.names = set(names)
+
+    class _Model:
+        def __init__(self) -> None:
+            self.policy = _Policy()
+            self.action_space = type("Space", (), {"shape": (6,)})()
+            self._action_schema = build_action_schema(has_sl_mode=True).to_dict()
+            self.num_timesteps = 50_000
+            self.rollout_buffer = None
+
+    monkeypatch.setattr(
+        "quant_rl.train.dashboard.active_prior_names",
+        lambda _frame, _thresholds: {"direction"},
+    )
+    cb = TrainingDashboardCallback(total_timesteps=100_000, log_every=50_000)
+    cb.model = _Model()  # type: ignore[assignment]
+    cb._prior_opens = _prior_book(5)
+
+    cb._apply_prior_interval()
+
+    assert cb.model.action_space.shape == (6,)
+    assert "direction" not in getattr(cb.model.policy, "names")
+
+
 def test_empty_opens_still_turn_risk_on_at_the_floor() -> None:
     class _Policy:
         def __init__(self) -> None:
@@ -338,6 +392,8 @@ def test_format_dashboard_table() -> None:
             "structure_tp": 0.0,
             "session_end": 0.0,
             "peak_dd_behavior": 0.0,
+            "ema_21_exit": 0.0,
+            "other": 0.0,
         },
         "n_closes": 0,
         "critic": {"ret_mean": 0.0, "val_mean": 0.0, "adv_mean": 0.0, "adv_std": 0.0},
@@ -352,6 +408,8 @@ def test_format_dashboard_table() -> None:
         },
         "eval": {
             "return_pct": 0.26,
+            "total_pnl": 260.0,
+            "account_currency": "USD",
             "sharpe": 4.02,
             "sortino": 31.09,
             "max_drawdown": 0.03,
@@ -376,6 +434,7 @@ def test_format_dashboard_table() -> None:
     assert "win_rate" in text
     assert "66.7%" in text
     assert "REWARD" in text
+    assert "PnL reward contribution" in text
     assert "---" in text
     assert "|" in text
     # Every line must share one width so borders close exactly.

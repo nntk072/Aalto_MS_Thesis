@@ -98,6 +98,18 @@ def compute_trade_metrics(
     """
     t_open = pd.Timestamp(open_row["time"])
     t_close = pd.Timestamp(close_row["time"])
+    bars_tz = bars.index.tz if isinstance(bars.index, pd.DatetimeIndex) else None
+    if bars_tz is not None:
+        t_open = (
+            t_open.tz_localize(bars_tz) if t_open.tzinfo is None else t_open.tz_convert(bars_tz)
+        )
+        t_close = (
+            t_close.tz_localize(bars_tz) if t_close.tzinfo is None else t_close.tz_convert(bars_tz)
+        )
+    elif t_open.tzinfo is not None or t_close.tzinfo is not None:
+        # Keep wall time when the source bars are deliberately timezone-naive.
+        t_open = t_open.tz_localize(None) if t_open.tzinfo is not None else t_open
+        t_close = t_close.tz_localize(None) if t_close.tzinfo is not None else t_close
     direction = int(open_row["direction"]) if pd.notna(open_row.get("direction")) else 0
     entry_price = float(open_row["price"]) if pd.notna(open_row.get("price")) else np.nan
     exit_price = float(close_row["price"]) if pd.notna(close_row.get("price")) else np.nan
@@ -105,7 +117,11 @@ def compute_trade_metrics(
     # Extract bars within [t_open, t_close]. MAE/MFE ignore impossible OHLC
     # and a one-bar print that both neighbors reject. A news candle whose
     # neighbors stay at the new price remains eligible.
-    trade_bars = bars.loc[(bars.index >= t_open) & (bars.index <= t_close)]
+    if bars.index.is_monotonic_increasing:
+        # Datetime range slicing avoids scanning every bar for every trade.
+        trade_bars = bars.loc[t_open:t_close]
+    else:
+        trade_bars = bars.loc[(bars.index >= t_open) & (bars.index <= t_close)]
     if len(trade_bars) > 0:
         trade_bars = trade_bars.loc[tradable_mask(trade_bars)]
 

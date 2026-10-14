@@ -1,0 +1,22 @@
+schema_version: 1
+campaign_id: ladder3_shared_bundle_n64_seed42_20m_20261014
+variant_file: scripts/variant_list_3_strategy_20261014.txt
+
+# Resource-sizing continuation of the three strategy runs. This is a distinct
+# campaign because both the environment backend and vector width changed.
+variants:
+  - ladder_a0_flat
+  - ladder_a0_flat_po3
+  - ladder_a0_flat_dist
+seeds: [42]
+timesteps: 20000000
+data_source: bundle
+split:
+  train_end: "2025-12-31"
+  test_start: "2026-01-01"
+
+evaluation:
+  locked_oos_role: selection_acknowledged
+  locked_oos_exposure: previously_inspected_holdout
+  selection_allowed: true
+  deterministic: true

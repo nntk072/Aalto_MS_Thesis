@@ -17,10 +17,12 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
+import numpy as np
 import torch
 from gymnasium import spaces
 from omegaconf import DictConfig
 
+from quant_rl.action_schema import ActionSchema
 from quant_rl.utils.device import enable_extractor_autocast
 
 try:
@@ -30,6 +32,117 @@ try:
     _SB3_AVAILABLE = True
 except ImportError:
     _SB3_AVAILABLE = False
+
+
+def validate_model_action_schema(
+    model: Any,
+    expected_schema: ActionSchema,
+    *,
+    allow_legacy: bool = False,
+    legacy_layout_key: str | None = None,
+) -> str | None:
+    """Validate action semantics before using a checkpoint for evaluation.
+
+    SB3 reconstructs the policy when loading, so its constructor default key
+    cannot prove the saved layout. Versioned metadata belongs on the PPO model
+    (included in SB3's serialized model data). Unversioned checkpoints require
+    an explicit legacy opt-in plus an explicit layout selection. Width alone
+    cannot distinguish layouts such as ``6_dir`` and ``6_sl``. The one
+    supported width migration is the documented 4D no-exit layout to the
+    current 5D base layout, with a structural-exit coordinate appended at
+    inference time.
+    """
+    shape = getattr(getattr(model, "action_space", None), "shape", None)
+    actual_width = int(shape[0]) if shape and len(shape) == 1 else None
+    policy = getattr(model, "policy", None)
+    version = getattr(model, "_action_schema_version", None)
+    layout = getattr(model, "_action_layout_key", None)
+    # Accept policy-only metadata from lightweight compatibility adapters;
+    # a freshly reconstructed SB3 policy's default key has no version and is
+    # therefore never trusted as proof of its original layout.
+    if version is None:
+        version = getattr(policy, "_action_schema_version", None)
+        if version is not None and layout is None:
+            layout = getattr(policy, "_action_layout_key", None)
+
+    if version is None:
+        if not allow_legacy:
+            raise ValueError("unversioned action checkpoint needs explicit legacy opt-in")
+        if legacy_layout_key is None:
+            raise ValueError("unversioned action checkpoint needs an explicit legacy layout key")
+        if layout is not None and layout != expected_schema.key:
+            raise ValueError(
+                f"legacy action layout {layout!r} differs from {expected_schema.key!r}"
+            )
+        migration: str | None = None
+        if legacy_layout_key == "legacy4_no_exit_v1":
+            if actual_width != 4 or expected_schema.key != "5":
+                raise ValueError(
+                    "legacy4_no_exit_v1 requires a 4D checkpoint and the current 5D base layout"
+                )
+            migration = "legacy4_no_exit_v1_to_overlay-action-v2-5"
+        elif legacy_layout_key != expected_schema.key:
+            raise ValueError(
+                f"explicit legacy layout {legacy_layout_key!r} differs from "
+                f"expected {expected_schema.key!r}"
+            )
+        elif actual_width != expected_schema.width:
+            raise ValueError(
+                f"legacy action width {actual_width} disagrees with "
+                f"selected layout {legacy_layout_key!r} width {expected_schema.width}"
+            )
+        manifest = expected_schema.to_dict()
+        manifest["checkpoint_metadata"] = "legacy_unversioned"
+        manifest["legacy_layout_key"] = legacy_layout_key
+        manifest["migration"] = migration
+        setattr(model, "_action_schema", manifest)
+        if policy is not None:
+            setattr(policy, "_action_schema", manifest)
+        return migration
+
+    if actual_width != expected_schema.width:
+        raise ValueError(
+            f"checkpoint action width {actual_width} disagrees with "
+            f"expected width {expected_schema.width}"
+        )
+
+    if version != expected_schema.version:
+        raise ValueError(
+            f"action schema version {version!r} differs from {expected_schema.version!r}"
+        )
+    if layout != expected_schema.key:
+        raise ValueError(f"action layout {layout!r} differs from {expected_schema.key!r}")
+    # The policy rebuilt by SB3 starts with a constructor default. Restore
+    # the validated layout for correct mode-prior coordinates after loading.
+    if policy is not None:
+        policy._action_layout_key = layout
+        policy._action_schema_version = version
+    # The validated decoder contract is useful to dashboards and exports;
+    # it does not change the serialized policy's action coordinates.
+    manifest = expected_schema.to_dict()
+    manifest["checkpoint_metadata"] = "versioned"
+    setattr(model, "_action_schema", manifest)
+    if policy is not None:
+        setattr(policy, "_action_schema", manifest)
+    return None
+
+
+class LegacyFourToFiveActionAdapter:
+    """Append the explicit structural-exit coordinate for a legacy 4D policy."""
+
+    def __init__(self, model: Any) -> None:
+        self.model = model
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.model, name)
+
+    def predict(self, observation: Any, *, deterministic: bool = True) -> tuple[Any, Any]:
+        action, state = self.model.predict(observation, deterministic=deterministic)
+        values = np.asarray(action)
+        if values.shape[-1:] != (4,):
+            raise ValueError(f"legacy 4D policy returned unexpected action shape {values.shape}")
+        structural_exit = np.full((*values.shape[:-1], 1), -1.0, dtype=values.dtype)
+        return np.concatenate((values, structural_exit), axis=-1), state
 
 
 def encoder_for(arch: str) -> type[Any]:
@@ -231,14 +344,35 @@ def build_agent(
 
     if isinstance(env.action_space, spaces.Box):
         width = int(env.action_space.shape[0])
-        has_direction = bool(getattr(env, "agent_direction_control", False))
-        has_sl_mode = bool(getattr(env, "allow_agent_sl_mode", False))
-        has_tp_mode = bool(getattr(env, "allow_agent_tp_mode", False))
-        has_multi_tp = bool(getattr(env, "allow_multi_tp", False))
-        has_simplex = bool(getattr(env, "allow_simplex", has_multi_tp))
-        ppo_model.policy._action_layout_key = _layout_key(
-            width, has_direction, has_sl_mode, has_tp_mode, has_multi_tp, has_simplex
-        )  # type: ignore[assignment]
+        schema = getattr(env, "action_schema", None)
+        if isinstance(schema, ActionSchema):
+            if width != schema.width:
+                raise ValueError(
+                    f"action space width {width} disagrees with declared schema width "
+                    f"{schema.width}"
+                )
+            layout_key = schema.key
+        elif width == 1 and not bool(getattr(env, "strategy_actions", False)):
+            # The scalar Box belongs to the continuous directional action mode,
+            # not to the strategy-overlay coordinate schema.
+            layout_key = _layout_key(width)
+        else:
+            raise ValueError(
+                "Box strategy actions require a declarative ActionSchema; "
+                "action width alone cannot identify coordinate meanings"
+            )
+        setattr(ppo_model.policy, "_action_layout_key", layout_key)
+        from quant_rl.action_schema import SCHEMA_VERSION
+
+        setattr(ppo_model.policy, "_action_schema_version", SCHEMA_VERSION)
+        # The policy itself is excluded from SB3's model data during save;
+        # persist the semantics on the model so save/load can recover them.
+        setattr(ppo_model, "_action_layout_key", layout_key)
+        setattr(ppo_model, "_action_schema_version", SCHEMA_VERSION)
+        if isinstance(schema, ActionSchema):
+            schema_manifest = schema.to_dict()
+            setattr(ppo_model, "_action_schema", schema_manifest)
+            setattr(ppo_model.policy, "_action_schema", schema_manifest)
     from .rollout_buffer import install_single_copy_add
 
     install_single_copy_add(ppo_model.rollout_buffer)

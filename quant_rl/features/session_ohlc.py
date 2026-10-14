@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+import numpy as np
 import pandas as pd
 
 
@@ -212,3 +213,102 @@ def prev_ny_high_low(
     out = out.where(mask | out.notna().any(axis=1))
     out = out.ffill()
     return out
+
+
+def previous_labeled_session_ohlc(
+    df: pd.DataFrame,
+    sessions: dict[str, dict[str, str]],
+    session_tz: str = "America/Chicago",
+    *,
+    bar_minutes: int = 1,
+) -> pd.DataFrame:
+    """Expose the latest fully completed configured session's range.
+
+    Session labels are considered in timestamp order, so the selected range
+    may be Asia, London, or NY depending on which configured window most
+    recently ended. A session is well formed only when its final expected
+    bar is present; a truncated tail is never promoted to a reference. The
+    range becomes visible at the first decision bar whose timestamp is at or
+    after the session close (the close of the final in-session bar).
+
+    ``sessions`` maps stable labels to ``{"start": "HH:MM", "end": "HH:MM"}``
+    wall-clock windows. The calendar is evaluated in ``session_tz`` for each
+    bar, including DST transitions. Codes are assigned by sorted label name
+    starting at 1; zero means no completed session is available.
+    """
+    idx = pd.DatetimeIndex(df.index)
+    if idx.tz is None:
+        raise ValueError("index must be timezone-aware (data tz), got naive index")
+    if bar_minutes < 1:
+        raise ValueError("bar_minutes must be positive")
+    labels = sorted(sessions)
+    code_for = {label: code for code, label in enumerate(labels, start=1)}
+    local = idx.tz_convert(session_tz)
+    chosen_high = np.full(len(df), np.nan, dtype=float)
+    chosen_low = np.full(len(df), np.nan, dtype=float)
+    chosen_code = np.zeros(len(df), dtype=float)
+    chosen_close_ns = np.full(len(df), np.nan, dtype=float)
+
+    # Gather only complete sessions, then apply each record from its close
+    # onward. Stable sorting by completion time makes the latest one win.
+    completed: list[tuple[pd.Timestamp, float, float, int]] = []
+    high_values = pd.to_numeric(df["high"], errors="coerce").to_numpy(dtype=float)
+    low_values = pd.to_numeric(df["low"], errors="coerce").to_numpy(dtype=float)
+    for label in labels:
+        window = sessions[label]
+        start_t = _parse_hhmm(window["start"])
+        end_t = _parse_hhmm(window["end"])
+        mask = session_mask(idx, window["start"], window["end"], session_tz).to_numpy()
+        dates = _session_dates(local, start_t, end_t).to_numpy()
+        group_keys = [(dates[i], label) if mask[i] else None for i in range(len(idx))]
+        positions: dict[tuple[dt.date, str], list[int]] = {}
+        for i, key in enumerate(group_keys):
+            if key is not None:
+                positions.setdefault(key, []).append(i)
+        for (session_date, _), rows in positions.items():
+            start_local = pd.Timestamp.combine(session_date, start_t).tz_localize(
+                session_tz, nonexistent="shift_forward", ambiguous="raise"
+            )
+            close_local = pd.Timestamp.combine(session_date, end_t).tz_localize(session_tz)
+            expected_last = close_local - pd.Timedelta(minutes=bar_minutes)
+            last_bar = idx[rows[-1]]
+            expected_count = int(
+                (close_local.tz_convert("UTC") - start_local.tz_convert("UTC")).total_seconds()
+                // (bar_minutes * 60)
+            )
+            actual_times = (
+                idx[rows].tz_convert("UTC").to_numpy(dtype="datetime64[ns]").view(np.int64)
+            )
+            contiguous = len(rows) == expected_count and (
+                len(rows) <= 1
+                or bool((np.diff(actual_times) == pd.Timedelta(minutes=bar_minutes).value).all())
+            )
+            if not contiguous or last_bar.tz_convert(session_tz) != expected_last:
+                continue
+            high = float(np.nanmax(high_values[rows]))
+            low = float(np.nanmin(low_values[rows]))
+            if not np.isfinite(high) or not np.isfinite(low):
+                continue
+            completed.append((close_local.tz_convert(idx.tz), high, low, code_for[label]))
+
+    completed.sort(key=lambda item: item[0])
+    close_ns = np.asarray([item[0].value for item in completed], dtype=np.int64)
+    for i, timestamp in enumerate(idx):
+        j = int(np.searchsorted(close_ns, timestamp.value, side="right") - 1)
+        if j >= 0:
+            close_at, high, low, code = completed[j]
+            chosen_high[i] = high
+            chosen_low[i] = low
+            chosen_code[i] = code
+            chosen_close_ns[i] = close_at.value
+
+    return pd.DataFrame(
+        {
+            "previous_session_high": chosen_high,
+            "previous_session_low": chosen_low,
+            "previous_session_midpoint": (chosen_high + chosen_low) / 2.0,
+            "previous_session_code": chosen_code,
+            "previous_session_completed_at_ns": chosen_close_ns,
+        },
+        index=idx,
+    )

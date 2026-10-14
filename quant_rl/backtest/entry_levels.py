@@ -30,6 +30,20 @@ def _tf_col_prefix(tf: str) -> str:
 
 
 @dataclass(frozen=True)
+class TargetReference:
+    """Provenance for one executable candidate; None means unverified metadata."""
+
+    name: str
+    timeframe: str
+    original_price: float | None
+    adjusted_price: float
+    confirmed_at: str | None
+    reason: str
+    sources: tuple[str, ...] = ()
+    fallback_reason: str | None = None
+
+
+@dataclass(frozen=True)
 class OrderGeometry:
     """One working stop and one exit, or a refusal."""
 
@@ -57,6 +71,8 @@ class OrderGeometry:
     tp3_ref: str = ""
     tp_lot_fractions: tuple[float, ...] = ()
     tp_indices: tuple[int | None, int | None, int | None] = (None, None, None)
+    tp_references: tuple[TargetReference, ...] = ()
+    sl_candidate_audit: tuple[dict[str, Any], ...] = ()
 
 
 def _menu_pairs(
@@ -70,12 +86,41 @@ def _with_menus(
     geometry: OrderGeometry,
     stops: list[tuple[str, float, float]],
     targets: list[tuple[str, float, float]],
+    *,
+    row: Any = None,
+    source_prices: dict[str, float] | None = None,
+    fallback_reason: str | None = None,
+    stop_audit: list[dict[str, Any]] | None = None,
 ) -> OrderGeometry:
     """Attach the full candidate ladders so a chart can list every option."""
+    selected = {i for i in geometry.tp_indices if i is not None}
+    if not selected and geometry.tp_index >= 0 and geometry.exit_mode != "ema_21":
+        selected = {geometry.tp_index}
+    original_prices = source_prices or {}
+    references: list[TargetReference] = []
+    for idx, (name, px, _) in enumerate(targets):
+        names = tuple(name.split("|"))
+        first = names[0]
+        stamp = row.get(f"{first}_confirmed_at") if row is not None else None
+        confirmed = None if stamp is None or pd.isna(stamp) else pd.Timestamp(stamp).isoformat()
+        references.append(
+            TargetReference(
+                name=name,
+                timeframe=reference_timeframe(name),
+                original_price=original_prices.get(first),
+                adjusted_price=float(px),
+                confirmed_at=confirmed,
+                reason="selected" if idx in selected else "eligible",
+                sources=names,
+                fallback_reason=fallback_reason,
+            )
+        )
     return replace(
         geometry,
         sl_menu=_menu_pairs(stops),
         tp_menu=_menu_pairs(targets),
+        tp_references=tuple(references),
+        sl_candidate_audit=tuple(stop_audit or ()),
     )
 
 
@@ -203,6 +248,8 @@ def place_strategy_order(
     tp_z: tuple[float, float] | None = None,
     allow_multi_tp: bool = False,
     allow_simplex: bool = True,
+    target_front_run_pts: float = 0.0,
+    price_increment: float | None = None,
 ) -> OrderGeometry:
     """Pick the stop, then a structural target or an EMA-21 exit.
 
@@ -212,7 +259,7 @@ def place_strategy_order(
     mode = "ema_21" if exit_mode == "ema_21" else "structural"
     state = manipulation_state(feat_row)
     buf = stop_buffer(buffer_pts)
-    stops = _stop_menu(
+    stops, stop_audit = _stop_menu(
         strategy,
         direction=direction,
         entry_price=float(entry_price),
@@ -237,7 +284,7 @@ def place_strategy_order(
         "sl",
     )
     if not stops:
-        return _with_menus(empty, stops, [])
+        return _with_menus(empty, stops, [], stop_audit=stop_audit)
     anchor = None
     anchor_dist = None
     for name, price, dist in stops:
@@ -254,6 +301,9 @@ def place_strategy_order(
     else:
         sl_at = 0
     sl_name, sl_price, sl_dist = stops[sl_at]
+    for candidate in stop_audit:
+        candidate["selected"] = candidate["status"] == "eligible" and candidate["name"] == sl_name
+    source_prices: dict[str, float] = {}
     targets = _target_menu(
         direction=direction,
         entry_price=float(entry_price),
@@ -262,7 +312,15 @@ def place_strategy_order(
         max_tp_distance=max_tp_distance,
         rr_bounds=rr_bounds,
         htf=htf,
+        front_run_pts=target_front_run_pts,
+        price_increment=price_increment,
+        source_prices=source_prices,
     )
+    tp_fallback_reason: str | None = None
+    if rr_bounds is not None and targets and sl_dist > 1e-12:
+        rr_lo, rr_hi = map(float, rr_bounds)
+        if not any(rr_lo <= dist / sl_dist <= rr_hi for _, _, dist in targets):
+            tp_fallback_reason = "no_structural_reference_within_rr_window"
     if mode == "ema_21":
         ema = _finite(feat_row, "ema_21")
         if ema is None:
@@ -283,6 +341,10 @@ def place_strategy_order(
                 ),
                 stops,
                 targets,
+                row=feat_row,
+                source_prices=source_prices,
+                fallback_reason=tp_fallback_reason,
+                stop_audit=stop_audit,
             )
         return _with_menus(
             OrderGeometry(
@@ -303,6 +365,10 @@ def place_strategy_order(
             ),
             stops,
             targets,
+            row=feat_row,
+            source_prices=source_prices,
+            fallback_reason=tp_fallback_reason,
+            stop_audit=stop_audit,
         )
     if not targets:
         return _with_menus(
@@ -322,6 +388,7 @@ def place_strategy_order(
             ),
             stops,
             [],
+            stop_audit=stop_audit,
         )
     if allow_multi_tp or tp_selections is not None:
         from quant_rl.envs.tp_decoders import decode_tp_fractions, decode_tp_selections
@@ -349,6 +416,7 @@ def place_strategy_order(
                 ),
                 stops,
                 [],
+                stop_audit=stop_audit,
             )
         tp1_name, tp1_px = (
             (targets[tp1_idx][0], float(targets[tp1_idx][1])) if tp1_idx is not None else ("", None)
@@ -403,6 +471,10 @@ def place_strategy_order(
             ),
             stops,
             targets,
+            row=feat_row,
+            source_prices=source_prices,
+            fallback_reason=tp_fallback_reason,
+            stop_audit=stop_audit,
         )
 
     tp_at = select_index(tp_fraction, len(targets))
@@ -436,6 +508,10 @@ def place_strategy_order(
         ),
         stops,
         targets,
+        row=feat_row,
+        source_prices=source_prices,
+        fallback_reason=tp_fallback_reason,
+        stop_audit=stop_audit,
     )
 
 
@@ -538,7 +614,7 @@ def _stop_menu(
     buffer: float,
     manipulation: str,
     htf: tuple[str, ...] = ("M5", "M15", "H1"),
-) -> list[tuple[str, float, float]]:
+) -> tuple[list[tuple[str, float, float]], list[dict[str, Any]]]:
     raw = list(strategy.sl_candidates(direction=direction, row=row))
     if not raw and hasattr(strategy, "sl_reference"):
         ref = strategy.sl_reference(direction=direction, row=row)
@@ -580,6 +656,7 @@ def _stop_menu(
     )
     if (direction == 1 and smt_bullish) or (direction == -1 and smt_bearish):
         raw = [("smt_swing", px) if name == swing else (name, px) for name, px in raw]
+    before_filter = list(raw)
     if (
         manipulation == "against"
         and getattr(strategy, "manipulation_filter", "against") == "against"
@@ -591,18 +668,72 @@ def _stop_menu(
     ):
         raw = [(name, px) for name, px in raw if "ifvg" in name or "fvg" in name]
     menu: list[tuple[str, float, float]] = []
+    audit: list[dict[str, Any]] = []
+    filtered_names = {name for name, _ in before_filter} - {name for name, _ in raw}
+    for name in sorted(filtered_names):
+        level = next(float(px) for candidate, px in before_filter if candidate == name)
+        audit.append(
+            {
+                "name": name,
+                "reference_price": level,
+                "stop_price": float("nan"),
+                "distance": float("nan"),
+                "status": "rejected",
+                "reason": "manipulation_filter",
+            }
+        )
     for name, level in collapse_levels([(n, float(p)) for n, p in raw]):
         stop = level - buffer if direction == 1 else level + buffer
         if direction == 1 and stop >= entry_price:
+            audit.append(
+                {
+                    "name": name,
+                    "reference_price": level,
+                    "stop_price": stop,
+                    "distance": abs(entry_price - stop),
+                    "status": "rejected",
+                    "reason": "wrong_side",
+                }
+            )
             continue
         if direction == -1 and stop <= entry_price:
+            audit.append(
+                {
+                    "name": name,
+                    "reference_price": level,
+                    "stop_price": stop,
+                    "distance": abs(entry_price - stop),
+                    "status": "rejected",
+                    "reason": "wrong_side",
+                }
+            )
             continue
         dist = abs(entry_price - stop)
         if dist + 1e-12 < min_dist:
+            audit.append(
+                {
+                    "name": name,
+                    "reference_price": level,
+                    "stop_price": stop,
+                    "distance": dist,
+                    "status": "rejected",
+                    "reason": "below_min_distance",
+                }
+            )
             continue
         menu.append((name, float(stop), dist))
+        audit.append(
+            {
+                "name": name,
+                "reference_price": level,
+                "stop_price": stop,
+                "distance": dist,
+                "status": "eligible",
+                "reason": "",
+            }
+        )
     menu.sort(key=lambda item: item[2])
-    return menu
+    return menu, audit
 
 
 def _target_menu(
@@ -614,7 +745,14 @@ def _target_menu(
     max_tp_distance: float,
     rr_bounds: tuple[float, float] | None = None,
     htf: tuple[str, ...] = ("M5", "M15", "H1"),
+    front_run_pts: float = 0.0,
+    price_increment: float | None = None,
+    source_prices: dict[str, float] | None = None,
 ) -> list[tuple[str, float, float]]:
+    if not np.isfinite(front_run_pts) or front_run_pts < 0.0:
+        raise ValueError("front_run_pts must be finite and nonnegative")
+    if price_increment is not None and (not np.isfinite(price_increment) or price_increment <= 0.0):
+        raise ValueError("price_increment must be finite and positive")
     if direction == 1:
         names = [
             "last_swing_high",
@@ -649,6 +787,25 @@ def _target_menu(
             raw.append((f"{tf_up}_{swing_name}", level))
     raw.extend(_suffixed(row, gap_suffixes))
     raw.extend(_deviations(row))
+    if source_prices is not None:
+        source_prices.update((name, float(price)) for name, price in raw)
+    # A known confirmation after the decision is never eligible. The pivot
+    # origin (`*_time`) is not a confirmation time and is not used here.
+    decision_at = getattr(row, "name", None)
+    if not isinstance(decision_at, pd.Timestamp):
+        decision_at = None
+    available: list[tuple[str, float]] = []
+    for name, level in raw:
+        confirmed_at = row.get(f"{name}_confirmed_at") if hasattr(row, "get") else None
+        if confirmed_at is not None and not pd.isna(confirmed_at):
+            if decision_at is None:
+                continue  # explicit availability requires an actual decision clock
+            try:
+                if pd.Timestamp(confirmed_at) > decision_at:
+                    continue
+            except (TypeError, ValueError):
+                continue  # fail closed on invalid or timezone-incompatible metadata
+        available.append((name, level))
     room = float(max_tp_distance) if max_tp_distance is not None else float("nan")
     ranked: list[tuple[str, float, float, bool]] = []
     rr_lo, rr_hi = (
@@ -656,7 +813,15 @@ def _target_menu(
         if rr_bounds is not None
         else (float("-inf"), float("inf"))
     )
-    for name, level in collapse_levels(raw):
+    for name, level in collapse_levels(available):
+        if front_run_pts:
+            level = float(level) - direction * float(front_run_pts)
+        if price_increment is not None:
+            units = level / price_increment
+            if direction == 1:
+                level = float(np.floor(units + 1e-10) * price_increment)
+            else:
+                level = float(np.ceil(units - 1e-10) * price_increment)
         if direction == 1 and level <= entry_price:
             continue
         if direction == -1 and level >= entry_price:
@@ -678,6 +843,10 @@ def _target_menu(
     legal = [item for item in ranked if item[3]]
     chosen = legal or ranked
     menu = [(name, level, dist) for name, level, dist, _in_range in chosen]
+    if price_increment is not None or front_run_pts:
+        # Different original references can map to the same executable tick.
+        deduped = collapse_levels([(name, level) for name, level, _ in menu])
+        menu = [(name, px, abs(px - entry_price)) for name, px in deduped]
     menu.sort(key=lambda item: item[2])
     return menu
 

@@ -1,0 +1,17 @@
+schema_version: 1
+campaign_id: resource_profile_a0_seed42_2m_exposed_20261013
+variant_file: scripts/matrix/resource_profile_a0_variant_list.txt
+variants:
+  - ladder_a0_flat
+seeds:
+  - 42
+timesteps: 2000000
+data_source: frames
+split:
+  train_end: '2025-12-31'
+  test_start: '2026-01-01'
+evaluation:
+  locked_oos_role: final_report_only
+  locked_oos_exposure: previously_inspected_holdout
+  selection_allowed: false
+  deterministic: true

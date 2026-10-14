@@ -61,6 +61,8 @@ if not hasattr(_mt5_stub, "symbol_info"):
     )
 if not hasattr(_mt5_stub, "symbol_info_tick"):
     setattr(_mt5_stub, "symbol_info_tick", lambda *a, **k: SimpleNamespace(bid=100.0, ask=100.1))
+if not hasattr(_mt5_stub, "positions_get"):
+    setattr(_mt5_stub, "positions_get", lambda *a, **k: [])
 if not hasattr(_mt5_stub, "order_send"):
     setattr(_mt5_stub, "order_send", lambda *a, **k: None)
 if not hasattr(_mt5_stub, "copy_rates_from_pos"):
@@ -111,6 +113,7 @@ class RecordingTrader(Trader):
 
     def __init__(self, *, sells_open: bool = False) -> None:
         self.opened: list[tuple[Any, ...]] = []
+        self.opened_stops: list[float | None] = []
         self.closed: list[tuple[Any, ...]] = []
         self.sells_open = sells_open
 
@@ -118,6 +121,7 @@ class RecordingTrader(Trader):
         import MetaTrader5 as mt5
 
         self.opened.append((symbol, volume, position_type))
+        self.opened_stops.append(sl)
         return SimpleNamespace(order=1, volume=volume, price=1.0, retcode=mt5.TRADE_RETCODE_DONE)
 
     def close_positions(self, robot_name: str, symbol=None, position_type=None):
@@ -175,6 +179,7 @@ def test_live_mode_places_buy_and_closes_opposite_sell() -> None:
 
     assert len(trader.opened) == 1
     assert trader.opened[0][2] == mt5.ORDER_TYPE_BUY
+    assert trader.opened_stops[0] == 50.1
     assert trader.closed == [("US100.cash", mt5.ORDER_TYPE_SELL)]
 
 
@@ -187,6 +192,34 @@ def test_paper_mode_never_places_orders() -> None:
 
     assert trader.opened == []
     assert trader.closed == []
+
+
+def test_robot_class_defaults_to_paper_trading() -> None:
+    from mt5_trading.robot.rl_robot import RLRobot
+
+    from quant_rl.live.rl_strategy import RLStrategyAdapter
+
+    adapter = RLStrategyAdapter(model=_StubModel(), config_path="quant_rl/config/default.yaml")
+    robot = RLRobot(
+        adapter=adapter,
+        data_source=_StubData(_make_bars()),
+        trader=cast(Trader, RecordingTrader()),
+    )
+
+    assert robot.paper_trading is True
+
+
+def test_live_robot_refuses_entry_if_broker_stop_cannot_be_computed() -> None:
+    trader = RecordingTrader()
+    robot, _ = _make_robot(trader, paper_trading=False)
+
+    def unavailable_stop(*_args: Any, **_kwargs: Any) -> float:
+        raise ValueError("quote unavailable")
+
+    robot.risk_manager.calculate_stop_loss_price = unavailable_stop
+    robot.trade()
+
+    assert trader.opened == []
 
 
 def test_robot_feed_secondary_bars_for_smt() -> None:

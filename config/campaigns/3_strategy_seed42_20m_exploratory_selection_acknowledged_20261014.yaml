@@ -1,0 +1,25 @@
+schema_version: 1
+campaign_id: ladder3_strategy_seed42_20m_exploratory_selection_acknowledged_20261014
+variant_file: scripts/variant_list_3_strategy_20261014.txt
+
+# One A0 rung per strategy. This small run is an exploratory execution check;
+# reward modes differ by the frozen variant definitions, so it is not a matched
+# causal comparison and cannot establish confirmatory performance.
+variants:
+  - ladder_a0_flat
+  - ladder_a0_flat_po3
+  - ladder_a0_flat_dist
+seeds: [42]
+timesteps: 20000000
+data_source: frames
+split:
+  train_end: "2025-12-31"
+  test_start: "2026-01-01"
+
+# The available 2026 period was previously inspected and is for acknowledged
+# selection only; it is not fresh confirmatory evidence.
+evaluation:
+  locked_oos_role: selection_acknowledged
+  locked_oos_exposure: previously_inspected_holdout
+  selection_allowed: true
+  deterministic: true

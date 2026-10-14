@@ -1,5 +1,14 @@
 # Triton operations and runtime verification
 
+For compute architecture, venv provisioning, storage characteristics,
+resource observations and installation troubleshooting, see
+[Triton environment guidance](triton_environment.md).
+
+If `mypy --version` stalls inside an allocated GPU shell, see
+[the architecture-aware Lustre Mypy workaround](triton_mypy_lustre.md).
+The ARM64 workaround was verified on 2026-10-11; the x86_64 equivalent
+needs validation on an x86 compute node.
+
 ## Historical GPU and RAM guidance
 
 The [GPU campaign plan](../training/triton_gpu_training_agent_plan.md)

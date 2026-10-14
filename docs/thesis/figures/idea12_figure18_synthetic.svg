@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560">
+<title>Figure 18 — Idea 2 previous-session midpoint gate</title><rect width="1000" height="560" fill="#fbfcfe"/>
+<style>text{font:14px sans-serif;fill:#152536} .small{font-size:12px} .axis{stroke:#8091a0;stroke-width:1} .bull{stroke:#18794e;fill:#18794e} .bear{stroke:#b42318;fill:#b42318} .ref{stroke:#7a5af8;stroke-dasharray:6 5} .zone{fill:#fdb022;fill-opacity:.19;stroke:#dc6803} .gate{stroke:#175cd3;stroke-dasharray:7 5}</style>
+<text x="44" y="34" font-size="20" font-weight="bold">Figure 18 — Idea 2 previous-session midpoint gate</text>
+<text x="44" y="54" class="small">SYNTHETIC EXPLANATORY EXAMPLE — not historical data or a strategy result</text>
+<rect x="220" y="120.0" width="570" height="300.0" fill="#d1e9ff" stroke="#175cd3"/>
+<line class="gate" x1="220" y1="270.0" x2="790" y2="270.0"/>
+<line x1="220" y1="220.0" x2="790" y2="220.0" stroke="#b42318" stroke-width="3"/>
+<text x="810" y="124.0">previous completed ny high 120</text>
+<text x="810" y="274.0">midpoint 108</text>
+<text x="810" y="224.0">decision close 112</text>
+<text x="810" y="424.0">low 96</text>
+<text x="230" y="470" fill="#b42318">New long blocked: close is at premium</text>
+<text x="230" y="495">An already open long continues under its existing exit rules.</text>
+<text x="65" y="535" class="small">Session calendar: Asia 19–23, London 02–05, NY 08:30–15:00 America/Chicago; DST-aware.</text></svg>

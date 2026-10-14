@@ -30,6 +30,7 @@ import pandas as pd
 from ..backtest.costs import COST_US100, CostModel
 from ..envs.trading_env import TradingEnv
 from ..evaluation.metrics import max_drawdown
+from .reward_attribution import RewardAttribution
 
 
 def make_action_fn(
@@ -97,6 +98,7 @@ def evaluate_model(
     candidate_max_age_bars: int = 5,
     arm_requires_retest: bool = False,
     entry_state_observation: bool = True,
+    strict_research_eligibility: bool = False,
     strategy_reward: Any = None,
     strategy_weight: float = 0.0,
     sl_buffer_pts: float = 0.0,
@@ -122,6 +124,7 @@ def evaluate_model(
     allow_agent_tp_mode: bool = False,
     tp_mode_defer_threshold: float = 0.1,
     allow_multi_tp: bool = False,
+    allow_simplex: bool = True,
     tp_breakeven_alpha: float = 0.5,
     risk_floor: float = 0.0005,
     mtf: bool = False,
@@ -179,6 +182,7 @@ def evaluate_model(
             candidate_max_age_bars=candidate_max_age_bars,
             arm_requires_retest=arm_requires_retest,
             entry_state_observation=entry_state_observation,
+            strict_research_eligibility=strict_research_eligibility,
             strategy_reward=strategy_reward,
             strategy_weight=strategy_weight,
             sl_buffer_pts=sl_buffer_pts,
@@ -204,6 +208,7 @@ def evaluate_model(
             allow_agent_tp_mode=allow_agent_tp_mode,
             tp_mode_defer_threshold=tp_mode_defer_threshold,
             allow_multi_tp=allow_multi_tp,
+            allow_simplex=allow_simplex,
             tp_breakeven_alpha=tp_breakeven_alpha,
             risk_floor=risk_floor,
             mtf=mtf,
@@ -218,6 +223,7 @@ def evaluate_model(
     )
     action_counts: Counter[str] = Counter()
     reward_sum = 0.0
+    reward_attribution = RewardAttribution()
     n_steps = 0
     while not (done or truncated):
         action = action_fn(obs)
@@ -226,8 +232,9 @@ def evaluate_model(
         else:
             action_key = str(action)
         action_counts[action_key] += 1
-        obs, reward, done, truncated, _ = env.step(action)
+        obs, reward, done, truncated, info = env.step(action)
         reward_sum += float(reward)
+        reward_attribution.add(float(reward), info.get("reward_parts"))
         n_steps += 1
 
     equity_series = pd.Series(
@@ -254,6 +261,7 @@ def evaluate_model(
         "days_traded": days_traded,
         "survived_full_year": survived_full_year,
         "reward_sum": reward_sum,
+        "reward_attribution": reward_attribution.as_dict(),
         "n_steps": n_steps,
         "fail_time": fail_time,
         "max_trailing_dd": float(max_drawdown(env.equity_curve)),

@@ -1,0 +1,19 @@
+schema_version: 1
+campaign_id: dev_a0_a1_seed42_100k_exposed_2026
+variant_file: config/campaigns/variant_dev_a0_a1.txt
+variants: [ladder_a0_flat, ladder_a1_sl]
+seeds: [42]
+timesteps: 100000
+data_source: frames
+split:
+  train_end: "2025-12-31"
+  test_start: "2026-01-01"
+evaluation:
+  locked_oos_role: selection_acknowledged
+  locked_oos_exposure: previously_inspected_holdout
+  selection_allowed: true
+  deterministic: true
+purpose: >-
+  Exploratory one-factor comparison of A0 and A1, seed 42, 100,000 PPO steps
+  per variant. The configured 2026 period is exposed development data; results
+  are non-confirmatory and cannot support a final-holdout claim.

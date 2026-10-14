@@ -61,6 +61,9 @@
 
 1. **Live risk ≈ training risk** — `live_risk_overrides` must stay aligned with `ftmo` dollar limits
 2. **Silent divergence is the failure mode** — training under $1000 cap, live under $5000 is a bug
-3. **Action semantics must match** — discrete (PPO) vs continuous (SAC) vs strategy 4-D Box
+3. **Action semantics must match** — discrete (PPO), continuous (SAC), or
+   flag-derived strategy-overlay `Box` coordinates from
+   `quant_rl/action_schema.py`; checkpoint schema metadata must match the live
+   environment configuration
 4. **PAPER_TRADING defaults to true** — no orders placed unless explicitly disabled
 5. **Model loading** — must load with same encoder architecture used in training

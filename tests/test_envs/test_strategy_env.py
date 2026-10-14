@@ -109,6 +109,85 @@ class TestStrategyActionSpace:
         assert env.action_space.shape != (5,)
 
 
+class TestPO3EntryModes:
+    def test_confirmed_first_eligible_requires_confirmation_pulse(self) -> None:
+        strategy = PO3IFVGStrategy(entry_mode="confirmed_first_eligible")
+        assert (
+            strategy.context_direction(pd.Series({"sweep_low": 1.0, "po3_ifvg_confirmed": 0.0}))
+            == 0
+        )
+        assert (
+            strategy.context_direction(
+                pd.Series({"po3_ifvg_confirmed": 1.0, "po3_distribution_direction": 1.0})
+            )
+            == 1
+        )
+        assert (
+            strategy.context_direction(
+                pd.Series({"po3_ifvg_confirmed": 1.0, "po3_distribution_direction": -1.0})
+            )
+            == -1
+        )
+
+    def test_confirmed_retest_must_be_later_than_confirmation(self) -> None:
+        strategy = PO3IFVGStrategy(entry_mode="confirmed_retest", require_price_retest=True)
+        assert (
+            strategy.context_direction(
+                pd.Series(
+                    {
+                        "ifvg_bull_confirmed": 1.0,
+                        "ifvg_retest_bull": 1.0,
+                        "ifvg_bull_age": 0.0,
+                        "po3_distribution_after_ifvg": 0.0,
+                        "po3_distribution_direction": 1.0,
+                    }
+                )
+            )
+            == 0
+        )
+        assert (
+            strategy.context_direction(
+                pd.Series(
+                    {
+                        "ifvg_bull_confirmed": 0.0,
+                        "ifvg_retest_bull": 1.0,
+                        "ifvg_bull_age": 1.0,
+                        "po3_distribution_after_ifvg": 1.0,
+                        "po3_distribution_direction": 1.0,
+                    }
+                )
+            )
+            == 1
+        )
+        assert (
+            strategy.context_direction(
+                pd.Series(
+                    {
+                        "ifvg_retest_bull": 1.0,
+                        "ifvg_bull_age": 6.0,
+                        "po3_distribution_after_ifvg": 1.0,
+                        "po3_distribution_direction": 1.0,
+                    }
+                )
+            )
+            == 0
+        )
+
+    def test_preconfirmation_mode_has_a_distinct_fvg_candidate_signal(self) -> None:
+        strategy = PO3IFVGStrategy(
+            entry_mode="preconfirmation_exploratory", require_price_retest=False
+        )
+        assert strategy.context_direction(pd.Series({"fvg_retest_bull": 1.0})) == 1
+        assert strategy.context_direction(pd.Series({"po3_ifvg_confirmed": 1.0})) == 0
+
+    def test_new_entry_mode_rejects_conflicting_legacy_retest_flag(self) -> None:
+        with pytest.raises(ValueError, match="conflicts"):
+            PO3IFVGStrategy(
+                entry_mode="confirmed_first_eligible",
+                require_price_retest=True,
+            )
+
+
 class TestStrategyObservation:
     def test_raw_columns_excluded_from_seq(self) -> None:
         bars = _bars()

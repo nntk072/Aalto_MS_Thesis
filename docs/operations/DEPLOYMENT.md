@@ -104,4 +104,15 @@ knowledge**:
 - [ ] Kill-switch limits re-checked against `ftmo:` block
 - [ ] First live session supervised end-to-end, then reviewed before unattended runs
 
+The current RL bridge is **not** execution-equivalent to the thesis training
+environment. It emits direction-only signals and the live robot applies the
+configured fixed `stop_loss_pips`; training uses structure-derived exits and
+may enable policy-controlled stop/target modes. The live path also does not
+enforce the training/evaluation cumulative daily and max-loss guardrails.
+Broker-side fixed stops and stop-based exposure caps are enforced by
+`RLRobot`/`RiskManager`, but this does not close those parity gaps. Keep
+`PAPER_TRADING=true` until a reviewed implementation maps the trained policy's
+actual exit semantics and account guardrails to MT5 and verifies them with
+broker-compatible integration tests.
+
 For provenance and command validity, see [reproducibility](../reproducibility.md).
