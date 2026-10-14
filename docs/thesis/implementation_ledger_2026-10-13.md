@@ -2113,3 +2113,19 @@ repository HEAD is `1effb2e`. Do not alter campaign provenance to force a
 resume. Overall readiness remains **NOT READY** pending completed training
 and train/test evaluations, independent research review, a pristine holdout
 for confirmatory claims, and full-phase resource evidence.
+
+### Active campaign acceptance-policy provenance caveat — 2026-10-14
+
+The 18-worker campaign was created from commit `937bae529fdf5d6c17db6174880ef448320e2883`,
+before the user-approved acceptance change in `16b13ae`. Source comparison
+confirms that the pinned code's train gate requires positive end equity and
+positive equity slope, and its default no-trade early abort is enabled after
+the configured minimum-step threshold. The approved policy instead makes PnL,
+equity slope, and activity reported metrics and disables no-trade early abort;
+max-loss breach and peak trailing drawdown above 10% remain the hard
+train-survival gates. The live workers therefore do not train under the latest
+accepted policy. Preserve their outputs as an exploratory run under the earlier
+semantics and do not interpret them as evidence for the updated acceptance
+policy. Any resume must retain the exact source fingerprint and this caveat;
+a campaign under the updated policy requires a new identity and source
+fingerprint. The current running allocation was left untouched.

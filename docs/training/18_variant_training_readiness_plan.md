@@ -949,3 +949,16 @@ verify exact-source resume behavior and preserve checkpoints and both campaign
 manifests. Readiness remains **NOT READY**: no candidate has completed
 training and both final split evaluations; the exposed 2026 interval is not
 confirmatory; independent research review and a pristine holdout remain open.
+
+**Acceptance-policy provenance caveat:** the active workers use source commit
+`937bae5`, which predates the researcher-approved policy in `16b13ae`. The
+source diff confirms that `937bae5` requires positive end equity and equity
+slope for the train gate and defaults to stopping after the configured
+no-trade threshold; the approved policy treats PnL/slope/activity as metrics
+and disables the no-trade early abort. Therefore the active run is an
+exploratory run under the earlier acceptance semantics, even though its
+campaign name and 20M budget remain as configured. Preserve its outputs, but
+do not represent it as having trained under the updated acceptance policy.
+Any continuation from its checkpoints must use its exact pinned source and
+retain this caveat; evaluating under the newer policy requires a separately
+identified campaign with the newer source and fingerprint.
