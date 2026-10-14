@@ -978,3 +978,36 @@ pinned-source dry-run of its spec fails the controller's in-repository spec
 path check because the spec currently sits under a symlinked output directory.
 Its partial runs must remain separate until a provenance-preserving recovery
 or migration is prepared; do not claim they will resume automatically.
+
+### Live campaign follow-up — 2026-10-14 10:46 UTC
+
+Slurm job `20954895` remains RUNNING (about 1 hour 20 minutes elapsed). The
+main manifest records 16 running jobs and the two preserved cache-mismatch
+failures; the separate recovery manifest records two running jobs. All 18
+current worker logs now show PPO progress from 786,432 to 1,179,648 steps
+(median 983,040). Ten 1,000,000-step checkpoints exist across the manifests.
+No final evaluation has completed.
+
+The three named prebuilt cache sidecars now match the hashes expected by the
+failed workers: baseline `656b50e064710408`, Idea 1
+`75feaab2164f0ee9`, Idea 2 `c5c8b3d9e890a760`; the two strategy caches also
+have their required `.htf_sweeps.parquet` files. Their parquet matrices remain
+local, untracked data. This proves the current cache artifacts are usable by
+the recovery workers; it does not retroactively make the two failed attempts
+successful.
+
+The resource CSVs cover 55.5/55.8 minutes. On gpuarm1/gpuarm2, process-tree
+PSS averaged 93.9/121.1 GiB and peaked at 102.4/131.4 GiB. Slurm-job cgroup
+memory averaged 134.4/129.2 GiB; sampled current maxima were 151.2/138.8 GiB,
+and cgroup high-water marks were 152.9/140.7 GiB against 512 GiB per node.
+All `max`, `oom`, `oom_kill`, and `oom_group_kill` event counters were zero.
+Process-tree CPU averaged 3.88/4.88 cores. GPU utilization averaged
+56.3%/54.6% (peaks 98%/96%); VRAM averaged 39.6/41.9 GiB (peaks 44.0/46.8
+GiB). These remain early-run measurements, not final-phase resource bounds.
+
+A primary-campaign dry-run under the pinned source resolved all 18 keys and
+20M steps/variant. The separate recovery spec does not pass the pinned
+controller's repository-boundary check through the shared-output symlink.
+The launcher therefore resumes only the primary campaign; recovery-run
+migration remains open. The active run still uses pre-`16b13ae` acceptance
+semantics and must not be presented as following the updated policy.

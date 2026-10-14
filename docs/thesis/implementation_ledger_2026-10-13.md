@@ -2144,3 +2144,32 @@ have an automatic resume path: its spec lives under a symlinked output
 directory, and a pinned-source dry-run rejects it as outside the repository.
 Retain those partial outputs; do not claim the two recovery runs will resume
 automatically. A provenance-preserving migration remains open.
+
+### Live campaign follow-up — 2026-10-14 10:46 UTC
+
+At this snapshot, Slurm job `20954895` is RUNNING with 1:20 elapsed. The main
+campaign has 16 running jobs and two preserved cache-mismatch failures; the
+separate recovery campaign has two running jobs. All 18 current worker logs
+show PPO progress between 786,432 and 1,179,648 (median 983,040) steps, and
+ten 1M-step checkpoints are present across the manifests. No final evaluations
+are present.
+
+Current sidecar hashes are baseline `656b50e064710408`, Idea 1
+`75feaab2164f0ee9`, and Idea 2 `c5c8b3d9e890a760`; both idea caches have the
+required HTF sweep audit files. This validates the current cache artifacts,
+not the two failed attempts.
+
+The latest resource window contains 99/97 samples over 55.5/55.8 minutes.
+Process-tree PSS averages/peaks are 93.9/102.4 GiB on gpuarm1 and
+121.1/131.4 GiB on gpuarm2. Slurm-job cgroup memory average/current max/high
+water are 134.4/151.2/152.9 GiB and 129.2/138.8/140.7 GiB, respectively,
+against 512 GiB per node. All cgroup max/OOM counters are zero. Process-tree
+CPU averages 3.88/4.88 cores. GPU utilization averages 56.3%/54.6%, with
+98%/96% peaks; VRAM averages 39.6/41.9 GiB, peaking at 44.0/46.8 GiB.
+These measurements are early-phase only.
+
+The primary campaign dry-run passed under the pinned 937bae source. The
+separate recovery spec fails the pinned controller's in-repository path check
+through the shared-output symlink; automatic recovery resume was removed from
+the launcher and remains open for explicit migration. The active training
+still uses acceptance semantics predating `16b13ae`.
