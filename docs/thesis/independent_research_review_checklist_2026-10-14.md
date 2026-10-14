@@ -69,6 +69,33 @@ Until a qualified reviewer fills this record and resolves the open items, the
 independent-review gate remains **OPEN** and overall campaign readiness remains
 **NOT READY**.
 
+### Live campaign and resource refresh — 2026-10-14 13:09 UTC
+
+Slurm job `20954895` remains RUNNING on `gpuarm[1-2]` (2 GH200, 96 CPUs, 1 TiB
+total RAM, six-hour allocation). Reconciliation across the primary manifest
+(16 running, two stale-cache startup failures) and the separate cache-recovery
+manifest (two running) confirms 18 active unique seed-42 lineages. Latest
+logged progress is 2,949,120–4,620,288 of 20M requested steps. No early-abort
+marker was found, but no final full-train or report-only test evaluation has
+been produced. The current-source survival-only acceptance policy differs from
+the pinned worker source `937bae5`; any result is an exploratory continuation
+across that recorded policy boundary. The 2026 report-only period was already
+inspected and remains selection-acknowledged, not pristine holdout evidence.
+
+The allocation sampler covers 3.32 hours: process-tree CPU averaged
+3.82/4.89 cores, cgroup RAM averaged 141.2/141.8 GiB and peaked at
+158.7/162.6 GiB, GPU utilization averaged 56.5%/55.6%, and VRAM peaked at
+50,499/58,175 MiB; OOM counters remain zero. This is interim sizing evidence.
+The checksummed worker-level snapshot and raw resource CSV hashes are in
+`outputs/gpu_campaigns/readiness_reaudit_20261014/reports/live_campaign_snapshot_20261014_1309.json`
+(SHA-256 `af80c4cf4d7be47d9adb1a9caad263970559a619c9f51bf833e97f0e11075e07`).
+The recovery controller log contains validation-error text even though the two
+recovery manifests/logs show live, advancing workers; keep this invocation
+discrepancy visible for review and do not treat the messages alone as proof of
+failed workers. Independent review remains OPEN pending a signed reviewer
+disposition, final train/test reports, a fresh confirmatory holdout, and
+resolution of the policy-boundary and resource-sizing questions.
+
 ## Campaign and evaluation status addendum — 2026-10-14
 
 The primary 18-run campaign is still active under its pinned source revision
