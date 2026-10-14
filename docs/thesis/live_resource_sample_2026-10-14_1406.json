@@ -1,0 +1,57 @@
+{
+  "allocation_shape": {
+    "cpus": 96,
+    "gpus": 2,
+    "memory_gib_per_node": 512,
+    "nodes": 2
+  },
+  "method_note": "Allocation-scope cgroup RAM and process-tree CPU are sampled; CPU average is CPU-time counter delta divided by the interval duration. These are interim partial-run statistics, not full-run sizing guarantees.",
+  "nodes": {
+    "gpuarm1": {
+      "cgroup_limit_gib": 512.0,
+      "cgroup_ram_avg_gib": 145.5985466263511,
+      "cgroup_ram_latest_gib": 168.3864402770996,
+      "cgroup_ram_peak_gib": 169.95831680297852,
+      "cpu_avg_cores_from_counter_deltas": 3.8227394747900183,
+      "end_utc": "2026-10-14T14:06:09.831959+00:00",
+      "gpu_util_avg_pct": 57.05227272727273,
+      "gpu_util_last_hour_avg_pct": 58.46534653465346,
+      "gpu_util_last_pct": 64.0,
+      "gpu_vram_peak_gib": 51.8662109375,
+      "oom_event_peak": 0,
+      "oom_events_latest": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "process_pss_avg_gib": 110.52980525276878,
+      "process_pss_peak_gib": 132.82530975341797,
+      "ram_scope": "slurm_job",
+      "samples": 440,
+      "source_csv": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/resources_gpuarm1.csv",
+      "source_csv_sha256": "7cb1bde349a9a07606f3db36b6f5083c672a757201c05b0704d83a8145ce52fd",
+      "start_utc": "2026-10-14T09:50:03.927380+00:00",
+      "window_hours": 4.2683
+    },
+    "gpuarm2": {
+      "cgroup_limit_gib": 512.0,
+      "cgroup_ram_avg_gib": 146.83472051330136,
+      "cgroup_ram_latest_gib": 168.8365249633789,
+      "cgroup_ram_peak_gib": 172.68915176391602,
+      "cpu_avg_cores_from_counter_deltas": 4.887668788700487,
+      "end_utc": "2026-10-14T14:05:52.348225+00:00",
+      "gpu_util_avg_pct": 55.92974238875878,
+      "gpu_util_last_hour_avg_pct": 57.02020202020202,
+      "gpu_util_last_pct": 72.0,
+      "gpu_vram_peak_gib": 61.1337890625,
+      "oom_event_peak": 0,
+      "oom_events_latest": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "process_pss_avg_gib": 140.97954161329068,
+      "process_pss_peak_gib": 167.41615104675293,
+      "ram_scope": "slurm_job",
+      "samples": 427,
+      "source_csv": "outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014/logs/resources_gpuarm2.csv",
+      "source_csv_sha256": "d91ab02667e2c2665bc5e06da50b4ade2196fa62fca86ccc08b1771f515b0b46",
+      "start_utc": "2026-10-14T09:50:04.137607+00:00",
+      "window_hours": 4.2634
+    }
+  },
+  "observed_at_utc": "2026-10-14T14:06:30+00:00",
+  "schema_version": 1
+}
