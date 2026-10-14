@@ -23,6 +23,20 @@ print(active, counts.get("failed", 0), counts.get("succeeded", 0))
 PY
 }
 
+checkpoint_signature() {
+  # A normal allocation timeout returns nonzero after the controller saves
+  # interrupted checkpoints. Count that allocation as progress, not as a
+  # supervisor error. File metadata detects new or rewritten checkpoints;
+  # the controller separately checks ZIP integrity before resuming one.
+  local root="$OUT_DIR/runs/attempts"
+  if [[ ! -d "$root" ]]; then
+    echo missing
+    return
+  fi
+  find "$root" -type f -name 'ppo_ckpt_*_steps.zip' \
+    -printf '%P %s %T@\n' | sort | sha256sum | awk '{print $1}'
+}
+
 old_campaign_active() {
   if pgrep -f '[r]un_campaign_18way_two_node_supervisor.sh' >/dev/null; then
     return 0
@@ -57,6 +71,7 @@ while true; do
   fi
 
   echo "$(date --iso-8601=seconds) requesting two nodes, one GH200/node, 48 CPUs and 512G/node, 6h"
+  checkpoints_before="$(checkpoint_signature)"
   set +e
   srun \
     --partition=gpu-grace-h200-141g \
@@ -83,7 +98,16 @@ while true; do
     [[ "$failed" == 0 && "$succeeded" == 18 ]] && exit 0
     exit 1
   fi
-  if (( rc != 0 )); then ((errors+=1)); else errors=0; fi
-  if (( errors >= MAX_ERRORS )); then echo "allocation retry limit reached; inspect this log"; exit 2; fi
+  checkpoints_after="$(checkpoint_signature)"
+  if [[ "$checkpoints_after" != "$checkpoints_before" ]]; then
+    echo "$(date --iso-8601=seconds) allocation made checkpoint progress; resetting no-progress error count"
+    errors=0
+  elif (( rc != 0 )); then
+    ((errors+=1))
+    echo "$(date --iso-8601=seconds) no new checkpoint; consecutive allocation errors=$errors/$MAX_ERRORS"
+  else
+    errors=0
+  fi
+  if (( errors >= MAX_ERRORS )); then echo "no-progress allocation retry limit reached; inspect this log"; exit 2; fi
   sleep 30
 done

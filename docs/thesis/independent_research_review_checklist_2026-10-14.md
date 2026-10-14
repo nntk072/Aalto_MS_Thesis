@@ -195,3 +195,11 @@ all 18 seed-42 lineages on CPU: 18 passed, 0 failed; 13 were at 2M steps and
 These were not final-budget models, and worker logs showed progress beyond the
 saved checkpoint levels. Treat this as migration-input compatibility evidence
 only.
+
+The continuation supervisor now resets its allocation retry counter after new
+checkpoint files appear and limits retries only after three consecutive
+nonzero allocations with no checkpoint change. Shell syntax passed and the
+focused checkpoint-migration tests passed 5/5; the watcher was restarted with
+this change and is still waiting for the original allocation. This protects
+continuity across allocation limits; it is not evidence that the strategy
+learns or survives.

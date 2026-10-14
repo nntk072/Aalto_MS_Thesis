@@ -2346,3 +2346,18 @@ audit snapshot, not their final models. CPU loading does not prove GH200
 compatibility or strategy performance. The live allocation and waiting
 migration supervisor remain unchanged; final train/test evaluations are
 still absent and readiness remains **NOT READY**.
+
+### Migration supervisor no-progress retry fix — 2026-10-14 11:59 UTC
+
+Fixed the prepared continuation supervisor so expected six-hour allocation
+boundaries do not consume its three-error budget when training produced new
+checkpoints. It now fingerprints checkpoint path/size/mtime metadata
+before and after each allocation; checkpoint progress resets the no-progress
+error count, while three consecutive nonzero allocations without a checkpoint
+change still stop the supervisor for inspection. Restarted only the waiting
+login-side migration watcher to load this change. The current Slurm job
+`20954895` remained RUNNING, and the watcher continued waiting; no training
+worker or Slurm allocation was stopped or requested. Validation: `bash -n`
+passed, the focused campaign checkpoint migration tests passed 5/5, full-tree
+Ruff format/lint and Mypy passed, and `git diff --check` passed. The retry
+contract is about safe continuation; it is not evidence of training quality.
