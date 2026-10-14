@@ -176,6 +176,20 @@ only. Do not reinterpret earlier probe gate results under this later protocol.
 6. Use separately frozen selection/validation data and deterministic final evaluation protocol to compare actions, trades, equity, returns, Sharpe definition, max DD, costs, win rates, risk survival, termination and SL/TP behavior. Preserve failures and evaluate locked OOS only according to final-report policy.
 7. Publish an 18-row auditable output manifest and do not substitute similar aggregate performance for full behavioral equivalence.
 
+### Live campaign status — 2026-10-14
+
+The exploratory 18-variant, seed-42, 20M campaign has launched under Slurm
+allocation `20954895` on gpuarm1/gpuarm2. Sixteen workers are in the primary
+campaign and two stale-cache retries run in a separate recovery campaign.
+The run is incomplete and remains exploratory because its report-only test
+period was previously inspected. Its source identity is pinned to commit
+`937bae529fdf5d6c17db6174880ef448320e2883`; metric-policy changes in
+`16b13ae` do not alter its already-running workers and invalidate a direct
+resume from the updated checkout. Preserve the fingerprint guard and source
+provenance when continuing it. The current run does not close resource sizing,
+independent research review, or pristine-holdout gaps; readiness remains
+**NOT READY**.
+
 
 ## 7. Resources, conditional sizing and benchmark plan
 

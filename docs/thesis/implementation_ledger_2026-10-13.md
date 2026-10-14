@@ -2030,3 +2030,48 @@ parity before relying on them for the corrected registry. Do not launch the
 20M campaign: the other 17 pilot train-equity gates still failed, and this
 pure-baseline configuration has not been trained. Overall readiness remains
 **NOT READY**.
+
+### One-year train / test-window evaluation and acceptance metrics — 2026-10-14
+
+The researcher confirmed that each final trained policy must be evaluated on
+both the complete one-year in-sample training split and the following
+five-to-six-month test split, with model weights frozen before test replay.
+The current trainer already performs deterministic final replays on both
+splits and writes `evaluations/train_in_sample.json`,
+`evaluations/test_report_only.json`, and `evaluations/summary.md`; dashboard
+train-prefix checks remain progress diagnostics, not final split reports.
+The active campaign uses train bars through 2025-12-31 (351,550 bars) and test
+bars from 2026-01-01 through 2026-07-03 (177,210 bars). The test interval was
+previously inspected and remains exploratory, not pristine confirmation.
+
+Per the clarified acceptance policy, net PnL, equity slope, and trade count
+are metrics. They are not hard gates and must not stop training by themselves.
+The train survival gate remains hard for a max-loss breach or peak trailing
+drawdown above 10%. Default no-trade early-abort is disabled so activity stays
+a measured outcome. These semantics are implemented in source commit
+`16b13ae`; full-tree Ruff format/lint and Mypy passed, and 47 focused tests
+passed.
+
+### Live 18-variant exploratory campaign — current state 2026-10-14
+
+Slurm allocation `20954895` is RUNNING on gpuarm1/gpuarm2 with one GH200,
+48 CPUs, and 512 GiB per node; time limit is six hours. It contains 16
+workers under the main campaign and two cache-recovery workers under a
+separate campaign directory. The current manifests list those 18 workers as
+running, with the main campaign's two original stale-cache attempts preserved
+as failures. At the latest check, logged PPO progress was 589,824 steps for
+`ladder_a0_flat` and 393,216 for `ladder_a4b_distribution`; these are early
+progress snapshots against 20M requested steps, not completed results.
+
+The running campaign was created from commit `937bae529fdf5d6c17db6174880ef448320e2883`.
+Its identity fingerprint includes the source commit and source hashes; the
+subsequent metric-policy commit `16b13ae` changes that identity. Current worker
+processes are unaffected, but an automatic `--resume` from the updated
+checkout will fail its fingerprint check. Do not rewrite the manifest or
+attempt provenance to bypass that guard. Before another allocation, either
+resume under the exact pinned source snapshot or create a new, explicitly
+lineaged campaign from a validated checkpoint migration. Do not claim the
+18-run campaign complete or READY on current partial evidence. Thesis
+readiness remains **NOT READY**: independent research review, a pristine
+confirmatory holdout, final campaign evidence, and sustained training resource
+sizing remain open.
