@@ -17,6 +17,8 @@ import pandas as pd
 import pytest
 from mt5_trading.adapters.data import TradingData
 
+from quant_rl.observation_schema import OBSERVATION_SCHEMA_V1, build_observation_schema
+
 # --- headless MetaTrader5 stub (Windows-only package, absent on Linux) -----
 if "MetaTrader5" not in sys.modules:
     try:  # pragma: no cover - depends on platform
@@ -155,6 +157,8 @@ def test_pending_latency_order_is_cancelled_when_episode_ends(trending_bars):
 
 class _StubModel:
     """Duck-typed SB3 model: action = +1 (long) always."""
+
+    _observation_schema = build_observation_schema(OBSERVATION_SCHEMA_V1).to_dict()
 
     def predict(self, obs: dict[str, Any], deterministic: bool = True) -> np.ndarray[Any, Any]:  # noqa: ARG002
         return np.array([1])

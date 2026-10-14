@@ -138,13 +138,27 @@ def test_save_dashboard_plots(tmp_path):
             "structure_tp": [0.6, 0.5],
             "grad_norm": [1.2, 0.8],
             "return_pct": [1.0, ""],
+            "eval_max_drawdown_pct": [0.2, 0.3],
+            "eval_total_pnl": [100.0, -200.0],
+            "avg_trade": [10.0, -20.0],
             "sharpe": [0.5, ""],
+            "sortino": [0.7, 0.6],
+            "profit_factor": [1.2, 0.8],
+            "win_rate": [0.6, 0.4],
+            "n_trades": [10, 20],
+            "turnover": [0.3, 0.4],
         }
     ).to_csv(log_path, index=False)
     out = tmp_path / "plots"
     save_dashboard_plots(log_path, out_dir=out, save_html=False)
     for name in (
-        "dashboard_eval",
+        "dashboard_return",
+        "dashboard_pnl",
+        "dashboard_sharpe",
+        "dashboard_profit_factor",
+        "dashboard_win_rate",
+        "dashboard_trade_count",
+        "dashboard_turnover",
         "dashboard_reward",
         "dashboard_behavior",
         "dashboard_risk",

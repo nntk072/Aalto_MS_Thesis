@@ -16,6 +16,7 @@ from quant_rl.train.ablation_utils import load_variant_config, merge_variant_cfg
 from quant_rl.train.variant_resolver import (  # noqa: E402
     DEFAULT_BASE,
     FULL_PO3_BASE,
+    PREBUILT_FEATURE_CACHES,
     PROJECT_ROOT,
     load_experiments,
     resolve_variant,
@@ -38,8 +39,9 @@ STRAT_YAML = {
     "po3_ifvg": "config/2_po3_ifvg.yaml",
     "distribution": "config/3_distribution.yaml",
 }
-# Intentional: baseline-named rungs now run BaselineStrategy, not the default po3 block.
-EXPECTED_DIFF_KEYS = {"strategy.name"}
+# Intentional config drift: the resolver adds an explicit prebuilt feature
+# cache to the three cache-backed baseline rungs.
+EXPECTED_DIFF_KEYS: set[str] = set()
 
 
 def _flatten(cfg) -> dict[str, object]:
@@ -88,11 +90,18 @@ def test_resolver_matches_legacy_config(name: str) -> None:
     legacy = _flatten(_legacy(name))
     new = _flatten(_new(name))
     diff = {k for k in set(legacy) | set(new) if legacy.get(k) != new.get(k)}
-    unexpected = diff - EXPECTED_DIFF_KEYS
+    expected_diff = set(EXPECTED_DIFF_KEYS)
+    expected_cache = PREBUILT_FEATURE_CACHES.get(name)
+    if expected_cache is not None:
+        expected_diff.add("data.prebuilt_feature_cache")
+        assert new["data.prebuilt_feature_cache"] == expected_cache
+    unexpected = diff - expected_diff
     assert not unexpected, f"{name}: unexpected config drift: " + ", ".join(
         f"{k} legacy={legacy.get(k)!r} new={new.get(k)!r}" for k in sorted(unexpected)
     )
     if diff:
-        # Only the baseline-named rungs and controls may differ, and only in strategy.name.
-        assert diff == EXPECTED_DIFF_KEYS
-        assert resolve_variant(name, vae_path="placeholder.pth")["strategy"] == "baseline"
+        # Cache-backed rungs differ only by their explicit, variant-specific
+        # prebuilt feature cache.
+        assert diff == expected_diff
+    resolved = resolve_variant(name, vae_path="placeholder.pth")
+    assert resolved["strategy"] == new["strategy.name"]

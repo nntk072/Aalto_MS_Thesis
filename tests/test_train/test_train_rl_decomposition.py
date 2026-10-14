@@ -99,7 +99,9 @@ class TestParseTrainArgs:
             args = parse_train_args()
         assert args.seed == 42
         assert args.algo == "ppo"
-        assert args.arch == "tcn"
+        # Leave the architecture unset so config/quality-variant resolution
+        # can select it; train_rl falls back to tcn after config is loaded.
+        assert args.arch is None
         assert args.reward == "dsr"
         assert args.strategy == "baseline"
         assert args.mvp is False

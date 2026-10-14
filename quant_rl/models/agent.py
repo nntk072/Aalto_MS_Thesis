@@ -300,6 +300,7 @@ def build_agent(
     # Infer F from the env's observation space
     n_features: int = env.observation_space["seq"].shape[1]
     account_dim: int = int(env.observation_space["account"].shape[0])
+    agent_cfg = cfg.get("agent", {})
 
     # Choose feature extractor based on architecture / VAE use
     extractor_cls: Any
@@ -320,7 +321,7 @@ def build_agent(
         if arch == "mtf":
             extractor_kwargs = dict(latent_dim=latent_dim, account_dim=account_dim)
         elif arch == "lite_tcn":
-            lite_cfg = cfg.agent.get("lite_tcn", {})
+            lite_cfg = agent_cfg.get("lite_tcn", {})
             latent_dim = int(lite_cfg.get("latent_dim", 128))
             extractor_kwargs = dict(
                 seq_len=cfg.env.obs_window,
@@ -341,7 +342,7 @@ def build_agent(
             )
 
     # Two hidden layers after the encoder. SAC uses ``qf`` for the critic.
-    head_cfg = cfg.agent.get("head_arch", {})
+    head_cfg = agent_cfg.get("head_arch", {})
     head_arch = [int(value) for value in head_cfg.get(arch, [256, 128])]
     if algo == "sac":
         net_arch: dict[str, Any] = dict(pi=head_arch, qf=head_arch)

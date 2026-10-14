@@ -15,9 +15,12 @@ from quant_rl.features.build import (
 )
 from quant_rl.features.indicators import ny_session_clock
 from quant_rl.live.rl_strategy import RLStrategyAdapter
+from quant_rl.observation_schema import OBSERVATION_SCHEMA_V1, build_observation_schema
 
 
 class _StubModel:
+    _observation_schema = build_observation_schema(OBSERVATION_SCHEMA_V1).to_dict()
+
     def predict(self, obs: dict[str, Any], deterministic: bool = True) -> np.ndarray[Any, Any]:  # noqa: ARG002
         return np.array([1])
 
