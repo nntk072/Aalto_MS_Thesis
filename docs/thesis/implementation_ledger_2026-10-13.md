@@ -2451,3 +2451,23 @@ state. `dashboard.py` is unchanged from the pinned worker source commit
 but does not establish a completed one-year evaluation or final policy failure.
 Full training-split and report-only test replays remain pending at the end of
 the 20M budget.
+
+### Fresh checkpoint-lineage and CPU load audit — 2026-10-14 12:22 UTC
+
+Rebuilt the lineage map from the live primary and recovery manifests into
+`outputs/gpu_campaigns/readiness_reaudit_20261014/checkpoint_map_snapshot_20261014_1216.json`.
+It covers exactly 18 run keys: the newest resumable baseline checkpoint at
+3M and the other 17 at 2M. The successor controller's read-only dry-run
+accepted all 18 keys for the 20M, shared-bundle, `n_envs=64`, two-GH200-node
+shape with 5 CPUs per worker. Its output was captured in the tool result; no
+Slurm step was started. The machine-readable dry-run output is
+`outputs/gpu_campaigns/readiness_reaudit_20261014/reports/campaign_migration_dry_run_20261014_1216.json`.
+
+Then CPU-loaded all 18 selected PPO archives with the lineage audit utility;
+all 18 passed and each embedded timestep matched its provenance record. The
+report is
+`outputs/gpu_campaigns/readiness_reaudit_20261014/reports/checkpoint_load_cpu_18_seed42_latest_20261014_1216.json`.
+This validates checkpoint integrity and CPU deserialization for the current
+snapshot, not GH200 loading, continued training, final evaluations, or policy
+quality. Slurm job `20954895` remained RUNNING during the audit; no training
+allocation or worker was stopped.
