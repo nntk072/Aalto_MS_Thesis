@@ -300,6 +300,9 @@ risk:
 
 training:
   mode: "full"           # "full" = all data / "mvp" = M1-only minimal slice
+  # Keep every training environment on the chronological split through its end
+  # after a risk breach; use risk_terminated only for an explicit legacy replay.
+  episode_mode: "full_split"
   use_m1_only: false     # true = skip SMT/secondary features (M1 primary only)
   primary_only: false    # true = ignore secondary symbol entirely
   max_days: null         # null = all data; integer = last N calendar days for training

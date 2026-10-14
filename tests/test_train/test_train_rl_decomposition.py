@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 import torch
 
 from quant_rl.evaluation.metrics import PerformanceMetrics
@@ -21,9 +22,40 @@ from quant_rl.train.train_rl import (
     _initialize_value_head,
     _load_merged_config,
     _setup_rngs,
+    _training_episodic,
     _write_evaluation_artifacts,
     parse_train_args,
 )
+
+
+def test_training_episode_mode_defaults_to_full_split() -> None:
+    assert _training_episodic(SimpleNamespace(training={}, env={})) is False
+    assert (
+        _training_episodic(SimpleNamespace(training={"episode_mode": "full_split"}, env={}))
+        is False
+    )
+
+
+def test_training_episode_mode_can_preserve_legacy_risk_terminated_behavior() -> None:
+    cfg = SimpleNamespace(
+        training={"episode_mode": "risk_terminated"},
+        env={"max_episode_steps": 100},
+    )
+    assert _training_episodic(cfg) is True
+
+
+def test_training_episode_mode_rejects_unknown_values() -> None:
+    with pytest.raises(ValueError, match="training.episode_mode"):
+        _training_episodic(SimpleNamespace(training={"episode_mode": "random_start"}, env={}))
+
+
+def test_full_split_training_rejects_artificial_episode_cap() -> None:
+    cfg = SimpleNamespace(
+        training={"episode_mode": "full_split"},
+        env={"max_episode_steps": 100},
+    )
+    with pytest.raises(ValueError, match="env.max_episode_steps=null"):
+        _training_episodic(cfg)
 
 
 def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path) -> None:
