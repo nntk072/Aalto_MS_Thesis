@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 from omegaconf import OmegaConf
 from scripts.bench.measure_ppo_throughput import (
     _apply_profile_overrides,
+    _json_default,
     _prepare_bundle,
 )
 
@@ -35,6 +37,11 @@ def test_rollout_override_is_global_steps_times_logical_envs() -> None:
     _apply_profile_overrides(cfg, n_envs=None, rollout_steps_per_env=128)
 
     assert cfg.ppo.n_steps == 4096
+
+
+def test_numpy_scalars_are_json_serializable() -> None:
+    assert _json_default(np.int64(7)) == 7
+    assert _json_default(np.float32(1.5)) == 1.5
 
 
 def test_variant_config_uses_production_strategy_merge_and_cli_override(

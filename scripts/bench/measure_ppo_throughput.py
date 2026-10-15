@@ -28,6 +28,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from gymnasium import spaces
 from omegaconf import OmegaConf
 
@@ -47,6 +48,13 @@ from quant_rl.envs.worker import make_bundle_env
 from quant_rl.models.agent import build_agent
 from quant_rl.train.train_rl import _load_merged_config, _setup_rngs, _strategy_from_cfg
 from quant_rl.utils.device import scale_training_cfg
+
+
+def _json_default(value: Any) -> Any:
+    """Convert NumPy scalar metadata to JSON-native Python values."""
+    if isinstance(value, np.generic):
+        return value.item()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 def _parse_args() -> argparse.Namespace:
@@ -413,7 +421,7 @@ def _train_probe(
     }
     model.get_env().close()
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(report, indent=2) + "\n")
+    output.write_text(json.dumps(report, indent=2, default=_json_default) + "\n")
     return report
 
 
@@ -437,7 +445,7 @@ def main() -> None:
         args.overrides,
         args.seed,
     )
-    print(json.dumps(report, indent=2))
+    print(json.dumps(report, indent=2, default=_json_default))
 
 
 if __name__ == "__main__":
