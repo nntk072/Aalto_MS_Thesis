@@ -1,0 +1,194 @@
+{
+  "campaign_id": "ladder18_seed42_20m_policy_migration_nenv64_20261014",
+  "data_source": "bundle",
+  "episodes": [
+    {
+      "archived_copy": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1715Z/ladder_a0_flat_dist__seed42_episode_equity.csv",
+      "breach_reasons": {
+        "trailing_dd": 2
+      },
+      "end_reasons": {
+        "risk_breach": 2
+      },
+      "episode_steps_max": 14596,
+      "episode_steps_min": 13353,
+      "episodes": 2,
+      "full_training_split_episodes": 0,
+      "sha256": "c460da70351c22844f5a25ca35ddf5f5cb5bb79255db378b0f2d861ee7b9761c",
+      "variant": "ladder_a0_flat_dist__seed42"
+    },
+    {
+      "archived_copy": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1715Z/ladder_a1_sl__seed42_episode_equity.csv",
+      "breach_reasons": {
+        "trailing_dd": 12
+      },
+      "end_reasons": {
+        "risk_breach": 12
+      },
+      "episode_steps_max": 15672,
+      "episode_steps_min": 7338,
+      "episodes": 12,
+      "full_training_split_episodes": 0,
+      "sha256": "232d8302c62a5f1c0210e3a3bb112d79aad485702690acc9656996039c485b00",
+      "variant": "ladder_a1_sl__seed42"
+    },
+    {
+      "archived_copy": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1715Z/ladder_a1_sl_po3__seed42_episode_equity.csv",
+      "breach_reasons": {
+        "trailing_dd": 1
+      },
+      "end_reasons": {
+        "risk_breach": 1
+      },
+      "episode_steps_max": 14731,
+      "episode_steps_min": 14731,
+      "episodes": 1,
+      "full_training_split_episodes": 0,
+      "sha256": "316982f3e1a30c48f5ae0728452e9137d13ddce29076d2427e027e1730529884",
+      "variant": "ladder_a1_sl_po3__seed42"
+    }
+  ],
+  "final_metrics_json": [],
+  "final_summaries": [],
+  "fresh_logs_within_5m": 18,
+  "interpretation": "Point-in-time exploratory snapshot. The currently recorded 15 episodes across three variants all ended on trailing-drawdown risk breaches before full train-split completion. The campaign remains active, and no final metrics or summary exists. Readiness remains NOT READY.",
+  "job_id": "20963043",
+  "manifest_fingerprint": "7ee026894d0575619d885ddb09a391ac1a3c1b3196bd92c64861c26a31749b73",
+  "n_envs": 64,
+  "numbered_checkpoints": [
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat__seed42/attempt1/ladder_a0_flat__seed42/20261014_191955_371103_rl_train_seed42_tcn/model/ppo_ckpt_9000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat_po3__seed42/attempt1/ladder_a0_flat_po3__seed42/20261014_191955_230354_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl__seed42/attempt1/ladder_a1_sl__seed42/20261014_191951_745461_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl_dist__seed42/attempt1/ladder_a1_sl_dist__seed42/20261014_191956_797217_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl_po3__seed42/attempt1/ladder_a1_sl_po3__seed42/20261014_192003_766208_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a2_tp__seed42/attempt1/ladder_a2_tp__seed42/20261014_191957_498001_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a2_tp_dist__seed42/attempt1/ladder_a2_tp_dist__seed42/20261014_191959_987413_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a3_multi_tp__seed42/attempt1/ladder_a3_multi_tp__seed42/20261014_191954_853189_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a3_multi_tp_dist__seed42/attempt1/ladder_a3_multi_tp_dist__seed42/20261014_192004_839765_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a3_multi_tp_po3__seed42/attempt1/ladder_a3_multi_tp_po3__seed42/20261014_191957_817729_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip"
+  ],
+  "observed_at_utc": "2026-10-14T17:15:57.901753+00:00",
+  "progress": [
+    {
+      "additional_steps": 1204224,
+      "current_dashboard_steps": 9204224,
+      "key": "ladder_a0_flat__seed42",
+      "source_steps": 8000000
+    },
+    {
+      "additional_steps": 1007616,
+      "current_dashboard_steps": 7007616,
+      "key": "ladder_a1_sl__seed42",
+      "source_steps": 6000000
+    },
+    {
+      "additional_steps": 1007616,
+      "current_dashboard_steps": 7007616,
+      "key": "ladder_a2_tp__seed42",
+      "source_steps": 6000000
+    },
+    {
+      "additional_steps": 901120,
+      "current_dashboard_steps": 6901120,
+      "key": "ladder_a3_multi_tp__seed42",
+      "source_steps": 6000000
+    },
+    {
+      "additional_steps": 901120,
+      "current_dashboard_steps": 5901120,
+      "key": "ladder_a4b_entry_fsm__seed42",
+      "source_steps": 5000000
+    },
+    {
+      "additional_steps": 802816,
+      "current_dashboard_steps": 5802816,
+      "key": "ladder_a4a_entry_fsm_hidden__seed42",
+      "source_steps": 5000000
+    },
+    {
+      "additional_steps": 1007616,
+      "current_dashboard_steps": 7007616,
+      "key": "ladder_a0_flat_po3__seed42",
+      "source_steps": 6000000
+    },
+    {
+      "additional_steps": 1105920,
+      "current_dashboard_steps": 7105920,
+      "key": "ladder_a1_sl_po3__seed42",
+      "source_steps": 6000000
+    },
+    {
+      "additional_steps": 901120,
+      "current_dashboard_steps": 6901120,
+      "key": "ladder_a2_tp_po3__seed42",
+      "source_steps": 6000000
+    },
+    {
+      "additional_steps": 1007616,
+      "current_dashboard_steps": 7007616,
+      "key": "ladder_a3_multi_tp_po3__seed42",
+      "source_steps": 6000000
+    },
+    {
+      "additional_steps": 802816,
+      "current_dashboard_steps": 5802816,
+      "key": "ladder_a4b_po3_ifvg__seed42",
+      "source_steps": 5000000
+    },
+    {
+      "additional_steps": 802816,
+      "current_dashboard_steps": 5802816,
+      "key": "ladder_a4a_entry_fsm_hidden_po3__seed42",
+      "source_steps": 5000000
+    },
+    {
+      "additional_steps": 901120,
+      "current_dashboard_steps": 6901120,
+      "key": "ladder_a0_flat_dist__seed42",
+      "source_steps": 6000000
+    },
+    {
+      "additional_steps": 1007616,
+      "current_dashboard_steps": 7007616,
+      "key": "ladder_a1_sl_dist__seed42",
+      "source_steps": 6000000
+    },
+    {
+      "additional_steps": 1007616,
+      "current_dashboard_steps": 7007616,
+      "key": "ladder_a2_tp_dist__seed42",
+      "source_steps": 6000000
+    },
+    {
+      "additional_steps": 901120,
+      "current_dashboard_steps": 6901120,
+      "key": "ladder_a3_multi_tp_dist__seed42",
+      "source_steps": 6000000
+    },
+    {
+      "additional_steps": 802816,
+      "current_dashboard_steps": 5802816,
+      "key": "ladder_a4b_distribution__seed42",
+      "source_steps": 5000000
+    },
+    {
+      "additional_steps": 704512,
+      "current_dashboard_steps": 5704512,
+      "key": "ladder_a4a_entry_fsm_hidden_dist__seed42",
+      "source_steps": 5000000
+    }
+  ],
+  "resource_snapshot_reference": {
+    "path": "docs/thesis/live_resource_snapshot_2026-10-14_1713.json",
+    "sha256": "7c81adfb211cd90c4f6ed0f7b00800708910d02ad5d8dd56c68c6cf5aab803fc"
+  },
+  "schema": "aalto.live_campaign_snapshot.v1",
+  "squeue": "20963043|RUNNING|1:11:51|6:00:00|gpuarm[1-2]",
+  "target_steps_per_variant": 20000000,
+  "worker_manifest_status": {
+    "failed": 0,
+    "interrupted": 0,
+    "running": 18,
+    "succeeded": 0
+  }
+}

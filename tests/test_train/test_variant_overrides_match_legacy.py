@@ -1,8 +1,4 @@
-"""The resolver's overrides must reproduce the legacy merge_variant_cfg config.
-
-Requires OmegaConf (repo environment). Expected differences are listed in
-EXPECTED_DIFF_KEYS and are the intended fixes, nothing else.
-"""
+"""The resolver's overrides must reproduce the legacy merge_variant_cfg config."""
 
 from __future__ import annotations
 
@@ -91,6 +87,11 @@ def test_resolver_matches_legacy_config(name: str) -> None:
     new = _flatten(_new(name))
     diff = {k for k in set(legacy) | set(new) if legacy.get(k) != new.get(k)}
     expected_diff = set(EXPECTED_DIFF_KEYS)
+    resolved = resolve_variant(name, vae_path="placeholder.pth")
+    if resolved["strategy"] == "baseline":
+        assert new["strategy.name"] == "baseline"
+        if legacy.get("strategy.name") != new.get("strategy.name"):
+            expected_diff.add("strategy.name")
     expected_cache = PREBUILT_FEATURE_CACHES.get(name)
     if expected_cache is not None:
         expected_diff.add("data.prebuilt_feature_cache")
@@ -100,8 +101,6 @@ def test_resolver_matches_legacy_config(name: str) -> None:
         f"{k} legacy={legacy.get(k)!r} new={new.get(k)!r}" for k in sorted(unexpected)
     )
     if diff:
-        # Cache-backed rungs differ only by their explicit, variant-specific
-        # prebuilt feature cache.
+        # Baseline semantics and the explicit feature cache are intentional.
         assert diff == expected_diff
-    resolved = resolve_variant(name, vae_path="placeholder.pth")
     assert resolved["strategy"] == new["strategy.name"]

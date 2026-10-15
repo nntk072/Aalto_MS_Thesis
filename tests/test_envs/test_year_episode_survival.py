@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -11,7 +12,7 @@ import pytest
 from quant_rl.backtest.account import AccountState
 from quant_rl.data.session import add_session_id, add_session_labels
 from quant_rl.envs.trading_env import TradingEnv
-from quant_rl.train.train_rl import _max_episode_steps
+from quant_rl.train.train_rl import _max_episode_steps, _training_episodic
 
 
 def _ohlc(idx: pd.DatetimeIndex, close: np.ndarray[Any, Any]) -> pd.DataFrame:
@@ -280,6 +281,44 @@ def test_eval_year_fail_latches_once() -> None:
             break
     assert len(env.breach_events) == n_first
     assert env._year_failed is True
+
+
+@pytest.mark.unit
+def test_full_split_training_mode_reaches_data_end_after_risk_breach() -> None:
+    """A breached PPO year remains observable through the train split end."""
+    episodic = _training_episodic(SimpleNamespace(training={"episode_mode": "full_split"}, env={}))
+    assert episodic is False
+    env = _multi_day_env(
+        n_days=2,
+        bars_per_day=80,
+        obs_window=10,
+        episodic=episodic,
+        max_episode_steps=None,
+        guardrail_kwargs={
+            "daily_loss_limit": 5_000.0,
+            "max_loss_limit": 10_000.0,
+            "trailing_dd_limit": 0.0,
+        },
+    )
+    env.reset()
+    env.account.balance = 89_000.0
+    env.account.update_equity(0.0)
+    _, _, done, truncated, _ = env.step(0)
+    assert done is False
+    assert truncated is False
+    assert env._year_failed is True
+
+    last_info: dict[str, Any] = {}
+    for _ in range(10_000):
+        _, _, done, truncated, last_info = env.step(0)
+        if done or truncated:
+            break
+
+    assert done is False
+    assert truncated is True
+    assert last_info["episode_equity"]["completed_data_split"] is True
+    assert last_info["episode_equity"]["episode_end_reason"] == "data_end"
+    assert last_info["episode_equity"]["breach_reason"] == "max_drawdown"
 
 
 @pytest.mark.unit

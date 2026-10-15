@@ -9,6 +9,7 @@ import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts/matrix/campaign_controller.py"
@@ -53,6 +54,14 @@ def test_resource_sampler_does_not_reserve_a_gpu() -> None:
     )
     assert not any(argument.startswith("--gpus=") for argument in command)
     assert not any(argument.startswith("--gpu-bind=") for argument in command)
+
+
+def test_action_space_width_validation_supports_legacy_discrete_and_box() -> None:
+    assert controller.action_space_matches_width(SimpleNamespace(shape=(), n=20), 20)
+    assert controller.action_space_matches_width(SimpleNamespace(shape=(), n=np.int64(20)), 20)
+    assert controller.action_space_matches_width(SimpleNamespace(shape=(5,)), 5)
+    assert not controller.action_space_matches_width(SimpleNamespace(shape=(), n=19), 20)
+    assert not controller.action_space_matches_width(SimpleNamespace(shape=(4,)), 5)
 
 
 def test_campaign_source_snapshot_archives_and_verifies_exact_hashed_files(
@@ -150,6 +159,10 @@ def test_verify_run_artifacts(
     run.mkdir(parents=True)
     config_text = '{"env":{"normalize":true}}\n'
     (run / "config.yaml").write_text(config_text, encoding="utf-8")
+    cache_path = tmp_path / "feature-cache.parquet"
+    cache_path.write_bytes(b"verified feature cache bytes")
+    cache_hash = "a" * 16
+    Path(str(cache_path) + ".hash").write_text(cache_hash + "\n", encoding="utf-8")
     (tmp_path / "one" / "resolved_config.json").write_text(
         json.dumps({"variant": "variant", "seed": 7, "steps": 8192}), encoding="utf-8"
     )
@@ -181,7 +194,9 @@ def test_verify_run_artifacts(
         "test_return": 0.2,
         "test_survived_full_year": True,
         "train_equity_ok": train_ok,
-        "feature_cache_hash": "a" * 64,
+        "feature_cache_hash": cache_hash,
+        "feature_cache_name": cache_path.name,
+        "run_manifests": ["run_manifest.json"],
         "feature_columns": feature_columns,
         "feature_schema_sha256": hashlib.sha256(
             json.dumps(feature_columns, separators=(",", ":")).encode()
@@ -204,6 +219,26 @@ def test_verify_run_artifacts(
                 archive.writestr("checkpoint", checkpoint)
         else:
             model_file.write_bytes(checkpoint)
+    model_file = run / "model" / "ppo_final.zip"
+    checkpoint_hash = (
+        hashlib.sha256(model_file.read_bytes()).hexdigest() if model_file.is_file() else "b" * 64
+    )
+    cache_sha256 = hashlib.sha256(cache_path.read_bytes()).hexdigest()
+    (run / "run_manifest.json").write_text(
+        json.dumps(
+            {
+                "feature_cache": {
+                    "path": str(cache_path),
+                    "identity": cache_path.name,
+                    "sha256": cache_hash,
+                    "file_sha256": cache_sha256,
+                },
+                "checkpoint": {"sha256": checkpoint_hash},
+                "config": {"sha256": hashlib.sha256(config_text.encode()).hexdigest()},
+            }
+        ),
+        encoding="utf-8",
+    )
     fake_model = SimpleNamespace(
         num_timesteps=8192,
         action_space=SimpleNamespace(shape=(2,)),
@@ -222,6 +257,24 @@ def test_verify_run_artifacts(
     assert success is expected
     if gate_reason is not None:
         assert reason == f"training risk-survival gate failed: {gate_reason}"
+    if expected:
+        Path(str(cache_path) + ".hash").write_text("c" * 16 + "\n", encoding="utf-8")
+        assert not controller.verify_run_artifacts(
+            tmp_path,
+            "variant__seed7",
+            8192,
+            expected_fingerprint=fingerprint,
+            expected_attempt=1,
+        )[0]
+        Path(str(cache_path) + ".hash").write_text(cache_hash + "\n", encoding="utf-8")
+        cache_path.write_bytes(b"tampered cache bytes with same sidecar")
+        assert not controller.verify_run_artifacts(
+            tmp_path,
+            "variant__seed7",
+            8192,
+            expected_fingerprint=fingerprint,
+            expected_attempt=1,
+        )[0]
 
 
 def test_verify_run_artifacts_invalid_json(tmp_path: Path) -> None:

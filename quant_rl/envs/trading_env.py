@@ -346,14 +346,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         dsr_eta : float
             Differential Sharpe Ratio damping factor.
         episodic : bool
-            If ``True`` (default, used for PPO training), a guardrail breach
-            ends the episode (``done=True``) exactly as before. If ``False``
-            (used for walk-forward evaluation/rollout), a breach force-closes
-            any open position and blocks new trades for the rest of that
-            ``session_id`` (calendar day), then trading resumes on the next
-            session — mirroring ``quant_rl.backtest.engine.run_backtest`` — so
-            a single call to ``reset()`` + repeated ``step()`` calls can walk
-            the *entire* test set without terminating early.
+            If ``True``, a guardrail breach ends the episode (``done=True``).
+            If ``False`` (used for full-split training and evaluation), a breach
+            force-closes any open position and blocks new trades for the rest of
+            that ``session_id`` (calendar day), then trading resumes on the next
+            session — mirroring ``quant_rl.backtest.engine.run_backtest`` — so a
+            single call to ``reset()`` + repeated ``step()`` calls can walk the
+            *entire* data split without terminating early.
         use_sweep_reward : bool
             If True, use SweepConfirmationReward instead of DSRReward.
         sweep_alpha : float
@@ -1039,8 +1038,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # Reset reward function
         self.reward_fn.reset()
 
-        # Eval-mode (episodic=False) walk-forward bookkeeping. Harmless but
-        # unused when episodic=True (training).
+        # Non-episodic full-split bookkeeping, used by evaluation and
+        # full-split training; unused in risk-terminated training mode.
         self.prev_session: int | None = None
         self.breached_sessions: set[int] = set()
         self.sessions_with_trades: set[int] = set()
@@ -1218,10 +1217,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         Returns ``(reason, session_blocked, done, truncated)`` where:
 
         - ``reason`` is the breach reason string or ``None`` if no breach.
-        - ``session_blocked`` is ``True`` when the session is blocked in eval
-          mode (breach already occurred earlier this session).
+        - ``session_blocked`` is ``True`` when the session is blocked after an
+          earlier breach.
         - ``done`` / ``truncated`` follow the episode mode: in episodic mode
-          a breach ends the episode; in eval mode the rollout continues.
+          a breach ends the episode; in non-episodic mode the split rollout
+          continues with the breached session/year blocked as appropriate.
 
         When a breach occurs, any open position is force-closed and the
         breach is recorded in ``breach_log`` / ``breach_events``.

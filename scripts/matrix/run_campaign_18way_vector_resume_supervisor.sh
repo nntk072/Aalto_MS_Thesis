@@ -12,6 +12,15 @@ mkdir -p "$(dirname "$LOG")"
 exec >>"$LOG" 2>&1
 echo "$(date --iso-8601=seconds) VecEnv-resume supervisor start host=$(hostname -s)"
 
+# A second login shell can start the same continuation while the first `srun`
+# is blocked in the queue. Lock the shared campaign directory before it can
+# submit, so only one supervisor owns this campaign across login hosts.
+exec 9>"$OUT_DIR/.allocation_supervisor.lock"
+if ! flock -n 9; then
+  echo "$(date --iso-8601=seconds) another supervisor already owns this campaign; exiting"
+  exit 0
+fi
+
 read_state() {
   [[ -s "$OUT_DIR/campaign.json" ]] || { echo missing; return; }
   # The login host may inherit an AArch64 venv path; use its system Python.
@@ -44,7 +53,7 @@ old_campaign_active() {
     return 0
   fi
   printf '%s\n' "$queued" | awk '
-    $1 == "thesis18x2" && ($2 == "RUNNING" || $2 == "PENDING" || $2 == "CONFIGURING") { found=1 }
+    $1 ~ /^thesis18(x2|vec)$/ && ($2 == "RUNNING" || $2 == "PENDING" || $2 == "CONFIGURING") { found=1 }
     END { exit !found }
   '
 }

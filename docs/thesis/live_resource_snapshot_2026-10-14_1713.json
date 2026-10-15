@@ -1,0 +1,62 @@
+{
+  "campaign_id": "ladder18_seed42_20m_policy_migration_nenv64_20261014",
+  "interpretation": "Partial live sample only; it does not establish a full-run resource peak or sustained sizing. Zero sampled OOM events were observed.",
+  "job_id": "20963043",
+  "nodes": {
+    "gpuarm1": {
+      "latest_gpu_utilization_pct": 56.0,
+      "max_cgroup_memory_current_gib": 129.96,
+      "max_observed_oom_events": 0,
+      "mean_cgroup_memory_gib": 124.33,
+      "mean_gpu_utilization_pct": 56.2,
+      "mean_process_tree_cpu_cores": 4.937,
+      "mean_process_tree_pss_gib": 116.56,
+      "memory_scope": "slurm_job",
+      "peak_gpu_memory_mib": 61065,
+      "peak_gpu_utilization_pct": 99.0,
+      "reported_cgroup_memory_peak_gib": 132.14,
+      "sample_count": 91,
+      "window_minutes": 53.6
+    },
+    "gpuarm2": {
+      "latest_gpu_utilization_pct": 63.0,
+      "max_cgroup_memory_current_gib": 132.52,
+      "max_observed_oom_events": 0,
+      "mean_cgroup_memory_gib": 123.14,
+      "mean_gpu_utilization_pct": 55.3,
+      "mean_process_tree_cpu_cores": 4.904,
+      "mean_process_tree_pss_gib": 119.54,
+      "memory_scope": "slurm_job",
+      "peak_gpu_memory_mib": 101645,
+      "peak_gpu_utilization_pct": 98.0,
+      "reported_cgroup_memory_peak_gib": 133.59,
+      "sample_count": 92,
+      "window_minutes": 53.55
+    }
+  },
+  "observed_at_utc": "2026-10-14T17:13:52.307383+00:00",
+  "raw_samples": {
+    "gpuarm1": {
+      "end_utc": "2026-10-14T17:13:16.478229+00:00",
+      "memory_scope": [
+        "slurm_job"
+      ],
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/resource_snapshot_20261014_1713/resources_gpuarm1.csv",
+      "rows": 91,
+      "sha256": "8607a71f2dc9df3c6526b21d847f30c689ced4523f78984d1a7bfd732a39111e",
+      "start_utc": "2026-10-14T16:19:40.259169+00:00"
+    },
+    "gpuarm2": {
+      "end_utc": "2026-10-14T17:13:13.524283+00:00",
+      "memory_scope": [
+        "slurm_job"
+      ],
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/resource_snapshot_20261014_1713/resources_gpuarm2.csv",
+      "rows": 92,
+      "sha256": "33a203e65d90dd2716fc95f0465f68065f5fddd0f55cf18e46985dcee649df2c",
+      "start_utc": "2026-10-14T16:19:40.274181+00:00"
+    }
+  },
+  "sampling_scope": "Slurm job cgroup for memory; campaign process tree for CPU and I/O; assigned GPU telemetry from node sampler",
+  "schema": "aalto.campaign_resource_snapshot.v1"
+}
