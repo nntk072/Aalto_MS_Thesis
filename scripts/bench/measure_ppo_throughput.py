@@ -22,12 +22,15 @@ import hashlib
 import json
 import os
 import platform
+import random
 import subprocess
 import time
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 from typing import Any
 
+import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 from omegaconf import OmegaConf
@@ -53,6 +56,30 @@ from quant_rl.envs.worker import make_bundle_env
 from quant_rl.models.agent import build_agent
 from quant_rl.train.train_rl import _load_merged_config, _setup_rngs, _strategy_from_cfg
 from quant_rl.utils.device import scale_training_cfg
+
+
+class _StepTimingWrapper(gym.Wrapper[Any, Any, Any, Any]):
+    """Collect per-environment step duration for a diagnostic probe."""
+
+    def __init__(self, env: gym.Env[Any, Any]) -> None:
+        super().__init__(env)
+        self._step_seconds = 0.0
+        self._step_count = 0
+
+    def step(self, action: Any) -> Any:
+        started = time.perf_counter()
+        try:
+            return self.env.step(action)
+        finally:
+            self._step_seconds += time.perf_counter() - started
+            self._step_count += 1
+
+    def get_step_timing(self) -> dict[str, float | int]:
+        return {"seconds": self._step_seconds, "steps": self._step_count}
+
+
+def _timed_env_from_factory(env_factory: Any) -> _StepTimingWrapper:
+    return _StepTimingWrapper(env_factory())
 
 
 def _json_default(value: Any) -> Any:
@@ -81,6 +108,29 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Override rollout length per environment; this changes PPO update geometry.",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Override the effective PPO minibatch size after hardware scaling.",
+    )
+    parser.add_argument(
+        "--torch-compile-mode",
+        choices=("default", "reduce-overhead", "max-autotune"),
+        default=None,
+        help="Compile the PPO policy for an isolated learner benchmark.",
+    )
+    parser.add_argument(
+        "--matmul-precision",
+        choices=("highest", "high", "medium"),
+        default=None,
+        help="Override CUDA float32 matmul precision after production CUDA setup.",
+    )
+    parser.add_argument(
+        "--measure-env-steps",
+        action="store_true",
+        help="Time TradingEnv.step calls and report per-shard environment time.",
     )
     parser.add_argument(
         "--total-timesteps",
@@ -203,12 +253,15 @@ def _apply_profile_overrides(
     *,
     n_envs: int | None,
     rollout_steps_per_env: int | None,
+    batch_size: int | None = None,
 ) -> None:
     """Apply explicit benchmark overrides after production hardware scaling."""
     if n_envs is not None:
         cfg.env.n_envs = n_envs
     if rollout_steps_per_env is not None:
         cfg.ppo.n_steps = int(cfg.env.n_envs) * rollout_steps_per_env
+    if batch_size is not None:
+        cfg.ppo.batch_size = batch_size
 
 
 def _train_probe(
@@ -222,6 +275,10 @@ def _train_probe(
     config_path: Path | None = None,
     overrides: list[str] | None = None,
     seed: int = 42,
+    batch_size: int | None = None,
+    torch_compile_mode: str | None = None,
+    matmul_precision: str | None = None,
+    measure_env_steps: bool = False,
 ) -> dict[str, Any]:
     import torch
 
@@ -233,10 +290,13 @@ def _train_probe(
     # hardware scaler use the same worker memory estimate as that backend.
     cfg.env.data_source = "bundle"
     scale_training_cfg(cfg, torch.device(device), arch)
+    if matmul_precision is not None:
+        torch.set_float32_matmul_precision(matmul_precision)
     _apply_profile_overrides(
         cfg,
         n_envs=n_envs,
         rollout_steps_per_env=rollout_steps_per_env,
+        batch_size=batch_size,
     )
     n_envs = int(cfg.env.n_envs)
     total_timesteps = int(
@@ -273,9 +333,53 @@ def _train_probe(
     parent_env = make_bundle_env(spec)
     if not isinstance(parent_env.observation_space, spaces.Dict):
         raise TypeError("PPO throughput probe requires a Dict observation space")
-    env_fn = partial(make_bundle_env, spec)
+    env_fn: Callable[[], gym.Env[Any, Any]] = partial(make_bundle_env, spec)
+    if measure_env_steps:
+        env_fn = partial(_timed_env_from_factory, env_fn)
     model = build_agent(parent_env, cfg, arch=arch, algo=algo, device=device, env_fn=env_fn)
     vec_env = model.get_env()
+    compile_warmup_seconds = 0.0
+    if torch_compile_mode is not None:
+        if device != "cuda":
+            raise ValueError("torch.compile mode probes require --device cuda")
+        from stable_baselines3.common.utils import obs_as_tensor
+
+        py_rng_state = random.getstate()
+        np_rng_state = np.random.get_state()
+        torch_rng_state = torch.get_rng_state()
+        cuda_rng_state = torch.cuda.get_rng_state_all()
+        compile_started = time.monotonic()
+        model.policy = torch.compile(model.policy, mode=torch_compile_mode)
+        inference_obs = {
+            key: np.broadcast_to(space.sample(), (int(model.n_envs), *(space.shape or ()))).copy()
+            for key, space in parent_env.observation_space.spaces.items()
+        }
+        training_obs = {
+            key: np.broadcast_to(
+                space.sample(), (int(model.batch_size), *(space.shape or ()))
+            ).copy()
+            for key, space in parent_env.observation_space.spaces.items()
+        }
+        inference_obs_tensor = obs_as_tensor(inference_obs, model.device)
+        training_obs_tensor = obs_as_tensor(training_obs, model.device)
+        sample_count = int(model.batch_size)
+        if isinstance(model.action_space, spaces.Discrete):
+            sample_actions = torch.zeros(sample_count, dtype=torch.long, device=model.device)
+        else:
+            action_shape = tuple(model.action_space.shape)
+            sample_actions = torch.zeros(
+                (sample_count, *action_shape), dtype=torch.float32, device=model.device
+            )
+        with torch.no_grad():
+            model.policy(inference_obs_tensor)
+        model.policy.evaluate_actions(training_obs_tensor, sample_actions)
+        torch.cuda.synchronize()
+        compile_warmup_seconds = time.monotonic() - compile_started
+        # Compilation warmup must not advance the benchmark's seeded policy RNG.
+        random.setstate(py_rng_state)
+        np.random.set_state(np_rng_state)
+        torch.set_rng_state(torch_rng_state)
+        torch.cuda.set_rng_state_all(cuda_rng_state)
     vector_backend = type(vec_env).__name__
     remotes = getattr(vec_env, "remotes", None)
     physical_worker_count = len(remotes) if remotes is not None else 1
@@ -291,7 +395,15 @@ def _train_probe(
     # of the budget the n_epochs=15 update loop costs". SB3 calls ``self.train()``
     # from inside ``learn()``, so shadowing it on the instance times that phase.
     update_timing = {"update_seconds": 0.0, "update_calls": 0}
+    optimizer_timing = {"optimizer_steps": 0}
     original_train = model.train
+    original_optimizer_step = model.policy.optimizer.step
+
+    def _counted_optimizer_step(*args: Any, **kwargs: Any) -> Any:
+        optimizer_timing["optimizer_steps"] += 1
+        return original_optimizer_step(*args, **kwargs)
+
+    model.policy.optimizer.step = _counted_optimizer_step
 
     def _timed_train(*args: Any, **kwargs: Any) -> Any:
         train_started = time.monotonic()
@@ -313,6 +425,19 @@ def _train_probe(
     training_seconds = time.monotonic() - started
     cpu_seconds_after = _process_tree_cpu_seconds()
     model.train = original_train
+    model.policy.optimizer.step = original_optimizer_step
+
+    env_step_stats: list[dict[str, float | int]] = []
+    env_step_shard_seconds: list[float] = []
+    if measure_env_steps:
+        env_step_stats = vec_env.env_method("get_step_timing")
+        widths = getattr(vec_env, "logical_envs_per_shard", [1] * len(env_step_stats))
+        cursor = 0
+        for width in widths:
+            env_step_shard_seconds.append(
+                sum(float(item["seconds"]) for item in env_step_stats[cursor : cursor + width])
+            )
+            cursor += width
 
     # SB3 counts every per-env step into ``num_timesteps``, so this is the real
     # number of env steps the rollout produced (>= total_timesteps because the
@@ -369,6 +494,20 @@ def _train_probe(
         "vector_backend": vector_backend,
         "rollout_buffer_class": type(model.rollout_buffer).__name__,
         "rollout_buffer_on_device": bool(cfg.ppo.get("rollout_buffer_on_device", False)),
+        "defer_metric_sync": bool(cfg.ppo.get("defer_metric_sync", False)),
+        "ppo_class": type(model).__name__,
+        "torch_compile_mode": torch_compile_mode,
+        "torch_compile_warmup_seconds": compile_warmup_seconds,
+        "matmul_precision": torch.get_float32_matmul_precision(),
+        "env_step_timing_enabled": measure_env_steps,
+        "env_step_calls": sum(int(item["steps"]) for item in env_step_stats),
+        "env_step_cpu_seconds_total": sum(float(item["seconds"]) for item in env_step_stats),
+        "env_step_wall_lower_bound_seconds": max(env_step_shard_seconds, default=0.0),
+        "env_step_mean_ms": (
+            1000.0
+            * sum(float(item["seconds"]) for item in env_step_stats)
+            / max(sum(int(item["steps"]) for item in env_step_stats), 1)
+        ),
         "configured_vector_backend": str(cfg.env.get("vector_backend", "subproc")),
         "physical_worker_count": physical_worker_count,
         "logical_envs_per_worker": logical_envs_per_worker
@@ -379,6 +518,11 @@ def _train_probe(
         "aggregate_rollout_size": nominal_env_steps,
         "n_epochs": int(model.n_epochs),
         "batch_size": int(model.batch_size),
+        "minibatches_per_epoch": int(
+            (nominal_env_steps + int(model.batch_size) - 1) // int(model.batch_size)
+        ),
+        "optimizer_steps": optimizer_timing["optimizer_steps"],
+        "ppo_epochs_completed": int(getattr(model, "_n_updates", 0)),
         "configured_ppo_n_steps": int(cfg.ppo.n_steps),
         "effective_ppo_n_steps_per_env": int(model.n_steps),
         "learning_rate": float(cfg.ppo.learning_rate),
@@ -457,9 +601,10 @@ def main() -> None:
     if (
         (args.n_envs is not None and args.n_envs < 1)
         or (args.rollout_steps_per_env is not None and args.rollout_steps_per_env < 1)
+        or (args.batch_size is not None and args.batch_size < 1)
         or (args.total_timesteps is not None and args.total_timesteps < 1)
     ):
-        raise SystemExit("n_envs, rollout steps, and total_timesteps must be positive")
+        raise SystemExit("n_envs, rollout steps, batch size, and total_timesteps must be positive")
     report = _train_probe(
         args.n_envs,
         args.rollout_steps_per_env,
@@ -471,6 +616,10 @@ def main() -> None:
         args.config,
         args.overrides,
         args.seed,
+        args.batch_size,
+        args.torch_compile_mode,
+        args.matmul_precision,
+        args.measure_env_steps,
     )
     print(json.dumps(report, indent=2, default=_json_default))
 
