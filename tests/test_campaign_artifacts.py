@@ -44,6 +44,35 @@ def test_worker_command_binds_one_gpu_from_shared_allocation() -> None:
     ]
 
 
+def test_worker_command_uses_explicit_cpu_mask_when_provided() -> None:
+    command = controller.worker_command(
+        ["python", "train.py"],
+        node="gpuarm1",
+        gpu_type="gh200",
+        cpus=5,
+        cpu_mask="0x3e0",
+        expected_cpu_ids=list(range(5, 10)),
+    )
+
+    assert "--cpu-bind=mask_cpu:0x3e0" in command
+    assert "--expected-cpus" in command
+    assert ",".join(str(cpu) for cpu in range(5, 10)) in command
+    assert command[-2:] == ["python", "train.py"]
+
+
+def test_worker_cpu_masks_are_disjoint_and_reject_oversubscription() -> None:
+    cpu_ids = list(range(48))
+    masks = [controller.cpu_mask_for_slot(cpu_ids, slot, 5) for slot in range(9)]
+
+    assert all(len(ids) == 5 for _, ids in masks)
+    assert len({cpu for _, ids in masks for cpu in ids}) == 45
+    assert masks[0][0] == "0x1f"
+    assert masks[1][0] == "0x3e0"
+    assert controller.cpu_mask_for_slot(cpu_ids, 45, 1)[1] == [45]
+    with pytest.raises(ValueError, match="only 3 remain"):
+        controller.cpu_mask_for_slot(cpu_ids, 9, 5)
+
+
 def test_resource_sampler_does_not_reserve_a_gpu() -> None:
     command = controller.worker_command(
         ["python", "sample.py"],
@@ -399,7 +428,9 @@ def test_failed_attempt_artifacts_are_hashed_and_remain_terminal_on_resume(
 
     monkeypatch.setattr(controller, "ROOT", root)
     monkeypatch.setattr(
-        controller, "available_resources", lambda: {"cpu_affinity": 16, "memory_limit_bytes": 0}
+        controller,
+        "available_resources",
+        lambda: {"cpu_affinity": 16, "cpu_ids": list(range(16)), "memory_limit_bytes": 0},
     )
     monkeypatch.setattr(
         controller,

@@ -126,7 +126,7 @@ def cgroup_memory_file(name: str) -> pathlib.Path | None:
     return None
 
 
-def available_resources() -> dict[str, int]:
+def available_resources() -> dict[str, Any]:
     mem_limit = 0
     memory = cgroup_memory_file("memory.max")
     if memory is not None:
@@ -149,8 +149,24 @@ def available_resources() -> dict[str, int]:
             legacy_value = int(memory.read_text().strip())
             if 0 < legacy_value < 2**60:
                 mem_limit = legacy_value
-    cpu_cores = len(os.sched_getaffinity(0))
-    return {"memory_limit_bytes": mem_limit, "cpu_affinity": cpu_cores}
+    cpu_ids = sorted(os.sched_getaffinity(0))
+    return {
+        "memory_limit_bytes": mem_limit,
+        "cpu_affinity": len(cpu_ids),
+        "cpu_ids": cpu_ids,
+    }
+
+
+def cpu_mask_for_slot(cpu_ids: list[int], slot: int, cpus: int) -> tuple[str, list[int]]:
+    """Assign a distinct contiguous slice of allocated CPU IDs to one worker."""
+    if slot < 0 or cpus <= 0:
+        raise ValueError("CPU slot and worker CPU count must be non-negative/positive")
+    start = slot * cpus
+    selected = cpu_ids[start : start + cpus]
+    if len(selected) != cpus:
+        raise ValueError(f"CPU slot {slot} needs {cpus} CPUs but only {len(selected)} remain")
+    mask = sum(1 << cpu for cpu in selected)
+    return f"0x{mask:x}", selected
 
 
 def expand_slurm_hosts(node_list: str) -> list[str]:
@@ -178,12 +194,16 @@ def worker_command(
     cpus: int,
     gpu_count: int = 1,
     gpu_id: int = 0,
+    cpu_mask: str | None = None,
+    expected_cpu_ids: list[int] | None = None,
 ) -> list[str]:
     """Build an allocation-local or explicitly GPU-pinned Slurm worker command."""
     if node is None:
         return command
     if gpu_count < 0 or (gpu_count and not 0 <= gpu_id < gpu_count):
         raise ValueError("worker GPU count or binding index is invalid")
+    if (cpu_mask is None) != (expected_cpu_ids is None):
+        raise ValueError("CPU mask and expected CPU IDs must be provided together")
     result = [
         "srun",
         "--overlap",
@@ -195,13 +215,25 @@ def worker_command(
     ]
     if gpu_count:
         result.extend([f"--gpus={gpu_type}:{gpu_count}", f"--gpu-bind=map_gpu:{gpu_id}"])
+    cpu_binding = f"mask_cpu:{cpu_mask}" if cpu_mask is not None else "cores"
+    worker_command = command
+    if cpu_mask is not None and expected_cpu_ids is not None:
+        guard = ROOT / "scripts" / "matrix" / "verify_worker_cpu_affinity.py"
+        worker_command = [
+            sys.executable,
+            str(guard),
+            "--expected-cpus",
+            ",".join(str(cpu) for cpu in expected_cpu_ids),
+            "--",
+            *command,
+        ]
     result.extend(
         [
-            "--cpu-bind=cores",
+            f"--cpu-bind={cpu_binding}",
             "--chdir",
             str(ROOT),
             "--export=ALL",
-            *command,
+            *worker_command,
         ]
     )
     return result
@@ -1238,6 +1270,7 @@ def main() -> int:
         raise RuntimeError("must run inside an existing Slurm compute allocation")
     resources = available_resources()
     cpus = resources["cpu_affinity"]
+    cpu_ids = cast(list[int], resources["cpu_ids"])
     workers_per_node = math.ceil(args.workers / len(worker_nodes)) if worker_nodes else args.workers
     envs_per_cpu = 12 if args.data_source == "bundle" else 2
     if workers_per_node * args.n_envs > cpus * envs_per_cpu:
@@ -1309,6 +1342,7 @@ def main() -> int:
             "gpus_per_node": args.worker_gpus_per_node if worker_nodes else None,
             "gpu_binding": "least-loaded-map_gpu" if worker_nodes else None,
             "cpus_per_worker": args.worker_cpus if worker_nodes else None,
+            "cpu_binding": "unique-mask-per-worker" if worker_nodes else None,
         },
         "fast_reports": args.fast_reports,
         "evaluation": evaluation,
@@ -1450,6 +1484,9 @@ def main() -> int:
             sampler_log = (out / "logs" / f"resource_sampler_{node}.log").open(
                 "a", encoding="utf-8"
             )
+            sampler_cpu_mask, sampler_cpu_ids = cpu_mask_for_slot(
+                cpu_ids, workers_per_node * args.worker_cpus, 1
+            )
             sampler_cmd = worker_command(
                 [
                     sys.executable,
@@ -1463,6 +1500,8 @@ def main() -> int:
                 gpu_type=args.worker_gpu_type,
                 cpus=1,
                 gpu_count=0,
+                cpu_mask=sampler_cpu_mask,
+                expected_cpu_ids=sampler_cpu_ids,
             )
             sampler_env = dict(os.environ)
             sampler_env.pop("CUDA_VISIBLE_DEVICES", None)
@@ -1496,6 +1535,8 @@ def main() -> int:
         bootstrap_lineage = initial_checkpoints.get(key)
         resume_checkpoint_hash = sha256_file(resume_checkpoint) if resume_checkpoint else None
         worker_node = None
+        worker_cpu_mask = None
+        worker_cpu_ids: list[int] = []
         if worker_nodes:
             node_load = {
                 node: sum(
@@ -1506,7 +1547,12 @@ def main() -> int:
                 for node in worker_nodes
             }
             worker_node = min(worker_nodes, key=lambda node: node_load[node])
+            worker_cpu_mask, worker_cpu_ids = cpu_mask_for_slot(
+                cpu_ids, node_load[worker_node], args.worker_cpus
+            )
             job["worker_node"] = worker_node
+            job["worker_cpu_mask"] = worker_cpu_mask
+            job["worker_cpu_ids"] = worker_cpu_ids
             gpu_load = {
                 gpu_id: sum(
                     1
@@ -1565,6 +1611,8 @@ def main() -> int:
                 cpus=args.worker_cpus,
                 gpu_count=args.worker_gpus_per_node,
                 gpu_id=int(job["worker_gpu_id"]),
+                cpu_mask=worker_cpu_mask,
+                expected_cpu_ids=worker_cpu_ids,
             )
         env = dict(
             os.environ,
@@ -1610,6 +1658,8 @@ def main() -> int:
                 "attempt": attempt,
                 "pid": proc.pid,
                 "worker_node": worker_node,
+                "worker_cpu_mask": worker_cpu_mask,
+                "worker_cpu_ids": worker_cpu_ids,
                 "log": str(logpath),
                 "attempt_output": str(run_out),
             },
