@@ -4,7 +4,7 @@ set -Eeuo pipefail
 
 REPO="${TRITON_REPO:-/scratch/work/nguyenl37/Aalto_MS_Thesis}"
 SPEC="${CAMPAIGN_SPEC:-config/campaigns/18_variant_seed42_20m_full_split_n64_20261015.yaml}"
-CAMPAIGN_ID="ladder18_seed42_20m_full_split_n64_20261015"
+CAMPAIGN_ID="${CAMPAIGN_ID:-ladder18_seed42_20m_full_split_n64_20261015}"
 OUT_DIR="$REPO/outputs/gpu_campaigns/$CAMPAIGN_ID"
 DONE_MARKER="$OUT_DIR/allocation_controller.exit"
 

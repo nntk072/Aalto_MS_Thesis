@@ -108,6 +108,40 @@ def test_evaluate_model_produces_trades_and_valid_equity():
     assert not np.isclose(equity.iloc[-1], 100_000.0)
 
 
+def test_evaluate_model_uses_requested_observation_schema(monkeypatch):
+    """Training and evaluation must construct the same account observation."""
+    from quant_rl.envs.trading_env import TradingEnv as OriginalTradingEnv
+    from quant_rl.observation_schema import OBSERVATION_SCHEMA_V2, V2_COORDINATES
+
+    env_kwargs = {}
+
+    def _capture_env_kwargs(**kwargs):
+        env_kwargs.update(kwargs)
+        return OriginalTradingEnv(**kwargs)
+
+    monkeypatch.setattr("quant_rl.eval.rollout.TradingEnv", _capture_env_kwargs)
+
+    class _SchemaCheckingModel(_ScriptedModel):
+        def predict(self, obs, deterministic: bool = True):
+            assert np.asarray(obs["account"]).shape[-1] == len(V2_COORDINATES)
+            return super().predict(obs, deterministic=deterministic)
+
+    bars = _make_bars(40)
+    features = _make_features(bars)
+    result = evaluate_model(
+        _SchemaCheckingModel({}, default=0),
+        bars=bars,
+        features=features,
+        obs_window=10,
+        observation_schema_version=OBSERVATION_SCHEMA_V2,
+        observation_age_scale_bars=30.0,
+    )
+
+    assert result["n_steps"] == len(bars) - 10
+    assert env_kwargs["observation_schema_version"] == OBSERVATION_SCHEMA_V2
+    assert env_kwargs["observation_age_scale_bars"] == 30.0
+
+
 def test_eval_mode_resumes_trading_after_breach_in_next_session():
     """A guardrail breach in one session must block further trading for the
     rest of that session, but not the entire rollout: the next session_id
