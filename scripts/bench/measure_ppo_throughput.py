@@ -41,6 +41,11 @@ from scripts.bench.measure_env_memory import (
     _load_train_slice,
     _tree_pss_mib,
 )
+from scripts.triton.sample_campaign_resources import (
+    descendant_pids,
+    process_tree_cpu_usec,
+    read_process_table,
+)
 
 from quant_rl.envs.env_bundle_builder import build_env_bundle
 from quant_rl.envs.env_spec import EnvSpec
@@ -55,6 +60,12 @@ def _json_default(value: Any) -> Any:
     if isinstance(value, np.generic):
         return value.item()
     raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def _process_tree_cpu_seconds() -> float:
+    """Return cumulative CPU time for this trainer and its live descendants."""
+    process_ids = descendant_pids([os.getpid()], read_process_table())
+    return process_tree_cpu_usec(process_ids) / 1_000_000.0
 
 
 def _parse_args() -> argparse.Namespace:
@@ -294,11 +305,13 @@ def _train_probe(
 
     model.train = _timed_train
 
+    cpu_seconds_before = _process_tree_cpu_seconds()
     started = time.monotonic()
     model.learn(total_timesteps=total_timesteps, progress_bar=False)
     if device == "cuda":
         torch.cuda.synchronize()
     training_seconds = time.monotonic() - started
+    cpu_seconds_after = _process_tree_cpu_seconds()
     model.train = original_train
 
     # SB3 counts every per-env step into ``num_timesteps``, so this is the real
@@ -307,6 +320,9 @@ def _train_probe(
     actual_env_steps = int(model.num_timesteps)
     update_seconds = float(update_timing["update_seconds"])
     rollout_and_framework_seconds = max(training_seconds - update_seconds, 0.0)
+    process_tree_cpu_seconds = max(cpu_seconds_after - cpu_seconds_before, 0.0)
+    average_cpu_cores = process_tree_cpu_seconds / max(training_seconds, 1e-9)
+    allocated_cpus = int(os.environ.get("SLURM_CPUS_PER_TASK", "0")) or None
     head_cfg = cfg.agent.get("head_arch", {})
 
     gpu_after: dict[str, int] = {}
@@ -335,9 +351,12 @@ def _train_probe(
             ).stdout.strip()
         ),
         "benchmark_source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "variant": variant,
+        "config_path": str(config_path) if config_path is not None else None,
         "python_version": platform.python_version(),
         "torch_version": torch.__version__,
         "config_sha256": config_sha256,
+        "resolved_config_yaml": cfg_text,
         "bundle_manifest_sha256": (
             hashlib.sha256((bundle_path / "manifest.json").read_bytes()).hexdigest()
             if (bundle_path / "manifest.json").is_file()
@@ -405,6 +424,12 @@ def _train_probe(
         "cgroup_vecenv_ready_bytes": vecenv_bytes,
         "cgroup_after_training_bytes": _cgroup_memory_bytes(),
         "trainer_tree_pss_mib": _tree_pss_mib(os.getpid()),
+        "process_tree_cpu_seconds": process_tree_cpu_seconds,
+        "average_cpu_cores_used": average_cpu_cores,
+        "allocated_cpus": allocated_cpus,
+        "allocated_cpu_fraction": (
+            average_cpu_cores / allocated_cpus if allocated_cpus is not None else None
+        ),
         "training_seconds": training_seconds,
         "total_wallclock_seconds": training_seconds,
         "env_steps_per_second": actual_env_steps / max(training_seconds, 1e-9),

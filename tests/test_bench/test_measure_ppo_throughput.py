@@ -8,6 +8,7 @@ from scripts.bench.measure_ppo_throughput import (
     _apply_profile_overrides,
     _json_default,
     _prepare_bundle,
+    _process_tree_cpu_seconds,
 )
 
 
@@ -42,6 +43,10 @@ def test_rollout_override_is_global_steps_times_logical_envs() -> None:
 def test_numpy_scalars_are_json_serializable() -> None:
     assert _json_default(np.int64(7)) == 7
     assert _json_default(np.float32(1.5)) == 1.5
+
+
+def test_process_tree_cpu_measurement_is_nonnegative() -> None:
+    assert _process_tree_cpu_seconds() >= 0.0
 
 
 def test_variant_config_uses_production_strategy_merge_and_cli_override(
