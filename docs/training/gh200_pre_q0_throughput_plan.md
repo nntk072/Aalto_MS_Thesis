@@ -25,9 +25,10 @@ quality does not regress.
 2. **Stage one complete PPO rollout in VRAM. — Prototype measured**
    Upload the completed rollout once, then reuse it across PPO epochs. Preserve
    the same per-epoch permutation and minibatch contents. Measure memory use and
-   throughput before making this a production default. The opt-in prototype is
-   implemented in `quant_rl/models/rollout_buffer.py`; the default remains the
-   existing CPU buffer pending campaign/evaluation review.
+   throughput before making this a production default. The implementation is
+   in `quant_rl/models/rollout_buffer.py`; after two consistent paired GH200
+   measurements and exact minibatch parity, it is enabled by default. Set
+   `ppo.rollout_buffer_on_device=false` to retain the CPU-buffer control.
 
 3. **Try pinned host memory and asynchronous prefetch.**
    Use this as a fallback if full GPU staging is awkward or if overlap improves
@@ -128,5 +129,6 @@ launch activity make phase-level follow-up profiling important.
 - CPU buffer repeat runs: `outputs/benchmarks/fast-training-wp0/gh200-a3-cpu-rollout-buffer-r1.json`, `outputs/benchmarks/fast-training-wp0/gh200-a3-cpu-rollout-buffer-r2.json`
 - Device buffer repeat runs: `outputs/benchmarks/fast-training-wp0/gh200-a3-device-rollout-buffer-r1.json`, `outputs/benchmarks/fast-training-wp0/gh200-a3-device-rollout-buffer-r2.json`
 Q0, existing campaign processes, and Slurm job states were not changed by this
-prototype. The optimized buffer is opt-in; a campaign-level adoption decision
-and an end-to-end training/evaluation comparison remain open.
+prototype. New PPO runs use the device buffer by default, including the pending
+18-variant job when it starts. The throughput comparison is still PPO-core
+only; an end-to-end campaign and training/evaluation quality review remain open.

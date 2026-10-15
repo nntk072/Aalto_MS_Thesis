@@ -232,7 +232,7 @@ ppo:
   n_steps: 2048
   batch_size: 512
   n_epochs: 15
-  rollout_buffer_on_device: false  # stage each completed PPO rollout on the learner device
+  rollout_buffer_on_device: true  # stage each completed PPO rollout on the learner device
   learning_rate: 3.0e-4
   gamma: 0.99
   gae_lambda: 0.95

@@ -57,6 +57,7 @@ def test_variant_config_uses_production_strategy_merge_and_cli_override(
         variant="ladder_a0_flat",
         overrides=[
             "ppo.n_epochs=7",
+            "ppo.rollout_buffer_on_device=false",
             "env.vector_backend=sharded_bundle",
             "env.vector_shards=4",
         ],
@@ -67,6 +68,7 @@ def test_variant_config_uses_production_strategy_merge_and_cli_override(
     assert arch == "tcn"
     assert cfg.strategy.name == "baseline"
     assert cfg.ppo.n_epochs == 7
+    assert cfg.ppo.rollout_buffer_on_device is False
     assert cfg.env.vector_backend == "sharded_bundle"
     assert cfg.env.vector_shards == 4
     assert cfg.ppo.total_timesteps > 0
