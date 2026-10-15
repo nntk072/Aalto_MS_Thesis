@@ -186,3 +186,67 @@ tested exactly. No full production training/evaluation campaign was run during
 these probes; no Q0 or 18-variant campaign was started by this optimization
 work. Therefore these measurements do not establish that a policy survives a
 full-year training episode or that its evaluation performance is preserved.
+
+## Post-staging concurrency and scheduling probes on 2026-10-15
+
+The old T=2/4/8/9 sweep predates the device-resident rollout buffer and cannot
+select concurrency for the new path. A fresh one-level-at-a-time sweep was run
+on the same allocated GH200 with the same A3 profile, 64 logical environments,
+16 shared-bundle shards, 128 steps per environment, batch size 4096, 15 epochs,
+and 262,144 steps per worker. Every worker used the device-resident rollout
+buffer. The bundle manifest hash was
+`5cb695f540c23950d4bbcee502fedca6aaa540f8afaaf255af2c65c3b583d102`.
+
+| Trainers on one GH200 | Aggregate steps/s | Per-worker FPS p10 / median / p90 | Group wall time | Worker result |
+| ---: | ---: | ---: | ---: | --- |
+| 1 | 3,429 | 4,001 / 4,001 / 4,001 | 76.5 s | 1/1 succeeded |
+| 2 | 5,230 | 2,982 / 2,987 / 2,992 | 100.3 s | 2/2 succeeded |
+| 3 | 6,581 | 2,487 / 2,489 / 2,578 | 119.5 s | 3/3 succeeded |
+| 4 | 7,137 | 2,011 / 2,012 / 2,091 | 146.9 s | 4/4 succeeded |
+| 6 | 8,003 | 1,487 / 1,507 / 1,528 | 196.5 s | 6/6 succeeded |
+| 9 | 8,699 | 1,069 / 1,085 / 1,119 | 271.2 s | 9/9 succeeded |
+
+Aggregate throughput still increased through T=9, although the gain from T=6
+to T=9 was about 8.7% while per-worker throughput fell. At T=9 the mean
+measured trainer CPU use was about 1.93 cores each (about 17.4 cores combined
+out of 48 allocated); per-trainer peak allocated VRAM was about 3.62 GiB. The
+GPU was heavily utilized during the concurrent group. This points to GPU update
+contention, rather than CPU or VRAM capacity, as the scheduling concern for
+this profile.
+
+Three T=9 scheduling controls used the same workload:
+
+| Scheduling | Aggregate steps/s | Group wall | Mean wait per worker for PPO update slot |
+| --- | ---: | ---: | ---: |
+| Simultaneous launch | 8,699 | 271.2 s | n/a |
+| 2-second deterministic launch stagger | 8,924 | 264.4 s | n/a |
+| One concurrent PPO update slot | 7,816 | 301.9 s | 165.3 s |
+| Two concurrent PPO update slots | 8,828 | 267.3 s | 81.4 s |
+
+The 2-second launch stagger was the best observed setting, about 2.6% above
+the simultaneous T=9 group. Two update slots nearly matched that result, but
+did not beat it. A single update slot reduced aggregate throughput by about
+10.2%; its queueing cost outweighed the reduction in concurrent GPU updates.
+This benchmark-only semaphore changes when `train()` runs, not the PPO update
+math. It remains opt-in and is not wired into production training.
+
+For an 18-run campaign with two GH200 nodes and nine trainers per node, the
+measured T=9-stagger aggregate rate implies approximately 5.6 hours of PPO-core
+time for 18 × 20M steps. This is a throughput projection only: production
+callbacks, checkpointing, evaluation, report rendering, startup, and inter-run
+coordination were excluded, so campaign wall time will be longer. The current
+allocation still has one GH200 and the separate 18-run Slurm request remains
+pending; this probe did not launch that campaign.
+
+Artifacts are under
+`outputs/benchmarks/fast-training-wp1-device-concurrency-20261015/`:
+
+- `sweep_manifest.json` records the sweep workload and allocation identity.
+- `t1/` through `t9/` include individual worker logs and JSON measurements,
+  group summaries, and one-second GPU utilization/memory samples.
+- `control/` contains simultaneous-staggered and one/two-update-slot runs.
+
+These results select T=9 with a 2-second launch stagger as the current PPO-core
+throughput candidate for one GH200. Treat this as a benchmark setting, not as a
+validated production campaign configuration, until a two-node end-to-end run
+measures callback/evaluation cost and confirms artifact integrity.

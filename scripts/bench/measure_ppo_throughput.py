@@ -170,7 +170,36 @@ def _parse_args() -> argparse.Namespace:
             "Rebuilding loads the full train-split frames and needs ~512 GiB."
         ),
     )
+    parser.add_argument(
+        "--update-semaphore-dir",
+        type=Path,
+        default=None,
+        help="Optional shared lock directory for an isolated multi-trainer update-scheduling probe.",
+    )
+    parser.add_argument(
+        "--update-semaphore-slots",
+        type=int,
+        default=0,
+        help="Maximum concurrent PPO train() sections when using --update-semaphore-dir.",
+    )
     return parser.parse_args()
+
+
+def _acquire_update_slot(directory: Path, slots: int) -> Any:
+    """Acquire one cross-process update slot; caller closes the returned handle."""
+    import fcntl
+
+    directory.mkdir(parents=True, exist_ok=True)
+    while True:
+        for index in range(slots):
+            handle = (directory / f"slot-{index}.lock").open("a+")
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                handle.close()
+                continue
+            return handle
+        time.sleep(0.01)
 
 
 def _prepare_bundle(
@@ -279,6 +308,8 @@ def _train_probe(
     torch_compile_mode: str | None = None,
     matmul_precision: str | None = None,
     measure_env_steps: bool = False,
+    update_semaphore_dir: Path | None = None,
+    update_semaphore_slots: int = 0,
 ) -> dict[str, Any]:
     import torch
 
@@ -394,7 +425,12 @@ def _train_probe(
     # reported FPS can be split into "how fast can the envs step" and "how much
     # of the budget the n_epochs=15 update loop costs". SB3 calls ``self.train()``
     # from inside ``learn()``, so shadowing it on the instance times that phase.
-    update_timing = {"update_seconds": 0.0, "update_calls": 0}
+    update_timing = {
+        "update_seconds": 0.0,
+        "update_compute_seconds": 0.0,
+        "update_semaphore_wait_seconds": 0.0,
+        "update_calls": 0,
+    }
     optimizer_timing = {"optimizer_steps": 0}
     original_train = model.train
     original_optimizer_step = model.policy.optimizer.step
@@ -406,13 +442,28 @@ def _train_probe(
     model.policy.optimizer.step = _counted_optimizer_step
 
     def _timed_train(*args: Any, **kwargs: Any) -> Any:
-        train_started = time.monotonic()
+        update_started = time.monotonic()
+        slot_handle = (
+            _acquire_update_slot(update_semaphore_dir, update_semaphore_slots)
+            if update_semaphore_dir is not None and update_semaphore_slots > 0
+            else None
+        )
+        compute_started = time.monotonic()
         try:
             return original_train(*args, **kwargs)
         finally:
             if device == "cuda":
                 torch.cuda.synchronize()
-            update_timing["update_seconds"] += time.monotonic() - train_started
+            compute_elapsed = time.monotonic() - compute_started
+            if slot_handle is not None:
+                import fcntl
+
+                fcntl.flock(slot_handle.fileno(), fcntl.LOCK_UN)
+                slot_handle.close()
+            elapsed = time.monotonic() - update_started
+            update_timing["update_seconds"] += elapsed
+            update_timing["update_compute_seconds"] += compute_elapsed
+            update_timing["update_semaphore_wait_seconds"] += max(elapsed - compute_elapsed, 0.0)
             update_timing["update_calls"] += 1
 
     model.train = _timed_train
@@ -583,6 +634,9 @@ def _train_probe(
         "actual_env_steps": actual_env_steps,
         "nominal_env_steps_per_rollout_window": nominal_env_steps,
         "update_seconds": update_seconds,
+        "update_compute_seconds": float(update_timing["update_compute_seconds"]),
+        "update_semaphore_wait_seconds": float(update_timing["update_semaphore_wait_seconds"]),
+        "update_semaphore_slots": update_semaphore_slots or None,
         "update_calls": update_timing["update_calls"],
         "rollout_and_framework_overhead_seconds": rollout_and_framework_seconds,
         "rollout_steps_per_second": actual_env_steps / max(rollout_and_framework_seconds, 1e-9),
@@ -603,8 +657,16 @@ def main() -> None:
         or (args.rollout_steps_per_env is not None and args.rollout_steps_per_env < 1)
         or (args.batch_size is not None and args.batch_size < 1)
         or (args.total_timesteps is not None and args.total_timesteps < 1)
+        or args.update_semaphore_slots < 0
     ):
-        raise SystemExit("n_envs, rollout steps, batch size, and total_timesteps must be positive")
+        raise SystemExit(
+            "n_envs, rollout steps, batch size, and total_timesteps must be positive; "
+            "update semaphore slots cannot be negative"
+        )
+    if (args.update_semaphore_slots > 0) != (args.update_semaphore_dir is not None):
+        raise SystemExit(
+            "set both --update-semaphore-slots and --update-semaphore-dir for semaphore probes"
+        )
     report = _train_probe(
         args.n_envs,
         args.rollout_steps_per_env,
@@ -620,6 +682,8 @@ def main() -> None:
         args.torch_compile_mode,
         args.matmul_precision,
         args.measure_env_steps,
+        args.update_semaphore_dir,
+        args.update_semaphore_slots,
     )
     print(json.dumps(report, indent=2, default=_json_default))
 
