@@ -432,6 +432,10 @@ def build_agent(
         seed=seed,
         verbose=1,
     )
+    if bool(cfg.ppo.get("rollout_buffer_on_device", False)):
+        from .rollout_buffer import DeviceDictRolloutBuffer
+
+        ppo_kwargs["rollout_buffer_class"] = DeviceDictRolloutBuffer
     if device is not None:
         ppo_kwargs["device"] = device
     policy, policy_kwargs, ppo_kwargs["ent_coef"] = _ppo_policy_and_ent_coef(

@@ -7,7 +7,7 @@ import torch
 from gymnasium import spaces
 from stable_baselines3.common.buffers import DictRolloutBuffer
 
-from quant_rl.models.rollout_buffer import install_single_copy_add
+from quant_rl.models.rollout_buffer import DeviceDictRolloutBuffer, install_single_copy_add
 
 
 def _space() -> spaces.Dict:
@@ -47,3 +47,53 @@ def test_single_copy_add_matches_sb3_and_keeps_source() -> None:
     assert np.array_equal(updated.log_probs[0], reference.log_probs[0])
     assert np.array_equal(obs["seq"], source)
     assert updated.pos == 1
+
+
+def test_device_rollout_buffer_matches_sb3_minibatches_and_resets() -> None:
+    obs_space = _space()
+    action_space = spaces.Box(-1.0, 1.0, (2,), dtype=np.float32)
+    reference = DictRolloutBuffer(4, obs_space, action_space, device="cpu", n_envs=2)
+    staged = DeviceDictRolloutBuffer(4, obs_space, action_space, device="cpu", n_envs=2)
+    rng = np.random.default_rng(17)
+
+    for key in reference.observations:
+        reference.observations[key][:] = rng.standard_normal(
+            reference.observations[key].shape, dtype=np.float32
+        )
+        staged.observations[key][:] = reference.observations[key]
+    for name in ("actions", "values", "log_probs", "advantages", "returns"):
+        target = getattr(reference, name)
+        target[:] = rng.standard_normal(target.shape, dtype=np.float32)
+        getattr(staged, name)[:] = target
+    for buffer in (reference, staged):
+        buffer.pos = buffer.buffer_size
+        buffer.full = True
+
+    np.random.seed(314)
+    reference_batches = list(reference.get(batch_size=5))
+    np.random.seed(314)
+    staged_batches = list(staged.get(batch_size=5))
+
+    assert len(reference_batches) == len(staged_batches)
+    for reference_batch, staged_batch in zip(reference_batches, staged_batches, strict=True):
+        for field in (
+            "observations",
+            "actions",
+            "old_values",
+            "old_log_prob",
+            "advantages",
+            "returns",
+        ):
+            reference_value = getattr(reference_batch, field)
+            staged_value = getattr(staged_batch, field)
+            if isinstance(reference_value, dict):
+                assert reference_value.keys() == staged_value.keys()
+                for key in reference_value:
+                    assert torch.equal(reference_value[key], staged_value[key])
+            else:
+                assert torch.equal(reference_value, staged_value)
+
+    assert staged._device_rollout
+    staged.reset()
+    assert staged._device_rollout == {}
+    assert not staged.generator_ready

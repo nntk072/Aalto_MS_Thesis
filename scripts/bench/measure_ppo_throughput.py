@@ -367,6 +367,8 @@ def _train_probe(
         "seed": seed,
         "n_envs": int(model.n_envs),
         "vector_backend": vector_backend,
+        "rollout_buffer_class": type(model.rollout_buffer).__name__,
+        "rollout_buffer_on_device": bool(cfg.ppo.get("rollout_buffer_on_device", False)),
         "configured_vector_backend": str(cfg.env.get("vector_backend", "subproc")),
         "physical_worker_count": physical_worker_count,
         "logical_envs_per_worker": logical_envs_per_worker
