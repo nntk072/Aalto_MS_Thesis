@@ -1,0 +1,99 @@
+{
+  "campaign": {
+    "data_source": "bundle",
+    "final_metrics_json": [],
+    "final_summary_markdown": [],
+    "fingerprint": "7ee026894d0575619d885ddb09a391ac1a3c1b3196bd92c64861c26a31749b73",
+    "id": "ladder18_seed42_20m_policy_migration_nenv64_20261014",
+    "job_id": "20963043",
+    "logs_updated_within_5m": 18,
+    "manifest_sha256": "5e5f6d66ed3b978cd4ac4c91634387478b650db68b3e4d8007a660432ad6d6fa",
+    "n_envs": 64,
+    "new_numbered_checkpoints": [
+      "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat__seed42/attempt1/ladder_a0_flat__seed42/20261014_191955_371103_rl_train_seed42_tcn/model/ppo_ckpt_9000000_steps.zip"
+    ],
+    "squeue": "20963043|RUNNING|1:02:28|6:00:00|gpuarm[1-2]",
+    "status_from_manifest": {
+      "failed": 0,
+      "interrupted": 0,
+      "pending": 0,
+      "running": 18,
+      "succeeded": 0
+    },
+    "target_steps_per_variant": 20000000,
+    "worker_log_ages_seconds": {
+      "ladder_a0_flat__seed42__attempt1.log": 39,
+      "ladder_a0_flat_dist__seed42__attempt1.log": 57,
+      "ladder_a0_flat_po3__seed42__attempt1.log": 54,
+      "ladder_a1_sl__seed42__attempt1.log": 21,
+      "ladder_a1_sl_dist__seed42__attempt1.log": 187,
+      "ladder_a1_sl_po3__seed42__attempt1.log": 47,
+      "ladder_a2_tp__seed42__attempt1.log": 14,
+      "ladder_a2_tp_dist__seed42__attempt1.log": 112,
+      "ladder_a2_tp_po3__seed42__attempt1.log": 77,
+      "ladder_a3_multi_tp__seed42__attempt1.log": 22,
+      "ladder_a3_multi_tp_dist__seed42__attempt1.log": 82,
+      "ladder_a3_multi_tp_po3__seed42__attempt1.log": 47,
+      "ladder_a4a_entry_fsm_hidden__seed42__attempt1.log": 39,
+      "ladder_a4a_entry_fsm_hidden_dist__seed42__attempt1.log": 110,
+      "ladder_a4a_entry_fsm_hidden_po3__seed42__attempt1.log": 16,
+      "ladder_a4b_distribution__seed42__attempt1.log": 45,
+      "ladder_a4b_entry_fsm__seed42__attempt1.log": 25,
+      "ladder_a4b_po3_ifvg__seed42__attempt1.log": 50
+    },
+    "worker_logs": 18,
+    "workers": 18
+  },
+  "episode_telemetry": [
+    {
+      "breach_reasons": {
+        "trailing_dd": 9
+      },
+      "end_reasons": {
+        "risk_breach": 9
+      },
+      "episode_steps_max": 13630,
+      "episode_steps_min": 7338,
+      "full_training_split_episodes": 0,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl__seed42/attempt1/ladder_a1_sl__seed42/20261014_191951_745461_rl_train_seed42_tcn/model/episode_equity.csv",
+      "rows": 9,
+      "sha256": "b3f063960d883d50f74a5de8ab4fb1a79a7cd17d388db213693479067c570386",
+      "trade_count_max": 169,
+      "trade_count_min": 89
+    }
+  ],
+  "interpretation": "Interim training evidence only. The currently observed ladder_a1_sl episode CSV has nine completed environment episodes, all ended on trailing drawdown before the full train split; this is not a final policy evaluation and does not establish the final campaign outcome. No final metrics or final summary are present. Readiness remains NOT READY.",
+  "lineage": {
+    "ladder_a0_flat__seed42": {
+      "checkpoint_sha256": "1f0d1369b4f021e99e38f4cd5c7f3d0795db2ef3eb461fea161abe8ec7e7365d",
+      "key": "ladder_a0_flat__seed42",
+      "source_attempt": 1,
+      "source_attempt_provenance_sha256": "0f6121d172cb396446ebbf59355b19839efee14d0626717dc92e6f7aafd9ef21",
+      "source_campaign_dir": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014",
+      "source_campaign_fingerprint": "b19cf865ae01a900c425b9e7ab45fd922b5ac14b54364171cca34574ea270556",
+      "source_campaign_git_sha": "937bae529fdf5d6c17db6174880ef448320e2883",
+      "source_campaign_id": "ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014",
+      "source_num_timesteps": 8000000,
+      "source_requested_timesteps": 20000000
+    },
+    "ladder_a1_sl__seed42": {
+      "checkpoint_sha256": "9b83f1bacace9238ee9ec2734d65be5c79fb46a18193743f4d069863dec1a55b",
+      "key": "ladder_a1_sl__seed42",
+      "source_attempt": 1,
+      "source_attempt_provenance_sha256": "0755c21a5d70036b2ee108c90211a4ece37c62227ca27d1f791d1ae001846255",
+      "source_campaign_dir": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014",
+      "source_campaign_fingerprint": "b19cf865ae01a900c425b9e7ab45fd922b5ac14b54364171cca34574ea270556",
+      "source_campaign_git_sha": "937bae529fdf5d6c17db6174880ef448320e2883",
+      "source_campaign_id": "ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014",
+      "source_num_timesteps": 6000000,
+      "source_requested_timesteps": 20000000
+    }
+  },
+  "observed_at_utc": "2026-10-14T17:06:35.230016+00:00",
+  "repository": {
+    "branch": "main",
+    "head": "c2261ca75f80ab8d6bb0494d847e786557aa9bb7",
+    "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis"
+  },
+  "schema": "aalto.live_campaign_snapshot.v1"
+}

@@ -1,0 +1,59 @@
+{
+  "audit_type": "live A0 resolved-config and action/feature contract audit",
+  "audit_time_utc": "2026-10-14T17:51:18Z",
+  "campaign_id": "ladder18_seed42_20m_policy_migration_nenv64_20261014",
+  "campaign_git_sha": "c2261ca75f80ab8d6bb0494d847e786557aa9bb7",
+  "campaign_manifest_fingerprint": "7ee026894d0575619d885ddb09a391ac1a3c1b3196bd92c64861c26a31749b73",
+  "slurm_job_id": "20963043",
+  "variant_key": "ladder_a0_flat__seed42",
+  "runtime_attempt": 1,
+  "runtime_log": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a0_flat__seed42__attempt1.log",
+  "runtime_evidence": [
+    "Worker resolved as variant=ladder_a0_flat, strategy=baseline, reward=dsr, features=default.",
+    "Worker reports hash-validated use of data/prebuilt_feature_cache/baseline.parquet.",
+    "Worker loaded the 8,000,000-step A0 checkpoint from the purelegacy_shared_bundle campaign and resumed toward the same 20,000,000-step target."
+  ],
+  "effective_config": {
+    "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat__seed42/attempt1/ladder_a0_flat__seed42/20261014_191955_371103_rl_train_seed42_tcn/config.yaml",
+    "sha256": "fd218b1e3ca6a4216871f39bd54c2b7d8084fa87458fdbc7552dee3a47d55d44",
+    "strategy_name": "baseline",
+    "strategy_actions": false,
+    "agent_direction_control": false,
+    "continuous_actions": false,
+    "reward_mode": "dsr",
+    "full_po3_profile_selected": false,
+    "max_episode_steps": null
+  },
+  "action_feature_contract": {
+    "action_space": "Discrete(20), source-derived from TradingEnv when strategy_actions=false and continuous_actions=false",
+    "po3_strategy_action_manipulation_guard": "disabled: the strategy-action side-lock returns without filtering when strategy_actions=false",
+    "open_manipulation_bars": "effective default is 10, but the open-blackout check is inside the strategy_actions-only entry-gate block, so it does not filter A0 actions",
+    "feature_bundle_key": "68e374fa7df8318fae061fadf861b6228861c4b348aa12cf261fbdc0165368a7",
+    "feature_manifest": "cache/shared_env/68e374fa7df8318fae061fadf861b6228861c4b348aa12cf261fbdc0165368a7/manifest.json",
+    "numeric_feature_columns": 194,
+    "observation_feature_columns": 195,
+    "feature_names_matching_po3_ifvg_fvg_or_manipulation": 0,
+    "prebuilt_cache": "data/prebuilt_feature_cache/baseline.parquet",
+    "prebuilt_cache_hash_sidecar": "data/prebuilt_feature_cache/baseline.parquet.hash",
+    "prebuilt_cache_hash_key": "656b50e064710408"
+  },
+  "source_sha256": {
+    "quant_rl/train/variant_resolver.py": "08b04e71faaad3ddd1fac912b8f497c9310b1c667824cafbc1976cf49964de62",
+    "quant_rl/envs/trading_env.py": "04313555138bd6f6b8cb6a5b0dbb173a2590dc9da09e384571834fb56852b0f9",
+    "quant_rl/envs/worker.py": "9b8a10398313944ad1d2c7a7565e5920a88c4b699418e61a8d9b7314c9c587d6",
+    "quant_rl/config/default.yaml": "eb4b745840d28e33fd35f58dbd2317d319de41fc0f0a97a330127c3eb49dca96",
+    "feature_manifest.json": "8672ae7f1e2aa06e752450981853335770f9ae2da2d29c86bcd15935cb36e156"
+  },
+  "checkpoint_lineage": {
+    "source_campaign_id": "ladder18_seed42_20m_purelegacy_shared_bundle_n64_20261014",
+    "source_git_sha": "937bae529fdf5d6c17db6174880ef448320e2883",
+    "checkpoint_sha256": "1f0d1369b4f021e99e38f4cd5c7f3d0795db2ef3eb461fea161abe8ec7e7365d",
+    "source_num_timesteps": 8000000
+  },
+  "limitations": [
+    "This is a resolved-config, source-contract, cache-manifest, and runtime-log audit; it is not a strategy-performance evaluation.",
+    "Action-space semantics are derived from the active source and effective config rather than a separate live object introspection.",
+    "The campaign is still running, so training results and final evaluations are unavailable.",
+    "The current-source A0 frames/shared-bundle parity rerun remains open; prior 18-variant parity evidence used earlier A0 semantics."
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "audit_type": "live resource sample; active Slurm job/cgroup/GPU observation, not a full-run sizing claim",
+  "snapshot_time_utc": "2026-10-14T19:49:00Z",
+  "campaign_id": "ladder18_seed42_20m_policy_migration_nenv64_20261014",
+  "slurm_job_id": "20963043",
+  "allocation_observed": "RUNNING on gpuarm[1-2]; 2 GH200 nodes; 48 CPUs and 512 GiB RAM requested per node",
+  "worker_layout": "18 PPO trainers, 9 per node; 5 CPUs requested per trainer; n_envs=64; shared bundle",
+  "requested_worker_cpu_cores_per_node": 45,
+  "nodes": {
+    "gpuarm1": {
+      "raw_csv": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/resource_snapshot_20261014_1949/resources_gpuarm1.csv",
+      "sha256": "0cc3d192ad0d726b5785aeb41cb289141f56ae37ea83e02d81e5b8e16ac57b4f",
+      "sample_count": 344,
+      "start_utc": "2026-10-14T16:19:40.259169+00:00",
+      "end_utc": "2026-10-14T19:48:43.649795+00:00",
+      "duration_hours": 3.484,
+      "cgroup_memory_average_gib": 137.88,
+      "cgroup_memory_max_current_gib": 158.4,
+      "cgroup_memory_peak_gib": 159.99,
+      "process_tree_cpu_avg_cores": 4.92,
+      "gpu_utilization_average_pct": 58.7,
+      "gpu_utilization_peak_pct": 99.0,
+      "gpu_memory_average_gib": 60.72,
+      "gpu_memory_peak_gib": 65.87,
+      "sampled_oom_kill_max": 0
+    },
+    "gpuarm2": {
+      "raw_csv": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/resource_snapshot_20261014_1949/resources_gpuarm2.csv",
+      "sha256": "c60451c4d2ebbfe715dc4b154cf64582e971a2cb6739b70b0ee3bebcb2ec3d7e",
+      "sample_count": 346,
+      "start_utc": "2026-10-14T16:19:40.274181+00:00",
+      "end_utc": "2026-10-14T19:48:54.400044+00:00",
+      "duration_hours": 3.487,
+      "cgroup_memory_average_gib": 138.77,
+      "cgroup_memory_max_current_gib": 159.94,
+      "cgroup_memory_peak_gib": 161.9,
+      "process_tree_cpu_avg_cores": 4.89,
+      "gpu_utilization_average_pct": 59.0,
+      "gpu_utilization_peak_pct": 100.0,
+      "gpu_memory_average_gib": 63.73,
+      "gpu_memory_peak_gib": 99.26,
+      "sampled_oom_kill_max": 0
+    }
+  },
+  "limitations": [
+    "Sampler began about 15 minutes after allocation start and this snapshot ends during the live allocation; it is not the complete campaign resource profile.",
+    "CPU figures are process-tree CPU-time deltas and Slurm job/cgroup observations; no per-process CPU throttling or pressure counters were sampled, so the limiting CPU/GPU factor is not isolated.",
+    "No sampled OOM kills were observed; this does not prove all-run peak safety.",
+    "GPU utilization and memory are periodic samples and can miss brief saturation between samples.",
+    "The prior three-trainer comparison used a different source/config revision and is not a controlled benchmark."
+  ]
+}

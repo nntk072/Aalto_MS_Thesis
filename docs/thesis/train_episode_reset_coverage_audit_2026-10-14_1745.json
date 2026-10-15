@@ -1,0 +1,608 @@
+{
+  "campaign": {
+    "campaign_id": "ladder18_seed42_20m_policy_migration_nenv64_20261014",
+    "fingerprint": "7ee026894d0575619d885ddb09a391ac1a3c1b3196bd92c64861c26a31749b73",
+    "initial_checkpoint_lineage_count": 18,
+    "initial_checkpoint_source_git_shas": [
+      "937bae529fdf5d6c17db6174880ef448320e2883"
+    ],
+    "job_id": "20963043",
+    "job_state_observed": "RUNNING|1:41:10|6:00:00|gpuarm[1-2]",
+    "latest_logged_steps_min_median_max": [
+      6179648,
+      7572864,
+      9867776
+    ],
+    "runtime_git_sha": "c2261ca75f80ab8d6bb0494d847e786557aa9bb7",
+    "worker_logs_fresh_within_5m": 18,
+    "workers_with_step_logs": 18
+  },
+  "captured_at_utc": "2026-10-14T17:45:17.950090+00:00",
+  "configured_budget": {
+    "all_interim_equity_gate_early_abort_disabled": true,
+    "all_max_episode_steps_unset": true,
+    "all_n_envs_64": true,
+    "all_no_trade_early_abort_disabled": true,
+    "effective_configs_found": 18,
+    "full_training_split_agent_steps": 99504,
+    "n_envs": 64,
+    "nominal_full_split_pass_equivalents_if_no_early_risk_termination": 3.140577263225599,
+    "nominal_steps_per_env": 312500.0,
+    "target_ppo_timesteps_per_variant": 20000000
+  },
+  "effective_configs": [
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat__seed42/attempt1/ladder_a0_flat__seed42/20261014_191955_371103_rl_train_seed42_tcn/config.yaml",
+      "sha256": "fd218b1e3ca6a4216871f39bd54c2b7d8084fa87458fdbc7552dee3a47d55d44",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat_dist__seed42/attempt1/ladder_a0_flat_dist__seed42/20261014_191958_437039_rl_train_seed42_tcn/config.yaml",
+      "sha256": "42c16d4c68b4c95ed6f52f4db69c6c37a8709dd9277544976f6603434cbe9cf2",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat_po3__seed42/attempt1/ladder_a0_flat_po3__seed42/20261014_191955_230354_rl_train_seed42_tcn/config.yaml",
+      "sha256": "b2f7cc6d1240720045ee47c9634afeb0ebed42c09202b177b3bb0a6f26a63e16",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl__seed42/attempt1/ladder_a1_sl__seed42/20261014_191951_745461_rl_train_seed42_tcn/config.yaml",
+      "sha256": "c36f0f45246c5b417a710c8647fb69d3c99ede8878c9590fd13f5e78a14c0b2b",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl_dist__seed42/attempt1/ladder_a1_sl_dist__seed42/20261014_191956_797217_rl_train_seed42_tcn/config.yaml",
+      "sha256": "4efa62bb3ddcba45681ba2d1fbc59e55bc213811520715dfc9d66538dba57f37",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl_po3__seed42/attempt1/ladder_a1_sl_po3__seed42/20261014_192003_766208_rl_train_seed42_tcn/config.yaml",
+      "sha256": "431277caeb64eeecb91ad7b09921792c204eb7c77f107d18f0484c43c75defd0",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a2_tp__seed42/attempt1/ladder_a2_tp__seed42/20261014_191957_498001_rl_train_seed42_tcn/config.yaml",
+      "sha256": "44ffa3798b50dd0030cc517f51376ab89317a335cd739ff40c36ebe994f729c3",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a2_tp_dist__seed42/attempt1/ladder_a2_tp_dist__seed42/20261014_191959_987413_rl_train_seed42_tcn/config.yaml",
+      "sha256": "83001a10fe60ad04f906248af9047cf931536ec381b53384fc89924f7bc0aab7",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a2_tp_po3__seed42/attempt1/ladder_a2_tp_po3__seed42/20261014_191959_923448_rl_train_seed42_tcn/config.yaml",
+      "sha256": "dbd57260d37072946e2b6d544398ad8034082cc7d65e52088af4de361b648b2c",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a3_multi_tp__seed42/attempt1/ladder_a3_multi_tp__seed42/20261014_191954_853189_rl_train_seed42_tcn/config.yaml",
+      "sha256": "07b799a29a0bc80fbb94fa5d4fd626c06573f10102fe6985e21a632124a8cd4b",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a3_multi_tp_dist__seed42/attempt1/ladder_a3_multi_tp_dist__seed42/20261014_192004_839765_rl_train_seed42_tcn/config.yaml",
+      "sha256": "d96125f3f76e59c157dd290c6ee017afd7f05d0628eff2168e4c8286edc256c9",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a3_multi_tp_po3__seed42/attempt1/ladder_a3_multi_tp_po3__seed42/20261014_191957_817729_rl_train_seed42_tcn/config.yaml",
+      "sha256": "e73d948eb72fb58ba4aee86d9658c1d1a6257dd022883a39873d2872caa737fb",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a4a_entry_fsm_hidden__seed42/attempt1/ladder_a4a_entry_fsm_hidden__seed42/20261014_191957_831596_rl_train_seed42_tcn/config.yaml",
+      "sha256": "d1070398a089bcd61cb7de2c004f7e2735d2d10bc12720ad038ce94f53c12ed0",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a4a_entry_fsm_hidden_dist__seed42/attempt1/ladder_a4a_entry_fsm_hidden_dist__seed42/20261014_192006_544864_rl_train_seed42_tcn/config.yaml",
+      "sha256": "48231ee28a8e9724119a16c168dda464fa1ba14c318ab7640012cb7127c92c3b",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a4a_entry_fsm_hidden_po3__seed42/attempt1/ladder_a4a_entry_fsm_hidden_po3__seed42/20261014_191951_868732_rl_train_seed42_tcn/config.yaml",
+      "sha256": "8aff7503e6a90d5d1b5c5b6f61d562075f503de2917ef2088764acdad69a3a3f",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a4b_distribution__seed42/attempt1/ladder_a4b_distribution__seed42/20261014_191958_362963_rl_train_seed42_tcn/config.yaml",
+      "sha256": "43e00267edcd8eb31bdcd7d1ae99da2799f5c9b9c44137625fe70831e65713c1",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a4b_entry_fsm__seed42/attempt1/ladder_a4b_entry_fsm__seed42/20261014_191955_280862_rl_train_seed42_tcn/config.yaml",
+      "sha256": "80e5c60d34922f9654a31cbeb67b23cd8c80d71bb63903484b78309851047213",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    },
+    {
+      "max_episode_steps": null,
+      "n_envs": 64,
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a4b_po3_ifvg__seed42/attempt1/ladder_a4b_po3_ifvg__seed42/20261014_191958_335521_rl_train_seed42_tcn/config.yaml",
+      "sha256": "ee878b4d41a8d03bb7ed962b26812c04c6f89ee4b4bd69a2ec86136d686cbcf3",
+      "stop_on_equity_gate": false,
+      "stop_on_no_trades": false
+    }
+  ],
+  "environment_semantics": {
+    "full_split_evaluation": "Final train/test evaluation creates non-episodic environments and replays complete splits, but this is evaluation after learning and cannot retroactively establish full-year training exposure",
+    "reset_start": "TradingEnv.reset sets _ny_pos to searchsorted(_ny_indices, obs_window), returning each reset to the first eligible NY bar after the observation warmup; no random episode start is applied",
+    "risk_breach": "In episodic mode, _check_guardrails returns done=True on risk breach; environment episode ends before split completion",
+    "training_env_is_episodic_by_default": "quant_rl/train/train_rl.py:487-522 (make_env episodic=True); train call omits episodic override at train_rl.py:1375-1395",
+    "vector_auto_reset": "SB3 SubprocVecEnv worker calls env.reset() after done; next episode therefore restarts at the same first eligible NY bar"
+  },
+  "final_evaluation_artifacts": {
+    "test_report_only_count": 0,
+    "test_report_only_paths": [],
+    "train_in_sample_count": 0,
+    "train_in_sample_paths": []
+  },
+  "interpretation": {
+    "finding": "The 20M/64 budget is nominal capacity, not demonstrated year coverage. Every training reset returns to the first eligible training bar. All completed episodes recorded at this capture are trailing-drawdown prefixes and none reaches the full 99,504-step train split.",
+    "limit": "Only completed episode records available at capture are summarized; this does not assert that every vector environment has terminated or that all later training dates were unseen. The active run remains in progress. The deterministic complete-split final train/test reports remain required.",
+    "readiness": "NOT READY"
+  },
+  "observed_completed_episodes": {
+    "by_variant": {
+      "ladder_a0_flat_dist__seed42": {
+        "breach_reasons": {
+          "trailing_dd": 7
+        },
+        "completed_data_split": 0,
+        "episodes": 7,
+        "max_steps": 23216,
+        "mean_steps": 18425.14,
+        "mean_trades": 67,
+        "min_steps": 13353
+      },
+      "ladder_a1_sl__seed42": {
+        "breach_reasons": {
+          "trailing_dd": 20
+        },
+        "completed_data_split": 0,
+        "episodes": 20,
+        "max_steps": 25113,
+        "mean_steps": 15410.6,
+        "mean_trades": 171.15,
+        "min_steps": 7338
+      },
+      "ladder_a1_sl_po3__seed42": {
+        "breach_reasons": {
+          "trailing_dd": 1
+        },
+        "completed_data_split": 0,
+        "episodes": 1,
+        "max_steps": 14731,
+        "mean_steps": 14731,
+        "mean_trades": 69,
+        "min_steps": 14731
+      }
+    },
+    "count": 28,
+    "end_reason_counts": {
+      "risk_breach:trailing_dd": 28
+    },
+    "episode_steps_max": 25113,
+    "episode_steps_mean": 16139.96,
+    "episode_steps_min": 7338,
+    "full_split_completions": 0,
+    "max_fraction_of_train_split": 0.252382,
+    "min_fraction_of_train_split": 0.073746,
+    "records": [
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 93947.3503196435,
+        "environment_index": 20,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 13353,
+        "equity_delta": -6052.649680356495,
+        "n_trades": 59,
+        "timestep": 6854592,
+        "variant": "ladder_a0_flat_dist__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 92939.39082163456,
+        "environment_index": 56,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 14596,
+        "equity_delta": -7060.609178365441,
+        "n_trades": 68,
+        "timestep": 6934144,
+        "variant": "ladder_a0_flat_dist__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 92817.35589357752,
+        "environment_index": 38,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 15884,
+        "equity_delta": -7182.644106422478,
+        "n_trades": 58,
+        "timestep": 7016576,
+        "variant": "ladder_a0_flat_dist__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 92985.59000307969,
+        "environment_index": 43,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 17889,
+        "equity_delta": -7014.409996920309,
+        "n_trades": 69,
+        "timestep": 7144896,
+        "variant": "ladder_a0_flat_dist__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 93498.9919551579,
+        "environment_index": 13,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 21863,
+        "equity_delta": -6501.008044842107,
+        "n_trades": 59,
+        "timestep": 7399232,
+        "variant": "ladder_a0_flat_dist__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 93619.693616935,
+        "environment_index": 63,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 22175,
+        "equity_delta": -6380.306383065006,
+        "n_trades": 76,
+        "timestep": 7419200,
+        "variant": "ladder_a0_flat_dist__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 93195.13906316964,
+        "environment_index": 28,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 23216,
+        "equity_delta": -6804.860936830359,
+        "n_trades": 80,
+        "timestep": 7485824,
+        "variant": "ladder_a0_flat_dist__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 95753.29081668216,
+        "environment_index": 54,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 7338,
+        "equity_delta": -4246.709183317842,
+        "n_trades": 89,
+        "timestep": 6469632,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 94821.60290350042,
+        "environment_index": 20,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 8593,
+        "equity_delta": -5178.397096499582,
+        "n_trades": 109,
+        "timestep": 6549952,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 93235.1606556537,
+        "environment_index": 58,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 9365,
+        "equity_delta": -6764.839344346299,
+        "n_trades": 128,
+        "timestep": 6599360,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 93250.72103999318,
+        "environment_index": 33,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 9694,
+        "equity_delta": -6749.278960006821,
+        "n_trades": 122,
+        "timestep": 6620416,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 95461.94118183095,
+        "environment_index": 17,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 10402,
+        "equity_delta": -4538.058818169055,
+        "n_trades": 135,
+        "timestep": 6665728,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 93029.14849592355,
+        "environment_index": 32,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 12579,
+        "equity_delta": -6970.851504076447,
+        "n_trades": 157,
+        "timestep": 6805056,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 95027.8858898066,
+        "environment_index": 47,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 13527,
+        "equity_delta": -4972.1141101934045,
+        "n_trades": 163,
+        "timestep": 6865728,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 97026.04143058695,
+        "environment_index": 25,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 13608,
+        "equity_delta": -2973.958569413051,
+        "n_trades": 169,
+        "timestep": 6870912,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 93219.46723332624,
+        "environment_index": 37,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 13630,
+        "equity_delta": -6780.532766673758,
+        "n_trades": 167,
+        "timestep": 6872320,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 92577.29650971625,
+        "environment_index": 0,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 14213,
+        "equity_delta": -7422.703490283748,
+        "n_trades": 186,
+        "timestep": 6909632,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 93757.52696160947,
+        "environment_index": 57,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 15374,
+        "equity_delta": -6242.473038390526,
+        "n_trades": 182,
+        "timestep": 6983936,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 94314.5991928833,
+        "environment_index": 26,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 15672,
+        "equity_delta": -5685.4008071167045,
+        "n_trades": 169,
+        "timestep": 7003008,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 93269.21597610839,
+        "environment_index": 55,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 17008,
+        "equity_delta": -6730.784023891611,
+        "n_trades": 200,
+        "timestep": 7088512,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 91649.12379770541,
+        "environment_index": 62,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 17381,
+        "equity_delta": -8350.876202294588,
+        "n_trades": 191,
+        "timestep": 7112384,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 93957.65519813317,
+        "environment_index": 3,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 17494,
+        "equity_delta": -6042.344801866828,
+        "n_trades": 195,
+        "timestep": 7119616,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 94328.1870201349,
+        "environment_index": 39,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 19575,
+        "equity_delta": -5671.812979865106,
+        "n_trades": 192,
+        "timestep": 7252800,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 93400.61108922616,
+        "environment_index": 6,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 21414,
+        "equity_delta": -6599.388910773836,
+        "n_trades": 206,
+        "timestep": 7370496,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 97717.98661469252,
+        "environment_index": 10,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 22560,
+        "equity_delta": -2282.0133853074803,
+        "n_trades": 212,
+        "timestep": 7443840,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 94976.16744984504,
+        "environment_index": 1,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 23672,
+        "equity_delta": -5023.832550154955,
+        "n_trades": 220,
+        "timestep": 7515008,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 93686.48929062503,
+        "environment_index": 13,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 25113,
+        "equity_delta": -6313.510709374968,
+        "n_trades": 231,
+        "timestep": 7607232,
+        "variant": "ladder_a1_sl__seed42"
+      },
+      {
+        "breach_reason": "trailing_dd",
+        "completed_data_split": false,
+        "end_equity": 93268.48161841117,
+        "environment_index": 45,
+        "episode_end_reason": "risk_breach",
+        "episode_steps": 14731,
+        "equity_delta": -6731.51838158883,
+        "n_trades": 69,
+        "timestep": 6942784,
+        "variant": "ladder_a1_sl_po3__seed42"
+      }
+    ],
+    "source_episode_csvs": [
+      {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat_dist__seed42/attempt1/ladder_a0_flat_dist__seed42/20261014_191958_437039_rl_train_seed42_tcn/model/episode_equity.csv",
+        "sha256": "8032b3ad47a6a1d57fd4596c19da33d4009be26870d75913f9fb6bbad4555f1b"
+      },
+      {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl__seed42/attempt1/ladder_a1_sl__seed42/20261014_191951_745461_rl_train_seed42_tcn/model/episode_equity.csv",
+        "sha256": "1f9572fd255c9244c31a757e190886895e4cc6468679665c002d827fce4673b5"
+      },
+      {
+        "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl_po3__seed42/attempt1/ladder_a1_sl_po3__seed42/20261014_192003_766208_rl_train_seed42_tcn/model/episode_equity.csv",
+        "sha256": "316982f3e1a30c48f5ae0728452e9137d13ddce29076d2427e027e1730529884"
+      }
+    ],
+    "variant_count": 3
+  },
+  "schema": "aalto.train_episode_reset_coverage_audit.v1",
+  "source_hashes_sha256": {
+    ".venv-x86/lib/python3.12/site-packages/stable_baselines3/common/vec_env/subproc_vec_env.py": "6e31549805997337a2b38eaa7b54d4d00310a6b7c58e42a6cb6fb6f6c4e9d572",
+    "config/campaigns/18_variant_seed42_20m_policy_migration_nenv64_20261014.yaml": "b1c8571df3c5480f1e59ca3ef7977e473ce398ba7593335a047b3cba68eef797",
+    "docs/thesis/train_year_coverage_audit_2026-10-14.json": "74f98db62dbcc89f90fca7876c705e1d52e79706208219fef45da0e0450a3a8f",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/campaign.json": "5e5f6d66ed3b978cd4ac4c91634387478b650db68b3e4d8007a660432ad6d6fa",
+    "quant_rl/envs/trading_env.py": "04313555138bd6f6b8cb6a5b0dbb173a2590dc9da09e384571834fb56852b0f9",
+    "quant_rl/models/agent.py": "1fecd37fcad6dcdc30f50a03067b7fb1782ac9c9828d6d802eec45037a71e488",
+    "quant_rl/train/equity_gate.py": "2d2d7187965b75da6b59261b4b400115e02202610c165910e321895e252351e0",
+    "quant_rl/train/train_rl.py": "e1bfd5c21747b95af41cad577fc35b9cd20808cd99f9a6b5507949ebaa5262f7"
+  }
+}

@@ -1,0 +1,314 @@
+{
+  "campaign": {
+    "data_source": "bundle",
+    "final_metrics_json": [],
+    "final_summary_markdown": [],
+    "fingerprint": "7ee026894d0575619d885ddb09a391ac1a3c1b3196bd92c64861c26a31749b73",
+    "id": "ladder18_seed42_20m_policy_migration_nenv64_20261014",
+    "job_id": "20963043",
+    "logs_updated_within_5m": 18,
+    "manifest_sha256": "5e5f6d66ed3b978cd4ac4c91634387478b650db68b3e4d8007a660432ad6d6fa",
+    "manifest_status": {
+      "failed": 0,
+      "interrupted": 0,
+      "pending": 0,
+      "running": 18,
+      "succeeded": 0
+    },
+    "n_envs": 64,
+    "numbered_checkpoints": [
+      "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat__seed42/attempt1/ladder_a0_flat__seed42/20261014_191955_371103_rl_train_seed42_tcn/model/ppo_ckpt_9000000_steps.zip",
+      "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat_po3__seed42/attempt1/ladder_a0_flat_po3__seed42/20261014_191955_230354_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+      "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl__seed42/attempt1/ladder_a1_sl__seed42/20261014_191951_745461_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+      "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl_dist__seed42/attempt1/ladder_a1_sl_dist__seed42/20261014_191956_797217_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+      "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl_po3__seed42/attempt1/ladder_a1_sl_po3__seed42/20261014_192003_766208_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+      "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a2_tp__seed42/attempt1/ladder_a2_tp__seed42/20261014_191957_498001_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+      "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a3_multi_tp_po3__seed42/attempt1/ladder_a3_multi_tp_po3__seed42/20261014_191957_817729_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip"
+    ],
+    "squeue": "20963043|RUNNING|1:09:08|6:00:00|gpuarm[1-2]",
+    "target_steps_per_variant": 20000000,
+    "worker_logs": 18,
+    "workers": 18
+  },
+  "episode_telemetry": [
+    {
+      "archived_copy": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1716Z/ladder_a0_flat_dist__seed42_episode_equity.csv",
+      "breach_reasons": {
+        "trailing_dd": 1
+      },
+      "end_reasons": {
+        "risk_breach": 1
+      },
+      "episode_steps_max": 13353,
+      "episode_steps_min": 13353,
+      "full_training_split_episodes": 0,
+      "rows": 1,
+      "sha256": "75bad0fda24f5aac1d0b388986fe96fad3635a0a181975657aae39bfb42155ee",
+      "trade_count_max": 59,
+      "trade_count_min": 59,
+      "variant": "ladder_a0_flat_dist__seed42"
+    },
+    {
+      "archived_copy": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1716Z/ladder_a1_sl__seed42_episode_equity.csv",
+      "breach_reasons": {
+        "trailing_dd": 12
+      },
+      "end_reasons": {
+        "risk_breach": 12
+      },
+      "episode_steps_max": 15672,
+      "episode_steps_min": 7338,
+      "full_training_split_episodes": 0,
+      "rows": 12,
+      "sha256": "232d8302c62a5f1c0210e3a3bb112d79aad485702690acc9656996039c485b00",
+      "trade_count_max": 186,
+      "trade_count_min": 89,
+      "variant": "ladder_a1_sl__seed42"
+    },
+    {
+      "archived_copy": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1716Z/ladder_a1_sl_po3__seed42_episode_equity.csv",
+      "breach_reasons": {
+        "trailing_dd": 1
+      },
+      "end_reasons": {
+        "risk_breach": 1
+      },
+      "episode_steps_max": 14731,
+      "episode_steps_min": 14731,
+      "full_training_split_episodes": 0,
+      "rows": 1,
+      "sha256": "316982f3e1a30c48f5ae0728452e9137d13ddce29076d2427e027e1730529884",
+      "trade_count_max": 69,
+      "trade_count_min": 69,
+      "variant": "ladder_a1_sl_po3__seed42"
+    }
+  ],
+  "interpretation": "Interim exploratory evidence. All currently observed episode records across three variants end on trailing-drawdown breaches before the training split completes. The active worker progress and resource sample do not prove final performance or sizing. No final evaluation artifacts exist; readiness remains NOT READY.",
+  "observed_at_utc": "2026-10-14T17:13:15.183231+00:00",
+  "progress": {
+    "estimated_mean_hours_remaining_at_observed_rate": 13.61,
+    "mean_additional_steps_from_migration_checkpoints": 875633,
+    "mean_additional_steps_per_worker_per_second_since_attempt_start": 272.34,
+    "projection_caveat": "Rough linear projection from current dashboard checkpoints; not a runtime guarantee.",
+    "workers": [
+      {
+        "additional_steps": 1105920,
+        "key": "ladder_a0_flat__seed42",
+        "latest_dashboard_steps": 9105920,
+        "node": "gpuarm1",
+        "source_checkpoint_steps": 8000000,
+        "target_completion_pct": 45.53,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 901120,
+        "key": "ladder_a1_sl__seed42",
+        "latest_dashboard_steps": 6901120,
+        "node": "gpuarm2",
+        "source_checkpoint_steps": 6000000,
+        "target_completion_pct": 34.51,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 901120,
+        "key": "ladder_a2_tp__seed42",
+        "latest_dashboard_steps": 6901120,
+        "node": "gpuarm1",
+        "source_checkpoint_steps": 6000000,
+        "target_completion_pct": 34.51,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 901120,
+        "key": "ladder_a3_multi_tp__seed42",
+        "latest_dashboard_steps": 6901120,
+        "node": "gpuarm2",
+        "source_checkpoint_steps": 6000000,
+        "target_completion_pct": 34.51,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 802816,
+        "key": "ladder_a4b_entry_fsm__seed42",
+        "latest_dashboard_steps": 5802816,
+        "node": "gpuarm1",
+        "source_checkpoint_steps": 5000000,
+        "target_completion_pct": 29.01,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 802816,
+        "key": "ladder_a4a_entry_fsm_hidden__seed42",
+        "latest_dashboard_steps": 5802816,
+        "node": "gpuarm2",
+        "source_checkpoint_steps": 5000000,
+        "target_completion_pct": 29.01,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 1007616,
+        "key": "ladder_a0_flat_po3__seed42",
+        "latest_dashboard_steps": 7007616,
+        "node": "gpuarm1",
+        "source_checkpoint_steps": 6000000,
+        "target_completion_pct": 35.04,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 1007616,
+        "key": "ladder_a1_sl_po3__seed42",
+        "latest_dashboard_steps": 7007616,
+        "node": "gpuarm2",
+        "source_checkpoint_steps": 6000000,
+        "target_completion_pct": 35.04,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 901120,
+        "key": "ladder_a2_tp_po3__seed42",
+        "latest_dashboard_steps": 6901120,
+        "node": "gpuarm1",
+        "source_checkpoint_steps": 6000000,
+        "target_completion_pct": 34.51,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 1007616,
+        "key": "ladder_a3_multi_tp_po3__seed42",
+        "latest_dashboard_steps": 7007616,
+        "node": "gpuarm2",
+        "source_checkpoint_steps": 6000000,
+        "target_completion_pct": 35.04,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 704512,
+        "key": "ladder_a4b_po3_ifvg__seed42",
+        "latest_dashboard_steps": 5704512,
+        "node": "gpuarm1",
+        "source_checkpoint_steps": 5000000,
+        "target_completion_pct": 28.52,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 704512,
+        "key": "ladder_a4a_entry_fsm_hidden_po3__seed42",
+        "latest_dashboard_steps": 5704512,
+        "node": "gpuarm2",
+        "source_checkpoint_steps": 5000000,
+        "target_completion_pct": 28.52,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 901120,
+        "key": "ladder_a0_flat_dist__seed42",
+        "latest_dashboard_steps": 6901120,
+        "node": "gpuarm1",
+        "source_checkpoint_steps": 6000000,
+        "target_completion_pct": 34.51,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 901120,
+        "key": "ladder_a1_sl_dist__seed42",
+        "latest_dashboard_steps": 6901120,
+        "node": "gpuarm2",
+        "source_checkpoint_steps": 6000000,
+        "target_completion_pct": 34.51,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 901120,
+        "key": "ladder_a2_tp_dist__seed42",
+        "latest_dashboard_steps": 6901120,
+        "node": "gpuarm1",
+        "source_checkpoint_steps": 6000000,
+        "target_completion_pct": 34.51,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 901120,
+        "key": "ladder_a3_multi_tp_dist__seed42",
+        "latest_dashboard_steps": 6901120,
+        "node": "gpuarm2",
+        "source_checkpoint_steps": 6000000,
+        "target_completion_pct": 34.51,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 704512,
+        "key": "ladder_a4b_distribution__seed42",
+        "latest_dashboard_steps": 5704512,
+        "node": "gpuarm1",
+        "source_checkpoint_steps": 5000000,
+        "target_completion_pct": 28.52,
+        "target_steps": 20000000
+      },
+      {
+        "additional_steps": 704512,
+        "key": "ladder_a4a_entry_fsm_hidden_dist__seed42",
+        "latest_dashboard_steps": 5704512,
+        "node": "gpuarm2",
+        "source_checkpoint_steps": 5000000,
+        "target_completion_pct": 28.52,
+        "target_steps": 20000000
+      }
+    ]
+  },
+  "repository": {
+    "branch": "main",
+    "head": "c2261ca75f80ab8d6bb0494d847e786557aa9bb7",
+    "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis"
+  },
+  "resource_snapshot": {
+    "nodes": {
+      "gpuarm1": {
+        "latest_cgroup_memory_gib": 127.28,
+        "latest_gpu_memory_mib": 60951,
+        "latest_gpu_utilization_pct": 23.0,
+        "max_cgroup_memory_current_gib": 129.96,
+        "max_observed_oom_events": 0,
+        "mean_cgroup_memory_gib": 124.12,
+        "mean_gpu_utilization_pct": 55.2,
+        "mean_process_tree_cpu_cores": 4.939,
+        "mean_process_tree_pss_gib": 116.09,
+        "memory_scope": [
+          "slurm_job"
+        ],
+        "peak_gpu_memory_mib": 60951,
+        "peak_gpu_utilization_pct": 98.0,
+        "peak_sample_interval_cpu_cores": 5.406,
+        "process_tree_storage_read_delta_gib": 0.151,
+        "process_tree_storage_write_delta_gib": 0.043,
+        "reported_cgroup_memory_peak_gib": 132.14,
+        "sample_count": 86,
+        "window_minutes": 50.5
+      },
+      "gpuarm2": {
+        "latest_cgroup_memory_gib": 129.58,
+        "latest_gpu_memory_mib": 62496,
+        "latest_gpu_utilization_pct": 72.0,
+        "max_cgroup_memory_current_gib": 131.66,
+        "max_observed_oom_events": 0,
+        "mean_cgroup_memory_gib": 122.7,
+        "mean_gpu_utilization_pct": 54.9,
+        "mean_process_tree_cpu_cores": 4.904,
+        "mean_process_tree_pss_gib": 119.11,
+        "memory_scope": [
+          "slurm_job"
+        ],
+        "peak_gpu_memory_mib": 101645,
+        "peak_gpu_utilization_pct": 98.0,
+        "peak_sample_interval_cpu_cores": 5.26,
+        "process_tree_storage_read_delta_gib": 0.368,
+        "process_tree_storage_write_delta_gib": 0.104,
+        "reported_cgroup_memory_peak_gib": 132.8,
+        "sample_count": 87,
+        "window_minutes": 50.57
+      }
+    },
+    "path": "docs/thesis/live_resource_snapshot_2026-10-14_1710.json",
+    "sha256": "b15fa89bce224ac65e063100835ace24fc22d465a2ca6a7007993befcccbc31c"
+  },
+  "schema": "aalto.live_campaign_snapshot.v1"
+}

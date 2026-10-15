@@ -194,6 +194,31 @@ def _max_episode_steps(cfg: Any) -> int | None:
     return int(raw)
 
 
+def _training_episodic(cfg: Any) -> bool:
+    """Resolve whether risk breaches terminate training episodes.
+
+    ``full_split`` keeps the environment cursor moving through the chronological
+    training split after a risk breach; the environment latches the year failure
+    and blocks trading according to the existing guardrail semantics. The
+    episode then ends at the split boundary, so PPO cannot silently train only
+    on repeated early-year prefixes. ``risk_terminated`` preserves the prior
+    episodic behavior for explicitly requested legacy runs.
+    """
+    training = cfg.get("training", {}) if hasattr(cfg, "get") else getattr(cfg, "training", {})
+    mode = str(training.get("episode_mode", "full_split")).strip().lower()
+    if mode == "full_split":
+        if _max_episode_steps(cfg) is not None:
+            raise ValueError(
+                "training.episode_mode='full_split' requires env.max_episode_steps=null"
+            )
+        return False
+    if mode == "risk_terminated":
+        return True
+    raise ValueError(
+        f"training.episode_mode must be 'full_split' or 'risk_terminated', got {mode!r}"
+    )
+
+
 def _direction_summary(trades: Any) -> dict[str, int]:
     """Count open directions from an evaluate_model trade log."""
     if trades is None or getattr(trades, "empty", True):
@@ -768,8 +793,9 @@ def _action_space_width(env: Any) -> int | None:
     action_space = getattr(env, "action_space", None)
     if action_space is None:
         return None
-    if hasattr(action_space, "shape"):
-        return int(action_space.shape[0])
+    shape = getattr(action_space, "shape", None)
+    if shape:
+        return int(shape[0])
     if hasattr(action_space, "n"):
         return int(action_space.n)
     return None
@@ -1294,6 +1320,7 @@ def main() -> None:
             reward=args.reward,
             arch=args.arch,
             bundle_dir=str(bundle_path),
+            episodic=_training_episodic(cfg),
         )
         train_eval_spec = EnvSpec.from_cfg(
             cfg,
@@ -1378,6 +1405,7 @@ def main() -> None:
                 cfg,
                 algo=args.algo,
                 reward=args.reward,
+                episodic=_training_episodic(cfg),
                 use_vae=args.use_vae,
                 vae=env_vae,
                 pre_ny_by_date=pre_ny_by_date,

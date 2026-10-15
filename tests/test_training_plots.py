@@ -139,12 +139,17 @@ def test_save_dashboard_plots(tmp_path):
             "grad_norm": [1.2, 0.8],
             "return_pct": [1.0, ""],
             "sharpe": [0.5, ""],
+            "eval_total_pnl": [120.0, -20.0],
+            "avg_trade": [12.0, -10.0],
+            "eval_max_drawdown_pct": [2.0, 3.0],
         }
     ).to_csv(log_path, index=False)
     out = tmp_path / "plots"
     save_dashboard_plots(log_path, out_dir=out, save_html=False)
     for name in (
-        "dashboard_eval",
+        "dashboard_return",
+        "dashboard_pnl",
+        "dashboard_sharpe",
         "dashboard_reward",
         "dashboard_behavior",
         "dashboard_risk",

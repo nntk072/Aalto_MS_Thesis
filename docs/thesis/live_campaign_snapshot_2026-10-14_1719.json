@@ -1,0 +1,250 @@
+{
+  "campaign_id": "ladder18_seed42_20m_policy_migration_nenv64_20261014",
+  "data_source": "bundle",
+  "episodes": [
+    {
+      "archived_copy": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1719Z/ladder_a0_flat_dist__seed42_episode_equity.csv",
+      "breach_reasons": {
+        "trailing_dd": 3
+      },
+      "end_reasons": {
+        "risk_breach": 3
+      },
+      "episode_steps_max": 15884,
+      "episode_steps_min": 13353,
+      "episodes": 3,
+      "full_training_split_episodes": 0,
+      "sha256": "d69f9bcc4ac494e5246416daf676d721621e6512ef2fa7c4fca4e8e6366350b8",
+      "variant": "ladder_a0_flat_dist__seed42"
+    },
+    {
+      "archived_copy": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1719Z/ladder_a1_sl__seed42_episode_equity.csv",
+      "breach_reasons": {
+        "trailing_dd": 15
+      },
+      "end_reasons": {
+        "risk_breach": 15
+      },
+      "episode_steps_max": 17494,
+      "episode_steps_min": 7338,
+      "episodes": 15,
+      "full_training_split_episodes": 0,
+      "sha256": "0405180a60aef7f68149928a6086282a82ffef48354a6584ea3c9e1426f2b05c",
+      "variant": "ladder_a1_sl__seed42"
+    },
+    {
+      "archived_copy": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1719Z/ladder_a1_sl_po3__seed42_episode_equity.csv",
+      "breach_reasons": {
+        "trailing_dd": 1
+      },
+      "end_reasons": {
+        "risk_breach": 1
+      },
+      "episode_steps_max": 14731,
+      "episode_steps_min": 14731,
+      "episodes": 1,
+      "full_training_split_episodes": 0,
+      "sha256": "316982f3e1a30c48f5ae0728452e9137d13ddce29076d2427e027e1730529884",
+      "variant": "ladder_a1_sl_po3__seed42"
+    }
+  ],
+  "final_metrics_json": [],
+  "final_summary_markdown": [],
+  "interpretation": "Interim exploratory evidence. Episode telemetry from three variants shows trailing-drawdown risk breaches before full train-split completion. No final train/test reports are present. Readiness remains NOT READY.",
+  "job_id": "20963043",
+  "logs_fresh_within_5m": 18,
+  "manifest_fingerprint": "7ee026894d0575619d885ddb09a391ac1a3c1b3196bd92c64861c26a31749b73",
+  "manifest_status": {
+    "failed": 0,
+    "interrupted": 0,
+    "running": 18,
+    "succeeded": 0
+  },
+  "n_envs": 64,
+  "numbered_checkpoints": [
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat__seed42/attempt1/ladder_a0_flat__seed42/20261014_191955_371103_rl_train_seed42_tcn/model/ppo_ckpt_9000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat_dist__seed42/attempt1/ladder_a0_flat_dist__seed42/20261014_191958_437039_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat_po3__seed42/attempt1/ladder_a0_flat_po3__seed42/20261014_191955_230354_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl__seed42/attempt1/ladder_a1_sl__seed42/20261014_191951_745461_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl_dist__seed42/attempt1/ladder_a1_sl_dist__seed42/20261014_191956_797217_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl_po3__seed42/attempt1/ladder_a1_sl_po3__seed42/20261014_192003_766208_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a2_tp__seed42/attempt1/ladder_a2_tp__seed42/20261014_191957_498001_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a2_tp_dist__seed42/attempt1/ladder_a2_tp_dist__seed42/20261014_191959_987413_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a2_tp_po3__seed42/attempt1/ladder_a2_tp_po3__seed42/20261014_191959_923448_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a3_multi_tp__seed42/attempt1/ladder_a3_multi_tp__seed42/20261014_191954_853189_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a3_multi_tp_dist__seed42/attempt1/ladder_a3_multi_tp_dist__seed42/20261014_192004_839765_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a3_multi_tp_po3__seed42/attempt1/ladder_a3_multi_tp_po3__seed42/20261014_191957_817729_rl_train_seed42_tcn/model/ppo_ckpt_7000000_steps.zip",
+    "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a4b_entry_fsm__seed42/attempt1/ladder_a4b_entry_fsm__seed42/20261014_191955_280862_rl_train_seed42_tcn/model/ppo_ckpt_6000000_steps.zip"
+  ],
+  "observed_at_utc": "2026-10-14T17:19:49.046593+00:00",
+  "progress": [
+    {
+      "additional_steps": 1302528,
+      "key": "ladder_a0_flat__seed42",
+      "latest_dashboard_steps": 9302528,
+      "source_checkpoint_steps": 8000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 1105920,
+      "key": "ladder_a1_sl__seed42",
+      "latest_dashboard_steps": 7105920,
+      "source_checkpoint_steps": 6000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 1105920,
+      "key": "ladder_a2_tp__seed42",
+      "latest_dashboard_steps": 7105920,
+      "source_checkpoint_steps": 6000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 1007616,
+      "key": "ladder_a3_multi_tp__seed42",
+      "latest_dashboard_steps": 7007616,
+      "source_checkpoint_steps": 6000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 901120,
+      "key": "ladder_a4b_entry_fsm__seed42",
+      "latest_dashboard_steps": 5901120,
+      "source_checkpoint_steps": 5000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 901120,
+      "key": "ladder_a4a_entry_fsm_hidden__seed42",
+      "latest_dashboard_steps": 5901120,
+      "source_checkpoint_steps": 5000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 1105920,
+      "key": "ladder_a0_flat_po3__seed42",
+      "latest_dashboard_steps": 7105920,
+      "source_checkpoint_steps": 6000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 1105920,
+      "key": "ladder_a1_sl_po3__seed42",
+      "latest_dashboard_steps": 7105920,
+      "source_checkpoint_steps": 6000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 1007616,
+      "key": "ladder_a2_tp_po3__seed42",
+      "latest_dashboard_steps": 7007616,
+      "source_checkpoint_steps": 6000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 1105920,
+      "key": "ladder_a3_multi_tp_po3__seed42",
+      "latest_dashboard_steps": 7105920,
+      "source_checkpoint_steps": 6000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 802816,
+      "key": "ladder_a4b_po3_ifvg__seed42",
+      "latest_dashboard_steps": 5802816,
+      "source_checkpoint_steps": 5000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 802816,
+      "key": "ladder_a4a_entry_fsm_hidden_po3__seed42",
+      "latest_dashboard_steps": 5802816,
+      "source_checkpoint_steps": 5000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 1007616,
+      "key": "ladder_a0_flat_dist__seed42",
+      "latest_dashboard_steps": 7007616,
+      "source_checkpoint_steps": 6000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 1105920,
+      "key": "ladder_a1_sl_dist__seed42",
+      "latest_dashboard_steps": 7105920,
+      "source_checkpoint_steps": 6000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 1007616,
+      "key": "ladder_a2_tp_dist__seed42",
+      "latest_dashboard_steps": 7007616,
+      "source_checkpoint_steps": 6000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 1007616,
+      "key": "ladder_a3_multi_tp_dist__seed42",
+      "latest_dashboard_steps": 7007616,
+      "source_checkpoint_steps": 6000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 802816,
+      "key": "ladder_a4b_distribution__seed42",
+      "latest_dashboard_steps": 5802816,
+      "source_checkpoint_steps": 5000000,
+      "target_steps": 20000000
+    },
+    {
+      "additional_steps": 802816,
+      "key": "ladder_a4a_entry_fsm_hidden_dist__seed42",
+      "latest_dashboard_steps": 5802816,
+      "source_checkpoint_steps": 5000000,
+      "target_steps": 20000000
+    }
+  ],
+  "repository_head": "c2261ca75f80ab8d6bb0494d847e786557aa9bb7",
+  "resource_snapshot": {
+    "nodes": {
+      "gpuarm1": {
+        "latest_gpu_utilization_pct": 66.0,
+        "max_cgroup_memory_current_gib": 129.96,
+        "max_oom_events": 0,
+        "mean_cgroup_memory_gib": 124.76,
+        "mean_gpu_utilization_pct": 56.5,
+        "mean_process_tree_cpu_cores": 4.935,
+        "mean_process_tree_pss_gib": 117.38,
+        "memory_scope": "slurm_job",
+        "peak_gpu_memory_mib": 61315,
+        "peak_gpu_utilization_pct": 99.0,
+        "reported_cgroup_memory_peak_gib": 132.14,
+        "sample_count": 101,
+        "window_minutes": 59.77
+      },
+      "gpuarm2": {
+        "latest_gpu_utilization_pct": 54.0,
+        "max_cgroup_memory_current_gib": 133.02,
+        "max_oom_events": 0,
+        "mean_cgroup_memory_gib": 123.92,
+        "mean_gpu_utilization_pct": 55.2,
+        "mean_process_tree_cpu_cores": 4.903,
+        "mean_process_tree_pss_gib": 120.34,
+        "memory_scope": "slurm_job",
+        "peak_gpu_memory_mib": 101645,
+        "peak_gpu_utilization_pct": 98.0,
+        "reported_cgroup_memory_peak_gib": 134.32,
+        "sample_count": 102,
+        "window_minutes": 59.5
+      }
+    },
+    "path": "docs/thesis/live_resource_snapshot_2026-10-14_1719.json",
+    "sha256": "a2ddc3fddc59a9c9f39d73074f9c9d4df2509d94a1e2524937a2a888320615cd"
+  },
+  "schema": "aalto.live_campaign_snapshot.v1",
+  "squeue": "20963043|RUNNING|1:15:42|6:00:00|gpuarm[1-2]",
+  "target_steps_per_variant": 20000000,
+  "worker_cpus": 5,
+  "worker_logs": 18
+}

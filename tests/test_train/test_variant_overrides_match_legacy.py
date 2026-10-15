@@ -1,8 +1,4 @@
-"""The resolver's overrides must reproduce the legacy merge_variant_cfg config.
-
-Requires OmegaConf (repo environment). Expected differences are listed in
-EXPECTED_DIFF_KEYS and are the intended fixes, nothing else.
-"""
+"""The resolver's overrides must reproduce the legacy merge_variant_cfg config."""
 
 from __future__ import annotations
 
@@ -16,6 +12,7 @@ from quant_rl.train.ablation_utils import load_variant_config, merge_variant_cfg
 from quant_rl.train.variant_resolver import (  # noqa: E402
     DEFAULT_BASE,
     FULL_PO3_BASE,
+    PREBUILT_FEATURE_CACHES,
     PROJECT_ROOT,
     load_experiments,
     resolve_variant,
@@ -38,8 +35,6 @@ STRAT_YAML = {
     "po3_ifvg": "config/2_po3_ifvg.yaml",
     "distribution": "config/3_distribution.yaml",
 }
-# Intentional: baseline-named rungs now run BaselineStrategy, not the default po3 block.
-EXPECTED_DIFF_KEYS = {"strategy.name"}
 
 
 def _flatten(cfg) -> dict[str, object]:
@@ -88,11 +83,19 @@ def test_resolver_matches_legacy_config(name: str) -> None:
     legacy = _flatten(_legacy(name))
     new = _flatten(_new(name))
     diff = {k for k in set(legacy) | set(new) if legacy.get(k) != new.get(k)}
-    unexpected = diff - EXPECTED_DIFF_KEYS
+    expected_diff = set()
+    resolved = resolve_variant(name, vae_path="placeholder.pth")
+    if resolved["strategy"] == "baseline":
+        assert new["strategy.name"] == "baseline"
+        if legacy.get("strategy.name") != new.get("strategy.name"):
+            expected_diff.add("strategy.name")
+    if name in PREBUILT_FEATURE_CACHES:
+        expected_diff.add("data.prebuilt_feature_cache")
+        assert new["data.prebuilt_feature_cache"] == PREBUILT_FEATURE_CACHES[name]
+    unexpected = diff - expected_diff
     assert not unexpected, f"{name}: unexpected config drift: " + ", ".join(
         f"{k} legacy={legacy.get(k)!r} new={new.get(k)!r}" for k in sorted(unexpected)
     )
     if diff:
-        # Only the baseline-named rungs and controls may differ, and only in strategy.name.
-        assert diff == EXPECTED_DIFF_KEYS
-        assert resolve_variant(name, vae_path="placeholder.pth")["strategy"] == "baseline"
+        # Baseline semantics and the explicitly selected feature cache are intentional.
+        assert diff == expected_diff

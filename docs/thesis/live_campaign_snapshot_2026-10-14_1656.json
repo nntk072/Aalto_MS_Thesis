@@ -1,0 +1,320 @@
+{
+  "campaign": {
+    "allocation_nodes": "gpuarm[1-2]\n",
+    "data_source": "bundle",
+    "effective_config_audit_checks": {
+      "all_20m": true,
+      "all_checkpoint_every_1m": true,
+      "all_equity_gate_early_abort_disabled": true,
+      "all_full_split_episode_limit_unset": true,
+      "all_no_trade_hard_abort_disabled": true,
+      "all_workers_n_env64": true
+    },
+    "end_time": "2026-10-15T01:04:07",
+    "evaluation_policy": {
+      "deterministic": true,
+      "locked_oos_exposure": "previously_inspected_holdout",
+      "locked_oos_role": "selection_acknowledged",
+      "selection_allowed": true
+    },
+    "fingerprint": "7ee026894d0575619d885ddb09a391ac1a3c1b3196bd92c64861c26a31749b73",
+    "git_sha": "c2261ca75f80ab8d6bb0494d847e786557aa9bb7",
+    "id": "ladder18_seed42_20m_policy_migration_nenv64_20261014",
+    "job_id": "20963043",
+    "job_state": "RUNNING",
+    "n_envs": 64,
+    "requested_steps_per_variant": 20000000,
+    "runtime": "00:53:22",
+    "squeue_rows": [
+      "JOBID|PARTITION|NAME|STATE|TIME|NODELIST(REASON)",
+      "20963043|gpu-grace-h200-141g|thesis18vec|RUNNING|53:22|gpuarm[1-2]"
+    ],
+    "time_limit": "06:00:00",
+    "workers": 18
+  },
+  "checkpoint_count": 0,
+  "continuation_watcher": {
+    "monitor_log": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/campaign_chain_monitor.log",
+    "monitor_log_sha256": "219f9ebb671039350c9c109911976b64ebe590c97e3c32a4c84b88211dbd25e0",
+    "second_slurm_job_queued": false,
+    "tail": [
+      "2026-10-14T19:51:18+03:00 waiting for current allocation 20963043 to end",
+      "2026-10-14T19:51:18+03:00 current allocation state=RUNNING; waiting 60s",
+      "2026-10-14T19:52:18+03:00 current allocation state=RUNNING; waiting 60s",
+      "2026-10-14T19:53:18+03:00 current allocation state=RUNNING; waiting 60s",
+      "2026-10-14T19:54:18+03:00 current allocation state=RUNNING; waiting 60s",
+      "2026-10-14T19:55:18+03:00 current allocation state=RUNNING; waiting 60s",
+      "2026-10-14T19:56:18+03:00 current allocation state=RUNNING; waiting 60s",
+      "2026-10-14T19:57:18+03:00 current allocation state=RUNNING; waiting 60s"
+    ],
+    "tmux_session": "thesis-organizer",
+    "window": "campaign-chain"
+  },
+  "final_evaluation_artifacts": 0,
+  "observed_at_utc": "2026-10-14T16:57:29.633273+00:00",
+  "readiness": "NOT READY: exploratory campaign incomplete; final full-split results, full-year episode coverage, independent review, confirmatory holdout, and sustained resource sizing remain unestablished.",
+  "reports": {
+    "effective_config_audit_18.json": {
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/effective_config_audit_18.json",
+      "sha256": "f953935b640c3cdb8a37c15c244abbf72f8da91ac822671cd2a334c569bf5b45"
+    },
+    "ppo_gradient_norm_diagnostic_20261014T164640Z.json": {
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/ppo_gradient_norm_diagnostic_20261014T164640Z.json",
+      "sha256": "1462bc5cbb1a5c8133c0d2846268859ecbe6ba14887aa43faf15ad7af1ed5d53"
+    },
+    "train_test_evaluation_contract_audit.json": {
+      "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/train_test_evaluation_contract_audit.json",
+      "sha256": "167889475ab7721a310e32fa9896b1d34169c2f87146d125fc46f204d7b51667"
+    }
+  },
+  "repository": {
+    "branch": "main",
+    "head": "c2261ca75f80ab8d6bb0494d847e786557aa9bb7",
+    "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis",
+    "working_tree_paths_before_doc_update": []
+  },
+  "resources": {
+    "gpuarm1": {
+      "cgroup_memory_current_bytes": 134706638848,
+      "cgroup_memory_peak_bytes": 141885779968,
+      "gpu_memory_used_mib": 60459,
+      "gpu_utilization_pct": 55.0,
+      "oom_counters": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "resource_csv_sha256": "b551a697025eacdc5c6670e8822a5f36c3265f4d997549e80160751534c011a3",
+      "sample_count": 65,
+      "sample_time_utc": "2026-10-14T16:57:22.938452+00:00"
+    },
+    "gpuarm2": {
+      "cgroup_memory_current_bytes": 137697693696,
+      "cgroup_memory_peak_bytes": 139541635072,
+      "gpu_memory_used_mib": 61597,
+      "gpu_utilization_pct": 33.0,
+      "oom_counters": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "resource_csv_sha256": "6ce337464e38dfb7d58feb14f76b4d6c074cdc50df6f638f7e46b34a840b3b06",
+      "sample_count": 65,
+      "sample_time_utc": "2026-10-14T16:57:17.572171+00:00"
+    }
+  },
+  "storage": {
+    "campaign_directory_bytes": 5810676945,
+    "user_quota_raw": "User quotas for nguyenl37\n     Filesystem   space   quota   limit   grace   files   quota   limit   grace\n  /home            15289M  20480M  21504M            145k       0       0        \n/scratch (user qta)   152G    536G    536G       -     460k   1048k   1048k       -\n/scratch (total use)  152G      0       0        -     460k      0       0        -\n\nGroup quotas\nFilesystem   group                  space   quota   limit   grace   files   quota   limit   grace\n/scratch     nguyenl37               152G    536G    536G       -    460k   1048k   1048k       -"
+  },
+  "workers": [
+    {
+      "checkpoint_start_steps": 8000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.01 log_std=[-0.7,0.0] reward_mode=dsr strategy=baseline",
+      "error_marker": false,
+      "key": "ladder_a0_flat__seed42",
+      "latest_logged_fps": 373,
+      "latest_logged_steps": 8786432,
+      "log_mtime_utc": "2026-10-14T16:56:54+00:00",
+      "log_sha256": "2a47e29c9153a5ede4b151814f3378ff439241be4c3176bb9de342cb10ba6b45",
+      "node": "gpuarm1",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 6000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=dsr strategy=baseline",
+      "error_marker": false,
+      "key": "ladder_a1_sl__seed42",
+      "latest_logged_fps": 340,
+      "latest_logged_steps": 6688128,
+      "log_mtime_utc": "2026-10-14T16:56:42+00:00",
+      "log_sha256": "05b5bf1457830aed5b60a288c7e71cb49e10eda9f6e890a0d089d9e5adb2e61f",
+      "node": "gpuarm2",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 6000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=dsr strategy=baseline",
+      "error_marker": false,
+      "key": "ladder_a2_tp__seed42",
+      "latest_logged_fps": 324,
+      "latest_logged_steps": 6688128,
+      "log_mtime_utc": "2026-10-14T16:57:13+00:00",
+      "log_sha256": "02021b39e5d24db4c126d3d2b66d8fd7e843893bf0db3d4bec08b75d3c0fc940",
+      "node": "gpuarm1",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 6000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=dsr strategy=baseline",
+      "error_marker": false,
+      "key": "ladder_a3_multi_tp__seed42",
+      "latest_logged_fps": 302,
+      "latest_logged_steps": 6589824,
+      "log_mtime_utc": "2026-10-14T16:55:37+00:00",
+      "log_sha256": "f7eb142285e76383c52c00c2778d24b7b8309f1bb12bcdcd0ab564a76171ba67",
+      "node": "gpuarm2",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 5000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=dsr strategy=baseline",
+      "error_marker": false,
+      "key": "ladder_a4b_entry_fsm__seed42",
+      "latest_logged_fps": 290,
+      "latest_logged_steps": 5589824,
+      "log_mtime_utc": "2026-10-14T16:57:12+00:00",
+      "log_sha256": "b159c412fa35a30bc3a5b720e066cecbb889aca9b032a88bcb751acf0ed3ce8b",
+      "node": "gpuarm1",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 5000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=dsr strategy=baseline",
+      "error_marker": false,
+      "key": "ladder_a4a_entry_fsm_hidden__seed42",
+      "latest_logged_fps": 268,
+      "latest_logged_steps": 5491520,
+      "log_mtime_utc": "2026-10-14T16:53:55+00:00",
+      "log_sha256": "0537c8f2ff91dbc11233d483c31c43d959dd346df6aba3befe8e7ca9e0c2d641",
+      "node": "gpuarm2",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 6000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=pnl strategy=po3_ifvg",
+      "error_marker": false,
+      "key": "ladder_a0_flat_po3__seed42",
+      "latest_logged_fps": 345,
+      "latest_logged_steps": 6688128,
+      "log_mtime_utc": "2026-10-14T16:56:25+00:00",
+      "log_sha256": "605c88157bdf9c14037cb1b5f6091d926c59e85e1e2c2947cd018e31c7ad8b21",
+      "node": "gpuarm1",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 6000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=pnl strategy=po3_ifvg",
+      "error_marker": false,
+      "key": "ladder_a1_sl_po3__seed42",
+      "latest_logged_fps": 337,
+      "latest_logged_steps": 6688128,
+      "log_mtime_utc": "2026-10-14T16:56:27+00:00",
+      "log_sha256": "0df53ccf0684688c58e533cb99edb99378a7fcb180ba93aab6e3b25e5f3a860c",
+      "node": "gpuarm2",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 6000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=pnl strategy=po3_ifvg",
+      "error_marker": false,
+      "key": "ladder_a2_tp_po3__seed42",
+      "latest_logged_fps": 305,
+      "latest_logged_steps": 6589824,
+      "log_mtime_utc": "2026-10-14T16:55:26+00:00",
+      "log_sha256": "f98ef23e12e5db28898996e007471b5e65b7ee00a826d40c71fdddb8f620eac6",
+      "node": "gpuarm1",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 6000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=pnl strategy=po3_ifvg",
+      "error_marker": false,
+      "key": "ladder_a3_multi_tp_po3__seed42",
+      "latest_logged_fps": 297,
+      "latest_logged_steps": 6589824,
+      "log_mtime_utc": "2026-10-14T16:55:20+00:00",
+      "log_sha256": "7b8004ec79cc6b3db104ad7a360dba139aef1795ebe04b01f2e5a00513af6319",
+      "node": "gpuarm2",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 5000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=pnl strategy=po3_ifvg",
+      "error_marker": false,
+      "key": "ladder_a4b_po3_ifvg__seed42",
+      "latest_logged_fps": 257,
+      "latest_logged_steps": 5491520,
+      "log_mtime_utc": "2026-10-14T16:54:41+00:00",
+      "log_sha256": "1d6f98d03ada3b2f46f20aa13e20d6ca791b79ee360f15f91aa82e3f27896ed5",
+      "node": "gpuarm1",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 5000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=pnl strategy=po3_ifvg",
+      "error_marker": false,
+      "key": "ladder_a4a_entry_fsm_hidden_po3__seed42",
+      "latest_logged_fps": 266,
+      "latest_logged_steps": 5491520,
+      "log_mtime_utc": "2026-10-14T16:53:27+00:00",
+      "log_sha256": "f97a97e0b8ff84d68d62e23e36f6e28b1f6e071eddcbba9a88091cc36cf9e36e",
+      "node": "gpuarm2",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 6000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=pnl strategy=distribution",
+      "error_marker": false,
+      "key": "ladder_a0_flat_dist__seed42",
+      "latest_logged_fps": 298,
+      "latest_logged_steps": 6589824,
+      "log_mtime_utc": "2026-10-14T16:55:34+00:00",
+      "log_sha256": "feaa2d549e345675b136251727362bf36bfec7fc3ae8fdda7477b3895fe66155",
+      "node": "gpuarm1",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 6000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=pnl strategy=distribution",
+      "error_marker": false,
+      "key": "ladder_a1_sl_dist__seed42",
+      "latest_logged_fps": 326,
+      "latest_logged_steps": 6688128,
+      "log_mtime_utc": "2026-10-14T16:57:00+00:00",
+      "log_sha256": "1d8796a84d9a458165e87bf840000d7573074bed34e0b658cf5b551e3d5b1984",
+      "node": "gpuarm2",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 6000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=pnl strategy=distribution",
+      "error_marker": false,
+      "key": "ladder_a2_tp_dist__seed42",
+      "latest_logged_fps": 314,
+      "latest_logged_steps": 6589824,
+      "log_mtime_utc": "2026-10-14T16:54:01+00:00",
+      "log_sha256": "dcd41f9f3f7eedeb816c4bdbfc2c91263084ef31da59a7a4bef5b96ebac5f370",
+      "node": "gpuarm1",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 6000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=pnl strategy=distribution",
+      "error_marker": false,
+      "key": "ladder_a3_multi_tp_dist__seed42",
+      "latest_logged_fps": 316,
+      "latest_logged_steps": 6589824,
+      "log_mtime_utc": "2026-10-14T16:53:55+00:00",
+      "log_sha256": "8473577e779e52e8be7495d8d12e659c25231769b5498974f235170c9d28496a",
+      "node": "gpuarm2",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 5000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=pnl strategy=distribution",
+      "error_marker": false,
+      "key": "ladder_a4b_distribution__seed42",
+      "latest_logged_fps": 254,
+      "latest_logged_steps": 5491520,
+      "log_mtime_utc": "2026-10-14T16:55:43+00:00",
+      "log_sha256": "38b742c30a01524bc633811364f4edc6e1d3c446107ba6e92bd80005dae6c3b1",
+      "node": "gpuarm1",
+      "status": "running"
+    },
+    {
+      "checkpoint_start_steps": 5000000,
+      "effective_ppo_line": "PPO effective: n_envs=64 n_steps=128 rollout=8192 batch=4096 epochs=15 lr=0.0003 gamma=0.99 clip=0.2 ent_coef=0.001 log_std=[-0.7,0.0] reward_mode=pnl strategy=distribution",
+      "error_marker": false,
+      "key": "ladder_a4a_entry_fsm_hidden_dist__seed42",
+      "latest_logged_fps": 241,
+      "latest_logged_steps": 5491520,
+      "log_mtime_utc": "2026-10-14T16:56:22+00:00",
+      "log_sha256": "9cb45727cbf20715d5dce9e27bc4958de2e213c2308f796ce4655b9f42430c8a",
+      "node": "gpuarm2",
+      "status": "running"
+    }
+  ]
+}

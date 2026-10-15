@@ -1,0 +1,1468 @@
+{
+  "schema": "aalto.live_campaign_snapshot.v1",
+  "captured_at_utc": "2026-10-14T19:51:25+00:00",
+  "campaign": {
+    "campaign_id": null,
+    "campaign_manifest_sha256": "5e5f6d66ed3b978cd4ac4c91634387478b650db68b3e4d8007a660432ad6d6fa",
+    "fingerprint": "7ee026894d0575619d885ddb09a391ac1a3c1b3196bd92c64861c26a31749b73",
+    "runtime_git_sha": "c2261ca75f80ab8d6bb0494d847e786557aa9bb7",
+    "job_id": "20963043",
+    "job_state_observed": "RUNNING at capture; squeue observed 3:46:37 / 6:00:00 on gpuarm[1-2]",
+    "allocation": "two GH200 nodes; 48 CPUs and 512 GiB requested per node",
+    "workers_configured": 18,
+    "worker_logs_found": 18,
+    "worker_logs_fresh_within_5m": 18,
+    "latest_logged_steps_min_median_max": [
+      8047424,
+      9981312,
+      12816896
+    ],
+    "requested_steps_per_variant": 20000000,
+    "worker_progress": [
+      {
+        "run_key": "ladder_a0_flat__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a0_flat__seed42__attempt1.log",
+        "log_sha256": "306feadb869e0ef5169941ec95467276fa7e497c3eac970dec2ee2f19ed2f18e",
+        "log_mtime_local": "2026-10-14T22:48:26+03:00",
+        "latest_logged_steps": 12816896,
+        "latest_logged_fps": 387
+      },
+      {
+        "run_key": "ladder_a0_flat_dist__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a0_flat_dist__seed42__attempt1.log",
+        "log_sha256": "f68879b4296f043899539d89e8ca21fbac9f4a6bc1423083f335c19dd8b4e8ef",
+        "log_mtime_local": "2026-10-14T22:51:17+03:00",
+        "latest_logged_steps": 9833856,
+        "latest_logged_fps": 308
+      },
+      {
+        "run_key": "ladder_a0_flat_po3__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a0_flat_po3__seed42__attempt1.log",
+        "log_sha256": "b1af931f5aa31a18e25a1384e3ee0234327c564170c0442b18eaa7f54c94a968",
+        "log_mtime_local": "2026-10-14T22:51:10+03:00",
+        "latest_logged_steps": 10030464,
+        "latest_logged_fps": 319
+      },
+      {
+        "run_key": "ladder_a1_sl__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a1_sl__seed42__attempt1.log",
+        "log_sha256": "63a5eb31aca8161f29f71f47dc87ec21de069501b21e4444cc41698959f27d5f",
+        "log_mtime_local": "2026-10-14T22:50:09+03:00",
+        "latest_logged_steps": 10128768,
+        "latest_logged_fps": 329
+      },
+      {
+        "run_key": "ladder_a1_sl_dist__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a1_sl_dist__seed42__attempt1.log",
+        "log_sha256": "81cc308bb5a0dc0a8790478e579320a7f5c300f931bc40caf34ce7f22dd44040",
+        "log_mtime_local": "2026-10-14T22:48:46+03:00",
+        "latest_logged_steps": 10030464,
+        "latest_logged_fps": 323
+      },
+      {
+        "run_key": "ladder_a1_sl_po3__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a1_sl_po3__seed42__attempt1.log",
+        "log_sha256": "87e2a31b591062db10d8106a0da7552a8bdf0b17b3bb88e3f45ec1717ab7a73d",
+        "log_mtime_local": "2026-10-14T22:50:21+03:00",
+        "latest_logged_steps": 10030464,
+        "latest_logged_fps": 321
+      },
+      {
+        "run_key": "ladder_a2_tp__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a2_tp__seed42__attempt1.log",
+        "log_sha256": "561852092ef9a76e1add74e4990b488798ca72228bb84dda2ab7a6f9bbc3f129",
+        "log_mtime_local": "2026-10-14T22:48:49+03:00",
+        "latest_logged_steps": 10227072,
+        "latest_logged_fps": 339
+      },
+      {
+        "run_key": "ladder_a2_tp_dist__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a2_tp_dist__seed42__attempt1.log",
+        "log_sha256": "7f03166277d1699d3f49cd95f8b92419e8a6d647ed1688ab43cb6954b92895f1",
+        "log_mtime_local": "2026-10-14T22:50:33+03:00",
+        "latest_logged_steps": 10030464,
+        "latest_logged_fps": 325
+      },
+      {
+        "run_key": "ladder_a2_tp_po3__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a2_tp_po3__seed42__attempt1.log",
+        "log_sha256": "742dfbad3dc38461c979b485d260f8b17c6d5fb1f3008216f6fa4ad016b4a9d2",
+        "log_mtime_local": "2026-10-14T22:50:05+03:00",
+        "latest_logged_steps": 9932160,
+        "latest_logged_fps": 313
+      },
+      {
+        "run_key": "ladder_a3_multi_tp__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a3_multi_tp__seed42__attempt1.log",
+        "log_sha256": "19c1cb98e4a9ff7dae5965795234595ffafbe57d44fd18562ad505edfb5fbeae",
+        "log_mtime_local": "2026-10-14T22:51:15+03:00",
+        "latest_logged_steps": 10128768,
+        "latest_logged_fps": 332
+      },
+      {
+        "run_key": "ladder_a3_multi_tp_dist__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a3_multi_tp_dist__seed42__attempt1.log",
+        "log_sha256": "fe456c1ceab942e8c29703d6cd2b332985895d44a4e113deda3265e2ade458b2",
+        "log_mtime_local": "2026-10-14T22:50:19+03:00",
+        "latest_logged_steps": 9932160,
+        "latest_logged_fps": 318
+      },
+      {
+        "run_key": "ladder_a3_multi_tp_po3__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a3_multi_tp_po3__seed42__attempt1.log",
+        "log_sha256": "e4b1ad0dab17d06cd66bb83653ba9dc4908af23e49d3f263bdc295b2849cb093",
+        "log_mtime_local": "2026-10-14T22:50:58+03:00",
+        "latest_logged_steps": 10030464,
+        "latest_logged_fps": 320
+      },
+      {
+        "run_key": "ladder_a4a_entry_fsm_hidden__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a4a_entry_fsm_hidden__seed42__attempt1.log",
+        "log_sha256": "2a67b2fd02c6d335e686338ae676859f9ad7d313a2ff11e8a8015fcf3dd8a7dc",
+        "log_mtime_local": "2026-10-14T22:51:23+03:00",
+        "latest_logged_steps": 8244032,
+        "latest_logged_fps": 261
+      },
+      {
+        "run_key": "ladder_a4a_entry_fsm_hidden_dist__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a4a_entry_fsm_hidden_dist__seed42__attempt1.log",
+        "log_sha256": "dbc57dd70d81b956d570fa74476cad009d8f02086288ea96a9466648ec0d65eb",
+        "log_mtime_local": "2026-10-14T22:50:07+03:00",
+        "latest_logged_steps": 8047424,
+        "latest_logged_fps": 248
+      },
+      {
+        "run_key": "ladder_a4a_entry_fsm_hidden_po3__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a4a_entry_fsm_hidden_po3__seed42__attempt1.log",
+        "log_sha256": "4cb8ad0e904a2b6d5cf942880c887209d0d3370c8245dbe3215ec4ba4800c44b",
+        "log_mtime_local": "2026-10-14T22:50:21+03:00",
+        "latest_logged_steps": 8145728,
+        "latest_logged_fps": 256
+      },
+      {
+        "run_key": "ladder_a4b_distribution__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a4b_distribution__seed42__attempt1.log",
+        "log_sha256": "7477734bf0ed820d79cc4065732bd5bf65d4e959c447c00876ff2a5d89e5895f",
+        "log_mtime_local": "2026-10-14T22:50:18+03:00",
+        "latest_logged_steps": 8145728,
+        "latest_logged_fps": 250
+      },
+      {
+        "run_key": "ladder_a4b_entry_fsm__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a4b_entry_fsm__seed42__attempt1.log",
+        "log_sha256": "1016ba85f8fd18e7c621daebaab02be1066cc7f0500b149aadb31cf603e3f69d",
+        "log_mtime_local": "2026-10-14T22:47:54+03:00",
+        "latest_logged_steps": 8440640,
+        "latest_logged_fps": 277
+      },
+      {
+        "run_key": "ladder_a4b_po3_ifvg__seed42",
+        "log_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/workers/ladder_a4b_po3_ifvg__seed42__attempt1.log",
+        "log_sha256": "dd3013baa9032fbf842e45329a4871003307ea27f19615c4a6745cb10a0399e0",
+        "log_mtime_local": "2026-10-14T22:49:56+03:00",
+        "latest_logged_steps": 8244032,
+        "latest_logged_fps": 258
+      }
+    ]
+  },
+  "controller_status_artifact": {
+    "path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/campaign_status.json",
+    "sha256": "c256e74457f9ab5c24f91553810d485bbd052b31e147da8ffe46cfb79b75985a",
+    "captured_at": "2026-10-14T16:19:40.876974+00:00",
+    "statuses": {
+      "failed": 0,
+      "interrupted": 0,
+      "pending": 0,
+      "running": 18,
+      "succeeded": 0
+    },
+    "warning": "Controller status file is stale relative to live workers: its capture time predates this snapshot. Live Slurm state and worker logs are authoritative for current activity."
+  },
+  "episode_telemetry": {
+    "files_available": 8,
+    "files_unavailable": 10,
+    "total_completed_episodes": 225,
+    "full_split_episode_count": 0,
+    "runs_with_available_telemetry": 8,
+    "snapshots": [
+      {
+        "run_key": "ladder_a0_flat__seed42",
+        "source_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat__seed42/attempt1/ladder_a0_flat__seed42/20261014_191955_371103_rl_train_seed42_tcn/model/episode_equity.csv",
+        "source_sha256_after_copy": "9646ed9d60bba1589ec3540ed90a272e2e5a45435543680a59d768c991140235",
+        "snapshot_copy_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1950Z/ladder_a0_flat__seed42_episode_equity.csv",
+        "snapshot_sha256": "9646ed9d60bba1589ec3540ed90a272e2e5a45435543680a59d768c991140235",
+        "source_size_bytes_before": 6294,
+        "source_size_bytes_after": 6294,
+        "source_size_stable_during_copy": true,
+        "episode_count": 53,
+        "completed_data_split_count": 0,
+        "full_split_episodes": 0,
+        "max_episode_steps": 71857,
+        "end_reasons": {
+          "trailing_dd": 53
+        },
+        "per_environment": {
+          "3": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 51589
+          },
+          "28": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 52890
+          },
+          "4": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 54062
+          },
+          "11": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 56019
+          },
+          "59": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 56032
+          },
+          "15": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 56410
+          },
+          "18": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 56410
+          },
+          "21": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 56410
+          },
+          "20": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 56818
+          },
+          "19": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 57198
+          },
+          "38": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 57198
+          },
+          "9": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 57509
+          },
+          "45": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 59536
+          },
+          "55": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 59539
+          },
+          "35": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 59541
+          },
+          "50": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 59550
+          },
+          "53": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 60709
+          },
+          "16": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61407
+          },
+          "1": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61413
+          },
+          "7": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61413
+          },
+          "42": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61415
+          },
+          "0": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61491
+          },
+          "5": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61491
+          },
+          "8": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61491
+          },
+          "43": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61491
+          },
+          "49": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61491
+          },
+          "51": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61491
+          },
+          "56": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61491
+          },
+          "58": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61491
+          },
+          "60": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61491
+          },
+          "62": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61491
+          },
+          "47": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 62648
+          },
+          "41": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 62656
+          },
+          "44": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 62664
+          },
+          "27": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 63063
+          },
+          "24": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 63452
+          },
+          "26": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 63452
+          },
+          "37": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 63452
+          },
+          "54": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 64626
+          },
+          "12": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 64956
+          },
+          "63": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 64988
+          },
+          "34": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 65616
+          },
+          "2": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 65617
+          },
+          "22": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 65617
+          },
+          "32": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 65785
+          },
+          "17": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 66282
+          },
+          "57": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 66282
+          },
+          "40": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 67182
+          },
+          "23": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 67185
+          },
+          "10": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 67959
+          },
+          "13": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 67959
+          },
+          "48": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 67959
+          },
+          "36": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 71857
+          }
+        }
+      },
+      {
+        "run_key": "ladder_a0_flat_dist__seed42",
+        "source_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat_dist__seed42/attempt1/ladder_a0_flat_dist__seed42/20261014_191958_437039_rl_train_seed42_tcn/model/episode_equity.csv",
+        "source_sha256_after_copy": "95730921943ce1c56f88fcc4a45c92e68c7c0599dc9dfc0a38abcd3fcaa8cf87",
+        "snapshot_copy_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1950Z/ladder_a0_flat_dist__seed42_episode_equity.csv",
+        "snapshot_sha256": "95730921943ce1c56f88fcc4a45c92e68c7c0599dc9dfc0a38abcd3fcaa8cf87",
+        "source_size_bytes_before": 5723,
+        "source_size_bytes_after": 5723,
+        "source_size_stable_during_copy": true,
+        "episode_count": 48,
+        "completed_data_split_count": 0,
+        "full_split_episodes": 0,
+        "max_episode_steps": 60875,
+        "end_reasons": {
+          "trailing_dd": 48
+        },
+        "per_environment": {
+          "20": {
+            "episodes": 2,
+            "full_split_episodes": 0,
+            "max_episode_steps": 38947
+          },
+          "56": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 14596
+          },
+          "38": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 15884
+          },
+          "43": {
+            "episodes": 2,
+            "full_split_episodes": 0,
+            "max_episode_steps": 28970
+          },
+          "13": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 21863
+          },
+          "63": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 22175
+          },
+          "28": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 23216
+          },
+          "29": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 24124
+          },
+          "31": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 26640
+          },
+          "47": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 27436
+          },
+          "61": {
+            "episodes": 2,
+            "full_split_episodes": 0,
+            "max_episode_steps": 30854
+          },
+          "33": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 29913
+          },
+          "23": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 33361
+          },
+          "26": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 34754
+          },
+          "4": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 35372
+          },
+          "51": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 36503
+          },
+          "30": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 38330
+          },
+          "41": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 38682
+          },
+          "60": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 38900
+          },
+          "52": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 40608
+          },
+          "6": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 41289
+          },
+          "45": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 41675
+          },
+          "48": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 45879
+          },
+          "1": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 46752
+          },
+          "16": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 47008
+          },
+          "57": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 48427
+          },
+          "55": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 49307
+          },
+          "12": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 49806
+          },
+          "42": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 50606
+          },
+          "25": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 51646
+          },
+          "2": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 51710
+          },
+          "11": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 53729
+          },
+          "35": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 57768
+          },
+          "18": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 57961
+          },
+          "22": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 59278
+          },
+          "8": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 59330
+          },
+          "34": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 59722
+          },
+          "39": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 59753
+          },
+          "46": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 59801
+          },
+          "58": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 60108
+          },
+          "36": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 60226
+          },
+          "9": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 60460
+          },
+          "5": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 60659
+          },
+          "59": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 60711
+          },
+          "15": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 60875
+          }
+        }
+      },
+      {
+        "run_key": "ladder_a0_flat_po3__seed42",
+        "source_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a0_flat_po3__seed42/attempt1/ladder_a0_flat_po3__seed42/20261014_191955_230354_rl_train_seed42_tcn/model/episode_equity.csv",
+        "source_sha256_after_copy": "d628bd4dc97ab897c06774e7521ed3d84feb838aaa6fe3ba1e7704b9a0cd7e94",
+        "snapshot_copy_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1950Z/ladder_a0_flat_po3__seed42_episode_equity.csv",
+        "snapshot_sha256": "d628bd4dc97ab897c06774e7521ed3d84feb838aaa6fe3ba1e7704b9a0cd7e94",
+        "source_size_bytes_before": 1312,
+        "source_size_bytes_after": 1312,
+        "source_size_stable_during_copy": true,
+        "episode_count": 10,
+        "completed_data_split_count": 0,
+        "full_split_episodes": 0,
+        "max_episode_steps": 62688,
+        "end_reasons": {
+          "trailing_dd": 10
+        },
+        "per_environment": {
+          "44": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 33650
+          },
+          "49": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 35202
+          },
+          "38": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 37626
+          },
+          "13": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 45645
+          },
+          "54": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 47408
+          },
+          "16": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 47602
+          },
+          "42": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 59867
+          },
+          "31": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 60092
+          },
+          "15": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61144
+          },
+          "56": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 62688
+          }
+        }
+      },
+      {
+        "run_key": "ladder_a1_sl__seed42",
+        "source_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl__seed42/attempt1/ladder_a1_sl__seed42/20261014_191951_745461_rl_train_seed42_tcn/model/episode_equity.csv",
+        "source_sha256_after_copy": "595b87f8a959a6bbfed55260ba5529cd4c6e837ec33aa3bcd9e3a2b84e087083",
+        "snapshot_copy_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1950Z/ladder_a1_sl__seed42_episode_equity.csv",
+        "snapshot_sha256": "595b87f8a959a6bbfed55260ba5529cd4c6e837ec33aa3bcd9e3a2b84e087083",
+        "source_size_bytes_before": 3161,
+        "source_size_bytes_after": 3161,
+        "source_size_stable_during_copy": true,
+        "episode_count": 26,
+        "completed_data_split_count": 0,
+        "full_split_episodes": 0,
+        "max_episode_steps": 38766,
+        "end_reasons": {
+          "trailing_dd": 26
+        },
+        "per_environment": {
+          "54": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 7338
+          },
+          "20": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 8593
+          },
+          "58": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 9365
+          },
+          "33": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 9694
+          },
+          "17": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 10402
+          },
+          "32": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 12579
+          },
+          "47": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 13527
+          },
+          "25": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 13608
+          },
+          "37": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 13630
+          },
+          "0": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 14213
+          },
+          "57": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 15374
+          },
+          "26": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 15672
+          },
+          "55": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 17008
+          },
+          "62": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 17381
+          },
+          "3": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 17494
+          },
+          "39": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 19575
+          },
+          "6": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 21414
+          },
+          "10": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 22560
+          },
+          "1": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 23672
+          },
+          "13": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 25113
+          },
+          "22": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 25607
+          },
+          "30": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 35989
+          },
+          "42": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 36329
+          },
+          "23": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 38142
+          },
+          "18": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 38491
+          },
+          "9": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 38766
+          }
+        }
+      },
+      {
+        "run_key": "ladder_a1_sl_po3__seed42",
+        "source_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl_po3__seed42/attempt1/ladder_a1_sl_po3__seed42/20261014_192003_766208_rl_train_seed42_tcn/model/episode_equity.csv",
+        "source_sha256_after_copy": "f6626ef02604340fcd54ecdc4cf2cb62c83b9f2b3fe80e3e3fea76521d89cdcc",
+        "snapshot_copy_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1950Z/ladder_a1_sl_po3__seed42_episode_equity.csv",
+        "snapshot_sha256": "f6626ef02604340fcd54ecdc4cf2cb62c83b9f2b3fe80e3e3fea76521d89cdcc",
+        "source_size_bytes_before": 4465,
+        "source_size_bytes_after": 4465,
+        "source_size_stable_during_copy": true,
+        "episode_count": 37,
+        "completed_data_split_count": 0,
+        "full_split_episodes": 0,
+        "max_episode_steps": 62209,
+        "end_reasons": {
+          "trailing_dd": 37
+        },
+        "per_environment": {
+          "45": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 14731
+          },
+          "57": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 27213
+          },
+          "18": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 33118
+          },
+          "24": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 33788
+          },
+          "26": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 33788
+          },
+          "35": {
+            "episodes": 2,
+            "full_split_episodes": 0,
+            "max_episode_steps": 36791
+          },
+          "22": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 40836
+          },
+          "3": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 41398
+          },
+          "9": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 43388
+          },
+          "51": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 43388
+          },
+          "8": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 45961
+          },
+          "12": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 46014
+          },
+          "4": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 46169
+          },
+          "0": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 46259
+          },
+          "54": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 46334
+          },
+          "52": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 47759
+          },
+          "11": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 47891
+          },
+          "38": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 48026
+          },
+          "55": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 49284
+          },
+          "13": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 49321
+          },
+          "48": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 49559
+          },
+          "10": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 49807
+          },
+          "5": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 50327
+          },
+          "61": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 50426
+          },
+          "47": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 50975
+          },
+          "43": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 51792
+          },
+          "28": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 53071
+          },
+          "56": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 53255
+          },
+          "15": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 54836
+          },
+          "7": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 56010
+          },
+          "49": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 56189
+          },
+          "21": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 56449
+          },
+          "63": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 57249
+          },
+          "58": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61646
+          },
+          "6": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61912
+          },
+          "59": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 62209
+          }
+        }
+      },
+      {
+        "run_key": "ladder_a2_tp_dist__seed42",
+        "source_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a2_tp_dist__seed42/attempt1/ladder_a2_tp_dist__seed42/20261014_191959_987413_rl_train_seed42_tcn/model/episode_equity.csv",
+        "source_sha256_after_copy": "f6fd1298fef7e351db2682f4d1c6f7a5cc10119018b62a8d24e653135bf7be26",
+        "snapshot_copy_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1950Z/ladder_a2_tp_dist__seed42_episode_equity.csv",
+        "snapshot_sha256": "f6fd1298fef7e351db2682f4d1c6f7a5cc10119018b62a8d24e653135bf7be26",
+        "source_size_bytes_before": 3298,
+        "source_size_bytes_after": 3298,
+        "source_size_stable_during_copy": true,
+        "episode_count": 27,
+        "completed_data_split_count": 0,
+        "full_split_episodes": 0,
+        "max_episode_steps": 63866,
+        "end_reasons": {
+          "trailing_dd": 27
+        },
+        "per_environment": {
+          "13": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 38684
+          },
+          "6": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 40606
+          },
+          "8": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 41648
+          },
+          "30": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 50712
+          },
+          "12": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 51645
+          },
+          "1": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 53642
+          },
+          "17": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 53724
+          },
+          "18": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 54893
+          },
+          "43": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 55007
+          },
+          "22": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 55232
+          },
+          "48": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 55298
+          },
+          "29": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 57460
+          },
+          "9": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 58407
+          },
+          "14": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 59308
+          },
+          "50": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 59772
+          },
+          "24": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 59795
+          },
+          "16": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 60092
+          },
+          "34": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 60095
+          },
+          "59": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 60095
+          },
+          "25": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 60410
+          },
+          "33": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 60549
+          },
+          "20": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61100
+          },
+          "36": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61215
+          },
+          "31": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 61406
+          },
+          "53": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 62392
+          },
+          "2": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 62936
+          },
+          "62": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 63866
+          }
+        }
+      },
+      {
+        "run_key": "ladder_a2_tp_po3__seed42",
+        "source_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a2_tp_po3__seed42/attempt1/ladder_a2_tp_po3__seed42/20261014_191959_923448_rl_train_seed42_tcn/model/episode_equity.csv",
+        "source_sha256_after_copy": "c56621aaf50c381b57903bbe0a4fe0931702316992e810034e863db34c573908",
+        "snapshot_copy_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1950Z/ladder_a2_tp_po3__seed42_episode_equity.csv",
+        "snapshot_sha256": "c56621aaf50c381b57903bbe0a4fe0931702316992e810034e863db34c573908",
+        "source_size_bytes_before": 2713,
+        "source_size_bytes_after": 2713,
+        "source_size_stable_during_copy": true,
+        "episode_count": 22,
+        "completed_data_split_count": 0,
+        "full_split_episodes": 0,
+        "max_episode_steps": 60585,
+        "end_reasons": {
+          "trailing_dd": 22
+        },
+        "per_environment": {
+          "36": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 32286
+          },
+          "29": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 37185
+          },
+          "37": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 39788
+          },
+          "35": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 41289
+          },
+          "30": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 44716
+          },
+          "3": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 45263
+          },
+          "10": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 46208
+          },
+          "32": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 46969
+          },
+          "38": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 48797
+          },
+          "24": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 49821
+          },
+          "11": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 51045
+          },
+          "14": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 53363
+          },
+          "45": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 53608
+          },
+          "12": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 54103
+          },
+          "1": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 54120
+          },
+          "50": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 56397
+          },
+          "15": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 56853
+          },
+          "33": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 58243
+          },
+          "18": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 58803
+          },
+          "40": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 58893
+          },
+          "23": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 59508
+          },
+          "9": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 60585
+          }
+        }
+      },
+      {
+        "run_key": "ladder_a3_multi_tp__seed42",
+        "source_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a3_multi_tp__seed42/attempt1/ladder_a3_multi_tp__seed42/20261014_191954_853189_rl_train_seed42_tcn/model/episode_equity.csv",
+        "source_sha256_after_copy": "a536ab1870bdf67fbbafb27b20144539525ede519c5b11f5bad01b98878d3005",
+        "snapshot_copy_path": "outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/live_episode_snapshot_20261014T1950Z/ladder_a3_multi_tp__seed42_episode_equity.csv",
+        "snapshot_sha256": "a536ab1870bdf67fbbafb27b20144539525ede519c5b11f5bad01b98878d3005",
+        "source_size_bytes_before": 384,
+        "source_size_bytes_after": 384,
+        "source_size_stable_during_copy": true,
+        "episode_count": 2,
+        "completed_data_split_count": 0,
+        "full_split_episodes": 0,
+        "max_episode_steps": 55221,
+        "end_reasons": {
+          "trailing_dd": 2
+        },
+        "per_environment": {
+          "14": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 44386
+          },
+          "11": {
+            "episodes": 1,
+            "full_split_episodes": 0,
+            "max_episode_steps": 55221
+          }
+        }
+      }
+    ],
+    "episode_steps_min_median_max": [
+      7338,
+      53071,
+      71857
+    ],
+    "end_reasons": {
+      "trailing_dd": 225
+    }
+  },
+  "final_evaluation_artifacts": {
+    "train_in_sample_count": 0,
+    "train_in_sample_paths": [],
+    "test_report_only_count": 0,
+    "test_report_only_paths": []
+  },
+  "readiness": "NOT READY",
+  "limitations": [
+    "Live worker logs and episode CSVs are written concurrently; files with changed byte size during copy are flagged and snapshot bytes are hashed.",
+    "Only present episode telemetry is summarized; unavailable telemetry is not evidence that an environment had no episodes.",
+    "Observed campaign progress is not a final training or evaluation result.",
+    "The exposed 2026 evaluation interval remains selection-acknowledged and cannot support confirmatory claims."
+  ]
+}

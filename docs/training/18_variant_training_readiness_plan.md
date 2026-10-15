@@ -1,13 +1,17 @@
 # 18-Variant Training Campaign — Readiness Investigation and Implementation Plan
 
-**Date:** 2026-10-10 (Europe/Helsinki)<br>
+**Plan created:** 2026-10-10 (Europe/Helsinki)<br>
+**Last verified:** 2026-10-14 19:39 UTC<br>
 **Triton repo:** /scratch/work/nguyenl37/Aalto_MS_Thesis<br>
-**Observed HEAD:** b00b5e85622ec1410c8a11cc063cd52c87d3976d (working tree clean before creating this plan)<br>
-**Scope:** Implementation authorized by follow-up. Repository configuration, campaign provenance, artifact validation and evaluation metadata are being implemented. No production training, Slurm allocation, benchmark, or commit is authorized by this document.
+**Branch / campaign code HEAD:** `main` / `c2261ca75f80ab8d6bb0494d847e786557aa9bb7`<br>
+**Working tree:** uncommitted documentation/evidence updates; the active workers' source files are unchanged. The resume fingerprint also includes `git_sha`, however, so committing even docs-only changes before the campaign finishes would make the continuation controller reject `--resume` with a fingerprint mismatch. Keep `HEAD` at the pinned campaign revision until the campaign is terminal.<br>
+**Scope:** exploratory 18-variant training and evidence review on the authorized existing data. Do not claim production or confirmatory readiness.
 
 ## 1. Executive summary and decision
 
-**Readiness: NOT READY for production or confirmatory claims.** The researcher specified `ladder_a0_flat` as a pure legacy reference (`strategy_actions=false`, legacy `Discrete(20)`, no PO3 manipulation guard). The previous 100k pilot's A0 artifact used `strategy_actions=true`; it is not evidence for that reference, and A0 is not a one-factor control for A1. The authorized exploratory campaign is now running as Slurm job `20954895`: seed 42, 20,000,000 requested steps per variant, shared-bundle backend, `n_envs=64`, and the chronological 2025 training / 2026 report-only test split. Its test interval was previously inspected, so results are selection-acknowledged and exploratory. The post-correction preflight passed fixed-trace frames/bundle parity for all 18 variants; see the campaign parity report. The old 100k pilot failures remain historical evidence and do not determine the outcome of this longer run. The active workers use source commit `937bae5`; later metric-policy changes in `16b13ae` do not affect them and prevent direct resume from the updated checkout. Current-source feature-prefix checks passed nine cutoffs across three profiles. Sustained full-run resource sizing, independent research review, and a viable strategy remain open. The researcher waived new post-2026-07-03 data for exploratory work only; confirmatory claims still require an untouched holdout.
+**Readiness: NOT READY for production or confirmatory claims.** The current exploratory campaign is `ladder18_seed42_20m_policy_migration_nenv64_20261014`, Slurm job `20963043`, using seed 42, the shared-bundle backend, `n_envs=64`, and 20M requested PPO steps per variant. At 17:45 UTC, all 18 worker logs were fresh on two GH200 nodes and progress was 6.18M–9.87M steps; no final evaluation artifacts existed. The 17:45 reset-semantics audit captured 28 recorded episodes across three variants; all ended on trailing-drawdown breach after 7,338–25,113 steps, with none completing the training split. Since resets return to the first eligible NY bar, these episodes are repeated prefixes, not full-year training trajectories. A full-split training fix is prepared and pushed on an isolated branch, but is not active in this run. The configs use the chronological 2025 training split and report-only 2026 test split. The 2026 interval was already inspected and is permanently selection-acknowledged exploratory data. Checkpoints originate from source lineage `937bae5` and are being continued with code HEAD `c2261ca`; preserve that policy/source boundary in interpretation. A 1.14-hour resource sample averaged 4.93/4.90 CPU cores and 125.5/125.0 GiB cgroup RAM per node, with 56.9%/55.5% average GPU utilization and no sampled OOM events; this remains partial-run sizing evidence.
+
+The latest immutable live snapshot is [`live_campaign_snapshot_2026-10-14_1719.json`](../thesis/live_campaign_snapshot_2026-10-14_1719.json), SHA-256 `d0a3fa93bf2382fdd3f4a8f25f5b114523112bf425feb6fb5b3ab1558db3cfee`; the 17:29 check was reconciled directly against Slurm, worker logs, episode CSVs, and resource sampler CSVs. Effective configs and the train/test evaluation call path are audited under the campaign `reports/` directory. Interim episodes do not prove complete-year learning, final survival, profitability, or evaluation results. The historical 100k pilot failures remain valid and are not replaced by this unfinished campaign. Independent research sign-off, a pristine confirmatory holdout, final train/test metrics, a viable strategy, and sustained resource sizing remain open. A one-window continuation watcher waits for this allocation to finish and for two suitable idle GH200 nodes before resuming; it has not queued a second job.
 
 **Live status refresh — 2026-10-14 13:09 UTC:** Slurm job `20954895` is RUNNING on two GH200 nodes, with 18 active unique lineages reconciled across the primary manifest (16 active, two cache-start failures) and the recovery manifest (two active). Progress is 2.949M–4.620M/20M logged steps; no early-abort marker or final train/test report is present. At 3.32 hours, allocation cgroup RAM averaged 141.2/141.8 GiB and peaked at 158.7/162.6 GiB; CPU averaged 3.82/4.89 cores; GPU utilization averaged 56.5%/55.6%; VRAM peaked at 50,499/58,175 MiB; OOM counters were zero. See `outputs/gpu_campaigns/readiness_reaudit_20261014/reports/live_campaign_snapshot_20261014_1309.json` (SHA-256 `af80c4cf4d7be47d9adb1a9caad263970559a619c9f51bf833e97f0e11075e07`) for worker-level logs and raw resource CSV hashes. A recovery-controller log has validation-error text despite both recovery lineages running; preserve that command-path discrepancy for audit. These are interim exploratory observations, not evidence of a successful policy. Readiness stays **NOT READY**.
 
@@ -1207,3 +1211,158 @@ Focused campaign-report and artifact tests passed **23/23**; full-tree Ruff form
 ### Interim resource refresh — 2026-10-14 15:09 UTC
 
 The 5.32-hour sample averages 150.7/152.4 GiB cgroup RAM per node and peaks at 180.6/184.0 GiB of 512 GiB, with 3.82/4.89 primary-process-tree CPU cores, 57.0%/56.4% GPU utilization, 54.6/65.9 GiB VRAM peaks, and zero sampled OOM events. The resource JSON and exact compressed raw CSV snapshots are recorded in `docs/thesis/live_resource_sample_2026-10-14_1508.json` and the corresponding campaign `reports/resource_snapshot_20261014_1508/`. RAM/GPU are allocation scope and include recovery workers; primary process-tree CPU may omit them. Job `20954895` remained RUNNING at 5:44/6:00 and the separate migration watcher was waiting for it. The interval is incomplete and does not close sustained sizing.
+
+
+### Live 18-worker vector-resume campaign refresh — 2026-10-14 16:57 UTC
+
+Slurm job `20963043` is `RUNNING` at `00:53:22` / six hours on `gpuarm[1-2]
+`. The manifest reports 18/18 workers running; the worker logs currently span 5,491,520–8,786,432 PPO steps, 18/18 logs were updated within five minutes, and no traceback or `EARLY_ABORT` marker was found. All effective-log lines confirm `n_envs=64`. The campaign requests 20M steps per variant, uses the shared bundle, and records the previously inspected 2026 interval as `selection_acknowledged`.
+
+No periodic checkpoint or final train/test evaluation artifact had appeared at this snapshot. The first new numbered checkpoints are configured every 1M environment steps; the exact 18 effective configs are audited in `outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/reports/effective_config_audit_18.json`. The source call-path audit confirms deterministic train-in-sample and test-report-only final evaluations, but those reports remain absent. The interim PPO diagnostic records a very large finite pre-clip gradient norm for `ladder_a4a_entry_fsm_hidden_dist`; PPO clips at 0.5, so this is a review signal rather than a pass/fail result.
+
+Latest allocation samples were 125.5/128.2 GiB cgroup RAM, 55%/33% GPU utilization, with zero sampled OOM events. The user quota reports 152 GiB of 536 GiB and 460k of 1.048m files; the campaign directory is 5.4 GiB.
+
+A single `thesis-organizer:campaign-chain` tmux watcher is waiting for job `20963043` to leave Slurm, then for two idle GH200 nodes with at least 512 GB each before invoking `run_campaign_18way_vector_resume_supervisor.sh`. No second job is queued. Its log is `outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/logs/campaign_chain_monitor.log`. The audit snapshot is [`docs/thesis/live_campaign_snapshot_2026-10-14_1656.json`](live_campaign_snapshot_2026-10-14_1656.json) (SHA-256 `a5f98d2c20835caca79d58fa1398d7b90c7027f7f0f7f6ac0aa6c998446569e4`).
+
+This is interim exploratory evidence, not proof of full-year episodes, survival, profitability, or confirmatory validity. Historical pilot failures remain in force; independent research review and a fresh confirmatory holdout remain open. Overall readiness remains **NOT READY**.
+
+### Current continuation evidence — 2026-10-14 17:06 UTC
+
+The above 16:56 snapshot is superseded for live progress by [`docs/thesis/live_campaign_snapshot_2026-10-14_1706.json`](../thesis/live_campaign_snapshot_2026-10-14_1706.json). Job `20963043` remains active; the first post-resume 9M checkpoint is present for the legacy baseline, while final train/test artifacts are still absent. The only currently written episode telemetry is for `ladder_a1_sl__seed42`: nine episodes ended on trailing-drawdown breach before completing the training split. This partial signal warrants review after final evaluation, but does not establish completed-policy failure or success. Readiness remains **NOT READY**.
+
+### Episode-telemetry continuation — 2026-10-14 17:07 UTC
+
+The current live snapshot is [`docs/thesis/live_campaign_snapshot_2026-10-14_1707.json`](../thesis/live_campaign_snapshot_2026-10-14_1707.json), SHA-256 `eb757f5256841f2cc85b14b6bc5775acd4d0f9c1c1d6269b99f2de4185b60500`. It preserves two current-source episode CSVs: nine `ladder_a1_sl` episodes and one `ladder_a1_sl_po3` episode; all ten ended on trailing-drawdown breach before the train split completed. The Idea 1 episode lasted 14,731 steps and logged 69 trades. This partial evidence is a survival warning for review, not a final evaluation or campaign verdict. The campaign remains active, final train/test reports are missing, and readiness remains **NOT READY**.
+
+### Latest continuation observation — 2026-10-14 17:09 UTC
+
+The latest immutable status is [`docs/thesis/live_campaign_snapshot_2026-10-14_1709.json`](../thesis/live_campaign_snapshot_2026-10-14_1709.json), SHA-256 `11132512e5f0e3a5048e0b53fee94552a205794a9d3898f016a631ac99c8cfa8`. It records 18 active workers and archived episode evidence for `ladder_a1_sl` (10 episodes) and `ladder_a1_sl_po3` (one episode); all 11 episodes ended on trailing-drawdown breach before completing the train split. One post-resume 9M checkpoint exists; final metrics and summaries are still missing. This is an interim warning, not a final strategy verdict. Readiness remains **NOT READY**.
+
+### Active campaign update — 2026-10-14 17:11 UTC
+
+The 50.5-minute allocation-scoped sample averages 124.12/122.70 GiB cgroup RAM per node, with recorded peaks of 132.14/132.80 GiB out of 512 GiB; process-tree CPU averages 4.939/4.904 cores; GPU utilization averages 55.2%/54.9% and peaks at 98%; GPU-memory peaks are 60,951/101,645 MiB; sampled OOM events are zero. This remains partial live-run evidence, not final sizing. The machine-readable report is `docs/thesis/live_resource_snapshot_2026-10-14_1710.json` (SHA-256 `b15fa89bce224ac65e063100835ace24fc22d465a2ca6a7007993befcccbc31c)` with immutable raw CSV copies and hashes.
+
+The 17:11 campaign snapshot (`docs/thesis/live_campaign_snapshot_2026-10-14_1711.json`, SHA-256 `50b2558b0c6e27e01107d00ab9245afae3c696f4a81b6acb809c2f8d84ee8bad`) records 18/18 workers active and fresh logs; three numbered continuation checkpoints at 7M–9M; twelve episode records across three variants, all ending in trailing-drawdown breach before completing the train split; and no final metrics or summaries. These data are exploratory progress signals, not final results. Readiness remains **NOT READY**.
+
+### Current allocation and sizing update — 2026-10-14 17:13 UTC
+
+### Active 18-run campaign evidence — 2026-10-14 17:13 UTC
+
+The immutable campaign snapshot [`docs/thesis/live_campaign_snapshot_2026-10-14_1713.json`](../thesis/live_campaign_snapshot_2026-10-14_1713.json), SHA-256 `c9df47a35c5ed838f31969385c9b49b723e3bf99a623ee614ddaa48dd2a3ef12`, records job `20963043` running at 1:09:45/6:00:00, 18/18 workers active, all worker logs fresh, and eight numbered continuation checkpoints. Current dashboard steps range from 5.70M to 9.18M of 20M total; models resumed from 5M–8M checkpoints. Mean added progress is about 0.90M per worker over 54 minutes (about 276 steps/s); a linear projection leaves about 13.4 hours to the 20M target and is not a runtime guarantee. The continuation supervisor is configured to request successive allocations when needed.
+
+The snapshot preserves 14 completed environment episodes across three variants; all ended in trailing-drawdown risk breach, and none completed the full training split. No final metrics or final summaries exist. These are interim training alarms, not the final deterministic train/test evaluations or evidence that the finished policies fail or succeed.
+
+The paired partial resource report [`docs/thesis/live_resource_snapshot_2026-10-14_1713.json`](../thesis/live_resource_snapshot_2026-10-14_1713.json), SHA-256 `7c81adfb211cd90c4f6ed0f7b00800708910d02ad5d8dd56c68c6cf5aab803fc`, covers about 53.6 minutes: mean job-cgroup RAM was 123–124 GiB per 512-GiB node, recorded peaks 132–134 GiB; process-tree CPU averaged about 4.9 cores/node while 45 worker CPUs were requested; GPU utilization averaged 55–56% and peaked at 98–99%; GPU-memory peaks were 61,065 and 101,645 MiB; sampled OOM counters were zero. This is partial resource sizing, not a full-run profile. Readiness remains **NOT READY**.
+
+### Requested CI checks and live campaign refresh — 2026-10-14 17:16 UTC
+
+The default `.venv` could not run on this x86 login host (`Exec format error`); rerunning through the repository's `.venv-x86` succeeded: `ruff format --check .` reported 406 files formatted; `ruff check .` passed; `mypy .` reported no issues in 406 source files; and focused campaign/report/resource tests (`tests/test_triton_resource_sampler.py`, `tests/test_campaign_results_summary.py`, `tests/test_campaign_artifacts.py`) passed 31/31. `git diff --check` passed. No training-source code changed.
+
+The newest point-in-time snapshot is `docs/thesis/live_campaign_snapshot_2026-10-14_1715.json` (SHA-256 `d3d74060630193779b6302dab79f7d4388d751185e2d1fd2b8990dfa4d58eb12`). Job `20963043` was still RUNNING at 1:11:51/6:00:00 with all 18 workers active and fresh logs. Ten numbered checkpoints existed. Fifteen recorded episodes across `ladder_a0_flat_dist`, `ladder_a1_sl`, and `ladder_a1_sl_po3` had all ended on trailing-drawdown breach before the full train split; no final metrics or summary existed. This remains interim evidence, not the final policy decision.
+
+Full-tree format/lint/type and scoped tests are complete for the current docs/evidence work. The requested commit/push remains deferred until the campaign and its continuation watcher are terminal: `campaign_controller.py` fingerprints both the current Git SHA and source-file hashes, so a docs-only commit would change the resume fingerprint even though the worker source hashes still match. Only docs/report artifacts are modified. Do not claim readiness: independent review remains unsigned, the campaign is incomplete, and exposed data remains exploratory. Overall readiness remains **NOT READY**.
+
+### Live campaign refresh — 2026-10-14 17:19 UTC
+
+The point-in-time [campaign snapshot](live_campaign_snapshot_2026-10-14_1719.json), SHA-256 `d0a3fa93bf2382fdd3f4a8f25f5b114523112bf425feb6fb5b3ab1558db3cfee`, records job `20963043` running at 1:15:42/6:00:00, all 18 workers active with fresh logs, 13 numbered checkpoints, and latest dashboard steps from 5.80M to 9.30M of the 20M target. No final metrics or summaries exist.
+
+Nineteen completed environment episodes are currently recorded across three variants; all nineteen ended on trailing-drawdown breach before completing the training split. This is an interim survival signal, not a final evaluation. The paired [resource snapshot](live_resource_snapshot_2026-10-14_1719.json), SHA-256 `a2ddc3fddc59a9c9f39d73074f9c9d4df2509d94a1e2524937a2a888320615cd`, covers about 60 minutes: cgroup RAM averages 123.9–124.8 GiB/node and peaks at 132–134 GiB of 512 GiB; process-tree CPU averages 4.90–4.94 cores/node; GPU utilization averages 55–57% and peaks at 98–99%; VRAM peaks at 61,315 and 101,645 MiB; sampled OOM counts remain zero. This is still a partial run profile. The source fingerprint remains unchanged, and the run is left active under the existing continuation watcher. Readiness remains **NOT READY**.
+
+### Trailing-drawdown terminal adjudication — 2026-10-14 17:23 UTC
+
+A source/config check confirms the observed episode endings are consistent with the configured training guardrail, not evidence of an accidental episode-length cap. All 18 current effective `config.yaml` files set `ftmo.trailing_dd_limit=0.07` and `env.max_episode_steps=null`. For example, A1-SL's effective config is `outputs/gpu_campaigns/ladder18_seed42_20m_policy_migration_nenv64_20261014/runs/attempts/ladder_a1_sl__seed42/attempt1/ladder_a1_sl__seed42/20261014_191951_745461_rl_train_seed42_tcn/config.yaml` (SHA-256 `c36f0f45246c5b417a710c8647fb69d3c99ede8878c9590fd13f5e78a14c0b2b`). `FTMOGuardrails.check_trailing_dd()` ends PPO training episodes when the peak-to-current equity drop reaches 7% of initial balance ($7,000 on $100,000); `TradingEnv._check_guardrails()` terminates episodic training on that breach. Non-episodic evaluation latches the year failure and continues the rollout. The focused `test_trailing_dd_terminates_year_episode` regression reports a pass.
+
+Therefore the episodes' end equity delta from starting balance must not be compared directly to the $7,000 peak-to-trough threshold: prior gains can make peak equity exceed starting balance. The repeated breaches are genuine training-sample survival failures under the configured gate, not a code defect established by current evidence. They remain interim while the policies train; require the eventual full-split train/test reports before making a final policy decision.
+
+### Live continuation and reviewer-boundary refresh — 2026-10-14 17:29 UTC
+
+Slurm job `20963043` remains RUNNING on `gpuarm[1-2]`; all 18 worker logs were updated within five minutes, at 5,884,736–9,572,864 steps of 20M (median 7,277,952). The active campaign manifest records runtime source `c2261ca`; its initial checkpoint lineages preserve their earlier source provenance, primarily `937bae5`. The effective current configs disable both no-trade and interim equity-gate early aborts. The final training-survival gate keeps PnL/slope/activity as metrics and fails on max-loss breach or peak trailing drawdown above 10%; keep the old-checkpoint/current-continuation policy boundary explicit.
+
+The current-source episode CSVs contain 21 completed episodes across three variants. All 21 ended in `trailing_dd` after 7,338–19,575 steps, and none completed the 99,504-step train split. No `train_in_sample.json` or `test_report_only.json` final report exists. This is a stronger interim survival warning, not a final policy verdict. A 1.14-hour resource sample from 16:19:40 to 17:28:11 UTC averages 125.5/125.0 GiB Slurm-cgroup RAM, 4.93/4.90 process-tree CPU cores, and 56.9%/55.5% GPU utilization on the two nodes; reported cgroup peaks are 133.3/135.8 GiB, GPU memory peaks 61,663/101,645 MiB, and sampled OOM counters remain zero. The live sampler CSVs are append-only; the prior immutable 60-minute resource snapshot remains `live_resource_snapshot_2026-10-14_1719.json`. These early-run measurements do not close 20M resource sizing.
+
+The independent-review checklist now reflects this active policy boundary, interim episode evidence, and current allocation sample. External sign-off, final full-split evaluations, viability, a fresh confirmatory holdout, and full-run resource sizing remain open. Overall readiness stays **NOT READY**.
+
+### Training-year reset-semantics audit — 2026-10-14 17:34 UTC
+
+The point-in-time audit [`train_episode_reset_coverage_audit_2026-10-14.json`](../thesis/train_episode_reset_coverage_audit_2026-10-14.json), SHA-256 `8f0e564510cd0cbf481bcc3576e392b603eb6e35a85d5939b6d7910c66f177f9`, inspected the active campaign's 18 effective configs, checkpoint lineage, 22 episode records, and source/runtime hashes. Training calls `make_env` with its default `episodic=True`; `TradingEnv.reset()` sets the cursor to the first eligible NY bar after the observation warmup; risk breaches terminate episodic training; and the vector worker automatically resets a terminated environment. Therefore each completed risk-breached episode restarts at the beginning of the same training split rather than sampling a later start date.
+
+The 22 captured episodes across `ladder_a0_flat_dist`, `ladder_a1_sl`, and `ladder_a1_sl_po3` all ended on `trailing_dd`, covering 7,338–21,414 of 99,504 NY agent steps (7.4%–21.5% of the split); none completed the year. This directly shows repeated-prefix learning for these completed episodes. It does not prove that all 64 environments have terminated or that no other environment reached later dates. The 20M/64 arithmetic remains a nominal 3.14 full-split passes only if episodes reach the end; aggregate budget alone does not establish a full-year training exposure. Final full-split evaluations remain distinct and cannot retroactively supply training exposure. The active campaign is allowed to finish as an exploratory checkpoint continuation, but it cannot be called evidence of a learned full-year trajectory unless the episode telemetry supports that claim.
+
+This exposes an actionable training-design gap for any subsequent run: define and test an episode-sampling/training contract that guarantees exposure across the complete training year despite risk breaches, while preserving the survival gate. Do not alter the active run's fingerprinted code/config. Independent review, full-split final reports, viability, fresh confirmatory data, and full-run resource sizing remain open; readiness stays **NOT READY**.
+
+### Full-split training mode prepared — 2026-10-14 17:44 UTC
+
+An isolated implementation is pushed on branch `codex/full-year-episode-coverage`, commit `5f17bd5` (`Train policies through the full chronological split`). The new default `training.episode_mode: full_split` wires non-episodic full-split behavior into both frame-backed and shared-bundle training. It records risk breaches and applies the existing block-trading rules, then continues through the split boundary; it rejects an artificial `env.max_episode_steps` cap. `risk_terminated` remains available for explicit legacy runs. The full-year breach/data-end regression and mode/config checks pass (28 focused tests); full-tree Ruff format/lint and Mypy pass (406 source files each). This branch is not merged into or loaded by job `20963043`, and no new allocation was requested. A future full-split campaign requires a distinct campaign identity/source fingerprint and separate launch authorization.
+
+### Live campaign check — 2026-10-14 17:45 UTC
+
+Job `20963043` remains RUNNING; all 18 worker logs were fresh, at 6,179,648–9,867,776 steps of 20M (median 7,572,864). A new immutable [`reset-semantics audit`](../thesis/train_episode_reset_coverage_audit_2026-10-14_1745.json), SHA-256 `aa3875d6074b84eb9be7a0b8cf8ba881b6e8d5aa840a5066a9f4a886597979e6`, captures 28 completed episodes across three variants; all ended on `trailing_dd` after 7,338–25,113 steps (7.4%–25.2% of the 99,504-step split), and none completed the split. No final train-in-sample or report-only test report exists. This remains interim evidence; the active run is allowed to continue under its original source identity, but it does not yet demonstrate full-year training exposure. Readiness remains **NOT READY**.
+
+
+### Current A0 action and feature contract audit — 2026-10-14 17:51 UTC
+
+The live `ladder_a0_flat` attempt resolves to `strategy=baseline`, `strategy_actions=false`, `agent_direction_control=false`, DSR reward, and the default feature profile. Its runtime log confirms the hash-validated `baseline.parquet` cache, and the cache manifest contains 194 numeric feature columns (195 observation feature columns) with no PO3/IFVG/FVG/manipulation-named columns. Source/config inspection derives the legacy `Discrete(20)` action space and confirms the PO3 side-lock and open-blackout filtering are gated by strategy actions, so they do not filter A0. The A0 checkpoint lineage also comes from the earlier pure-legacy campaign and resumed at 8M steps. Reproducible details and hashes are in [`a0_current_action_feature_audit_2026-10-14.json`](../thesis/a0_current_action_feature_audit_2026-10-14.json), SHA-256 `2637a60b14496d12f7f29802d16043addfa8834da696e9b794b2ec6e9bdf7887`. This closes the planned current A0 config/action audit only; it is not strategy evaluation. The separate bounded current-source A0 frames/shared-bundle parity result is recorded below.
+
+
+### Resource sample extension — 2026-10-14 17:55 UTC
+
+The immutable [`live resource snapshot`](../thesis/live_resource_snapshot_2026-10-14_1755.json), SHA-256 `0dd5a117a746397072b30e78ee6bedcd9a2cc9289bcf841d9c4d8c76c54aace4`, extends the two-node observation to about 1.58 hours. Cgroup RAM averaged 127.6/127.7 GiB and peaked at 138.6/140.2 GiB of 512 GiB per node; sampled OOM-kill counters remained zero. GPU utilization averaged 58.5%/57.1% and peaked at 99%/98%; VRAM peaked at 61.3/99.3 GiB. Slurm `sstat` AveCPU across the nine 5-CPU worker steps on each node corresponds to about 4.91/4.88 aggregate CPU cores, roughly 10.9%/10.8% of the 45 worker CPUs requested per node. This supports the interim observation that CPU is underused, while GPU use is variable and memory has headroom. It is not a complete campaign sizing or throughput benchmark; do not extrapolate it as full-run safety or speedup evidence.
+
+
+### Corrected A0 frames/shared-bundle parity — 2026-10-14 21:03 Helsinki time
+
+A current-source, A0-only audit passed at the pinned campaign HEAD `c2261ca75f80ab8d6bb0494d847e786557aa9bb7`. Frames-backed and shared-bundle environments matched exactly (`max_scalar_delta=0.0`) over the 49,925-step exposed test-calendar trace and a 10,000-step active-action trace; the latter opened 46 trades and produced 93 trade-log rows. Both environments used 194 numeric features and observation shapes account `[6]`, sequence `[60,195]`, and sequence mask `[60]`; the active run's action contract is `Discrete(20)`. The JSON report is [`a0_frames_bundle_parity.json`](../../outputs/gpu_campaigns/readiness_reaudit_20261014/a0_current_parity/a0_frames_bundle_parity.json), SHA-256 `6d40de0e4429ed2db0ce7016b0583d8362374f40a373834cea5df793c0921f86`; the one-variant driver is retained beside it, SHA-256 `81897d053d5ef7ee4190c8bb9e7e4421d6842dc63267d413f66e0b24527c094e`. This closes the corrected-A0 parity check only. It does not establish exhaustive state equivalence, performance, viability, full-year training exposure, or parity for every other current-source variant. The live 18-run campaign remains separate and active.
+
+
+### Live campaign and continuation-fingerprint refresh — 2026-10-14 19:39 UTC
+
+Slurm job `20963043` is RUNNING at 3:35:47/6:00:00 on `gpuarm1` and `gpuarm2`, with one GH200 GPU, 48 CPUs and 512 GiB per node. All 18 worker logs were updated between 19:37:01 and 19:39:58 UTC. Logged PPO progress is 7,850,816–12,521,984 of 20M steps (median 9,735,552); the slowest worker's latest rate is 248 FPS, or about 13.61 hours remaining at that rate. This is a rough per-worker projection, not a completion guarantee. No final train-in-sample or report-only test evaluation artifacts exist.
+
+The `thesis-organizer:campaign-chain` watcher remains live and is waiting for this job to end, then for two idle GH200 nodes with at least 512 GB each before invoking the existing 18-way resume supervisor. No follow-up allocation is currently queued. The active campaign still uses source commit `c2261ca`; the full-split fix at `5f17bd5` is isolated and is not loaded. The latest episode-coverage audit is still the 17:45 report: its 28 recorded episodes all ended at trailing drawdown before the training-split end. This run therefore remains exploratory and does not yet prove the requested full-year training exposure.
+
+The pending worktree changes affect docs/evidence only. Resume validation was checked in `scripts/matrix/campaign_controller.py`: the campaign fingerprint includes both `git_sha` and source-file hashes, so even a docs-only commit would change the fingerprint and make the automatic `--resume` fail. Keep `HEAD` pinned until the campaign and its watcher are terminal; then run the requested commit/push gate. Overall readiness remains **NOT READY**.
+
+
+### Three-trainer versus 18-trainer throughput comparison — 2026-10-14 19:40 UTC
+
+The earlier `ladder3_shared_bundle_n64_seed42_20m_20261014` run (`20944844`) logged 1,256, 1,306 and 1,455 FPS for its three workers, a summed 4,017 environment steps/s. It used `n_envs=64`, shared bundles, two GH200 GPUs on one node, and 32 CPUs per worker; those rates were recorded around 0.98M–1.18M steps and the short resource sample lasted about 15 minutes. The current `ladder18_seed42_20m_policy_migration_nenv64_20261014` run (`20963043`) logged 247–385 FPS across 18 workers (median 319.5; sum 5,486 steps/s), with nine workers sharing each of two GH200 GPUs and five CPUs requested per worker. The current aggregate rate is about 37% above the old three-worker aggregate, even though per-worker FPS is about four times lower. This is indicative, not a controlled benchmark: the runs have different source commits, and the old and current pure-baseline `ladder_a0_flat` configs differ in `strategy_actions`.
+
+The short old-run sample measured 45.3% mean GPU utilization (87% peak), about 5.15 CPU cores for the allocation, and a 69.4 GB allocation memory peak. The current 1.58-hour sample measured 57–59% mean GPU utilization (98–99% peak), about 4.9 CPU cores per node against 45 worker CPUs requested per node, and 127.6–127.7 GiB average / 138.6–140.2 GiB peak RAM per 512-GiB node. These observations do not show system-wide CPU or RAM exhaustion. The source builds `n_envs=64` with SB3 `SubprocVecEnv` ([`agent.py`](../../quant_rl/models/agent.py#L130)); the current sampler counted about 615 processes per node, consistent with heavy vector-worker scheduling. The most visible changes are nine trainers per GPU versus roughly 1.5 before, and 5 versus 32 CPUs allocated per trainer. GPU sharing plus CPU-side rollout/synchronization likely explain much of the per-worker slowdown, but sampled CPU is low and no CPU-throttle counters were captured, so this does not prove CPU quota exhaustion. The full allocation and exact worker logs are retained under the two campaign directories. Do not infer that raising per-worker CPU requests or RAM will restore 1,000+ FPS, and do not call the GPU compute-saturated from peak-only utilization. This resource comparison is not training-performance evidence.
+
+### Live resource follow-up — 2026-10-14 19:49 UTC
+
+The active allocation's sampler now spans 3.49 hours. The immutable report [`live_resource_snapshot_2026-10-14_1949.json`](../thesis/live_resource_snapshot_2026-10-14_1949.json), SHA-256 `3143b15ff663449fa8db1fd026fa4636500e50846f9f010ed7e3440984a756ba`, preserves the raw CSV snapshots and calculations. Per-node cgroup RAM averaged 137.88/138.77 GiB and peaked at 159.99/161.90 GiB by the cgroup peak counter, within 512 GiB; process-tree CPU averaged 4.92/4.89 cores; GPU utilization averaged 58.7%/59.0% with 99%/100% sampled peaks; sampled VRAM peaks were 65.87/99.26 GiB; sampled OOM kills were zero. This interval supports RAM headroom and low aggregate CPU use, but it does not measure CPU throttling/pressure and cannot isolate CPU scheduling from GPU sharing as the FPS bottleneck. The job remains active and the run comparison remains uncontrolled. Treat the sample as incomplete resource-sizing evidence, not proof of final safety or training quality.
+
+### Live year-coverage follow-up — 2026-10-14 19:50 UTC
+
+The immutable [`live campaign snapshot`](../thesis/live_campaign_snapshot_2026-10-14_1950.json), SHA-256 `1f38c5eb626741a3221c96ebe879e147dc8369e1976c2b0eb34e6db3da9110af`, records all 18 worker logs and eight available current-source episode telemetry files at 19:50 UTC. Those files contain 225 completed episodes, all ending on `trailing_dd` at 7,338–71,857 steps; none reached the complete 99,504-step training split. Ten variants had no telemetry file at capture, so no result is inferred for them. This is interim negative survival evidence for recorded episodes, not a final policy verdict. No final train-in-sample or test-report-only evaluations exist. The same snapshot flags `campaign_status.json` as stale at 16:19:40 UTC; the generated 22:50 summary that consumed it has been explicitly marked superseded. Use live Slurm state and archived worker/episode evidence for current status. Overall readiness remains **NOT READY**.
+
+### Trainer throughput optimization
+
+See [`trainer_speed_optimization_plan.md`](trainer_speed_optimization_plan.md) for the staged profile and controlled scaling plan. It uses aggregate steps/s for campaign-time decisions and keeps throughput evidence separate from policy-quality and readiness claims. No active campaign settings have been changed.
+
+### Restart decision — 2026-10-15
+
+The old 20M checkpoints were trained with early risk-terminal resets and did
+not complete the chronological training split. The current implementation
+changes episode semantics to `full_split`, so the next comparison starts from
+scratch rather than carrying those weights forward. The new run is
+`ladder18_seed42_20m_full_split_n64_20261015`: 18 variants, one seed (42),
+20M steps per variant, shared bundle, 64 environments, train and test
+evaluations, and selection-acknowledged use of the previously inspected 2026
+interval. No profitability gate or 50-trade pass condition was added.
+
+The exact campaign spec and restart-safe allocation commands are
+[`18_variant_seed42_20m_full_split_n64_20261015.yaml`](../../config/campaigns/18_variant_seed42_20m_full_split_n64_20261015.yaml),
+[`allocation runner`](../../scripts/matrix/run_campaign_18way_full_split_allocation.sh),
+and [`allocation supervisor`](../../scripts/matrix/run_campaign_18way_full_split_supervisor.sh).
+Dry-run validation passed: 18 workers, nine per node, five requested CPUs per
+worker, one GH200 per node, 360M total requested steps. The full pytest suite
+passed 1,465 tests; full-tree Ruff format/lint and Mypy passed.
+
+The new two-node GH200 Slurm request `20973488` is queued, not allocated,
+because `gpuarm2` is down after a reboot timeout. `gpuarm1` is idle. Leave the
+request pending and resume the fresh campaign once both nodes are available.
+Readiness remains **NOT READY** until the campaign finishes and its full-year
+train episodes, train/test reports, and policy gates are reviewed. Results on
+the exposed 2026 interval remain exploratory, not confirmatory.

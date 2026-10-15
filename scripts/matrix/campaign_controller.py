@@ -14,6 +14,7 @@ import hashlib
 import importlib.metadata
 import json
 import math
+import numbers
 import os
 import pathlib
 import platform
@@ -30,6 +31,7 @@ from typing import Any, TextIO, cast
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEFAULT_VARIANTS = ROOT / "scripts" / "variant_list.txt"
 STOP = False
+_CACHE_FILE_HASHES: dict[tuple[str, int, int, int], str] = {}
 
 
 def utc() -> str:
@@ -268,6 +270,25 @@ def sha256_file(path: pathlib.Path) -> str:
         for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def cached_sha256_file(path: pathlib.Path) -> str:
+    """Hash a shared campaign cache once per unchanged file identity."""
+    stat = path.stat()
+    identity = (str(path.resolve()), stat.st_ino, stat.st_size, stat.st_mtime_ns)
+    digest = _CACHE_FILE_HASHES.get(identity)
+    if digest is None:
+        digest = sha256_file(path)
+        _CACHE_FILE_HASHES[identity] = digest
+    return digest
+
+
+def action_space_matches_width(action_space: Any, width: int) -> bool:
+    """Check vector and legacy discrete action spaces without conflating them."""
+    discrete_width = getattr(action_space, "n", None)
+    if isinstance(discrete_width, numbers.Integral):
+        return int(discrete_width) == width and tuple(getattr(action_space, "shape", ())) == ()
+    return getattr(action_space, "shape", None) == (width,)
 
 
 def campaign_source_files(
@@ -533,8 +554,80 @@ def verify_run_artifacts(
             if isinstance(gate, dict) and isinstance(gate.get("reason"), str):
                 reason += f": {gate['reason']}"
             return False, reason
+        # The cache sidecar is intentionally a 16-hex content key produced by
+        # feature_cache_content_hash(); the full parquet SHA-256 is recorded
+        # separately in run_manifest.json. Requiring 64 characters here made
+        # every otherwise-complete run fail artifact admission.
         cache_hash = payload.get("feature_cache_hash")
-        if not isinstance(cache_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", cache_hash):
+        cache_name = payload.get("feature_cache_name")
+        manifest_names = payload.get("run_manifests")
+        if (
+            not isinstance(cache_hash, str)
+            or not re.fullmatch(r"[0-9a-f]{16}", cache_hash)
+            or not isinstance(cache_name, str)
+            or not cache_name
+            or not isinstance(manifest_names, list)
+            or not manifest_names
+            or any(not isinstance(name, str) or not name for name in manifest_names)
+        ):
+            continue
+        cache_manifest_checkpoint_hash: str | None = None
+        cache_manifest_valid = True
+        for name in manifest_names:
+            manifest_path = (path.parent / name).resolve()
+            try:
+                manifest_path.relative_to(path.parent.resolve())
+                run_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                cache_manifest_valid = False
+                break
+            if not isinstance(run_manifest, dict):
+                cache_manifest_valid = False
+                break
+            feature_cache = run_manifest.get("feature_cache")
+            checkpoint_manifest = run_manifest.get("checkpoint")
+            config_manifest = run_manifest.get("config")
+            if not isinstance(feature_cache, dict):
+                cache_manifest_valid = False
+                break
+            if not isinstance(checkpoint_manifest, dict):
+                cache_manifest_valid = False
+                break
+            if not isinstance(config_manifest, dict):
+                cache_manifest_valid = False
+                break
+            cache_path_text = feature_cache.get("path")
+            cache_file_hash = feature_cache.get("file_sha256")
+            if (
+                feature_cache.get("identity") != cache_name
+                or feature_cache.get("sha256") != cache_hash
+                or not isinstance(cache_path_text, str)
+                or not isinstance(cache_file_hash, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", cache_file_hash)
+                or config_manifest.get("sha256") != payload.get("effective_config_sha256")
+                or not isinstance(checkpoint_manifest.get("sha256"), str)
+                or not re.fullmatch(r"[0-9a-f]{64}", checkpoint_manifest["sha256"])
+            ):
+                cache_manifest_valid = False
+                break
+            cache_path = pathlib.Path(cache_path_text)
+            sidecar_path = pathlib.Path(str(cache_path) + ".hash")
+            try:
+                if (
+                    not cache_path.is_file()
+                    or sidecar_path.read_text(encoding="utf-8").strip() != cache_hash
+                    or cached_sha256_file(cache_path) != cache_file_hash
+                ):
+                    cache_manifest_valid = False
+                    break
+            except OSError:
+                cache_manifest_valid = False
+                break
+            if cache_manifest_checkpoint_hash not in (None, checkpoint_manifest["sha256"]):
+                cache_manifest_valid = False
+                break
+            cache_manifest_checkpoint_hash = checkpoint_manifest["sha256"]
+        if not cache_manifest_valid:
             continue
         feature_columns = payload.get("feature_columns")
         schema_hash = payload.get("feature_schema_sha256")
@@ -578,6 +671,8 @@ def verify_run_artifacts(
         model_file = path.parent / "model" / "ppo_final.zip"
         if not model_file.is_file() or model_file.stat().st_size == 0:
             continue
+        if cache_manifest_checkpoint_hash != sha256_file(model_file):
+            continue
         try:
             with zipfile.ZipFile(model_file) as archive:
                 if archive.testzip() is not None:
@@ -597,8 +692,7 @@ def verify_run_artifacts(
             model = model_class.load(model_file, device="cpu")
             if int(model.num_timesteps) < expected_steps:
                 continue
-            action_shape = getattr(model.action_space, "shape", None)
-            if action_shape != (payload["action_space_width"],):
+            if not action_space_matches_width(model.action_space, payload["action_space_width"]):
                 continue
             model_obs = getattr(model.observation_space, "spaces", {})
             model_obs_shapes = {
