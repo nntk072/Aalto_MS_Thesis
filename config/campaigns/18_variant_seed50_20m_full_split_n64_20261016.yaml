@@ -1,5 +1,5 @@
 schema_version: 1
-campaign_id: ladder18_seed50_20m_full_split_n64_20261016
+campaign_id: ladder18_seed50_20m_full_split_n64_mainplan_20261016
 variant_file: scripts/variant_list.txt
 variants:
   - ladder_a0_flat

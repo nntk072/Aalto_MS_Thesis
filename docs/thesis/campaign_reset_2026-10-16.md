@@ -18,7 +18,17 @@
 
 ## Replacement run
 
+- Original seed-50 campaign: `ladder18_seed50_20m_full_split_n64_20261016`,
+  submitted from source commit `f65e6ff` as Slurm job `20981489` before the master
+  plan was merged. The user authorized stopping it so the plan could be merged
+  before restarting. The supervisor and its `srun` child were interrupted with
+  signals; `scancel` was not used. The job is absent from `squeue`. Its output,
+  logs, and checkpoints were preserved. The manifest's last persisted worker
+  states say `running`; treat those states as stale because the controller was
+  interrupted. A separate `interruption.json` records this status. No PPO step
+  checkpoint was found, so this is a fresh restart rather than a checkpoint resume.
 - New campaign spec: `config/campaigns/18_variant_seed50_20m_full_split_n64_20261016.yaml`
+  (new campaign ID `ladder18_seed50_20m_full_split_n64_mainplan_20261016`)
 - Identity follows the master plan's new-run policy: seed 50, 20M steps per
   variant, full-split episodes, `n_envs=64`, shared-bundle data, and the same 18
   registered variants. It has a separate output identity and does not resume seed 42.
@@ -26,6 +36,8 @@
 - Verification before launch: all 18 identities resolved in campaign dry-run;
   `ruff format --check .`, `ruff check .`, `mypy .`, and
   `pytest tests/test_rollout.py -q` passed.
-- The new Slurm run is launched only after this source/config state is committed to
-  `main`; its campaign manifest is the operational source for the live job ID and
-  runtime status.
+- The master plan and Triton operating rules are merged and pushed to `main` at
+  `5aeb68f4aacab774df4fc78dd1940b16b51500b7`. This updated spec must also be
+  committed before launch so the new campaign fingerprint matches the final
+  source/config state. The resulting campaign manifest is the operational source
+  for its live job ID and runtime status.
