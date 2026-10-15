@@ -1,10 +1,11 @@
 # Aalto Thesis Trading System — Master Project Execution Plan
 
-**Status:** ACTIVE — thesis evidence is not yet frozen  
-**Revision:** 2026-10-16  
-**Authority:** This file is the single operational roadmap for the remaining thesis, experiment, infrastructure, writing, review, and archival work.  
-**Primary objective:** Complete a defensible, reproducible empirical master’s thesis by the supervisor-PDF target of **2026-11-09** and the faculty submission deadline of **2026-11-23**, without sacrificing correctness or inventing evidence.  
-**Execution principle:** Parallelize independent work aggressively; serialize anything that depends on an unresolved scientific decision, changes a shared experimental control, or competes for a resource whose contention would invalidate a measurement.
+**Status:** ACTIVE — empirical results package is not yet frozen
+**Revision:** 2026-10-16 — single-agent horizontal-execution profile
+**Authority:** This file is the single operational roadmap for the remaining experiment, correctness, infrastructure, evaluation, evidence, review, and archival work.
+**Primary objective:** Produce a defensible, reproducible **results package** containing the complete logs, checkpoints, raw evaluations, statistics, figures/tables, provenance, failures, and finding summaries required to write the thesis afterward. Thesis prose is downstream work, not part of the Codex agent's execution scope.
+**Deadline context:** The results package should be frozen early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**, but the agent should optimize for valid evidence rather than drafting chapters.
+**Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
 ---
 
@@ -13,13 +14,13 @@
 This roadmap is self-contained. Every active task must map to a work package,
 entry condition, acceptance criterion, or explicit extension below. Supporting
 logs, manifests, tests, checkpoints, data hashes, reports, review records, and
-thesis files are evidence; they do not create independent work queues.
+results artifacts are evidence; they do not create independent work queues.
 
 For every task:
 
 1. identify the work package and its dependency state;
-2. state whether the task is scientific, correctness, infrastructure, writing,
-   review, or optional extension work;
+2. state whether the task is scientific, correctness, infrastructure, training,
+   evaluation, evidence, review, or optional extension work;
 3. preserve immutable run evidence and active experiment identities;
 4. make the smallest change needed to answer the registered question;
 5. measure the result before broadening scope;
@@ -67,9 +68,31 @@ claims actually retained in the thesis:
 A negative or inconclusive result can satisfy this state. Profitability is not
 a definition of thesis completion.
 
-### 2.3 `THESIS_PACKAGE_READY`
+### 2.3 `RESULTS_PACKAGE_COMPLETE`
 
-`THESIS_EVIDENCE_COMPLETE` plus:
+This is the terminal state for the long-running Codex agent goal. It requires
+`THESIS_EVIDENCE_COMPLETE` plus a complete, machine-indexed handoff package:
+
+- every thesis-relevant run has its resolved config, command, source/data/cache identity,
+  stdout/stderr/Slurm/controller logs, training traces, checkpoint(s), hashes, and load checks;
+- every valid run has deterministic raw evaluation outputs, including equity, positions, fills,
+  breaches, actions/behavior summaries, reward components where available, and cost-stress outputs
+  where applicable;
+- every comparison has seed-level tables plus aggregate statistics/uncertainty appropriate to its
+  evidence role;
+- all final figures and table-source files are generated from frozen machine-readable artifacts;
+- every failed, incomplete, inactive, or zero-trade attempt is retained with an explicit disposition;
+- every empirical finding has a result card linking the claim boundary to exact evidence paths;
+- a global result manifest maps RQ/question -> run IDs -> checkpoints -> raw outputs -> statistics ->
+  figure/table artifacts -> allowed interpretation;
+- the archive can be understood without tmux history, shell scrollback, or reconstructing human memory.
+
+**Codex agent stops its research-critical mission here.** It may generate concise result summaries and
+artifact indexes, but it does not need to draft thesis chapters to satisfy this roadmap.
+
+### 2.4 `THESIS_PACKAGE_READY`
+
+`RESULTS_PACKAGE_COMPLETE` plus downstream thesis-authoring work:
 
 - Chapter 8 contains real, traceable results rather than placeholders;
 - Discussion, Conclusions, Introduction, and Abstract use exactly the same
@@ -81,16 +104,16 @@ a definition of thesis completion.
   disclosure, references, appendices, and reproducibility notes are complete;
 - the final PDF builds cleanly and has been visually inspected.
 
-### 2.4 `SUBMISSION_COMPLETE`
+### 2.5 `SUBMISSION_COMPLETE`
 
 The supervisor-review cycle is closed, the final submission package is frozen,
 and the faculty version has been submitted with its evidence archive retained.
 
-### 2.5 `RESEARCH_EXTENSION_COMPLETE`
+### 2.6 `RESEARCH_EXTENSION_COMPLETE`
 
 The Q0–Q7 program has reached a declared stopping point with reproducible
 control/treatment decisions for every executed stage. This is **not** required
-for `THESIS_PACKAGE_READY` unless a Q-stage result is deliberately promoted
+for `RESULTS_PACKAGE_COMPLETE` unless a Q-stage result is deliberately promoted
 into the thesis claim set before the thesis evidence freeze.
 
 ---
@@ -393,19 +416,24 @@ provenance that never existed.
   cgroup limit.
 - Throughput is judged by reliable aggregate completed timesteps/hour and
   end-to-end experiment makespan, not individual worker FPS alone.
+- For the active 18-worker full-split screen, the approved shape is two nodes,
+  one GH200 per node, 48 CPUs and 512 GiB per node, with 18 workers at five
+  CPUs each (`n_envs=64`, shared bundle). This is a campaign-specific setting,
+  not a universal allocation request; keep the two GPUs distributed across the
+  two nodes and re-check the actual queue and cgroup limits before future jobs.
 
 
-### 4.13 Mandatory per-run thesis evidence bundle
+### 4.13 Mandatory per-run results evidence bundle
 
-Every training/evaluation attempt that can influence the thesis must leave a durable
+Every training/evaluation attempt that can influence the final results must leave a durable
 artifact bundle. This is mandatory for successful, failed, incomplete, inactive, and
-zero-trade runs. A result is not thesis-usable if the number survives but its run
+zero-trade runs. A result is not results-package-usable if the number survives but its run
 identity, logs, config, checkpoint, or raw records do not.
 
 Recommended structure (names may vary, contents may not):
 
 ```text
-outputs/thesis_evidence/<experiment_id>/<attempt_or_seed>/
+outputs/results_evidence/<experiment_id>/<attempt_or_seed>/
   manifest.json
   artifact_index.json
   resolved_config.yaml
@@ -445,8 +473,8 @@ outputs/thesis_evidence/<experiment_id>/<attempt_or_seed>/
     equity_curve.*
     drawdown_curve.*
     activity_or_action_plot.*
-    additional_thesis_figures.*
-  thesis/
+    additional_result_figures.*
+  results/
     finding.md
     table_rows.csv
 ```
@@ -467,11 +495,12 @@ For a failed run with no checkpoint, retain the manifest, resolved config, comma
 logs, failure reason, completed step count, and any partial artifacts. Failure evidence is
 part of the experiment ledger, not disposable noise.
 
-### 4.14 Thesis finding card: the writing interface
+### 4.14 Result finding card: the thesis-writing handoff interface
 
-Every completed work package or empirical run that produces a thesis-relevant
+Every completed work package or empirical run that produces a result-relevant
 finding must also create/update a short machine-linkable `finding.md`. Its purpose is
-to let thesis writing start immediately without rereading raw logs. Each finding card
+to make the final results package self-explanatory so thesis writing can happen afterward without
+rereading raw logs. The agent produces the evidence summary, not chapter prose. Each finding card
 must contain:
 
 1. **Finding ID and status:** `verified`, `negative`, `inconclusive`, `inactive`,
@@ -487,11 +516,11 @@ must contain:
 8. **Allowed claim:** the strongest wording the evidence supports.
 9. **Forbidden overclaim / limitations:** e.g. single-seed, exposed OOS, confounded
    action space, incomplete run, or system-level comparison only.
-10. **Thesis destination:** chapter/section/table/figure where the finding belongs.
-11. **One-paragraph interpretation:** concise text that can seed the Results or
-    Discussion draft, but remains subordinate to the raw artifacts.
+10. **Likely thesis destination:** candidate chapter/section/table/figure where the finding belongs.
+11. **One-paragraph evidence interpretation:** concise factual interpretation of what the
+    result supports and does not support; this is a handoff note, not thesis prose.
 
-Single-seed seed-50 findings can therefore enter Chapter 8 as clearly labelled
+Single-seed seed-50 findings are therefore preserved as clearly labelled
 **screening/system-behaviour evidence** while the final >=5 paired-seed conclusion is
 still pending. When P7 completes, the final paired finding card supersedes only the
 headline robustness/causal conclusion; it does not erase valid implementation,
@@ -513,11 +542,10 @@ Treat this as a planning snapshot, not live cluster telemetry.
    one discovery seed, 20M PPO timesteps, `n_envs=64`, shared-bundle backend.
    Treat it as in progress until all 18 identities are reconciled to terminal
    artifacts.
-3. Final deterministic evaluation has a real compatibility defect in this
-   snapshot: the training-side common evaluator passes observation-schema
-   arguments that the evaluator signature does not currently accept/forward.
-   This is an immediate recovery blocker, not a reason to discard valid trained
-   checkpoints.
+3. The evaluator observation-schema forwarding defect was fixed in main commit
+   `f65e6ff` and its focused regression passed. P2 implementation is in place;
+   end-to-end deterministic recovery from a real saved checkpoint remains open.
+   Repair evaluation and recover valid checkpoints instead of retraining them.
 4. The 2026 report interval has been inspected and is permanently exposed.
    No pristine confirmatory holdout is currently available in the retained
    dataset.
@@ -552,12 +580,12 @@ Treat this as a planning snapshot, not live cluster telemetry.
 
 Therefore the immediate objective is **not to design more model families**. It
 is to finish/reconcile the current screen, make final evaluation trustworthy,
-freeze a valid matched thesis experiment, and obtain the evidence needed to
-complete the manuscript.
+freeze a valid matched experiment, and obtain the complete evidence package needed
+for thesis writing afterward.
 
 ---
 
-## 6. Dependency graph: start to finish
+## 6. Dependency graph: Codex agent horizontal execution to results freeze
 
 ```text
                           ┌─────────────────────────────────────┐
@@ -567,18 +595,18 @@ complete the manuscript.
                     ┌──────────────────────┼────────────────────────┐
                     │                      │                        │
                     ▼                      ▼                        ▼
-          P1 Finish/reconcile      P2 Evaluation/report     W0 Thesis non-result
-          18-way screening         fix in isolation         chapters + templates
+          P1 Finish/reconcile      P2 Evaluation/report      E0 Evidence/result
+          18-way screening         fix in isolation          pipeline + indexes
                     │                      │                        │
-                    └──────────────┬───────┘                        │
-                                   ▼                                │
-                        P3 Canonical screen reports                 │
-                                   │                                │
-                                   ▼                                │
-                     P4 G0-G3 validity/evidence audit ◄────────────┘
+                    └──────────────┬───────┴──────────────┬─────────┘
+                                   ▼                      │
+                        P3 Canonical screen reports       │
+                                   │                      │
+                                   ▼                      │
+                     P4 G0-G3 validity/evidence audit ◄──┘
                                    │
                                    ▼
-                       P5 Freeze thesis experiment
+                       P5 Freeze final experiment
                     RQ1 matched pair + claim boundaries
                                    │
                          ┌─────────┴──────────┐
@@ -588,36 +616,32 @@ complete the manuscript.
                          │                    │
                          └─────────┬──────────┘
                                    ▼
-                 P7 Paired seeds + cost robustness
+                 P7 Final paired seeds + cost robustness
                                    │
                          ┌─────────┴──────────┐
                          ▼                    ▼
-                    S0 Statistics       W1 Results writing
-                    + final figures     as seeds finish
+                    S0 Statistics       E1 Result aggregation
+                    + final figures     + finding cards/index
                          └─────────┬──────────┘
                                    ▼
-                       P8 Thesis evidence freeze
+                       P8 Evidence/review freeze
                                    │
                                    ▼
-                      P9 Complete full thesis PDF
+                   P9 RESULTS_PACKAGE_COMPLETE
                                    │
                                    ▼
-                    P10 Supervisor PDF — 2026-11-09
+             downstream thesis writing / PDF assembly by author
                                    │
                                    ▼
-                    P11 Feedback + final submission
+                    Supervisor PDF — 2026-11-09
                                    │
                                    ▼
                     Faculty submission — 2026-11-23
-                                   │
-                                   ▼
-                  P12 Archive / defense / optional Q0-Q7
 ```
 
-The Q0–Q7 research program is deliberately outside the default thesis critical
-path. A Q-stage may run earlier only under the explicit rules in Part II.
-
----
+The default Codex agent mission ends at **P9 `RESULTS_PACKAGE_COMPLETE`**. Thesis prose,
+formatting, and PDF assembly are downstream work. The Q0–Q7 research program is
+deliberately outside the default results-critical path unless explicitly promoted.
 
 ## 7. Parallelization and resource-lock rules
 
@@ -635,8 +659,8 @@ A task is parallel-safe only if all are true:
 
 - evaluator/schema fix while PPO training continues;
 - numerical-report/postprocess tooling while training continues;
-- Methods/Data/Environment/Evaluation/Reproducibility writing while experiments
-  continue;
+- evidence-bundle tooling, raw-output validators, result tables, and figure-generation code
+  while experiments continue;
 - independent reviewer package preparation while G0–G3 evidence is assembled;
 - deterministic statistics/figure code against already-finished seed artifacts
   while other seeds run;
@@ -651,18 +675,209 @@ A task is parallel-safe only if all are true:
 - final matched robustness before RQ1 control/treatment semantics are frozen;
 - throughput benchmarking of competing configurations on hardware where they
   interfere with one another;
-- final claim writing before the corresponding result is frozen;
+- final result aggregation/claim disposition before the corresponding result is frozen;
 - fresh-holdout evaluation before selection and trial accounting are locked.
 
 ---
 
-# PART I — THESIS-CRITICAL EXECUTION
+## 7A. Codex agent long-running horizontal operating protocol
+
+This protocol is for **one long-running Codex agent** handling work across long-running
+training and evaluation jobs. The agent coordinates and works across independent lanes rather than
+executing one serial task at a time.
+
+### 7A.1 Never-idle invariant
+
+If a training job is running and any independent task is `READY`, the agent works on that task. Waiting
+for compute is valid only when every remaining task is genuinely blocked by that compute result.
+Training time should overlap with evaluator work, correctness tests, recovery tooling, evidence
+packaging, statistics code, result figures, provenance checks, and review preparation.
+
+### 7A.2 Persistent control state
+
+Maintain one compact machine-readable/Markdown control record alongside outputs, for example
+`outputs/agent_state/current_status.md` plus `outputs/agent_state/state.json`. This is **not another
+roadmap**. It records only:
+
+- current master-plan revision/hash;
+- active package and lane;
+- READY / RUNNING / BLOCKED / DONE tasks;
+- active training/evaluation job identities and immutable fingerprints;
+- last verified checkpoint/result per run;
+- blockers and exact unblock condition;
+- next three highest-priority actions;
+- last full CI/evaluator/evidence-pipeline validation state.
+
+Update this control state after every meaningful terminal event, launch, failure, merge, experiment
+freeze, or evidence seal. This makes context compaction/restart recoverable without rereading the
+repository or guessing what happened.
+
+### 7A.3 Atomic execution units
+
+Break work into units that can be verified independently: one bug/fix, one contract test set, one
+run reconciliation, one evaluator recovery, one evidence bundle, one statistics output, one launch
+matrix, one review disposition. Each unit ends with:
+
+`change/result -> validation -> artifact paths -> status update -> next dependency`.
+
+Do not keep large unvalidated working changes open merely because the agent can run continuously.
+
+### 7A.4 Source and resource isolation
+
+- active training source/config/data/cache fingerprints are immutable;
+- correctness/evaluator/runtime changes use isolated worktrees/branches or otherwise proven-safe
+  boundaries until merged;
+- a benchmark never competes with critical training if contention would invalidate its result;
+- evaluation/post-processing may use spare resources only when it cannot materially slow the active
+  scientific campaign;
+- the agent never assumes that an interactive allocation will persist indefinitely: checkpoint/resume and
+  durable logs must make scheduler interruption recoverable.
+
+### 7A.5 Training-aware event loop
+
+While long jobs run, the agent cycles through event-driven work rather than polling constantly:
+
+1. verify active jobs have durable identity/log/checkpoint paths;
+2. work the highest-priority independent READY unit;
+3. when a run becomes terminal, immediately classify and seal its evidence bundle;
+4. evaluate/recover that checkpoint if the evaluator path is ready;
+5. update aggregate screen/final-pair status and dependency gates;
+6. launch the next authorized run only if its scientific/runtime inputs are frozen;
+7. return to independent READY work;
+8. if **no independent READY unit exists**, enter `WAITING_COMPUTE` instead of spending model tokens on repetitive status polling.
+
+### 7A.6 Quiet-wait and adaptive polling protocol
+
+`Never-idle` does **not** mean `never-sleep`. When every useful lane is blocked only by running
+training/evaluation jobs, the agent must deliberately pause model activity. A long-running campaign must
+not cause one-minute conversational/model turns such as “training is still running at 1.xxx”.
+
+#### Event-first rule
+
+Prefer external/job-state events over model-driven polling whenever the execution environment permits
+it. A watcher or scheduler-side process may record job state, timestamps, checkpoint creation, and
+terminal status into a compact machine-readable file. The model should read that state only when it
+wakes; the watcher itself must not require repeated model inference.
+
+#### Polling cadence when event notification is unavailable
+
+Use coarse adaptive polling based on expected run duration and observed progress:
+
+- **launch health check:** once after roughly 2–5 minutes, only to catch immediate startup/config/data failures;
+- **early stabilization check:** once around 15–30 minutes if the job is still expected to run for hours;
+- **steady-state training:** normally no more than once every **45–90 minutes** for multi-hour jobs;
+- **very long stable runs (>8 h remaining):** polling may stretch to **90–120 minutes**;
+- **near expected completion:** shorten to roughly **15–30 minutes** only when the latest measured rate places completion within about one hour;
+- **known checkpoint boundary / scheduler wall-time boundary:** wake shortly after that boundary to validate checkpoint/resume state;
+- **failure signal or terminal transition:** wake immediately when such an event is externally available.
+
+These are upper-level defaults, not reasons to wake the model unnecessarily. If a robust external
+watcher can detect terminal state, prefer sleeping until that event.
+
+#### Token-saving status discipline
+
+During `WAITING_COMPUTE`:
+
+- do **not** emit repetitive user-facing or internal prose updates;
+- do **not** reread full logs; query only compact state (`squeue`/`sacct` summary, one-line progress,
+  file existence/mtime/size, or a small `tail`) needed to decide whether an event occurred;
+- do **not** rewrite `current_status.md` merely because elapsed time changed;
+- update persistent control state only on a meaningful event: launch health confirmed, checkpoint
+  sealed, rate materially changed, failure, resume, terminal completion, evaluator completion,
+  evidence seal, or dependency-gate transition;
+- avoid recalculating ETA every poll unless throughput materially changed;
+- avoid re-summarizing unchanged findings into model context.
+
+A quiet poll that finds no meaningful state change should end immediately without generating a new
+analysis narrative.
+
+#### Sleep-state record
+
+Before pausing, the agent writes only the minimal durable fields needed for recovery:
+
+```text
+state = WAITING_COMPUTE
+blocking_jobs = [...]
+last_verified_event = ...
+last_progress_sample = ...
+expected_next_event = ...
+next_check_not_before = ...
+wake_conditions = [terminal, failure, checkpoint_boundary, scheduled_coarse_check]
+next_ready_action_after_wake = ...
+```
+
+This state is enough for context compaction or model restart. No minute-by-minute history belongs in
+the control file or conversational context.
+
+#### Example for an approximately 14-hour 20M run
+
+A healthy long run might require model attention approximately at:
+
+```text
+launch
+  -> +3 min startup health
+  -> +20 min stabilization
+  -> +60–90 min coarse check
+  -> then every ~60–120 min while stable
+  -> ~30 min cadence only near estimated completion
+  -> terminal event -> evaluate/package immediately
+```
+
+If other independent tasks are READY, the agent performs them instead of sleeping. If none are READY,
+quiet waiting is the correct and token-efficient behavior.
+
+### 7A.7 Reasoning-effort escalation policy
+
+Use the least reasoning effort that can resolve the current unit safely. Treat reasoning effort as a
+limited resource: spend it on decisions whose consequences or uncertainty justify the cost, not on
+routine waiting or repeated status checks.
+
+- **Low effort:** routine status checks, log extraction, inventories, straightforward document edits,
+  deterministic command/result interpretation, and other bounded tasks with clear acceptance criteria.
+- **Medium effort:** ordinary implementation/debugging, multi-step dependency analysis, experiment
+  planning within a frozen protocol, or diagnosis that needs evidence from several artifacts.
+- **High effort:** scientific-validity and causal-claim decisions, ambiguous or conflicting evidence,
+  data leakage/provenance concerns, checkpoint or schema compatibility, active-campaign source-boundary
+  decisions, major architecture changes, and resource choices that could invalidate a run.
+- **Escalate once more only when** the current effort level leaves a material correctness or decision
+  uncertainty unresolved. State the uncertainty and evidence needed; do not repeatedly increase effort
+  to compensate for missing data or an external wait.
+- **Do not escalate** for elapsed time, long-running jobs, large log volume that can be summarized with
+  bounded queries, or routine polling. Read the smallest relevant evidence and enter `WAITING_COMPUTE`
+  when no independent READY work remains.
+- After a high-stakes decision, record the decision, evidence, and remaining uncertainty in the relevant
+  plan/status/evidence artifact so a later agent does not repeat the same reasoning from scratch.
+
+### 7A.8 Retry and failure discipline
+
+- infrastructure interruption with a valid matching checkpoint -> resume under a new attempt identity;
+- deterministic code/config/data defect -> stop that affected lineage, fix/test once, then relaunch;
+- evaluator/export defect after successful training -> repair/recover, do not retrain;
+- repeated identical failure -> investigate root cause rather than blind retry;
+- every retry keeps the original attempt and traceback in the ledger.
+
+### 7A.9 Context-budget discipline
+
+The agent should prefer repository artifacts over conversational memory. After completing a substantial
+unit, write the result to the appropriate manifest/status/evidence file and use those files as the
+source of truth. Long-running success means **state survives context compression**, not that every
+prior detail remains in the model context.
+
+### 7A.10 Stop condition
+
+The continuous agent does not stop merely because training is finished. It stops at P9 only after
+`RESULTS_PACKAGE_COMPLETE`: final logs, configs, checkpoints, raw outputs, statistics, figures,
+finding cards, failures, hashes, and global indexes are present and cross-validated.
+
+---
+
+# PART I — RESULTS-CRITICAL EXECUTION
 
 ## 8. P0 — Establish the safe execution boundary
 
-**Priority:** immediate  
-**Dependencies:** none  
-**Parallel with:** evaluator preparation, report tooling, thesis writing
+**Priority:** immediate
+**Dependencies:** none
+**Parallel with:** evaluator preparation, evidence tooling, result-index preparation
 
 ### Actions
 
@@ -681,16 +896,16 @@ A task is parallel-safe only if all are true:
 
 ### Exit criterion
 
-The current experiment and every parallel engineering/writing lane have clear,
+The current experiment and every parallel engineering/evidence lane have clear,
 non-overlapping provenance boundaries.
 
 ---
 
 ## 9. P1 — Finish and reconcile the 18-way full-split screen
 
-**Priority:** critical path  
-**Dependencies:** P0  
-**Parallel with:** P2, W0, report-tool preparation
+**Priority:** critical path
+**Dependencies:** P0
+**Parallel with:** P2, E0, report-tool preparation
 
 For each of the 18 variant identities:
 
@@ -729,9 +944,9 @@ identity has an evidence-backed reason and retained artifacts.
 
 ## 10. P2 — Repair and harden deterministic evaluation
 
-**Priority:** immediate parallel blocker removal  
-**Dependencies:** P0  
-**Parallel with:** P1  
+**Priority:** immediate parallel blocker removal
+**Dependencies:** P0
+**Parallel with:** P1
 **Use against active checkpoints only after:** the source boundary is safe
 
 ### Required correction
@@ -767,8 +982,8 @@ action, risk, cost, and execution semantics recorded for its training lineage.
 
 ## 11. P3 — Separate numerical evaluation from visualization and produce canonical screen reports
 
-**Priority:** critical path  
-**Dependencies:** P1 + P2  
+**Priority:** critical path
+**Dependencies:** P1 + P2
 **Parallelism:** independent checkpoint evaluations may run concurrently if
 resources and filesystem load remain controlled
 
@@ -826,9 +1041,9 @@ an explicit non-hidden reason why recovery is impossible.
 
 ## 12. P4 — Close G0–G3: correctness, validity, design readiness, reproducibility
 
-**Priority:** critical path  
-**Dependencies:** P3  
-**Parallel with:** independent-review preparation and thesis non-result writing
+**Priority:** critical path
+**Dependencies:** P3
+**Parallel with:** independent-review preparation and evidence/result packaging
 
 ### G0 — execution/accounting correctness
 
@@ -910,9 +1125,9 @@ that would change interpretation after seeing its results.
 
 ## 13. P5 — Freeze the thesis experiment and baseline hierarchy
 
-**Priority:** critical path  
-**Dependencies:** P4  
-**Parallel with:** P6 profiling setup, review, thesis writing
+**Priority:** critical path
+**Dependencies:** P4
+**Parallel with:** P6 profiling setup, review, evidence/result packaging
 
 ### 13.1 RQ1 matched control/treatment
 
@@ -1050,9 +1265,9 @@ checkpoint/log/provenance bundle from the development stage.
 
 ## 14. P6 — Freeze the production runtime before expensive paired runs
 
-**Priority:** thesis-critical efficiency gate  
-**Dependencies:** P4 plus the safe end of the screen; may overlap P5 design work  
-**Parallel with:** review and manuscript writing
+**Priority:** thesis-critical efficiency gate
+**Dependencies:** P4 plus the safe end of the screen; may overlap P5 design work
+**Parallel with:** review and result-pipeline work
 
 ### 14.1 Exact-config end-to-end baseline
 
@@ -1125,8 +1340,8 @@ will not be launched on an unnecessarily slow or scientifically altered runtime.
 
 ## 15. P7 — Last empirical compute gate: final paired confirmation and cost stress (G4)
 
-**Priority:** final empirical thesis gate and **last major training goal**  
-**Dependencies:** all required single-seed variant work and finding packs complete + P5 experiment freeze + P6 runtime freeze + no blocking review defect  
+**Priority:** final empirical thesis gate and **last major training goal**
+**Dependencies:** all required single-seed variant work and finding packs complete + P5 experiment freeze + P6 runtime freeze + no blocking review defect
 **Parallelism:** independent final seed pairs may run concurrently on authorized resources
 
 ### 15.1 Main matched run matrix
@@ -1212,9 +1427,9 @@ or `insufficient valid evidence`, with the reason and uncertainty explicit.
 
 ## 16. P8 — Independent review and thesis evidence freeze
 
-**Priority:** critical path  
-**Dependencies:** review preparation begins at P4; final disposition uses P7 evidence  
-**Parallel with:** statistics/figure generation and thesis writing
+**Priority:** critical path
+**Dependencies:** review preparation begins at P4; final disposition uses P7 evidence
+**Parallel with:** statistics/figure generation and result aggregation
 
 ### 16.1 Reviewer questions
 
@@ -1268,119 +1483,99 @@ thesis evidence set is frozen.
 
 ---
 
-## 17. W0/W1 — Thesis writing runs in parallel with the technical path
+## 17. E0/E1 — Results packaging runs continuously with the technical path
 
-Writing is not a final-week task. Use the current manuscript as the working
-artifact and update only claims whose evidence state is known.
+The agent must not spend the critical path drafting thesis chapters. Instead it builds the
+**results-writing substrate** continuously so every terminal experiment becomes immediately
+usable later.
 
-### W0 — can be completed before final results
+### E0 — build before final results
 
-Write/finalize now:
+Prepare and validate now:
 
-1. Introduction framing and research questions, with RQ2 marked as extension if
-   it remains deferred.
-2. Background and related work.
-3. Full data/source/calendar/session/timezone description.
-4. PO3/IFVG definitions and structural decision geometry.
-5. Environment, account constraints, action schema, SL/TP/partial-exit methods,
-   including the IFVG far-edge/through-zone stop alternatives and the final
-   multi-HTF confirmed-swing stop menu.
-6. PPO, encoder, observation, reward, training and checkpoint methodology. Replace
-   stale illustrative runtime values with the actual frozen protocol: the canonical
-   one-seed discovery/development run uses seed 50 / 20M / `n_envs=64` for newly
-   launched comparable variants, while any older seed-42 artifacts retain their own
-   historical identity. The final matched RQ1 experiment uses the predeclared >=5
-   paired-seed set / 20M per seed / `n_envs=64` only after all earlier findings and
-   design decisions are frozen.
-7. Validation/model-selection protocol and exposed-period disclosure.
-8. Experiment-design section: screen versus matched intervention versus
-   robustness versus final-report roles.
-9. Metrics, position-level accounting, uncertainty, trial/search accounting,
-   and cost-sensitivity method.
-10. Reproducibility/provenance and threats-to-validity sections.
-11. Architecture/pipeline diagrams and non-result illustrations.
-12. Results tables/figure templates wired to machine-readable artifacts, with
-    TODOs rather than fabricated values.
+1. the canonical per-run evidence-bundle writer and artifact index;
+2. resolved-config, source/data/cache/checkpoint fingerprint capture;
+3. durable stdout/stderr/Slurm/controller/resource-log collection;
+4. checkpoint hashing, metadata, and load-validation tooling;
+5. deterministic evaluation export for metrics, equity, positions, fills, breaches,
+   actions/behavior, reward components, entry funnels, and costs where applicable;
+6. machine-readable seed/run summary tables;
+7. reproducible statistics code for paired differences, uncertainty, cost sensitivity,
+   survival/breach outcomes, and dependence-aware reporting;
+8. figure generation for learning curves, equity, drawdown, activity/actions, survival,
+   mechanism comparisons, and cost sensitivity;
+9. result-card templates containing evidence role, allowed claim, forbidden overclaim,
+   limitations, exact artifact paths, and likely thesis destination;
+10. global experiment/trial ledger including failed, inactive, interrupted, and zero-trade
+    attempts;
+11. final result-manifest schema mapping question/RQ -> run IDs -> seeds -> checkpoint hashes
+    -> raw eval -> statistics -> figure/table artifacts -> interpretation boundary;
+12. validation that older seed-42 artifacts remain historical/exploratory and newly comparable
+    one-seed work uses seed 50 / 20M / `n_envs=64` unless a frozen run identity says otherwise.
 
-### W1 — populate as valid evidence becomes terminal
+### E1 — populate continuously as runs terminate
 
-Write:
+For every terminal run or comparison, the agent immediately:
 
-- experimental coverage and validity;
-- training behavior/learning curves;
-- main matched comparison;
-- account survival and execution outcomes;
-- mechanism ladder with attribution labels;
-- encoder result or explicit `not tested` statement;
-- robustness, cost sensitivity, uncertainty, and selection-adjustment result;
-- one evidence-based answer per research question.
+- seals the evidence bundle before moving on;
+- validates the checkpoint and all expected raw outputs;
+- records completed timesteps, wall time, effective throughput, resource use, and failure state;
+- reconstructs metrics from raw records and cross-checks reported summaries;
+- generates the applicable numerical tables and figures;
+- creates/updates `finding.md` with exact evidence links and claim boundaries;
+- updates the global trial ledger and result manifest;
+- marks missing artifacts as blockers rather than silently leaving them for the end.
 
-Never write the conclusion first and search for supporting metrics afterward.
+The final >=5 paired-seed evidence supersedes only the robustness/causal conclusion. It does
+not erase valid single-seed implementation, behavior, failure, or mechanism findings.
 
 ---
 
-## 18. P9 — Complete the full thesis package
+## 18. P9 — Freeze and hand off the complete results package
 
-**Priority:** deadline critical  
-**Dependencies:** P8 for final claims; W0 should already be largely complete
+**Priority:** results-critical terminal package
+**Dependencies:** P8 final evidence/review disposition + E0/E1 artifact pipeline
 
-### 18.1 Results and interpretation
+### 18.1 Results handoff requirements
 
-1. Populate Chapter 8 only from the frozen result manifest.
-2. Explain failed, incomplete, and zero-trade runs.
+1. Populate the global result manifest only from frozen evidence.
+2. Include failed, incomplete, inactive, and zero-trade runs with explicit dispositions.
 3. Keep partial-exit legs separate from completed-position counts.
 4. Distinguish system-level comparisons from isolated mechanism effects.
-5. State effect size/uncertainty and cost sensitivity, not only a winner label.
-6. If fresh OOS is unavailable, state that confirmatory temporal generalization
-   remains untested rather than weakening the holdout definition.
+5. Report effect size/uncertainty and cost sensitivity, not only a winner label.
+6. If fresh OOS is unavailable, record confirmatory temporal generalization as untested rather
+   than weakening the holdout definition.
+7. Verify every table/figure can be regenerated from retained machine-readable artifacts.
+8. Verify every final checkpoint has a hash, metadata, load check, exact config, seed, steps,
+   `n_envs`, source/data/cache identity, and deterministic evaluation reference.
+9. Produce one compact `results_summary.md` that enumerates every empirical question, its
+   disposition, the strongest supported interpretation, limitations, and artifact links. This is
+   an evidence index for later thesis writing, not chapter prose.
 
-### 18.2 Propagate RQ answers consistently
+### 18.2 RQ/result dispositions
 
-For each RQ write exactly one supported disposition:
+For each retained question record exactly one supported disposition:
 
 - supported;
 - unsupported / evidence of worse performance;
 - no advantage established / inconclusive;
 - not tested.
 
-Carry the same disposition into Results, Discussion, Conclusions, Introduction,
-and Abstract. Do not turn `no advantage established` into `no effect exists`.
+Do not turn `no advantage established` into `no effect exists`, and do not convert a single-seed
+screen into a robust treatment claim.
 
-### 18.3 Administrative and disclosure completion
+### Exit criterion — `RESULTS_PACKAGE_COMPLETE`
 
-Confirm:
-
-- advisor name/title and degree-programme wording;
-- submission date and acknowledgements;
-- licence;
-- market-data availability/provider restrictions;
-- model/result-record availability statement;
-- AI-use disclosure with tools/models, dates, affected work, and author review;
-- reference completeness and citation consistency.
-
-### 18.4 Final artifact QA
-
-Check:
-
-- every table/figure source exists and is reproducible;
-- no placeholder/fake performance chart remains;
-- no table mixes incompatible run identities;
-- costs/account limits/data dates agree across chapters;
-- action/reward/management definitions match the evaluated code/config;
-- all TODOs are either resolved or intentionally retained only if acceptable;
-- page/figure/table references, glossary, symbols, captions, and appendices;
-- PDF compilation warnings and visual layout.
-
-### Exit criterion
-
-A complete, coherent, evidence-backed PDF exists and is ready for supervisor
-review.
+A new agent or the thesis author can answer **what ran, what happened, how certain it is, where
+the raw evidence is, which checkpoint produced it, and what may safely be claimed** without
+reading terminal history or rerunning an experiment.
 
 ---
 
-## 19. P10 — Supervisor PDF freeze — 2026-11-09
+## 19. P10 — Downstream author task: supervisor PDF freeze — 2026-11-09
 
-By **2026-11-09**, send the complete PDF rather than waiting for optional scope.
+**Outside the default Codex agent results mission.** After P9, the author uses the frozen results
+package to write and assemble the thesis. By **2026-11-09**, send the complete PDF rather than waiting for optional scope.
 The package should include or link the evidence manifest and a short change/
 open-issue summary.
 
@@ -1389,7 +1584,7 @@ as future/ongoing work unless the supervisor explicitly requests inclusion.
 
 ---
 
-## 20. P11 — Supervisor feedback, final validation, and faculty submission
+## 20. P11 — Downstream author task: supervisor feedback and faculty submission
 
 ### 2026-11-09 to 2026-11-15 — feedback cycle
 
@@ -1437,7 +1632,7 @@ Do **not** cut:
 - the matched RQ1 design once it is the thesis core;
 - honest failure/holdout disclosure;
 - the minimum robustness needed to state uncertainty responsibly;
-- the complete thesis writing/review window simply to add another model.
+- the complete evidence/review window simply to add another model.
 
 If valid empirical evidence cannot be completed, the fallback is an honest
 limited/negative/inconclusive thesis or a supervisor-approved design/audit scope,
@@ -1713,16 +1908,15 @@ what is uncertain, and what will happen next without reading raw logs.
 
 ---
 
-## 36. Final deliverables and thesis artifact set
+## 36. Final deliverables and results artifact set
 
-The project must finish with enough structured evidence that the thesis can be written,
-checked, and reproduced without reconstructing a campaign from tmux history or human
-memory. Deliverables accumulate throughout the plan; do not wait until P9 to create
-them.
+The Codex agent research mission must finish with enough structured evidence that the thesis can be
+written afterward, checked, and reproduced without reconstructing a campaign from tmux history or
+human memory. Deliverables accumulate throughout the plan; do not wait until P9 to create them.
 
 ### 36.1 Deliverables by evidence stage
 
-| Evidence stage | Mandatory deliverables | Primary thesis use |
+| Evidence stage | Mandatory deliverables | Later evidence/review use |
 |---|---|---|
 | Correctness / implementation | focused test logs, golden traces, source/config snapshot, issue disposition, finding cards | Methods, implementation validity, limitations |
 | Data / feature validity | dataset audit, split/calendar report, causality/fold-fitting checks, feature/cache hashes | Data and Experimental Design |
@@ -1734,13 +1928,13 @@ them.
 | Optional promoted RQ3 pair | same paired bundle standard if actually promoted; otherwise retain one-seed/system-level evidence only | RQ3 with correct attribution label |
 | Failed/inactive/zero-trade runs | config + command + logs + partial artifacts + explicit failure/inactivity reason | Coverage, threats to validity, negative findings |
 | Evidence freeze | claim-to-run manifest, final RQ answer table, independent review disposition | Results-to-claim consistency |
-| Submission | final PDF, editable sources, all figure/table sources, archive manifest, availability/AI statements | Final handoff and reproducibility |
+| Results-package freeze | `results_summary.md`, global artifact/result manifest, all figure/table sources, archive manifest, reproduction notes | Direct handoff for thesis writing and review |
 
 ### 36.2 Final retained artifact set
 
 Before supervisor freeze and again before submission, retain:
 
-- final PDF and editable thesis sources;
+- `results_summary.md` and global result/artifact manifests;
 - figure/table source artifacts;
 - result manifest mapping claims to evidence;
 - final RQ answer table;
@@ -1758,125 +1952,150 @@ Before supervisor freeze and again before submission, retain:
 - independent-review disposition;
 - cost-stress output;
 - reproduction commands/environment notes;
-- AI/data/model availability statements;
-- defense-ready figures generated from the same evidence.
+- data/model availability and reproducibility notes needed to describe the evidence later;
+- thesis/defense-ready result figures generated from the same frozen evidence.
 
 Do not include an unverifiable artifact merely to make the archive appear more
 complete.
 
 ---
 
-## 37. Calendar from 2026-10-16 to submission
+## 37. Results-first execution window
 
-These are deadline-oriented target windows, not promises about scheduler/runtime.
-Dependencies and scientific gates override the dates.
+These are results-oriented target windows for a continuously running Codex agent. Scheduler
+availability and scientific gates override dates. Thesis drafting is deliberately excluded from the
+agent critical path.
 
-| Window | Critical target | Parallel work |
+| Window | Critical result target | Horizontal work while compute runs |
 |---|---|---|
-| **16–20 Oct** | P0–P3: reconcile screen, fix evaluator, recover canonical numerical reports | W0 Methods/Data/Evaluation writing; report tooling; reviewer package |
-| **20–25 Oct** | P4–P6: close validity gates, freeze RQ1 experiment, freeze production runtime | Finish non-result chapters; prepare stats/figures; optional implementation-only Q work |
-| **24 Oct–02 Nov** | P7 last compute gate: >=5 paired seeds only for the final selected RQ1 pair + deterministic evaluation + cost stress | Continue writing from completed seed-50 finding packs; update headline Results as final pairs become terminal |
-| **01–05 Nov** | P8: evidence/reviewer freeze, final tables/figures/RQ dispositions | Discussion/limitations/conclusions drafting |
-| **03–08 Nov** | P9: full PDF integration and QA | References, appendices, metadata, availability/AI disclosure |
-| **09 Nov** | **Complete PDF to supervisor** | Freeze optional scope unless requested |
-| **09–15 Nov** | P11 feedback resolution | Only evidence-required reruns if a real blocker is found |
-| **16–22 Nov** | Final formatting, consistency, archive, submission checks | Defense summary/figures from frozen evidence |
-| **23 Nov** | **Faculty submission** | Record submitted artifact identity |
+| **16–18 Oct** | P0/P2/E0: safe boundary, evaluator/schema repair, evidence-bundle and result-index tooling | correctness tests, HTF stop-candidate completion/verification, recovery tooling |
+| **18–20 Oct** | P1/P3: complete/reconcile the one-seed screen and canonical deterministic reports | package each terminal run immediately; prepare stats/figures; audit failures |
+| **20–22 Oct** | P4/P5: validity audit, select/freeze final matched pair and exact semantics | independent review prep; final configs; result-manifest population |
+| **22–23 Oct** | P6: benchmark/freeze final training concurrency and runtime using aggregate makespan | prepare paired-seed launch matrix and automated evaluation |
+| **23–25 Oct** | P7: final >=5 paired seeds for the selected control/treatment only + cost stress | evaluate/package finished seeds as they terminate; no idle waiting |
+| **25–27 Oct** | S0/E1/P8: final statistics, uncertainty, figures, review disposition, evidence freeze | regenerate/cross-check tables and figures from raw artifacts |
+| **by ~27 Oct target** | **P9 `RESULTS_PACKAGE_COMPLETE`** | complete logs + checkpoints + raw outputs + findings + global manifest handed off for thesis writing |
 
-If P7 slips, do not respond by launching more variants. Descope optional RQs and
-visualization first, preserve the validity of the core result, and keep the
-writing/review window intact.
+The date is a target, not permission to bypass gates. If compute queues or a correctness defect delay
+P7, the agent should keep every other READY lane moving and preserve the result package rather than
+launching extra variants.
 
----
+### Runtime planning assumptions
+
+- Treat historical FPS figures as measurements tied to their own run, phase, and
+  hardware. Do not use a single-worker or brief startup sample as the current
+  campaign forecast.
+- Estimate remaining time from stabilized aggregate completed timesteps/hour
+  across the active workers, then include startup, checkpointing, evaluation,
+  report export, queue gaps, and allocation boundaries.
+- Do **not** assume 18-way concurrency is optimal for the final paired matrix;
+  P6 must choose the concurrency that minimizes reliable total makespan.
+- Training wall time overlaps with evaluation tooling, packaging, correctness
+  work, statistics code, reviewer preparation, and processing already-terminal runs.
 
 ## 38. Status board
 
-Update this table rather than rewriting narrative history into the roadmap.
+Update this table as the persistent agent control surface. It is status, not a second roadmap.
 
-| ID | Package | Current state | Depends on | Parallel-safe work |
+| ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE | — | P2 prep, W0 |
-| P1 | 18-way full-split screen reconciliation | ACTIVE | P0 | P2, W0 |
-| P2 | Deterministic evaluator/schema repair | ACTIVE-PREP | P0 | P1, W0 |
-| P3 | Canonical numerical screen reports | BLOCKED | P1 + P2 | per-checkpoint evals |
-| P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | review prep, W0 |
-| P5 | Freeze matched thesis design/baselines | BLOCKED | P4 | P6 prep, review |
-| P6 | Production runtime/resource freeze | PREP-ONLY | P4/screen-safe | writing/review |
-| P7 | Last compute gate: selected-pair >=5-seed robustness + cost stress | BLOCKED | all single-seed findings + P5 + P6 | final seed pairs/stats |
-| P8 | Review + thesis evidence freeze | PREP-ONLY | final P7 evidence | figures/writing |
-| P9 | Complete thesis package | IN PARALLEL | W0 now; final claims need P8 | chapter work |
-| P10 | Supervisor PDF freeze | DEADLINE | P9 | — |
-| P11 | Feedback/faculty submission | BLOCKED | P10 | controlled revisions |
-| P12 | Final archive/defense handoff | BLOCKED | P11 | — |
+| P0 | Safe boundary/current snapshot | ACTIVE | — | P2 prep, E0 |
+| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE | P0 | P2, E0 |
+| P2 | Deterministic evaluator/schema repair | IMPLEMENTED; CHECKPOINT RECOVERY OPEN | P0 | P1, E0 |
+| E0 | Evidence/result pipeline + indexes | ACTIVE | P0 | P1, P2 |
+| P3 | Canonical numerical screen reports | BLOCKED | P1 + P2 | per-checkpoint eval/package |
+| P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | review prep, result packaging |
+| P5 | Freeze matched design/baselines | BLOCKED | P4 | P6 prep, review |
+| P6 | Production runtime/resource freeze | PREP-ONLY | P4/screen-safe | paired-launch prep |
+| P7 | Final selected-pair >=5-seed robustness + cost stress | BLOCKED | all single-seed findings + P5 + P6 | eval/package terminal seeds |
+| S0 | Statistics + final figures | PREP-ONLY | schema can be built early; final values need P7 | finished-seed analysis |
+| E1 | Result aggregation/finding cards | ACTIVE-AS-ARTIFACTS-ARRIVE | E0 | every terminal run |
+| P8 | Review + evidence freeze | PREP-ONLY | final P7 evidence | figure/result cross-checks |
+| P9 | `RESULTS_PACKAGE_COMPLETE` handoff | BLOCKED | P8 + E1 | archive/index QA |
 | Q0–Q7 | Research extension | OPTIONAL/GATED | stage parents | within-stage arms only |
 
----
+## 39. Immediate actions for one long-running Codex agent
 
-## 39. Immediate actions
+Execute horizontally. The agent should always select the highest-priority READY task and must not wait
+idly for training when another independent lane can advance. Conversely, when **all** useful lanes
+are blocked only on long-running compute, the agent should enter the `WAITING_COMPUTE` quiet-wait state
+from Section 7A.6 rather than spending tokens on frequent status checks.
 
-Execute these now, in parallel where safe.
+### Lane A — correctness / implementation
 
-### Critical experiment lane
+1. Establish P0 source/config/data/cache boundaries and keep active run fingerprints immutable.
+2. Complete/verify the HTF multi-swing stop-candidate contract before final P7 training; preserve
+   the already-implemented IFVG through-zone extreme and its regression coverage.
+3. Run focused tests first, then the required full regression/lint/type gates after integration.
+4. Any defect capable of invalidating active/future scientific evidence outranks throughput or
+   optional feature work.
 
-1. Preserve and reconcile the current full-split screen until all 18 identities
-   are terminal.
-2. Do not alter the fingerprinted source/config/data/cache of an active run.
-3. Preserve valid completed checkpoints even when final evaluation/export fails.
+### Lane B — active training / campaign operations
 
-### Evaluation lane
+5. Preserve and reconcile the current one-seed screen until all required identities are terminal.
+6. Use seed 50 as the canonical first seed for newly launched comparable variants, 20M steps,
+   `n_envs=64`; retain historical seed-42 attempts under their true identities.
+7. Never mutate an active run identity. Resume only from validated matching checkpoints.
+8. Do not launch >=5 paired seeds until implementation, one-seed findings, selected pair, evaluator,
+   and runtime are frozen.
+8a. After launch/stability validation, use adaptive coarse polling or an external watcher; do not
+    generate minute-by-minute training updates. Stable multi-hour jobs should normally wake the agent no
+    more often than every 45–120 minutes unless a terminal/failure/checkpoint event occurs.
 
-4. Fix the observation-schema evaluator contract in isolation.
-5. Add saved-checkpoint regression coverage for action/observation schema and
-   deterministic final evaluation.
-6. Prepare automated recovery/canonical report generation for every valid screen
-   checkpoint.
+### Lane C — evaluator / recovery
 
-### Evidence/design lane
+9. Fix the observation-schema evaluator contract in isolation and add saved-checkpoint regressions.
+10. Recover valid completed training from checkpoints rather than retraining because export/plots failed.
+11. Make numerical deterministic evaluation mandatory; optional visualization remains post-processing.
 
-7. Prepare the G0–G3 checklist against actual screen artifacts.
-8. Draft the one-page RQ1 matched control/treatment specification now, but freeze
-   candidate identities only after valid screen evidence is available.
-9. Prepare the baseline hierarchy and distinguish system comparators from causal
-   controls.
+### Lane D — results/evidence pipeline
 
-### Runtime lane
+12. Build E0 immediately: bundle writer, hashes, checkpoint metadata/load checks, raw eval exports,
+    artifact index, result-card template, global ledger, and result-manifest schema.
+13. Every terminal run is packaged before the agent considers it fully closed: config + command + logs +
+    checkpoint/hash + raw eval + metrics + finding card.
+14. Generate tables/figures from machine-readable outputs as soon as their input is terminal.
+15. Keep failures, inactive runs, and zero-trade outcomes as first-class results with dispositions.
 
-10. Make the exact-config benchmark consume the resolved final candidate config.
-11. Reuse the proven device-rollout fast path as the leading candidate; measure
-    end-to-end campaign behavior before P7.
-12. Keep numerical evaluation mandatory and move optional plot work to resumable
-    post-processing when beneficial.
+### Lane E — final design / review / statistics
 
-### Thesis/review lane
+16. Apply G0–G3 against actual artifacts, then freeze the smallest valid RQ1 control/treatment pair.
+17. Prepare paired statistics and cost-stress tooling before the final seeds finish.
+18. Prepare the independent-review packet early so review latency does not sit after P7.
 
-13. Complete W0 chapters immediately: Data, Method, Environment, Agent,
-    Experimental Design, Evaluation, Reproducibility, and known Limitations.
-14. Prepare Chapter 8 tables/figures as artifact-driven templates only, then populate
-    them incrementally from completed `finding.md` cards. Seed-50 one-seed outputs may
-    be written as screening/system-behaviour findings with that limitation explicit.
-15. After every terminal training/evaluation run, verify its evidence bundle contains
-    logs, resolved config, checkpoint/hash, raw numerical outputs, and a finding card
-    before moving on.
-16. Prepare the independent-review packet before P7 finishes so review latency
-    is not on the final critical path.
-17. Complete metadata/data-availability/AI-disclosure fields that do not depend
-    on empirical outcomes.
+### Lane F — runtime optimization
+
+19. Treat throughput as specific to its campaign, phase, and sampling window. Base forecasts on a
+    stabilized aggregate rate from the current campaign, not a brief per-worker sample.
+20. Before P7, benchmark a small concurrency set for the final paired matrix and choose by reliable
+    aggregate completed 20M runs/hour / total makespan, while preserving `n_envs=64` and scientific
+    parity.
+21. Reuse proven device-resident rollout staging; do not reopen measured no-gain optimizations unless
+    the bottleneck changes.
+
+### Codex agent scheduler rule
+
+At every decision point, choose work in this order:
+
+1. correctness blocker that could invalidate compute;
+2. recovery/evaluation of already-completed expensive training;
+3. packaging/verification of newly terminal runs;
+4. launch/continue an authorized READY critical training job;
+5. dependency work that unlocks the next scientific gate;
+6. statistics/figures/indexes against already-frozen data;
+7. optional extension work only when it consumes no critical compute/integration capacity.
 
 ### Do not do now
 
+- do not spend the agent cycles drafting thesis chapters;
 - do not launch Q0–Q7 research runs by default;
-- do not expand the current 18 variants to 90 production runs;
-- do not start the RQ2 encoder tournament unless P5 explicitly promotes it;
-- do not launch the >=5 paired-seed thesis confirmation until **all required
-  implementation and one-seed finding packs are complete**, the final matched pair is
-  selected, and its design/runtime are frozen;
-- do not choose a model from the exposed 2026 report interval;
+- do not expand the current variants to a five-seed matrix;
+- do not start the RQ2 encoder tournament unless explicitly promoted;
+- do not launch final paired seeds before the final implementation/design/runtime freeze;
+- do not choose models from the exposed 2026 report interval;
 - do not retrain because optional chart generation failed;
-- do not add SAC/VAE/new encoder families to the thesis critical path;
-- do not treat throughput, unit tests, or dashboard reward as evidence of
-  strategy profitability or robustness.
-
----
+- do not add SAC/VAE/new encoder families to the critical path;
+- do not treat throughput, unit tests, or dashboard reward as strategy evidence.
 
 ## 40. Failure and decision rules
 
@@ -1904,27 +2123,31 @@ Execute these now, in parallel where safe.
 12. **No positive strategy result exists:** finish the thesis with a valid
     negative/inconclusive result and implications.
 13. **Time is short:** follow the descope order in Section 21; do not sacrifice
-    correctness, provenance, or the writing/review window to add breadth.
+    correctness, provenance, or the evidence/review window to add breadth.
 
 ---
 
-## 41. Definition of project end
+## 41. Definition of Codex agent mission end
 
-The master’s thesis project is complete when:
+The continuous Codex agent results mission is complete at P9 when:
 
-- the submitted PDF is tied to a frozen evidence manifest;
-- every empirical statement is supported by a traceable run or explicitly
-  marked as limitation/future work;
-- the RQ answer table is consistent across Results, Discussion, Conclusions,
-  and Abstract;
-- exposed-data and search/selection limitations are explicit;
-- failed/inactive runs remain visible in the research record;
-- source/config/data/checkpoint/result identities, durable logs, and finding cards are
-  sufficient to reconstruct every reported lineage without relying on terminal scrollback;
-- the final submission and evidence archive are backed up;
-- Q0–Q7 and live-production work are either completed separately or have an
-  explicit post-thesis stop/defer point.
+- `RESULTS_PACKAGE_COMPLETE` is satisfied;
+- every empirical finding is tied to a frozen evidence manifest and exact run identity;
+- every final run has durable resolved config, command, source/data/cache fingerprints, logs,
+  checkpoint(s), hashes, load validation, raw deterministic evaluation outputs, and metrics;
+- the final matched comparison has the required paired-seed evidence, uncertainty/statistics, and
+  cost-stress results, or an explicit valid negative/inconclusive disposition;
+- failures, inactive runs, interrupted attempts, and zero-trade runs remain visible in the ledger;
+- all final tables and figures regenerate from machine-readable retained artifacts;
+- every `finding.md` states evidence role, allowed claim, forbidden overclaim, limitations, and exact
+  artifact paths;
+- `results_summary.md` and the global result/artifact manifest let the thesis author determine what
+  happened and what may be claimed without reading terminal scrollback or rerunning experiments;
+- the evidence archive is backed up and a new agent can resume/review from repository artifacts
+  rather than conversational memory;
+- Q0–Q7 and live-production work are explicitly completed, deferred, or left outside the thesis
+  evidence lineage.
 
-At that point, any new architecture, algorithm, market, data period, or trading
-idea begins a new research extension rather than silently reopening this thesis
-roadmap.
+The supervisor PDF, prose integration, references, formatting, and faculty submission are downstream
+author tasks. They may discover a true evidence blocker, in which case work returns to the earliest
+contaminated package; otherwise they do not keep the agent's research-critical mission open.

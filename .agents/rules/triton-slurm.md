@@ -122,6 +122,7 @@ present the 18-trainer projection as a direct measurement.
 |-----|------|-----------------|-----|
 | One model (one TCN / GRU / Transformer, 20M) | **1** | GH200: `--gpus=gh200:1 --mem=512G --cpus-per-task=48 --time=6:00:00` or `--time=12:00:00` | One process, one 141 GB GPU. 6h is the default 20M train. 12h when `MaxTime` allows and the user asks for the longer shell. |
 | Six-run matrix (overlay then baseline, three archs) | **2** | GH200: `--gpus=gh200:2 --mem=900G --cpus-per-task=128 --time=6:00:00` | Historical six-run launcher `scripts/run_6run_matrix_tmux.sh` is absent from this checkout. Check [current matrix scripts](../../scripts/matrix/) and allocation limits before selecting a launcher. |
+| 18-trainer full-split screen (campaign-specific) | **2 total, one per node** | GH200: `--nodes=2 --ntasks=2 --cpus-per-task=48 --gpus-per-node=gh200:1 --mem=512G --time=6:00:00` | Current active allocation shape: 18 workers across two nodes (9/node), 5 CPUs/worker, `n_envs=64`, shared bundle. Keep this distinct from two GPUs on one node; recheck cgroup memory and controller placement before reuse. |
 
 H200 (`gpu-h200-141g-short`, `.venv-x86`) is still preferred for a **1-GPU** job
 when that partition has idle capacity. The six-run matrix stays on GH200
