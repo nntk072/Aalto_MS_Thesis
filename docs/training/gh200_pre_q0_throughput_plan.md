@@ -1,5 +1,7 @@
 # GH200 Training Throughput Plan (Pre-Q0)
 
+> **Plan routing:** Current order and next action are governed by the [master project execution plan](../thesis/master_project_execution_plan.md). This document is the technical GH200 measurement reference; do not execute it as a separate queue.
+
 ## Goal and boundaries
 
 Improve measured PPO training throughput on the GH200 without changing the

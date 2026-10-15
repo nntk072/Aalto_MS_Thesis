@@ -1,5 +1,7 @@
 # 18-Variant Training Campaign — Readiness Investigation and Implementation Plan
 
+> **Plan routing:** Current order and next action are governed by the [master project execution plan](../thesis/master_project_execution_plan.md). This document is the detailed campaign contract and historical evidence; do not execute it as a separate queue.
+
 **Plan created:** 2026-10-10 (Europe/Helsinki)<br>
 **Last verified:** 2026-10-14 19:39 UTC<br>
 **Triton repo:** /scratch/work/nguyenl37/Aalto_MS_Thesis<br>

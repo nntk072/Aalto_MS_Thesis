@@ -3,6 +3,14 @@
 Quantitative RL trading system. PPO/SAC agents learn entry/exit timing on US100/US500
 using structure-aware features (SMT divergence, PO3 state, liquidity sweeps, FVG zones).
 
+## Active research roadmap
+
+Use [`docs/thesis/master_project_execution_plan.md`](docs/thesis/master_project_execution_plan.md)
+as the single operational queue for thesis readiness, the active campaign,
+throughput work, and Q0–Q7. Older plans are technical references and evidence,
+not parallel work queues. Preserve the roadmap's stage gates and current
+campaign safety constraints.
+
 ## Build & Test
 
 ```bash

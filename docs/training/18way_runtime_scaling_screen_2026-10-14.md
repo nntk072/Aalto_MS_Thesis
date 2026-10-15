@@ -1,5 +1,7 @@
 # 18-Variant Runtime Scaling Screen — 2026-10-14
 
+> **Plan routing:** Current decisions and next actions are consolidated in the [master project execution plan](../thesis/master_project_execution_plan.md). This file is a dated historical projection and evidence record, not an active work queue.
+
 ## Decision
 
 The existing timing evidence does **not** support completing 18 × 20M steps in

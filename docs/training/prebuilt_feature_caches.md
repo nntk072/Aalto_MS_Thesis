@@ -1,5 +1,7 @@
 # Prebuilt strategy feature caches
 
+> **Plan routing:** Cache use and acceptance are governed by the [master project execution plan](../thesis/master_project_execution_plan.md). This file is the cache contract reference, not a separate work queue.
+
 The three named Parquet matrices are stored locally under
 `data/prebuilt_feature_cache/`:
 

@@ -1,4 +1,7 @@
 # Triton RAM optimization implementation plan
+
+> **Plan routing:** Current order and next action are governed by the [master project execution plan](../thesis/master_project_execution_plan.md). This document is the technical memory-sizing/parity reference; do not execute it as a separate queue.
+
 Date: 2026-10-10
 Repository: /scratch/work/nguyenl37/Aalto_MS_Thesis
 Scope: 18 variants x 5 seeds x 20M PPO timesteps.

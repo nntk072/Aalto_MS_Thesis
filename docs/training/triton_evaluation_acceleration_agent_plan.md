@@ -1,5 +1,7 @@
 # Agent plan: accelerate Triton evaluation and report generation
 
+> **Plan routing:** Current order and next action are governed by the [master project execution plan](../thesis/master_project_execution_plan.md). This document is the technical evaluation/reporting reference; do not execute it as a separate queue.
+
 Date: 2026-10-11
 Repository: /scratch/work/nguyenl37/Aalto_MS_Thesis
 Campaign: outputs/gpu_campaigns/pilot_18_seed42_100k/

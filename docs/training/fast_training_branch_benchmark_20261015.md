@@ -1,5 +1,7 @@
 # Fast training branch: GH200 benchmark
 
+> **Plan routing:** Current decisions and next actions are consolidated in the [master project execution plan](../thesis/master_project_execution_plan.md). This file records benchmark evidence and caveats, not a separate active plan.
+
 Date: 2026-10-15  
 Branch: `codex/fast-training-wp0`  
 Benchmark code: `b847b5b` (`Measure trainer CPU usage in probes`)  

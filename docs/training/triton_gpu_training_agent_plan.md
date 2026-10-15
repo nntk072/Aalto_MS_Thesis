@@ -1,5 +1,7 @@
 # Triton GPU Training Agent Plan
 
+> **Plan routing:** Current order and next action are governed by the [master project execution plan](../thesis/master_project_execution_plan.md). This document is the controller and campaign-design reference; its historical 18 × 5 matrix is superseded for current execution.
+
 Repository: /scratch/work/nguyenl37/Aalto_MS_Thesis
 Status: Controller implementation and mock integration verified on Triton GH200, 2026-10-10. Production campaign remains gated on end-to-end benchmark and complete CI.
 

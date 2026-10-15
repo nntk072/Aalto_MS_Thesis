@@ -1,5 +1,7 @@
 # RL Learning Quality Program: Implementation Status
 
+> **Plan routing:** The [master project execution plan](../thesis/master_project_execution_plan.md) is the single operational plan for Q0–Q7. This file records implementation status only; it does not authorize or document a launched research campaign.
+
 This work is a separate research lineage. It does not change the historical
 experiment registry or the readiness state of the thesis campaign.
 

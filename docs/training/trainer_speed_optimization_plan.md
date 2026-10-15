@@ -1,5 +1,7 @@
 # Trainer Speed Optimization Plan
 
+> **Plan routing:** Current order and next action are governed by the [master project execution plan](../thesis/master_project_execution_plan.md). This document is the technical measurement reference; do not execute it as a separate queue.
+
 **Status:** measurement and design plan; no training source or active campaign configuration has been changed.  
 **Context date:** 2026-10-14.  
 **Purpose:** increase useful campaign throughput without weakening the training/evaluation contract or misreading per-worker FPS as total campaign speed.

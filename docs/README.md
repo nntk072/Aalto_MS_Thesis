@@ -2,6 +2,7 @@
 
 | Page | Purpose |
 |------|---------|
+| [thesis/master_project_execution_plan.md](thesis/master_project_execution_plan.md) | **Canonical ordered roadmap** for campaign readiness, implementation gates, throughput work, and Q0–Q7. Older plans are technical references; do not run them as parallel work queues. |
 | [reproducibility.md](reproducibility.md) | Data flow, training/evaluation CLI, artifact provenance and limitations |
 | [operations/triton.md](operations/triton.md) | Triton SSH, HPC environment, scheduling and logs |
 | [operations/live-status.md](operations/live-status.md) | MT5 paper/live boundaries and implementation status |

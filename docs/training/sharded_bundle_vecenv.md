@@ -1,5 +1,7 @@
 # Sharded bundle vector environment
 
+> **Plan routing:** Current use and acceptance are governed by the [master project execution plan](../thesis/master_project_execution_plan.md). This file records the backend contract, not a separate plan.
+
 `env.vector_backend: sharded_bundle` runs multiple logical environments inside
 each subprocess. `env.n_envs` remains the logical PPO environment count;
 `env.vector_shards` controls the number of worker processes. The worker groups
