@@ -42,6 +42,57 @@ SubprocVecEnv and 1.82 for sharded-16, with 48 CPUs allocated. These are single
 run observations, not a sustained node-wide utilization profile. The other
 reports predate CPU accounting and have no CPU measurement.
 
+## Provisional trainer-concurrency sweep
+
+Using the same A3 profile and 16-shard backend, I ran 1, 2, 4, 8, and 9
+checkpoint-free probes together on the same GH200. All trainers used 64 logical
+environments and 262,144 steps. The multi-trainer points use separate seeds.
+Aggregate rate is total completed environment steps divided by the common
+start-to-finish wall window.
+
+| Concurrent trainers | Aggregate steps/s | Mean steps/s per trainer | Ready cgroup RAM | Sum CPU cores | Sum trainer-tree PSS |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 2,193 | 2,193 | 6.40 GB | 1.82 | 4.98 GiB |
+| 2 | 3,701 | 1,970 | 9.05 GB | 3.54 | 9.70 GiB |
+| 4 | 6,210 | 1,647 | 14.43 GB | 6.98 | 19.04 GiB |
+| 8 | 7,885 | 1,032 | 25.96 GB | 12.23 | 37.62 GiB |
+| 9 | 7,983 | 929 | 27.98 GB | 13.34 | 42.46 GiB |
+
+The 8- and 9-trainer `nvidia-smi dmon` samples averaged 97.9% and 98.4% SM
+utilization while the GPU was active. The ninth trainer increased measured
+aggregate throughput by only about 1.3% over eight, while reducing per-trainer
+rate by about 10%. CPU use remained below 14 of 48 cores, and the nine-trainer
+ready cgroup memory sample was about 28 GB of the 512 GiB allocation. No probe
+failed or exhausted GPU memory.
+
+At nine concurrent trainers, the paired backend comparison was:
+
+| Backend | Aggregate steps/s | Per-trainer steps/s | Ready cgroup RAM | Sum trainer-tree PSS | Sum CPU cores |
+|---|---:|---:|---:|---:|---:|
+| SubprocVecEnv | 7,748 | 925 | 70.78 GB | 81.74 GiB | 16.24 |
+| ShardedBundleVecEnv, 16 shards | 7,983 | 929 | 27.98 GB | 42.46 GiB | 13.34 |
+
+In this single paired run, sharding had about 3% higher aggregate throughput,
+about 61% lower ready cgroup RAM, and about 48% lower summed PSS. Both backend
+samples had the GPU near saturation. Treat the small throughput edge as
+provisional until repeated; the memory and worker-count reductions are the
+clearer result.
+
+This makes nine sharded trainers per GH200 a plausible makespan choice for the
+18-variant campaign (nine per node on two GH200 nodes): it lets all 18 variants
+progress together, while the ninth slot adds little aggregate GPU throughput.
+That is still a provisional projection from one GH200 and a 262k-step core
+benchmark. It does not include production callbacks, full 20M schedules, two-node
+interference, or confirm a 20M allocation will fit its wall limit. Re-measure
+with the selected learning `n_envs` before the actual campaign.
+
+At the measured nine-trainer per-worker rate of about 929 steps/s, a 20M-step
+variant projects to roughly 6.0 hours of PPO core time. That leaves no practical
+margin in a six-hour allocation for bundle checks, evaluation, callbacks, and
+checkpoint promotion. Plan for a 12-hour allocation or a validated allocation
+resume path; do not treat this short probe as evidence that a 20M campaign fits
+in six hours.
+
 Earlier A0-core probes on the same GH200 measured 3,026 steps/s for SubprocVecEnv
 and 3,132 steps/s for sharded-16, while ready-state RAM fell from 10.56 GB to
 6.04 GB. This different policy profile shows that backend throughput effects
@@ -56,10 +107,10 @@ depend on the PPO workload; it does not establish an A3 speedup.
   about 60% of wall time, and these measurements do not show that observation
   IPC is the remaining dominant bottleneck. The plan's 10% sustained-throughput
   threshold for that added complexity has not been met.
-- Defer the final trainers-per-GPU and makespan choice until the learning-quality
-  track selects its `n_envs`; changing that value also changes rollout geometry.
-  A future concurrency benchmark should compare aggregate useful steps/s and
-  memory at that frozen setting.
+- Use nine concurrent trainers per GH200 as the current measured candidate if
+  the campaign must run all 18 variants together. Revalidate at the `n_envs`
+  chosen by the learning-quality track, because changing it changes rollout
+  geometry and resource use.
 
 ## Verification and artifacts
 
