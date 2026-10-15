@@ -153,7 +153,8 @@ env:
   observation_age_scale_bars: 60       # v2 position-age normalization scale
   data_source: frames                   # frames remains default until bundle gates pass
   n_envs: 8                           # train_rl RAM-caps this (powers of two); 1 = DummyVecEnv
-  vector_backend: subproc             # subproc or serial; logical n_envs is unchanged
+  vector_backend: subproc             # subproc, serial, or sharded_bundle
+  vector_shards: 0                    # 0 = min(8, n_envs); envs remain independent
   action_type: "discrete"              # "discrete" | "continuous"
   # null = full train-split year (last NY bar truncates; FTMO fail terminates).
   max_episode_steps: null

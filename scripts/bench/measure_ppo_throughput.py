@@ -260,6 +260,7 @@ def _train_probe(
     vector_backend = type(vec_env).__name__
     remotes = getattr(vec_env, "remotes", None)
     physical_worker_count = len(remotes) if remotes is not None else 1
+    logical_envs_per_worker = getattr(vec_env, "logical_envs_per_shard", None)
     vecenv_bytes = _cgroup_memory_bytes()
 
     # n_steps is split by n_envs inside build_agent (n_steps // n_envs per env).
@@ -341,6 +342,9 @@ def _train_probe(
         "vector_backend": vector_backend,
         "configured_vector_backend": str(cfg.env.get("vector_backend", "subproc")),
         "physical_worker_count": physical_worker_count,
+        "logical_envs_per_worker": logical_envs_per_worker
+        if logical_envs_per_worker is not None
+        else [1] * physical_worker_count,
         "total_timesteps": total_timesteps,
         "rollout_steps_per_env": rollout_steps_per_env,
         "aggregate_rollout_size": nominal_env_steps,

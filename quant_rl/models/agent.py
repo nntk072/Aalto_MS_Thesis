@@ -157,9 +157,10 @@ def _build_vector_env(
 
     n_envs = int(getattr(cfg.get("env", {}), "n_envs", 1))
     vector_backend = str(getattr(cfg.get("env", {}), "vector_backend", "subproc"))
-    if vector_backend not in {"subproc", "serial"}:
+    if vector_backend not in {"subproc", "serial", "sharded_bundle"}:
         raise ValueError(
-            f"env.vector_backend must be 'subproc' or 'serial', got {vector_backend!r}"
+            "env.vector_backend must be 'subproc', 'serial', or 'sharded_bundle', "
+            f"got {vector_backend!r}"
         )
     if n_envs <= 1 or env_fn is None:
         return DummyVecEnv([lambda: env])
@@ -189,6 +190,22 @@ def _build_vector_env(
         return DummyVecEnv([_thread_capped_env_fn] * n_envs)
 
     start_method = "forkserver" if use_forkserver else None
+    if vector_backend == "sharded_bundle":
+        if not bundle_workers:
+            raise ValueError("vector_backend='sharded_bundle' requires env.data_source='bundle'")
+        from quant_rl.envs.sharded_vec_env import ShardedBundleVecEnv
+
+        configured_shards = int(getattr(cfg.env, "vector_shards", 0))
+        n_shards = min(8, n_envs) if configured_shards == 0 else configured_shards
+        if n_shards < 1 or n_shards > n_envs:
+            raise ValueError(
+                f"env.vector_shards must be between 1 and env.n_envs ({n_envs}), got {n_shards}"
+            )
+        return ShardedBundleVecEnv(
+            [_thread_capped_env_fn] * n_envs,
+            n_shards=n_shards,
+            start_method=start_method,
+        )
     return SubprocVecEnv([_thread_capped_env_fn] * n_envs, start_method=start_method)
 
 

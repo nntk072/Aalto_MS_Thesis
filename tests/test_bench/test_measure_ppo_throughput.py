@@ -43,7 +43,11 @@ def test_variant_config_uses_production_strategy_merge_and_cli_override(
     cfg, bundle_path, algo, arch = _prepare_bundle(
         tmp_path,
         variant="ladder_a0_flat",
-        overrides=["ppo.n_epochs=7"],
+        overrides=[
+            "ppo.n_epochs=7",
+            "env.vector_backend=sharded_bundle",
+            "env.vector_shards=4",
+        ],
     )
 
     assert bundle_path == tmp_path
@@ -51,4 +55,6 @@ def test_variant_config_uses_production_strategy_merge_and_cli_override(
     assert arch == "tcn"
     assert cfg.strategy.name == "baseline"
     assert cfg.ppo.n_epochs == 7
+    assert cfg.env.vector_backend == "sharded_bundle"
+    assert cfg.env.vector_shards == 4
     assert cfg.ppo.total_timesteps > 0
