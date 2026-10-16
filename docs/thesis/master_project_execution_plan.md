@@ -331,7 +331,10 @@ are not guessed.
 - Fit-dependent transformations are fitted inside each training fold only and
   frozen for the corresponding validation fold.
 - Multi-timeframe features use completed source bars and causal confirmation
-  times; assembled-feature prefix invariance remains a required check.
+  times. A current-source real-market prefix audit has passed at three listed
+  cutoffs across four feature groups representing the 18 resolved variants;
+  repeat it after relevant source/input changes. This sampled check does not
+  replace the remaining fold, cache, execution, or label-causality reviews.
 - Data/cache identities include effective feature config, source data, split,
   and fitting scope. Named prebuilt caches fail closed on missing/mismatched
   hashes rather than silently rebuilding into the same identity.
@@ -1304,17 +1307,26 @@ against an authoritative schedule. This is a bounded bar-file integrity and
 coverage result, not G1 closure: feed/export provenance and data-use terms,
 broker timezone/DST behavior, schedule-aware gap adjudication, quote-age/trade
 impact from missing or duplicate ticks, and the separate feature/cache/fold/
-episode gates remain open. Supplemental M1, tick, feature-cache, prefix, and
-budget evidence from the prior seed-50 source snapshot is archived in
-`docs/thesis/evidence/g1_2026-10-16/README.md`. Its M1/tick hashes match the
-current recovery campaign's inputs, but its cache and prefix results predate
-changes to `features/build.py`, `structure.py`, `swings.py`, and
-`config/default.yaml`; repeat those checks against the final frozen source.
+episode gates remain open. Supplemental M1, tick, feature-cache, historical
+prefix, and budget evidence from the prior seed-50 source snapshot is archived
+in `docs/thesis/evidence/g1_2026-10-16/README.md`. The historical cache/prefix
+reports predate changes to `features/build.py`, `structure.py`, `swings.py`, and
+`config/default.yaml`.
 On source-identical `main` code at `4efbc88`, the focused split/causality/
 alignment/fitting/walk-forward suite passed 42 tests and the tick/fill/quote
 suite passed 14 tests on the existing GH200 allocation. The exact commands and
 scope limits are in `docs/thesis/g1_contract_tests_2026-10-16.json`; these are
-unit/contract tests, not substitutes for the pending real-data reruns.
+unit/contract tests, not substitutes for real-data checks. A fresh raw-feature
+prefix audit, `docs/thesis/g1_feature_prefix_current_source_2026-10-16.json`,
+then passed all 12 profile/cutoff comparisons across four feature groups
+representing all 18 resolved variants, with zero feature deltas. The audit ran
+on job `20990395`; its 32 feature/config source hashes, two M1 input hashes,
+and script hash matched the files at verification. This covers only the listed
+cutoffs using uncached raw builds. Current-source raw-to-cache parity, fold-local
+fit validation, other causal paths, and all other listed validity items remain
+open; rerun the prefix check if any relevant source or input changes. The user
+reported that no broker/feed identity or data-use/publication terms record is
+available, so that provenance gate also remains open.
 
 ### G2 — experiment-design readiness
 

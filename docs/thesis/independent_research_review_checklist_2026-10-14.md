@@ -10,11 +10,12 @@ The prior checklist text below refers to files under
 are absent from the current canonical checkout. A bounded A0/checkpoint parity
 report is not a substitute for the claimed all-18-variant report. Until that
 artifact is restored and hash-checked, reviewers must treat the all-18 parity
-claim as unverified. The feature-prefix report that is available has been
-archived under `evidence/g1_2026-10-16/`, but it used source snapshot
-`8a98f7792f83ce4bbe5cb84f4a2137657d791c02`; feature/config files changed
-afterward, so it does not establish prefix invariance for the current source.
-See the dated [G1 evidence inventory](evidence/g1_2026-10-16/README.md).
+claim as unverified. The archived historical feature-prefix report used source
+snapshot `8a98f7792f83ce4bbe5cb84f4a2137657d791c02`; a fresh current-source
+prefix report is now available at
+[`g1_feature_prefix_current_source_2026-10-16.json`](g1_feature_prefix_current_source_2026-10-16.json).
+See the dated [G1 evidence inventory](evidence/g1_2026-10-16/README.md) for
+scope and hash verification.
 
 This checklist prepares the remaining independent review of the Aalto thesis
 trading-system evidence. It is not itself independent sign-off, a strategy
@@ -38,12 +39,14 @@ campaign decision and evidence boundary are in
   utilization peaks 97%/96%, and lacks allocation-wide cgroup memory and
   process-tree CPU-time measurements. It does not establish a sustained 20M
   resource profile.
-- The archived real-market feature-prefix audit:
-  [`g1_real_market_feature_prefix_20261016_main.json`](evidence/g1_2026-10-16/g1_real_market_feature_prefix_20261016_main.json).
-  It passed 12/12 comparisons across four profiles and three cutoffs, but used
-  source snapshot `8a98f7792f83ce4bbe5cb84f4a2137657d791c02`. Since relevant
-  feature/config files changed, it is historical evidence only; rerun against
-  the frozen thesis source before relying on it.
+- The current-source real-market feature-prefix audit:
+  [`g1_feature_prefix_current_source_2026-10-16.json`](g1_feature_prefix_current_source_2026-10-16.json).
+  It passed 12/12 cutoff/profile comparisons, covering all 18 resolved variants
+  across four feature groups and three cutoffs; each comparison had zero feature
+  delta. All recorded source/config and raw M1 hashes matched at verification.
+  This is sampled prefix evidence, not cache parity, a complete proof of every
+  causal path, or data/strategy validity. The older report remains archived as
+  historical evidence.
 - **All-18-variant full-calendar frames/shared-bundle parity:** the earlier
   checklist cited `outputs/gpu_campaigns/readiness_reaudit_20261014/` and
   `outputs/gpu_campaigns/real_market_frames_bundle_parity_20261013/`, but
@@ -75,7 +78,7 @@ campaign decision and evidence boundary are in
 | Experiment design | Do the registered contrasts support the thesis claims? Which results, if any, are valid within each family? | Baseline, PO3/IFVG, and distribution families differ in reward and action/strategy semantics; do not interpret cross-family differences as isolated causal effects. |
 | Execution and accounting | Are order timing, tick/quote fills, stops, take profits, costs, equity, and drawdown calculations correct for the stated market assumptions? | Code review and focused regressions exist; no independent broker integration or exhaustive reviewer sign-off exists. |
 | Reward and risk | Are the training/evaluation breach penalties, shaped rewards, risk limits, and hard train-equity/survival gates appropriate and consistently interpreted? | Reward is not a profitability metric. All 18 historical 100k pilot gates failed under the then-current rule. The active policy-migration run resumes checkpoints originating from source `937bae5` under campaign source `c2261ca`; this is a training-policy boundary that must remain explicit. Its effective configs disable no-trade and interim equity-gate early aborts. The current final training-survival gate treats PnL, equity slope, and activity as report metrics; max-loss breach or peak trailing drawdown above 10% fail survival. Review the old checkpoint phase, current continuation policy, and final train/test reports separately. |
-| Feature causality | Are the MTF close-time alignments, swing/structure availability, train-only fitting, split boundaries, and cache identities causal? | On 2026-10-14, seven MTF/HTF/variant/swing/sweep/PO3/IFVG files passed 126/126 fixture tests in 5.76s; six causal-feature/split/fit-scope/cache/assembled-causality/leakage files passed 29/29 in 7.01s with two expected Transformer warnings; four entry-gate/eligibility/golden-trace files passed 30/30 in 3.50s (Python 3.12.14, pytest 9.1.1). Current real-market prefix invariance passed 3 profiles × 3 cutoffs with matching hashes. The current-source frames/shared-bundle audit passed 18/18 variants over the full 49,925-step test-calendar trace and 10,000-step active trace per variant; all 36 traces had maximum scalar delta 0.0, with matching source and raw-data hashes. Together these checks strengthen bounded feature/backend causality and parity evidence; they do not establish every execution/label/model-selection path or pristine confirmatory OOS. |
+| Feature causality | Are the MTF close-time alignments, swing/structure availability, train-only fitting, split boundaries, and cache identities causal? | On 2026-10-14, seven MTF/HTF/variant/swing/sweep/PO3/IFVG files passed 126/126 fixture tests in 5.76s; six causal-feature/split/fit-scope/cache/assembled-causality/leakage files passed 29/29 in 7.01s with two expected Transformer warnings; four entry-gate/eligibility/golden-trace files passed 30/30 in 3.50s (Python 3.12.14, pytest 9.1.1). The fresh current-source real-market prefix audit passed 12/12 profile/cutoff comparisons across all 18 resolved variants, with zero feature delta and matching hashes. The claimed all-18 frames/shared-bundle audit artifact is absent from this checkout, so its prior 18/18 claim remains unverified. These bounded checks do not establish every execution/label/model-selection path, strict cache parity, or pristine confirmatory OOS. |
 | Model selection | Is the selection protocol protected from exposed-period and human checkpoint-selection leakage? | The 2026 interval is permanently exposed. The one-seed campaign has no selected candidate and no independent selection record. |
 | Training duration and evaluation | Does each policy receive a meaningful full-year training exposure, and do final evaluations cover the complete train and report-only test periods? | The nominal 20M/64 budget is about 3.14 NY-session episode equivalents per environment only if episodes reach the end. The latest immutable [`live campaign snapshot`](live_campaign_snapshot_2026-10-14_1950.json), SHA-256 `1f38c5eb626741a3221c96ebe879e147dc8369e1976c2b0eb34e6db3da9110af`, captures eight available episode telemetry files across eight variants: 225 completed episodes, all ending on trailing-drawdown breach at 7,338–71,857 of 99,504 train steps; none completed the split. Ten variants had no telemetry file at capture. Training resets return to the first eligible NY bar, so completed episodes restart on the same prefix; this does not prove what dates any still-running environment has visited or that every environment terminated. A tested full-split fix exists on unmerged branch `codex/full-year-episode-coverage` (commit `5f17bd5`); it is not active in the current campaign. No final train-in-sample or report-only test reports exist. The 18-worker run was still at 8.05M–12.82M of 20M when captured. Review per-environment coverage and complete-split reports before deciding whether the user's full-year learning requirement was met. |
 | Performance claims | Do any results support viability, generalization, or confirmatory conclusions? | No. The 18-run pilot failed every training gate; six surviving test replays had at most two trades. No pristine holdout result exists. |
