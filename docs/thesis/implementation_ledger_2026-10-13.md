@@ -2842,3 +2842,24 @@ P2 remains open for a post-campaign deterministic-label fix and repeated
 checkpoint evaluation, generic management-parameter forwarding tests, and
 parity against a completed selected checkpoint. Job `20985591` is still
 running with no campaign trainers; the 18-run manifest remains interrupted.
+
+### P2 resume-checkpoint deserialization — 2026-10-16 13:05 Helsinki
+
+On `gpuarm1`, all 18 attempt-3 checkpoints selected by the immutable
+`reports/cache_recovery.json` for attempt 4 were checked against their recorded
+SHA-256, attempt-3 provenance, interrupted campaign identity, fingerprint, and
+saved timestep, then loaded sequentially with `PPO.load(..., device="cpu")`.
+All 18 passed; loaded counts range from 11M to 14M. The machine-readable
+results are in
+`outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/checkpoint_load_audit_gpuarm1_20261016_rerun.json`.
+This establishes loadability of those resume artifacts in the current GH200
+node environment only; no trainer was started, and it does not prove successful
+continuation, completed training, strategy validity, or readiness.
+
+The generic `scripts/matrix/audit_campaign_checkpoint_loads.py` was not usable
+for this interrupted campaign state: it follows the manifest's attempt-4
+counter, whose workers failed before PPO, instead of the preserved attempt-3
+resume pointers. The bounded load audit therefore consumed the recovery report
+directly. Repair or replace the generic audit selection path after the live
+campaign boundary. The campaign remains 18/18 interrupted; P1/P2 remain open
+and thesis readiness remains NOT READY.

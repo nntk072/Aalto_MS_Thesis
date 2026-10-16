@@ -641,6 +641,28 @@ frame/bundle parity replay matched every compared result field for 177,210
 test bars. Both are historical exploratory audits, not confirmatory evidence.
 P1 and P2 remain open, and readiness remains NOT READY.
 
+### Live execution update — 2026-10-16 13:08 Helsinki
+
+On `gpuarm1`, all 18 attempt-3 recovery checkpoints selected for attempt 4
+passed SHA-256, provenance, campaign identity/fingerprint, saved-step, and
+`PPO.load(device="cpu")` checks. The report is
+`outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/checkpoint_load_audit_gpuarm1_20261016_rerun.json`.
+The generic audit CLI did not follow these pointers because it selects the
+failed attempt-4 counter; this limitation and the bounded result are recorded
+under P2. No trainer was started.
+
+Allocation `20985591` remains RUNNING on `gpuarm1` and `gpuarm2`, two GH200s,
+48 CPUs and 512 GiB RAM per node, scheduled to end at 17:32:47 Helsinki.
+At 13:08 both GH200s reported 0% utilization and 0 MiB used; Slurm shows only
+the allocation, `.extern`, and `.0` steps. The old controller's release marker
+remains absent because its worker fan-out predates the persistent dispatcher.
+The guarded supervisor remains available to request the next allocation after
+this one ends; no duplicate allocation or extra Slurm step was submitted.
+
+The documentation update passed full-tree Ruff format/check, full-tree Mypy
+(438 source files), and 15 focused recovery/evidence tests on `gpuarm1` at
+13:06. Readiness remains NOT READY; P1 and P2 remain open.
+
 ---
 
 ## 6. Dependency graph: Codex agent horizontal execution to results freeze
@@ -1072,6 +1094,19 @@ Verify:
   training snapshot says `data_source=bundle`. The backend parity contract must
   be demonstrated for each exact reported checkpoint and source/config
   lineage; a generic unit test or checkpoint hash is insufficient.
+- All 18 exact attempt-3 resume checkpoints selected for attempt 4 were
+  checksum-checked and sequentially deserialized with `PPO.load(...,
+  device="cpu")` on `gpuarm1`. Each loaded timestep matched the recovery record
+  (11M–14M); the report also records attempt-3 provenance hashes and the active
+  campaign fingerprint:
+  `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/checkpoint_load_audit_gpuarm1_20261016_rerun.json`.
+  This closes checkpoint deserialization for the current resume inputs only;
+  it does not establish that workers can resume successfully or that later
+  checkpoints/configs evaluate correctly. The generic
+  `audit_campaign_checkpoint_loads.py` did not resolve these inputs because it
+  selects the manifest's latest attempt (failed attempt 4), rather than the
+  preserved attempt-3 recovery pointers. Fix or replace that audit path after
+  the active campaign boundary.
 
 Do not edit fingerprinted training/evaluation source while the active campaign
 is live. Complete any required source correction after the campaign boundary,
