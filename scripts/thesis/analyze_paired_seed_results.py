@@ -25,6 +25,7 @@ from quant_rl.evaluation.matched_comparison import INTERVENTION_FIELDS, MATCH_FI
 BOOTSTRAP_DRAWS = 10_000
 EXACT_SIGN_FLIP_MAX_PAIRS = 15
 MONTE_CARLO_SIGN_FLIP_DRAWS = 100_000
+MIN_PAIRED_SEEDS = 5
 
 
 def _finite_number(value: Any, *, field: str) -> float:
@@ -62,8 +63,8 @@ def _validate_pair_input(
     ):
         raise ValueError("metrics must be a non-empty list of unique names")
     pairs = payload.get("pairs")
-    if not isinstance(pairs, list) or len(pairs) < 2:
-        raise ValueError("at least two completed matched seed pairs are required")
+    if not isinstance(pairs, list) or len(pairs) < MIN_PAIRED_SEEDS:
+        raise ValueError(f"at least {MIN_PAIRED_SEEDS} completed matched seed pairs are required")
 
     seen_seeds: set[int] = set()
     seen_run_ids: set[str] = set()

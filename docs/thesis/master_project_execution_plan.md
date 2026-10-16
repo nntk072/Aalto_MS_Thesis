@@ -1658,8 +1658,8 @@ Prepare and validate now:
 `scripts/thesis/analyze_paired_seed_results.py` provides a separate paired-seed
 analysis stage. It fails closed unless each arm is a succeeded
 `matched_confirmation` or `robustness` run, every declared match field is
-present and equal except the explicit intervention, and at least two unique
-seed pairs are supplied. It preserves per-seed arm values and run provenance,
+present and equal except the explicit intervention, and at least five unique
+seed pairs are supplied, matching P7's minimum. It preserves per-seed arm values and run provenance,
 reports a deterministic paired-seed bootstrap interval, an exact sign-flip
 test where the number of pairs permits it (otherwise a seeded Monte Carlo
 version), and Holm-adjusted p-values across requested metrics. It labels the

@@ -89,10 +89,10 @@ def test_paired_seed_analysis_rejects_uncompleted_or_selection_runs() -> None:
             analyze_paired_seed_metrics(payload)
 
 
-def test_paired_seed_analysis_requires_two_paired_seeds_and_full_identity() -> None:
+def test_paired_seed_analysis_requires_five_pairs_and_full_identity() -> None:
     payload = _payload()
-    payload["pairs"] = payload["pairs"][:1]
-    with pytest.raises(ValueError, match="at least two"):
+    payload["pairs"] = payload["pairs"][:4]
+    with pytest.raises(ValueError, match="at least 5"):
         analyze_paired_seed_metrics(payload)
 
     payload = _payload()

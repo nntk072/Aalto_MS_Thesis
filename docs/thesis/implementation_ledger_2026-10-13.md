@@ -2869,7 +2869,8 @@ and thesis readiness remains NOT READY.
 Added `scripts/thesis/analyze_paired_seed_results.py` and
 `tests/test_thesis_paired_seed_statistics.py`. The utility validates successful
 matched-confirmation/robustness arms, unique seed/run identities, all
-`MATCH_FIELDS`, and a single declared intervention; it records per-seed arm
+`MATCH_FIELDS`, a single declared intervention, and the plan's minimum of five
+paired seeds; it records per-seed arm
 values and provenance, a paired-seed bootstrap interval, sign-flip p-values,
 and Holm adjustment across requested metrics. Its output marks between-seed
 uncertainty separately from the existing moving-block path bootstrap and
