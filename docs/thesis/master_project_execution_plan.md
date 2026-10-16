@@ -1349,6 +1349,17 @@ restriction/context. If more than one dimension must differ, state that the
 comparison is a bundled system intervention rather than claiming single-rule
 causality.
 
+The active seed-50 screen's resolved configurations have already been compared
+for design match. `ladder_a0_flat` is the pure legacy A0 reference (default
+features, DSR reward, legacy action semantics); `ladder_a0_flat_po3` and
+`ladder_a0_flat_dist` use the full PO3/MTF profile, different strategies and
+PNL reward, strategy actions, and PD context. These rows are therefore bundled
+system comparisons, not matched RQ1 arms. The hash-backed comparison is
+`docs/thesis/seed50_screen_config_match_audit_2026-10-16.json`; its source
+campaign copy is retained under `outputs/`.
+Keep the distinction when reporting the screen; define a separate matched pair
+only after P4 and do not select it from the previously inspected holdout.
+
 ### 13.2 RQ3 mechanism evidence
 
 Use the 18-way screen to choose the smallest set of management mechanisms worth

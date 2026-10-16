@@ -1,0 +1,85 @@
+{
+  "schema": "aalto.screen_config_comparison.v1",
+  "created_at_local": "2026-10-16T17:58:35+03:00",
+  "evidence_role": "pre-result resolved-config match audit; not a training or evaluation outcome",
+  "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+  "campaign_fingerprint": "91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e",
+  "campaign_git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+  "common_design": {
+    "algo": "ppo",
+    "arch": "tcn",
+    "seed": 50,
+    "requested_total_timesteps": 20000000,
+    "n_envs": 64,
+    "data_source": "shared_bundle",
+    "split": {"train_end": "2025-12-31", "test_start": "2026-01-01"},
+    "holdout_role": "selection_acknowledged; previously inspected"
+  },
+  "variants": {
+    "ladder_a0_flat": {
+      "resolved_config": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat__seed50/attempt1/ladder_a0_flat__seed50/resolved_config.json",
+      "resolved_config_sha256": "ee10eb518736954028579c60812d6ce91fc99ac0aedcbc8c9256cbf86415ec56",
+      "base_config": "quant_rl/config/default.yaml",
+      "feature_profile": "default",
+      "strategy": "baseline",
+      "reward_mode": "dsr",
+      "strategy_actions": false,
+      "include_pd_context": false,
+      "feature_cache": "data/prebuilt_feature_cache/baseline.parquet"
+    },
+    "ladder_a0_flat_po3": {
+      "resolved_config": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat_po3__seed50/attempt1/ladder_a0_flat_po3__seed50/resolved_config.json",
+      "resolved_config_sha256": "88eab88f238352b88d4ea353ed1ea0d530cac1a629203e0843fff0a4f3d9f44a",
+      "base_config": "config/features/full_po3_mtf.yaml",
+      "feature_profile": "full_po3",
+      "strategy": "po3_ifvg",
+      "reward_mode": "pnl",
+      "strategy_actions": true,
+      "include_pd_context": true,
+      "feature_cache": "data/prebuilt_feature_cache/idea1_po3_ifvg.parquet",
+      "additional_overrides": [
+        "features.include_session_ohlc=true",
+        "features.liquidity.enabled=true",
+        "features.po3_state_mtf.enabled=true",
+        "features.ifvg_mtf.enabled=true",
+        "features.include_strategy_state=true",
+        "features.structure.enabled=true",
+        "env.open_manipulation_bars=0",
+        "env.peak_trailing_dd_limit=0"
+      ]
+    },
+    "ladder_a0_flat_dist": {
+      "resolved_config": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat_dist__seed50/attempt1/ladder_a0_flat_dist__seed50/resolved_config.json",
+      "resolved_config_sha256": "96d57742d2cd9f00d23bf8e0bf9b954123c41a5d0861f961e3bb66ac6dd25e8e",
+      "base_config": "config/features/full_po3_mtf.yaml",
+      "feature_profile": "full_po3",
+      "strategy": "distribution",
+      "reward_mode": "pnl",
+      "strategy_actions": true,
+      "include_pd_context": true,
+      "feature_cache": "data/prebuilt_feature_cache/idea2_distribution.parquet",
+      "additional_overrides": [
+        "features.include_session_ohlc=true",
+        "features.liquidity.enabled=true",
+        "features.po3_state_mtf.enabled=true",
+        "features.ifvg_mtf.enabled=true",
+        "features.include_strategy_state=true",
+        "features.structure.enabled=true",
+        "env.open_manipulation_bars=0",
+        "env.peak_trailing_dd_limit=0"
+      ]
+    }
+  },
+  "pair_assessment": {
+    "ladder_a0_flat_vs_ladder_a0_flat_po3": {
+      "matched": false,
+      "differences": ["base config and feature profile", "feature/structure context", "strategy", "reward mode", "strategy action schema", "PD context"]
+    },
+    "ladder_a0_flat_vs_ladder_a0_flat_dist": {
+      "matched": false,
+      "differences": ["base config and feature profile", "feature/structure context", "strategy", "reward mode", "strategy action schema", "PD context"]
+    },
+    "allowed_interpretation": "Exploratory bundled complete-system comparisons only; not an isolated structural-overlap treatment effect and not confirmatory evidence.",
+    "p5_requirement": "After P4, specify a separate matched RQ1 control/treatment holding reward, action semantics, costs, risk, data, budget, and checkpoint rule fixed, changing only the declared structural intervention. Do not select the pair using the previously inspected holdout."
+  }
+}
