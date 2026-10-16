@@ -2788,3 +2788,37 @@ their chronological exposure is reconciled. P2's source implementation is
 present, but deterministic recovery/evaluation using a real campaign
 checkpoint remains unverified. No strategy result or readiness claim is
 supported by these infrastructure failures or partial checkpoints.
+
+### P2 replay audit and pushed recovery tooling — 2026-10-16 12:39 Helsinki
+
+Commit `2211712` (`Add guarded campaign recovery and evidence indexing`) is
+pushed to `origin/main`. Its gpuarm1 gate passed at 12:11: full-tree Ruff
+format/check, full-tree Mypy over 436 source files, and 44 focused tests. A
+prelaunch evidence index was generated at
+`outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/thesis_evidence_index_prelaunch_20985591.json`;
+it verifies all 228 campaign source hashes and four recorded input-data hashes.
+
+For P2, the interrupted 14M-step `ladder_a0_flat__seed50` attempt-3 checkpoint
+(`a5f4b47f8b1e523bde501c71a56f1f3e9ccae62674951fc83fd38e89fb422530`) was
+loaded and replayed twice on gpuarm1 using the saved config, deterministic
+actions, and both chronological splits. Each pass covered 351,550 training
+bars and 177,210 test bars. The training result was Sharpe -3.8747, return
+-7.3197%, 231 trades; the historical test result was Sharpe -0.9420, return
+-0.6891%, 107 trades. Equity CSVs and metric JSONs were byte-identical between
+passes. All other trade columns were identical, but `level_type` differed for
+53 training and 23 test rows (`london_low` versus `asian_low`). The audit
+`reports/p2_replay_determinism_audit_20261016.json` traces the likely cause to
+`TradingEnv._matched_entry_level` taking the maximum timestamp from a set with
+no deterministic tie-break. A 12-process characterization with tied
+`london_low`/`asian_low` crossing times and different `PYTHONHASHSEED` values
+returned each label for six seeds, confirming the source-level tie-break
+defect. Since `level_type` drives temporal subgroup reports, full
+replay/report determinism is not proven. These descriptive
+results use a partial checkpoint and a previously inspected,
+selection-acknowledged test split; they are not confirmatory strategy evidence.
+
+P2 remains open: fix the tie-break only after the active campaign boundary,
+then rerun the exact replay and action-dependent frame/shared-bundle parity
+checks. Job `20985591` remains held without trainer steps; it predates the
+dispatcher and will not be released into its old worker-step fan-out. The
+campaign remains 18/18 interrupted and thesis readiness remains NOT READY.

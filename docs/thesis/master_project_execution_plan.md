@@ -1022,6 +1022,21 @@ Verify:
   It does not prove equality of action-dependent fills, equity, breaches, and
   trade summaries for the campaign policy. Add or run that stronger comparison
   against an authorized checkpoint before treating P2 as closed.
+- A real 14M-step, interrupted `ladder_a0_flat__seed50` attempt-3 checkpoint was
+  loaded and evaluated twice on gpuarm1, over 351,550 training bars and 177,210
+  test bars per pass. Equity CSVs and aggregate metrics were byte-identical.
+  Trade event rows were identical except `level_type`: 53 training rows and 23
+  test rows changed from `london_low` to `asian_low`. Source inspection finds
+  `_matched_entry_level` chooses the maximum crossing time over a set, without
+  a tie-break for equal timestamps. A 12-process characterization of this
+  method with equal `london_low`/`asian_low` crossing times and different
+  `PYTHONHASHSEED` values returned each label for six seeds, confirming the
+  tie-break is process-order dependent. Because `level_type` feeds temporal
+  subgroup reports, full report determinism is not established.
+  The detailed artifact is
+  `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/p2_replay_determinism_audit_20261016.json`.
+  Stabilize the label selection and repeat the audit after the active campaign
+  boundary; do not edit this fingerprinted source during the live campaign.
 - The report-only evaluator reconstructs the run from frames even when the
   training snapshot says `data_source=bundle`. The backend parity contract must
   be demonstrated for the exact reported checkpoint and source/config lineage;
@@ -2060,7 +2075,7 @@ Update this table as the persistent agent control surface. It is status, not a s
 |---|---|---|---|---|
 | P0 | Safe boundary/current snapshot | ACTIVE — 2026-10-16 live snapshot; campaign identity preserved; GPU start gate held | — | P2 prep, E0 |
 | P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE — 18 interrupted after attempt-4 cache-path infrastructure failure; validated attempt-3 resume pointers; no resumed workers yet | P0 | P2, E0 |
-| P2 | Deterministic evaluator/schema repair | IMPLEMENTED; CHECKPOINT RECOVERY OPEN | P0 | P1, E0 |
+| P2 | Deterministic evaluator/schema repair | ACTIVE — real checkpoint replays match equity/metrics but expose `level_type` nondeterminism; source fix deferred to campaign boundary; frame/bundle parity open | P0 | P1, E0 |
 | E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index and persistent worker dispatcher pass bounded GPU-node checks; live campaign index built; runtime integration pending | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | review prep, result packaging |
