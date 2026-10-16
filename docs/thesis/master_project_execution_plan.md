@@ -334,7 +334,9 @@ are not guessed.
   times. A current-source real-market prefix audit has passed at three listed
   cutoffs across four feature groups representing the 18 resolved variants;
   repeat it after relevant source/input changes. This sampled check does not
-  replace the remaining fold, cache, execution, or label-causality reviews.
+  replace the remaining fold, execution, or label-causality reviews. Current-
+  source raw-to-cache parity also passed for four representative feature
+  profiles; confirm each resolved variant's cache mapping at the final freeze.
 - Data/cache identities include effective feature config, source data, split,
   and fitting scope. Named prebuilt caches fail closed on missing/mismatched
   hashes rather than silently rebuilding into the same identity.
@@ -1306,8 +1308,8 @@ them missing bars because market closures/holidays have not been checked
 against an authoritative schedule. This is a bounded bar-file integrity and
 coverage result, not G1 closure: feed/export provenance and data-use terms,
 broker timezone/DST behavior, schedule-aware gap adjudication, quote-age/trade
-impact from missing or duplicate ticks, and the separate feature/cache/fold/
-episode gates remain open. Supplemental M1, tick, feature-cache, historical
+impact from missing or duplicate ticks, and the separate fold/episode gates
+remain open. Supplemental M1, tick, feature-cache, historical
 prefix, and budget evidence from the prior seed-50 source snapshot is archived
 in `docs/thesis/evidence/g1_2026-10-16/README.md`. The historical cache/prefix
 reports predate changes to `features/build.py`, `structure.py`, `swings.py`, and
@@ -1322,11 +1324,17 @@ then passed all 12 profile/cutoff comparisons across four feature groups
 representing all 18 resolved variants, with zero feature deltas. The audit ran
 on job `20990395`; its 32 feature/config source hashes, two M1 input hashes,
 and script hash matched the files at verification. This covers only the listed
-cutoffs using uncached raw builds. Current-source raw-to-cache parity, fold-local
-fit validation, other causal paths, and all other listed validity items remain
-open; rerun the prefix check if any relevant source or input changes. The user
-reported that no broker/feed identity or data-use/publication terms record is
-available, so that provenance gate also remains open.
+cutoffs using uncached raw builds. The current-source raw-to-cache report,
+`docs/thesis/g1_feature_cache_raw_parity_current_source_2026-10-16.json`, also
+passed all four representative feature profiles: indexes/columns and content
+hash sidecars matched, with zero value, NaN-mask, or numeric deltas. Cache files
+were read-only. Its 32 source/config hashes, two M1 hashes, four cache-file
+hashes, and the audit-script hash were verified; this does not replace checking
+the resolved cache mapping for every variant at final freeze. Fold-local fit
+validation, other causal paths, and all other listed validity items remain open;
+rerun both audits after relevant source or input changes. The user reported
+that no broker/feed identity or data-use/publication terms record is available,
+so that provenance gate also remains open.
 
 ### G2 — experiment-design readiness
 
