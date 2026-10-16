@@ -1068,9 +1068,16 @@ Verify:
   observation/action schemas before replay. The current `ladder18_seed50` saved
   config uses the defaults `risk.sl_mode=fixed`, SL/TP defer thresholds `0.1`,
   TP breakeven alpha `0.5`, PPO, and no VAE, so these values match the current
-  evaluator defaults. The generic evaluation contract still needs explicit
-  forwarding/tests for those configured management values before a selected
-  pair that changes them can be evaluated.
+  evaluator defaults. Generic management-value forwarding is also covered:
+  `_build_eval_common` maps the saved SL/TP mode, TP reference, defer thresholds,
+  breakeven alpha, and EOD-risk settings into report evaluation, and
+  `tests/test_envs/test_eligibility_wiring.py::test_management_settings_match_training_and_evaluation_environment_kwargs`
+  compares non-default values with the training environment. On 2026-10-16,
+  the focused evaluation/config suite passed 22 tests across that file,
+  `tests/test_rollout.py`, and `tests/test_eval/test_eval_run_provenance.py`.
+  This closes generic management-value forwarding coverage; it does not replace
+  exact saved-checkpoint recovery/parity or completed-selected-checkpoint
+  acceptance.
 - Existing frame/shared-bundle evaluation parity coverage uses a hold action.
   It does not prove equality of action-dependent fills, equity, breaches, and
   trade summaries for the campaign policy. Add or run that stronger comparison
