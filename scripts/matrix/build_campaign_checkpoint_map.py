@@ -4,11 +4,23 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import pathlib
 import sys
+from typing import Any, cast
 
-from scripts.matrix.campaign_controller import ROOT, build_initial_checkpoint_map
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+CONTROLLER_PATH = ROOT / "scripts" / "matrix" / "campaign_controller.py"
+CONTROLLER_SPEC = importlib.util.spec_from_file_location(
+    "campaign_controller_for_checkpoint_map", CONTROLLER_PATH
+)
+if CONTROLLER_SPEC is None or CONTROLLER_SPEC.loader is None:
+    raise ImportError(f"cannot load campaign controller from {CONTROLLER_PATH}")
+CONTROLLER_MODULE = importlib.util.module_from_spec(CONTROLLER_SPEC)
+sys.modules[CONTROLLER_SPEC.name] = CONTROLLER_MODULE
+CONTROLLER_SPEC.loader.exec_module(CONTROLLER_MODULE)
+build_initial_checkpoint_map = cast(Any, CONTROLLER_MODULE).build_initial_checkpoint_map
 
 
 def main() -> int:
@@ -39,7 +51,10 @@ def main() -> int:
     try:
         output.relative_to(ROOT.resolve())
     except ValueError:
-        raise ValueError("checkpoint map output must be stored inside this repository") from None
+        raise ValueError(
+            f"checkpoint map output must be stored inside this repository "
+            f"(output={output}, repository={ROOT.resolve()})"
+        ) from None
     if output.exists():
         raise FileExistsError(f"refusing to replace existing checkpoint map: {output}")
     data = build_initial_checkpoint_map(args.source_campaign, required_keys, args.timesteps)

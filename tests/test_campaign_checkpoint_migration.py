@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -18,6 +19,20 @@ SPEC = importlib.util.spec_from_file_location("campaign_controller", MODULE_PATH
 assert SPEC is not None and SPEC.loader is not None
 controller = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(controller)
+
+
+def test_checkpoint_map_cli_loads_controller_from_its_own_worktree(tmp_path: Path) -> None:
+    script = MODULE_PATH.with_name("build_campaign_checkpoint_map.py")
+    result = subprocess.run(
+        [sys.executable, str(script), "--help"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Create an immutable checkpoint-lineage map" in result.stdout
 
 
 def _source_campaign(tmp_path: Path) -> tuple[Path, Path, dict[str, Any]]:
