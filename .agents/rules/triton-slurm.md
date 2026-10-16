@@ -138,19 +138,22 @@ run the command inside an existing shell.
 - GPU count limits are **partition and workload specific**, not global. Follow
   the per-family caps in the table below; check Slurm availability and account
   limits before each request. For the current thesis campaign, the user has set
-  a hard cap of **2 GH200 GPUs assigned at once** and **2 per allocation
-  request**. This cap does not apply to V100 or other GPU families.
+  a hard aggregate cap of **2 GH200 GPUs total across all active allocations**
+  and **2 per allocation request**. Count GPUs across jobs and nodes, including
+  pending jobs that could overlap. For example, requesting 1 GH200 on gpuarm1
+  plus 2 on gpuarm2 (or 2 on gpuarm1 plus 1 on gpuarm2) is forbidden because
+  the combined total is 3. The intended 18-trainer layout is one GH200 on each
+  of two nodes. This cap does not apply to V100 or other GPU families.
 - Before any GH200 request, inspect all active and pending campaign jobs with
   `squeue` and `scontrol show job`. Never request more than 2 GH200 in one job,
-  combine allocations to run more than 2 simultaneously, or request two on one
-  node plus another on a second node. The 18-trainer shape is at most one GH200
-  on each of two nodes (`--nodes=2 --gpus-per-node=gh200:1`). To avoid an idle
+  combine allocations to run more than 2 simultaneously, or request a 2-GH200
+  allocation on one node plus any additional GH200 on another. To avoid an idle
   gap, one successor request for 2 GH200 may be queued while the current pair
   runs only when it has an explicit Slurm dependency on the current job's
   termination, guaranteeing no allocation overlap. Do not create multiple
   pending successors or submit an unchained overlapping request. Confirm the
-  dependency and requested GRES in `scontrol show job`; no more than 2 GPUs may
-  be allocated concurrently.
+  dependency and aggregate requested GRES in `scontrol show job`; no more than
+  2 GH200s may be allocated concurrently.
 
 ## Before allocating (after user OK) — check availability
 
