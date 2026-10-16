@@ -1,0 +1,29 @@
+{
+  "schema": "aalto.live_campaign_snapshot.v1",
+  "captured_at_utc": "2026-10-16T08:19:42Z",
+  "repository": {
+    "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis",
+    "branch": "main",
+    "head": "f6c11118984276acfb0e09501d0526561e0f500b",
+    "working_tree": "clean"
+  },
+  "campaign": {
+    "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016",
+    "manifest": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/campaign.json",
+    "fingerprint": "3474621efd6a1481bd2a20bce0cfd2c0b69969df1849c6cd738d19dc5bb4ba34",
+    "recorded_git_sha": "8a98f7792f83ce4bbe5cb84f4a2137657d791c02",
+    "requested": "18 variants, seed 50, 20M steps each, n_envs=64, two GH200 nodes",
+    "state": "18 failed at attempt 4; no successful or active workers",
+    "last_allocation": "20985281 FAILED, 00:03:38, exit 1; two GH200 nodes gpuarm1/gpuarm2",
+    "failure_evidence": "All workers failed in quant_rl.data.pipeline.run_pipeline at cache_dir.mkdir(..., exist_ok=True), raising FileExistsError because repository cache was a dangling self-referential symlink.",
+    "preserved_checkpoints": "19 checkpoint archives remain under attempt3; latest known progress before attempt4 was approximately 11M-14M steps per variant.",
+    "supervisor": "tmux session thesis-seed50 is absent; allocation_supervisor exited after all 18 campaign identities were marked failed.",
+    "allocation_state": "No active Slurm jobs observed at capture time."
+  },
+  "local_repair": {
+    "path": "cache",
+    "change": "Preserved the former self-referential symlink at cache/.old-self-referential-cache-link and created a real empty cache directory.",
+    "effect": "The observed mkdir failure condition is removed; cache contents still need to be built before concurrent workers resume."
+  },
+  "readiness": "P0 snapshot captured. P1 remains incomplete; do not treat any attempt4 failure as strategy evidence or the campaign as complete."
+}

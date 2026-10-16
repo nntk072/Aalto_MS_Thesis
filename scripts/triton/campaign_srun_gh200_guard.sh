@@ -44,5 +44,16 @@ campaign_srun_gh200_guard() {
 
 srun() {
   campaign_srun_gh200_guard "$@" || return $?
-  command srun "$@"
+
+  local repo="${TRITON_REPO:-/scratch/work/nguyenl37/Aalto_MS_Thesis}"
+  local -a forwarded=("$@")
+  local i
+  for ((i = 0; i + 1 < ${#forwarded[@]}; i++)); do
+    if [[ "${forwarded[i]}" == "bash" \
+      && "${forwarded[i + 1]}" == "$repo/scripts/matrix/run_campaign_18way_cpumask_allocation.sh" ]]; then
+      forwarded[i + 1]="$repo/scripts/triton/campaign_allocation_wrapper.sh"
+      break
+    fi
+  done
+  command srun "${forwarded[@]}"
 }
