@@ -1125,6 +1125,22 @@ Verify:
   in-sample parity for one interrupted checkpoint, not strategy or
   confirmatory evidence; P2 remains open for the other regression requirements
   and a completed selected checkpoint.
+- A second action-dependent in-sample parity audit used the interrupted
+  12M-step `ladder_a0_flat_dist__seed50` attempt-3 checkpoint. The report records
+  the original campaign fingerprint, attempt provenance, saved config and
+  feature-cache hashes, the `main` HEAD and clean working tree, and the audit
+  script hash. Frame and shared-bundle evaluation matched every recorded field
+  (equity, trades, account, breaches/events, actions, rewards, diagnostics,
+  step/session counts, and aggregate metrics) over 99,504 steps on the 351,550
+  training bars; both paths recorded 771 trade-event rows / 59 completed trades.
+  The result is negative (about -$10,630 net PnL, 15.8% maximum drawdown, and
+  one breach), so it is useful only as backend-parity evidence for this
+  interrupted in-sample checkpoint. It does not show a successful or completed
+  policy and is not confirmatory evidence. Report:
+  `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/p2_checkpoint_frame_bundle_train_a0_dist_12m_20261016/audit.json`.
+  P2 remains open for completed-selected-checkpoint acceptance, repeated
+  deterministic report validation, and the other schema/compatibility
+  requirements above.
 - The report-only evaluator reconstructs the run from frames even when the
   training snapshot says `data_source=bundle`. The backend parity contract must
   be demonstrated for each exact reported checkpoint and source/config
