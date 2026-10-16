@@ -16,6 +16,7 @@ Do not infer node architecture from the SSH gateway.
 | --- | --- | --- | --- |
 | ARM64 / `aarch64` | `gpuarm1`, NVIDIA GH200 | `.venv` | `uv sync --locked --extra dev` with ARM64 uv |
 | AMD64 / `x86_64` | H100/H200 compute nodes | `.venv-x86` | `scripts/setup/setup_venv_x86.sh` on x86_64 |
+| AMD64 / `x86_64` | V100 (CC 7.0) | `.venv-v100` | Separate environment; torch 2.14.0+cu126, Python 3.12, project lock dependencies excluding its cu130 CUDA packages. Verify `sm_70`, CC `(7, 0)`, and a real CUDA op before use. |
 
 Activate with `source scripts/triton/activate_venv.sh` from the correct
 compute node. Inspect `command -v python`, `readlink -f "$(command -v python)"`,
@@ -24,6 +25,15 @@ Never execute ARM64 venv entrypoints from an x86_64 login shell or reuse
 compiled packages across architectures. GPU types, RAM, partitions, and
 availability change; inspect current Slurm state rather than hardcoding
 resource assumptions.
+
+The x86 `.venv-x86` is built with torch 2.14.0+cu130 and does not include V100
+(`sm_70`) kernels. The V100 environment is isolated from it and uses the
+CUDA 12.6 wheel that includes `sm_70`. Its creation must not edit `pyproject.toml`
+or `uv.lock`; install application dependencies from the locked export while
+excluding the torch/cu130 CUDA runtime packages, then install `torch==2.14.0`
+from the official cu126 index. Re-run the compatibility checks after recreating
+the environment. Do not claim V100 training support from environment creation
+alone; a representative trainer smoke run is still required.
 
 ## Storage characteristics
 

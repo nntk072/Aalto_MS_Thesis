@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Reuse an existing GPU tmux/srun shell, or allocate ONE long interactive srun.
 #
-# GPU priority: H200 first (if usable), else GH200.
-# Always 1 GPU. Time: 12h if partition MaxTime allows, else 6h.
+# Default picker: H200 first (if usable), else GH200, with a 1-GPU request.
+# This is a helper default, not a project-wide GPU cap; see the family-specific
+# limits in .agents/rules/triton-slurm.md. Time: 12h if allowed, else 6h.
 #
 # Env overrides:
 #   PARTITION  GPUS  MEM  CPUS  TIME
