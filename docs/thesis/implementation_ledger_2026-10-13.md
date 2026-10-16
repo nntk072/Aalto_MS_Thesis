@@ -2744,3 +2744,47 @@ independent review, or valid confirmatory holdout exists.
 ### Trainer speed optimization plan
 
 [`trainer_speed_optimization_plan.md`](../training/trainer_speed_optimization_plan.md) records a staged, measurement-first plan for phase profiling, trainer/GPU concurrency, `n_envs`, callback overhead, and PPO update settings. Current samples do not prove a single bottleneck; source/config changes and benchmarking are deferred until the live campaign and resume watcher are terminal so the campaign fingerprint remains valid.
+
+### Campaign recovery and live allocation — 2026-10-16 12:04 Helsinki
+
+The current 18-variant seed-50 campaign is
+`ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016`, fingerprint
+`3474621efd6a1481bd2a20bce0cfd2c0b69969df1849c6cd738d19dc5bb4ba34`.
+Attempt 4 failed for all 18 identities before PPO training because the shared
+bar-cache path was a self-referential symlink. The failure is classified and
+retained in `reports/attempt4_infrastructure_reconciliation.json`; worker logs
+and provenance are preserved. The cache path is now a real directory with 14
+nonempty configured bar caches. The recovery record in
+`reports/cache_recovery.json` preserves each attempt-4 log hash and the hash of
+its attempt-3 resume checkpoint. The manifest's 18 resume pointers now refer to
+attempt 3 (11M–14M steps), with pre-repair manifest and report backups retained.
+The current manifest remains 18/18 `interrupted`; attempt 5 has not begun.
+
+Slurm job `20985591` is RUNNING on `gpuarm1` and `gpuarm2`, requesting one
+GH200, 48 CPUs and 512 GiB RAM per node, with a six-hour wall time ending
+17:32 Helsinki. The live Slurm topology contains only allocation step `.0` and
+`.extern`; no worker steps exist. The controller's start marker is absent. This
+allocation predates the persistent per-node dispatcher code now in the working
+tree, so it remains held rather than starting the fingerprinted controller
+with its old worker-step fan-out. The guarded supervisor is still live in tmux
+session `thesis-seed50`; its next allocation goes through the updated wrapper.
+
+The wrapper, dispatcher, recovery validation, tests, and evidence-index builder
+are uncommitted on canonical `main`. They are outside the campaign's 228 hashed
+source paths; those source hashes were verified without mismatches before this
+work. At 12:11 Helsinki, gpuarm1 completed full-tree Ruff format/check,
+full-tree Mypy (436 source files), and 44 focused tests. It also generated
+`reports/thesis_evidence_index_prelaunch_20985591.json`; the index verifies all
+228 recorded campaign source hashes and all four recorded market-data input
+hashes, and explicitly says full chronological split exposure and checkpoint
+deserialization are not established. This verifies bounded tooling and
+inventory only, not campaign readiness. The active allocation's preflight
+process predates the dispatcher and remains held without a training marker; do
+not release its older worker-step fan-out. The current captured state is
+[`live_campaign_snapshot_2026-10-16_1158.json`](live_campaign_snapshot_2026-10-16_1158.json).
+
+P1 remains open until all 18 runs resume, reach terminal dispositions, and
+their chronological exposure is reconciled. P2's source implementation is
+present, but deterministic recovery/evaluation using a real campaign
+checkpoint remains unverified. No strategy result or readiness claim is
+supported by these infrastructure failures or partial checkpoints.

@@ -41,6 +41,30 @@ def _atomic_json(path: Path, value: dict[str, Any]) -> None:
     os.replace(temporary, path)
 
 
+def _checkpoint_attempt(checkpoint: Path, campaign_dir: Path) -> int:
+    relative = checkpoint.resolve().relative_to(campaign_dir.resolve())
+    attempts = [
+        int(match.group(1))
+        for part in relative.parts
+        if (match := re.fullmatch(r"attempt(\d+)", part)) is not None
+    ]
+    if len(attempts) != 1:
+        raise ValueError(f"resume checkpoint has ambiguous attempt lineage: {checkpoint}")
+    return attempts[0]
+
+
+def _write_immutable_backup(path: Path, contents: bytes) -> None:
+    if path.exists():
+        if path.read_bytes() != contents:
+            raise FileExistsError(f"recovery backup differs from current evidence: {path}")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("xb") as stream:
+        stream.write(contents)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
 def prepare_campaign_resume(campaign_dir: Path) -> dict[str, Any]:
     manifest_path = campaign_dir / "campaign.json"
     original_bytes = manifest_path.read_bytes()
@@ -52,6 +76,7 @@ def prepare_campaign_resume(campaign_dir: Path) -> dict[str, Any]:
 
     failed: list[dict[str, Any]] = []
     checkpoint_steps: list[int] = []
+    resume_attempt_by_key: dict[str, int] = {}
     for job in jobs:
         if job.get("status") != "failed":
             continue
@@ -76,7 +101,12 @@ def prepare_campaign_resume(campaign_dir: Path) -> dict[str, Any]:
             raise ValueError(f"failed attempt unexpectedly contains checkpoints for {key}")
 
         provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
-        if provenance.get("attempt") != attempt_number:
+        if (
+            provenance.get("attempt") != attempt_number
+            or provenance.get("run_key") != key
+            or provenance.get("variant") != job.get("variant")
+            or provenance.get("seed") != job.get("seed")
+        ):
             raise ValueError(f"attempt provenance number mismatch for {key}")
         if provenance.get("campaign_fingerprint") != fingerprint:
             raise ValueError(f"attempt fingerprint mismatch for {key}")
@@ -89,10 +119,14 @@ def prepare_campaign_resume(campaign_dir: Path) -> dict[str, Any]:
             raise ValueError(f"resume checkpoint escapes this campaign for {key}")
         if not checkpoint.is_file() or _sha256(checkpoint) != checkpoint_hash:
             raise ValueError(f"resume checkpoint is missing or changed for {key}")
+        checkpoint_attempt = _checkpoint_attempt(checkpoint, campaign_dir)
+        if checkpoint_attempt >= attempt_number:
+            raise ValueError(f"resume checkpoint is not earlier than failed attempt for {key}")
         match = re.search(r"ppo_ckpt_(\d+)_steps\.zip$", checkpoint.name)
         if not match:
             raise ValueError(f"resume checkpoint step is not identifiable for {key}")
         checkpoint_steps.append(int(match.group(1)))
+        resume_attempt_by_key[key] = checkpoint_attempt
         failed.append(
             {
                 "key": key,
@@ -102,34 +136,100 @@ def prepare_campaign_resume(campaign_dir: Path) -> dict[str, Any]:
                 "resume_checkpoint": checkpoint_raw,
                 "resume_checkpoint_sha256": checkpoint_hash,
                 "resume_checkpoint_steps": int(match.group(1)),
+                "resume_checkpoint_attempt": checkpoint_attempt,
             }
         )
 
     if not failed:
+        recovery_path = campaign_dir / "reports" / "cache_recovery.json"
+        if not recovery_path.is_file():
+            return {
+                "campaign_fingerprint": fingerprint,
+                "requeued": 0,
+                "already_resumable": True,
+            }
+        recovery_bytes = recovery_path.read_bytes()
+        recovery_report = json.loads(recovery_bytes)
+        if recovery_report.get("campaign_fingerprint") != fingerprint:
+            raise ValueError("cache recovery report fingerprint does not match campaign")
+        jobs_by_key = {str(job.get("key", "")): job for job in jobs}
+        corrections: list[dict[str, Any]] = []
+        for item in recovery_report.get("requeued_identities", []):
+            key = str(item.get("key", ""))
+            job = jobs_by_key.get(key)
+            if job is None or job.get("status") != "interrupted":
+                continue
+            attempt_number = int(item.get("attempt", 0))
+            log_path = campaign_dir / str(item.get("log", ""))
+            if not log_path.is_file() or _sha256(log_path) != item.get("log_sha256"):
+                raise ValueError(f"recovery report log is missing or changed for {key}")
+            provenance_path = (
+                campaign_dir
+                / "runs"
+                / "attempts"
+                / key
+                / f"attempt{attempt_number}"
+                / "attempt_provenance.json"
+            )
+            if not provenance_path.is_file():
+                raise ValueError(f"recovery report provenance is missing for {key}")
+            provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+            checkpoint = Path(str(item.get("resume_checkpoint", "")))
+            if (
+                provenance.get("campaign_fingerprint") != fingerprint
+                or provenance.get("run_key") != key
+                or provenance.get("attempt") != attempt_number
+                or provenance.get("resume_checkpoint") != str(checkpoint)
+                or provenance.get("resume_checkpoint_sha256")
+                != item.get("resume_checkpoint_sha256")
+                or not checkpoint.is_file()
+                or _sha256(checkpoint) != item.get("resume_checkpoint_sha256")
+            ):
+                raise ValueError(f"recovery report checkpoint is missing or changed for {key}")
+            checkpoint_attempt = _checkpoint_attempt(checkpoint, campaign_dir)
+            previous_attempt = job.get("resume_from_attempt")
+            if previous_attempt != checkpoint_attempt:
+                corrections.append(
+                    {
+                        "key": key,
+                        "previous_resume_from_attempt": previous_attempt,
+                        "resume_from_attempt": checkpoint_attempt,
+                        "resume_checkpoint": str(checkpoint),
+                    }
+                )
+                job["resume_from_attempt"] = checkpoint_attempt
+
+        if corrections:
+            current_manifest_bytes = manifest_path.read_bytes()
+            backup_path = (
+                campaign_dir / "reports" / "campaign_manifest_before_resume_attempt_repair.json"
+            )
+            _write_immutable_backup(backup_path, current_manifest_bytes)
+            report_backup = (
+                campaign_dir / "reports" / "cache_recovery_before_resume_attempt_repair.json"
+            )
+            _write_immutable_backup(report_backup, recovery_bytes)
+            recovery_report["resume_attempt_corrections"] = corrections
+            recovery_report["resume_attempt_repair_manifest_backup"] = str(
+                backup_path.relative_to(campaign_dir)
+            )
+            _atomic_json(manifest_path, manifest)
+            _atomic_json(recovery_path, recovery_report)
         return {
             "campaign_fingerprint": fingerprint,
             "requeued": 0,
-            "already_resumable": True,
+            "resume_attempt_corrections": len(corrections),
+            "already_resumable": not corrections,
         }
 
     backup_path = campaign_dir / "reports" / "campaign_manifest_before_cache_recovery.json"
-    if backup_path.exists():
-        if backup_path.read_bytes() != original_bytes:
-            raise FileExistsError(
-                f"recovery backup already exists with different content: {backup_path}"
-            )
-    else:
-        backup_path.parent.mkdir(parents=True, exist_ok=True)
-        with backup_path.open("xb") as stream:
-            stream.write(original_bytes)
-            stream.flush()
-            os.fsync(stream.fileno())
+    _write_immutable_backup(backup_path, original_bytes)
 
     lineage_before = json.dumps(manifest.get("initial_checkpoint_lineage"), sort_keys=True)
     for job in jobs:
         if job.get("status") == "failed":
             job["status"] = "interrupted"
-            job["resume_from_attempt"] = int(job["attempts"])
+            job["resume_from_attempt"] = resume_attempt_by_key[str(job["key"])]
     if (
         manifest.get("fingerprint") != fingerprint
         or json.dumps(manifest.get("initial_checkpoint_lineage"), sort_keys=True) != lineage_before

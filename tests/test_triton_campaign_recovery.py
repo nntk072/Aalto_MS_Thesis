@@ -35,6 +35,9 @@ def _campaign_fixture(root: Path) -> tuple[Path, bytes]:
         provenance = {
             "attempt": attempt,
             "campaign_fingerprint": fingerprint,
+            "run_key": key,
+            "variant": key.removesuffix("__seed50"),
+            "seed": 50,
             "resume_checkpoint": str(checkpoint),
             "resume_checkpoint_sha256": checkpoint_hash,
         }
@@ -48,6 +51,8 @@ def _campaign_fixture(root: Path) -> tuple[Path, bytes]:
         jobs.append(
             {
                 "key": key,
+                "variant": key.removesuffix("__seed50"),
+                "seed": 50,
                 "attempts": attempt,
                 "status": "failed",
                 "failure_reason": "infrastructure failure",
@@ -71,7 +76,7 @@ def test_resume_requeues_only_proven_infrastructure_failures(tmp_path: Path) -> 
     recovered = json.loads((campaign / "campaign.json").read_text())
     assert result["requeued"] == 18
     assert {job["status"] for job in recovered["jobs"]} == {"interrupted"}
-    assert {job["resume_from_attempt"] for job in recovered["jobs"]} == {4}
+    assert {job["resume_from_attempt"] for job in recovered["jobs"]} == {3}
     assert recovered["fingerprint"] == "a" * 64
     assert (
         recovered["initial_checkpoint_lineage"]
@@ -87,6 +92,34 @@ def test_resume_requeues_only_proven_infrastructure_failures(tmp_path: Path) -> 
     assert second_result["requeued"] == 0
     assert second_result["already_resumable"] is True
     assert (campaign / "campaign.json").read_bytes() == after_recovery
+
+
+def test_resume_repairs_incorrect_attempt_pointer_from_checkpoint_lineage(
+    tmp_path: Path,
+) -> None:
+    campaign, _original = _campaign_fixture(tmp_path)
+    prepare_campaign_resume(campaign)
+    manifest_path = campaign / "campaign.json"
+    manifest = json.loads(manifest_path.read_text())
+    for job in manifest["jobs"]:
+        job["resume_from_attempt"] = 4
+    incorrect_manifest = json.dumps(manifest, indent=2) + "\n"
+    manifest_path.write_text(incorrect_manifest)
+
+    result = prepare_campaign_resume(campaign)
+
+    repaired = json.loads(manifest_path.read_text())
+    assert result["resume_attempt_corrections"] == 18
+    assert {job["resume_from_attempt"] for job in repaired["jobs"]} == {3}
+    manifest_backup = campaign / "reports" / "campaign_manifest_before_resume_attempt_repair.json"
+    assert manifest_backup.read_text() == incorrect_manifest
+    report = json.loads((campaign / "reports" / "cache_recovery.json").read_text())
+    assert len(report["resume_attempt_corrections"]) == 18
+    assert all(
+        correction["previous_resume_from_attempt"] == 4 and correction["resume_from_attempt"] == 3
+        for correction in report["resume_attempt_corrections"]
+    )
+    assert prepare_campaign_resume(campaign)["already_resumable"] is True
 
 
 def test_resume_refuses_unknown_failure_without_mutating_manifest(tmp_path: Path) -> None:

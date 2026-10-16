@@ -583,6 +583,42 @@ is to finish/reconcile the current screen, make final evaluation trustworthy,
 freeze a valid matched experiment, and obtain the complete evidence package needed
 for thesis writing afterward.
 
+### Live execution update — 2026-10-16 12:04 Helsinki
+
+Campaign `ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016` retains its
+original fingerprint `3474621efd6a1481bd2a20bce0cfd2c0b69969df1849c6cd738d19dc5bb4ba34`.
+All 18 attempt-4 workers failed before training at `cache_dir.mkdir` because
+`cache` was a self-referential symlink. Their logs and provenance remain intact.
+The cache path is now a real directory with the 14 configured nonempty bar
+caches. Resume pointers were corrected to the hash-verified attempt-3 checkpoints
+(11M–14M steps); the correction and immutable backups are recorded in
+`outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/cache_recovery.json`
+and adjacent recovery reports. The campaign manifest remains 18/18
+`interrupted`; no resumed attempt has started.
+
+Slurm job `20985591` is RUNNING on `gpuarm1` and `gpuarm2`, with one GH200,
+48 CPUs and 512 GiB RAM per node, scheduled to end at 17:32 Helsinki. It has
+only the allocation step and `.extern`; no worker steps or trainers are active.
+Its training release marker remains absent. This allocation began before the
+persistent worker-dispatch changes on disk, so it stays held until natural
+expiry. The updated wrapper, dispatcher, recovery checks, and evidence-index
+writer passed a fresh gpuarm1 gate at 12:11 Helsinki: full-tree Ruff
+format/check, full-tree Mypy (436 source files), and 44 focused tests. The
+evidence index was built on gpuarm1; it verifies all 228 recorded source hashes
+and all four recorded market-data input hashes, while retaining limitations
+for complete split exposure and checkpoint deserialization. These changes are
+still uncommitted. The live allocation's preflight process predates the
+dispatcher and its start marker remains absent; do not release that older
+controller into worker-step fan-out. Do not infer training progress, strategy
+evidence, or a READY state from the allocation or saved partial checkpoints.
+
+The point-in-time machine-readable record is
+[`live_campaign_snapshot_2026-10-16_1158.json`](live_campaign_snapshot_2026-10-16_1158.json).
+The current checkout is `/scratch/work/nguyenl37/Aalto_MS_Thesis`, branch
+`main`, HEAD `45ef1a0`; 228 recorded campaign source hashes were verified with
+no mismatches before the dispatcher work, which changes only paths outside the
+campaign source-hash manifest.
+
 ---
 
 ## 6. Dependency graph: Codex agent horizontal execution to results freeze
@@ -972,6 +1008,29 @@ Verify:
 - legacy/default behavior when new schema arguments are absent;
 - observation coordinate count/order and action coordinate count/order;
 - no change to trade/fill/equity results caused solely by the compatibility fix.
+
+### Audit notes — open until exercised on a real checkpoint
+
+- `eval_run.py` now forwards the observation schema and age scale and validates
+  observation/action schemas before replay. The current `ladder18_seed50` saved
+  config uses the defaults `risk.sl_mode=fixed`, SL/TP defer thresholds `0.1`,
+  TP breakeven alpha `0.5`, PPO, and no VAE, so these values match the current
+  evaluator defaults. The generic evaluation contract still needs explicit
+  forwarding/tests for those configured management values before a selected
+  pair that changes them can be evaluated.
+- Existing frame/shared-bundle evaluation parity coverage uses a hold action.
+  It does not prove equality of action-dependent fills, equity, breaches, and
+  trade summaries for the campaign policy. Add or run that stronger comparison
+  against an authorized checkpoint before treating P2 as closed.
+- The report-only evaluator reconstructs the run from frames even when the
+  training snapshot says `data_source=bundle`. The backend parity contract must
+  be demonstrated for the exact reported checkpoint and source/config lineage;
+  a generic unit test or checkpoint hash is insufficient.
+
+Do not edit fingerprinted training/evaluation source while the active campaign
+is live. Complete any required source correction after the campaign boundary,
+or prove that the selected evaluation lineage uses only the audited default
+values, then run the exact saved-checkpoint recovery comparison.
 
 ### Exit criterion
 
@@ -1999,10 +2058,10 @@ Update this table as the persistent agent control surface. It is status, not a s
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE | — | P2 prep, E0 |
-| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE | P0 | P2, E0 |
+| P0 | Safe boundary/current snapshot | ACTIVE — 2026-10-16 live snapshot; campaign identity preserved; GPU start gate held | — | P2 prep, E0 |
+| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE — 18 interrupted after attempt-4 cache-path infrastructure failure; validated attempt-3 resume pointers; no resumed workers yet | P0 | P2, E0 |
 | P2 | Deterministic evaluator/schema repair | IMPLEMENTED; CHECKPOINT RECOVERY OPEN | P0 | P1, E0 |
-| E0 | Evidence/result pipeline + indexes | ACTIVE | P0 | P1, P2 |
+| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index and persistent worker dispatcher pass bounded GPU-node checks; live campaign index built; runtime integration pending | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | review prep, result packaging |
 | P5 | Freeze matched design/baselines | BLOCKED | P4 | P6 prep, review |

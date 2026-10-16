@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aalto.example/schemas/thesis-trial-ledger-v1.json",
+  "title": "Aalto thesis experiment and attempt ledger",
+  "description": "Append-only inventory of runs and attempts, including failed, interrupted, inactive, and excluded work.",
+  "type": "object",
+  "required": ["schema", "updated_at_utc", "records"],
+  "properties": {
+    "schema": {"const": "aalto.thesis_trial_ledger.v1"},
+    "updated_at_utc": {"type": "string", "format": "date-time"},
+    "records": {"type": "array", "items": {"$ref": "#/$defs/record"}},
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  },
+  "$defs": {
+    "record": {
+      "type": "object",
+      "required": ["record_id", "record_type", "campaign_id", "run_id", "status", "evidence_role", "source_sha", "config_sha256", "artifacts", "disposition"],
+      "properties": {
+        "record_id": {"type": "string", "minLength": 1},
+        "record_type": {"enum": ["run", "attempt"]},
+        "campaign_id": {"type": "string", "minLength": 1},
+        "run_id": {"type": "string", "minLength": 1},
+        "attempt": {"type": ["integer", "null"], "minimum": 1},
+        "variant": {"type": "string", "minLength": 1},
+        "seed": {"type": "integer"},
+        "evidence_role": {"enum": ["smoke", "development", "selection", "robustness", "final_report_only", "runtime_benchmark", "correctness", "other"]},
+        "status": {"enum": ["planned", "running", "succeeded", "failed", "interrupted", "inactive", "excluded"]},
+        "source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "config_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "data_sha256": {"type": "array", "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+        "cache_sha256": {"type": "array", "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+        "checkpoint_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "requested_timesteps": {"type": ["integer", "null"], "minimum": 0},
+        "completed_timesteps": {"type": ["integer", "null"], "minimum": 0},
+        "n_envs": {"type": ["integer", "null"], "minimum": 1},
+        "started_at_utc": {"type": ["string", "null"], "format": "date-time"},
+        "ended_at_utc": {"type": ["string", "null"], "format": "date-time"},
+        "artifacts": {"type": "array", "items": {"type": "string"}},
+        "disposition": {"type": "string", "minLength": 1},
+        "supersedes_record_id": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
