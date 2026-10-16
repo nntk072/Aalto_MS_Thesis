@@ -29,10 +29,9 @@ def test_worker_command_binds_one_gpu_from_shared_allocation() -> None:
         gpu_id=1,
     )
 
-    assert command[:11] == [
+    assert command[:9] == [
         "srun",
         "--overlap",
-        "--exact",
         "--nodes=1",
         "--ntasks=1",
         "--nodelist=gpuarm2",
@@ -40,8 +39,8 @@ def test_worker_command_binds_one_gpu_from_shared_allocation() -> None:
         "--gpus=gh200:2",
         "--gpu-bind=map_gpu:1",
         "--cpu-bind=cores",
-        "--chdir",
     ]
+    assert command[9:11] == ["--chdir", str(controller.ROOT)]
 
 
 def test_worker_command_uses_explicit_cpu_mask_when_provided() -> None:
@@ -55,6 +54,7 @@ def test_worker_command_uses_explicit_cpu_mask_when_provided() -> None:
     )
 
     assert "--cpu-bind=mask_cpu:0x3e0" in command
+    assert "--exact" not in command
     assert "--expected-cpus" in command
     assert ",".join(str(cpu) for cpu in range(5, 10)) in command
     assert command[-2:] == ["python", "train.py"]

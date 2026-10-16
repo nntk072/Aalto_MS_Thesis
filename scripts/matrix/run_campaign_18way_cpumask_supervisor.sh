@@ -3,8 +3,8 @@
 set -Eeuo pipefail
 
 REPO="${TRITON_REPO:-/scratch/work/nguyenl37/Aalto_MS_Thesis-main}"
-SPEC="${CAMPAIGN_SPEC:-config/campaigns/18_variant_seed50_20m_full_split_n64_cpumask_20261016.yaml}"
-CAMPAIGN_ID="${CAMPAIGN_ID:-ladder18_seed50_20m_full_split_n64_cpumask_20261016}"
+SPEC="${CAMPAIGN_SPEC:-config/campaigns/18_variant_seed50_20m_full_split_n64_cpumask_v2_20261016.yaml}"
+CAMPAIGN_ID="${CAMPAIGN_ID:-ladder18_seed50_20m_full_split_n64_cpumask_v2_20261016}"
 SOURCE_CAMPAIGN="${SOURCE_CAMPAIGN:-$REPO/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016}"
 OUT_DIR="$REPO/outputs/gpu_campaigns/$CAMPAIGN_ID"
 LOG="$OUT_DIR/logs/allocation_supervisor.log"
@@ -44,7 +44,7 @@ allocation_active() {
     return 0
   fi
   printf '%s\n' "$queued" | awk '
-    $1 == "thesis18cpumask" && ($2 == "RUNNING" || $2 == "PENDING" || $2 == "CONFIGURING") { found=1 }
+    $1 == "thesis18maskv2" && ($2 == "RUNNING" || $2 == "PENDING" || $2 == "CONFIGURING") { found=1 }
     END { exit !found }
   '
 }
@@ -74,7 +74,7 @@ while true; do
     --partition=gpu-grace-h200-141g \
     --nodes=2 --ntasks=2 --ntasks-per-node=1 \
     --cpus-per-task=48 --gpus-per-node=gh200:1 --mem=512G \
-    --time=06:00:00 --job-name=thesis18cpumask \
+    --time=06:00:00 --job-name=thesis18maskv2 \
     --export=ALL,TRITON_REPO="$REPO",CAMPAIGN_SPEC="$SPEC",CAMPAIGN_ID="$CAMPAIGN_ID",SOURCE_CAMPAIGN="$SOURCE_CAMPAIGN" \
     --chdir="$REPO" \
     bash "$REPO/scripts/matrix/run_campaign_18way_cpumask_allocation.sh"

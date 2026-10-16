@@ -207,7 +207,6 @@ def worker_command(
     result = [
         "srun",
         "--overlap",
-        "--exact",
         "--nodes=1",
         "--ntasks=1",
         f"--nodelist={node}",
