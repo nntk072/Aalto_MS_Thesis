@@ -8,6 +8,12 @@ if [[ ! -s "$campaign_manifest" ]]; then
   return 0
 fi
 
+# activate_venv.sh may be sourced again by nested validation scripts. Keep the
+# first real Git path and shim environment instead of wrapping the shim itself.
+if [[ "${CAMPAIGN_GIT_IDENTITY_ACTIVE:-}" == "1" ]]; then
+  return 0
+fi
+
 campaign_recorded_git_sha="$(python - "$campaign_manifest" <<'PY'
 import json
 import sys
@@ -44,5 +50,6 @@ chmod 700 "$campaign_git_shim_dir/git"
 export CAMPAIGN_GIT_IDENTITY_SHA="$campaign_recorded_git_sha"
 export CAMPAIGN_GIT_IDENTITY_REPO="$(cd "$TRITON_REPO" && pwd -P)"
 export CAMPAIGN_GIT_IDENTITY_REAL_GIT="$campaign_real_git"
+export CAMPAIGN_GIT_IDENTITY_ACTIVE=1
 export PATH="$campaign_git_shim_dir:$PATH"
 echo "Campaign resume will retain recorded Git identity $campaign_recorded_git_sha; source hashes remain enforced."

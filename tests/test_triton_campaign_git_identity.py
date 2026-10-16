@@ -66,7 +66,7 @@ def test_campaign_resume_shim_scopes_recorded_sha_to_controller(tmp_path: Path) 
         [
             "bash",
             "-c",
-            'cd "$TRITON_REPO"; source "$1"; git rev-parse HEAD; "$3" "$2"',
+            'cd "$TRITON_REPO"; source "$1"; source "$1"; git rev-parse HEAD; "$3" "$2"',
             "campaign-identity-test",
             str(script),
             str(controller),
