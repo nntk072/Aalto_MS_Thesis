@@ -172,10 +172,11 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
   one request and stop.
 - **Before alloc:** check `sinfo`/`squeue` for free GPU/CPU/RAM and apply the
   partition and GPU-family guidance in `.agents/rules/triton-slurm.md`. The
-  current thesis campaign has a user-set hard cap of 2 GH200 GPUs total across
-  active and pending campaign allocations; account for existing jobs before
-  submitting a recovery request. Its 18-trainer placement is one GH200 per
-  node across two nodes. This cap does not apply to other GPU families. The
+  current thesis campaign has a user-set hard cap of 2 GH200 GPUs allocated at
+  once and 2 GPUs per allocation request. A single successor request may be
+  queued with a Slurm dependency that guarantees it starts only after the
+  active allocation ends. Its 18-trainer placement is one GH200 per node
+  across two nodes. This cap does not apply to other GPU families. The
   2026-10-16 V100 probe uses 1 V100 shared by 2 trainers;
   `.venv-x86` cu130 is incompatible with V100, so use `.venv-v100` only after
   checking `sm_70` support and a real CUDA operation. Match venv architecture

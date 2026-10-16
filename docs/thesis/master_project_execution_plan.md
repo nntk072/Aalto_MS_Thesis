@@ -2276,9 +2276,9 @@ Update this table as the persistent agent control surface. It is status, not a s
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
 | P0 | Safe boundary/current snapshot | ACTIVE — latest immutable snapshot remains `live_campaign_snapshot_2026-10-16_1750.json`. Canonical main was clean at `413729e` when the recovery started; the campaign records that Git SHA and 230 source hashes (documentation is excluded). Job `20990395` is RUNNING on gpuarm1/gpuarm2 (one GH200, 48 CPUs and 512 GiB per node), started 17:34:29 and scheduled to end 23:34:29. At the 18:53 check, its wrapper/controller were alive and it was the only active or pending job for the user; no duplicate recovery request was present. The old gated allocation 20985591 is terminal. No jobs were canceled |
-| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE — original audit covers 18 identities and 72 attempts. The 18 original attempt-3 checkpoints were 11–14M; attempt-4 workers had failed before training at cache-directory creation. Recovery campaign `ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016`, fingerprint `91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e`, is running all 18 identities from validated attempt-3 checkpoints under a distinct ID, targeting 20M total at `n_envs=64` with the shared bundle. GPU CI passed on gpuarm1 (Ruff format/check, Mypy 446 files, and 30 focused tests). At 18:53, process inspection found all 18 trainers active (9/node), with latest worker checkpoint markers from 12M to 16M. One GPU sample showed 100% utilization on each GH200 and 78,334/146,831 and 79,961/146,831 MiB used; this is an instantaneous reading, not a stabilized resource profile. No 20M terminal result or final evaluation is recorded. The current run is selection-acknowledged and exploratory because the locked holdout was previously inspected; do not use it as confirmatory or architecture-selection evidence. The 14/228 changed-source review and exact cache-refresh report remain at the paths recorded above | P0 | P2, E0 |
+| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE — original audit covers 18 identities and 72 attempts. The 18 original attempt-3 checkpoints were 11–14M; attempt-4 workers had failed before training at cache-directory creation. Recovery campaign `ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016`, fingerprint `91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e`, is running all 18 identities from validated attempt-3 checkpoints under a distinct ID, targeting 20M total at `n_envs=64` with the shared bundle. GPU CI passed on gpuarm1 (Ruff format/check, Mypy 446 files, and 30 focused tests). At 19:08, latest checkpoint markers across all 18 worker logs ranged from 13M to 17M; a 19:10 process check found nine trainers on each node. The 18:53 GPU snapshot showed 100% utilization per GH200 and 78,334/146,831 and 79,961/146,831 MiB used; that single sample is not a stabilized resource profile. No 20M terminal result or final evaluation is recorded. The current run is selection-acknowledged and exploratory because the locked holdout was previously inspected; do not use it as confirmatory or architecture-selection evidence. The 14/228 changed-source review and exact cache-refresh report remain at the paths recorded above | P0 | P2, E0 |
 | P2 | Deterministic evaluator/schema repair | ACTIVE — stable lexical tie-break and train/eval risk/management wiring implemented. Evaluation bundle workers now disable training-only trailing guardrails; training workers retain them. Current main passed full-tree Ruff/Mypy and pytest (1,561 tests, 27 subtests, 38 warnings). A real 14M interrupted baseline checkpoint matches frame/shared-bundle outputs over inspected test and all 351,550 in-sample training bars. A separate 12M interrupted Idea 2 checkpoint also matched both backends on 99,504 training-split steps; a repeated audit produced identical report-level metrics and parity fields. Neither is a completed selected checkpoint; repeated serialized trade-event determinism, broader evaluator/provenance acceptance, and completed-checkpoint parity remain open | P0 | P1, E0 |
-| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and all-attempt screen reconciler. `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/thesis_evidence_index_post_source_review_20261016.json` hashes the incomplete-screen finding card and current-main source review; the recovery cache refresh report records exact output equality and retained backups. Final run/result analysis awaits P1/P2 | P0 | P1, P2 |
+| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and all-attempt screen reconciler. Current-source G1 evidence now includes 12/12 feature-prefix comparisons and 4/4 representative raw-cache parity profiles, with source/data/cache hashes recorded. `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/thesis_evidence_index_post_source_review_20261016.json` hashes the incomplete-screen finding card and current-main source review; the recovery cache refresh report records exact output equality and retained backups. Final run/result analysis awaits P1/P2 | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | review prep, result packaging |
 | P5 | Freeze matched design/baselines | BLOCKED | P4 | P6 prep, review |
@@ -2290,15 +2290,16 @@ Update this table as the persistent agent control surface. It is status, not a s
 | P9 | `RESULTS_PACKAGE_COMPLETE` handoff | BLOCKED | P8 + E1 | archive/index QA |
 | Q0–Q7 | Research extension | OPTIONAL/GATED | stage parents | within-stage arms only |
 
-**GH200 allocation guard (user direction, 2026-10-16 18:46 Helsinki):** the
-current thesis campaign may use at most **2 GH200 GPUs total across all its
-active and pending allocations**. The active job `20990395` holds that pair,
-one GPU on each of `gpuarm1` and `gpuarm2`; do not submit an additional GH200
-allocation while it holds both. The cluster's four configured GH200s describe
-hardware capacity, not this campaign's allocation allowance. Before any later
-recovery request, count GPUs already requested by active and pending campaign
-jobs plus the proposed request; the aggregate must remain at or below two.
-For the 18-trainer shape, retain one GPU per node across two nodes.
+**GH200 allocation guard (user direction, 2026-10-16):** the thesis campaign
+may have at most **2 GH200 GPUs allocated at once**, and no single allocation
+request may ask for more than 2. The active job `20990395` holds that pair,
+one GPU on each of `gpuarm1` and `gpuarm2`. The cluster's four configured
+GH200s describe hardware capacity, not this campaign's allocation allowance.
+For continuity, one 2-GH200 successor may be queued behind an explicit Slurm
+dependency on the current job's termination; verify the dependency prevents
+overlap. Never combine requests to run more than 2 at once, or request two GPUs
+on one node plus another on a second node. For the 18-trainer shape, retain one
+GPU per node across two nodes.
 
 ## 39. Immediate actions for one long-running Codex agent
 
