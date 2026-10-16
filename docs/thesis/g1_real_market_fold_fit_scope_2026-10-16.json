@@ -1,0 +1,373 @@
+{
+  "affected_campaign_run_count": 17,
+  "affected_campaign_runs": [
+    "ladder_a0_flat_dist__seed50",
+    "ladder_a0_flat_po3__seed50",
+    "ladder_a1_sl__seed50",
+    "ladder_a1_sl_dist__seed50",
+    "ladder_a1_sl_po3__seed50",
+    "ladder_a2_tp__seed50",
+    "ladder_a2_tp_dist__seed50",
+    "ladder_a2_tp_po3__seed50",
+    "ladder_a3_multi_tp__seed50",
+    "ladder_a3_multi_tp_dist__seed50",
+    "ladder_a3_multi_tp_po3__seed50",
+    "ladder_a4a_entry_fsm_hidden__seed50",
+    "ladder_a4a_entry_fsm_hidden_dist__seed50",
+    "ladder_a4a_entry_fsm_hidden_po3__seed50",
+    "ladder_a4b_distribution__seed50",
+    "ladder_a4b_entry_fsm__seed50",
+    "ladder_a4b_po3_ifvg__seed50"
+  ],
+  "all_profiles_pass": false,
+  "audit": "real_market_purged_fold_fit_scope_poison_test",
+  "audit_script_sha256": "636fe862391ec7aaf3cf98d590357034de0a704dc8ba86afd6e24e732176f3ef",
+  "cache_resolution_report_sha256": "8db13db526e1b2e1faf40c45c27d2e645036c1b9e8f085965ed88c790accf89e",
+  "campaign_fingerprint": "91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e",
+  "campaign_git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+  "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+  "completed_at": "2026-10-16T19:45:20.724923+03:00",
+  "failed_profiles": [
+    "ladder_a0_flat_dist",
+    "ladder_a0_flat_po3",
+    "ladder_a1_sl"
+  ],
+  "fold_rows_available": 60000,
+  "raw_inputs_sha256": {
+    "data/US100.cash_M1_202412300105_202607031959.csv": "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+    "data/US500.cash_M1_202412300105_202607031959.csv": "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9"
+  },
+  "repository_head": "bdfff3d4c08c6288f13ec2393d8bb913436aacdd",
+  "results": [
+    {
+      "changed_features_model_visible": {},
+      "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat__seed50/attempt1/ladder_a0_flat__seed50/20261016_173541_834754_rl_train_seed50_tcn/config.yaml",
+      "config_sha256": "fbdc54103b775c611f2c4d091b5e3494bac91b7d89babbe2b7f8676a844b509f",
+      "embargo_bars": 20,
+      "feature_hash": "4842532f87d90b84",
+      "fold": 0,
+      "passed": true,
+      "purge_bars": 60,
+      "temporary_cache_keys": [
+        "US100.cash_features_v20-mtf-swing-candidates_bedb74a35de520a7.parquet",
+        "US100.cash_features_v20-mtf-swing-candidates_2cf951fa300664f7.parquet"
+      ],
+      "train_changed_feature_detail": {
+        "changed_column_count": 0,
+        "changed_columns": [],
+        "first_changed_rows": []
+      },
+      "train_feature_sha256_original": "c2882a2aa79b3e6775b0e4154ca816f4a2ab534dbd21d68269bc00fe412e3951",
+      "train_feature_sha256_poisoned": "c2882a2aa79b3e6775b0e4154ca816f4a2ab534dbd21d68269bc00fe412e3951",
+      "train_features_identical_after_validation_poison": true,
+      "train_last": "2025-02-12 05:39:00+03:00",
+      "train_max_abs_delta": 0.0,
+      "train_rows": 41920,
+      "validation_feature_sha256_original": "635dee26ec8e5f5e1d64294a46586abf0dab5d8f91bc14bd0cad05e8cbe557cb",
+      "validation_feature_sha256_poisoned": "292f48fde0c13d4c1ee87c955f4adba6d40a720e0fa89be71641be0d29da7ebf",
+      "validation_features_changed": true,
+      "validation_first": "2025-02-12 07:00:00+03:00",
+      "validation_max_abs_delta": 4707.060805920893,
+      "validation_rows": 6000,
+      "variant": "ladder_a0_flat"
+    },
+    {
+      "changed_features_model_visible": {
+        "prev_ny_high": true,
+        "prev_ny_low": true
+      },
+      "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a1_sl__seed50/attempt1/ladder_a1_sl__seed50/20261016_173854_725508_rl_train_seed50_tcn/config.yaml",
+      "config_sha256": "cf9d534110484ce57e5e0778593afe9de5744ceb586ba46422a3ba23af4027dc",
+      "embargo_bars": 20,
+      "feature_hash": "6edf3a05ec601d16",
+      "fold": 0,
+      "passed": false,
+      "purge_bars": 60,
+      "temporary_cache_keys": [
+        "US100.cash_features_v20-mtf-swing-candidates_057bf972ac1a0539.parquet",
+        "US100.cash_features_v20-mtf-swing-candidates_a1072d8f34579fc6.parquet"
+      ],
+      "train_changed_feature_detail": {
+        "changed_column_count": 2,
+        "changed_columns": [
+          "prev_ny_high",
+          "prev_ny_low"
+        ],
+        "first_changed_rows": [
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:31:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:32:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:33:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:34:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:35:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:36:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:37:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:38:00+03:00"
+          }
+        ]
+      },
+      "train_feature_sha256_original": "22c6689851a72f0fb140bb2117a3e192613089ee0f3ed5c84bd9e594000f54e3",
+      "train_feature_sha256_poisoned": "2f850eadde7734266bab14d1a8210124fcb17e8ff61b9d0f0263bf878e9e2900",
+      "train_features_identical_after_validation_poison": false,
+      "train_last": "2025-02-12 05:39:00+03:00",
+      "train_max_abs_delta": 4336.549999999999,
+      "train_rows": 41920,
+      "validation_feature_sha256_original": "679e4dc1bb05e84753216a0c74ed08b20c3aaf976efa83d4f0da9351daa37ad0",
+      "validation_feature_sha256_poisoned": "506a1e67ad5fda761a1fc8e2a1301ccffb36a9b8b1d60551a74409c153d9da01",
+      "validation_features_changed": true,
+      "validation_first": "2025-02-12 07:00:00+03:00",
+      "validation_max_abs_delta": 26116.62,
+      "validation_rows": 6000,
+      "variant": "ladder_a1_sl"
+    },
+    {
+      "changed_features_model_visible": {
+        "prev_ny_high": true,
+        "prev_ny_low": true
+      },
+      "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat_po3__seed50/attempt1/ladder_a0_flat_po3__seed50/20261016_173544_291860_rl_train_seed50_tcn/config.yaml",
+      "config_sha256": "ab81d893d12ae6b4b11a47bef608633e9a8f884de443cb9814820d1d6ad0a986",
+      "embargo_bars": 20,
+      "feature_hash": "90756a2ac36a2dcb",
+      "fold": 0,
+      "passed": false,
+      "purge_bars": 60,
+      "temporary_cache_keys": [
+        "US100.cash_features_v20-mtf-swing-candidates_5c1cb1f367c4bf8c.parquet",
+        "US100.cash_features_v20-mtf-swing-candidates_6c6a7eb89dd547f5.parquet"
+      ],
+      "train_changed_feature_detail": {
+        "changed_column_count": 2,
+        "changed_columns": [
+          "prev_ny_high",
+          "prev_ny_low"
+        ],
+        "first_changed_rows": [
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:31:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:32:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:33:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:34:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:35:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:36:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:37:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:38:00+03:00"
+          }
+        ]
+      },
+      "train_feature_sha256_original": "454cb7526f8156f71784c1bb9f651344b3c69cf6ab457a9d8f734bc79f49e9e4",
+      "train_feature_sha256_poisoned": "4203dc9388cd178a7fc6bd6a76cf1d34658c8d9a2c1cfc0f0558346cd38af5eb",
+      "train_features_identical_after_validation_poison": false,
+      "train_last": "2025-02-12 05:39:00+03:00",
+      "train_max_abs_delta": 4336.549999999999,
+      "train_rows": 41920,
+      "validation_feature_sha256_original": "550a054a4a88520706ab0c5c6dd07e3db09c29c5edc63dda311479d169d6a8fe",
+      "validation_feature_sha256_poisoned": "7aaba8137df7329be6298f37938133648985bf55715386c25c407e007939f033",
+      "validation_features_changed": true,
+      "validation_first": "2025-02-12 07:00:00+03:00",
+      "validation_max_abs_delta": 1729800000000000.0,
+      "validation_rows": 6000,
+      "variant": "ladder_a0_flat_po3"
+    },
+    {
+      "changed_features_model_visible": {
+        "prev_ny_high": true,
+        "prev_ny_low": true
+      },
+      "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat_dist__seed50/attempt1/ladder_a0_flat_dist__seed50/20261016_173544_299952_rl_train_seed50_tcn/config.yaml",
+      "config_sha256": "e6363d2ae21429ca4c974360ecd5c28f93e9b7f193699118b0bcc6e6908e2d33",
+      "embargo_bars": 20,
+      "feature_hash": "f7b463019fc2fde4",
+      "fold": 0,
+      "passed": false,
+      "purge_bars": 60,
+      "temporary_cache_keys": [
+        "US100.cash_features_v20-mtf-swing-candidates_73cd329982d3ead1.parquet",
+        "US100.cash_features_v20-mtf-swing-candidates_673e305ab4c81a5c.parquet"
+      ],
+      "train_changed_feature_detail": {
+        "changed_column_count": 2,
+        "changed_columns": [
+          "prev_ny_high",
+          "prev_ny_low"
+        ],
+        "first_changed_rows": [
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:31:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:32:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:33:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:34:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:35:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:36:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:37:00+03:00"
+          },
+          {
+            "columns": [
+              "prev_ny_high",
+              "prev_ny_low"
+            ],
+            "timestamp": "2025-02-12 01:38:00+03:00"
+          }
+        ]
+      },
+      "train_feature_sha256_original": "f2ec654484fe18428304d4d790031795d5d023d7eb7ec8bb63eb15d2b5a932ba",
+      "train_feature_sha256_poisoned": "8249363c18b53af2d8520aa2c3903d7ee6ae63c9a9f5e12c780ae302c32a5d05",
+      "train_features_identical_after_validation_poison": false,
+      "train_last": "2025-02-12 05:39:00+03:00",
+      "train_max_abs_delta": 4336.549999999999,
+      "train_rows": 41920,
+      "validation_feature_sha256_original": "671f28c62015e64ab2d3d4f20ac2e92888ded143f0b0e5f1ff8a15d4f778ed23",
+      "validation_feature_sha256_poisoned": "08a14c1db00ccd304ae77fa2d09a8fef592955691b73c0546f6dad3c0bc01105",
+      "validation_features_changed": true,
+      "validation_first": "2025-02-12 07:00:00+03:00",
+      "validation_max_abs_delta": 1729800000000000.0,
+      "validation_rows": 6000,
+      "variant": "ladder_a0_flat_dist"
+    }
+  ],
+  "scope_note": "FAILED: only 1/4 profile perturbation checks passed. Validation OHLC changes altered training features ['prev_ny_high', 'prev_ny_low'] for profiles ['ladder_a0_flat_dist', 'ladder_a0_flat_po3', 'ladder_a1_sl']; the mapped saved campaign configs include 17/18 runs. This is a real-market causality failure for the tested slice, not a strategy result. The active campaign source was not changed.",
+  "slurm_job_id": "20990395",
+  "source_diagnosis": "The only changed training columns in failing profiles are prev_ny_high and prev_ny_low. Source inspection finds prev_ny_high_low computes each session's final extreme and shifts by one row within that same session group, exposing the future final NY-session levels after the first bar of that session.",
+  "source_sha256": {
+    "quant_rl/data/clean.py": "93eb07b3f3041458ad5570cb87a5b936e92061470ab4db6804690d5fc9f1c0c5",
+    "quant_rl/data/session.py": "b9cfb04b2b98ee3c8b4faf282040f04861a095e6f9ba04f8a14fd0e54e072129",
+    "quant_rl/data/split.py": "88cce652a8348f106e9203d82700ebe85f2208ca28e68a086a579e86808ca654",
+    "quant_rl/evaluation/walkforward.py": "3b36abfd158903bad02d988d396a436d62ef6a464556c619538eb70bd4a4dc35",
+    "quant_rl/features/build.py": "0922bc24f988319ac4033a2cc261b60f75cacded3ec43f02dbc5557afacb365c",
+    "quant_rl/features/normalize.py": "7b357053db23d7143204b688c6d50bdb7c8447ba5b031dabc139b148130182ec",
+    "quant_rl/features/session_ohlc.py": "42faa4b27199fbddb8112085869ffa13e759a1edbf257e7d4c6568716578a513"
+  },
+  "temporary_cache_root_removed": true
+}
