@@ -1286,6 +1286,20 @@ Complete a thesis-ready data audit:
 - full-split episode coverage;
 - explicit classification of the exposed 2026 period.
 
+The 2026-10-16 bounded M1 scan is recorded in
+`docs/thesis/data_quality_audit_2026-10-16.json`. It confirms campaign-manifest
+SHA-256 matches for both M1 inputs, 528,760 US100 rows and 527,139 US500 rows
+from 2024-12-30 through 2026-07-03, zero duplicate or out-of-order timestamps,
+zero rows with invalid numeric OHLCV/spread fields, and zero invalid OHLC
+ordering. It reconciles 351,550 US100 and 350,098 US500 train rows through
+2025-12-31; 177,210 US100 and 177,041 US500 rows fall in the already-exposed
+2026 interval. The scan records timestamp discontinuities but does not call
+them missing bars because market closures/holidays have not been checked
+against an authoritative schedule. This is a bounded bar-file integrity and
+coverage result, not G1 closure: feed/export provenance and data-use terms,
+tick-file content quality, broker timezone/DST behavior, schedule-aware gap
+adjudication, and the separate feature/cache/fold/episode gates remain open.
+
 ### G2 — experiment-design readiness
 
 Before any thesis-final seed matrix begins, freeze:

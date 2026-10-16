@@ -1,0 +1,133 @@
+{
+  "audit_script": "docs/thesis/audit_m1_data_quality_2026-10-16.py",
+  "audit_script_sha256": "5cd9a1f6663a5b3937b8cef001fd593acc21eb91ea1ef74ac05adc70499d28ba",
+  "campaign_fingerprint": "91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e",
+  "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+  "campaign_manifest_sha256": "efe062d0805808048b4f01e9af7eaa963415ba32c611682a3b84c512a0fffacb",
+  "campaign_recorded_git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+  "check_method": {
+    "numeric_rows": "Require finite numeric conversion for OHLC, TICKVOL, VOL, and SPREAD columns; report rows with any missing/non-numeric value.",
+    "ohlc_order": "Require HIGH >= LOW, OPEN, CLOSE and LOW <= OPEN, CLOSE.",
+    "row_roles": "Train rows have date <= 2025-12-31; exposed rows have date >= 2026-01-01.",
+    "timestamp": "Parse tab-separated <DATE>/<TIME> with %Y.%m.%d %H:%M:%S; timestamps remain naive broker-clock values.",
+    "timestamp_gaps": "Count adjacent source-order deltas above 60, 300, and 3600 seconds; do not classify them as missing bars without an authoritative market schedule."
+  },
+  "configuration": {
+    "available_data_end": "2026-07-03",
+    "bar_source": "M1 CSV files; higher bar timeframes are resampled by the pipeline",
+    "exposed_period_start": "2026-01-01",
+    "recorded_timezone_assumption": "Etc/GMT-3 fixed UTC+3; timestamps in files are timezone-naive broker-clock strings",
+    "symbols": [
+      "US100.cash",
+      "US500.cash"
+    ],
+    "train_end_inclusive": "2025-12-31"
+  },
+  "created_at_utc": "2026-10-16T15:06:16.848185+00:00",
+  "data_role": "training through 2025-12-31; 2026-01-01 through 2026-07-03 is previously inspected/exposed development data",
+  "evidence_role": "bounded data-quality inventory; not proof of data rights, vendor authenticity, strategy validity, or confirmatory OOS evidence",
+  "g1_status": "PARTIAL; this scan covers basic M1 integrity and identity fingerprints only.",
+  "interpretation": {
+    "timestamp_gap_counts": "Elapsed discontinuities include expected market closures and holidays; they are not classified as missing bars without an authoritative trading-calendar schedule.",
+    "zero_volume": "MT5 CFD bar exports record VOL=0; tick volume is the activity field. This is not real traded volume."
+  },
+  "m1_bar_files": {
+    "data/US100.cash_M1_202412300105_202607031959.csv": {
+      "adjacent_timestamp_gap_counts_seconds": {
+        "greater_than_300": 397,
+        "greater_than_3600": 392,
+        "greater_than_60": 406,
+        "largest": [
+          263760,
+          204660,
+          191160,
+          191160,
+          190260,
+          177360,
+          177360,
+          177360,
+          177360,
+          177360
+        ]
+      },
+      "duplicate_timestamps": 0,
+      "first_timestamp_broker_clock_naive": "2024-12-30 01:05:00",
+      "invalid_ohlc_order_rows": 0,
+      "last_timestamp_broker_clock_naive": "2026-07-03 19:59:00",
+      "negative_spread_rows": 0,
+      "negative_tick_volume_rows": 0,
+      "out_of_order_adjacent_timestamps": 0,
+      "row_count": 528760,
+      "rows_exposed_2026_01_01_through_available_end": 177210,
+      "rows_train_through_2025_12_31": 351550,
+      "rows_with_non_numeric_or_missing_numeric_values": 0,
+      "sha256_campaign_manifest": "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+      "sha256_current": "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+      "sha256_matches_campaign_manifest": true,
+      "size_bytes": 35247226,
+      "symbol_from_filename": "US100.cash",
+      "unparseable_timestamps": 0,
+      "zero_real_volume_rows": 528760
+    },
+    "data/US500.cash_M1_202412300105_202607031959.csv": {
+      "adjacent_timestamp_gap_counts_seconds": {
+        "greater_than_300": 394,
+        "greater_than_3600": 393,
+        "greater_than_60": 1926,
+        "largest": [
+          263760,
+          204660,
+          191160,
+          191160,
+          190260,
+          177360,
+          177360,
+          177360,
+          177360,
+          177360
+        ]
+      },
+      "duplicate_timestamps": 0,
+      "first_timestamp_broker_clock_naive": "2024-12-30 01:05:00",
+      "invalid_ohlc_order_rows": 0,
+      "last_timestamp_broker_clock_naive": "2026-07-03 19:59:00",
+      "negative_spread_rows": 0,
+      "negative_tick_volume_rows": 0,
+      "out_of_order_adjacent_timestamps": 0,
+      "row_count": 527139,
+      "rows_exposed_2026_01_01_through_available_end": 177041,
+      "rows_train_through_2025_12_31": 350098,
+      "rows_with_non_numeric_or_missing_numeric_values": 0,
+      "sha256_campaign_manifest": "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+      "sha256_current": "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+      "sha256_matches_campaign_manifest": true,
+      "size_bytes": 32185188,
+      "symbol_from_filename": "US500.cash",
+      "unparseable_timestamps": 0,
+      "zero_real_volume_rows": 527139
+    }
+  },
+  "open_g1_items": [
+    "Vendor/feed identity, export provenance, and applicable data-use/license terms are not established by the CSVs or repository metadata inspected here.",
+    "Tick input hashes are recorded in the active campaign manifest but tick-file content/quality was not rescanned in this audit.",
+    "Timestamp discontinuities are not compared against an authoritative exchange/broker calendar; they are not asserted to be missing bars.",
+    "The fixed Etc/GMT-3 convention is an assumption; source broker timezone and broker DST schedule are not independently verified. Session/DST impact must be treated as a validity limitation.",
+    "This scan does not revalidate feature causality/prefix invariance, fold-local fitting, purged walk-forward masks, MTF close/confirmation alignment, or strict cache hash behavior; retain their separate evidence and review them against current sources.",
+    "Full-split episode coverage requires terminal deterministic evaluation; the active screen is incomplete."
+  ],
+  "repository_head_at_audit": "90e86e7bb4ed1615d70b8e93630183636e6f8c88",
+  "runtime": {
+    "pandas": "2.3.2",
+    "python": "3.12.15"
+  },
+  "schema": "aalto.thesis_data_quality_audit.v1",
+  "tick_inputs_recorded_by_campaign": {
+    "data/US100.cash_202512290105_202607031959.csv": "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+    "data/US500.cash_202412300105_202607031959.csv": "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+  },
+  "working_tree_status_at_audit": [
+    " M docs/thesis/master_project_execution_plan.md",
+    "?? docs/thesis/audit_m1_data_quality_2026-10-16.py",
+    "?? docs/thesis/data_quality_audit_2026-10-16.json"
+  ]
+}
