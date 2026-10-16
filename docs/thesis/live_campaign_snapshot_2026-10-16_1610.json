@@ -1,0 +1,83 @@
+{
+  "schema": "aalto.live_campaign_snapshot.v1",
+  "captured_at_local": "2026-10-16T16:10:47+03:00",
+  "captured_at_utc": "2026-10-16T13:10:47+00:00",
+  "repository": {
+    "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis",
+    "branch": "main",
+    "head": "3309b7cd5b4118942cd3d92c2aa7b5d7d4fd3637",
+    "origin_main": "3309b7cd5b4118942cd3d92c2aa7b5d7d4fd3637",
+    "working_tree_clean_at_capture": true,
+    "requested_plan_path": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/docs/thesis/master_project_execution_plan.md",
+    "requested_plan_path_note": "Aalto_MS_Thesis-main is not a Git worktree; its source directories are compatibility symlinks to the canonical checkout and its outputs retain historical campaign artifact paths.",
+    "canonical_plan_path": "docs/thesis/master_project_execution_plan.md"
+  },
+  "campaign": {
+    "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016",
+    "fingerprint": "3474621efd6a1481bd2a20bce0cfd2c0b69969df1849c6cd738d19dc5bb4ba34",
+    "identity": "18 variants, seed 50, 20M steps each, n_envs=64, shared bundle, two GH200 nodes",
+    "manifest": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/campaign.json",
+    "statuses_at_capture": {"interrupted": 18},
+    "resume_checkpoints": "18 validated attempt-3 checkpoints, 11M-14M steps; continuation not yet started",
+    "source_fidelity": {
+      "recorded_campaign_git_sha": "8a98f7792f83ce4bbe5cb84f4a2137657d791c02",
+      "current_main_matching_source_files": 214,
+      "recorded_source_files": 228,
+      "changed_source_files": 14,
+      "diff_report": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/source_fidelity_current_main_diff_20261016.json",
+      "review": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/source_fidelity_review_current_main_20261016.md"
+    }
+  },
+  "recovery_prebuilt_feature_caches": {
+    "refresh_report": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/prebuilt_feature_cache_refresh_20261016.json",
+    "all_three_matrices_exactly_equal_to_retained_files": true,
+    "old_files_retained": true,
+    "scope": "baseline, Idea 1, and Idea 2 shared caches; 528760 rows each"
+  },
+  "slurm": {
+    "persistent_supervisor": {
+      "host": "login4.triton.aalto.fi",
+      "tmux_session": "thesis-seed50",
+      "process": "scripts/triton/campaign_recovery_supervisor.sh",
+      "state_at_capture": "RUNNING; srun request for the recovery campaign is pending and uses TRITON_REPO=/scratch/work/nguyenl37/Aalto_MS_Thesis"
+    },
+    "active_allocation": {
+      "job_id": "20985591",
+      "state": "RUNNING",
+      "partition": "gpu-grace-h200-141g",
+      "nodes": ["gpuarm1", "gpuarm2"],
+      "gpus": "1 GH200 per node; 2 total",
+      "cpus": "48 per node; 96 total",
+      "memory": "512 GiB per node; 1 TiB total",
+      "started_local": "2026-10-16T11:32:47+03:00",
+      "scheduled_end_local": "2026-10-16T17:32:47+03:00",
+      "elapsed_at_capture": "4:38:00",
+      "remaining_seconds_at_capture": 4920,
+      "worker_trainers": 0,
+      "training_start_marker_present": false,
+      "disposition": "Preserve the allocation and wrapper; no controller or trainer is running."
+    },
+    "pending_recovery_request": {
+      "job_id": "20990395",
+      "state": "PENDING",
+      "partition": "gpu-grace-h200-141g",
+      "reason": "AssocGrpGRESRunMinutes",
+      "nodes": 2,
+      "gpus": "1 GH200 per node; 2 total",
+      "cpus": "48 per node; 96 total",
+      "memory": "512 GiB per node; 1 TiB total",
+      "time_limit": "6 hours",
+      "start_time": "Unknown",
+      "recovery_campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "training_start_marker_present": true
+    },
+    "actions": "No duplicate request submitted; no job canceled."
+  },
+  "readiness": "P1 remains open: 18/18 original identities are interrupted below 20M, and no recovery trainer has started. P2 and downstream thesis gates remain open. Thesis status NOT READY.",
+  "verification": {
+    "scheduler": "squeue and scontrol confirmed the active and pending job states, resources, and pending reason.",
+    "supervisor": "tmux ls and the process table confirmed session thesis-seed50 and campaign_recovery_supervisor.sh are running.",
+    "compute": "gpuarm1 process check found no campaign_controller.py or train_rl.py process.",
+    "prebuilt_caches": "Current-hash sidecars and exact matrix equality validated for all three caches; original files remain in the recorded backup directory."
+  }
+}
