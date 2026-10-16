@@ -2153,10 +2153,10 @@ Update this table as the persistent agent control surface. It is status, not a s
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE — 14:12 update; canonical main checkout; allocation `20985591` reserves 1 GH200, 48 CPUs, and 512 GiB per node across gpuarm1/gpuarm2, held behind the release marker; no trainers observed. Each node has 1 additional GH200 and enough free CPU/RAM for a second 2-GH200 allocation | — | P2 prep, E0 |
-| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE — inventory generated (108 run records, all failed/interrupted; 162 attempts). The preserved v3 campaign has a strict Git-revision fingerprint mismatch against current `main`; a separate continuation is staged from its 18 validated attempt-3 checkpoints (11–14M). No training has launched from the continuation yet | P0 | P2, E0 |
+| P0 | Safe boundary/current snapshot | ACTIVE — 14:19 update; canonical main checkout; allocation `20985591` reserves 1 GH200, 48 CPUs, and 512 GiB per node across gpuarm1/gpuarm2, held behind the v3 release marker; no trainers observed. New 2-node/2-GH200 request `20990395` is PENDING with `AssocGrpGRESRunMinutes`; the allocation wrapper is ready for the child continuation | — | P2 prep, E0 |
+| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE — all-attempt audit covers 18 identities and 72 attempts. Attempt 2 has full-split telemetry for all 64 environments in all 18 variants; latest checkpoints are 11–14M, not the 20M budget. All attempt-4 workers failed before training on the cache symlink; a separate continuation is staged from validated attempt-3 checkpoints. Request `20990395` is pending; no continuation training has launched | P0 | P2, E0 |
 | P2 | Deterministic evaluator/schema repair | ACTIVE — stable lexical tie-break and train/eval SL/TP configuration forwarding implemented; 34 focused tests and full 1,543-test suite pass. Two 14M historical replays with distinct Python hash seeds have byte-identical train/test equity, metrics, and trades. Broader evaluator/provenance acceptance remains open | P0 | P1, E0 |
-| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, and six-campaign trial-ledger builder; ledger schema validation and focused tests pass. Real final-result analysis awaits P1/P2 | P0 | P1, P2 |
+| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and all-attempt screen reconciler; focused tests pass. Real final-result analysis awaits P1/P2 | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | review prep, result packaging |
 | P5 | Freeze matched design/baselines | BLOCKED | P4 | P6 prep, review |
@@ -2215,11 +2215,44 @@ map records attempt 3 for all 18 keys and the old v3 fingerprint. Focused tests
 verify that lineage and a handoff resolver checks the source fingerprint,
 target spec, and exact run-key coverage. The allocation supervisor will follow
 the explicit continuation handoff after the currently held allocation returns.
-The GH200 preflight passes because one card per node is free, while the current
-job still reserves its existing pair. No new allocation or trainer has been
-launched yet, and the old v3 manifest/checkpoints were not rewritten. This
-continuation remains exploratory selection evidence, not confirmatory thesis
-evidence. Readiness remains NOT READY.
+The GH200 node-capacity preflight finds one additional card per node, while the
+current job still reserves its existing pair. A new 2-node request `20990395`
+was submitted after the commit gate; it is pending with
+`AssocGrpGRESRunMinutes`. Its child start marker is staged, but no new
+allocation has begun and no continuation trainer has launched. The old v3
+manifest/checkpoints were not rewritten. This continuation remains exploratory
+selection evidence, not confirmatory thesis evidence. Readiness remains NOT
+READY.
+
+### P1 attempt-by-attempt screen reconciliation — 2026-10-16 14:19 Helsinki
+
+Generated
+`outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/p1_attempt_reconciliation_20261016.json`
+from the campaign manifest, every attempt's provenance and worker log, saved
+checkpoint files, and `episode_equity.csv` records. It includes all 18 run
+identities and all 72 recorded attempts. Every variant has 64/64 environments
+with `completed_data_split=true` during attempt 2; each recorded episode is
+99,504 steps and ended at `data_end`. This directly confirms one full train
+split episode for every environment in that attempt, rather than inferring
+coverage from aggregate PPO steps.
+
+Latest valid saved checkpoints are 11M–14M steps, below the requested 20M, so
+none of the 18 identities is a completed-budget screen result. All 18 attempt-4
+logs show exit code 1 and the same pre-training `FileExistsError` at
+`cache_dir.mkdir`: `cache` was a self-referential symlink. The current `cache`
+path is now a real directory, and `prebuild_campaign_bar_cache.py` succeeded
+on gpuarm1, validating all 14 configured bar-cache files for both symbols.
+Original attempt logs/checkpoints and the v3 campaign fingerprint remain
+preserved. The later `p1_reconciliation_20261016.md` snapshot reports only the
+latest attempt and therefore shows its missing episode file as unavailable;
+use the all-attempt JSON above for exposure reconciliation. The controller's
+status snapshot is timestamped 08:17 UTC and says failed=18, while the current
+campaign manifest says interrupted=18; retain both raw sources and do not
+collapse them into one status without the per-attempt evidence.
+
+The screen still has no 20M terminal identity, and this episode-coverage result
+does not establish survival, evaluation validity, or strategy quality. The
+recovery continuation remains exploratory. Readiness remains NOT READY.
 
 ### P2 deterministic replay and management-configuration repair — 2026-10-16 14:12 Helsinki
 
