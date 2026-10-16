@@ -10,6 +10,10 @@ DEFAULT_QUALITY_REGISTRY = (
     Path(__file__).resolve().parents[2] / "config" / "quality_experiments.yaml"
 )
 
+_SELECTABLE_STATUSES = frozenset(
+    {"control", "implemented_unit_tested", "existing_encoder_implementation"}
+)
+
 
 def load_quality_registry(path: str | Path = DEFAULT_QUALITY_REGISTRY) -> DictConfig:
     """Load and validate staged quality variants without touching historical experiments."""
@@ -96,8 +100,18 @@ def apply_quality_variant(cfg: DictConfig, variant_id: str) -> DictConfig:
                 f"quality variant {variant_id!r} depends on unresolved parent {current!r}; "
                 "select the prior-stage winner before continuing"
             )
-        lineage.append(variant)
         parent = variant.get("parent")
+        if parent is not None and str(parent).endswith("_winner"):
+            raise ValueError(
+                f"quality variant {variant_id!r} depends on unresolved parent {parent!r}; "
+                "select the prior-stage winner before continuing"
+            )
+        status = str(variant.get("status", "unspecified"))
+        if status not in _SELECTABLE_STATUSES:
+            raise ValueError(
+                f"quality variant {current!r} is not implemented and selectable (status={status!r})"
+            )
+        lineage.append(variant)
         current = str(parent) if parent is not None else ""
     cloned = OmegaConf.create(OmegaConf.to_container(cfg, resolve=False))
     if not isinstance(cloned, DictConfig):

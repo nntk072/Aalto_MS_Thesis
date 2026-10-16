@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import platform
 import subprocess
 import tempfile
 from datetime import datetime
@@ -20,6 +22,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from omegaconf import DictConfig, OmegaConf
+from stable_baselines3 import __version__ as stable_baselines3_version
 
 from quant_rl.data.clean import clean
 from quant_rl.data.loader import load_bars
@@ -27,13 +30,18 @@ from quant_rl.data.session import add_session_id, add_session_labels
 from quant_rl.data.split import get_split_config, make_train_mask
 from quant_rl.envs.strategies import BaselineStrategy, DistributionStrategy, PO3IFVGStrategy
 from quant_rl.evaluation.walkforward import purged_walk_forward
-from quant_rl.features.build import build_walkforward_fold_features, select_obs_columns
+from quant_rl.features.build import (
+    FEATURE_CACHE_VERSION,
+    build_walkforward_fold_features,
+    select_obs_columns,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 CAMPAIGN_ID = "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016"
 CAMPAIGN = ROOT / "outputs/gpu_campaigns" / CAMPAIGN_ID
 RESOLUTION_REPORT = ROOT / "docs/thesis/g1_campaign_feature_cache_resolution_2026-10-16.json"
-OUTPUT = ROOT / "docs/thesis/g1_real_market_fold_fit_scope_2026-10-16.json"
+PRE_REPAIR_OUTPUT = ROOT / "docs/thesis/g1_real_market_fold_fit_scope_2026-10-16.json"
+OUTPUT = ROOT / "docs/thesis/g1_real_market_fold_fit_scope_post_repair_2026-10-17.json"
 VARIANTS = ("ladder_a0_flat", "ladder_a1_sl", "ladder_a0_flat_po3", "ladder_a0_flat_dist")
 STRATEGIES = {
     "baseline": BaselineStrategy,
@@ -91,6 +99,10 @@ def train_difference_detail(left: pd.DataFrame, right: pd.DataFrame) -> dict[str
 
 
 def main() -> int:
+    if OUTPUT.exists():
+        raise FileExistsError(f"refusing to overwrite post-repair audit: {OUTPUT}")
+    if not PRE_REPAIR_OUTPUT.is_file():
+        raise FileNotFoundError(f"pre-repair audit report missing: {PRE_REPAIR_OUTPUT}")
     resolution = json.loads(RESOLUTION_REPORT.read_text(encoding="utf-8"))
     if (
         resolution["campaign_fingerprint"]
@@ -271,12 +283,19 @@ def main() -> int:
         )
     report = {
         "audit": "real_market_purged_fold_fit_scope_poison_test",
+        "feature_cache_version": FEATURE_CACHE_VERSION,
         "scope_note": scope_note,
+        "previous_audit": {
+            "path": str(PRE_REPAIR_OUTPUT.relative_to(ROOT)),
+            "sha256": sha256_file(PRE_REPAIR_OUTPUT),
+            "disposition": "immutable pre-repair failure; not a result for current source",
+        },
         "source_diagnosis": (
-            "The only changed training columns in failing profiles are prev_ny_high and "
-            "prev_ny_low. Source inspection finds prev_ny_high_low computes each session's "
-            "final extreme and shifts by one row within that same session group, exposing "
-            "the future final NY-session levels after the first bar of that session."
+            "This report evaluates the current source identified by source_sha256. "
+            "The prior report documented model-visible future NY-session extrema in "
+            "prev_ny_high/prev_ny_low; this field does not assume that diagnosis remains "
+            "true after repair. Per-profile poison results and current source hashes are "
+            "the evidence for this rerun."
         ),
         "affected_campaign_runs": [row["variant"] for row in affected_campaign_runs],
         "affected_campaign_run_count": len(affected_campaign_runs),
@@ -284,6 +303,14 @@ def main() -> int:
         "campaign_id": CAMPAIGN_ID,
         "campaign_fingerprint": campaign["fingerprint"],
         "campaign_git_sha": campaign["git_sha"],
+        "runtime": {
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "pandas": pd.__version__,
+            "numpy": np.__version__,
+            "stable_baselines3": stable_baselines3_version,
+            "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+        },
         "repository_head": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
         ).strip(),

@@ -131,15 +131,16 @@ How-to material lives elsewhere and is not repeated:
   fill pricing when `costs.use_tick_execution` is on.
 - **The feature cache is versioned.** Feature pipelines are cached as
   parquet keyed by `FEATURE_CACHE_VERSION` (currently
-  `v8-full-day-completed-htf-swings` in `quant_rl/features/build.py`).
+  `v21-causal-prior-ny-session` in `quant_rl/features/build.py`).
   Bar caches use `BAR_CACHE_VERSION` (`v2-full-day` in
-  `quant_rl/data/pipeline.py`). A schema change must bump the relevant
+  `quant_rl/data/pipeline.py`). Feature content hashes also include resolved
+  feature settings and data identity. A semantic change must bump the relevant
   version; stale caches are otherwise silently reused.
 - **Opt-in feature blocks are config-driven.** Overlay columns
   (`include_strategy_state`, `include_session_ohlc`, MTF expansion flags)
-  are toggled by variant YAMLs under `config/`. All runs share the same
-  cache key; changing flags requires `--force` or deleting the stale
-  parquet so columns are rebuilt.
+  are toggled by variant YAMLs under `config/`. The resolved flags contribute
+  to each cache's content hash, so different feature configurations use
+  different cache paths.
 - **OOS dates are locked in `default.yaml`.** `data.split.train_end` /
   `test_start` are the single source of truth for the split; variant
   configs must not override them.
@@ -489,8 +490,9 @@ trains. `BestCheckpointEvalCallback` checkpoints during training;
 `quant_rl/eval/rollout.py` (`evaluate_model`) replays checkpoints on the
 locked OOS window; `quant_rl/evaluation/` computes metrics, bootstrap CIs,
 and walk-forward reports; `quant_rl/eval/export.py` writes artifacts to
-`outputs/`. Feature caches are keyed by `FEATURE_CACHE_VERSION` only —
-use `--force` or delete stale parquet when changing opt-in feature flags.
+`outputs/`. Feature caches use `FEATURE_CACHE_VERSION` plus the resolved
+feature/data content hash; inspect the effective cache path when comparing
+variants.
 
 ### Live: paper first, then promote
 
@@ -683,4 +685,3 @@ Contract tests:
 > (policy and training) → `quant_rl/evaluation/` and `quant_rl/eval/`
 > (evaluation). Agents should use the [domain maps](../.agents/domain_maps/)
 > for file discovery and verify the actual implementation.
-

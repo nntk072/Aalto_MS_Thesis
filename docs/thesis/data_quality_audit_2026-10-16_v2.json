@@ -1,0 +1,3993 @@
+{
+  "audit_script": "docs/thesis/audit_m1_data_quality_2026-10-16.py",
+  "audit_script_sha256": "3267386430422fbee37e1e68d3c0dcdebb2f81d87bb60bbd442b8a65bf49f103",
+  "campaign_fingerprint": "91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e",
+  "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+  "campaign_manifest_sha256": "76a4ea35169386ebac57d07f46595b8aeaf5defe5392e50578b529aaf463b688",
+  "campaign_recorded_git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+  "check_method": {
+    "numeric_rows": "Require finite numeric conversion for OHLC, TICKVOL, VOL, and SPREAD columns; report rows with any missing/non-numeric value.",
+    "ohlc_order": "Require HIGH >= LOW, OPEN, CLOSE and LOW <= OPEN, CLOSE.",
+    "row_roles": "Train rows have date <= 2025-12-31; exposed rows have date >= 2026-01-01.",
+    "timestamp": "Parse tab-separated <DATE>/<TIME> with %Y.%m.%d %H:%M:%S; timestamps remain naive broker-clock values.",
+    "timestamp_gaps": "Count adjacent source-order deltas above 60, 300, and 3600 seconds; do not classify them as missing bars without an authoritative market schedule.",
+    "training_ny_session_observation": "Under the configured Etc/GMT-3 to America/Chicago conversion, count observed M1 rows in each [08:30:00, 15:00:00) session and check the nominal final bar. Do not label deviations as missing bars or closures without a calendar."
+  },
+  "configuration": {
+    "available_data_end": "2026-07-03",
+    "bar_source": "M1 CSV files; higher bar timeframes are resampled by the pipeline",
+    "campaign_worker_session_configs": [
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat__seed50/attempt1/ladder_a0_flat__seed50/20261016_173541_834754_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "fbdc54103b775c611f2c4d091b5e3494bac91b7d89babbe2b7f8676a844b509f",
+        "end": "15:00:00",
+        "job_key": "ladder_a0_flat__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a1_sl__seed50/attempt1/ladder_a1_sl__seed50/20261016_173854_725508_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "cf9d534110484ce57e5e0778593afe9de5744ceb586ba46422a3ba23af4027dc",
+        "end": "15:00:00",
+        "job_key": "ladder_a1_sl__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a2_tp__seed50/attempt1/ladder_a2_tp__seed50/20261016_173830_311118_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "def9d0fee1a2cd1c68bdb062fefdf15c413c763b599ccc2374bf4a70178f175d",
+        "end": "15:00:00",
+        "job_key": "ladder_a2_tp__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a3_multi_tp__seed50/attempt1/ladder_a3_multi_tp__seed50/20261016_173851_879718_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "9b039a75dd89da002b5629c4b103269ec25b9a229b99630ea6dda90926beae71",
+        "end": "15:00:00",
+        "job_key": "ladder_a3_multi_tp__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/20261016_173831_499350_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "09043b05abd0af7cc3bbc0d1de123d0533969119adb25b8540382d85de138d5c",
+        "end": "15:00:00",
+        "job_key": "ladder_a4b_entry_fsm__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/20261016_173853_520178_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "80f007cea13d16324bac28c0944fc59319d60dfb0f7d47e3c242f61ebe9c43a7",
+        "end": "15:00:00",
+        "job_key": "ladder_a4a_entry_fsm_hidden__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat_po3__seed50/attempt1/ladder_a0_flat_po3__seed50/20261016_173544_291860_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "ab81d893d12ae6b4b11a47bef608633e9a8f884de443cb9814820d1d6ad0a986",
+        "end": "15:00:00",
+        "job_key": "ladder_a0_flat_po3__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a1_sl_po3__seed50/attempt1/ladder_a1_sl_po3__seed50/20261016_173939_951451_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "052e7f86209f5ba48ac2d5d09244b05badabc64134807d7d4b51c236e0175fd1",
+        "end": "15:00:00",
+        "job_key": "ladder_a1_sl_po3__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a2_tp_po3__seed50/attempt1/ladder_a2_tp_po3__seed50/20261016_173916_530968_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "b199dc09eea2dcf61d1765e347ab35e0a5a8b97a69784a74d68f23f4e4ed2e44",
+        "end": "15:00:00",
+        "job_key": "ladder_a2_tp_po3__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a3_multi_tp_po3__seed50/attempt1/ladder_a3_multi_tp_po3__seed50/20261016_173939_930111_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "071a60c0bc973782cb9e2a6ab84b1a1988ab98740639e6278d95ad52f7f15c8a",
+        "end": "15:00:00",
+        "job_key": "ladder_a3_multi_tp_po3__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a4b_po3_ifvg__seed50/attempt1/ladder_a4b_po3_ifvg__seed50/20261016_173914_874503_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "df8d9764696f06fde015ea3b21b7395bdb0845c4814db7fe9123095369350dee",
+        "end": "15:00:00",
+        "job_key": "ladder_a4b_po3_ifvg__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a4a_entry_fsm_hidden_po3__seed50/attempt1/ladder_a4a_entry_fsm_hidden_po3__seed50/20261016_173940_440491_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "0ae40b58f28ee4009340d39e5ad043419fd7ea741eb22038fd9a857ee2bbb78e",
+        "end": "15:00:00",
+        "job_key": "ladder_a4a_entry_fsm_hidden_po3__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat_dist__seed50/attempt1/ladder_a0_flat_dist__seed50/20261016_173544_299952_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "e6363d2ae21429ca4c974360ecd5c28f93e9b7f193699118b0bcc6e6908e2d33",
+        "end": "15:00:00",
+        "job_key": "ladder_a0_flat_dist__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a1_sl_dist__seed50/attempt1/ladder_a1_sl_dist__seed50/20261016_173942_904767_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "9285d6703f2efe8a8fb66703acdf4bd780430b50881b18b08c7c172c886e5663",
+        "end": "15:00:00",
+        "job_key": "ladder_a1_sl_dist__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a2_tp_dist__seed50/attempt1/ladder_a2_tp_dist__seed50/20261016_173919_283003_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "4c74d060afa701a473c7540d14c99129167a3ce9c33c7f84802f1924488a85ac",
+        "end": "15:00:00",
+        "job_key": "ladder_a2_tp_dist__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a3_multi_tp_dist__seed50/attempt1/ladder_a3_multi_tp_dist__seed50/20261016_173942_143101_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "739ecaaa80b6bcd3011b414766d2f50b65ee764580bf711143df9c1ffbe90249",
+        "end": "15:00:00",
+        "job_key": "ladder_a3_multi_tp_dist__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a4b_distribution__seed50/attempt1/ladder_a4b_distribution__seed50/20261016_173920_057388_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "5c368eda86b5eb723991a965a994e5665fd873089c7aa740ad9263224bc05f32",
+        "end": "15:00:00",
+        "job_key": "ladder_a4b_distribution__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      },
+      {
+        "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a4a_entry_fsm_hidden_dist__seed50/attempt1/ladder_a4a_entry_fsm_hidden_dist__seed50/20261016_173943_175177_rl_train_seed50_tcn/config.yaml",
+        "config_sha256": "48866bc916bb8f7e10094e43c4a9e90a72bfae86018e2b869c88b012c37f1c95",
+        "end": "15:00:00",
+        "job_key": "ladder_a4a_entry_fsm_hidden_dist__seed50",
+        "start": "08:30:00",
+        "timezone": "America/Chicago"
+      }
+    ],
+    "exposed_period_start": "2026-01-01",
+    "feature_session_config": "quant_rl/config/default.yaml",
+    "feature_session_config_sha256": "3a84d0086850442980d23778feb66bb9dc5ec1e8738d01ddf9f214a71866082e",
+    "ny_session_window": {
+      "end_exclusive": "15:00:00",
+      "start": "08:30:00",
+      "timezone": "America/Chicago"
+    },
+    "recorded_timezone_assumption": "Etc/GMT-3 from quant_rl/config/default.yaml; timestamps in files are timezone-naive broker-clock strings",
+    "symbols": [
+      "US100.cash",
+      "US500.cash"
+    ],
+    "train_end_inclusive": "2025-12-31"
+  },
+  "created_at_utc": "2026-10-16T23:15:19.407369+00:00",
+  "data_role": "training through 2025-12-31; 2026-01-01 through 2026-07-03 is previously inspected/exposed development data",
+  "evidence_role": "bounded data-quality inventory; not proof of data rights, vendor authenticity, strategy validity, or confirmatory OOS evidence",
+  "g1_status": "PARTIAL; this scan covers basic M1 integrity and identity fingerprints only.",
+  "interpretation": {
+    "timestamp_gap_counts": "Elapsed discontinuities include expected market closures and holidays; they are not classified as missing bars without an authoritative trading-calendar schedule.",
+    "zero_volume": "MT5 CFD bar exports record VOL=0; tick volume is the activity field. This is not real traded volume."
+  },
+  "m1_bar_files": {
+    "data/US100.cash_M1_202412300105_202607031959.csv": {
+      "adjacent_timestamp_gap_counts_seconds": {
+        "greater_than_300": 397,
+        "greater_than_3600": 392,
+        "greater_than_60": 406,
+        "largest": [
+          263760,
+          204660,
+          191160,
+          191160,
+          190260,
+          177360,
+          177360,
+          177360,
+          177360,
+          177360
+        ]
+      },
+      "duplicate_timestamps": 0,
+      "first_timestamp_broker_clock_naive": "2024-12-30 01:05:00",
+      "invalid_ohlc_order_rows": 0,
+      "last_timestamp_broker_clock_naive": "2026-07-03 19:59:00",
+      "negative_spread_rows": 0,
+      "negative_tick_volume_rows": 0,
+      "out_of_order_adjacent_timestamps": 0,
+      "row_count": 528760,
+      "rows_exposed_2026_01_01_through_available_end": 177210,
+      "rows_train_through_2025_12_31": 351550,
+      "rows_with_non_numeric_or_missing_numeric_values": 0,
+      "sha256_campaign_manifest": "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+      "sha256_current": "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+      "sha256_matches_campaign_manifest": true,
+      "size_bytes": 35247226,
+      "symbol_from_filename": "US100.cash",
+      "training_ny_session_observation": {
+        "data_timezone_assumption": "Etc/GMT-3",
+        "interpretation": "Observed rows under the configured Etc/GMT-3 to America/Chicago conversion. Counts are compared with a nominal 390-minute window, but short sessions are not classified as missing bars or market closures without an authoritative calendar.",
+        "nominal_m1_rows_for_configured_ny_window": 390,
+        "observed_rows_min_median_max": {
+          "max": 390,
+          "median": 390.0,
+          "min": 150
+        },
+        "observed_session_count": 259,
+        "session_timezone": "America/Chicago",
+        "session_window": "[08:30:00, 15:00:00)",
+        "sessions": [
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2024-12-30T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2024-12-30"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2024-12-31T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2024-12-31"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-02T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-02"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-03T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-03"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-06T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-06"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-07T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-07"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-08T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-08"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-10T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-10"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-13T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-13"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-14T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-14"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-15T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-15"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-16T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-16"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-17T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-17"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-20T19:59:00+03:00",
+            "observed_m1_rows": 150,
+            "session_date_ct": "2025-01-20"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-21T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-21"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-22T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-22"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-23T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-23"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-24T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-24"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-27T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-27"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-28T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-28"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-29T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-29"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-30T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-30"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-31T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-31"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-03T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-03"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-04T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-04"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-05T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-05"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-06T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-06"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-07T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-07"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-10T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-10"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-11T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-11"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-12T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-12"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-13T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-13"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-14T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-14"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-17T19:59:00+03:00",
+            "observed_m1_rows": 150,
+            "session_date_ct": "2025-02-17"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-18T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-18"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-19T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-19"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-20T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-20"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-21T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-21"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-24T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-24"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-25T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-25"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-26T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-26"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-27T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-27"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-28T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-28"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-03-03T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-03-03"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-03-04T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-03-04"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-03-05T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-03-05"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-03-06T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-03-06"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-03-07T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-03-07"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-10T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-10"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-11T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-11"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-12T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-12"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-13T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-13"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-14T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-14"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-17T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-17"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-18T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-18"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-19T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-19"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-20T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-20"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-21T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-21"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-24T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-24"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-25T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-25"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-26T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-26"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-27T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-27"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-28T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-28"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-31T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-31"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-01T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-01"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-02T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-02"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-03T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-03"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-04T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-04"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-07T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-07"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-08T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-08"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-09T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-09"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-10T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-10"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-11T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-11"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-14T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-14"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-15T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-15"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-16T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-16"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-17T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-17"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-21T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-21"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-22T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-22"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-23T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-23"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-24T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-24"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-25T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-25"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-28T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-28"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-29T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-29"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-30T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-30"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-01T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-01"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-02T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-02"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-05T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-05"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-06T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-06"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-07T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-07"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-08T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-08"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-09T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-09"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-12T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-12"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-13T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-13"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-14T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-14"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-15T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-15"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-16T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-16"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-19T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-19"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-20T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-20"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-21T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-21"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-22T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-22"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-23T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-23"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-05-26T19:59:00+03:00",
+            "observed_m1_rows": 210,
+            "session_date_ct": "2025-05-26"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-27T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-27"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-28T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-28"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-29T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-29"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-30T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-30"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-02T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-02"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-03T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-03"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-04T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-04"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-05T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-05"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-06T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-06"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-09T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-09"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-10T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-10"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-11T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-11"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-12T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-12"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-13T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-13"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-16T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-16"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-17T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-17"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-18T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-18"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-06-19T19:59:00+03:00",
+            "observed_m1_rows": 210,
+            "session_date_ct": "2025-06-19"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-20T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-20"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-23T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-23"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-24T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-24"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-25T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-25"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-26T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-26"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-27T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-27"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-30T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-30"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-01T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-01"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-02T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-02"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-07-03T20:14:00+03:00",
+            "observed_m1_rows": 225,
+            "session_date_ct": "2025-07-03"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-07-04T19:59:00+03:00",
+            "observed_m1_rows": 210,
+            "session_date_ct": "2025-07-04"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-07T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-07"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-08T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-08"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-09T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-09"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-10T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-10"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-11T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-11"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-14T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-14"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-15T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-15"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-16T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-16"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-17T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-17"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-18T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-18"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-21T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-21"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-22T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-22"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-23T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-23"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-24T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-24"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-25T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-25"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-28T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-28"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-29T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-29"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-30T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-30"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-31T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-31"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-01T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-01"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-04T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-04"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-05T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-05"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-06T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-06"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-07T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-07"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-08T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-08"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-11T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-11"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-12T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-12"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-13T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-13"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-14T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-14"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-15T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-15"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-18T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-18"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-19T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-19"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-20T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-20"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-21T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-21"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-22T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-22"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-25T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-25"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-26T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-26"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-27T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-27"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-28T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-28"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-29T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-29"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-09-01T19:59:00+03:00",
+            "observed_m1_rows": 210,
+            "session_date_ct": "2025-09-01"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-02T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-02"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-03T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-03"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-04T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-04"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-05T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-05"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-08T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-08"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-09T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-09"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-10T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-10"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-11T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-11"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-12T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-12"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-15T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-15"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-16T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-16"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-17T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-17"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-18T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-18"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-19T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-19"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-22T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-22"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-23T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-23"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-24T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-24"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-25T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-25"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-26T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-26"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-29T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-29"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-30T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-30"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-01T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-01"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-02T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-02"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-03T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-03"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-06T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-06"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-07T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-07"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-08T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-08"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-09T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-09"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-10T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-10"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-13T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-13"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-14T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-14"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-15T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-15"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-16T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-16"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-17T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-17"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-20T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-20"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-21T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-21"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-22T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-22"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-23T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-23"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-24T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-24"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-27T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-27"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-28T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-28"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-29T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-29"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-30T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-30"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-31T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-31"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-03T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-03"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-04T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-04"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-05T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-05"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-06T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-06"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-07T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-07"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-10T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-10"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-11T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-11"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-12T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-12"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-13T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-13"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-14T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-14"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-17T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-17"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-18T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-18"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-19T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-19"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-20T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-20"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-21T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-21"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-24T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-24"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-25T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-25"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-26T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-26"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-27T19:59:00+03:00",
+            "observed_m1_rows": 150,
+            "session_date_ct": "2025-11-27"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-28T20:14:00+03:00",
+            "observed_m1_rows": 165,
+            "session_date_ct": "2025-11-28"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-01T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-01"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-02T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-02"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-03T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-03"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-04T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-04"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-05T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-05"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-08T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-08"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-09T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-09"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-10T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-10"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-11T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-11"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-12T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-12"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-15T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-15"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-16T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-16"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-17T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-17"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-18T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-18"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-19T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-19"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-22T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-22"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-23T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-23"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-24T20:14:00+03:00",
+            "observed_m1_rows": 165,
+            "session_date_ct": "2025-12-24"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-26T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-26"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-29T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-29"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-30T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-30"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-31T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-31"
+          }
+        ],
+        "sessions_matching_nominal_row_count": 164,
+        "sessions_with_nominal_final_bar": 164,
+        "training_end_inclusive": "2025-12-31"
+      },
+      "unparseable_timestamps": 0,
+      "zero_real_volume_rows": 528760
+    },
+    "data/US500.cash_M1_202412300105_202607031959.csv": {
+      "adjacent_timestamp_gap_counts_seconds": {
+        "greater_than_300": 394,
+        "greater_than_3600": 393,
+        "greater_than_60": 1926,
+        "largest": [
+          263760,
+          204660,
+          191160,
+          191160,
+          190260,
+          177360,
+          177360,
+          177360,
+          177360,
+          177360
+        ]
+      },
+      "duplicate_timestamps": 0,
+      "first_timestamp_broker_clock_naive": "2024-12-30 01:05:00",
+      "invalid_ohlc_order_rows": 0,
+      "last_timestamp_broker_clock_naive": "2026-07-03 19:59:00",
+      "negative_spread_rows": 0,
+      "negative_tick_volume_rows": 0,
+      "out_of_order_adjacent_timestamps": 0,
+      "row_count": 527139,
+      "rows_exposed_2026_01_01_through_available_end": 177041,
+      "rows_train_through_2025_12_31": 350098,
+      "rows_with_non_numeric_or_missing_numeric_values": 0,
+      "sha256_campaign_manifest": "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+      "sha256_current": "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+      "sha256_matches_campaign_manifest": true,
+      "size_bytes": 32185188,
+      "symbol_from_filename": "US500.cash",
+      "training_ny_session_observation": {
+        "data_timezone_assumption": "Etc/GMT-3",
+        "interpretation": "Observed rows under the configured Etc/GMT-3 to America/Chicago conversion. Counts are compared with a nominal 390-minute window, but short sessions are not classified as missing bars or market closures without an authoritative calendar.",
+        "nominal_m1_rows_for_configured_ny_window": 390,
+        "observed_rows_min_median_max": {
+          "max": 390,
+          "median": 390.0,
+          "min": 146
+        },
+        "observed_session_count": 259,
+        "session_timezone": "America/Chicago",
+        "session_window": "[08:30:00, 15:00:00)",
+        "sessions": [
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2024-12-30T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2024-12-30"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2024-12-31T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2024-12-31"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-02T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-02"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-03T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-03"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-06T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-06"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-07T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-07"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-08T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-08"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-10T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-10"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-13T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-13"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-14T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-14"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-15T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-15"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-16T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-16"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-17T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-17"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-20T19:59:00+03:00",
+            "observed_m1_rows": 150,
+            "session_date_ct": "2025-01-20"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-21T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-21"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-22T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-22"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-23T23:49:00+03:00",
+            "observed_m1_rows": 378,
+            "session_date_ct": "2025-01-23"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-24T23:49:00+03:00",
+            "observed_m1_rows": 376,
+            "session_date_ct": "2025-01-24"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-27T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-27"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-28T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-28"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-29T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-29"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-30T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-30"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-01-31T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-01-31"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-03T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-03"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-04T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-04"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-05T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-05"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-06T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-06"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-07T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-07"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-10T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-10"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-11T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-11"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-12T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-12"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-13T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-13"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-14T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-14"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-17T19:59:00+03:00",
+            "observed_m1_rows": 147,
+            "session_date_ct": "2025-02-17"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-18T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-18"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-19T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-19"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-20T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-20"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-21T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-21"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-24T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-24"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-25T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-25"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-26T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-26"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-27T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-27"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-02-28T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-02-28"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-03-03T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-03-03"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-03-04T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-03-04"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-03-05T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-03-05"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-03-06T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-03-06"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-03-07T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-03-07"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-10T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-10"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-11T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-11"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-12T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-12"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-13T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-13"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-14T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-14"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-17T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-17"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-18T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-18"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-19T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-19"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-20T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-20"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-21T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-21"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-24T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-24"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-25T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-25"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-26T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-26"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-27T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-27"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-28T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-28"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-03-31T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-03-31"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-01T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-01"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-02T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-02"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-03T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-03"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-04T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-04"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-07T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-07"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-08T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-08"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-09T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-09"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-10T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-10"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-11T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-11"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-14T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-14"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-15T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-15"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-16T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-16"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-17T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-17"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-21T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-21"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-22T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-22"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-23T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-23"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-24T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-24"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-25T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-25"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-28T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-28"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-29T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-29"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-04-30T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-04-30"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-01T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-01"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-02T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-02"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-05T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-05"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-06T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-06"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-07T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-07"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-08T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-08"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-09T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-09"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-12T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-12"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-13T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-13"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-14T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-14"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-15T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-15"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-16T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-16"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-19T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-19"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-20T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-20"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-21T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-21"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-22T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-22"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-23T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-23"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-05-26T19:59:00+03:00",
+            "observed_m1_rows": 210,
+            "session_date_ct": "2025-05-26"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-27T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-27"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-28T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-28"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-29T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-29"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-05-30T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-05-30"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-02T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-02"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-03T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-03"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-04T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-04"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-05T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-05"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-06T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-06"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-09T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-09"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-10T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-10"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-11T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-11"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-12T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-12"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-13T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-13"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-16T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-16"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-17T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-17"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-18T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-18"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-06-19T19:59:00+03:00",
+            "observed_m1_rows": 210,
+            "session_date_ct": "2025-06-19"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-20T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-20"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-23T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-23"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-24T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-24"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-25T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-25"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-26T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-26"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-27T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-27"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-06-30T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-06-30"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-01T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-01"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-02T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-02"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-07-03T20:14:00+03:00",
+            "observed_m1_rows": 225,
+            "session_date_ct": "2025-07-03"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-07-04T19:59:00+03:00",
+            "observed_m1_rows": 210,
+            "session_date_ct": "2025-07-04"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-07T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-07"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-08T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-08"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-09T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-09"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-10T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-10"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-11T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-11"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-14T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-14"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-15T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-15"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-16T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-16"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-17T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-17"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-18T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-18"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-21T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-21"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-22T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-22"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-23T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-23"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-24T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-24"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-25T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-25"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-28T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-28"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-29T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-29"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-30T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-30"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-07-31T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-07-31"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-01T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-01"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-04T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-04"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-05T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-05"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-06T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-06"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-07T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-07"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-08T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-08"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-11T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-11"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-12T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-12"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-13T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-13"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-14T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-14"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-15T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-15"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-18T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-18"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-19T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-19"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-20T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-20"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-21T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-21"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-22T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-22"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-25T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-25"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-26T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-26"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-27T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-27"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-28T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-28"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-08-29T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-08-29"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-09-01T19:59:00+03:00",
+            "observed_m1_rows": 207,
+            "session_date_ct": "2025-09-01"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-02T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-02"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-03T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-03"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-04T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-04"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-05T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-05"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-08T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-08"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-09T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-09"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-10T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-10"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-11T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-11"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-12T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-12"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-15T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-15"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-16T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-16"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-17T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-17"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-18T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-18"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-19T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-19"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-22T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-22"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-23T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-23"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-24T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-24"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-25T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-25"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-26T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-26"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-29T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-29"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-09-30T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-09-30"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-01T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-01"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-02T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-02"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-03T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-03"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-06T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-06"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-07T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-07"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-08T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-08"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-09T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-09"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-10T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-10"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-13T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-13"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-14T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-14"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-15T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-15"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-16T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-16"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-17T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-17"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-20T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-20"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-21T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-21"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-22T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-22"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-23T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-23"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-24T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-24"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-27T22:59:00+03:00",
+            "observed_m1_rows": 389,
+            "session_date_ct": "2025-10-27"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-28T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-28"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-29T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-29"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-30T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-30"
+          },
+          {
+            "matches_nominal_row_count": true,
+            "nominal_final_bar_present": true,
+            "observed_last_bar": "2025-10-31T22:59:00+03:00",
+            "observed_m1_rows": 390,
+            "session_date_ct": "2025-10-31"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-03T23:49:00+03:00",
+            "observed_m1_rows": 378,
+            "session_date_ct": "2025-11-03"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-04T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-04"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-05T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-05"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-06T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-06"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-07T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-07"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-10T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-10"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-11T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-11"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-12T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-12"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-13T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-13"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-14T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-14"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-17T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-17"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-18T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-18"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-19T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-19"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-20T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-20"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-21T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-21"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-24T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-24"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-25T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-11-25"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-26T23:49:00+03:00",
+            "observed_m1_rows": 377,
+            "session_date_ct": "2025-11-26"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-27T19:59:00+03:00",
+            "observed_m1_rows": 146,
+            "session_date_ct": "2025-11-27"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-11-28T20:14:00+03:00",
+            "observed_m1_rows": 165,
+            "session_date_ct": "2025-11-28"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-01T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-01"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-02T23:49:00+03:00",
+            "observed_m1_rows": 379,
+            "session_date_ct": "2025-12-02"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-03T23:49:00+03:00",
+            "observed_m1_rows": 377,
+            "session_date_ct": "2025-12-03"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-04T23:48:00+03:00",
+            "observed_m1_rows": 379,
+            "session_date_ct": "2025-12-04"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-05T23:49:00+03:00",
+            "observed_m1_rows": 378,
+            "session_date_ct": "2025-12-05"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-08T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-08"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-09T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-09"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-10T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-10"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-11T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-11"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-12T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-12"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-15T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-15"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-16T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-16"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-17T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-17"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-18T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-18"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-19T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-19"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-22T23:49:00+03:00",
+            "observed_m1_rows": 375,
+            "session_date_ct": "2025-12-22"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-23T23:49:00+03:00",
+            "observed_m1_rows": 377,
+            "session_date_ct": "2025-12-23"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-24T20:14:00+03:00",
+            "observed_m1_rows": 165,
+            "session_date_ct": "2025-12-24"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-26T23:49:00+03:00",
+            "observed_m1_rows": 379,
+            "session_date_ct": "2025-12-26"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-29T23:49:00+03:00",
+            "observed_m1_rows": 376,
+            "session_date_ct": "2025-12-29"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-30T23:49:00+03:00",
+            "observed_m1_rows": 377,
+            "session_date_ct": "2025-12-30"
+          },
+          {
+            "matches_nominal_row_count": false,
+            "nominal_final_bar_present": false,
+            "observed_last_bar": "2025-12-31T23:49:00+03:00",
+            "observed_m1_rows": 380,
+            "session_date_ct": "2025-12-31"
+          }
+        ],
+        "sessions_matching_nominal_row_count": 163,
+        "sessions_with_nominal_final_bar": 164,
+        "training_end_inclusive": "2025-12-31"
+      },
+      "unparseable_timestamps": 0,
+      "zero_real_volume_rows": 527139
+    }
+  },
+  "open_g1_items": [
+    "Vendor/feed identity, export provenance, and applicable data-use/license terms are not established by the CSVs or repository metadata inspected here.",
+    "Tick input hashes are recorded in the active campaign manifest but tick-file content/quality was not rescanned in this audit.",
+    "Timestamp discontinuities are not compared against an authoritative exchange/broker calendar; they are not asserted to be missing bars.",
+    "The fixed Etc/GMT-3 convention is an assumption; source broker timezone and broker DST schedule are not independently verified. Session/DST impact must be treated as a validity limitation.",
+    "This scan does not revalidate feature causality/prefix invariance, fold-local fitting, purged walk-forward masks, MTF close/confirmation alignment, or strict cache hash behavior; retain their separate evidence and review them against current sources.",
+    "The terminal recovery campaign lacks current-attempt full-split episode telemetry for ladder_a0_flat; terminal campaign state alone does not establish full-split exposure."
+  ],
+  "repository_head_at_audit": "aef47d1e4467a0bb4469a2d7f047aeb9d18fde0c",
+  "runtime": {
+    "pandas": "2.3.2",
+    "python": "3.12.14"
+  },
+  "schema": "aalto.thesis_data_quality_audit.v2",
+  "tick_inputs_recorded_by_campaign": {
+    "data/US100.cash_202512290105_202607031959.csv": "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+    "data/US500.cash_202412300105_202607031959.csv": "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+  },
+  "working_tree_status_at_audit": [
+    " M .agents/rules/triton-slurm.md",
+    " M AGENTS.md",
+    " M config/quality_experiments.yaml",
+    " M docs/architecture.md",
+    " M docs/config.md",
+    " M docs/operations/triton_environment.md",
+    " M docs/thesis/audit_m1_data_quality_2026-10-16.py",
+    " M docs/thesis/audit_real_market_fold_fit_scope_current_source_2026-10-16.py",
+    " M docs/thesis/independent_research_review_checklist_2026-10-14.md",
+    " M docs/thesis/master_project_execution_plan.md",
+    " M docs/thesis/related_work.md",
+    " M docs/thesis/threats_to_validity.md",
+    " M docs/training/rl_learning_quality_implementation.md",
+    " M quant_rl/config/default.yaml",
+    " M quant_rl/features/build.py",
+    " M quant_rl/features/po3_state.py",
+    " M quant_rl/features/session_ohlc.py",
+    " M quant_rl/models/agent.py",
+    " M quant_rl/train/quality_registry.py",
+    " M quant_rl/train/train_rl.py",
+    " M scripts/matrix/audit_campaign_checkpoint_loads.py",
+    " M scripts/setup/setup_venv_x86.sh",
+    " M tests/test_campaign_checkpoint_migration.py",
+    " M tests/test_envs/test_bundle_env_equivalence.py",
+    " M tests/test_envs/test_eligibility_wiring.py",
+    " M tests/test_features/test_session_ohlc.py",
+    " M tests/test_models/test_semantic_actor.py",
+    " M tests/test_train/test_quality_registry.py",
+    "?? docs/thesis/audit_checkpoint_full_split_budget_current_campaign_2026-10-16.py",
+    "?? docs/thesis/evidence/p1_18_variant_screen_disposition_2026-10-16.md",
+    "?? docs/thesis/g1_feature_prefix_post_repair_2026-10-17.json",
+    "?? docs/thesis/g1_real_market_fold_fit_scope_post_repair_2026-10-17.json",
+    "?? docs/thesis/independent_review_brief_2026-10-16.md",
+    "?? docs/thesis/live_status_2026-10-16_2043.md",
+    "?? docs/thesis/live_status_2026-10-16_2148.md",
+    "?? docs/thesis/live_status_2026-10-16_2340.md",
+    "?? docs/thesis/live_status_2026-10-16_2350.md",
+    "?? docs/thesis/live_status_2026-10-17_0000.md",
+    "?? docs/thesis/live_status_2026-10-17_0005.md",
+    "?? docs/thesis/live_status_2026-10-17_0016.md",
+    "?? docs/thesis/live_status_2026-10-17_0020.md",
+    "?? docs/thesis/p1_checkpoint_full_split_budget_2026-10-16.json",
+    "?? quant_rl/models/hybrid_actor.py",
+    "?? scripts/matrix/rebuild_named_prebuilt_feature_caches.py",
+    "?? scripts/setup/setup_venv_mi210.sh",
+    "?? tests/test_models/test_hybrid_actor.py",
+    "?? tests/test_rebuild_named_prebuilt_feature_caches.py"
+  ]
+}

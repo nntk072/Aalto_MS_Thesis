@@ -17,28 +17,48 @@ prefix report is now available at
 See the dated [G1 evidence inventory](evidence/g1_2026-10-16/README.md) for
 scope and hash verification.
 
+The historical 100k campaign summary and resource report are also absent from
+the current checkout. The implementation ledger retains narrative and selected
+accounting evidence, but it is not a replacement for the missing per-run JSON,
+logs, and report artifacts. Treat the 100k screen outcomes below as previously
+reported exploratory findings unless those underlying artifacts are restored
+and hash-verified.
+
 This checklist prepares the remaining independent review of the Aalto thesis
 trading-system evidence. It is not itself independent sign-off, a strategy
 selection, or evidence that a strategy works. The internal source review is in
 [`research_path_review_2026-10-13.md`](research_path_review_2026-10-13.md); the
 campaign decision and evidence boundary are in
 [`18_variant_training_readiness_plan.md`](../training/18_variant_training_readiness_plan.md).
+For a concise reviewer handoff, start with the
+[independent review brief](independent_review_brief_2026-10-16.md); this
+checklist remains the detailed evidence inventory.
 
 ## Evidence to review
 
-- The 18-variant 100k exploratory results:
-  [`campaign_results_summary.md`](../../outputs/gpu_campaigns/ladder18_shared_bundle_n64_seed42_100k_resource_probe_20261014/reports/campaign_results_summary.md)
-  and its JSON report. All 18 training equity gates failed. Twelve test
-  replays failed the 130-day survival requirement; the remaining six made at
-  most two trades. All 36 saved train/test PnL values reconcile with their
-  equity curves. The 2026 test interval was previously inspected, so these
-  results are exploratory and report-only.
-- The 100k resource observation:
-  [`resource summary`](../../outputs/gpu_campaigns/ladder18_shared_bundle_n64_seed42_100k_resource_probe_20261014/reports/campaign_results_summary.md).
-  It records 95 samples, 94 active, PSS peak 251.2 GiB, sampled GPU
-  utilization peaks 97%/96%, and lacks allocation-wide cgroup memory and
-  process-tree CPU-time measurements. It does not establish a sustained 20M
-  resource profile.
+- The working [related-work note](related_work.md) now links primary sources and
+  bounds the claims: prior trading papers are contextual rather than direct
+  evidence for this intraday cash-index setup; PPO is not claimed to be
+  superior; simulator risk gates are distinguished from constrained-policy
+  methods; and the one-session momentum comparator is not described as a
+  replication of monthly futures time-series momentum. Reviewer should check
+  the final references and confirm that these distinctions remain in the
+  manuscript. This edit is preparation, not independent sign-off.
+- The 18-variant 100k exploratory result is recorded in the
+  [implementation ledger's 100k probe sections](implementation_ledger_2026-10-13.md).
+  They report 18 failed training-equity gates, 12 test replays failing the
+  130-day survival requirement, and at most two trades in the other six. The
+  original campaign summary, per-run JSON, logs, and equity curves are absent
+  from this checkout, so these aggregate findings are not independently
+  re-computable here. The 2026 test interval was previously inspected; the
+  findings remain exploratory and report-only.
+- The 100k resource findings are likewise documented in the
+  [implementation ledger's resource-probe sections](implementation_ledger_2026-10-13.md).
+  They report 95 samples, 94 active, and a process-tree PSS peak of 251.2 GiB.
+  The underlying campaign report is absent; the ledger says the probe lacks
+  reliable allocation-wide cgroup memory and process-tree CPU-time
+  measurements. Do not treat these recorded observations as independently
+  re-verified or as a sustained 20M resource profile.
 - The current-source real-market feature-prefix audit:
   [`g1_feature_prefix_current_source_2026-10-16.json`](g1_feature_prefix_current_source_2026-10-16.json).
   It passed 12/12 cutoff/profile comparisons, covering all 18 resolved variants
@@ -47,6 +67,25 @@ campaign decision and evidence boundary are in
   This is sampled prefix evidence, not cache parity, a complete proof of every
   causal path, or data/strategy validity. The older report remains archived as
   historical evidence.
+- The later real-market fold-fit poison audit:
+  [`g1_real_market_fold_fit_scope_2026-10-16.json`](g1_real_market_fold_fit_scope_2026-10-16.json).
+  It perturbs validation OHLC by 20% in the first purged fold. Baseline passes;
+  `ladder_a1_sl`, `ladder_a0_flat_po3`, and `ladder_a0_flat_dist` fail because
+  model-visible `prev_ny_high`/`prev_ny_low` values in training change from
+  `2025-02-12 01:31+03`. These profiles map to 17/18 saved worker configs, and
+  the active campaign's `session_ohlc.py` source hash matches the audited
+  source. This failure supersedes any broad causality interpretation of the
+  sampled prefix pass. Treat current campaign outcomes as inadmissible for
+  variant selection; review the causal fix, same-session future-poison test,
+  rebuilt versioned caches, and rerun fold/prefix audits before reconsidering
+  the gate. The staged regression
+  `tests/test_features/test_session_ohlc.py::test_prev_ny_high_low_uses_only_completed_ny_sessions`
+  was run on `gpuarm1` on 2026-10-16 with CUDA disabled while job `20990395`
+  remained active. It failed as predicted: after the first bar of the first NY
+  session, the current source exposed that same session's eventual 110/90
+  range; result `1 failed, 17 deselected`. This confirms the test detects the
+  audited defect; the training source remains unchanged until the campaign
+  source boundary. This is internal evidence, not independent sign-off.
 - **All-18-variant full-calendar frames/shared-bundle parity:** the earlier
   checklist cited `outputs/gpu_campaigns/readiness_reaudit_20261014/` and
   `outputs/gpu_campaigns/real_market_frames_bundle_parity_20261013/`, but
@@ -62,7 +101,17 @@ campaign decision and evidence boundary are in
   Risk breaches end training episodes early, so this budget calculation does
   not prove that any policy completed a full-year training episode. Review the
   final train-in-sample and report-only test evaluations when available; they
-  must cover their complete chronological splits.
+  must cover their complete chronological splits. At 20:07 Helsinki on
+  2026-10-16, the active recovery campaign's `runs/attempts/` tree had no
+  `episode_equity.csv`; aggregate PPO steps and checkpoints therefore do not
+  establish complete-split exposure for its current attempts.
+  A 20:36 Helsinki audit then traced the attempt-2 episode records through
+  attempt-3 resume provenance into every current checkpoint lineage and
+  verified one full train-split traversal for all 64 environments across all
+  18 variants (1,152 records). This supersedes the earlier unverified-coverage
+  statement, while leaving active trading across the year, feature validity,
+  and final policy evaluations unresolved; see
+  [`p1_checkpoint_full_split_budget_2026-10-16.json`](p1_checkpoint_full_split_budget_2026-10-16.json).
 - The `episode_equity.csv` files from any continuation using the current source.
   They append environment index, episode steps, full-split completion, and end
   reason after each episode. The original workers pinned to `937bae5` lack
@@ -79,11 +128,11 @@ campaign decision and evidence boundary are in
 | Data provenance and use | Can the source feed, export provenance, broker clock/DST schedule, and thesis/publication data-use terms be established independently? | The user reports no provider or terms record is available. Current hashes and bar/tick quality scans identify exact files and their observed integrity, not their source or publication rights. Obtain authoritative records or retain this as an unresolved validity/publication limitation. |
 | Execution and accounting | Are order timing, tick/quote fills, stops, take profits, costs, equity, and drawdown calculations correct for the stated market assumptions? | Code review and focused regressions exist; no independent broker integration or exhaustive reviewer sign-off exists. |
 | Reward and risk | Are the training/evaluation breach penalties, shaped rewards, risk limits, and hard train-equity/survival gates appropriate and consistently interpreted? | Reward is not a profitability metric. All 18 historical 100k pilot gates failed under the then-current rule. The active recovery campaign (`20990395`, source `413729e`) resumes checkpoints originating from source `937bae5`; the prior migration campaign used source `c2261ca`. This training-policy boundary must remain explicit. Its effective configs disable no-trade and interim equity-gate early aborts. The current final training-survival gate treats PnL, equity slope, and activity as report metrics; max-loss breach or peak trailing drawdown above 10% fail survival. Review the old checkpoint phase, current continuation policy, and final train/test reports separately. |
-| Feature causality | Are the MTF close-time alignments, swing/structure availability, train-only fitting, split boundaries, and cache identities causal? | On 2026-10-14, seven MTF/HTF/variant/swing/sweep/PO3/IFVG files passed 126/126 fixture tests in 5.76s; six causal-feature/split/fit-scope/cache/assembled-causality/leakage files passed 29/29 in 7.01s with two expected Transformer warnings; four entry-gate/eligibility/golden-trace files passed 30/30 in 3.50s (Python 3.12.14, pytest 9.1.1). The fresh current-source real-market prefix audit passed 12/12 profile/cutoff comparisons across all 18 resolved variants, with zero feature delta and matching hashes. The current-source raw-to-cache audit passed all four representative feature profiles with zero value/NaN-mask mismatches, zero numeric delta, and matching content-hash sidecars. The claimed all-18 frames/shared-bundle audit artifact is absent from this checkout, so its prior 18/18 claim remains unverified. These bounded checks do not establish every execution/label/model-selection path, per-variant cache resolution at final freeze, or pristine confirmatory OOS. |
+| Feature causality | Are the MTF close-time alignments, swing/structure availability, train-only fitting, split boundaries, and cache identities causal? | On 2026-10-14, seven MTF/HTF/variant/swing/sweep/PO3/IFVG files passed 126/126 fixture tests; six causal-feature/split/fit-scope/cache/assembled-causality/leakage files passed 29/29; four entry-gate/eligibility/golden-trace files passed 30/30. The current-source 12/12 prefix audit and four-profile raw/cache parity audit passed their bounded checks. However, the later real-market fold-fit poison audit failed for three profiles mapped to 17/18 configs: validation perturbations changed model-visible `prev_ny_high`/`prev_ny_low` in training. This supersedes the sampled-prefix pass as evidence of causality and invalidates current campaign outcomes for selection. The repair, regression, cache rebuild, and repeated real-market audits are pending; the claimed all-18 frames/shared-bundle artifact remains absent. G1 stays OPEN. |
 | Model selection | Is the selection protocol protected from exposed-period and human checkpoint-selection leakage? | The 2026 interval is permanently exposed. The one-seed campaign has no selected candidate and no independent selection record. |
-| Training duration and evaluation | Does each policy receive a meaningful full-year training exposure, and do final evaluations cover the complete train and report-only test periods? | The nominal 20M/64 budget is about 3.14 NY-session episode equivalents per environment only if episodes reach the end. The latest immutable [`live campaign snapshot`](live_campaign_snapshot_2026-10-14_1950.json), SHA-256 `1f38c5eb626741a3221c96ebe879e147dc8369e1976c2b0eb34e6db3da9110af`, captures eight available episode telemetry files across eight variants: 225 completed episodes, all ending on trailing-drawdown breach at 7,338–71,857 of 99,504 train steps; none completed the split. Ten variants had no telemetry file at capture. Training resets return to the first eligible NY bar, so completed episodes restart on the same prefix; this does not prove what dates any still-running environment has visited or that every environment terminated. A tested full-split fix exists on unmerged branch `codex/full-year-episode-coverage` (commit `5f17bd5`); it is not active in the current campaign. No final train-in-sample or report-only test reports exist. The 18-worker run was still at 8.05M–12.82M of 20M when captured. Review per-environment coverage and complete-split reports before deciding whether the user's full-year learning requirement was met. |
+| Training duration and evaluation | Does each policy receive a meaningful full-year training exposure, and do final evaluations cover the complete train and report-only test periods? | The nominal 20M/64 budget is about 3.14 NY-session episode equivalents per environment only if episodes reach the end. The immutable [`live campaign snapshot`](live_campaign_snapshot_2026-10-14_1950.json), SHA-256 `1f38c5eb626741a3221c96ebe879e147dc8369e1976c2b0eb34e6db3da9110af`, captures eight available episode telemetry files across eight variants: 225 completed episodes, all ending on trailing-drawdown breach at 7,338–71,857 of 99,504 train steps; none completed the split. Ten variants had no telemetry file at capture. Training resets return to the first eligible NY bar, so those completed episodes restarted on the same prefix; that historical snapshot does not prove what dates any still-running environment had visited. The full-split fix was first committed on `codex/full-year-episode-coverage` (`5f17bd5`) and is now present on `main` in `46a8ce7` and the active source snapshot `413729e`; effective configs for job `20990395` specify `training.episode_mode=full_split` and `env.max_episode_steps=null`. The all-attempt audit and current checkpoint-lineage audit verify that 64/64 environments per variant completed one 99,504-step `data_end` episode in source attempt 2, with attempt-3 checkpoint provenance linking those records to the current models (1,152 records total; see [lineage audit](p1_checkpoint_full_split_budget_2026-10-16.json) and the existing [attempt reconciliation](../../outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/p1_attempt_reconciliation_20261016.json)). This establishes chronological full-split exposure before the current continuation, not active trading after a risk breach, feature validity, or strategy quality. Attempt-2 training diagnostics record 621 trailing-drawdown episodes out of 1,152, and two variants with 64/64 zero-trade episodes; these outcomes are exploratory because the model-visible NY-session feature leak contaminates this lineage and they are not final evaluation PnL. The current attempt itself still has no `episode_equity.csv`; `ladder_a0_flat` cannot complete a second full split within the 20M budget. One A0 attempt has now emitted deterministic final replay artifacts: its in-sample replay covered the full 99,504-step train split but failed the max-loss survival gate at `2025-09-11` (-$9,988.65; 168 trades; 91 sessions with trades out of 259). The previously inspected report-only test replay was +$50.44 over 123 trades. This is a mixed-source continuation; the screen remains inadmissible for selection because the real-market fold-fit audit fails for 17/18 configurations. See the [A0 finding card](../../outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/ladder_a0_flat_seed50_attempt1.md). P1 remains open. |
 | Performance claims | Do any results support viability, generalization, or confirmatory conclusions? | No. The 18-run pilot failed every training gate; six surviving test replays had at most two trades. No pristine holdout result exists. |
-| Resource/reproducibility | Are the observed pilot resources sufficient for the proposed 20M campaign, and can the results be reproduced from retained inputs/source? | The immutable 3.49-hour resource sample for historical job `20963043` (`live_resource_snapshot_2026-10-14_1949.json`) measured mean cgroup RAM 137.88/138.77 GiB, cgroup peaks 159.99/161.90 GiB, mean GPU utilization 58.7%/59.0%, peak sampled VRAM 65.87/99.26 GiB, and zero sampled OOM kills. Process-tree CPU averaged 4.92/4.89 cores per node; CPU pressure/throttle counters were not captured. It is pilot evidence, not a measurement of current job `20990395`. At 18:53 on 2026-10-16, all 18 current trainers were active (9/node), latest checkpoint markers ranged 12M–16M, and an instantaneous sample showed each GH200 at 100% GPU utilization with 78,334/146,831 and 79,961/146,831 MiB used. No cgroup RAM or process-tree CPU sample was taken at that instant, and no final train/test evaluation exists. Thus current full-budget resource sizing remains incomplete. The current campaign's recorded source is `413729e`; resumed checkpoint lineages preserve earlier source provenance `937bae5`. Review the campaign manifest, initial-checkpoint lineage, worker logs, and immutable raw resource samples together. |
+| Resource/reproducibility | Are the observed pilot resources sufficient for the proposed 20M campaign, and can the results be reproduced from retained inputs/source? | The immutable 3.49-hour resource sample for historical job `20963043` (`live_resource_snapshot_2026-10-14_1949.json`) measured mean cgroup RAM 137.88/138.77 GiB, cgroup peaks 159.99/161.90 GiB, mean GPU utilization 58.7%/59.0%, peak sampled VRAM 65.87/99.26 GiB, and zero sampled OOM kills. Process-tree CPU averaged 4.92/4.89 cores per node; CPU pressure/throttle counters were not captured. A separate frozen approximately 30-minute sample from current job `20990395` is at [`p6_resource_window_20261016_2000`](../../outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/p6_resource_window_20261016_2000/report.json): nine trainers per GH200, process-tree CPU about 11.6/48 cores per node, mean cgroup RAM 161.85/140.38 GiB with job peaks 167.75/146.70 GiB, GPU utilization 99.53%/99.41%, and sampled VRAM maxima 81,501/82,895 MiB. It is resource-only evidence from a contaminated lineage, not final runtime acceptance or strategy evidence; CPU pressure/throttle counters and full-run phase costs remain absent. Current campaign source is `413729e`; resumed checkpoint lineages preserve earlier source provenance `937bae5`. Review the campaign manifest, initial-checkpoint lineage, worker logs, and immutable raw resource samples together. |
 
 The short three-trainer comparison is not a controlled benchmark: campaign `ladder3_shared_bundle_n64_seed42_20m_20261014` used `n_envs=64`, 32 CPUs/worker and two GH200 GPUs for three workers (1.5 workers/GPU); it logged 1,256–1,455 FPS/worker, or 4,017 aggregate steps/s. Current job `20963043` uses the same `n_envs` and GPU model but nine workers/GPU and five CPUs/worker; latest logs were 247–385 FPS/worker (median 319.5), or 5,486 aggregate steps/s. Aggregate throughput is higher by about 37%, while per-worker FPS is about fourfold lower. Source revisions and A0 `strategy_actions` differ, so don't treat this as a causal hardware benchmark. Each trainer launches 64 SB3 subprocess environments; the current resource sample counted about 615 processes per node. Early samples show CPU and RAM headroom and GPU peaks near 100% but means below 60%; sharing, process scheduling and rollout synchronization are plausible contributors, not an isolated proven bottleneck. No CPU-throttling counters were sampled. See the readiness plan's “Three-trainer versus 18-trainer throughput comparison” evidence and caveats.
 

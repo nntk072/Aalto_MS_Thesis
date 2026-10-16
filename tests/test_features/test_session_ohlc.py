@@ -19,6 +19,7 @@ from omegaconf import DictConfig, OmegaConf
 
 from quant_rl.features.indicators import vwap_from_session, vwap_level
 from quant_rl.features.session_ohlc import (
+    prev_ny_high_low,
     previous_labeled_session_ohlc,
     prior_period_high_low,
     range_quadrants,
@@ -28,6 +29,8 @@ from quant_rl.features.session_ohlc import (
 
 DATA_TZ = "Etc/GMT-3"
 SESSION_TZ = "America/Chicago"
+NY_SESSION_START = "08:30"
+NY_SESSION_END = "15:00"
 
 
 def _sawtooth_bars(
@@ -199,6 +202,112 @@ def test_session_mask_january_broker_times() -> None:
     assert len(masked) == 48
     assert masked[0].hour == 4 and masked[0].minute == 0
     assert masked[-1].hour == 7 and masked[-1].minute == 55
+
+
+@pytest.mark.unit
+def test_prev_ny_high_low_uses_only_completed_ny_sessions() -> None:
+    """Future bars in an open NY session cannot alter its visible prior range."""
+    idx = pd.date_range("2026-01-05 00:00", periods=4 * 1440, freq="1min", tz=DATA_TZ)
+    ny_mask = session_mask(idx, NY_SESSION_START, NY_SESSION_END, session_tz=SESSION_TZ).to_numpy()
+    local_dates = np.asarray(idx.tz_convert(SESSION_TZ).date)
+    session_dates = sorted(set(local_dates[ny_mask]))
+    first_date, second_date = session_dates[:2]
+    first_rows = ny_mask & (local_dates == first_date)
+    second_rows = ny_mask & (local_dates == second_date)
+    bars = pd.DataFrame({"high": 100.0, "low": 95.0}, index=idx)
+    bars.loc[first_rows, "high"] = 110.0
+    bars.loc[first_rows, "low"] = 90.0
+    bars.loc[second_rows, "high"] = 120.0
+    bars.loc[second_rows, "low"] = 80.0
+
+    poisoned = bars.copy()
+    second_positions = np.flatnonzero(second_rows)
+    poisoned.loc[idx[second_positions[1:]], "high"] = 999.0
+    poisoned.loc[idx[second_positions[1:]], "low"] = 1.0
+
+    original_features = prev_ny_high_low(bars, session_tz=SESSION_TZ)
+    poisoned_features = prev_ny_high_low(poisoned, session_tz=SESSION_TZ)
+
+    # The first session has no earlier NY range. Throughout session two, the
+    # visible range must remain session one's completed 110/90 despite poisoning
+    # every later bar in session two.
+    assert original_features.loc[first_rows].isna().all().all()
+    second_index = idx[second_positions]
+    expected_previous = pd.DataFrame(
+        {"prev_ny_high": 110.0, "prev_ny_low": 90.0},
+        index=second_index,
+    )
+    pd.testing.assert_frame_equal(
+        original_features.loc[second_index], expected_previous, check_freq=False
+    )
+    pd.testing.assert_frame_equal(
+        poisoned_features.loc[second_index], expected_previous, check_freq=False
+    )
+
+    # The new range becomes available on the first decision bar at session
+    # close, after all of its in-session bars have completed.
+    close_time = pd.Timestamp(f"{second_date} {NY_SESSION_END}", tz=SESSION_TZ).tz_convert(DATA_TZ)
+    assert original_features.loc[close_time].to_dict() == {
+        "prev_ny_high": 120.0,
+        "prev_ny_low": 80.0,
+    }
+    assert poisoned_features.loc[close_time].to_dict() == {
+        "prev_ny_high": 999.0,
+        "prev_ny_low": 1.0,
+    }
+
+
+@pytest.mark.unit
+def test_prev_ny_high_low_promotes_observed_range_after_clock_close_with_data_gap() -> None:
+    """A clock-completed session uses its observed bars; G1 audits gaps separately."""
+    idx = pd.date_range("2026-01-05 00:00", periods=3 * 1440, freq="1min", tz=DATA_TZ)
+    ny_mask = session_mask(idx, NY_SESSION_START, NY_SESSION_END, session_tz=SESSION_TZ).to_numpy()
+    local_dates = np.asarray(idx.tz_convert(SESSION_TZ).date)
+    session_dates = sorted(set(local_dates[ny_mask]))
+    first_date, second_date = session_dates[:2]
+    first_rows = ny_mask & (local_dates == first_date)
+
+    bars = pd.DataFrame({"high": 100.0, "low": 95.0}, index=idx)
+    bars.loc[first_rows, "high"] = 110.0
+    bars.loc[first_rows, "low"] = 90.0
+    missing = idx[np.flatnonzero(first_rows)[100]]
+    bars = bars.drop(index=missing)
+
+    result = prev_ny_high_low(bars, session_tz=SESSION_TZ)
+    second_session_start = pd.Timestamp(
+        f"{second_date} {NY_SESSION_START}", tz=SESSION_TZ
+    ).tz_convert(DATA_TZ)
+    assert result.loc[second_session_start].to_dict() == {
+        "prev_ny_high": 110.0,
+        "prev_ny_low": 90.0,
+    }
+
+
+@pytest.mark.unit
+def test_prev_ny_high_low_uses_local_close_across_dst_transition() -> None:
+    idx = pd.date_range("2026-03-06 00:00", periods=5 * 1440, freq="1min", tz=DATA_TZ)
+    ny_mask = session_mask(idx, NY_SESSION_START, NY_SESSION_END, session_tz=SESSION_TZ).to_numpy()
+    local_dates = np.asarray(idx.tz_convert(SESSION_TZ).date)
+    bars = pd.DataFrame({"high": 100.0, "low": 90.0}, index=idx)
+    for date_index, session_date in enumerate(sorted(set(local_dates[ny_mask]))):
+        session_rows = ny_mask & (local_dates == session_date)
+        bars.loc[session_rows, "high"] = 200.0 + date_index
+        bars.loc[session_rows, "low"] = 80.0 - date_index
+
+    result = prev_ny_high_low(bars, session_tz=SESSION_TZ)
+    prior_close = pd.Timestamp(f"2026-03-08 {NY_SESSION_END}", tz=SESSION_TZ).tz_convert(DATA_TZ)
+    next_session = ny_mask & (local_dates == pd.Timestamp("2026-03-09").date())
+    prior_session = ny_mask & (local_dates == pd.Timestamp("2026-03-08").date())
+    expected_high = bars.loc[prior_session, "high"].iloc[0]
+    expected_low = bars.loc[prior_session, "low"].iloc[0]
+
+    assert result.loc[prior_close].to_dict() == {
+        "prev_ny_high": expected_high,
+        "prev_ny_low": expected_low,
+    }
+    visible = result.loc[idx[next_session]]
+    assert visible["prev_ny_high"].eq(expected_high).all()
+    assert visible["prev_ny_low"].eq(expected_low).all()
 
 
 # ---------------------------------------------------------------------------
@@ -423,7 +532,15 @@ def test_build_features_session_ohlc_additive() -> None:
     base = build_features(bars, cfg=cfg_base)
 
     cfg_sess = OmegaConf.merge(
-        cfg_base, OmegaConf.create({"features": {"include_session_ohlc": True}})
+        cfg_base,
+        OmegaConf.create(
+            {
+                "features": {
+                    "include_session_ohlc": True,
+                    "sessions": {"ny": {"start": "09:00", "end": "14:00"}},
+                }
+            }
+        ),
     )
     sess = build_features(bars, cfg=cast(DictConfig, cfg_sess))
 
@@ -442,6 +559,8 @@ def test_build_features_session_ohlc_additive() -> None:
         "ny_ct_close",
         "yesterday_high",
         "yesterday_low",
+        "prev_ny_high",
+        "prev_ny_low",
         "lastweek_high",
         "lastweek_low",
         "yesterday_q_upper_outer",
@@ -462,6 +581,15 @@ def test_build_features_session_ohlc_additive() -> None:
     day3 = sess.loc[sess.index >= pd.Timestamp("2026-03-09 00:00", tz=DATA_TZ)]
     for col in ("yesterday_high", "lastweek_high", "ny_ct_high"):
         assert day3[col].notna().any(), col
+
+    # Prior-NY levels use the configured CT window, even when it differs from
+    # the defaults. In March, 14:00 CT closes at 22:00 in the data's fixed UTC+3
+    # clock; that range becomes visible at the close timestamp.
+    ny_start = pd.Timestamp("2026-03-09 09:00", tz=SESSION_TZ).tz_convert(DATA_TZ)
+    ny_close = pd.Timestamp("2026-03-09 14:00", tz=SESSION_TZ).tz_convert(DATA_TZ)
+    ny_bars = bars.loc[(bars.index >= ny_start) & (bars.index < ny_close)]
+    assert sess.loc[ny_close, "prev_ny_high"] == pytest.approx(ny_bars["high"].max())
+    assert sess.loc[ny_close, "prev_ny_low"] == pytest.approx(ny_bars["low"].min())
 
     # Legacy broker-tz levels are untouched (additive block).
     assert {"asian_high", "asian_low", "london_high", "london_low"} <= set(map(str, sess.columns))

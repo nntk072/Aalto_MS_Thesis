@@ -2,12 +2,94 @@
 
 **Status:** ACTIVE — empirical results package is not yet frozen
 **Revision:** 2026-10-16 — single-agent horizontal-execution profile
-**Authority:** This file is the single operational roadmap for the remaining experiment, correctness, infrastructure, evaluation, evidence, review, and archival work.
-**Primary objective:** Produce a defensible, reproducible **results package** containing the complete logs, checkpoints, raw evaluations, statistics, figures/tables, provenance, failures, and finding summaries required to write the thesis afterward. Thesis prose is downstream work, not part of the Codex agent's execution scope.
-**Deadline context:** The results package should be frozen early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**, but the agent should optimize for valid evidence rather than drafting chapters.
+**Authority:** This file is the single operational roadmap for thesis-critical experiment, correctness, infrastructure, evaluation, evidence, review, archival, manuscript, and submission work.
+**Primary objective:** Complete the P0–P9 evidence package, then use its frozen artifacts to finish and submit a defensible thesis. The active user goal includes P10/P11 manuscript and submission work; those stages remain downstream of the evidence gates.
+**Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
+**Latest live state (2026-10-17 02:21 Helsinki):** job `20990395` is terminal
+`FAILED`; the earlier H200 successor request `21004765` remains pending and is
+not an allocation. Approved MI210 job `21007645` is active on `gpuamd1` for its
+six-hour validation window. ROCm/PyTorch GPU operation, focused Q-source tests,
+the post-repair fold-poison check, four-profile prefix audit, M1 integrity
+inventory, and transactional rebuild of the three named feature caches have
+run inside that allocation. No training campaign was launched,
+no Slurm job was canceled, and no new Slurm step was created. This transient
+snapshot does not change the ordered roadmap.
+
+**Earlier scheduler snapshot (2026-10-17 00:20 Helsinki):** job `20990395` was
+terminal `FAILED`; job `21004765` was pending on `gpu61` because the requested
+node was down, drained, rebooting, or reserved, with a forecast at Oct 18
+19:30. The `thesis-causal-repair` tmux session was preserved. See
+[`live_status_2026-10-17_0020.md`](live_status_2026-10-17_0020.md).
+
+**P1 source repair update (2026-10-17 00:10 Helsinki; gap-policy measurement
+still pending):** the causal repair exposes only a clock-completed session. A
+follow-up source review found that the old default window `16:30–23:00 CT` was
+inconsistent with the configured NY window `08:30–15:00 CT`; in fixed UTC+3
+data time these identify different sessions. The feature builder now passes
+the configured NY window and cache identity is
+`v22-causal-configured-ny-session`. The M1 audit derives its session window
+from the default feature config and records its hash. Missing-bar handling
+remains provisional: observed rows are used, while the audit reports row counts
+and the nominal final bar without asserting a market calendar.
+
+**P1 post-repair validation update (2026-10-17 02:21 Helsinki):** the MI210
+node ran the normalized M1 data audit (`data_quality_audit_2026-10-16_v4.json`),
+the fold-poison audit (`g1_real_market_fold_fit_scope_post_array_opt_2026-10-17.json`),
+and the full four-profile/12-cutoff prefix audit
+(`g1_feature_prefix_post_repair_2026-10-17.json`). The poison check passed for
+four representative profiles on one early purged fold (41,920 train and 6,000
+validation rows each): validation poisoning left all training features exactly
+unchanged and changed validation features. Prefix invariance passed all 12
+sampled comparisons across the four profiles. All three named caches were
+transactionally rebuilt with report
+[`prebuilt_cache_rebuild_2026-10-17_mi210.json`](prebuilt_cache_rebuild_2026-10-17_mi210.json);
+previous files/sidecars were copied to
+`data/prebuilt_feature_cache/backups/pre-repair_2026-10-17_mi210_21007645/`.
+These bounded checks do not establish
+exhaustive causality, market-calendar/DST validity, current strategy quality,
+or confirmatory evidence. The fresh screen remains gated on the cache rebuild,
+remaining reviews, post-boundary CI, and approved allocation.
+
+**P1 audit-preservation update (2026-10-17 00:05 Helsinki):** the fold-poison
+rerun now writes a new post-repair report instead of overwriting the immutable
+failed report, and its source diagnosis no longer asserts the old defect as a
+current result. The M1 completeness audit also refuses to overwrite its v2
+report. Both audits are prepared but unrun; the causal tests and cache rebuild
+remain open. See [`live_status_2026-10-17_0005.md`](live_status_2026-10-17_0005.md).
+
+**P1 configured-session correction (2026-10-17 00:10 Helsinki):**
+`prev_ny_high_low()` previously defaulted to `16:30–23:00 CT`, unlike the
+configured CT NY window `08:30–15:00`. The feature builder now passes the
+configured boundaries; the direct function defaults match them; the feature
+cache version is `v22-causal-configured-ny-session`; and the M1 audit reads its
+window from the feature config. Existing named caches remain preserved but are
+stale and must not be used until P1 validation and the transactional rebuild.
+
+**P1 campaign-config provenance check (2026-10-17 00:14 Helsinki):** all 18
+saved worker configs in the failed campaign record the configured NY window
+`08:30–15:00` CT. The M1 report builder now checks each worker's saved config
+against its manifest hash and the default feature-session config, and records
+the per-run config hashes. This check is authored but has not been executed.
+
 ---
+
+**P1 cache-rebuild provenance hardening (2026-10-17 00:20 Helsinki):** the
+transactional cache builder now records each full resolved merged config and
+its digest, hashes the selected YAML inputs and loaded in-repository `quant_rl`
+modules, and records runtime/platform/host/Slurm and dependency-lock metadata.
+It also records dirty-worktree status and a hash of the tracked working diff.
+Focused provenance regressions were added. Neither tests nor the cache rebuild
+have run; all three named caches remain stale until GPU-node validation and the
+transactional rebuild succeed. The M1 audit report builder's open-item text was
+also corrected: the recovery campaign is terminal, but the current attempt
+lacks full-split episode telemetry for `ladder_a0_flat`.
+
+**P1 raw-input cache isolation (2026-10-17 00:23 Helsinki):** cache rebuilding
+now forces raw-M1 ingestion into a temporary intermediate-bar cache, avoiding
+stale shared parquet inputs and preserving the project's reusable bar caches.
+A focused regression was added; it has not run.
 
 ## 1. How to use this roadmap
 
@@ -70,7 +152,8 @@ a definition of thesis completion.
 
 ### 2.3 `RESULTS_PACKAGE_COMPLETE`
 
-This is the terminal state for the long-running Codex agent goal. It requires
+This closes the P0–P9 results-evidence phase; the active goal continues through
+P10/P11. It requires
 `THESIS_EVIDENCE_COMPLETE` plus a complete, machine-indexed handoff package:
 
 - every thesis-relevant run has its resolved config, command, source/data/cache identity,
@@ -87,8 +170,8 @@ This is the terminal state for the long-running Codex agent goal. It requires
   figure/table artifacts -> allowed interpretation;
 - the archive can be understood without tmux history, shell scrollback, or reconstructing human memory.
 
-**Codex agent stops its research-critical mission here.** It may generate concise result summaries and
-artifact indexes, but it does not need to draft thesis chapters to satisfy this roadmap.
+**P9 closes the results-evidence phase, not the active user goal.** The agent then continues through
+P10/P11 to assemble the evidence-backed manuscript and submission artifacts.
 
 ### 2.4 `THESIS_PACKAGE_READY`
 
@@ -111,10 +194,13 @@ and the faculty version has been submitted with its evidence archive retained.
 
 ### 2.6 `RESEARCH_EXTENSION_COMPLETE`
 
-The Q0–Q7 program has reached a declared stopping point with reproducible
-control/treatment decisions for every executed stage. This is **not** required
-for `RESULTS_PACKAGE_COMPLETE` unless a Q-stage result is deliberately promoted
-into the thesis claim set before the thesis evidence freeze.
+The complete Q0–Q7 program has reached a declared stopping point with
+reproducible control/treatment decisions for every stage. By user direction on
+2026-10-16, Q0–Q7 are compulsory parts of the overall Codex mission. They remain
+downstream of thesis submission by default and are not prerequisites for
+`RESULTS_PACKAGE_COMPLETE` or `SUBMISSION_COMPLETE`; a Q-stage result enters the
+thesis only if it independently passes its evidence gates and is deliberately
+promoted before the thesis evidence freeze.
 
 ---
 
@@ -562,9 +648,17 @@ Treat this as a planning snapshot, not live cluster telemetry.
    No pristine confirmatory holdout is currently available in the retained
    dataset.
 5. Independent research sign-off remains open.
-6. The current manuscript is a coherent full draft with empirical TODOs. Its
-   research questions and result structure already permit an encoder question
-   to be reported as untested and require explicit evidence-to-claim answers.
+6. A previous planning snapshot described a coherent full manuscript draft, but
+   its source was not found in the canonical checkout during the 2026-10-16
+   artifact inventory. The only nearby PDF found was
+   `/scratch/work/nguyenl37/Thesis_Defense_PO3_IFVG.pdf`, a 27-page defense
+   slide deck rather than a manuscript. Locate and assess the manuscript source
+   before P10; if no source exists, create the thesis from the frozen evidence
+   package. A follow-up filename inventory under `/scratch/work/nguyenl37`
+   and `/home/nguyenl37` found no thesis `.tex`, `.qmd`, `.docx`, `.odt`, or
+   `.typ` file; the only matches outside the project were bundled compiler
+   library manuals. This bounds the search to those local roots and file types;
+   an external/cloud copy has not been ruled out.
 7. Device-resident PPO rollout staging has measured exact minibatch parity and a
    strong PPO-core throughput improvement. Higher trainer concurrency and larger
    minibatches have promising throughput measurements, but production adoption
@@ -677,6 +771,91 @@ The documentation update passed full-tree Ruff format/check, full-tree Mypy
 (438 source files), and 15 focused recovery/evidence tests on `gpuarm1` at
 13:06. Readiness remains NOT READY; P1 and P2 remain open.
 
+### Live execution update — 2026-10-16 20:24 Helsinki
+
+Read-only scheduler verification shows allocation `20990395` still RUNNING on
+`gpuarm1` and `gpuarm2`, with exactly two GH200s, 96 CPUs and 1 TiB RAM total.
+Its scheduled window is 17:34:29–23:34:29 Helsinki. The primary supervisor
+(`run_campaign_18way_cpumask_supervisor.sh`) and the authorized boundary watcher
+remain alive. The user authorized this job to finish naturally, then authorized
+stopping only its automatic reacquisition supervisor; do not `scancel` the job.
+
+The recovery allocation supervisor is sleeping while the current
+`thesis18cpumask` job remains active; it reports 18 campaign records active,
+zero failed, and zero succeeded. Independent live artifacts now confirm all 18
+workers: all 18 attempt logs were refreshed after 20:20, and the two node
+resource samplers report nine worker root PIDs each with `campaign_active=1`.
+At 20:27, logged cumulative progress ranged from 15.23M to 19.60M of 20M per
+variant (median 15.62M); reported per-worker FPS ranged from 419 to 551
+(median 459). The sum of the 18 latest FPS fields is about 8,345 steps/s, a
+log-derived estimate rather than an independently measured throughput window.
+The latest sample, timestamped 20:26:45 Helsinki, reports GPU utilization
+99%/100%, VRAM use 82,735/84,093 MiB, cgroup current RAM 175.5/154.5 GiB, and
+cgroup peaks 177.0/156.5 GiB; OOM counters are zero. These are point samples,
+not final run-wide resource summaries. The current recovery attempt still has
+no `episode_equity.csv` files, but the resumed source lineage has earlier
+attempt-2 episode telemetry; its coverage is audited below. Preserve the
+current job and its fingerprints until the safe boundary.
+
+A checkpoint-lineage budget audit is now recorded at
+[`p1_checkpoint_full_split_budget_2026-10-16.json`](p1_checkpoint_full_split_budget_2026-10-16.json), with its reproducible generator at
+[`audit_checkpoint_full_split_budget_current_campaign_2026-10-16.py`](audit_checkpoint_full_split_budget_current_campaign_2026-10-16.py).
+One full 99,504-step train split across 64 fresh environments requires
+6,368,256 aggregate steps. The audit traces all 18 current checkpoints through
+attempt-3 provenance to attempt-2 training records and verifies 64 unique
+environment indices per variant, each with exactly 99,504 steps,
+`completed_data_split=true`, and `episode_end_reason=data_end` (1,152 records).
+The current resumed baseline starts at 14M and has only 6M steps left in its
+20M cap, enough for at most 93,750 additional steps/environment; it cannot
+complete a second full split during this continuation. Thus one chronological
+train-split traversal per environment is evidenced before the current
+checkpoints, while current-attempt episode telemetry is still absent. This is
+exposure evidence, not proof of active trading throughout the year, a valid
+feature path, or strategy quality.
+
+The same per-environment records show why episode completion must be separated
+from survival and activity: 621/1,152 training episodes recorded a
+`trailing_dd` breach before continuing to `data_end`; two variants
+(`ladder_a4a_entry_fsm_hidden` and `ladder_a4b_entry_fsm`) recorded zero trades
+in all 64 episodes each. All 16 variants with trades had negative mean
+episode-equity deltas. These are in-sample training diagnostics from a
+feature-contaminated lineage, not deterministic evaluation PnL, and cannot be
+used to select a strategy. Per-variant counts and episode-level hashes are in
+the same audit JSON.
+
+The real-market fold-fit poison audit remains the controlling validity result:
+current NY-session high/low features leak future within-session values in
+profiles mapped to 17 of 18 variants. The current campaign is therefore
+exploratory and cannot support selection or confirmation. At the boundary,
+finish the authorized supervisor stop, preserve the run artifacts, repair the
+feature and regression, bump/rebuild the three versioned feature caches, rerun
+the real-market prefix/fold and cache audits, and prepare a fresh matched
+lineage; request allocation approval before launching it. Do not resume the
+contaminated checkpoints as thesis evidence. The full-split training
+implementation is already present on main (`46a8ce7`) and in the active source
+snapshot (`413729e`). Attempt-2 telemetry verifies one complete chronological
+split per environment in each current checkpoint lineage; this does not remove
+the causal-feature failure or prove active trading after a breach. P1–P4
+remain open and readiness remains NOT READY.
+
+### Live checkpoint-lineage and trainer update — 2026-10-16 20:39 Helsinki
+
+Allocation `20990395` remains RUNNING on `gpuarm[1-2]` at 3:04:59/6:00:00.
+All 18 attempt logs are live; they show 15.42M–19.997M of 20M total steps per
+variant, median 15.92M, and latest per-worker FPS 419–549 (median 458). The
+reacquisition supervisor and the user-authorized terminal-state watcher remain
+alive. The current attempt still has no `episode_equity.csv`; keep waiting for
+this allocation to finish naturally and preserve its source/checkpoints.
+
+The 20:38 version of the checkpoint-lineage audit now verifies that the 18
+attempt-3 checkpoints descend from attempt-2 runs in which every environment
+recorded 99,504 steps and `data_end`. It also summarizes the training episodes:
+621/1,152 recorded trailing-drawdown breaches; two variants recorded 64/64
+zero-trade episodes; all 16 variants with trades had negative mean episode
+equity deltas. These figures are exploratory training diagnostics from a
+feature-contaminated lineage, not final evaluation metrics. The report and
+generator are linked above; P1/P2 and G1 remain open.
+
 ---
 
 ## 6. Dependency graph: Codex agent horizontal execution to results freeze
@@ -724,7 +903,7 @@ The documentation update passed full-tree Ruff format/check, full-tree Mypy
                    P9 RESULTS_PACKAGE_COMPLETE
                                    │
                                    ▼
-             downstream thesis writing / PDF assembly by author
+           P10 manuscript writing / PDF assembly in active user goal
                                    │
                                    ▼
                     Supervisor PDF — 2026-11-09
@@ -733,9 +912,13 @@ The documentation update passed full-tree Ruff format/check, full-tree Mypy
                     Faculty submission — 2026-11-23
 ```
 
-The default Codex agent mission ends at **P9 `RESULTS_PACKAGE_COMPLETE`**. Thesis prose,
-formatting, and PDF assembly are downstream work. The Q0–Q7 research program is
-deliberately outside the default results-critical path unless explicitly promoted.
+The P0–P9 results-evidence phase ends at **`RESULTS_PACKAGE_COMPLETE`**. The
+active user goal continues through P10/P11 manuscript, PDF assembly, feedback,
+and faculty submission. Q0–Q7 are also compulsory for the overall mission by
+user direction on 2026-10-16. They remain a separate post-thesis research
+program by default so they cannot contaminate or delay the frozen thesis
+evidence. A Q stage may run earlier only after its entry criteria pass and when
+it does not consume resources or attention needed by thesis-critical gates.
 
 ## 7. Parallelization and resource-lock rules
 
@@ -959,9 +1142,10 @@ prior detail remains in the model context.
 
 ### 7A.10 Stop condition
 
-The continuous agent does not stop merely because training is finished. It stops at P9 only after
-`RESULTS_PACKAGE_COMPLETE`: final logs, configs, checkpoints, raw outputs, statistics, figures,
-finding cards, failures, hashes, and global indexes are present and cross-validated.
+The continuous agent does not stop merely because training or P9 is finished. P9 closes the
+results-evidence phase after final logs, configs, checkpoints, raw outputs, statistics, figures,
+finding cards, failures, hashes, and global indexes are present and cross-validated. The active user
+goal ends only at P11 `SUBMISSION_COMPLETE`.
 
 ---
 
@@ -1027,6 +1211,23 @@ This is a **one-seed selection/system-behavior screen**. It can:
 It cannot by itself establish robust treatment effects or generalization.
 Cross-family differences that include reward/action/strategy changes are not
 isolated effects of the structural overlay.
+
+### Current seed-50 recovery disposition
+
+The terminal campaign summary records 11 succeeded, 4 train-survival gate
+failures, and 3 interrupted variants. Current-attempt full-split episode
+telemetry is present for 17 variants (1,088 environments, one 99,504-step
+episode per environment); `ladder_a0_flat` has no completed-split telemetry in
+this attempt. Keep this distinct from the earlier checkpoint-lineage audit,
+which verified a prior full-split traversal for all 18 source lineages. Eight
+variants have zero trades in both train and report-only test evaluation. The
+fold-poison audit finds lookahead in 17/18 configurations; the sole passing
+profile, `ladder_a0_flat`, failed its train-survival gate. Thus the screen has
+no variant that is both causally admissible and passes the declared training
+survival gate. See the evidence-backed
+[`P1 screen disposition`](evidence/p1_18_variant_screen_disposition_2026-10-16.md)
+and campaign JSON report; do not use the screen for selection or confirmatory
+claims.
 
 ### Exit criterion
 
@@ -1105,8 +1306,18 @@ Verify:
   subgroup reports, full report determinism is not established.
   The detailed artifact is
   `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/p2_replay_determinism_audit_20261016.json`.
-  Stabilize the label selection and repeat the audit after the active campaign
-  boundary; do not edit this fingerprinted source during the live campaign.
+  The stable lexical tie-break was committed at 14:12 on 2026-10-16 in
+  `6827b3822f75feab46821747f1ba3a24f3c72723` and has a regression test in
+  `tests/test_envs/test_trading_env_decomposition.py`. The two replay passes
+  ran at 14:01 and 14:11, both before that correction (committed at 14:12:37),
+  so they do not verify the fixed implementation. A source-boundary audit on
+  2026-10-16 confirmed that the
+  active recovery campaign's `source_snapshot.zip` contains the corrected
+  `quant_rl/envs/trading_env.py` (SHA-256
+  `4056dd2608420ac232da2b12a5f727a5cfe648c8256438c04a81eef7ce8f1a81`, equal
+  to the current checkout). Repeat the cross-`PYTHONHASHSEED` deterministic
+  evaluation after the active campaign boundary; do not edit fingerprinted
+  source while the campaign is live.
 - The same checkpoint then completed a full 177,210-bar deterministic test
   replay through both the frame and shared-bundle environments. All compared
   fields matched exactly: equity, trade rows, account, breach state/events,
@@ -1243,6 +1454,18 @@ At minimum retain:
 - runtime/resource summary;
 - visualization manifest with completed/deferred/failed artifacts.
 
+### Report-generator audit — 2026-10-16
+
+Static review found that `scripts/matrix/summarize_campaign_results.py` sets
+the summary-level `seed` to `42` only when every job uses seed 42; otherwise it
+sets the field to `null`. This makes a homogeneous seed-50 campaign summary
+misstate its seed even though the per-run rows retain it. The live
+`campaign_controller.py` invokes this helper when the campaign terminates, so
+keep both files unchanged until job `20990395` is terminal. After that source
+boundary, update the schema to report the actual seed set (and a scalar seed
+only when homogeneous), add seed-50 and mixed-seed regressions, and regenerate
+the descriptive report without altering campaign results or fingerprints.
+
 ### Exit criterion
 
 Every successfully trained screen run has a canonical numerical report pack, or
@@ -1255,6 +1478,14 @@ an explicit non-hidden reason why recovery is impossible.
 **Priority:** critical path
 **Dependencies:** P3
 **Parallel with:** independent-review preparation and evidence/result packaging
+
+The concise reviewer handoff is
+[`independent_review_brief_2026-10-16.md`](independent_review_brief_2026-10-16.md);
+the detailed artifact inventory and questions remain in
+[`independent_research_review_checklist_2026-10-14.md`](independent_research_review_checklist_2026-10-14.md).
+The brief is preparation only; independent sign-off remains open and must be
+recorded against the repaired source and final evidence, not the current
+contaminated campaign.
 
 ### G0 — execution/accounting correctness
 
@@ -1410,6 +1641,17 @@ campaign copy is retained under `outputs/`.
 Keep the distinction when reporting the screen; define a separate matched pair
 only after P4 and do not select it from the previously inspected holdout.
 
+The `ladder_a1_sl` row is not a matched control for the Idea 1 rungs either.
+Its [saved config](../../outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a1_sl__seed50/attempt1/ladder_a1_sl__seed50/20261016_173854_725508_rl_train_seed50_tcn/config.yaml)
+uses DSR, `strategy_actions=true`, a signed direction-control coordinate, and
+`strategy.name=baseline`; the [saved `ladder_a0_flat_po3` config](../../outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat_po3__seed50/attempt1/ladder_a0_flat_po3__seed50/20261016_173544_291860_rl_train_seed50_tcn/config.yaml)
+uses PnL, no signed direction coordinate, the `po3_ifvg` strategy, and PD
+context. Their action schemas and reward/strategy semantics differ. The current
+18-row screen therefore contains no ready-made RQ1 pair. P5 must specify a new
+matched run identity after P4, aligning the reward, action schema, feature
+exposure, risk/management candidates, costs, and runtime before changing only
+the predeclared structural entry intervention.
+
 ### 13.2 RQ3 mechanism evidence
 
 Use the 18-way screen to choose the smallest set of management mechanisms worth
@@ -1549,6 +1791,16 @@ memory.current/peak/events, PSS/USS, process count, I/O, and wall time.
 
 ### 14.2 Reuse completed throughput knowledge
 
+An approximately 30-minute live resource sample, including frozen input logs,
+a collection script, and their SHA-256 values, is archived at
+`outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/p6_resource_window_20261016_2000/`.
+This is preliminary resource-planning evidence only: its campaign has a known
+model-visible feature leak in 17/18 configurations, the sample is not a
+full-run profile, and it does not establish final-runtime makespan or phase
+costs. It suggests the current 18-worker setup is GPU-saturated while assigned
+CPU and RAM retain headroom; confirm against a valid matched run before
+freezing P6.
+
 Treat full-rollout device staging as the leading fast-path candidate because it
 already has exact minibatch parity and repeat measurements. Do not reopen
 closed/no-gain ideas such as pinned prefetch, deferred scalar synchronization,
@@ -1570,8 +1822,8 @@ run makespan with adequate memory/CPU/GPU headroom. Compare alternative `n_envs`
 values only with rollout/update semantics explicitly controlled. If changing batch
 size, `n_steps`, or epochs changes the number of optimizer updates/learning
 dynamics, treat it as a new scientific configuration rather than a transparent
-speed fix. The broader `16/32/64` geometry comparison belongs to optional Q2
-unless a pre-P7 runtime defect makes it necessary.
+speed fix. The broader `16/32/64` geometry comparison belongs to required Q2
+unless a pre-P7 runtime defect makes it necessary for the thesis configuration.
 
 ### 14.4 Reporting overhead
 
@@ -1736,7 +1988,7 @@ Keep separate:
 - exposed-2026 descriptive evidence;
 - fresh holdout evidence, if any;
 - runtime/resource benchmarks;
-- optional Q-stage evidence.
+- Q-stage evidence, kept separate from thesis evidence unless formally promoted.
 
 ### Exit criterion
 
@@ -1848,19 +2100,25 @@ reading terminal history or rerunning an experiment.
 
 ---
 
-## 19. P10 — Downstream author task: supervisor PDF freeze — 2026-11-09
+## 19. P10 — Supervisor PDF freeze — 2026-11-09
 
-**Outside the default Codex agent results mission.** After P9, the author uses the frozen results
-package to write and assemble the thesis. By **2026-11-09**, send the complete PDF rather than waiting for optional scope.
+**In scope for the active user goal, downstream of P9.** Use the frozen results
+package to write or revise and assemble the thesis. By **2026-11-09**, prepare the complete PDF rather than waiting for optional scope.
 The package should include or link the evidence manifest and a short change/
 open-issue summary.
+
+**Authoring preparation check — 2026-10-16:** the repository file inventory
+contains no identifiable thesis manuscript source or thesis PDF (`.tex`,
+`.docx`, `.odt`, or `.pdf`) under the thesis-related paths. P10 must therefore
+locate the author's external draft, if one exists, or start the manuscript from
+the frozen P9 evidence package. Do not fill result-dependent chapters before P9.
 
 If a non-core experiment is still running, do not hold the PDF for it. Record it
 as future/ongoing work unless the supervisor explicitly requests inclusion.
 
 ---
 
-## 20. P11 — Downstream author task: supervisor feedback and faculty submission
+## 20. P11 — Supervisor feedback and faculty submission
 
 ### 2026-11-09 to 2026-11-15 — feedback cycle
 
@@ -1894,13 +2152,16 @@ identity.
 
 If time or compute becomes constrained, remove scope in this order:
 
-1. Q0–Q7 research extensions;
-2. RQ2 encoder comparison;
-3. optional supervised/classical baseline expansion beyond already stable
+1. RQ2 encoder comparison;
+2. optional supervised/classical baseline expansion beyond already stable
    comparators;
-4. broad five-seed replication of every mechanism rung;
-5. nonessential per-trade visualizations and cosmetic dashboards;
-6. optional live/paper-trading work.
+3. broad five-seed replication of every mechanism rung;
+4. nonessential per-trade visualizations and cosmetic dashboards;
+5. optional live/paper-trading work.
+
+Q0–Q7 are not descoped from the overall user goal. If needed to protect the
+Nov 9/Nov 23 thesis milestones, execute them after `SUBMISSION_COMPLETE` rather
+than delaying the thesis evidence freeze or submission.
 
 Do **not** cut:
 
@@ -1916,21 +2177,26 @@ not fabricated performance.
 
 ---
 
-# PART II — Q0–Q7 RESEARCH EXTENSION
+# PART II — REQUIRED Q0–Q7 RESEARCH PROGRAM
 
 ## 22. Entry rule for the Q program
 
-The Q program may use spare parallel capacity before submission only when all of
-these are true:
+The Q0–Q7 program is mandatory for the overall mission. Its default execution
+window is after `SUBMISSION_COMPLETE`; earlier execution is allowed only when
+all of these are true:
 
 - no thesis-critical work waits for the same developer/reviewer/compute resource;
 - its parent/control is frozen;
 - required implementation and schema/parity tests pass;
 - the run has an explicit research role and immutable identity;
-- the author explicitly authorizes the compute launch;
+- the author explicitly authorizes the compute launch (authorized on
+  2026-10-16 for the Q0–Q7 program; each new Slurm allocation still follows the
+  repository's allocation-approval rule);
 - the result will not silently redefine the frozen thesis experiment.
 
-Otherwise, continue Q0–Q7 after submission.
+If any condition is false, continue the thesis-critical path and start the Q
+program after submission. Do not skip a Q stage or mark the overall mission
+complete because thesis submission has been made.
 
 ### Standard stage pattern
 
@@ -1970,9 +2236,9 @@ Q2 cannot start until the Q1 disposition is frozen.
 
 ## 25. Q2 — Rollout geometry
 
-This is an **optional post-core quality experiment**, not a request to change the
-thesis-critical runtime. The thesis-critical P7 configuration remains `n_envs=64`.
-If Q2 is executed later, compare `n_envs = 16, 32, 64` from the frozen Q1 parent.
+This is a required post-core quality experiment, not a request to change the
+thesis-critical runtime. The thesis-critical P7 configuration remains
+`n_envs=64`. Compare `n_envs = 16, 32, 64` from the frozen Q1 parent.
 
 These arms may run in parallel on independent/non-confounding resources.
 Evaluate both:
@@ -2028,15 +2294,18 @@ guarantee unless the actual algorithm and assumptions justify that statement.
 
 ## 29. Q6 — Entry-state machine visibility
 
-From the frozen Q5 parent compare:
+From the frozen Q5 parent compare three arms:
 
-- visible entry-state/FSM observation;
-- no-FSM control.
+- no-FSM control;
+- FSM enabled with state hidden from the policy;
+- FSM enabled with state visible to the policy.
 
-Preserve the accepted post-IFVG semantics. Distinguish a change to eligibility
-from a change that only reveals state to the policy.
-
-The two arms may run in parallel after parent freeze.
+Preserve the accepted post-IFVG semantics. Compare no-FSM to hidden-FSM to
+estimate the effect of changing eligibility/state transitions; compare
+hidden-FSM to visible-FSM to estimate the effect of exposing that state to the
+policy. The existing two-arm visible/no-FSM comparison confounds these effects
+and is not sufficient. Freeze the same parent/configuration for all three arms;
+run them only after the Q5 parent is frozen.
 
 ---
 
@@ -2238,9 +2507,10 @@ complete.
 
 ## 37. Results-first execution window
 
-These are results-oriented target windows for a continuously running Codex agent. Scheduler
-availability and scientific gates override dates. Thesis drafting is deliberately excluded from the
-agent critical path.
+These are target windows for a continuously running Codex agent. Scheduler
+availability and scientific gates override dates. P0–P9 evidence remains the
+critical path; P10/P11 manuscript and submission work is also in the active
+goal and starts from the frozen evidence package.
 
 | Window | Critical result target | Horizontal work while compute runs |
 |---|---|---|
@@ -2251,10 +2521,42 @@ agent critical path.
 | **23–25 Oct** | P7: final >=5 paired seeds for the selected control/treatment only + cost stress | evaluate/package finished seeds as they terminate; no idle waiting |
 | **25–27 Oct** | S0/E1/P8: final statistics, uncertainty, figures, review disposition, evidence freeze | regenerate/cross-check tables and figures from raw artifacts |
 | **by ~27 Oct target** | **P9 `RESULTS_PACKAGE_COMPLETE`** | complete logs + checkpoints + raw outputs + findings + global manifest handed off for thesis writing |
+| **by 2026-11-09** | **P10 supervisor PDF** | write/revise from frozen findings; render, inspect, and package source, evidence links, and open-issue summary |
+| **2026-11-09 to 2026-11-23** | **P11 feedback and faculty submission** | resolve supervisor comments, freeze final PDF/source/evidence archive, record submitted artifact identity |
+| **after 2026-11-23 submission** | **Required Q0–Q7 program** | execute Q0 through Q7 in dependency order; freeze each parent, evaluate and package each stage before opening the next; obtain allocation approval for each new Slurm request |
 
 The date is a target, not permission to bypass gates. If compute queues or a correctness defect delay
 P7, the agent should keep every other READY lane moving and preserve the result package rather than
 launching extra variants.
+
+### Reforecast after the G1 causality failure — 2026-10-16
+
+The October 27 P9 target is now at high risk and should not be treated as the
+current expected completion date. The active seed-50 screen has a model-visible
+NY-session lookahead in 17/18 configurations; the current source regression
+fails as expected. A valid screen therefore requires a post-boundary source
+repair, a passing same-session future-poison test, versioned rebuilds of all
+three prebuilt caches, and passing real-market prefix/fold audits before fresh
+training can inform selection.
+
+For compute planning only, the current 18-worker logs' observed 300–500
+environment steps/second per worker imply roughly 11–19 hours of PPO collection
+for a 20M-step run. If 18 workers sustain that rate, a fresh one-seed screen's
+collection phase is also about 11–19 hours; this excludes evaluation, checkpoint
+export, reporting, allocation gaps, and any rate change after the feature repair.
+The final five paired seeds require 200M aggregate environment steps if no
+discovery pair qualifies for reuse. At two concurrent workers sustaining
+300–500 steps/second each, that is about 56–93 hours of training alone. These
+are arithmetic scenarios, not a runtime acceptance result; P6 must measure the
+frozen configuration and choose concurrency by reliable makespan.
+
+Current planning range from this gate failure is **about 2–4 weeks to P9** and
+**about 3–6 weeks through P11 submission**, assuming allocations can be
+reacquired without long gaps, the repair closes G1 on the first attempt, and
+the independent review does not find a new blocking defect. The November 9 PDF
+date is at risk; November 23 remains possible but is not assured. Reforecast
+after the cache rebuild, fresh screen, and P6 throughput measurement. Do not
+compress or skip evidence gates to meet either date.
 
 ### Runtime planning assumptions
 
@@ -2273,14 +2575,19 @@ launching extra variants.
 
 Update this table as the persistent agent control surface. It is status, not a second roadmap.
 
+Latest transient Slurm/process state is recorded in the dated
+[`live status note`](live_status_2026-10-16_2148.md); the immutable allocation
+snapshot remains separate. Keep job IDs, process IDs, countdowns, and live
+worker counts in that note rather than in this roadmap.
+
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE — immutable snapshot remains `live_campaign_snapshot_2026-10-16_1750.json`; current live state was rechecked at 19:39 Helsinki. Job `20990395` is RUNNING on gpuarm1/gpuarm2, requesting exactly 2 GH200 total (one per node), 48 CPUs and 512 GiB RAM per node, scheduled to end at 23:34:29. It is the only active/pending job shown for the user. On login4, tmux session `thesis-seed50` is alive with `run_campaign_18way_cpumask_supervisor.sh` (PID 760554) monitoring the allocation; its script loops on the same campaign ID/spec and requests the same two-node shape only after the matching job is no longer active. No duplicate request is queued. Campaign source identity remains Git SHA `413729ec3d68f342498434fba538b16a4b2776a7`, with 230 source hashes excluding docs. The old gated allocation 20985591 is terminal. No jobs were canceled |
-| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE BUT SCIENTIFICALLY CONTAMINATED — recovery campaign `ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016`, fingerprint `91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e`, is running 18 identities from validated attempt-3 checkpoints at `n_envs=64` with the shared bundle. The current supervisor most recently reports 18 active, 0 failed, 0 succeeded. A new real-market fold-poison audit found `prev_ny_high`/`prev_ny_low` leakage in three current-source profiles mapped to 17/18 saved run configs; the affected columns are model-visible and the exact `session_ohlc.py` hash matches the campaign manifest. Preserve current logs/checkpoints as exploratory failure evidence, but do not select variants or treat affected results as valid training evidence. After the source boundary, fix the feature, add regression tests, bump/rebuild caches, and run a fresh matched campaign. No terminal 20M result exists. Earlier 18:53 GPU utilization was 100% per GH200 with 78,334/146,831 and 79,961/146,831 MiB used; this single sample is not a stabilized profile | P0 | P2, E0 |
-| P2 | Deterministic evaluator/schema repair | ACTIVE — stable lexical tie-break and train/eval risk/management wiring implemented. Evaluation bundle workers now disable training-only trailing guardrails; training workers retain them. Current main passed full-tree Ruff/Mypy and pytest (1,561 tests, 27 subtests, 38 warnings). A real 14M interrupted baseline checkpoint matches frame/shared-bundle outputs over inspected test and all 351,550 in-sample training bars. Replays under two `PYTHONHASHSEED` values produced identical train/test equity, metrics, and trade CSVs for that interrupted checkpoint. A separate 12M interrupted Idea 2 checkpoint matched both backends on 99,504 in-sample steps; a repeated audit produced identical report-level metrics and parity fields. These are partial-checkpoint evidence only; completed selected-checkpoint recovery/parity, broader evaluator/provenance acceptance, and remaining schema/compatibility requirements stay open | P0 | P1, E0 |
-| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and all-attempt screen reconciler. Current-source G1 evidence includes 12/12 sampled feature-prefix comparisons, 4/4 representative raw-cache parity profiles, and 18/18 saved-run-config cache mapping. The new real-market fold-poison report `docs/thesis/g1_real_market_fold_fit_scope_2026-10-16.json` failed for three profiles and identifies a model-visible future NY-session leak affecting 17/18 configs; this supersedes the broader causality implication of the sampled prefix pass. Keep the cache mapping and raw parity claims bounded to their actual scope. `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/thesis_evidence_index_post_source_review_20261016.json` hashes the incomplete-screen finding card and current-main source review; refresh after source/cache repair. Final run/result analysis awaits P1/P2 | P0 | P1, P2 |
+| P0 | Safe boundary/current snapshot | ACTIVE — immutable allocation snapshot and source/run fingerprints remain recorded in `live_campaign_snapshot_2026-10-16_1750.json`; job `20990395` is terminal and its evidence remains exploratory. Recovery launcher/client remain alive for pending job `21004765`; client request, `SubmitLine`, and scheduler allocation still conflict. Do not treat it as a confirmed GH200 allocation or submit a duplicate. A separate approved MI210 allocation `21007645` on `gpuamd1` is active for bounded source/runtime checks; ROCm 6.3.1 + PyTorch 2.7.1+rocm6.3 passed a real GPU operation. This does not validate the locked CUDA 13.0 stack or authorize training. The P1 causal repair has begun; focused GPU-node validation and post-boundary CI remain required before any new causal campaign. See `live_status_2026-10-17_0000.md` | — | P1, P2, E0 |
+| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE BUT SCIENTIFICALLY CONTAMINATED — preserve the old screen as exploratory: the real-market fold-fit audit found model-visible `prev_ny_high`/`prev_ny_low` leakage in 17/18 saved run configurations. The terminal recovery report records 11 succeeded, 4 train-survival failures, 3 interrupted, and current-attempt full-split telemetry for 17/18 variants (1,088 environments); `ladder_a0_flat` lacks a current-attempt completed-split record. Eight variants are inactive with zero train/test trades. No result is both causally admissible and gate-passing. The causal repair now uses the configured clock-completed `08:30–15:00 CT` NY session and cache identity `v22-causal-configured-ny-session`. Post-repair validation passed the four-profile fold poison (one early purged fold) and 12/12 sampled feature-prefix comparisons; the M1 inventory is recorded in `data_quality_audit_2026-10-16_v4.json`. The three named caches were transactionally rebuilt and hash/parquet-verified; report: `prebuilt_cache_rebuild_2026-10-17_mi210.json`, with prior files preserved in the dated backup directory. These checks do not establish exhaustive causality or market-calendar/DST correctness. Vendor/use provenance, remaining reviews, post-boundary CI, and a fresh admissible screen are still open. Finding: `docs/thesis/evidence/p1_18_variant_screen_disposition_2026-10-16.md` | P0 | P2, E0 |
+| P2 | Deterministic evaluator/schema repair | ACTIVE — stable lexical tie-break and train/eval risk/management wiring are implemented. Existing audits cover partial checkpoint parity and deterministic replay, but completed selected-checkpoint recovery, broader provenance acceptance, and remaining schema/compatibility requirements stay open. Full-tree Ruff passed. A prior full-tree Mypy pass required a temporary `outputs/` exclusion in `pyproject.toml`; that edit has been restored to match all 230 active-campaign source hashes, so full-tree Mypy must be rerun under the post-boundary CI configuration before the final source freeze | P0 | P1, E0 |
+| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and all-attempt screen reconciler exist. Historical evidence includes the pre-repair fold-poison failure affecting 17/18 configs. Post-repair evidence now includes 12/12 sampled prefix comparisons across four profiles and four-profile early-fold poison invariance; previous raw-cache parity and 18/18 cache mapping retain their narrower scopes. The new M1 inventory remains PARTIAL because vendor/use provenance, broker calendar/DST, and tick quality are not established. `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/thesis_evidence_index_post_source_review_20261016.json` must be refreshed after source/cache repair. Final run/result analysis awaits P1/P2 | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED | P1 + P2 | per-checkpoint eval/package |
-| P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | review prep, result packaging |
+| P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | Reviewer preparation includes the bounded notes in `docs/thesis/related_work.md` and `docs/thesis/threats_to_validity.md`, plus open decision items in `docs/thesis/independent_research_review_checklist_2026-10-14.md`; the latest real-market causal audit fails and no independent reviewer has signed off |
 | P5 | Freeze matched design/baselines | BLOCKED | P4 | P6 prep, review |
 | P6 | Production runtime/resource freeze | PREP-ONLY | P4/screen-safe | paired-launch prep |
 | P7 | Final selected-pair >=5-seed robustness + cost stress | BLOCKED | all single-seed findings + P5 + P6 | eval/package terminal seeds |
@@ -2288,7 +2595,7 @@ Update this table as the persistent agent control surface. It is status, not a s
 | E1 | Result aggregation/finding cards | ACTIVE-AS-ARTIFACTS-ARRIVE | E0 | every terminal run |
 | P8 | Review + evidence freeze | PREP-ONLY | final P7 evidence | figure/result cross-checks |
 | P9 | `RESULTS_PACKAGE_COMPLETE` handoff | BLOCKED | P8 + E1 | archive/index QA |
-| Q0–Q7 | Research extension | OPTIONAL/GATED | stage parents | within-stage arms only |
+| Q0–Q7 | Required research program | AUTHORIZED, NO RESEARCH RUNS — all stages are compulsory for the overall mission; bounded source/unit checks now pass on an MI210 ROCm test environment, but no Q stage is empirically complete. Q5 PPO-Lagrangian is unimplemented; Q2/Q3/Q4/Q6 arms remain fail-closed and need their remaining integration/schema gates. Default start is after P11; earlier work requires frozen stage entry gates and must not displace thesis-critical work | ordered stage parents | implementation/schema/evidence preparation |
 
 **GH200 allocation guard (user direction, 2026-10-16):** the thesis campaign
 may have at most **2 GH200 GPUs total across all active allocations**, and no
@@ -2299,7 +2606,10 @@ node across two nodes. The cluster's four configured GH200s describe hardware
 capacity, not this campaign's allowance. For continuity, one 2-GH200 successor
 may be queued behind an explicit Slurm dependency on the current job's
 termination; verify the dependency prevents overlap and include pending jobs in
-the aggregate count.
+the aggregate count. As of the 2026-10-16 resource choice, the active pair is
+still two GH200s and its single dependent successor has been retargeted to one
+H200 to reach compute sooner; see the live status note for the current
+scheduler forecast.
 
 ### G1 causality gate failure — 2026-10-16
 
@@ -2312,20 +2622,110 @@ because training features `prev_ny_high` and `prev_ny_low` change from
 `2025-02-12 01:31+03`. The changed fields remain in the model observation
 schema. Those profiles map to 17 of the active 18 worker configs, and the
 campaign manifest's `quant_rl/features/session_ohlc.py` hash matches the audit
-source hash. The earlier 12 prefix cutoffs were at 12:37+03 and did not probe
-the NY-session opening interval where this defect appears.
+source hash. The recovery workers' logs confirm hash-validated use of the
+baseline, Idea 1, and Idea 2 named prebuilt caches. Their refresh record
+(`outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/prebuilt_feature_cache_refresh_20261016.json`)
+shows all three caches were regenerated from the current source before this
+allocation; the cache sidecar hashes matched the generated caches. The earlier
+12 prefix cutoffs were at 12:37+03 and did not probe the NY-session opening
+interval where this defect appears.
 
 Source inspection identifies the cause in `prev_ny_high_low`: it broadcasts
 each NY session's final high/low, then applies a one-row shift within that same
 session group. The resulting fields expose the current session's eventual
 extremes from its second bar onward, before the session has closed. The current
 training source and active workers are left unchanged to preserve the live
-fingerprint. Treat the current screen as exploratory/inadmissible for variant
+fingerprint. A same-session future-poison regression was run on `gpuarm1` with
+CUDA disabled while the allocation remained active; it failed on current
+source as expected (`1 failed, 17 deselected`), observing the first session's
+eventual 110/90 range on later bars of that same session. This establishes that
+the regression detects the defect, not that a repair passes. Treat the current
+screen as exploratory/inadmissible for variant
 selection. At the source boundary, repair the session shift, add a regression
 that perturbs later bars in the same NY session, bump the feature-cache version,
 rebuild all three prebuilt feature caches, rerun the real-data prefix/fold
-audits, and launch a fresh matched 18-run lineage from initialization. Do not
-resume the 17 affected policy checkpoints into that lineage.
+audits, and launch a fresh matched 18-run lineage from initialization. A
+transactional builder is now available at
+`scripts/matrix/rebuild_named_prebuilt_feature_caches.py`; its plan-only mode
+was checked on `gpuarm1` and resolves the baseline, Idea 1, and Idea 2 named
+caches with matching raw-data/split settings. The cache-writing path has not
+been run and must remain unused until the causal fix passes its regression.
+After that gate, run `--plan-only`, then invoke the builder with a new backup
+directory and report path under the fresh campaign's `artifacts/` and
+`reports/` folders. The builder stages all three caches, verifies their
+content-hash sidecars and exact parquet round-trip values, retains the previous
+cache files, and publishes only after staging succeeds. Do not resume the 17 affected
+policy checkpoints into that lineage.
+
+The builder's transaction helper passed three focused
+[tests](../../tests/test_rebuild_named_prebuilt_feature_caches.py) on `gpuarm1`
+with CUDA disabled: successful publication, rollback after post-publish
+validation failure, and rollback after a partial file replacement. Ruff format
+and lint passed for the helper and its test. The real cache-writing path
+remains unexecuted; these tests do not validate the causal repair or rebuilt
+cache contents.
+
+Source-contract note for the repair: `previous_labeled_session_ohlc` promotes
+only sessions with every expected M1 bar present, while the current
+`prev_ny_high_low` regression specifies same-session causality and extrema at
+the close but does not specify how missing NY bars affect the reference. Do not
+silently inherit that stricter missing-bar policy from the general helper; make
+the choice explicit and cover it with a focused regression if the repair
+changes that behavior. Before deciding, use the authorized H200 allocation to
+measure NY-session completeness in the training data; the existing M1 quality
+audit deliberately does not classify timestamp gaps as missing bars because
+no authoritative broker/exchange calendar is recorded.
+
+The regression `test_prev_ny_high_low_uses_only_completed_ny_sessions` is now
+present in `tests/test_features/test_session_ohlc.py`. It checks that poisoning
+future bars inside the second NY session cannot alter its visible prior-session
+range, and that the completed range becomes visible at session close. The test
+was run on `gpuarm1` on 2026-10-16 with CUDA disabled; it failed on the current
+source at the first-session all-NaN assertion (`1 failed, 17 deselected`), as
+expected from the audit. It has not passed on a repaired implementation. The
+campaign's immutable `source_snapshot.zip` excludes `tests/`, so adding this
+test does not change the active training fingerprint.
+
+### P1 checkpoint and telemetry refresh — 2026-10-16 21:14 Helsinki
+
+The formatted checkpoint-budget generator was rerun on `gpuarm1`; the JSON
+snapshot records its matching generator SHA-256. It verifies 18/18 prior
+checkpoint lineages with one 99,504-step `data_end` episode in each of 64
+environments (1,152 source-attempt episode records total). In the current
+attempt, three variants (`ladder_a0_flat_dist`, `ladder_a2_tp`, and
+`ladder_a3_multi_tp`) have 64 completed train-split episode records each; the
+baseline has an episode telemetry file but no completed-split records yet, and
+the other 14 variants have no current-attempt episode file at this snapshot.
+The baseline log had reached 19,996,544 of 20M steps and was in in-sample
+evaluation; no final report artifact was verified. The controller log at
+21:14:54 reported 18 active, 0 failed, 0 succeeded. Job `20990395` remained
+RUNNING.
+
+These records establish chronological train-split coverage for the three
+current-attempt variants and prior checkpoint lineages, not active trading
+throughout the year, strategy quality, completed 20M runs, or candidate
+validity. The same snapshot records the failed fold-fit audit affecting 17/18
+configs; all campaign outcomes remain inadmissible for selection. Machine-
+readable snapshot:
+[`p1_checkpoint_full_split_budget_2026-10-16.json`](p1_checkpoint_full_split_budget_2026-10-16.json).
+
+The full-tree Ruff format check, Ruff lint, and Mypy completed on `gpuarm1`.
+Mypy passed 446 source files after excluding generated `outputs/` artifacts
+from discovery; this preserves the immutable resource-report script and its
+recorded hash. The focused cache-builder tests passed (3/3). The
+`session_ohlc` test file had 17 passes and one expected failure in the staged
+same-session causal regression; the feature implementation has not yet been
+changed because the campaign remains active.
+
+At the 2026-10-16 20:07 Helsinki check, no `episode_equity.csv` existed under
+the active recovery campaign's `runs/attempts/` tree. A later lineage audit
+found the source campaign's attempt-2 episode records and verified complete
+chronological split coverage for all 18 current checkpoint lineages; see the
+20:36 evidence update and
+[`p1_checkpoint_full_split_budget_2026-10-16.json`](p1_checkpoint_full_split_budget_2026-10-16.json).
+This supersedes the earlier “unverified” conclusion about whether any
+environment completed the split. Aggregate timesteps remain insufficient by
+themselves; retain the per-environment telemetry and provenance chain.
 
 ## 39. Immediate actions for one long-running Codex agent
 
@@ -2510,12 +2910,15 @@ At every decision point, choose work in this order:
 4. launch/continue an authorized READY critical training job;
 5. dependency work that unlocks the next scientific gate;
 6. statistics/figures/indexes against already-frozen data;
-7. optional extension work only when it consumes no critical compute/integration capacity.
+7. required Q-stage preparation/execution only when its parent is frozen and it consumes no
+   critical compute/integration capacity; otherwise continue the thesis-critical dependency chain.
 
 ### Do not do now
 
-- do not spend the agent cycles drafting thesis chapters;
-- do not launch Q0–Q7 research runs by default;
+- do not draft result-dependent thesis chapters before P9; after P9, manuscript completion is required by this active goal;
+- do not launch a Q stage before its parent/control is frozen or while it would compete with an
+  unresolved thesis-critical gate; complete all Q0–Q7 stages after submission if they cannot run
+  safely earlier;
 - do not expand the current variants to a five-seed matrix;
 - do not start the RQ2 encoder tournament unless explicitly promoted;
 - do not launch final paired seeds before the final implementation/design/runtime freeze;
@@ -2556,7 +2959,10 @@ At every decision point, choose work in this order:
 
 ## 41. Definition of Codex agent mission end
 
-The continuous Codex agent results mission is complete at P9 when:
+The thesis results mission reaches `RESULTS_PACKAGE_COMPLETE` at P9, and the
+thesis submission reaches `SUBMISSION_COMPLETE` at P11. The overall Codex
+mission is complete only after both thesis submission and
+`RESEARCH_EXTENSION_COMPLETE` are achieved:
 
 - `RESULTS_PACKAGE_COMPLETE` is satisfied;
 - every empirical finding is tied to a frozen evidence manifest and exact run identity;
@@ -2572,9 +2978,11 @@ The continuous Codex agent results mission is complete at P9 when:
   happened and what may be claimed without reading terminal scrollback or rerunning experiments;
 - the evidence archive is backed up and a new agent can resume/review from repository artifacts
   rather than conversational memory;
-- Q0–Q7 and live-production work are explicitly completed, deferred, or left outside the thesis
-  evidence lineage.
+- all Q0–Q7 stages have a recorded winner/no-winner disposition, reproducible evidence, and a
+  frozen parent decision; their results remain outside the thesis evidence lineage unless formally
+  promoted under the thesis evidence gates.
 
-The supervisor PDF, prose integration, references, formatting, and faculty submission are downstream
-author tasks. They may discover a true evidence blocker, in which case work returns to the earliest
-contaminated package; otherwise they do not keep the agent's research-critical mission open.
+The supervisor PDF, prose integration, references, formatting, and faculty submission follow P9.
+They remain part of the active user goal; any discovered scientific blocker returns work to the
+earliest contaminated package. The overall goal ends only when `SUBMISSION_COMPLETE` and
+`RESEARCH_EXTENSION_COMPLETE` are both satisfied. Live-production work remains outside this goal.

@@ -185,34 +185,47 @@ def range_quadrants(high: pd.Series, low: pd.Series, prefix: str) -> pd.DataFram
 
 def prev_ny_high_low(
     df: pd.DataFrame,
-    start_ct: str = "16:30",
-    end_ct: str = "23:00",
+    start_ct: str = "08:30",
+    end_ct: str = "15:00",
     session_tz: str = "America/Chicago",
 ) -> pd.DataFrame:
-    """Previous completed NY session high/low, causally shifted.
+    """Latest clock-completed NY session high/low, available without lookahead.
 
-    Every bar in NY session N sees session N-1's final high/low. Bars before
-    the first session are NaN.
+    Bars during an open session see the prior session's observed high/low. At
+    the first decision bar at or after the session close, that session becomes
+    the reference. Session extrema use available rows; missing-bar quality is
+    audited separately and does not silently disqualify a session here. Bars
+    before the first session close are NaN.
     """
     idx = pd.DatetimeIndex(df.index)
     mask = session_mask(idx, start_ct, end_ct, session_tz)
     idx_ct = idx.tz_convert(session_tz)
-    grp = _session_dates(idx_ct, _parse_hhmm(start_ct), _parse_hhmm(end_ct)).where(mask)
-    session_high = df["high"].where(mask).groupby(grp).transform("last")
-    session_low = df["low"].where(mask).groupby(grp).transform("last")
-    session_id = grp.where(mask)
-    prev_high = session_high.groupby(session_id).transform("last").groupby(session_id).shift(1)
-    prev_low = session_low.groupby(session_id).transform("last").groupby(session_id).shift(1)
-    out = pd.DataFrame(
-        {
-            "prev_ny_high": prev_high,
-            "prev_ny_low": prev_low,
-        },
-        index=idx,
+    start_t = _parse_hhmm(start_ct)
+    end_t = _parse_hhmm(end_ct)
+    mask_values = mask.to_numpy(dtype=bool)
+    session_labels = pd.Series(
+        _session_dates(idx_ct, start_t, end_t).where(mask).to_numpy(), index=idx
     )
-    out = out.where(mask | out.notna().any(axis=1))
-    out = out.ffill()
-    return out
+    session_high = df["high"].where(mask_values).groupby(session_labels, sort=True).max()
+    session_low = df["low"].where(mask_values).groupby(session_labels, sort=True).min()
+    if session_high.empty:
+        return pd.DataFrame({"prev_ny_high": np.nan, "prev_ny_low": np.nan}, index=idx)
+
+    session_ends: list[pd.Timestamp] = []
+    for session_date in session_high.index:
+        end_date = session_date
+        if start_t > end_t:
+            end_date = end_date + dt.timedelta(days=1)
+        end_wall_time = pd.Timestamp.combine(end_date, end_t)
+        session_ends.append(end_wall_time.tz_localize(session_tz))
+
+    completed_position = pd.DatetimeIndex(session_ends).searchsorted(idx_ct, side="right") - 1
+    valid = completed_position >= 0
+    high_values = np.full(len(idx), np.nan, dtype=np.float64)
+    low_values = np.full(len(idx), np.nan, dtype=np.float64)
+    high_values[valid] = session_high.to_numpy(dtype=np.float64)[completed_position[valid]]
+    low_values[valid] = session_low.to_numpy(dtype=np.float64)[completed_position[valid]]
+    return pd.DataFrame({"prev_ny_high": high_values, "prev_ny_low": low_values}, index=idx)
 
 
 def previous_labeled_session_ohlc(

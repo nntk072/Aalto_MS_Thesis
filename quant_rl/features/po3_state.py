@@ -280,6 +280,11 @@ def build_ifvg_zone_features(
     if n == 0:
         return out
 
+    # Keep the per-bar state machine in NumPy storage. Scalar .at/.iat writes
+    # repeatedly resolve timestamp labels and DataFrame blocks on long M1
+    # histories, although this algorithm is already expressed by row offsets.
+    values = out.to_numpy(copy=True)
+
     fvg = detect_fvg(bars, fvg_config)
     conf = detect_ifvg_confirmation(bars, fvg, ifvg_config)
     inverse_opposing = bool(ifvg_config and ifvg_config.inverse_opposing_fvg)
@@ -332,51 +337,51 @@ def build_ifvg_zone_features(
             bull_dead = bull_left = False
             bull_origin = _candle1(i, bull_zl, bull_zh, bull=not inverse_opposing)
             bull_origin_bar = bull_fvg_origin[i]
-            out.at[idx[i], "ifvg_bull_confirmed"] = 1.0
+            values[i, 18] = 1.0
         if conf_bear[i] == 1:
             bear_start, bear_zl, bear_zh = i, bear_low[i], bear_high[i]
             bear_dead = bear_left = False
             bear_origin = _candle1(i, bear_zl, bear_zh, bull=inverse_opposing)
             bear_origin_bar = bear_fvg_origin[i]
-            out.at[idx[i], "ifvg_bear_confirmed"] = 1.0
+            values[i, 19] = 1.0
 
         a = atr_arr[i] if not np.isnan(atr_arr[i]) and atr_arr[i] > 0 else 1.0
         if bull_start >= 0 and not bull_dead and i - bull_start < max_age_bars:
-            out.iat[i, 0] = 1.0
-            out.at[idx[i], "ifvg_bull_age"] = float(i - bull_start)
-            out.at[idx[i], "ifvg_bull_fvg_origin_bar"] = bull_origin_bar
-            out.iat[i, 1] = bull_zl
-            out.iat[i, 2] = bull_zh
+            values[i, 0] = 1.0
+            values[i, 14] = float(i - bull_start)
+            values[i, 16] = bull_origin_bar
+            values[i, 1] = bull_zl
+            values[i, 2] = bull_zh
             if bull_zl <= close[i] <= bull_zh:
-                out.iat[i, 3] = 1.0
-            out.iat[i, 4] = min(abs(close[i] - bull_zl), abs(close[i] - bull_zh)) / a
+                values[i, 3] = 1.0
+            values[i, 4] = min(abs(close[i] - bull_zl), abs(close[i] - bull_zh)) / a
             # Once price has left the zone, any later non-filling overlap is a
             # retest; no fixed midpoint depth or near-edge close is required.
             if bull_left and bull_zl < low[i] <= bull_zh:
-                out.iat[i, 5] = 1.0
-            out.iat[i, 12] = bull_origin
+                values[i, 5] = 1.0
+            values[i, 12] = bull_origin
             if low[i] > bull_zh:
                 bull_left = True
             if low[i] <= bull_zl:
                 bull_dead = True
         if bear_start >= 0 and not bear_dead and i - bear_start < max_age_bars:
-            out.iat[i, 6] = 1.0
-            out.at[idx[i], "ifvg_bear_age"] = float(i - bear_start)
-            out.at[idx[i], "ifvg_bear_fvg_origin_bar"] = bear_origin_bar
-            out.iat[i, 7] = bear_zl
-            out.iat[i, 8] = bear_zh
+            values[i, 6] = 1.0
+            values[i, 15] = float(i - bear_start)
+            values[i, 17] = bear_origin_bar
+            values[i, 7] = bear_zl
+            values[i, 8] = bear_zh
             if bear_zl <= close[i] <= bear_zh:
-                out.iat[i, 9] = 1.0
-            out.iat[i, 10] = min(abs(close[i] - bear_zl), abs(close[i] - bear_zh)) / a
+                values[i, 9] = 1.0
+            values[i, 10] = min(abs(close[i] - bear_zl), abs(close[i] - bear_zh)) / a
             if bear_left and bear_zl <= high[i] < bear_zh:
-                out.iat[i, 11] = 1.0
-            out.iat[i, 13] = bear_origin
+                values[i, 11] = 1.0
+            values[i, 13] = bear_origin
             if high[i] < bear_zl:
                 bear_left = True
             if high[i] >= bear_zh:
                 bear_dead = True
 
-    return out
+    return pd.DataFrame(values, index=idx, columns=out.columns)
 
 
 def align_ifvg_zone_timeframes(

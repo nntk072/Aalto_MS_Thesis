@@ -439,7 +439,7 @@ def build_agent(
     if device is not None:
         ppo_kwargs["device"] = device
     policy, policy_kwargs, ppo_kwargs["ent_coef"] = _ppo_policy_and_ent_coef(
-        cfg, policy_kwargs, env.action_space
+        cfg, policy_kwargs, env.action_space, getattr(env, "action_schema", None)
     )
     ppo_model = PPO(
         policy,
@@ -495,14 +495,44 @@ def _ppo_policy_and_ent_coef(
     cfg: DictConfig,
     policy_kwargs: dict[str, Any],
     action_space: spaces.Space[Any],
+    action_schema: ActionSchema | None = None,
 ) -> tuple[Any, dict[str, Any], float]:
     """Box overlay: clamp Gaussian std. Discrete: keep categorical entropy coef."""
     ent_coef = float(cfg.ppo.ent_coef)
     if not isinstance(action_space, spaces.Box):
+        if str(cfg.ppo.get("policy_distribution", "clamped_diagonal_gaussian")) != (
+            "clamped_diagonal_gaussian"
+        ):
+            raise ValueError("configured policy_distribution requires a Box action space")
         return "MultiInputPolicy", policy_kwargs, ent_coef
     from .ppo_policy import ClampedStdMultiInputPolicy
 
     actor_arch = str(cfg.ppo.get("actor_arch", "shared"))
+    policy_distribution = str(cfg.ppo.get("policy_distribution", "clamped_diagonal_gaussian"))
+    if policy_distribution == "hybrid_v1":
+        if actor_arch != "shared":
+            raise ValueError("hybrid_v1 policy distribution requires ppo.actor_arch='shared'")
+        if not isinstance(action_schema, ActionSchema):
+            raise ValueError("hybrid_v1 requires a declared strategy ActionSchema")
+        if "exit" in action_schema.names and not bool(cfg.env.get("allow_ema_exit", True)):
+            raise ValueError("hybrid_v1 requires the EMA/structural exit coordinate to be active")
+        from .hybrid_actor import HybridClampedStdMultiInputPolicy
+
+        kwargs = dict(policy_kwargs)
+        kwargs["hybrid_action_coordinates"] = action_schema.names
+        kwargs["sl_mode_defer_threshold"] = float(cfg.env.get("sl_mode_defer_threshold", 0.1))
+        kwargs["tp_mode_defer_threshold"] = float(cfg.env.get("tp_mode_defer_threshold", 0.1))
+        kwargs["log_std_init"] = float(cfg.ppo.get("log_std_init", 0.0))
+        kwargs["log_std_min"] = float(cfg.ppo.get("log_std_min", -0.7))
+        kwargs["log_std_max"] = float(cfg.ppo.get("log_std_max", 0.0))
+        kwargs["mode_prior_coef"] = float(cfg.ppo.get("mode_prior_coef", 1e-3))
+        return (
+            HybridClampedStdMultiInputPolicy,
+            kwargs,
+            float(cfg.ppo.get("ent_coef_continuous", 0.001)),
+        )
+    if policy_distribution != "clamped_diagonal_gaussian":
+        raise ValueError(f"unknown PPO policy_distribution: {policy_distribution!r}")
     policy_cls: Any
     if actor_arch == "semantic_heads":
         from .semantic_actor import SemanticClampedStdMultiInputPolicy

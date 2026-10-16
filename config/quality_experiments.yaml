@@ -35,30 +35,30 @@ stages:
     variants:
       - id: q2_state_v2_nenv16
         parent: q1_state_v2
-        status: planned
+        status: implementation_unverified
         overrides: {env.n_envs: 16}
       - id: q2_state_v2_nenv32
         parent: q1_state_v2
-        status: planned
+        status: implementation_unverified
         overrides: {env.n_envs: 32}
       - id: q2_state_v2_nenv64
         parent: q1_state_v2
-        status: planned
+        status: implementation_unverified
         overrides: {env.n_envs: 64}
   - id: q3_reward
     control: q2_winner
     variants:
       - id: q3a_rr_fixed500
         parent: q2_winner
-        status: planned
+        status: implementation_unverified
         overrides: {env.reward_mode: rr, env.risk_mode: fixed, env.fixed_risk_usd: 500}
       - id: q3a_rr_fixed1000
         parent: q2_winner
-        status: planned
+        status: implementation_unverified
         overrides: {env.reward_mode: rr, env.risk_mode: fixed, env.fixed_risk_usd: 1000}
       - id: q3b_equity_delta_r_fixed500
         parent: q2_winner
-        status: implemented_unit_tested
+        status: implementation_unverified
         overrides:
           env.reward_mode: equity_delta_r
           env.risk_mode: fixed
@@ -68,11 +68,11 @@ stages:
     variants:
       - id: q4a_semantic_heads
         parent: q3_winner
-        status: implemented_unit_tested
+        status: implementation_unverified
         overrides: {ppo.actor_arch: semantic_heads}
       - id: q4b_hybrid_distribution
         parent: q3_winner
-        status: planned
+        status: implementation_unverified
         overrides: {ppo.policy_distribution: hybrid_v1}
   - id: q5_constraints
     control: q4_winner
@@ -86,11 +86,15 @@ stages:
     variants:
       - id: q6_fsm_visible
         parent: q5_winner
-        status: planned
+        status: implementation_unverified
         overrides: {env.entry_state_machine: true, env.entry_state_observation: true}
+      - id: q6_fsm_hidden
+        parent: q5_winner
+        status: implementation_unverified
+        overrides: {env.entry_state_machine: true, env.entry_state_observation: false}
       - id: q6_no_fsm_control
         parent: q5_winner
-        status: planned
+        status: implementation_unverified
         overrides: {env.entry_state_machine: false}
   - id: q7_encoder
     control: q6_winner

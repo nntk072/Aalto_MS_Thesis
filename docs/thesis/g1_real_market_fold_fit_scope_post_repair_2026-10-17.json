@@ -1,0 +1,176 @@
+{
+  "affected_campaign_run_count": 0,
+  "affected_campaign_runs": [],
+  "all_profiles_pass": true,
+  "audit": "real_market_purged_fold_fit_scope_poison_test",
+  "audit_script_sha256": "8a84f075425978973a225b43f2a2a94b0bedeac161a6bb2119dd3ed522d5c968",
+  "cache_resolution_report_sha256": "8db13db526e1b2e1faf40c45c27d2e645036c1b9e8f085965ed88c790accf89e",
+  "campaign_fingerprint": "91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e",
+  "campaign_git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+  "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+  "completed_at": "2026-10-17T00:48:31.404764+03:00",
+  "failed_profiles": [],
+  "feature_cache_version": "v22-causal-configured-ny-session",
+  "fold_rows_available": 60000,
+  "previous_audit": {
+    "disposition": "immutable pre-repair failure; not a result for current source",
+    "path": "docs/thesis/g1_real_market_fold_fit_scope_2026-10-16.json",
+    "sha256": "61ab7025520af5fcf7b313d10bd8b4fe9708f02bd434a30c2990fe88d8c7dbe9"
+  },
+  "raw_inputs_sha256": {
+    "data/US100.cash_M1_202412300105_202607031959.csv": "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+    "data/US500.cash_M1_202412300105_202607031959.csv": "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9"
+  },
+  "repository_head": "aef47d1e4467a0bb4469a2d7f047aeb9d18fde0c",
+  "results": [
+    {
+      "changed_features_model_visible": {},
+      "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat__seed50/attempt1/ladder_a0_flat__seed50/20261016_173541_834754_rl_train_seed50_tcn/config.yaml",
+      "config_sha256": "fbdc54103b775c611f2c4d091b5e3494bac91b7d89babbe2b7f8676a844b509f",
+      "embargo_bars": 20,
+      "feature_hash": "4842532f87d90b84",
+      "fold": 0,
+      "passed": true,
+      "purge_bars": 60,
+      "temporary_cache_keys": [
+        "US100.cash_features_v22-causal-configured-ny-session_12883c95b3dbaa49.parquet",
+        "US100.cash_features_v22-causal-configured-ny-session_7f10de74b9b86a15.parquet"
+      ],
+      "train_changed_feature_detail": {
+        "changed_column_count": 0,
+        "changed_columns": [],
+        "first_changed_rows": []
+      },
+      "train_feature_sha256_original": "918c4a5c70c10a1cc758ab34c624fe6fd928fa8e6b92cf2d7c0c8318832f2b7c",
+      "train_feature_sha256_poisoned": "918c4a5c70c10a1cc758ab34c624fe6fd928fa8e6b92cf2d7c0c8318832f2b7c",
+      "train_features_identical_after_validation_poison": true,
+      "train_last": "2025-02-12 05:39:00+03:00",
+      "train_max_abs_delta": 0.0,
+      "train_rows": 41920,
+      "validation_feature_sha256_original": "5aac0510ea4d54aa5f1224cb002937c798716f2b50e8dd7dc0d274a211a65aa1",
+      "validation_feature_sha256_poisoned": "c9b987e1d4fbb57b7e1dd95539a40f3b8b4691a24cf2516259c39e3788f227d7",
+      "validation_features_changed": true,
+      "validation_first": "2025-02-12 07:00:00+03:00",
+      "validation_max_abs_delta": 4707.060806724788,
+      "validation_rows": 6000,
+      "variant": "ladder_a0_flat"
+    },
+    {
+      "changed_features_model_visible": {},
+      "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a1_sl__seed50/attempt1/ladder_a1_sl__seed50/20261016_173854_725508_rl_train_seed50_tcn/config.yaml",
+      "config_sha256": "cf9d534110484ce57e5e0778593afe9de5744ceb586ba46422a3ba23af4027dc",
+      "embargo_bars": 20,
+      "feature_hash": "6edf3a05ec601d16",
+      "fold": 0,
+      "passed": true,
+      "purge_bars": 60,
+      "temporary_cache_keys": [
+        "US100.cash_features_v22-causal-configured-ny-session_959948d86f3fed13.parquet",
+        "US100.cash_features_v22-causal-configured-ny-session_0c7414db6ad5596a.parquet"
+      ],
+      "train_changed_feature_detail": {
+        "changed_column_count": 0,
+        "changed_columns": [],
+        "first_changed_rows": []
+      },
+      "train_feature_sha256_original": "ce950babd5da6568a9c4adbbaeb58b325ab15bfde9e162f57c1e3e48d07cdebf",
+      "train_feature_sha256_poisoned": "ce950babd5da6568a9c4adbbaeb58b325ab15bfde9e162f57c1e3e48d07cdebf",
+      "train_features_identical_after_validation_poison": true,
+      "train_last": "2025-02-12 05:39:00+03:00",
+      "train_max_abs_delta": 0.0,
+      "train_rows": 41920,
+      "validation_feature_sha256_original": "eaae21ff561ae3f409df2ee9d352daa31f0f7cda645080413477f46f107c6265",
+      "validation_feature_sha256_poisoned": "d6d31f3b9ae4687d1108515532a096442c5f5e23fac0fd2bf9446a677f65a61c",
+      "validation_features_changed": true,
+      "validation_first": "2025-02-12 07:00:00+03:00",
+      "validation_max_abs_delta": 26116.62,
+      "validation_rows": 6000,
+      "variant": "ladder_a1_sl"
+    },
+    {
+      "changed_features_model_visible": {},
+      "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat_po3__seed50/attempt1/ladder_a0_flat_po3__seed50/20261016_173544_291860_rl_train_seed50_tcn/config.yaml",
+      "config_sha256": "ab81d893d12ae6b4b11a47bef608633e9a8f884de443cb9814820d1d6ad0a986",
+      "embargo_bars": 20,
+      "feature_hash": "90756a2ac36a2dcb",
+      "fold": 0,
+      "passed": true,
+      "purge_bars": 60,
+      "temporary_cache_keys": [
+        "US100.cash_features_v22-causal-configured-ny-session_83447d31a92483c4.parquet",
+        "US100.cash_features_v22-causal-configured-ny-session_38cef6a37360f813.parquet"
+      ],
+      "train_changed_feature_detail": {
+        "changed_column_count": 0,
+        "changed_columns": [],
+        "first_changed_rows": []
+      },
+      "train_feature_sha256_original": "8e8c7b8c2419151810b05887a219eee80323ddf9d521d41f4afccc5191bec3e6",
+      "train_feature_sha256_poisoned": "8e8c7b8c2419151810b05887a219eee80323ddf9d521d41f4afccc5191bec3e6",
+      "train_features_identical_after_validation_poison": true,
+      "train_last": "2025-02-12 05:39:00+03:00",
+      "train_max_abs_delta": 0.0,
+      "train_rows": 41920,
+      "validation_feature_sha256_original": "f31452a1075151651defc71e971a69a4e5ad4187493845d8f36a2e962210eb0e",
+      "validation_feature_sha256_poisoned": "a1201e315afcae5392fb23a88ed4d6736d897fe6333687757c46d0aa0fd1fce9",
+      "validation_features_changed": true,
+      "validation_first": "2025-02-12 07:00:00+03:00",
+      "validation_max_abs_delta": 1729800000000000.0,
+      "validation_rows": 6000,
+      "variant": "ladder_a0_flat_po3"
+    },
+    {
+      "changed_features_model_visible": {},
+      "config_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat_dist__seed50/attempt1/ladder_a0_flat_dist__seed50/20261016_173544_299952_rl_train_seed50_tcn/config.yaml",
+      "config_sha256": "e6363d2ae21429ca4c974360ecd5c28f93e9b7f193699118b0bcc6e6908e2d33",
+      "embargo_bars": 20,
+      "feature_hash": "f7b463019fc2fde4",
+      "fold": 0,
+      "passed": true,
+      "purge_bars": 60,
+      "temporary_cache_keys": [
+        "US100.cash_features_v22-causal-configured-ny-session_078d1af7f546e318.parquet",
+        "US100.cash_features_v22-causal-configured-ny-session_89778ab64b1e7d73.parquet"
+      ],
+      "train_changed_feature_detail": {
+        "changed_column_count": 0,
+        "changed_columns": [],
+        "first_changed_rows": []
+      },
+      "train_feature_sha256_original": "8219204b635338a4ecb538b29f749ab187b11ede920ddb069d3d7077c1ced0f4",
+      "train_feature_sha256_poisoned": "8219204b635338a4ecb538b29f749ab187b11ede920ddb069d3d7077c1ced0f4",
+      "train_features_identical_after_validation_poison": true,
+      "train_last": "2025-02-12 05:39:00+03:00",
+      "train_max_abs_delta": 0.0,
+      "train_rows": 41920,
+      "validation_feature_sha256_original": "06967adf9b0bb212828d418eee11b47ace5327c4bf9ed4c96faf5b6b95ecb21f",
+      "validation_feature_sha256_poisoned": "43e355b7515566883fb26de8f5817fa4c89fa5c0ce678ba629188584108f4751",
+      "validation_features_changed": true,
+      "validation_first": "2025-02-12 07:00:00+03:00",
+      "validation_max_abs_delta": 1729800000000000.0,
+      "validation_rows": 6000,
+      "variant": "ladder_a0_flat_dist"
+    }
+  ],
+  "runtime": {
+    "numpy": "2.2.6",
+    "pandas": "2.3.2",
+    "platform": "Linux-5.14.0-687.41.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "python": "3.12.14",
+    "slurm_job_id": "21007645",
+    "stable_baselines3": "2.9.0"
+  },
+  "scope_note": "Bounded empirical check for one early purged fold and four feature profiles. Validation OHLC was perturbed by 20 percent; training-fold feature outputs remained exactly identical while validation features changed. This supports fold-local normalization isolation for the tested source/config/data slice. It is not a full five-fold training/evaluation run, exhaustive leakage proof, or strategy result.",
+  "slurm_job_id": "20990395",
+  "source_diagnosis": "This report evaluates the current source identified by source_sha256. The prior report documented model-visible future NY-session extrema in prev_ny_high/prev_ny_low; this field does not assume that diagnosis remains true after repair. Per-profile poison results and current source hashes are the evidence for this rerun.",
+  "source_sha256": {
+    "quant_rl/data/clean.py": "93eb07b3f3041458ad5570cb87a5b936e92061470ab4db6804690d5fc9f1c0c5",
+    "quant_rl/data/session.py": "b9cfb04b2b98ee3c8b4faf282040f04861a095e6f9ba04f8a14fd0e54e072129",
+    "quant_rl/data/split.py": "88cce652a8348f106e9203d82700ebe85f2208ca28e68a086a579e86808ca654",
+    "quant_rl/evaluation/walkforward.py": "3b36abfd158903bad02d988d396a436d62ef6a464556c619538eb70bd4a4dc35",
+    "quant_rl/features/build.py": "936418316bcfac6bd680cd61e9bae5605bbaa609236e0579d56c925eb7636079",
+    "quant_rl/features/normalize.py": "7b357053db23d7143204b688c6d50bdb7c8447ba5b031dabc139b148130182ec",
+    "quant_rl/features/session_ohlc.py": "a3e32df18034dfeb24ea8758ad1d5803e5da87c5cae689371aebd116b5d24773"
+  },
+  "temporary_cache_root_removed": true
+}

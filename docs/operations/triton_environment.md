@@ -17,6 +17,7 @@ Do not infer node architecture from the SSH gateway.
 | ARM64 / `aarch64` | `gpuarm1`, NVIDIA GH200 | `.venv` | `uv sync --locked --extra dev` with ARM64 uv |
 | AMD64 / `x86_64` | H100/H200 compute nodes | `.venv-x86` | `scripts/setup/setup_venv_x86.sh` on x86_64 |
 | AMD64 / `x86_64` | V100 (CC 7.0) | `.venv-v100` | Separate environment; torch 2.14.0+cu126, Python 3.12, project lock dependencies excluding its cu130 CUDA packages. Verify `sm_70`, CC `(7, 0)`, and a real CUDA op before use. |
+| AMD64 / `x86_64` | MI210 (`gfx90a`) | `/scratch/work/nguyenl37/.venv-mi210` | `scripts/setup/setup_venv_mi210.sh`; observed Triton ROCm 6.3.1, Python 3.12.14, torch 2.7.1+rocm6.3. Keep separate from the CUDA 13.0 project lock; validate the runtime and a real device operation before use. |
 
 Activate with `source scripts/triton/activate_venv.sh` from the correct
 compute node. Inspect `command -v python`, `readlink -f "$(command -v python)"`,
@@ -34,6 +35,16 @@ excluding the torch/cu130 CUDA runtime packages, then install `torch==2.14.0`
 from the official cu126 index. Re-run the compatibility checks after recreating
 the environment. Do not claim V100 training support from environment creation
 alone; a representative trainer smoke run is still required.
+
+The MI210 environment is isolated from `.venv-x86`: the project lock selects
+CUDA 13.0 packages, while the observed MI210 node exposes ROCm 6.3.1. The setup
+script keeps the locked non-accelerator dependencies and installs the official
+PyTorch 2.7.1 ROCm 6.3 wheel. On `gpuamd1` (Slurm job `21007645`), a 256×256
+MI210 matrix multiply succeeded, and the semantic-head/hybrid PPO update and
+save/load checks passed with this environment. This establishes a bounded test
+runtime, not parity with the locked CUDA 13.0 training stack or qualification
+for a research campaign. An end-to-end trainer and resource/throughput benchmark
+remain required before MI210 training use.
 
 ## Storage characteristics
 
@@ -63,9 +74,10 @@ Run installation on the target architecture in an authorized compute shell.
 For reproducible installs, select the matching interpreter and uv binary,
 inspect `uv.lock`, and use `UV_PROJECT_ENVIRONMENT` for the intended
 absolute environment path. For ARM64, that is `$PWD/.venv`; for x86_64,
-`$PWD/.venv-x86`. The repository x86 setup script currently uses
-`uv sync --extra dev` (without `--locked`); check its consequences for
-the lockfile before running it in a reproducibility-sensitive workflow.
+`$PWD/.venv-x86`. On an authorized H100/H200 compute node, run
+`scripts/setup/setup_venv_x86.sh`; it uses the locked command
+`UV_PROJECT_ENVIRONMENT="$PWD/.venv-x86" uv sync --locked --extra dev`.
+Do not use a project `.venv` symlink whose target is a different checkout.
 
 A uv-created venv may have no `pip` module: `python -m pip` failing is
 not proof the environment is broken. Prefer `uv pip check --python

@@ -169,6 +169,80 @@ def test_account_state_v2_bundle_observation_matches_frames(tmp_path: Path) -> N
         shared_obs = shared.step(0)[0]
 
 
+@pytest.mark.parametrize("entry_state_observation", [False, True])
+def test_entry_fsm_transitions_match_frames_and_bundle(
+    tmp_path: Path, entry_state_observation: bool
+) -> None:
+    """FSM transitions and optional policy visibility agree on both data paths."""
+    from quant_rl.envs.env_bundle_builder import build_env_bundle
+    from quant_rl.envs.strategies import PO3IFVGStrategy
+    from quant_rl.envs.trading_env import TradingEnv
+    from tests.test_envs.test_entry_state_machine import _market_fixture
+
+    bars, features = _market_fixture()
+    strategy = PO3IFVGStrategy(enforce_gate=True)
+    common: dict[str, Any] = {
+        "obs_window": 10,
+        "strategy": strategy,
+        "strategy_actions": True,
+        "entry_state_machine": True,
+        "entry_state_observation": entry_state_observation,
+        "candidate_max_age_bars": 5,
+        "open_manipulation_bars": 0,
+        "entry_cooldown_bars": 0,
+        "min_sl_atr_mult": 0.0,
+        "min_sl_points": 0.0,
+        "allow_agent_sl_mode": False,
+        "allow_ema_exit": False,
+    }
+    frames = TradingEnv(bars=bars, features=features, **common)
+    cfg = OmegaConf.create(
+        {
+            "env": {
+                "strategy_actions": True,
+                "entry_state_machine": True,
+                "entry_state_observation": entry_state_observation,
+                "obs_window": 10,
+            },
+            "data": {"raw_dir": str(tmp_path)},
+        }
+    )
+    path = build_env_bundle(
+        tmp_path,
+        bars,
+        features,
+        cfg,
+        raw_columns=strategy.raw_columns,
+        feature_config_hash=f"entry-fsm-parity-hidden-{not entry_state_observation}",
+        tickbook=None,
+        pre_ny_by_date=None,
+    )
+    shared = TradingEnv.from_bundle(path, **common)
+    frame_obs, _ = frames.reset(seed=23)
+    shared_obs, _ = shared.reset(seed=23)
+    action = np.array([0.0, 0.0, 0.5, 0.0, -1.0], dtype=np.float32)
+
+    for expected_state in ("CANDIDATE", "ARMED", "IN_POSITION"):
+        for key in frame_obs:
+            np.testing.assert_array_equal(frame_obs[key], shared_obs[key])
+        frame_step = frames.step(action)
+        shared_step = shared.step(action)
+        assert frame_step[1:4] == shared_step[1:4]
+        assert frame_step[4]["entry_state"] == expected_state
+        assert shared_step[4]["entry_state"] == expected_state
+        assert frames.entry_state_machine is not None
+        assert shared.entry_state_machine is not None
+        assert frames.entry_state_machine.state == shared.entry_state_machine.state
+        assert frames.entry_state_machine.state == expected_state
+        frame_obs, shared_obs = frame_step[0], shared_step[0]
+        if entry_state_observation:
+            np.testing.assert_array_equal(frame_obs["account"], shared_obs["account"])
+            assert frame_obs["account"].shape[0] == 10
+        else:
+            assert frame_obs["account"].shape[0] == 6
+            assert shared_obs["account"].shape[0] == 6
+
+
 def test_bundle_env_uses_read_only_ndarray_views(tmp_path: Path) -> None:
     """The hot path uses plain ndarray views backed by shared read-only mmaps."""
     from quant_rl.envs.env_bundle_builder import build_env_bundle

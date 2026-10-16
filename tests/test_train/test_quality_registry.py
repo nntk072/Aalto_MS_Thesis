@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import logging
+from types import SimpleNamespace
+
 import pytest
 from omegaconf import OmegaConf
 
+from quant_rl.config import load_config
 from quant_rl.train.quality_registry import (
     apply_quality_variant,
     get_quality_variant,
     load_quality_registry,
 )
+from quant_rl.train.train_rl import _log_effective_ppo
 
 
 def test_quality_registry_is_separate_and_staged() -> None:
@@ -37,3 +42,94 @@ def test_apply_quality_variant_clones_config_and_applies_only_declared_keys() ->
 def test_later_stage_refuses_to_run_before_winner_selection() -> None:
     with pytest.raises(ValueError, match="select the prior-stage winner"):
         apply_quality_variant(OmegaConf.create({}), "q3a_rr_fixed500")
+
+
+def test_q2_rollout_geometry_arms_are_registered_but_fail_closed() -> None:
+    for n_envs in (16, 32, 64):
+        variant_id = f"q2_state_v2_nenv{n_envs}"
+        stage, overrides = get_quality_variant(variant_id)
+        assert stage == "q2_rollout"
+        assert overrides["env.n_envs"] == n_envs
+        with pytest.raises(ValueError, match="not implemented and selectable"):
+            apply_quality_variant(OmegaConf.create({}), variant_id)
+
+
+def test_q2_training_log_records_effective_rollout_and_update_geometry(caplog) -> None:
+    cfg = load_config(["env.n_envs=16", "ppo.batch_size=64", "ppo.n_epochs=3", "ppo.n_steps=128"])
+    model = SimpleNamespace(n_steps=8, n_envs=16, ent_coef=0.01)
+    caplog.set_level(logging.INFO, logger="quant_rl.train.train_rl")
+
+    _log_effective_ppo(model, cfg)
+
+    assert (
+        "logical_n_envs=16 sb3_n_steps_per_env=8 aggregate_rollout_steps=128 "
+        "batch_size=64 n_epochs=3 minibatches_per_epoch=2 updates_per_rollout=6"
+    ) in caplog.text
+
+
+def test_q2_training_log_rejects_effective_environment_count_mismatch() -> None:
+    cfg = load_config(["env.n_envs=16"])
+    model = SimpleNamespace(n_steps=8, n_envs=8, ent_coef=0.01)
+    with pytest.raises(RuntimeError, match="effective PPO n_envs=8"):
+        _log_effective_ppo(model, cfg)
+
+
+def test_q6_has_three_explicit_arms_with_only_visibility_changed() -> None:
+    registry = load_quality_registry()
+    stage = next(stage for stage in registry.stages if stage.id == "q6_entry_fsm")
+    arms = {str(variant.id): variant for variant in stage.variants}
+    assert set(arms) == {"q6_fsm_visible", "q6_fsm_hidden", "q6_no_fsm_control"}
+    assert arms["q6_fsm_visible"].overrides["env.entry_state_machine"] is True
+    assert arms["q6_fsm_visible"].overrides["env.entry_state_observation"] is True
+    assert arms["q6_fsm_hidden"].overrides["env.entry_state_machine"] is True
+    assert arms["q6_fsm_hidden"].overrides["env.entry_state_observation"] is False
+    assert arms["q6_no_fsm_control"].overrides["env.entry_state_machine"] is False
+    assert all(str(variant.status) == "implementation_unverified" for variant in arms.values())
+    for variant_id in arms:
+        with pytest.raises(
+            ValueError, match="not implemented and selectable|select the prior-stage winner"
+        ):
+            apply_quality_variant(OmegaConf.create({}), variant_id)
+
+
+def test_unverified_hybrid_policy_remains_fail_closed() -> None:
+    with pytest.raises(
+        ValueError, match="not implemented and selectable|select the prior-stage winner"
+    ):
+        apply_quality_variant(OmegaConf.create({}), "q4b_hybrid_distribution")
+
+
+def test_unverified_registry_arms_are_all_fail_closed() -> None:
+    registry = load_quality_registry()
+    unverified = [
+        str(variant.id)
+        for stage in registry.stages
+        for variant in stage.variants
+        if str(variant.get("status", "")) == "implementation_unverified"
+    ]
+    assert unverified
+    for variant_id in unverified:
+        with pytest.raises(
+            ValueError, match="not implemented and selectable|select the prior-stage winner"
+        ):
+            apply_quality_variant(OmegaConf.create({}), variant_id)
+
+
+def test_lagrangian_placeholder_cannot_launch_as_ordinary_ppo() -> None:
+    base = OmegaConf.create({"ppo": {"n_steps": 8}})
+    stage, overrides = get_quality_variant("q5_lagrangian")
+    assert stage == "q5_constraints"
+    assert overrides["constrained_rl.enabled"] is True
+    with pytest.raises(
+        ValueError, match="not implemented and selectable|select the prior-stage winner"
+    ):
+        apply_quality_variant(base, "q5_lagrangian")
+    assert "constrained_rl" not in base
+
+
+def test_q6_registers_hidden_fsm_comparison_arm() -> None:
+    registry = load_quality_registry()
+    q6 = next(stage for stage in registry.stages if stage.id == "q6_entry_fsm")
+    hidden = next(variant for variant in q6.variants if variant.id == "q6_fsm_hidden")
+    assert hidden.overrides["env.entry_state_machine"] is True
+    assert hidden.overrides["env.entry_state_observation"] is False

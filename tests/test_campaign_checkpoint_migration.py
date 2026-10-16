@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from scripts.matrix import audit_campaign_checkpoint_loads
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts/matrix/campaign_controller.py"
 SPEC = importlib.util.spec_from_file_location("campaign_controller", MODULE_PATH)
@@ -213,6 +214,53 @@ def test_initial_checkpoint_map_falls_back_to_earlier_valid_attempt(tmp_path: Pa
         20_000_000,
     )
     assert validated["variant__seed42"]["source_attempt"] == 1
+
+
+def test_explicit_checkpoint_map_keeps_selected_attempt_after_newer_attempt_exists(
+    tmp_path: Path,
+) -> None:
+    campaign_dir, _checkpoint, _record = _source_campaign(tmp_path)
+    frozen_map = controller.build_initial_checkpoint_map(
+        [campaign_dir], {"variant__seed42"}, 20_000_000
+    )
+    frozen_map.pop("schema_version")
+    frozen_map_path = campaign_dir / "initial_checkpoints.json"
+    frozen_map_path.write_text(json.dumps(frozen_map), encoding="utf-8")
+
+    attempt2 = campaign_dir / "runs/attempts/variant__seed42/attempt2"
+    model_dir = attempt2 / "model"
+    model_dir.mkdir(parents=True)
+    checkpoint2 = model_dir / "ppo_ckpt_2000000_steps.zip"
+    with zipfile.ZipFile(checkpoint2, "w") as archive:
+        archive.writestr("data", json.dumps({"num_timesteps": 2_000_000}))
+    source_identity = {"source": "test fixture"}
+    fingerprint = hashlib.sha256(json.dumps(source_identity, sort_keys=True).encode()).hexdigest()
+    provenance = {
+        "campaign_fingerprint": fingerprint,
+        "identity": source_identity,
+        "run_key": "variant__seed42",
+        "variant": "variant",
+        "seed": 42,
+        "attempt": 2,
+        "requested_timesteps": 20_000_000,
+    }
+    (attempt2 / "attempt_provenance.json").write_text(json.dumps(provenance), encoding="utf-8")
+    manifest_path = campaign_dir / "campaign.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["jobs"][0]["attempts"] = 2
+    manifest["jobs"][0]["status"] = "failed"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    records, provenance_record = audit_campaign_checkpoint_loads._load_explicit_checkpoint_map(
+        frozen_map_path,
+        [{"key": "variant__seed42", "variant": "variant", "seed": 42}],
+        20_000_000,
+    )
+
+    assert records["variant__seed42"]["source_attempt"] == 1
+    assert records["variant__seed42"]["source_num_timesteps"] == 1_000_000
+    assert provenance_record["schema_version_added"] is True
+    assert provenance_record["input_sha256"] == controller.sha256_file(frozen_map_path)
 
 
 def test_full_budget_checkpoint_can_be_migrated_for_policy_reevaluation(

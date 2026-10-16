@@ -12,7 +12,7 @@ if [[ "$machine" != "x86_64" ]]; then
 fi
 
 echo "Syncing $REPO/.venv-x86 ..."
-UV_PROJECT_ENVIRONMENT="$REPO/.venv-x86" uv sync --extra dev
+UV_PROJECT_ENVIRONMENT="$REPO/.venv-x86" uv sync --locked --extra dev
 
 echo "Done. Activate with:"
 echo "  source scripts/triton/activate_venv.sh"

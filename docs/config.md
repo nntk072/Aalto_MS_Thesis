@@ -103,12 +103,13 @@ uv run python -m quant_rl.train.train_rl --mvp \
 | Constant | File | Current value | Busts |
 |----------|------|---------------|-------|
 | `BAR_CACHE_VERSION` | `quant_rl/data/pipeline.py` | `v2-full-day` | Stale bar parquet caches |
-| `FEATURE_CACHE_VERSION` | `quant_rl/features/build.py` | `v11-content-hash` | Stale feature parquet caches |
+| `FEATURE_CACHE_VERSION` | `quant_rl/features/build.py` | `v21-causal-prior-ny-session` | Stale feature parquet caches |
 | Content hash | `feature_cache_content_hash()` | 16-hex digest of version + features cfg + tz keys + data identity + optional `train_mask` | Flag flip or data change must miss cache |
 
-**Rule:** bump the relevant constant whenever the output schema changes.
-All runs share one feature cache key; changing opt-in flags without bumping
-the version requires `--force` or deleting the stale parquet.
+**Rule:** bump the relevant constant whenever feature semantics or output
+schema change. Feature flags and source-data identity also contribute to the
+content hash, so different resolved feature configurations use distinct cache
+paths.
 
 Cache file pattern:
 

@@ -45,6 +45,7 @@ def test_management_settings_match_training_and_evaluation_environment_kwargs(mo
             "env.sl_mode_defer_threshold=0.27",
             "env.tp_mode_defer_threshold=0.31",
             "env.tp_breakeven_alpha=0.42",
+            "env.allow_ema_exit=false",
             "env.eod_risk.breakeven_trigger_r=1.3",
             "env.eod_risk.breakeven_buffer_pts=1.7",
         ]
@@ -66,6 +67,8 @@ def test_management_settings_match_training_and_evaluation_environment_kwargs(mo
         assert captured[key] == expected
         assert evaluation_kwargs[key] == expected
     assert captured["eod_risk"] == evaluation_kwargs["eod_risk"]
+    assert captured["allow_ema_exit"] is False
+    assert evaluation_kwargs["allow_ema_exit"] is False
     assert captured["eod_risk"]["breakeven_trigger_r"] == 1.3
     assert captured["eod_risk"]["breakeven_buffer_pts"] == 1.7
 

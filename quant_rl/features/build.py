@@ -98,7 +98,8 @@ from .swings import swing_history
 # v15: swing confirmation pulses and the distribution-after-IFVG latch.
 # v16: SL modes (state machine + agent veto), prev-NY session H/L, swing
 #      history columns (swing_high_{1..3}/swing_low_{1..3}), TF-SMT enablement.
-FEATURE_CACHE_VERSION = "v20-mtf-swing-candidates"
+# v22: causal completed prior-NY levels use the configured NY session window.
+FEATURE_CACHE_VERSION = "v22-causal-configured-ny-session"
 
 
 def feature_cache_content_hash(
@@ -661,6 +662,12 @@ def build_fvg_zone_features(
     bull_origin = cast(int, out.columns.get_loc("fvg_bull_origin"))
     bear_origin = cast(int, out.columns.get_loc("fvg_bear_origin"))
 
+    # The zone/bar loop can touch millions of cells on a full M1 history.
+    # DataFrame.iat performs indexer and block-manager work for every scalar
+    # access, so keep the same ordered updates in a local homogeneous array
+    # and wrap it back into the original column schema once at the end.
+    values = out.to_numpy(copy=True)
+
     for zone in zones:
         start_i = int(idx.searchsorted(zone.start_ts, side="left"))
         end_i = int(idx.searchsorted(zone.end_ts, side="right"))  # exclusive
@@ -679,42 +686,42 @@ def build_fvg_zone_features(
             d = abs(close[i] - edge)
             a = atr_s[i] if not np.isnan(atr_s[i]) and atr_s[i] > 0 else 1.0
             in_col, dist_col = (bull_in, bull_dist) if bull else (bear_in, bear_dist)
-            dist = min(d / a, out.iat[i, dist_col])
-            out.iat[i, dist_col] = dist
+            dist = min(d / a, values[i, dist_col])
+            values[i, dist_col] = dist
             if zone.zone_low <= close[i] <= zone.zone_high:
-                out.iat[i, in_col] = 1.0
+                values[i, in_col] = 1.0
             is_fill = fill_i is not None and i == fill_i
             if bull:
-                out.iat[i, bull_active] = 1.0
-                out.iat[i, bull_lo] = zone.zone_low
-                out.iat[i, bull_hi] = zone.zone_high
+                values[i, bull_active] = 1.0
+                values[i, bull_lo] = zone.zone_low
+                values[i, bull_hi] = zone.zone_high
                 if origin_i >= 0:
-                    out.iat[i, bull_origin] = low[origin_i]
+                    values[i, bull_origin] = low[origin_i]
                 if (
                     not is_fill
                     and left
                     and zone.zone_low < low[i] <= zone.zone_high
                     and close[i] >= zone.zone_high
                 ):
-                    out.iat[i, bull_retest] = 1.0
+                    values[i, bull_retest] = 1.0
                 if low[i] > zone.zone_high:
                     left = True
             else:
-                out.iat[i, bear_active] = 1.0
-                out.iat[i, bear_lo] = zone.zone_low
-                out.iat[i, bear_hi] = zone.zone_high
+                values[i, bear_active] = 1.0
+                values[i, bear_lo] = zone.zone_low
+                values[i, bear_hi] = zone.zone_high
                 if origin_i >= 0:
-                    out.iat[i, bear_origin] = high[origin_i]
+                    values[i, bear_origin] = high[origin_i]
                 if (
                     not is_fill
                     and left
                     and zone.zone_low <= high[i] < zone.zone_high
                     and close[i] <= zone.zone_low
                 ):
-                    out.iat[i, bear_retest] = 1.0
+                    values[i, bear_retest] = 1.0
                 if high[i] < zone.zone_low:
                     left = True
-    return out
+    return pd.DataFrame(values, index=idx, columns=out.columns)
 
 
 def build_features(
@@ -1277,7 +1284,13 @@ def build_features(
 
         yday = prior_period_high_low(primary, freq="D", tz=sess_tz)
         lweek = prior_period_high_low(primary, freq="W", tz=sess_tz)
-        prev_ny = prev_ny_high_low(primary, session_tz=sess_tz)
+        ny_window = sess_cfg["ny"]
+        prev_ny = prev_ny_high_low(
+            primary,
+            start_ct=str(ny_window["start"]),
+            end_ct=str(ny_window["end"]),
+            session_tz=sess_tz,
+        )
         feat = pd.concat([feat, yday, lweek, prev_ny], axis=1)
 
         for range_name in list(sess_cfg.get("quadrant_ranges", ["yesterday", "lastweek"])):

@@ -142,8 +142,9 @@ run the command inside an existing shell.
   and **2 per allocation request**. Count GPUs across jobs and nodes, including
   pending jobs that could overlap. For example, requesting 1 GH200 on gpuarm1
   plus 2 on gpuarm2 (or 2 on gpuarm1 plus 1 on gpuarm2) is forbidden because
-  the combined total is 3. The intended 18-trainer layout is one GH200 on each
-  of two nodes. This cap does not apply to V100 or other GPU families.
+  the combined total is 3. For this campaign, use at most 1 GH200 per node;
+  the two-GPU layout is exactly one on gpuarm1 and one on gpuarm2. This cap
+  does not apply to V100 or other GPU families.
 - Before any GH200 request, inspect all active and pending campaign jobs with
   `squeue` and `scontrol show job`. Never request more than 2 GH200 in one job,
   combine allocations to run more than 2 simultaneously, or request a 2-GH200
@@ -157,20 +158,72 @@ run the command inside an existing shell.
 
 ## Before allocating (after user OK) — check availability
 
-On the **login node**, pick resources from what is actually free. Do not
-hard-code GH200 when H200 is idle.
+On the **login node**, pick resources from what is actually free on each
+candidate node. Before requesting a multi-node job, inspect every requested node
+individually. Record CPU allocated/idle, total/free/allocated host memory, and
+configured/allocated/used GPU type and count; a node being `MIXED` or having
+free CPUs/RAM does not prove that the required GPU is available.
 
 ```bash
-# Partition / GRES / MaxTime / node states
-sinfo -p gpu-h200-141g-short,gpu-h200-141g-m,gpu-grace-h200-141g \
-  -o '%P %a %D %T %G %l %m %c'
+# Per-node partition, CPU, RAM, state, and configured GPU inventory
+sinfo -N -p gpu-a100-80g,gpu-amd,gpu-h100-80g,gpu-h200-141g-short,gpu-h200-141g-m,gpu-grace-h200-141g,gpu-b300-288g-short \
+  -o '%N %P %T %C %m %e %G'
+# For each candidate node, inspect CPUAlloc/CPUTot, AllocMem/RealMemory,
+# FreeMem, CfgTRES, AllocTRES, and GresUsed. Then inspect users' jobs/steps.
+scontrol show node <candidate-node>
+squeue -w <candidate-node> -o '%.18i %.10u %.12P %.20j %.8T %.10M %.24R'
 
 # Queue pressure (optional)
-squeue -p gpu-h200-141g-short,gpu-h200-141g-m,gpu-grace-h200-141g -o '%.18i %.9P %.2t %.8N' | head
+squeue -p gpu-a100-80g,gpu-amd,gpu-h100-80g,gpu-h200-141g-short,gpu-h200-141g-m,gpu-grace-h200-141g,gpu-b300-288g-short -o '%.18i %.9P %.2t %.8N' | head
 ```
 
-Prefer partitions with **idle** or lightly **mixed** nodes and short queues.
-Confirm `MaxTime` before choosing wall-clock.
+Check every intended node with `scontrol show node`; `sinfo`'s aggregate
+partition line is not enough for CPU/RAM/GPU sizing. If available GPU usage is
+not exposed in Slurm fields, inspect it only through an existing allocation or
+authorized shell; never create a diagnostic `srun` step for the check. Confirm
+partition `MaxTime`, account/QOS eligibility, node architecture, and the
+matching environment before choosing wall-clock/resources.
+
+### One-minute allocation wait limit and GPU-family fallback
+
+Before every real GPU allocation attempt, inspect each candidate node's GPU,
+CPU, and host-RAM availability as described above, then compare realistic
+resource shapes with `srun --test-only`. The user requires the agent to spend
+no more than **60 seconds waiting or polling** for an eligible allocation.
+For `srun`/`salloc`, use Slurm's immediate timeout (`--immediate=60`) where
+supported; never leave a blocking allocation command waiting longer. For
+submitted jobs, stop polling for a start after 60 seconds. Once Slurm grants
+the allocation, the training or other authorized work may run for its full
+requested walltime; the one-minute limit is not a runtime limit.
+
+If the request has not started by then, stop waiting and treat that resource
+shape as unavailable for immediate work. Stop polling it and search for an
+eligible alternative. Before considering each alternative, inspect every
+candidate node's allocated/free CPUs, host RAM, and configured/allocated GPU
+inventory. Do not repeatedly poll, submit a duplicate, or create an overlapping
+replacement. This timeout does **not**
+authorize `scancel` or terminate an already-pending job: follow the cancellation
+authorization rule, preserve the pending job, and resolve it before requesting
+an alternative if it could overlap. Compare alternatives using fresh per-node
+CPU/RAM/GPU checks and `srun --test-only` forecasts.
+
+This timer starts when a request is eligible to run. A previously approved
+successor held behind an explicit `afterany`/`afterok` dependency is waiting on
+its predecessor, not waiting for free resources; preserve that single chained
+request and start its 60-second resource timer only after the dependency clears.
+
+When the preferred GPU family is unavailable within the limit, search for a
+compatible GPU **no lower than A100 or MI210**. Candidate families include
+A100, MI210, H100, H200, GH200, and B300 when the specific node and partition
+can satisfy the job. Compare predicted start time and measured end-to-end
+makespan, not model names alone. MI210 requires a validated ROCm-compatible
+environment; do not send the CUDA-only environment to it. NVIDIA alternatives
+require their matching CUDA/PyTorch environment and representative-kernel
+validation. If no eligible candidate is available, report the resource block
+and continue independent work; do not silently drop below the GPU floor.
+Respect the current thesis cap of two GH200s across active and pending jobs; it
+does not apply to other families. Do not switch a live or dependency-queued job
+to another family by submitting an overlapping replacement.
 
 ### GPU family and partition limits
 
@@ -244,17 +297,19 @@ srun --partition=gpu-grace-h200-141g --gpus=gh200:1 --time=6:00:00 \
   --mem=512G --ntasks=1 --cpus-per-task=48 --pty bash
 ```
 
-Example, six-run matrix, user OK:
-
-```bash
-srun --partition=gpu-grace-h200-141g --gpus=gh200:2 --time=6:00:00 \
-  --mem=900G --ntasks=1 --cpus-per-task=128 --pty bash
-```
+The historical two-GH200-on-one-node example is intentionally removed: the
+current thesis campaign permits at most one GH200 on each of two nodes. Follow
+the live per-node inventory and scheduler forecast before constructing any
+two-node request.
 
 `attach_or_alloc.sh` follows the same priority when it allocates (override with
 `PARTITION` / `GPUS` / `TIME` / `MEM` / `CPUS` env vars).
 
-## Two trains, one H200 (do not rediscover this)
+## Historical two-trainer H200 probe (2026-10-14)
+
+This profile documents a past probe, not a standing allocation instruction.
+Apply the current per-node inventory, 60-second wait limit, A100-or-better/MI210
+fallback, environment compatibility, and allocation-approval rules above.
 
 Idea 1 (`po3_ifvg`) and Idea 2 (`distribution`) at `n_envs=64` share **one**
 H200. Run `bash scripts/triton/two_trains_one_h200.sh` after the user says to
@@ -268,20 +323,33 @@ allocate. Do not probe other sizes first.
 | Time | **`--time=6:00:00`** | 12h on this shape (stays PENDING; `srun --test-only` can still say "now") |
 | Envs | `QUANT_RL_MAX_N_ENVS=64` | Leaving the cap unset: 900G selects 128 workers and OOMs |
 
-A PENDING job with `StartTime=Unknown` does not fit. Cancel **that one job
-you just submitted** and stop. Do not climb memory, CPUs, GPUs, or wall time.
-That cancel does not allow cancelling any other running train.
+If a request remains pending after 60 seconds, stop polling and treat that
+resource shape as unavailable for immediate work, even if Slurm shows a later
+estimated start. Immediately compare eligible A100-or-better/MI210 alternatives;
+do not leave a terminal or background poll running. Do not automatically
+cancel the pending request or create an overlapping duplicate. Check the job
+reason and per-node CPU, RAM, and GPU availability; compare alternatives with
+`srun --test-only`, then follow explicit cancellation and allocation approval
+rules before switching.
 
 Second train: a new tmux window that **`ssh`s the compute node**. That shell
 joins the same job (`SLURM_JOB_ID` is set). `srun --overlap` / `srun --jobid=`
 fails here with `Insane message length`. Do not retry overlap.
 
-2× GH200 is a different shape (`gh200:2`, 900G, 128 CPUs, **6h** only). Use it
-only when a node has both GPUs free. If `AllocTRES` already shows `gh200=2`
-on both `gpuarm` nodes, the wait is occupancy, not a wrong size — do not
-submit it.
+For this thesis campaign, the approved two-GH200 layout is one GH200 on each
+of two different nodes; do not request both GPUs on one node. If `AllocTRES`
+shows all GH200s occupied on the intended nodes, do not submit that shape or
+keep waiting on it. Apply the one-minute limit above, inspect per-node state
+for eligible A100-or-better or MI210 alternatives, then follow the allocation
+approval and no-overlap rules.
 
-## Verified 18-variant matrix notes
+## Historical 18-variant matrix measurements
+
+The profiles below record prior measurements, not current request instructions
+or authorization. The current one-minute wait and alternative-selection rules
+above, per-node inventory, one-GH200-per-node campaign shape, and explicit
+approval requirement take precedence. Do not reproduce an old allocation shape
+without a fresh forecast and approval.
 
 The unified matrix launcher is
 [`scripts/matrix/run_18variant_matrix.sh`](../../scripts/matrix/run_18variant_matrix.sh).
@@ -316,8 +384,9 @@ the same output/checkpoint directory, then retires the old allocation after
 the replacement completes. A batch already in progress is never interrupted
 by this check.
 
-These points were verified on Triton on 2026-10-08 and should be checked before
-redesigning the matrix:
+These points were measured on Triton on 2026-10-08. Treat them as historical
+benchmark evidence only; they do not override the current thesis allocation
+shape or the one-minute alternative-selection rule above:
 
 - The working four-trainer shape is **one `gpu-grace-h200-141g` allocation**:
   `--gpus=gh200:2 --mem=900G --cpus-per-task=128 --time=6:00:00`.

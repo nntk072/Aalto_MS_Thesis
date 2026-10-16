@@ -232,6 +232,7 @@ env:
 
 ppo:
   actor_arch: shared                # shared | semantic_heads; opt-in Q4A treatment
+  policy_distribution: clamped_diagonal_gaussian  # hybrid_v1 is an opt-in Q4B treatment
   semantic_head_width: 64
   n_steps: 2048
   batch_size: 512

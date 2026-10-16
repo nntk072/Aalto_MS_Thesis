@@ -7,6 +7,7 @@ from typing import Any
 import gymnasium as gym
 import numpy as np
 import numpy.typing as npt
+import pytest
 import torch
 from gymnasium import spaces
 from stable_baselines3 import PPO
@@ -112,3 +113,30 @@ def test_semantic_ppo_has_finite_distribution_and_roundtrips(tmp_path) -> None:
     validate_model_observation_schema(loaded, observation_schema)
     predicted, _ = loaded.predict(obs, deterministic=True)
     assert predicted.shape == (12,)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA or ROCm accelerator")
+def test_semantic_ppo_accelerator_update_and_roundtrip(tmp_path) -> None:
+    env = _OverlayEnv()
+    model = PPO(
+        SemanticClampedStdMultiInputPolicy,
+        env,
+        policy_kwargs={
+            "semantic_action_coordinates": COORDINATES,
+            "net_arch": {"pi": [32], "vf": [32]},
+            "features_extractor_class": TCNEncoder,
+            "features_extractor_kwargs": {"seq_len": 8, "n_features": 3, "account_dim": 6},
+        },
+        n_steps=2,
+        batch_size=2,
+        n_epochs=1,
+        device="cuda",
+    )
+    model.learn(total_timesteps=4)
+    torch.cuda.synchronize()
+    checkpoint = tmp_path / "semantic_policy_accelerator.zip"
+    model.save(checkpoint)
+    loaded = PPO.load(checkpoint, device="cuda")
+    predicted, _ = loaded.predict(env.reset()[0], deterministic=True)
+    assert predicted.shape == (12,)
+    assert torch.isfinite(torch.as_tensor(predicted)).all()

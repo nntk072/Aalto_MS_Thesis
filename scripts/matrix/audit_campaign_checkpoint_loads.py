@@ -43,14 +43,65 @@ def _package_version(name: str) -> str | None:
         return None
 
 
+def _load_explicit_checkpoint_map(
+    map_path: pathlib.Path,
+    jobs: list[dict[str, Any]],
+    target_steps: int,
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    """Validate a frozen checkpoint map without selecting a newer campaign attempt."""
+    source_path = map_path.resolve()
+    try:
+        source_path.relative_to(ROOT.resolve())
+    except ValueError:
+        raise ValueError("checkpoint map must be inside this repository") from None
+    if not source_path.is_file():
+        raise FileNotFoundError(f"checkpoint map does not exist: {source_path}")
+    source_sha256 = sha256_file(source_path)
+    raw = json.loads(source_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict) or not isinstance(raw.get("checkpoints"), list):
+        raise ValueError("checkpoint map must contain a checkpoints list")
+    input_schema_version = raw.get("schema_version")
+    added_schema_version = input_schema_version is None
+    if input_schema_version is not None and input_schema_version != 1:
+        raise ValueError(f"unsupported checkpoint map schema_version: {input_schema_version!r}")
+    normalized = dict(raw)
+    normalized["schema_version"] = 1
+    fd, temp_name = tempfile.mkstemp(
+        prefix=".explicit-checkpoint-map-", suffix=".json", dir=source_path.parent
+    )
+    normalized_path = pathlib.Path(temp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(normalized, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        records = validate_initial_checkpoints(normalized_path, jobs, target_steps)
+        normalized_sha256 = sha256_file(normalized_path)
+    finally:
+        normalized_path.unlink(missing_ok=True)
+    provenance = {
+        "input_path": str(source_path),
+        "input_sha256": source_sha256,
+        "input_schema_version": input_schema_version,
+        "normalized_schema_version": 1,
+        "schema_version_added": added_schema_version,
+        "normalized_map_sha256": normalized_sha256,
+    }
+    return records, provenance
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group.add_argument(
         "--source-campaign",
         action="append",
         type=pathlib.Path,
-        required=True,
         help="source campaign directory; repeat for parent manifests",
+    )
+    source_group.add_argument(
+        "--checkpoint-map",
+        type=pathlib.Path,
+        help="frozen controller checkpoint map; bypass automatic latest-attempt selection",
     )
     parser.add_argument(
         "--variant-file", type=pathlib.Path, default=ROOT / "scripts/variant_list.txt"
@@ -80,21 +131,34 @@ def main() -> int:
     if output.exists():
         raise FileExistsError(f"refusing to replace checkpoint-load report: {output}")
 
-    checkpoint_map = build_initial_checkpoint_map(
-        args.source_campaign, required_keys, args.timesteps
-    )
     output.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary_name = tempfile.mkstemp(
-        prefix=".checkpoint-load-map-", suffix=".json", dir=output.parent
-    )
-    map_path = pathlib.Path(temporary_name)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(checkpoint_map, handle, indent=2, sort_keys=True)
-            handle.write("\n")
-        records = validate_initial_checkpoints(map_path, jobs, args.timesteps)
-    finally:
-        map_path.unlink(missing_ok=True)
+    if args.checkpoint_map is not None:
+        records, checkpoint_map_provenance = _load_explicit_checkpoint_map(
+            args.checkpoint_map, jobs, args.timesteps
+        )
+    else:
+        checkpoint_map = build_initial_checkpoint_map(
+            args.source_campaign or [], required_keys, args.timesteps
+        )
+        fd, temporary_name = tempfile.mkstemp(
+            prefix=".checkpoint-load-map-", suffix=".json", dir=output.parent
+        )
+        map_path = pathlib.Path(temporary_name)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(checkpoint_map, handle, indent=2, sort_keys=True)
+                handle.write("\n")
+            records = validate_initial_checkpoints(map_path, jobs, args.timesteps)
+            checkpoint_map_provenance = {
+                "input_path": None,
+                "input_sha256": None,
+                "input_schema_version": 1,
+                "normalized_schema_version": 1,
+                "schema_version_added": False,
+                "normalized_map_sha256": sha256_file(map_path),
+            }
+        finally:
+            map_path.unlink(missing_ok=True)
 
     results: list[dict[str, Any]] = []
     for key, record in sorted(records.items()):
@@ -162,6 +226,7 @@ def main() -> int:
             "packages": packages,
         },
         "target_timesteps": args.timesteps,
+        "checkpoint_map": checkpoint_map_provenance,
         "device": "cpu",
         "checkpoint_count": len(results),
         "passed": sum(item["status"] == "passed" for item in results),
