@@ -27,6 +27,7 @@ def test_worker_command_binds_one_gpu_from_shared_allocation() -> None:
         cpus=7,
         gpu_count=2,
         gpu_id=1,
+        step_cpus=48,
     )
 
     assert command[:9] == [
@@ -35,7 +36,7 @@ def test_worker_command_binds_one_gpu_from_shared_allocation() -> None:
         "--nodes=1",
         "--ntasks=1",
         "--nodelist=gpuarm2",
-        "--cpus-per-task=7",
+        "--cpus-per-task=48",
         "--gpus=gh200:2",
         "--gpu-bind=map_gpu:1",
         "--cpu-bind=cores",
@@ -51,6 +52,7 @@ def test_worker_command_uses_explicit_cpu_mask_when_provided() -> None:
         cpus=5,
         cpu_mask="0x3e0",
         expected_cpu_ids=list(range(5, 10)),
+        step_cpus=48,
     )
 
     assert "--cpu-bind=mask_cpu:0x3e0" in command
@@ -58,6 +60,17 @@ def test_worker_command_uses_explicit_cpu_mask_when_provided() -> None:
     assert "--expected-cpus" in command
     assert ",".join(str(cpu) for cpu in range(5, 10)) in command
     assert command[-2:] == ["python", "train.py"]
+
+
+def test_worker_step_envelope_must_cover_the_cpu_mask() -> None:
+    with pytest.raises(ValueError, match="cannot be smaller"):
+        controller.worker_command(
+            ["python", "train.py"],
+            node="gpuarm1",
+            gpu_type="gh200",
+            cpus=5,
+            step_cpus=4,
+        )
 
 
 def test_worker_cpu_masks_are_disjoint_and_reject_oversubscription() -> None:

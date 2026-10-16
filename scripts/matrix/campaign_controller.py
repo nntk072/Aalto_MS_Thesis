@@ -196,6 +196,7 @@ def worker_command(
     gpu_id: int = 0,
     cpu_mask: str | None = None,
     expected_cpu_ids: list[int] | None = None,
+    step_cpus: int | None = None,
 ) -> list[str]:
     """Build an allocation-local or explicitly GPU-pinned Slurm worker command."""
     if node is None:
@@ -204,13 +205,16 @@ def worker_command(
         raise ValueError("worker GPU count or binding index is invalid")
     if (cpu_mask is None) != (expected_cpu_ids is None):
         raise ValueError("CPU mask and expected CPU IDs must be provided together")
+    allocated_cpus = cpus if step_cpus is None else step_cpus
+    if allocated_cpus < cpus:
+        raise ValueError("Slurm step CPU envelope cannot be smaller than the worker CPU mask")
     result = [
         "srun",
         "--overlap",
         "--nodes=1",
         "--ntasks=1",
         f"--nodelist={node}",
-        f"--cpus-per-task={cpus}",
+        f"--cpus-per-task={allocated_cpus}",
     ]
     if gpu_count:
         result.extend([f"--gpus={gpu_type}:{gpu_count}", f"--gpu-bind=map_gpu:{gpu_id}"])
@@ -1501,6 +1505,7 @@ def main() -> int:
                 gpu_count=0,
                 cpu_mask=sampler_cpu_mask,
                 expected_cpu_ids=sampler_cpu_ids,
+                step_cpus=cpus,
             )
             sampler_env = dict(os.environ)
             sampler_env.pop("CUDA_VISIBLE_DEVICES", None)
@@ -1612,6 +1617,7 @@ def main() -> int:
                 gpu_id=int(job["worker_gpu_id"]),
                 cpu_mask=worker_cpu_mask,
                 expected_cpu_ids=worker_cpu_ids,
+                step_cpus=cpus,
             )
         env = dict(
             os.environ,
