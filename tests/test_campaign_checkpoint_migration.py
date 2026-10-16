@@ -185,6 +185,36 @@ def test_initial_checkpoint_validation_rejects_lineage_or_hash_mismatch(
     assert campaign_dir.is_dir()
 
 
+def test_initial_checkpoint_map_falls_back_to_earlier_valid_attempt(tmp_path: Path) -> None:
+    campaign_dir, _checkpoint, expected_record = _source_campaign(tmp_path)
+    manifest_path = campaign_dir / "campaign.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["jobs"][0]["attempts"] = 2
+    manifest["jobs"][0]["status"] = "interrupted"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    (campaign_dir / "runs/attempts/variant__seed42/attempt2").mkdir()
+
+    checkpoint_map = controller.build_initial_checkpoint_map(
+        [campaign_dir], {"variant__seed42"}, 20_000_000
+    )
+    assert checkpoint_map["checkpoints"] == [
+        {
+            **expected_record,
+            "source_campaign_id": campaign_dir.name,
+            "source_campaign_git_sha": "b" * 40,
+            "source_requested_timesteps": 20_000_000,
+        }
+    ]
+    map_path = tmp_path / "checkpoint_map.json"
+    map_path.write_text(json.dumps(checkpoint_map), encoding="utf-8")
+    validated = controller.validate_initial_checkpoints(
+        map_path,
+        [{"key": "variant__seed42", "variant": "variant", "seed": 42}],
+        20_000_000,
+    )
+    assert validated["variant__seed42"]["source_attempt"] == 1
+
+
 def test_full_budget_checkpoint_can_be_migrated_for_policy_reevaluation(
     tmp_path: Path,
 ) -> None:

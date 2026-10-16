@@ -2153,10 +2153,10 @@ Update this table as the persistent agent control surface. It is status, not a s
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE — 13:08 update; campaign identity preserved; old 2-node allocation held behind absent release marker; supervisor active | — | P2 prep, E0 |
-| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE — 18 interrupted after attempt-4 cache-path infrastructure failure; all 18 attempt-3 resume checkpoints load; no resumed workers yet | P0 | P2, E0 |
-| P2 | Deterministic evaluator/schema repair | ACTIVE — 14M baseline frame/bundle parity and 18 resume-checkpoint loads passed; repeat-run `level_type` nondeterminism and generic management forwarding remain open; source fix deferred to campaign boundary | P0 | P1, E0 |
-| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index and dispatcher pass bounded GPU-node tests; paired-seed analysis utility prepared with synthetic tests; live integration and real result analysis await P1/P2 | P0 | P1, P2 |
+| P0 | Safe boundary/current snapshot | ACTIVE — 14:12 update; canonical main checkout; allocation `20985591` reserves 1 GH200, 48 CPUs, and 512 GiB per node across gpuarm1/gpuarm2, held behind the release marker; no trainers observed. Each node has 1 additional GH200 and enough free CPU/RAM for a second 2-GH200 allocation | — | P2 prep, E0 |
+| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE — inventory generated (108 run records, all failed/interrupted; 162 attempts). The preserved v3 campaign has a strict Git-revision fingerprint mismatch against current `main`; a separate continuation is staged from its 18 validated attempt-3 checkpoints (11–14M). No training has launched from the continuation yet | P0 | P2, E0 |
+| P2 | Deterministic evaluator/schema repair | ACTIVE — stable lexical tie-break and train/eval SL/TP configuration forwarding implemented; 34 focused tests and full 1,543-test suite pass. Two 14M historical replays with distinct Python hash seeds have byte-identical train/test equity, metrics, and trades. Broader evaluator/provenance acceptance remains open | P0 | P1, E0 |
+| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, and six-campaign trial-ledger builder; ledger schema validation and focused tests pass. Real final-result analysis awaits P1/P2 | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | review prep, result packaging |
 | P5 | Freeze matched design/baselines | BLOCKED | P4 | P6 prep, review |
@@ -2169,6 +2169,84 @@ Update this table as the persistent agent control surface. It is status, not a s
 | Q0–Q7 | Research extension | OPTIONAL/GATED | stage parents | within-stage arms only |
 
 ## 39. Immediate actions for one long-running Codex agent
+
+### P1/E0 evidence update — 2026-10-16 13:29 Helsinki
+
+Generated `docs/thesis/trial_ledger_2026-10-16.json` from the six structured
+campaign manifests currently present under `outputs/gpu_campaigns/`. The
+inventory contains 108 run records (76 interrupted, 32 failed) and 162 attempt
+records (112 interrupted, 50 failed). It preserves missing identity values as
+null and records 198 complete and 72 partial identities across run and attempt
+records. Slurm job IDs and states are taken from each attempt's provenance when
+available; the campaign manifest job ID is retained as a fallback and in the
+run-level job-ID list. The v3 campaign therefore maps its four recorded attempt
+jobs to `20982572`, `20982793`, `20984134`, and `20985281`, rather than assigning
+the old manifest job ID to every retry. The JSON validates against
+`trial_ledger.schema.json`; the focused builder tests pass on gpuarm1.
+
+This is an inventory and scheduler-state reconciliation, not completion of the
+18-run screen. Its stated limitations exclude standalone/deleted legacy runs,
+do not establish chronological train/test exposure or strategy validity, and
+retain unresolved parent/child allocation relationships where provenance is
+missing. The current GH200 allocation `20985591` is a recovery allocation, not
+a campaign attempt; it remains held behind the absent release marker, and no
+trainer processes were observed. Preserve that allocation and fingerprint
+while the P1/P2 gate work continues. Readiness remains NOT READY.
+
+### P1 checkpoint-lineage handoff — 2026-10-16 13:41 Helsinki
+
+The v3 manifest records Git revision
+`8a98f7792f83ce4bbe5cb84f4a2137657d791c02`, while canonical `main` is
+`e110f18a2b9f684f796333aa4313afc85c6f6e04`. The campaign controller includes
+`git_sha` in its resume fingerprint, so resuming v3 directly from current `main`
+would fail before training. A read-only audit found all 228 recorded source-file
+hashes matched the current tree before the checkpoint-map fallback change; this
+confirms code-file parity at that audit point but does not erase the strict
+commit-identity mismatch.
+
+To preserve v3 and its fingerprint, its 18 attempt-3 checkpoints were validated
+and staged as parent lineage for
+`ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016`. They cover
+11–14M saved steps and were previously CPU-load audited. The new spec keeps the
+same 18 variants, seed 50, 20M total-step target, shared bundle, and exposed
+selection split. The checkpoint-map builder now searches backward for the
+newest valid checkpoint if a later infrastructure-failed attempt has none; the
+map records attempt 3 for all 18 keys and the old v3 fingerprint. Focused tests
+verify that lineage and a handoff resolver checks the source fingerprint,
+target spec, and exact run-key coverage. The allocation supervisor will follow
+the explicit continuation handoff after the currently held allocation returns.
+The GH200 preflight passes because one card per node is free, while the current
+job still reserves its existing pair. No new allocation or trainer has been
+launched yet, and the old v3 manifest/checkpoints were not rewritten. This
+continuation remains exploratory selection evidence, not confirmatory thesis
+evidence. Readiness remains NOT READY.
+
+### P2 deterministic replay and management-configuration repair — 2026-10-16 14:12 Helsinki
+
+`TradingEnv._matched_entry_level` now selects the lexicographically smallest
+candidate among levels with the most recent crossing timestamp. This keeps the
+previous recency rule while making equal-time labels independent of set/hash
+iteration order. The root `risk` config now declares `sl_mode`, `tp_mode`, and
+`tp_reference`; training and deterministic evaluation explicitly forward these
+values along with the SL/TP action thresholds and breakeven alpha. Tests verify
+that the same configured management values reach both environment paths.
+
+Validation on gpuarm1: 34 focused tests passed; the campaign GPU gate passed
+full-tree formatting, Ruff, Mypy (444 source files), and 30 campaign artifact /
+checkpoint tests; the full suite passed 1,543 tests in 162.78 seconds. A replay
+of the preserved `ladder_a0_flat` attempt-3 14M checkpoint under
+`PYTHONHASHSEED=1` and `12` produced byte-identical train and test equity CSVs,
+metrics JSONs, and trade CSVs. The checkpoint SHA-256 remains
+`a5f4b47f8b1e523bde501c71a56f1f3e9ccae62674951fc83fd38e89fb422530`.
+Detailed hashes and replay paths are in
+`outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/p2_replay_determinism_audit_20261016.json`.
+
+This is bounded repeatability evidence for one interrupted 14M checkpoint and
+one runtime/data/cache path. The historic test split has already been
+inspected; it is not pristine holdout or confirmatory evidence. The replay
+metrics are negative (train return -7.32%, test return -0.69%), so it does not
+support a successful-strategy claim. No campaign trainer has launched, and
+overall thesis readiness remains NOT READY.
 
 Execute horizontally. The agent should always select the highest-priority READY task and must not wait
 idly for training when another independent lane can advance. Conversely, when **all** useful lanes

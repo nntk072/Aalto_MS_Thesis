@@ -9,12 +9,13 @@
     "schema": {"const": "aalto.thesis_trial_ledger.v1"},
     "updated_at_utc": {"type": "string", "format": "date-time"},
     "records": {"type": "array", "items": {"$ref": "#/$defs/record"}},
-    "limitations": {"type": "array", "items": {"type": "string"}}
+    "limitations": {"type": "array", "items": {"type": "string"}},
+    "campaign_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
   },
   "$defs": {
     "record": {
       "type": "object",
-      "required": ["record_id", "record_type", "campaign_id", "run_id", "status", "evidence_role", "source_sha", "config_sha256", "artifacts", "disposition"],
+      "required": ["record_id", "record_type", "campaign_id", "run_id", "status", "evidence_role", "source_sha", "config_sha256", "artifacts", "disposition", "identity_completeness"],
       "properties": {
         "record_id": {"type": "string", "minLength": 1},
         "record_type": {"enum": ["run", "attempt"]},
@@ -25,8 +26,8 @@
         "seed": {"type": "integer"},
         "evidence_role": {"enum": ["smoke", "development", "selection", "robustness", "final_report_only", "runtime_benchmark", "correctness", "other"]},
         "status": {"enum": ["planned", "running", "succeeded", "failed", "interrupted", "inactive", "excluded"]},
-        "source_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-        "config_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "source_sha": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+        "config_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
         "data_sha256": {"type": "array", "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
         "cache_sha256": {"type": "array", "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
         "checkpoint_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
@@ -37,7 +38,12 @@
         "ended_at_utc": {"type": ["string", "null"], "format": "date-time"},
         "artifacts": {"type": "array", "items": {"type": "string"}},
         "disposition": {"type": "string", "minLength": 1},
-        "supersedes_record_id": {"type": ["string", "null"]}
+        "supersedes_record_id": {"type": ["string", "null"]},
+        "campaign_fingerprint": {"type": ["string", "null"]},
+        "slurm_job_id": {"type": ["integer", "null"]},
+        "slurm_job_ids": {"type": "array", "items": {"type": "integer"}, "uniqueItems": true},
+        "scheduler_state": {"type": ["string", "null"]},
+        "identity_completeness": {"enum": ["complete", "partial", "missing"]}
       },
       "additionalProperties": false
     }

@@ -36,6 +36,40 @@ def test_legacy_default_remains_permissive() -> None:
     assert load_config().env.strict_research_eligibility is False
 
 
+def test_management_settings_match_training_and_evaluation_environment_kwargs(monkeypatch) -> None:
+    cfg = load_config(
+        [
+            "risk.sl_mode=trailing",
+            "risk.tp_mode=breakeven",
+            "risk.tp_reference=prior_session_extreme",
+            "env.sl_mode_defer_threshold=0.27",
+            "env.tp_mode_defer_threshold=0.31",
+            "env.tp_breakeven_alpha=0.42",
+            "env.eod_risk.breakeven_trigger_r=1.3",
+            "env.eod_risk.breakeven_buffer_pts=1.7",
+        ]
+    )
+    captured = {}
+    monkeypatch.setattr(train_rl, "TradingEnv", lambda **kwargs: captured.update(kwargs))
+    empty = pd.DataFrame()
+    train_rl.make_env(empty, empty, cfg, algo="ppo", reward="pnl")
+    evaluation_kwargs = train_rl._build_eval_common(cfg)[0]
+
+    for key, expected in {
+        "sl_mode": "trailing",
+        "tp_mode": "breakeven",
+        "tp_reference": "prior_session_extreme",
+        "sl_mode_defer_threshold": 0.27,
+        "tp_mode_defer_threshold": 0.31,
+        "tp_breakeven_alpha": 0.42,
+    }.items():
+        assert captured[key] == expected
+        assert evaluation_kwargs[key] == expected
+    assert captured["eod_risk"] == evaluation_kwargs["eod_risk"]
+    assert captured["eod_risk"]["breakeven_trigger_r"] == 1.3
+    assert captured["eod_risk"]["breakeven_buffer_pts"] == 1.7
+
+
 def test_idea2_environment_rejects_missing_bias_and_ifvg_gate_inputs() -> None:
     cfg = load_config(
         [

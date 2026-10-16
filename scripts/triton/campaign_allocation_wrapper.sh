@@ -56,29 +56,33 @@ while ! python "$REPO/scripts/triton/prebuild_campaign_bar_cache.py"; do
   ((cache_retry+=1))
 done
 
-recovery_retry=1
-while ! python "$REPO/scripts/triton/prepare_campaign_resume.py" --campaign-dir "$OUT_DIR"; do
-  touch "$FAILED" "$GPU_GATE_FAILED"
-  retry_marker="$OUT_DIR/retry_campaign_recovery.$recovery_retry"
-  echo "Campaign recovery validation failed; fix the cause, then touch $retry_marker"
-  while [[ ! -e "$retry_marker" ]]; do sleep 20; done
-  mv "$retry_marker" "$retry_marker.consumed"
-  rm -f "$FAILED"
-  ((recovery_retry+=1))
-done
+if [[ -s "$OUT_DIR/campaign.json" ]]; then
+  recovery_retry=1
+  while ! python "$REPO/scripts/triton/prepare_campaign_resume.py" --campaign-dir "$OUT_DIR"; do
+    touch "$FAILED" "$GPU_GATE_FAILED"
+    retry_marker="$OUT_DIR/retry_campaign_recovery.$recovery_retry"
+    echo "Campaign recovery validation failed; fix the cause, then touch $retry_marker"
+    while [[ ! -e "$retry_marker" ]]; do sleep 20; done
+    mv "$retry_marker" "$retry_marker.consumed"
+    rm -f "$FAILED"
+    ((recovery_retry+=1))
+  done
 
-index_retry=1
-while ! python "$REPO/scripts/thesis/build_campaign_evidence_index.py" \
-  --campaign-dir "$OUT_DIR" \
-  --output "$OUT_DIR/reports/thesis_evidence_index_before_${SLURM_JOB_ID}.json"; do
-  touch "$FAILED" "$GPU_GATE_FAILED"
-  retry_marker="$OUT_DIR/retry_campaign_evidence_index.$index_retry"
-  echo "Campaign evidence index failed; fix the cause, then touch $retry_marker"
-  while [[ ! -e "$retry_marker" ]]; do sleep 20; done
-  mv "$retry_marker" "$retry_marker.consumed"
-  rm -f "$FAILED"
-  ((index_retry+=1))
-done
+  index_retry=1
+  while ! python "$REPO/scripts/thesis/build_campaign_evidence_index.py" \
+    --campaign-dir "$OUT_DIR" \
+    --output "$OUT_DIR/reports/thesis_evidence_index_before_${SLURM_JOB_ID}.json"; do
+    touch "$FAILED" "$GPU_GATE_FAILED"
+    retry_marker="$OUT_DIR/retry_campaign_evidence_index.$index_retry"
+    echo "Campaign evidence index failed; fix the cause, then touch $retry_marker"
+    while [[ ! -e "$retry_marker" ]]; do sleep 20; done
+    mv "$retry_marker" "$retry_marker.consumed"
+    rm -f "$FAILED"
+    ((index_retry+=1))
+  done
+else
+  echo "New checkpoint-lineage campaign; source checkpoints are validated by the controller."
+fi
 dispatch_retry=1
 while true; do
   if python -m pytest \

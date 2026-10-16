@@ -857,8 +857,9 @@ def validate_initial_checkpoints(
         ):
             raise ValueError(f"source campaign run identity mismatch for {key}")
         attempt = int(item.get("source_attempt", 0))
-        if attempt < 1 or int(parent_job.get("attempts", 0)) != attempt:
-            raise ValueError(f"source attempt mismatch for {key}")
+        latest_attempt = int(parent_job.get("attempts", 0))
+        if attempt < 1 or attempt > latest_attempt:
+            raise ValueError(f"source attempt is outside recorded campaign attempts for {key}")
         attempt_dir = parent_dir / "runs" / "attempts" / key / f"attempt{attempt}"
         provenance_path = attempt_dir / "attempt_provenance.json"
         if not provenance_path.is_file():
@@ -973,12 +974,19 @@ def build_initial_checkpoint_map(
             key = str(job.get("key", ""))
             if key not in required_keys:
                 continue
-            attempt = int(job.get("attempts", 0))
-            if attempt < 1:
+            latest_attempt = int(job.get("attempts", 0))
+            if latest_attempt < 1:
                 continue
-            checkpoint = latest_resumable_checkpoint(
-                source_dir, key, attempt, fingerprint, max_steps=target_steps
-            )
+            attempt = 0
+            checkpoint = None
+            for candidate_attempt in range(latest_attempt, 0, -1):
+                candidate_checkpoint = latest_resumable_checkpoint(
+                    source_dir, key, candidate_attempt, fingerprint, max_steps=target_steps
+                )
+                if candidate_checkpoint is not None:
+                    attempt = candidate_attempt
+                    checkpoint = candidate_checkpoint
+                    break
             if checkpoint is None:
                 continue
             match = re.fullmatch(r"ppo_ckpt_(\d+)_steps\.zip", checkpoint.name)

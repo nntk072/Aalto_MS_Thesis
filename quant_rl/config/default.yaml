@@ -312,6 +312,9 @@ risk:
   min_lot: 0.01
   max_lot: 100.0
   default_risk_frac: 0.01              # 1% equity fallback for baselines
+  sl_mode: fixed                       # fixed | breakeven | trailing
+  tp_mode: fixed                       # fixed | breakeven | trailing
+  tp_reference: structural             # anchor for TP distance ratios
   min_sl_atr_mult: 0.5                 # reject/tighten stops inside noise
   # Absolute minimum |entry - SL| in price points. Sized as ~2x the worst
   # expected fill slippage (costs.slippage_points), so a 5-point slip still

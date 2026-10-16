@@ -135,11 +135,23 @@ def test_evaluate_model_uses_requested_observation_schema(monkeypatch):
         obs_window=10,
         observation_schema_version=OBSERVATION_SCHEMA_V2,
         observation_age_scale_bars=30.0,
+        sl_mode="trailing",
+        tp_mode="breakeven",
+        tp_reference="prior_session_extreme",
+        sl_mode_defer_threshold=0.23,
+        tp_mode_defer_threshold=0.29,
+        tp_breakeven_alpha=0.37,
     )
 
     assert result["n_steps"] == len(bars) - 10
     assert env_kwargs["observation_schema_version"] == OBSERVATION_SCHEMA_V2
     assert env_kwargs["observation_age_scale_bars"] == 30.0
+    assert env_kwargs["sl_mode"] == "trailing"
+    assert env_kwargs["tp_mode"] == "breakeven"
+    assert env_kwargs["tp_reference"] == "prior_session_extreme"
+    assert env_kwargs["sl_mode_defer_threshold"] == 0.23
+    assert env_kwargs["tp_mode_defer_threshold"] == 0.29
+    assert env_kwargs["tp_breakeven_alpha"] == 0.37
 
 
 def test_eval_mode_resumes_trading_after_breach_in_next_session():

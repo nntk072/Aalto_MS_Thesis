@@ -3811,7 +3811,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         }
         if not candidates:
             return None, None
-        latest_name = max(candidates, key=lambda n: self._level_crosses[(session_id, n)])
+        latest_cross_time = max(self._level_crosses[(session_id, name)] for name in candidates)
+        latest_name = min(
+            name
+            for name in candidates
+            if self._level_crosses[(session_id, name)] == latest_cross_time
+        )
         return latest_name, self._level_crosses[(session_id, latest_name)]
 
     def _bar_quote(self, bar: BarView) -> tuple[float, float]:

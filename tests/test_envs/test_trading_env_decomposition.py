@@ -118,6 +118,31 @@ class TestDecodeActionDiscrete:
         assert rr == pytest.approx(expected_rr[2])
 
 
+def test_matched_entry_level_ties_use_stable_lexical_order() -> None:
+    env = _make_simple_env()
+    tied_time = pd.Timestamp("2025-01-06 17:00", tz="Etc/GMT-3")
+    env._level_crosses = {
+        (1, "london_low"): tied_time,
+        (1, "asian_low"): tied_time,
+        (1, "london_high"): tied_time,
+        (1, "asian_high"): tied_time,
+        (2, "new_york_low"): tied_time,
+    }
+
+    assert env._matched_entry_level(1, -1) == ("asian_low", tied_time)
+    assert env._matched_entry_level(1, 1) == ("asian_high", tied_time)
+    assert env._matched_entry_level(3, -1) == (None, None)
+
+
+def test_matched_entry_level_still_prefers_newer_crossing_time() -> None:
+    env = _make_simple_env()
+    earlier = pd.Timestamp("2025-01-06 17:00", tz="Etc/GMT-3")
+    later = pd.Timestamp("2025-01-06 17:01", tz="Etc/GMT-3")
+    env._level_crosses = {(1, "asian_low"): later, (1, "london_low"): earlier}
+
+    assert env._matched_entry_level(1, -1) == ("asian_low", later)
+
+
 class TestDecodeActionContinuous:
     """Tests for continuous action decoding (SAC mode)."""
 

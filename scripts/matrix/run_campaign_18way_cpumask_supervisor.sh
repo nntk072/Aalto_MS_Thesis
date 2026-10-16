@@ -6,6 +6,27 @@ REPO="${TRITON_REPO:-/scratch/work/nguyenl37/Aalto_MS_Thesis-main}"
 SPEC="${CAMPAIGN_SPEC:-config/campaigns/18_variant_seed50_20m_full_split_n64_cpumask_v3_20261016.yaml}"
 CAMPAIGN_ID="${CAMPAIGN_ID:-ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016}"
 SOURCE_CAMPAIGN="${SOURCE_CAMPAIGN:-$REPO/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016}"
+ORIGINAL_CAMPAIGN_ID="$CAMPAIGN_ID"
+HANDOFF="$REPO/outputs/gpu_campaigns/$ORIGINAL_CAMPAIGN_ID/reports/continuation_handoff.json"
+if [[ -s "$HANDOFF" ]]; then
+  mapfile -t handoff_values < <(
+    python3 "$REPO/scripts/triton/resolve_campaign_continuation.py" \
+      --repo "$REPO" \
+      --source-campaign "$REPO/outputs/gpu_campaigns/$ORIGINAL_CAMPAIGN_ID" \
+      --handoff "$HANDOFF"
+  )
+  if [[ "${#handoff_values[@]}" -ne 3 ]]; then
+    echo "invalid continuation handoff; refusing to submit another allocation" >&2
+    exit 1
+  fi
+  CAMPAIGN_ID="${handoff_values[0]}"
+  SPEC="${handoff_values[1]}"
+  SOURCE_CAMPAIGN="${handoff_values[2]}"
+  export CAMPAIGN_ID
+  export CAMPAIGN_SPEC="$SPEC"
+  export SOURCE_CAMPAIGN
+  echo "continuation handoff: $ORIGINAL_CAMPAIGN_ID -> $CAMPAIGN_ID"
+fi
 OUT_DIR="$REPO/outputs/gpu_campaigns/$CAMPAIGN_ID"
 LOG="$OUT_DIR/logs/allocation_supervisor.log"
 MAX_ERRORS="${MAX_ALLOCATION_ERRORS:-3}"
