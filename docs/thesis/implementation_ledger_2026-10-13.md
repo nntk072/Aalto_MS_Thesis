@@ -2878,3 +2878,33 @@ states the symmetry and holdout/validity limitations. The four tests pass on
 synthetic inputs; they verify implementation mechanics only and provide no
 thesis evidence. Full-tree style/type checks and the required GPU-node gate
 remain to be run before commit.
+
+### HTF swing-candidate contract implementation — 2026-10-16
+
+Added the opt-in three-candidate MTF swing-stop profile in
+`config/features/pd_context_mtf_swing_candidates.yaml`. It exposes up to the
+three newest distinct accepted, unswept swing levels per side and timeframe,
+with pivot/confirmation times and source-timeframe age. Staleness is event
+based: swept levels or levels displaced beyond the three-event window expire;
+there is no arbitrary clock-age cutoff. Prices deduplicate at `costs.point_size`.
+The confirmation timestamp is the source candle close and the existing
+completed-bar alignment prevents earlier visibility. Candidate prices and
+metadata remain excluded from policy observations. The default count stays at
+one, preserving the active 18-variant screen semantics.
+
+The stop menu uses the multi-candidate columns when present, validates
+confirmation against the decision timestamp in both frame and shared-bundle
+`FeatureRow` execution, and records provenance plus selection/rejection reason.
+Long and short candidate geometry, wrong-side/minimum-distance rejection,
+tick-precision deduplication, event-recency expiration, and coexistence with
+IFVG protective candidates have focused coverage. The feature cache version is
+`v20-mtf-swing-candidates`; the feature hash includes `costs.point_size`.
+
+Verification on the existing gpuarm1 allocation: the focused candidate,
+feature, and stop-menu tests passed (47). The complete suite passed: 1,561
+tests, 27 subtests, and 38 warnings in 155.64 seconds. Full-tree Ruff passed
+(438 files formatted) and full-tree Mypy passed (446 source files). This is
+implementation and fixture-level evidence only. The active screen still uses
+latest-only stops; final P7 acceptance requires the selected matched pair to
+train and evaluate under the explicit three-candidate profile with independent
+review. It is not strategy-performance or readiness evidence.

@@ -234,13 +234,20 @@ These are invariants for all thesis evidence unless the author changes a rule
   only one `last_swing_low/high` value per timeframe. For every configured HTF
   used by the final experiment (currently M5/M15/H1), expose distinct recent
   confirmed swing lows for longs and swing highs for shorts. Freeze the exact
-  lookback/maximum candidate count before P7; the default implementation target
-  is up to the three most recent distinct confirmed swings per timeframe when
-  available. Each candidate records timeframe, pivot/reference time, confirmation
-  time, price, age, and rejection/selection reason.
+  lookback/maximum candidate count before P7. The frozen implementation uses the
+  three most recent distinct accepted swings per side and timeframe that remain
+  unswept. A level is stale once swept or displaced from that three-event window
+  by newer distinct confirmed levels; age is recorded in completed source-timeframe
+  bars, with no arbitrary wall-clock expiry. The opt-in final profile is
+  `config/features/pd_context_mtf_swing_candidates.yaml`; the default count remains
+  one to preserve the current screening campaign semantics. Each candidate records
+  timeframe, pivot/reference time, completed-bar confirmation time, price, age,
+  and rejection/selection reason.
 - Candidate construction is causal and fail-closed: filter wrong-side levels,
   minimum-distance violations, stale/unconfirmed references and duplicates at
-  instrument precision. Do not synthesize a missing swing merely to fill the menu.
+  instrument precision (`costs.point_size`). HTF confirmation time is the close of
+  the source bar, and the existing one-bar HTF alignment must not expose it earlier.
+  Do not synthesize a missing swing merely to fill the menu.
 
 ### 4.3 Target and partial-exit contract
 
@@ -564,11 +571,13 @@ Treat this as a planning snapshot, not live cluster telemetry.
    Lagrangian constraint optimization are not yet established research paths.
 9. Stop-candidate review has two different dispositions. The IFVG through-zone
    extreme is already generated, exposed to the strategy stop menu, and covered by
-   a focused regression; preserve it. HTF swing stops are only partially complete:
-   the current menu exposes the latest confirmed swing per configured timeframe,
-   not a recent multi-swing candidate set. Complete and freeze that candidate
-   contract before the final matched P7 runs if structural stop-anchor choice is
-   enabled.
+   a focused regression; preserve it. HTF swing-stop code now supports an opt-in
+   three-candidate set with source-timeframe provenance, causal confirmation time,
+   age, instrument-tick deduplication, and entry-level eligibility/rejection audit.
+   The default remains latest-only, preserving the active screening campaign.
+   Before final matched P7 runs, validate the enabled profile end to end (including
+   IFVG coexistence, selected/rejected provenance, and independent review), then
+   freeze its exact source/config/cache identity.
 10. Runtime/protocol truth must override stale manuscript examples. `n_envs=64`
    is the accepted thesis runtime. For the comparable one-seed discovery/development
    stage, use **seed 50 as the canonical first seed** for newly launched or relaunched
@@ -2172,7 +2181,7 @@ Update this table as the persistent agent control surface. It is status, not a s
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE — 14:59 update; canonical `/scratch/work/nguyenl37/Aalto_MS_Thesis` is clean on `main` at pushed commit `b1059d8`. Allocation `20985591` still reserves 1 GH200, 48 CPUs, and 512 GiB per node across gpuarm1/gpuarm2, held behind the v3 release marker; no trainers observed. Approved 2-node/2-GH200 request `20990395` remains PENDING with `AssocGrpGRESRunMinutes` and StartTime Unknown; its staged continuation marker remains intact | — | P2 prep, E0 |
+| P0 | Safe boundary/current snapshot | ACTIVE — 15:24 Helsinki update. Canonical checkout is /scratch/work/nguyenl37/Aalto_MS_Thesis on main; the latest implementation-ledger entry records the current candidate work and gates. Allocation 20985591 reserves 1 GH200, 48 CPUs, and 512 GiB per node across gpuarm1/gpuarm2 and remains behind the v3 release marker; no trainer/controller process was observed at the last check. Approved request 20990395 for two nodes and two GH200s remains PENDING with AssocGrpGRESRunMinutes and StartTime Unknown; its staged continuation marker remains intact | — | P2 prep, E0 |
 | P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE — all-attempt audit covers 18 identities and 72 attempts. Attempt 2 has full-split telemetry for all 64 environments in all 18 variants; latest checkpoints are 11–14M, not the 20M budget. All attempt-4 workers failed before training on the cache symlink; a separate continuation is staged from validated attempt-3 checkpoints. Request `20990395` is pending; no continuation training has launched | P0 | P2, E0 |
 | P2 | Deterministic evaluator/schema repair | ACTIVE — stable lexical tie-break and train/eval risk/management wiring implemented. Evaluation bundle workers now disable training-only trailing guardrails; training workers retain them. Full-tree Ruff/Mypy and full pytest (1,547 tests) pass. A real 14M interrupted baseline checkpoint matches frame/shared-bundle outputs over both inspected test data and all 351,550 in-sample training bars. Broader evaluator/provenance acceptance and parity for a completed selected checkpoint remain open | P0 | P1, E0 |
 | E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and all-attempt screen reconciler; focused tests pass. Real final-result analysis awaits P1/P2 | P0 | P1, P2 |
@@ -2308,8 +2317,11 @@ from Section 7A.6 rather than spending tokens on frequent status checks.
 ### Lane A — correctness / implementation
 
 1. Establish P0 source/config/data/cache boundaries and keep active run fingerprints immutable.
-2. Complete/verify the HTF multi-swing stop-candidate contract before final P7 training; preserve
-   the already-implemented IFVG through-zone extreme and its regression coverage.
+2. Implement and verify the HTF multi-swing stop-candidate contract before final P7 training;
+   preserve the already-implemented IFVG through-zone extreme and its regression coverage. The
+   opt-in three-candidate profile and causal stop-menu audit are implemented and pass focused and
+   full-suite checks. Final P7 acceptance still requires independent review and selected-pair
+   end-to-end evaluation under the frozen profile; the active screen remains latest-only.
 3. Run focused tests first, then the required full regression/lint/type gates after integration.
 4. Any defect capable of invalidating active/future scientific evidence outranks throughput or
    optional feature work.

@@ -431,6 +431,97 @@ def retained_swing_levels(
     return pd.DataFrame(cols, index=swings.index)
 
 
+def recent_unswept_swing_candidates(
+    swings: pd.DataFrame,
+    bars: pd.DataFrame,
+    *,
+    count: int = 3,
+    price_increment: float | None = None,
+    confirmation_delay_ms: int = 0,
+) -> pd.DataFrame:
+    """Expose the most recent confirmed, unswept swing candidates per side.
+
+    Slot 1 is the newest candidate. A level becomes available on its completed
+    confirmation bar and is removed as soon as a later (or same confirmation)
+    bar sweeps it. Older candidates fall out when the configured count is
+    exceeded; this event-recency rule defines staleness, with no arbitrary
+    wall-clock expiry. Pivot/confirmation times are epoch milliseconds so they
+    remain exact in the numeric shared-bundle matrix for minute-based bars.
+    """
+    if not swings.index.equals(bars.index):
+        raise ValueError("swings and bars must have identical indexes")
+    if count < 1:
+        raise ValueError("count must be at least one")
+    if price_increment is not None and (not np.isfinite(price_increment) or price_increment <= 0):
+        raise ValueError("price_increment must be finite and positive")
+    if confirmation_delay_ms < 0:
+        raise ValueError("confirmation_delay_ms must be nonnegative")
+
+    n = len(bars)
+    high_events = swings["swing_high_event"].to_numpy(dtype=bool)
+    low_events = swings["swing_low_event"].to_numpy(dtype=bool)
+    high_prices = swings["swing_high_extreme"].to_numpy(dtype=float)
+    low_prices = swings["swing_low_extreme"].to_numpy(dtype=float)
+    high_locations = swings["swing_high_location"].to_numpy(dtype=float)
+    low_locations = swings["swing_low_location"].to_numpy(dtype=float)
+    bar_high = bars["high"].to_numpy(dtype=float)
+    bar_low = bars["low"].to_numpy(dtype=float)
+    times_ms = (
+        pd.DatetimeIndex(bars.index).to_numpy(dtype="datetime64[ns]").view(np.int64) // 1_000_000
+    )
+
+    Candidate = tuple[float, int, int]
+    highs: list[Candidate] = []
+    lows: list[Candidate] = []
+
+    def tick_key(price: float) -> int | float:
+        if price_increment is None:
+            return price
+        return int(np.rint(price / price_increment))
+
+    def add_distinct(candidates: list[Candidate], candidate: Candidate) -> list[Candidate]:
+        key = tick_key(candidate[0])
+        # Keep the most recently confirmed representative of a price level.
+        candidates = [item for item in candidates if tick_key(item[0]) != key]
+        candidates.append(candidate)
+        return candidates
+
+    values: dict[str, np.ndarray[Any, Any]] = {}
+    for side in ("high", "low"):
+        for slot in range(1, count + 1):
+            stem = f"swing_{side}_candidate_{slot}"
+            values[stem] = np.full(n, np.nan, dtype=np.float64)
+            values[f"{stem}_pivot_time_ms"] = np.full(n, np.nan, dtype=np.float64)
+            values[f"{stem}_confirmed_at_ms"] = np.full(n, np.nan, dtype=np.float64)
+            values[f"{stem}_age_bars"] = np.full(n, np.nan, dtype=np.float64)
+
+    for t in range(n):
+        if high_events[t] and np.isfinite(high_prices[t]) and np.isfinite(high_locations[t]):
+            highs = add_distinct(highs, (float(high_prices[t]), int(high_locations[t]), t))
+        if low_events[t] and np.isfinite(low_prices[t]) and np.isfinite(low_locations[t]):
+            lows = add_distinct(lows, (float(low_prices[t]), int(low_locations[t]), t))
+
+        # Remove every swept level on this completed bar. The legacy retained
+        # helper records one sweep event per bar; candidate validity must not
+        # leave any other crossed level available to the stop menu.
+        highs = [candidate for candidate in highs if not bar_high[t] > candidate[0]]
+        lows = [candidate for candidate in lows if not bar_low[t] < candidate[0]]
+        highs = highs[-count:]
+        lows = lows[-count:]
+
+        for side, candidates in (("high", highs), ("low", lows)):
+            for slot, (price, pivot_idx, confirmed_idx) in enumerate(reversed(candidates), start=1):
+                stem = f"swing_{side}_candidate_{slot}"
+                values[stem][t] = price
+                values[f"{stem}_pivot_time_ms"][t] = times_ms[pivot_idx]
+                values[f"{stem}_confirmed_at_ms"][t] = (
+                    times_ms[confirmed_idx] + confirmation_delay_ms
+                )
+                values[f"{stem}_age_bars"][t] = t - confirmed_idx
+
+    return pd.DataFrame(values, index=bars.index)
+
+
 def _bars_since(events: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
     n = len(events)
     out = np.full(n, np.nan)

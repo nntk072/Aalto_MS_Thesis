@@ -12,7 +12,11 @@ from quant_rl.features.structure import (
     structure_levels,
     swing_features,
 )
-from quant_rl.features.swings import classify_structure, retained_swing_levels
+from quant_rl.features.swings import (
+    classify_structure,
+    recent_unswept_swing_candidates,
+    retained_swing_levels,
+)
 
 
 def _pivot_bars() -> pd.DataFrame:
@@ -188,6 +192,86 @@ def test_last_swing_columns_unchanged_by_retained_levels() -> None:
         swings["swing_low_extreme"],
         check_names=False,
     )
+
+
+def test_recent_unswept_candidates_are_newest_first_and_keep_provenance() -> None:
+    idx = pd.date_range("2026-01-05 09:00", periods=5, freq="5min", tz="UTC")
+    bars = pd.DataFrame(
+        {
+            "high": [100.0, 100.0, 100.0, 111.0, 100.0],
+            "low": [99.0, 99.0, 99.0, 99.0, 99.0],
+        },
+        index=idx,
+    )
+    swings = pd.DataFrame(
+        {
+            "swing_high_event": [False, True, True, False, True],
+            "swing_low_event": [False] * len(idx),
+            "swing_high_extreme": [np.nan, 110.0, 108.0, np.nan, 105.0],
+            "swing_low_extreme": [np.nan] * len(idx),
+            "swing_high_location": [np.nan, 0.0, 1.0, np.nan, 3.0],
+            "swing_low_location": [np.nan] * len(idx),
+        },
+        index=idx,
+    )
+
+    result = recent_unswept_swing_candidates(swings, bars, count=3)
+
+    assert result.loc[idx[2], "swing_high_candidate_1"] == pytest.approx(108.0)
+    assert result.loc[idx[2], "swing_high_candidate_2"] == pytest.approx(110.0)
+    assert result.loc[idx[2], "swing_high_candidate_1_age_bars"] == 0
+    assert result.loc[idx[2], "swing_high_candidate_1_pivot_time_ms"] == idx[1].value // 1_000_000
+    assert result.loc[idx[2], "swing_high_candidate_1_confirmed_at_ms"] == idx[2].value // 1_000_000
+    # One bar can sweep several candidates; none of the crossed levels remain.
+    assert pd.isna(result.loc[idx[3], "swing_high_candidate_1"])
+    assert result.loc[idx[4], "swing_high_candidate_1"] == pytest.approx(105.0)
+
+
+def test_recent_unswept_candidate_is_not_visible_if_swept_on_confirmation_bar() -> None:
+    idx = pd.date_range("2026-01-05 09:00", periods=3, freq="5min", tz="UTC")
+    bars = pd.DataFrame(
+        {"high": [100.0, 111.0, 100.0], "low": [99.0, 99.0, 99.0]},
+        index=idx,
+    )
+    swings = pd.DataFrame(
+        {
+            "swing_high_event": [False, True, False],
+            "swing_low_event": [False] * len(idx),
+            "swing_high_extreme": [np.nan, 110.0, np.nan],
+            "swing_low_extreme": [np.nan] * len(idx),
+            "swing_high_location": [np.nan, 0.0, np.nan],
+            "swing_low_location": [np.nan] * len(idx),
+        },
+        index=idx,
+    )
+
+    result = recent_unswept_swing_candidates(swings, bars, count=3)
+
+    assert pd.isna(result.loc[idx[1], "swing_high_candidate_1"])
+
+
+def test_recent_candidates_keep_newest_level_at_configured_tick_precision() -> None:
+    idx = pd.date_range("2026-01-05 09:00", periods=4, freq="5min", tz="UTC")
+    bars = pd.DataFrame(
+        {"high": [100.0] * 4, "low": [99.0] * 4},
+        index=idx,
+    )
+    swings = pd.DataFrame(
+        {
+            "swing_high_event": [False, True, True, False],
+            "swing_low_event": [False] * len(idx),
+            "swing_high_extreme": [np.nan, 110.001, 110.004, np.nan],
+            "swing_low_extreme": [np.nan] * len(idx),
+            "swing_high_location": [np.nan, 0.0, 1.0, np.nan],
+            "swing_low_location": [np.nan] * len(idx),
+        },
+        index=idx,
+    )
+
+    result = recent_unswept_swing_candidates(swings, bars, count=3, price_increment=0.01)
+
+    assert result.loc[idx[2], "swing_high_candidate_1"] == pytest.approx(110.004)
+    assert pd.isna(result.loc[idx[2], "swing_high_candidate_2"])
 
 
 def test_bars_since_last_swing_scales_by_obs_window() -> None:

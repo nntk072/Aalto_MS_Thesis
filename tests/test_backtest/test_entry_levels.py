@@ -17,6 +17,7 @@ from quant_rl.backtest.entry_levels import (
 from quant_rl.backtest.risk import compute_lots
 from quant_rl.envs.feature_row import BarView, FeatureRow
 from quant_rl.envs.trading_env import TradingEnv
+from quant_rl.features.swings import recent_unswept_swing_candidates
 
 
 class _Menu:
@@ -47,7 +48,7 @@ def _row(**values: float) -> pd.Series:
 
 
 def _place(
-    row: pd.Series,
+    row: pd.Series | FeatureRow,
     *,
     direction: int = 1,
     entry: float = 100.0,
@@ -58,6 +59,7 @@ def _place(
     buffer_pts: float = 0.0,
     max_tp: float = float("nan"),
     stops: list[tuple[str, float]] | None = None,
+    price_increment: float | None = None,
 ) -> OrderGeometry:
     return place_strategy_order(
         _Menu(stops),
@@ -70,6 +72,7 @@ def _place(
         exit_mode=exit_mode,
         buffer_pts=buffer_pts,
         max_tp_distance=max_tp,
+        price_increment=price_increment,
     )
 
 
@@ -93,6 +96,179 @@ def test_equal_prices_collapse_and_distinct_prices_stay() -> None:
     assert one[0][0] == "last_swing_high|london_high|prev_day_high|sweep_high_level"
     two = collapse_levels([("a", 100.0), ("b", 110.0)])
     assert len(two) == 2
+
+
+def test_levels_collapse_at_configured_instrument_precision() -> None:
+    assert collapse_levels(
+        [("first", 100.0), ("same_tick", 100.004), ("next_tick", 100.006)],
+        price_increment=0.01,
+    ) == [("first|same_tick", 100.0), ("next_tick", 100.006)]
+
+
+def test_latest_only_stop_menu_keeps_legacy_deduplication_without_candidate_schema() -> None:
+    order = _place(
+        _row(),
+        min_dist=1.0,
+        stops=[("legacy_a", 90.0), ("legacy_b", 90.004)],
+        price_increment=0.01,
+    )
+
+    assert {name for name, _ in order.sl_menu} == {"legacy_a", "legacy_b"}
+
+
+def test_mtf_swing_candidates_require_causal_provenance_and_are_audited() -> None:
+    decision_at = pd.Timestamp("2026-01-05 10:00:00", tz="UTC")
+    confirmed_at = pd.Timestamp("2026-01-05 09:55:00", tz="UTC")
+    pivot_at = pd.Timestamp("2026-01-05 09:45:00", tz="UTC")
+    row = pd.Series(
+        {
+            "M5_swing_low_candidate_1": 95.0,
+            "M5_swing_low_candidate_1_pivot_time_ms": pivot_at.value // 1_000_000,
+            "M5_swing_low_candidate_1_confirmed_at_ms": confirmed_at.value // 1_000_000,
+            "M5_swing_low_candidate_1_age_bars": 1.0,
+        },
+        name=decision_at,
+    )
+
+    order = _place(row, min_dist=1.0, price_increment=0.01)
+
+    assert any(name == "M5_swing_low_candidate_1" for name, _ in order.sl_menu)
+    candidate_audit = next(
+        item for item in order.sl_candidate_audit if item["name"] == "M5_swing_low_candidate_1"
+    )
+    assert candidate_audit["status"] == "eligible"
+    assert candidate_audit["provenance"] == [
+        {
+            "timeframe": "M5",
+            "pivot_time_ms": pivot_at.value // 1_000_000,
+            "confirmed_at_ms": confirmed_at.value // 1_000_000,
+            "age_bars": 1.0,
+        }
+    ]
+
+
+def test_mtf_swing_candidate_with_future_confirmation_fails_closed() -> None:
+    decision_at = pd.Timestamp("2026-01-05 10:00:00", tz="UTC")
+    future = pd.Timestamp("2026-01-05 10:05:00", tz="UTC")
+    row = pd.Series(
+        {
+            "M5_swing_low_candidate_1": 95.0,
+            "M5_swing_low_candidate_1_pivot_time_ms": future.value // 1_000_000,
+            "M5_swing_low_candidate_1_confirmed_at_ms": future.value // 1_000_000,
+            "M5_swing_low_candidate_1_age_bars": 0.0,
+        },
+        name=decision_at,
+    )
+
+    order = _place(row, min_dist=1.0)
+
+    assert not any(name == "M5_swing_low_candidate_1" for name, _ in order.sl_menu)
+    rejected = next(
+        item for item in order.sl_candidate_audit if item["name"] == "M5_swing_low_candidate_1"
+    )
+    assert rejected["status"] == "rejected"
+    assert rejected["reason"] == "unconfirmed_or_future_reference"
+
+
+@pytest.mark.parametrize(
+    ("price", "min_dist", "reason"),
+    [(101.0, 1.0, "wrong_side"), (99.5, 1.0, "below_min_distance")],
+)
+def test_mtf_swing_candidate_rejects_invalid_long_stop_geometry(
+    price: float, min_dist: float, reason: str
+) -> None:
+    decision_at = pd.Timestamp("2026-01-05 10:00:00", tz="UTC")
+    confirmed_at = pd.Timestamp("2026-01-05 09:55:00", tz="UTC")
+    pivot_at = pd.Timestamp("2026-01-05 09:45:00", tz="UTC")
+    name = "M5_swing_low_candidate_1"
+    row = pd.Series(
+        {
+            name: price,
+            f"{name}_pivot_time_ms": pivot_at.value // 1_000_000,
+            f"{name}_confirmed_at_ms": confirmed_at.value // 1_000_000,
+            f"{name}_age_bars": 1.0,
+        },
+        name=decision_at,
+    )
+
+    order = _place(row, min_dist=min_dist)
+
+    assert not any(candidate == name for candidate, _ in order.sl_menu)
+    rejected = next(item for item in order.sl_candidate_audit if item["name"] == name)
+    assert rejected["reason"] == reason
+
+
+def test_mtf_short_swing_candidate_and_ifvg_stops_coexist() -> None:
+    decision_at = pd.Timestamp("2026-01-05 10:00:00", tz="UTC")
+    confirmed_at = pd.Timestamp("2026-01-05 09:55:00", tz="UTC")
+    pivot_at = pd.Timestamp("2026-01-05 09:45:00", tz="UTC")
+    name = "H1_swing_high_candidate_1"
+    row = pd.Series(
+        {
+            name: 105.0,
+            f"{name}_pivot_time_ms": pivot_at.value // 1_000_000,
+            f"{name}_confirmed_at_ms": confirmed_at.value // 1_000_000,
+            f"{name}_age_bars": 1.0,
+        },
+        name=decision_at,
+    )
+
+    order = _place(
+        row,
+        direction=-1,
+        min_dist=1.0,
+        stops=[("ifvg_bull_high", 104.0), ("po3_ifvg_through_zone_extreme", 106.0)],
+    )
+
+    stop_names = {candidate for candidate, _ in order.sl_menu}
+    assert name in stop_names
+    assert "ifvg_bull_high" in stop_names
+    assert "po3_ifvg_through_zone_extreme" in stop_names
+
+
+def test_recent_swing_window_drops_levels_displaced_by_three_newer_swings() -> None:
+    idx = pd.date_range("2026-01-05 09:00", periods=6, freq="5min", tz="UTC")
+    prices = [120.0, 115.0, 110.0, 105.0]
+    bars = pd.DataFrame({"high": [100.0] * 6, "low": [99.0] * 6}, index=idx)
+    swings = pd.DataFrame(
+        {
+            "swing_high_event": [False, True, True, True, True, False],
+            "swing_low_event": [False] * len(idx),
+            "swing_high_extreme": [np.nan, *prices, np.nan],
+            "swing_low_extreme": [np.nan] * len(idx),
+            "swing_high_location": [np.nan, 0.0, 1.0, 2.0, 3.0, np.nan],
+            "swing_low_location": [np.nan] * len(idx),
+        },
+        index=idx,
+    )
+
+    result = recent_unswept_swing_candidates(swings, bars, count=3)
+
+    assert result.loc[idx[4], "swing_high_candidate_1"] == 105.0
+    assert result.loc[idx[4], "swing_high_candidate_2"] == 110.0
+    assert result.loc[idx[4], "swing_high_candidate_3"] == 115.0
+    assert 120.0 not in result.loc[idx[4]].to_numpy()
+
+
+def test_feature_row_candidate_uses_carried_decision_timestamp() -> None:
+    decision_ms = pd.Timestamp("2026-01-05 10:00:00", tz="UTC").value // 1_000_000
+    confirmed_ms = decision_ms - 300_000
+    pivot_ms = confirmed_ms - 600_000
+    names = [
+        "M5_swing_low_candidate_1",
+        "M5_swing_low_candidate_1_pivot_time_ms",
+        "M5_swing_low_candidate_1_confirmed_at_ms",
+        "M5_swing_low_candidate_1_age_bars",
+    ]
+    row = FeatureRow(
+        np.array([95.0, pivot_ms, confirmed_ms, 1.0]),
+        {name: index for index, name in enumerate(names)},
+        int(decision_ms),
+    )
+
+    order = _place(row, min_dist=1.0)
+
+    assert any(name == names[0] for name, _ in order.sl_menu)
 
 
 def test_long_and_short_menus_share_distances() -> None:

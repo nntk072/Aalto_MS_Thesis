@@ -12,6 +12,7 @@ from .swings import (
     classify_structure,
     detect_pivots,
     detect_swings,
+    recent_unswept_swing_candidates,
     retained_swing_levels,
     swing_features,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "detect_session_levels",
     "detect_swings",
     "get_session",
+    "recent_unswept_swing_candidates",
     "retained_swing_levels",
     "structure_levels",
     "swing_features",
@@ -36,6 +38,9 @@ def structure_levels(
     atr_mult: float = 0.0,
     *,
     retained_max: int = MAX_RETAINED_LEVELS,
+    swing_candidate_count: int = 1,
+    price_increment: float | None = None,
+    confirmation_delay_ms: int = 0,
 ) -> pd.DataFrame:
     """Compute causal swing price levels for structure-based SL/TP.
 
@@ -55,6 +60,11 @@ def structure_levels(
         swing_period: Bars on each side of the fractal (left = right).
         atr_mult: Zigzag reversal in ATR units; 0 accepts on confirmation.
         retained_max: Cap on retained unswept levels per side.
+        swing_candidate_count: Add up to this many recent, distinct, unswept
+            confirmed swings per side. The default preserves the legacy schema.
+        price_increment: Optional instrument tick size for candidate deduplication.
+        confirmation_delay_ms: Duration from the left-labeled source bar to its
+            completed-bar confirmation instant.
 
     Returns:
         Frame with ``last_swing_*`` (legacy) plus retained-set and compact
@@ -86,7 +96,22 @@ def structure_levels(
         .items()
     }
     base.update(retained)
-    return pd.DataFrame(base, index=bars.index)
+    result = pd.DataFrame(base, index=bars.index)
+    if swing_candidate_count > 1:
+        result = pd.concat(
+            [
+                result,
+                recent_unswept_swing_candidates(
+                    swings,
+                    bars,
+                    count=swing_candidate_count,
+                    price_increment=price_increment,
+                    confirmation_delay_ms=confirmation_delay_ms,
+                ),
+            ],
+            axis=1,
+        )
+    return result
 
 
 def detect_session_levels(

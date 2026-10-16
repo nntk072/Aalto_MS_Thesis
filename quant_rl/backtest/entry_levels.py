@@ -136,16 +136,25 @@ def select_index(fraction: float, n: int) -> int:
     return min(int(frac * n), n - 1)
 
 
-def collapse_levels(items: list[tuple[str, float]]) -> list[tuple[str, float]]:
+def collapse_levels(
+    items: list[tuple[str, float]], *, price_increment: float | None = None
+) -> list[tuple[str, float]]:
     """Merge prices within ``1e-4`` and join their names with ``|``."""
+    if price_increment is not None and (not np.isfinite(price_increment) or price_increment <= 0.0):
+        raise ValueError("price_increment must be finite and positive")
     groups: list[tuple[str, float]] = []
+    keys: list[int | float] = []
     for name, price in items:
         px = float(price)
         if not np.isfinite(px):
             continue
+        key: int | float = int(np.rint(px / price_increment)) if price_increment is not None else px
         merged = False
         for i, (names, kept) in enumerate(groups):
-            if abs(px - kept) <= _PRICE_TOL:
+            same_level = (
+                key == keys[i] if price_increment is not None else abs(px - kept) <= _PRICE_TOL
+            )
+            if same_level:
                 parts = names.split("|")
                 if name not in parts:
                     groups[i] = (names + "|" + name, kept)
@@ -153,6 +162,7 @@ def collapse_levels(items: list[tuple[str, float]]) -> list[tuple[str, float]]:
                 break
         if not merged:
             groups.append((name, px))
+            keys.append(key)
     return groups
 
 
@@ -268,6 +278,7 @@ def place_strategy_order(
         buffer=buf,
         manipulation=state,
         htf=htf,
+        price_increment=price_increment,
     )
     empty = OrderGeometry(
         None,
@@ -614,7 +625,11 @@ def _stop_menu(
     buffer: float,
     manipulation: str,
     htf: tuple[str, ...] = ("M5", "M15", "H1"),
+    price_increment: float | None = None,
 ) -> tuple[list[tuple[str, float, float]], list[dict[str, Any]]]:
+    early_audit: list[dict[str, Any]] = []
+    candidate_meta: dict[str, dict[str, Any]] = {}
+    candidate_schema_active = False
     raw = list(strategy.sl_candidates(direction=direction, row=row))
     if not raw and hasattr(strategy, "sl_reference"):
         ref = strategy.sl_reference(direction=direction, row=row)
@@ -623,9 +638,64 @@ def _stop_menu(
     swing = "last_swing_low" if direction == 1 else "last_swing_high"
     for tf in htf:
         tf_up = _tf_col_prefix(str(tf))
-        level = _finite(row, f"{tf_up}_{swing}")
-        if level is not None:
-            raw.append((f"{tf_up}_{swing}", level))
+        candidate_side = "low" if direction == 1 else "high"
+        candidate_prefix = f"{tf_up}_swing_{candidate_side}_candidate_"
+        candidate_columns = getattr(row, "index", ())
+        has_candidate_schema = any(
+            f"{candidate_prefix}{slot}" in candidate_columns for slot in range(1, 4)
+        )
+        if has_candidate_schema:
+            candidate_schema_active = True
+            decision_at = getattr(row, "name", None)
+            decision_ms = getattr(row, "decision_at_ms", None)
+            if decision_ms is None and decision_at is not None and not pd.isna(decision_at):
+                decision_ms = int(pd.Timestamp(decision_at).value // 1_000_000)
+            if decision_ms is not None:
+                decision_ms = int(decision_ms)
+            for slot in range(1, 4):
+                name = f"{candidate_prefix}{slot}"
+                level = _finite(row, name)
+                if level is None:
+                    continue
+                pivot_ms = _finite(row, f"{name}_pivot_time_ms")
+                confirmed_ms = _finite(row, f"{name}_confirmed_at_ms")
+                age_bars = _finite(row, f"{name}_age_bars")
+                reason = ""
+                if decision_ms is None:
+                    reason = "missing_decision_time"
+                elif pivot_ms is None or confirmed_ms is None:
+                    reason = "missing_provenance"
+                elif age_bars is None or age_bars < 0:
+                    reason = "invalid_age"
+                elif pivot_ms > confirmed_ms or confirmed_ms > decision_ms:
+                    reason = "unconfirmed_or_future_reference"
+                if reason:
+                    early_audit.append(
+                        {
+                            "name": name,
+                            "reference_price": level,
+                            "stop_price": float("nan"),
+                            "distance": float("nan"),
+                            "status": "rejected",
+                            "reason": reason,
+                            "timeframe": tf_up,
+                            "pivot_time_ms": pivot_ms,
+                            "confirmed_at_ms": confirmed_ms,
+                            "age_bars": age_bars,
+                        }
+                    )
+                    continue
+                raw.append((name, level))
+                candidate_meta[name] = {
+                    "timeframe": tf_up,
+                    "pivot_time_ms": pivot_ms,
+                    "confirmed_at_ms": confirmed_ms,
+                    "age_bars": age_bars,
+                }
+        else:
+            level = _finite(row, f"{tf_up}_{swing}")
+            if level is not None:
+                raw.append((f"{tf_up}_{swing}", level))
     if direction == 1:
         side_names = [
             "prev_day_low",
@@ -668,7 +738,7 @@ def _stop_menu(
     ):
         raw = [(name, px) for name, px in raw if "ifvg" in name or "fvg" in name]
     menu: list[tuple[str, float, float]] = []
-    audit: list[dict[str, Any]] = []
+    audit: list[dict[str, Any]] = list(early_audit)
     filtered_names = {name for name, _ in before_filter} - {name for name, _ in raw}
     for name in sorted(filtered_names):
         level = next(float(px) for candidate, px in before_filter if candidate == name)
@@ -682,7 +752,10 @@ def _stop_menu(
                 "reason": "manipulation_filter",
             }
         )
-    for name, level in collapse_levels([(n, float(p)) for n, p in raw]):
+    for name, level in collapse_levels(
+        [(n, float(p)) for n, p in raw],
+        price_increment=price_increment if candidate_schema_active else None,
+    ):
         stop = level - buffer if direction == 1 else level + buffer
         if direction == 1 and stop >= entry_price:
             audit.append(
@@ -732,6 +805,11 @@ def _stop_menu(
                 "reason": "",
             }
         )
+    for item in audit:
+        names = str(item.get("name", "")).split("|")
+        provenance = [candidate_meta[name] for name in names if name in candidate_meta]
+        if provenance:
+            item["provenance"] = provenance
     menu.sort(key=lambda item: item[2])
     return menu, audit
 

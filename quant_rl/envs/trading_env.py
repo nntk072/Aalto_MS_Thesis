@@ -460,6 +460,17 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             if bundle_data is not None
             else None
         )
+        if self._bundle_arrays is not None:
+            self._feature_time_ms = (self._bundle_arrays["bar_time_ns"] // 1_000_000).astype(
+                np.int64, copy=False
+            )
+        else:
+            self._feature_time_ms = (
+                pd.DatetimeIndex(self.features.index)
+                .to_numpy(dtype="datetime64[ns]")
+                .view(np.int64)
+                // 1_000_000
+            ).astype(np.int64, copy=False)
         bundle_labels = bundle_data.manifest.get("labels", {}) if bundle_data is not None else {}
         self._n_bars = (
             len(self._bundle_arrays["bar_time_ns"])
@@ -1134,7 +1145,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
     def _feature_row_at(self, idx: int) -> FeatureRow:
         """Feature-matrix row view for bar ``idx`` without ``pd.Series``."""
-        return FeatureRow(self._features_arr[idx], self._features_col_to_idx)
+        return FeatureRow(
+            self._features_arr[idx],
+            self._features_col_to_idx,
+            int(self._feature_time_ms[idx]),
+        )
 
     def _check_entry_gate(
         self,
@@ -2014,6 +2029,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     ),
                     allow_multi_tp=self.allow_multi_tp,
                     allow_simplex=self.allow_simplex,
+                    price_increment=float(self.cost_model.point_size),
                 )
                 sl_price = placed.sl_price
                 tp_price = placed.tp_price

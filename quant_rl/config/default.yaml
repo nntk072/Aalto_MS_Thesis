@@ -128,7 +128,11 @@ features:
   # existing include_fvg_ifvg flag with fvg_timeframes defaulting to
   # ["M1"] + htf_timeframes (M1_fvg_* included).
   smt: {enabled: false, timeframes: ["M5", "M15", "H1"]}
-  structure: {enabled: false, timeframes: ["M5", "M15", "H1"]}
+  structure:
+    enabled: false
+    timeframes: ["M5", "M15", "H1"]
+    swing_candidate_count: 1 # 1 preserves latest-only; 2/3 selects recent unswept swings
+    candidate_price_increment: null # defaults to costs.point_size
   liquidity: {enabled: false, timeframes: ["M5", "M15", "H1"]}
   po3_state_mtf: {enabled: false, timeframes: ["M1", "M5", "M15"]}
   # IFVG confirmations can be merged from any supported resample timeframe;

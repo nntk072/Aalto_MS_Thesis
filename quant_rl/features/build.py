@@ -98,7 +98,7 @@ from .swings import swing_history
 # v15: swing confirmation pulses and the distribution-after-IFVG latch.
 # v16: SL modes (state machine + agent veto), prev-NY session H/L, swing
 #      history columns (swing_high_{1..3}/swing_low_{1..3}), TF-SMT enablement.
-FEATURE_CACHE_VERSION = "v19-causal-mtf-ifvg"
+FEATURE_CACHE_VERSION = "v20-mtf-swing-candidates"
 
 
 def feature_cache_content_hash(
@@ -124,6 +124,9 @@ def feature_cache_content_hash(
         payload: dict[str, Any] = {}
         if hasattr(cfg, "features"):
             payload["features"] = OmegaConf.to_container(cfg.features, resolve=True)
+        cost_point_size = OmegaConf.select(cfg, "costs.point_size", default=None)
+        if cost_point_size is not None:
+            payload["costs.point_size"] = float(cost_point_size)
         for path in ("data.tz", "session.tz", "strategy.session.timezone"):
             node: Any = cfg
             ok = True
@@ -227,6 +230,12 @@ _PO3_TRIGGER_CODE = {"": 0, "retest": 1, "close_through": 2, "ltf_fvg": 3}
 MTF_RAW_SUFFIXES = (
     "last_swing_high",
     "last_swing_low",
+    *(
+        f"swing_{side}_candidate_{slot}{suffix}"
+        for side in ("high", "low")
+        for slot in range(1, 4)
+        for suffix in ("", "_pivot_time_ms", "_confirmed_at_ms", "_age_bars")
+    ),
     "sweep_high_level",
     "sweep_low_level",
     "sweep_high_pivot_time_ns",
@@ -888,6 +897,20 @@ def build_features(
         if _enabled(feat_cfg, "structure", False):
             struct_blocks: dict[str, pd.DataFrame] = {}
             struct_levels: dict[str, pd.DataFrame] = {}
+            swing_candidate_count = int(
+                OmegaConf.select(cfg, "features.structure.swing_candidate_count", default=1)
+                if cfg is not None
+                else 1
+            )
+            if not 1 <= swing_candidate_count <= 3:
+                raise ValueError("features.structure.swing_candidate_count must be between 1 and 3")
+            candidate_price_increment = (
+                OmegaConf.select(cfg, "features.structure.candidate_price_increment", default=None)
+                if cfg is not None
+                else None
+            )
+            if candidate_price_increment is None and cfg is not None:
+                candidate_price_increment = OmegaConf.select(cfg, "costs.point_size", default=None)
             for tf in _htf_list(feat_cfg, "structure", _MTF_LIGHT_TFS):
                 if str(tf) == "M1":
                     continue
@@ -895,11 +918,41 @@ def build_features(
                 if pri_tf.empty:
                     continue
                 tf_cfg = TIMEFRAME_CONFIG.get(str(tf), m1_cfg)
+                tf_duration_ms = int(
+                    pd.Timedelta(
+                        {
+                            "M1": "1min",
+                            "M5": "5min",
+                            "M15": "15min",
+                            "M30": "30min",
+                            "H1": "1h",
+                            "H4": "4h",
+                            "D1": "1d",
+                        }[str(tf)]
+                    ).total_seconds()
+                    * 1000
+                )
                 lv_tf = structure_levels(
                     pri_tf,
                     swing_period=int(tf_cfg["left"]),
                     atr_mult=float(tf_cfg["atr_mult"]),
-                )[["last_swing_high", "last_swing_low"]]
+                    swing_candidate_count=swing_candidate_count,
+                    price_increment=(
+                        float(candidate_price_increment)
+                        if candidate_price_increment is not None
+                        else None
+                    ),
+                    confirmation_delay_ms=tf_duration_ms,
+                )
+                keep_columns = ["last_swing_high", "last_swing_low"]
+                if swing_candidate_count > 1:
+                    keep_columns.extend(
+                        f"swing_{side}_candidate_{slot}{suffix}"
+                        for side in ("high", "low")
+                        for slot in range(1, swing_candidate_count + 1)
+                        for suffix in ("", "_pivot_time_ms", "_confirmed_at_ms", "_age_bars")
+                    )
+                lv_tf = lv_tf[keep_columns]
                 struct_levels[str(tf)] = lv_tf
                 bos_tf = detect_bos(pri_tf, lv_tf)[["bos_up", "bos_down"]]
                 struct_blocks[str(tf)] = pd.concat([lv_tf, bos_tf], axis=1)

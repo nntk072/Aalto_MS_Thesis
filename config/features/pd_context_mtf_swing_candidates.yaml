@@ -1,0 +1,9 @@
+# Thesis candidate profile for the final matched runs after stop-menu freeze.
+# Merge over default.yaml (or config/features/pd_context.yaml).
+features:
+  include_pd_context: true
+  structure:
+    enabled: true
+    timeframes: ["M5", "M15", "H1"]
+    swing_candidate_count: 3
+    # candidate_price_increment defaults to costs.point_size.

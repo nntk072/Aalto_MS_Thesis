@@ -54,11 +54,17 @@ class BarView:
 class FeatureRow:
     """Zero-copy view of one feature-matrix row (numpy + column map)."""
 
-    __slots__ = ("_values", "_col_to_idx", "_index")
+    __slots__ = ("_values", "_col_to_idx", "_index", "decision_at_ms")
 
-    def __init__(self, values: np.ndarray[Any, Any], col_to_idx: dict[str, int]) -> None:
+    def __init__(
+        self,
+        values: np.ndarray[Any, Any],
+        col_to_idx: dict[str, int],
+        decision_at_ms: int | None = None,
+    ) -> None:
         self._values = values
         self._col_to_idx = col_to_idx
+        self.decision_at_ms = decision_at_ms
         # Strategies use ``col not in row.index`` / ``col in row.index``.
         self._index = col_to_idx
 

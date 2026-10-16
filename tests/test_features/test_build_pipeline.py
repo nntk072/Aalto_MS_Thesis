@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 from omegaconf import OmegaConf
 
-from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features
+from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features, select_obs_columns
 
 
 @pytest.fixture
@@ -139,6 +139,46 @@ class TestBuildFeaturesPipeline:
         """FEATURE_CACHE_VERSION is a non-empty string."""
         assert isinstance(FEATURE_CACHE_VERSION, str)
         assert len(FEATURE_CACHE_VERSION) > 0
+
+    def test_configured_mtf_swing_candidates_are_exposed_but_not_observations(
+        self, deterministic_bars: pd.DataFrame
+    ) -> None:
+        cfg_dict = _default_cfg()
+        cfg_dict["features"]["structure"] = {
+            "enabled": True,
+            "timeframes": ["M5"],
+            "swing_candidate_count": 3,
+            "candidate_price_increment": 0.01,
+        }
+        cfg = OmegaConf.create(cfg_dict)
+
+        features = build_features(deterministic_bars, cfg=cfg)
+        candidates = [
+            f"M5_swing_{side}_candidate_{slot}{suffix}"
+            for side in ("high", "low")
+            for slot in range(1, 4)
+            for suffix in ("", "_pivot_time_ms", "_confirmed_at_ms", "_age_bars")
+        ]
+        assert set(candidates).issubset(features.columns)
+        assert features[candidates].notna().any().any()
+        assert set(candidates).isdisjoint(select_obs_columns(features).columns)
+        price = features["M5_swing_low_candidate_1"]
+        confirmed = features["M5_swing_low_candidate_1_confirmed_at_ms"]
+        valid = price.notna()
+        decision_ms = features.index.to_numpy(dtype="datetime64[ns]").view(np.int64) // 1_000_000
+        assert (confirmed.loc[valid].to_numpy() <= decision_ms[valid.to_numpy()]).all()
+
+    def test_final_mtf_swing_profile_merges_with_default_config(self) -> None:
+        base = OmegaConf.load("quant_rl/config/default.yaml")
+        overlay = OmegaConf.load("config/features/pd_context_mtf_swing_candidates.yaml")
+
+        merged = OmegaConf.merge(base, overlay)
+
+        assert merged.features.structure.enabled is True
+        assert list(merged.features.structure.timeframes) == ["M5", "M15", "H1"]
+        assert merged.features.structure.swing_candidate_count == 3
+        assert merged.features.structure.candidate_price_increment is None
+        assert merged.costs.point_size == 0.01
 
     def test_htf_sweep_metadata_and_audit_sidecar_are_cached(
         self, deterministic_bars: pd.DataFrame, tmp_path: Any
