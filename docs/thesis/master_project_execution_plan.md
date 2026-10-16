@@ -2139,10 +2139,10 @@ Update this table as the persistent agent control surface. It is status, not a s
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE — 13:00 live snapshot; campaign identity preserved; GPU start gate held pending next guarded allocation | — | P2 prep, E0 |
-| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE — 18 interrupted after attempt-4 cache-path infrastructure failure; validated attempt-3 resume pointers; no resumed workers yet | P0 | P2, E0 |
-| P2 | Deterministic evaluator/schema repair | ACTIVE — 14M baseline frame/bundle parity passed; repeat-run `level_type` nondeterminism and generic management forwarding remain open; source fix deferred to campaign boundary | P0 | P1, E0 |
-| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index and persistent worker dispatcher pass bounded GPU-node checks; live campaign index built; runtime integration pending | P0 | P1, P2 |
+| P0 | Safe boundary/current snapshot | ACTIVE — 13:08 update; campaign identity preserved; old 2-node allocation held behind absent release marker; supervisor active | — | P2 prep, E0 |
+| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE — 18 interrupted after attempt-4 cache-path infrastructure failure; all 18 attempt-3 resume checkpoints load; no resumed workers yet | P0 | P2, E0 |
+| P2 | Deterministic evaluator/schema repair | ACTIVE — 14M baseline frame/bundle parity and 18 resume-checkpoint loads passed; repeat-run `level_type` nondeterminism and generic management forwarding remain open; source fix deferred to campaign boundary | P0 | P1, E0 |
+| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index and dispatcher pass bounded GPU-node tests; current allocation predates the persistent managers, so runtime integration awaits next guarded allocation | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | review prep, result packaging |
 | P5 | Freeze matched design/baselines | BLOCKED | P4 | P6 prep, review |
