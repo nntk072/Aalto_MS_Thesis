@@ -137,8 +137,20 @@ run the command inside an existing shell.
 - Using `srun` for login-node checks (`ls`, log tails, plain `grep`).
 - GPU count limits are **partition and workload specific**, not global. Follow
   the per-family caps in the table below; check Slurm availability and account
-  limits before each request. The two-GH200 cap below applies to the current
-  thesis campaign shape, not to V100 or every GPU family.
+  limits before each request. For the current thesis campaign, the user has set
+  a hard aggregate cap of **2 GH200 GPUs total** across all its active and
+  pending allocations. This cap does not apply to V100 or other GPU families.
+- Before any GH200 request, sum `gres/gpu:gh200` for every active or pending
+  allocation belonging to this campaign, including recovery/replacement
+  requests, and the GPU count in the proposed request. The sum must never
+  exceed 2. Do not treat separate jobs, nodes, or `srun` commands as separate
+  allowances. For the 18-trainer campaign, request at most one GH200 on each
+  of two nodes (`--nodes=2 --gpus-per-node=gh200:1`); never request two on one
+  node plus another on a second node, or otherwise exceed two in aggregate.
+  Recheck `squeue` and `scontrol show job` immediately before submission. If
+  the existing campaign already holds both GPUs, do not submit another GH200
+  request until the existing allocation has released them or the user changes
+  this cap.
 
 ## Before allocating (after user OK) — check availability
 
@@ -163,7 +175,8 @@ The following is the Triton configuration observed on **2026-10-16** using
 `sinfo` and `scontrol`; node availability is transient. GPU counts are
 configured partition capacity, not a promise that those GPUs are free. Always
 query `sinfo`, `squeue`, `scontrol show node`, and account/QOS before a real
-request. The project has no universal two-GPU cap.
+request. The two-GH200 aggregate cap is specific to the current thesis
+campaign; it does not limit other GPU families.
 
 | GPU family | VRAM / CUDA capability | Triton partition(s) | Partition MaxTime / MaxNodes | Project request guidance |
 |---|---|---|---|---|
@@ -172,7 +185,7 @@ request. The project has no universal two-GPU cap.
 | H100 | 80 GiB / 9.0 | `gpu-h100-80g`, `gpu-h100-80g-short` | 5d or 2d / max one node | Representative node `gpu45`: 192 CPUs/990 GiB. Match runtime and environment/kernel support to the selected partition. |
 | H200 | 141 GiB / 9.0 | `gpu-h200-141g-m`, `gpu-h200-141g-short` | 8h or 2d / max one node | Representative node `gpu50`: 128 CPUs/1,980 GiB; full nodes expose up to 8 GPUs. Measure concurrency and request supported node resources. |
 | H200 partitioned | 71 GiB slice (H200 3g.71gb) / 9.0 | `gpu-h200-71g-ia` | 8h / max one node | `gpu49`: 128 CPUs/1,980 GiB and up to 8 71-GiB slices alongside 4 full H200s. Treat a slice as a partitioned GPU. Other 18/35-GiB IA partitions were not configured in this snapshot. |
-| GH200 | 141 GiB / 9.0 | `gpu-grace-h200-141g` | 5d / max two nodes | Representative node `gpuarm1`: 144 CPUs/1,100 GiB. Current 18-trainer campaign shape: at most 2 GH200, one per node. This is workload-specific, not a global GPU-count rule. |
+| GH200 | 141 GiB / 9.0 | `gpu-grace-h200-141g` | 5d / max two nodes | Current thesis-campaign user cap: **2 GH200 total across active and pending allocations**, normally one per node on two nodes. This is not the cluster's installed capacity and does not cap other GPU families. |
 | B300 | 288 GiB / 10.3 | `gpu-b300-288g-short` | 2d / max one node | Representative node `gpu64`: 256 CPUs/3,000 GiB. Verify framework support and measured throughput before choosing it. |
 | AMD MI100 / MI210 | 32 GiB MI100 / 64 GiB MI210, ROCm (not CUDA) | `gpu-amd` | 5d / max one node | `gpuamd1`: 16 CPUs/250 GiB, 1 MI100 + 2 MI210. Requires ROCm-compatible PyTorch/runtime; CUDA environments do not apply. |
 

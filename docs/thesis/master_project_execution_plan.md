@@ -2270,6 +2270,16 @@ Update this table as the persistent agent control surface. It is status, not a s
 | P9 | `RESULTS_PACKAGE_COMPLETE` handoff | BLOCKED | P8 + E1 | archive/index QA |
 | Q0–Q7 | Research extension | OPTIONAL/GATED | stage parents | within-stage arms only |
 
+**GH200 allocation guard (user direction, 2026-10-16 18:46 Helsinki):** the
+current thesis campaign may use at most **2 GH200 GPUs total across all its
+active and pending allocations**. The active job `20990395` holds that pair,
+one GPU on each of `gpuarm1` and `gpuarm2`; do not submit an additional GH200
+allocation while it holds both. The cluster's four configured GH200s describe
+hardware capacity, not this campaign's allocation allowance. Before any later
+recovery request, count GPUs already requested by active and pending campaign
+jobs plus the proposed request; the aggregate must remain at or below two.
+For the 18-trainer shape, retain one GPU per node across two nodes.
+
 ## 39. Immediate actions for one long-running Codex agent
 
 ### P1/E0 evidence update — 2026-10-16 13:29 Helsinki
