@@ -115,6 +115,25 @@ def compare_results(frame_result: dict[str, Any], bundle_result: dict[str, Any])
     return {field: _equal(frame_result[field], bundle_result[field]) for field in fields}
 
 
+def _evaluate_bundle_result(
+    model: Any,
+    bundle_env: Any,
+    *,
+    strategy_actions: bool,
+    continuous_actions: bool,
+) -> dict[str, Any]:
+    """Replay a bundle env with the same policy action interpretation as frames."""
+    return evaluate_model(
+        model,
+        pd.DataFrame(),
+        pd.DataFrame(),
+        deterministic=True,
+        continuous_actions=continuous_actions,
+        strategy_actions=strategy_actions,
+        env=bundle_env,
+    )
+
+
 def select_split(
     split: str,
     train_bars: pd.DataFrame,
@@ -268,12 +287,11 @@ def main() -> int:
         evaluation=True,
     )
     bundle_env = make_bundle_env(spec)
-    bundle_result = evaluate_model(
+    bundle_result = _evaluate_bundle_result(
         model,
-        pd.DataFrame(),
-        pd.DataFrame(),
-        deterministic=True,
-        env=bundle_env,
+        bundle_env,
+        continuous_actions=bool(eval_common["continuous_actions"]),
+        strategy_actions=bool(eval_common["strategy_actions"]),
     )
     comparisons = compare_results(frame_result, bundle_result)
     frame_metrics = _metrics(frame_result)
@@ -281,6 +299,9 @@ def main() -> int:
     metric_equal = _equal(frame_metrics, bundle_metrics)
     matches = all(comparisons.values()) and metric_equal
     current_head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    working_tree_dirty = bool(
+        subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()
+    )
     report: dict[str, Any] = {
         "schema_version": 1,
         "status": "passed" if matches else "failed",
@@ -291,13 +312,16 @@ def main() -> int:
         "source_attempt": provenance.get("attempt"),
         "repository": {
             "head": current_head,
+            "working_tree_dirty": working_tree_dirty,
             "branch": subprocess.check_output(
                 ["git", "branch", "--show-current"], text=True
             ).strip(),
         },
+        "audit_script_sha256": _sha256(Path(__file__).resolve()),
         "source_run": str(run_dir),
         "checkpoint": str(checkpoint),
         "checkpoint_sha256": _sha256(checkpoint),
+        "checkpoint_timesteps": int(model.num_timesteps),
         "attempt_provenance": str(provenance_path),
         "attempt_provenance_sha256": _sha256(provenance_path),
         "config_sha256": _sha256(run_dir / "config.yaml"),
@@ -321,9 +345,9 @@ def main() -> int:
         "frame_steps": int(frame_result["n_steps"]),
         "bundle_steps": int(bundle_result["n_steps"]),
         "limitations": [
-            "This is a single 14M-step interrupted baseline checkpoint, not a completed 20M campaign run.",
+            "Backend parity does not establish training completion, strategy validity, or confirmatory evidence.",
             "The test split was previously inspected and selection-acknowledged; the training split is in-sample. Neither is pristine confirmatory OOS evidence.",
-            "Backend parity for this checkpoint does not establish strategy validity or campaign readiness.",
+            "Repository HEAD, working-tree state, and audit-script hash identify the parity implementation used.",
         ],
     }
     output.parent.mkdir(parents=True, exist_ok=True)

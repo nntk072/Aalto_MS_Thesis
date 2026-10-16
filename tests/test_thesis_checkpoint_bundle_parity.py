@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
+from scripts.thesis import audit_checkpoint_frame_bundle_parity as parity
 from scripts.thesis.audit_checkpoint_frame_bundle_parity import compare_results, select_split
 
 
@@ -69,3 +70,22 @@ def test_select_split_keeps_in_sample_and_report_only_roles_distinct() -> None:
     assert selected_test[0] is test_bars
     assert selected_test[1] is test_features
     assert selected_test[2] == "previously_inspected_selection_acknowledged_test"
+
+
+def test_bundle_replay_preserves_overlay_action_vector(monkeypatch) -> None:
+    captured = {}
+
+    def fake_evaluate_model(model, bars, features, **kwargs):
+        captured.update(kwargs)
+        return {"status": "captured"}
+
+    monkeypatch.setattr(parity, "evaluate_model", fake_evaluate_model)
+
+    result = parity._evaluate_bundle_result(
+        object(), object(), strategy_actions=True, continuous_actions=False
+    )
+
+    assert result == {"status": "captured"}
+    assert captured["strategy_actions"] is True
+    assert captured["continuous_actions"] is False
+    assert captured["deterministic"] is True
