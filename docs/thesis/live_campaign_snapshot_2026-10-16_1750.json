@@ -1,0 +1,77 @@
+{
+  "schema": "aalto.live_campaign_snapshot.v1",
+  "captured_at_local": "2026-10-16T17:50:46+03:00",
+  "captured_at_utc": "2026-10-16T14:50:46+00:00",
+  "repository": {
+    "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis",
+    "branch": "main",
+    "head": "413729ec3d68f342498434fba538b16a4b2776a7",
+    "origin_main": "413729ec3d68f342498434fba538b16a4b2776a7",
+    "working_tree_clean_at_capture": true,
+    "plan_path": "docs/thesis/master_project_execution_plan.md",
+    "source_hashes_in_campaign": 230,
+    "docs_in_campaign_source_hashes": 0
+  },
+  "campaign": {
+    "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+    "fingerprint": "91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e",
+    "source_campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016",
+    "source_campaign_fingerprint": "3474621efd6a1481bd2a20bce0cfd2c0b69969df1849c6cd738d19dc5bb4ba34",
+    "source_git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+    "requested_steps_per_variant": 20000000,
+    "n_envs_per_variant": 64,
+    "data_backend": "shared_bundle",
+    "seed": 50,
+    "job_statuses": {"running": 18},
+    "resume_lineage": "validated attempt-3 checkpoints at 11M-14M; attempt 1 of recovery is continuing each toward 20M total",
+    "selection_boundary": "exploratory, selection-acknowledged screen; not confirmatory or architecture-selection evidence",
+    "feature_cache_logs": "representative baseline, Idea 1, and Idea 2 workers each log use of the matching hash-validated prebuilt cache"
+  },
+  "slurm": {
+    "active_recovery_job": {
+      "job_id": "20990395",
+      "state": "RUNNING",
+      "nodes": ["gpuarm1", "gpuarm2"],
+      "gpus": "1 GH200 per node",
+      "cpus": "48 per node",
+      "memory": "512 GiB per node",
+      "started_local": "2026-10-16T17:34:29+03:00",
+      "scheduled_end_local": "2026-10-16T23:34:29+03:00",
+      "controller": "18 campaign workers active; one worker manager per node"
+    },
+    "previous_allocation": {
+      "job_id": "20985591",
+      "state_at_capture": "terminal; no longer listed by squeue",
+      "training_marker": "left absent; old v3 allocation never launched trainers"
+    },
+    "persistent_supervisor": {
+      "host": "login4.triton.aalto.fi",
+      "tmux_session": "thesis-seed50",
+      "script": "scripts/matrix/run_campaign_18way_cpumask_supervisor.sh",
+      "state": "running; handoff resolves to recovery campaign; log says waiting for current allocation"
+    },
+    "actions": "No job canceled; no duplicate allocation submitted; supervisor restored after old allocation exited."
+  },
+  "early_training_sample": {
+    "sampled_local": "2026-10-16T17:50:46+03:00",
+    "worker_fps": {"count": 18, "min": 426, "median": 478.5, "max": 707, "sum_of_latest_staggered_logs": 9035},
+    "fps_interpretation": "early per-worker values from staggered logger windows; the sum is not a synchronized aggregate benchmark",
+    "resource_samples_utc": "2026-10-16T14:50:39Z-14:50:42Z",
+    "gpu_utilization_pct": {"gpuarm1": 99, "gpuarm2": 99},
+    "gpu_memory_mib": {"gpuarm1": 74633, "gpuarm2": 76275},
+    "allocated_host_memory_gib": {"per_node": 512},
+    "cgroup_memory_gib": {"gpuarm1": 120.4, "gpuarm2": 105.4},
+    "cpu_load1": {"gpuarm1": 14.12, "gpuarm2": 14.27},
+    "cpu_load_note": "load average, not a CPU utilization percentage; 48 CPUs allocated per node",
+    "memory_and_gpu_note": "No OOM events in sampled rows; HBM use and host RAM are below their allocations."
+  },
+  "preflight": {
+    "completed_local": "2026-10-16T17:34:38+03:00",
+    "result": "passed",
+    "ruff_format": "438 files already formatted",
+    "ruff_check": "passed",
+    "mypy": "446 source files, no issues",
+    "focused_pytest": "30 passed: campaign artifacts, checkpoint migration, and recovery tests"
+  },
+  "readiness": "P1 remains active until the 18-run screen reconciles; P2 and downstream gates remain open. NOT READY."
+}
