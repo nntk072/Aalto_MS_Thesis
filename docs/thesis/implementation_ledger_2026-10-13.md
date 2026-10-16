@@ -2863,3 +2863,17 @@ resume pointers. The bounded load audit therefore consumed the recovery report
 directly. Repair or replace the generic audit selection path after the live
 campaign boundary. The campaign remains 18/18 interrupted; P1/P2 remain open
 and thesis readiness remains NOT READY.
+
+### E0 paired-seed statistics preparation — 2026-10-16 13:15 Helsinki
+
+Added `scripts/thesis/analyze_paired_seed_results.py` and
+`tests/test_thesis_paired_seed_statistics.py`. The utility validates successful
+matched-confirmation/robustness arms, unique seed/run identities, all
+`MATCH_FIELDS`, and a single declared intervention; it records per-seed arm
+values and provenance, a paired-seed bootstrap interval, sign-flip p-values,
+and Holm adjustment across requested metrics. Its output marks between-seed
+uncertainty separately from the existing moving-block path bootstrap and
+states the symmetry and holdout/validity limitations. The four tests pass on
+synthetic inputs; they verify implementation mechanics only and provide no
+thesis evidence. Full-tree style/type checks and the required GPU-node gate
+remain to be run before commit.

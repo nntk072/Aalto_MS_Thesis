@@ -1653,6 +1653,20 @@ Prepare and validate now:
 12. validation that older seed-42 artifacts remain historical/exploratory and newly comparable
     one-seed work uses seed 50 / 20M / `n_envs=64` unless a frozen run identity says otherwise.
 
+### E0 paired-seed analysis utility — prepared, not yet applied to thesis results
+
+`scripts/thesis/analyze_paired_seed_results.py` provides a separate paired-seed
+analysis stage. It fails closed unless each arm is a succeeded
+`matched_confirmation` or `robustness` run, every declared match field is
+present and equal except the explicit intervention, and at least two unique
+seed pairs are supplied. It preserves per-seed arm values and run provenance,
+reports a deterministic paired-seed bootstrap interval, an exact sign-flip
+test where the number of pairs permits it (otherwise a seeded Monte Carlo
+version), and Holm-adjusted p-values across requested metrics. It labels the
+interval as between-seed uncertainty and explicitly defers temporal-path
+uncertainty to the existing moving-block procedure. Its synthetic tests verify
+the mechanics only; no campaign or thesis claim has been analyzed with it.
+
 ### E1 — populate continuously as runs terminate
 
 For every terminal run or comparison, the agent immediately:
@@ -2142,7 +2156,7 @@ Update this table as the persistent agent control surface. It is status, not a s
 | P0 | Safe boundary/current snapshot | ACTIVE — 13:08 update; campaign identity preserved; old 2-node allocation held behind absent release marker; supervisor active | — | P2 prep, E0 |
 | P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE — 18 interrupted after attempt-4 cache-path infrastructure failure; all 18 attempt-3 resume checkpoints load; no resumed workers yet | P0 | P2, E0 |
 | P2 | Deterministic evaluator/schema repair | ACTIVE — 14M baseline frame/bundle parity and 18 resume-checkpoint loads passed; repeat-run `level_type` nondeterminism and generic management forwarding remain open; source fix deferred to campaign boundary | P0 | P1, E0 |
-| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index and dispatcher pass bounded GPU-node tests; current allocation predates the persistent managers, so runtime integration awaits next guarded allocation | P0 | P1, P2 |
+| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index and dispatcher pass bounded GPU-node tests; paired-seed analysis utility prepared with synthetic tests; live integration and real result analysis await P1/P2 | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | review prep, result packaging |
 | P5 | Freeze matched design/baselines | BLOCKED | P4 | P6 prep, review |
