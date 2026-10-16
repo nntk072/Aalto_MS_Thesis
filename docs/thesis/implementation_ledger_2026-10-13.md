@@ -2822,3 +2822,23 @@ then rerun the exact replay and action-dependent frame/shared-bundle parity
 checks. Job `20985591` remains held without trainer steps; it predates the
 dispatcher and will not be released into its old worker-step fan-out. The
 campaign remains 18/18 interrupted and thesis readiness remains NOT READY.
+
+### P2 real-checkpoint backend parity — 2026-10-16 13:00 Helsinki
+
+Added `scripts/thesis/audit_checkpoint_frame_bundle_parity.py` and focused
+comparison tests outside the campaign's source-hash manifest. Full-tree
+gpuarm1 Ruff/Mypy and 46 focused tests passed at 12:50. The audit loaded the
+same 14M-step attempt-3 checkpoint and ran its deterministic test policy for
+177,210 bars through the frame evaluator and a new shared test-split bundle.
+All 20 compared fields matched exactly: equity, trade rows, account/breaches,
+actions, rewards, counters and aggregate metrics; each backend produced 107
+trades. Full details and source lineage are in
+`outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/p2_checkpoint_frame_bundle_a0_14m_20261016/audit.json`.
+This closes backend parity only for this partial baseline checkpoint. It does
+not resolve the separate cross-process `level_type` tie-break, prove report
+parity for all variants, or supply confirmatory performance evidence.
+
+P2 remains open for a post-campaign deterministic-label fix and repeated
+checkpoint evaluation, generic management-parameter forwarding tests, and
+parity against a completed selected checkpoint. Job `20985591` is still
+running with no campaign trainers; the 18-run manifest remains interrupted.

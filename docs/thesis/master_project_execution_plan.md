@@ -619,6 +619,28 @@ The current checkout is `/scratch/work/nguyenl37/Aalto_MS_Thesis`, branch
 no mismatches before the dispatcher work, which changes only paths outside the
 campaign source-hash manifest.
 
+### Live execution update — 2026-10-16 13:00 Helsinki
+
+Current snapshot: [`live_campaign_snapshot_2026-10-16_1300.json`](live_campaign_snapshot_2026-10-16_1300.json).
+The canonical checkout is still `main`; pushed HEAD is `56fc32a`, with the new
+checkpoint-backend audit and this status update being verified for commit.
+Slurm job `20985591` remains RUNNING on two GH200 nodes, with 48 CPUs and 512
+GiB RAM per node; it ends at 17:32:47 Helsinki. It has no worker steps or
+trainers, and both GPUs are idle after P2 replays. Leave its release marker
+absent because its already-running controller predates the persistent worker
+dispatcher and would use the old worker-step fan-out. The live supervisor can
+pick up the committed wrapper in its next allocation.
+
+The campaign remains 18/18 `interrupted`, all resume pointers target
+hash-verified attempt-3 checkpoints at 11M–14M steps, and the campaign
+fingerprint remains unchanged. The refreshed evidence index verifies all
+228/228 campaign source hashes without mismatch. For P2, a partial 14M
+baseline checkpoint replayed identically for equity and metrics but exposed
+cross-process `level_type` label variation; a separate active-policy
+frame/bundle parity replay matched every compared result field for 177,210
+test bars. Both are historical exploratory audits, not confirmatory evidence.
+P1 and P2 remain open, and readiness remains NOT READY.
+
 ---
 
 ## 6. Dependency graph: Codex agent horizontal execution to results freeze
@@ -1037,10 +1059,19 @@ Verify:
   `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/p2_replay_determinism_audit_20261016.json`.
   Stabilize the label selection and repeat the audit after the active campaign
   boundary; do not edit this fingerprinted source during the live campaign.
+- The same checkpoint then completed a full 177,210-bar deterministic test
+  replay through both the frame and shared-bundle environments. All compared
+  fields matched exactly: equity, trade rows, account, breach state/events,
+  actions, rewards, step counts, and aggregate metrics (107 trades in each
+  backend). The machine-readable report is
+  `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/p2_checkpoint_frame_bundle_a0_14m_20261016/audit.json`.
+  This closes backend parity for this partial baseline checkpoint only; the
+  repeat-run label mismatch, generic management-parameter forwarding, and
+  parity for a completed selected checkpoint remain open.
 - The report-only evaluator reconstructs the run from frames even when the
   training snapshot says `data_source=bundle`. The backend parity contract must
-  be demonstrated for the exact reported checkpoint and source/config lineage;
-  a generic unit test or checkpoint hash is insufficient.
+  be demonstrated for each exact reported checkpoint and source/config
+  lineage; a generic unit test or checkpoint hash is insufficient.
 
 Do not edit fingerprinted training/evaluation source while the active campaign
 is live. Complete any required source correction after the campaign boundary,
@@ -2073,9 +2104,9 @@ Update this table as the persistent agent control surface. It is status, not a s
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE — 2026-10-16 live snapshot; campaign identity preserved; GPU start gate held | — | P2 prep, E0 |
+| P0 | Safe boundary/current snapshot | ACTIVE — 13:00 live snapshot; campaign identity preserved; GPU start gate held pending next guarded allocation | — | P2 prep, E0 |
 | P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE — 18 interrupted after attempt-4 cache-path infrastructure failure; validated attempt-3 resume pointers; no resumed workers yet | P0 | P2, E0 |
-| P2 | Deterministic evaluator/schema repair | ACTIVE — real checkpoint replays match equity/metrics but expose `level_type` nondeterminism; source fix deferred to campaign boundary; frame/bundle parity open | P0 | P1, E0 |
+| P2 | Deterministic evaluator/schema repair | ACTIVE — 14M baseline frame/bundle parity passed; repeat-run `level_type` nondeterminism and generic management forwarding remain open; source fix deferred to campaign boundary | P0 | P1, E0 |
 | E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index and persistent worker dispatcher pass bounded GPU-node checks; live campaign index built; runtime integration pending | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | review prep, result packaging |

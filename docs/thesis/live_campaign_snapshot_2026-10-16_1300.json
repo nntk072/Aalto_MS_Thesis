@@ -1,0 +1,91 @@
+{
+  "allocation": {
+    "cpus": "48 per node; 96 total",
+    "gpus": "2 GH200 total, one per node",
+    "job_id": "20985591",
+    "memory": "512 GiB per node; 1 TiB total",
+    "nodes": [
+      "gpuarm1",
+      "gpuarm2"
+    ],
+    "observed_runtime_hhmmss": "1:26:28.228596",
+    "scheduled_end_local": "2026-10-16T17:32:47+03:00",
+    "state_at_capture": "RUNNING",
+    "steps": [
+      "20985591.0 allocation",
+      "20985591.extern"
+    ],
+    "time_limit": "6 hours; scheduled end 2026-10-16 17:32:47 Europe/Helsinki",
+    "time_remaining_seconds_at_capture": 16411,
+    "training_start_gate": "held; old controller predates dispatcher; no campaign workers started",
+    "worker_steps": 0
+  },
+  "campaign": {
+    "bar_cache": {
+      "configured_nonempty_bar_files": 14,
+      "path": "cache",
+      "real_directory": true
+    },
+    "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016",
+    "fingerprint": "3474621efd6a1481bd2a20bce0cfd2c0b69969df1849c6cd738d19dc5bb4ba34",
+    "identity": "18 variants, seed 50, 20M steps each, n_envs=64, shared bundle, two GH200 nodes",
+    "manifest": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/campaign.json",
+    "recorded_git_sha": "8a98f7792f83ce4bbe5cb84f4a2137657d791c02",
+    "resume_checkpoint_lineage": {
+      "attempt3_checkpoints": 37,
+      "manifest_backup": "reports/campaign_manifest_before_resume_attempt_repair.json",
+      "pointer_corrections": 18,
+      "recovery_report": "reports/cache_recovery.json",
+      "resume_from_attempt_counts": {
+        "3": 18
+      },
+      "resume_steps_max": 14000000,
+      "resume_steps_min": 11000000
+    },
+    "statuses": {
+      "interrupted": 18
+    }
+  },
+  "captured_at_utc": "2026-10-16T09:59:15+00:00",
+  "readiness": "P1 remains open: 18/18 interrupted, all resume pointers target attempt 3, no resumed attempt started. P2 remains open: nondeterministic level_type metadata across processes, generic management forwarding and completed-checkpoint parity remain. Historical holdout is previously inspected and selection-acknowledged. The partial 14M checkpoint audits are exploratory only. Thesis status NOT READY.",
+  "repository": {
+    "branch": "main",
+    "campaign_source_hash_mismatches": [],
+    "campaign_source_hashes_verified": 228,
+    "changed_files_outside_campaign_source_hash_manifest": true,
+    "head": "56fc32ac2361976bcb5ff809ac6abc28b43956df",
+    "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis",
+    "working_tree_status": [
+      "## main...origin/main",
+      " M docs/thesis/implementation_ledger_2026-10-13.md",
+      " M docs/thesis/master_project_execution_plan.md",
+      "?? docs/thesis/live_campaign_snapshot_2026-10-16_1245.json",
+      "?? scripts/thesis/audit_checkpoint_frame_bundle_parity.py",
+      "?? tests/test_thesis_checkpoint_bundle_parity.py"
+    ]
+  },
+  "runtime_after_replay": {
+    "captured_at_local": "2026-10-16T12:59:15.228596+03:00",
+    "gpuarm1": {
+      "evaluation_processes": 0,
+      "gpu_memory_used_mib": 0,
+      "gpu_utilization_percent": 0
+    },
+    "gpuarm2": {
+      "gpu_memory_used_mib": 0,
+      "gpu_utilization_percent": 0
+    },
+    "note": "Both deterministic replays and the frame/bundle parity audit have finished; no training or evaluation processes remain."
+  },
+  "schema": "aalto.live_campaign_snapshot.v1",
+  "verification": {
+    "branch": "main",
+    "campaign_evidence_index": "reports/thesis_evidence_index_post_backend_parity_20985591.json; 228/228 campaign source hashes verified, zero mismatches, 18 interrupted run identities.",
+    "gpu_gate": "Full-tree Ruff format/check and Mypy passed on gpuarm1; 46 focused tests passed at 12:50 Helsinki. These checks cover the current new audit code; the documentation/snapshot edits are pending their final commit gate.",
+    "latest_pushed_commit": "56fc32ac2361976bcb5ff809ac6abc28b43956df",
+    "p2_frame_bundle_parity": "reports/p2_checkpoint_frame_bundle_a0_14m_20261016/audit.json; passed, 177210 test bars, 107 trades, every compared policy/equity/trade/risk/metric field equal for frames and bundle.",
+    "p2_replay_determinism": "reports/p2_replay_determinism_audit_20261016.json; equity and metrics repeat exactly, but level_type differs on 53 train and 23 test rows across fresh processes; tie break confirmed hash-order-dependent.",
+    "training_release": "No worker step or trainer; training marker absent. Leave current allocation untouched; it predates the dispatcher and the live controller would use old worker-step fan-out.",
+    "worktree_clean": false
+  }
+}

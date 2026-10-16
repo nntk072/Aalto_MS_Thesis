@@ -1,0 +1,82 @@
+{
+  "allocation": {
+    "cpus": "48 per node; 96 total",
+    "gpus": "2 GH200 total, one per node",
+    "job_id": "20985591",
+    "memory": "512 GiB per node; 1 TiB total",
+    "nodes": [
+      "gpuarm1",
+      "gpuarm2"
+    ],
+    "scheduled_end_local": "2026-10-16T17:32:47+03:00",
+    "state_at_capture": "RUNNING",
+    "steps": [
+      "20985591.0 allocation",
+      "20985591.extern"
+    ],
+    "time_limit": "6 hours; scheduled end 2026-10-16 17:32:47 Europe/Helsinki",
+    "training_start_gate": "held; old allocation process predates the persistent dispatcher; no trainers or worker steps started",
+    "worker_steps": 0
+  },
+  "campaign": {
+    "bar_cache": {
+      "configured_nonempty_bar_files": 14,
+      "path": "cache",
+      "real_directory": true
+    },
+    "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016",
+    "fingerprint": "3474621efd6a1481bd2a20bce0cfd2c0b69969df1849c6cd738d19dc5bb4ba34",
+    "identity": "18 variants, seed 50, 20M steps each, n_envs=64, shared bundle, two GH200 nodes",
+    "manifest": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/campaign.json",
+    "recorded_git_sha": "8a98f7792f83ce4bbe5cb84f4a2137657d791c02",
+    "resume_checkpoint_lineage": {
+      "attempt3_checkpoints": 37,
+      "manifest_backup": "reports/campaign_manifest_before_resume_attempt_repair.json",
+      "pointer_corrections": 18,
+      "recovery_report": "reports/cache_recovery.json",
+      "resume_from_attempt_counts": {
+        "3": 18
+      },
+      "resume_steps_max": 14000000,
+      "resume_steps_min": 11000000
+    },
+    "statuses": {
+      "interrupted": 18
+    }
+  },
+  "captured_at_utc": "2026-10-16T09:45:07+00:00",
+  "readiness": "P1 remains open: 18/18 interrupted, no resumed attempt has begun. P2 remains open: replay metadata tie-break defect and frame/shared-bundle action-dependent parity not resolved. The historical test split is previously inspected and selection-acknowledged; the 14M baseline replay is exploratory and not confirmatory. Thesis status NOT READY.",
+  "repository": {
+    "branch": "main",
+    "campaign_source_hash_mismatches": [],
+    "campaign_source_hashes_verified": 228,
+    "changed_files_outside_campaign_source_hash_manifest": true,
+    "head": "56fc32ac2361976bcb5ff809ac6abc28b43956df",
+    "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis",
+    "working_tree_status": [
+      "## main...origin/main"
+    ]
+  },
+  "runtime_after_replay": {
+    "captured_at_local": "2026-10-16T12:44:43+03:00",
+    "gpuarm1": {
+      "evaluation_processes": 0,
+      "gpu_memory_used_mib": 0,
+      "gpu_utilization_percent": 0
+    },
+    "gpuarm2": {
+      "gpu_memory_used_mib": 0,
+      "gpu_utilization_percent": 0
+    },
+    "note": "Both replays finished; snapshot is post-evaluation idle state."
+  },
+  "schema": "aalto.live_campaign_snapshot.v1",
+  "verification": {
+    "campaign_evidence_index": "reports/thesis_evidence_index_post_p2_replay_20985591.json; verified 228/228 campaign source hashes, 4/4 input hashes, 18 interrupted run identities; index limitations preserved",
+    "gpu_gate": "full-tree Ruff format/check passed; full-tree Mypy passed for 436 source files; 44 focused tests passed on gpuarm1 at 12:41-12:43 Helsinki; gate marker matches commit 56fc32a",
+    "latest_commit": "56fc32ac2361976bcb5ff809ac6abc28b43956df",
+    "p2_checkpoint_replay": "reports/p2_replay_determinism_audit_20261016.json; same 14M partial checkpoint run twice; equity and aggregate metrics byte-identical; trade metadata level_type differed on 53 training and 23 test rows",
+    "pushed_to": "origin/main",
+    "training_release": "not released; active job has older controller and would use per-worker Slurm fan-out; leave marker absent and use updated dispatcher in next guarded allocation"
+  }
+}
