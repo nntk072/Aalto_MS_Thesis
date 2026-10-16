@@ -1,0 +1,37 @@
+{
+  "schema": "aalto.thesis_g1_contract_test_record.v1",
+  "date": "2026-10-16",
+  "repository_head": "4efbc88970fdb5980753fefc00c0f438004f5f7f",
+  "execution": {
+    "host": "gpuarm1.int.triton.aalto.fi",
+    "slurm_job_id": "20990395",
+    "architecture": "aarch64",
+    "python": "3.12.15",
+    "pytest": "9.1.1",
+    "thread_limits": ["OMP_NUM_THREADS=1", "OPENBLAS_NUM_THREADS=1"]
+  },
+  "runs": [
+    {
+      "command": "pytest tests/test_data_split.py tests/test_causal_features.py tests/test_features/test_htf_alignment.py tests/test_features/test_assembled_causality.py tests/test_features/test_feature_cache_and_fit_scope.py tests/test_features/test_fold_normalize.py tests/test_features/test_train_walkforward_contract.py tests/test_eval/test_walkforward.py -q",
+      "collected": 42,
+      "passed": 42,
+      "failed": 0,
+      "warnings": [
+        "Two expected PyTorch Transformer nested-tensor warnings in causal-feature tests."
+      ]
+    },
+    {
+      "command": "pytest tests/test_ticks.py tests/test_envs/test_tick_fill_reconciliation.py tests/test_backtest/test_broker_quote_parity_unittest.py -q",
+      "collected": 14,
+      "passed": 14,
+      "failed": 0,
+      "warnings": []
+    }
+  ],
+  "interpretation": "Focused unit/contract coverage passed for data splitting, feature causality and alignment, train-only fitting/cache identity, purged walk-forward behavior, tick parsing, tick fills, and broker quote parity. These tests do not replace real-data prefix/cache audits on the final feature source, independent data provenance review, or final checkpoint evaluations.",
+  "campaign_boundary": {
+    "active_campaign_fingerprint": "91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e",
+    "campaign_source_hashes_include_docs": false,
+    "campaign_source_hash_count": 230
+  }
+}

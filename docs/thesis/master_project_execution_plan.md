@@ -1082,6 +1082,11 @@ Verify:
   It does not prove equality of action-dependent fills, equity, breaches, and
   trade summaries for the campaign policy. Add or run that stronger comparison
   against an authorized checkpoint before treating P2 as closed.
+- An older review checklist reports an all-18-variant fixed-trace frames/bundle
+  comparison, but its cited report directories are absent from this checkout
+  and the result cannot be hash-rechecked. Do not count that claim toward P2;
+  the currently available selected-checkpoint parity audits do not establish
+  all-18 parity or completed-checkpoint acceptance.
 - A real 14M-step, interrupted `ladder_a0_flat__seed50` attempt-3 checkpoint was
   loaded and evaluated twice on gpuarm1, over 351,550 training bars and 177,210
   test bars per pass. Equity CSVs and aggregate metrics were byte-identical.
@@ -1297,8 +1302,19 @@ ordering. It reconciles 351,550 US100 and 350,098 US500 train rows through
 them missing bars because market closures/holidays have not been checked
 against an authoritative schedule. This is a bounded bar-file integrity and
 coverage result, not G1 closure: feed/export provenance and data-use terms,
-tick-file content quality, broker timezone/DST behavior, schedule-aware gap
-adjudication, and the separate feature/cache/fold/episode gates remain open.
+broker timezone/DST behavior, schedule-aware gap adjudication, quote-age/trade
+impact from missing or duplicate ticks, and the separate feature/cache/fold/
+episode gates remain open. Supplemental M1, tick, feature-cache, prefix, and
+budget evidence from the prior seed-50 source snapshot is archived in
+`docs/thesis/evidence/g1_2026-10-16/README.md`. Its M1/tick hashes match the
+current recovery campaign's inputs, but its cache and prefix results predate
+changes to `features/build.py`, `structure.py`, `swings.py`, and
+`config/default.yaml`; repeat those checks against the final frozen source.
+On source-identical `main` code at `4efbc88`, the focused split/causality/
+alignment/fitting/walk-forward suite passed 42 tests and the tick/fill/quote
+suite passed 14 tests on the existing GH200 allocation. The exact commands and
+scope limits are in `docs/thesis/g1_contract_tests_2026-10-16.json`; these are
+unit/contract tests, not substitutes for the pending real-data reruns.
 
 ### G2 — experiment-design readiness
 

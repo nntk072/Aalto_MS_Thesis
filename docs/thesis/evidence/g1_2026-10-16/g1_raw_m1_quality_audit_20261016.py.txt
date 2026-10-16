@@ -1,0 +1,127 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+ROOT = Path.cwd()
+sys.path.insert(0, str(ROOT))
+
+from quant_rl.data.clean import clean
+from quant_rl.data.session import add_session_labels
+from quant_rl.data.split import get_split_config, make_train_mask
+from quant_rl.config import load_config
+
+
+CAMPAIGN = ROOT / "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/campaign.json"
+CFG = ROOT / "quant_rl/config/default.yaml"
+campaign = json.loads(CAMPAIGN.read_text())
+cfg = load_config(config_path=CFG)
+train_end, test_start = get_split_config(cfg)
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def audit_symbol(symbol: str, filename: str) -> dict[str, object]:
+    path = ROOT / "data" / filename
+    raw = pd.read_csv(path, sep="\t", dtype=str, keep_default_na=False)
+    required = ["<DATE>", "<TIME>", "<OPEN>", "<HIGH>", "<LOW>", "<CLOSE>", "<TICKVOL>", "<VOL>", "<SPREAD>"]
+    if list(raw.columns) != required:
+        raise ValueError(f"unexpected header for {path}: {list(raw.columns)}")
+    ts = pd.to_datetime(raw["<DATE>"] + " " + raw["<TIME>"], format="%Y.%m.%d %H:%M:%S", errors="coerce")
+    numeric_names = ["<OPEN>", "<HIGH>", "<LOW>", "<CLOSE>", "<TICKVOL>", "<VOL>", "<SPREAD>"]
+    numeric = raw[numeric_names].apply(pd.to_numeric, errors="coerce")
+    o, h, l, c = (numeric[name].to_numpy(dtype=float) for name in ("<OPEN>", "<HIGH>", "<LOW>", "<CLOSE>"))
+    finite_ohlc = np.isfinite(np.column_stack([o, h, l, c])).all(axis=1)
+    values: dict[str, object] = {
+        "rows": int(len(raw)),
+        "invalid_timestamp_rows": int(ts.isna().sum()),
+        "raw_timestamp_order_breaks": int((ts.diff().dropna() < pd.Timedelta(0)).sum()),
+        "duplicate_timestamp_rows": int(ts.duplicated(keep=False).sum()),
+        "exact_duplicate_rows": int(raw.duplicated(keep="first").sum()),
+        "invalid_numeric_rows": int(numeric.isna().any(axis=1).sum()),
+        "nonfinite_ohlc_rows": int((~finite_ohlc).sum()),
+        "nonpositive_ohlc_rows": int(((np.column_stack([o, h, l, c]) <= 0).any(axis=1) & finite_ohlc).sum()),
+        "ohlc_inconsistent_rows": int((((h < np.maximum(o, c)) | (l > np.minimum(o, c)) | (h < l)) & finite_ohlc).sum()),
+        "negative_tickvol_rows": int((numeric["<TICKVOL>"] < 0).sum()),
+        "negative_volume_rows": int((numeric["<VOL>"] < 0).sum()),
+        "negative_spread_rows": int((numeric["<SPREAD>"] < 0).sum()),
+        "raw_min_timestamp": None if ts.isna().all() else str(ts.min()),
+        "raw_max_timestamp": None if ts.isna().all() else str(ts.max()),
+    }
+    valid_timestamps = ts.notna().to_numpy()
+    parsed: pd.DataFrame = pd.DataFrame(
+        {
+            "open": numeric["<OPEN>"], "high": numeric["<HIGH>"], "low": numeric["<LOW>"],
+            "close": numeric["<CLOSE>"], "tickvol": numeric["<TICKVOL>"],
+            "vol": numeric["<VOL>"], "spread": numeric["<SPREAD>"],
+        }, index=pd.DatetimeIndex(ts, name="datetime")
+    ).loc[valid_timestamps, :]
+    cleaned = clean(parsed, tz=str(cfg.data.tz))
+    deltas = cleaned.index.to_series().diff().dropna()
+    modal = deltas.mode().iloc[0]
+    gaps = deltas[deltas > 2 * modal]
+    labeled = add_session_labels(cleaned, tz=str(cfg.session.tz), ny_end=str(cfg.session.end))
+    cleaned_index = pd.DatetimeIndex(cleaned.index)
+    train_mask = make_train_mask(cleaned_index, train_end)
+    test_start_ts = pd.Timestamp(test_start, tz=cleaned_index.tz)
+    test_mask = cleaned_index >= test_start_ts
+    input_key = next((key for key in campaign.get("data_inputs", {}) if Path(key).name == filename), None)
+    actual_hash = sha256(path)
+    values.update(
+        {
+            "sha256": actual_hash,
+            "campaign_expected_sha256": None if input_key is None else campaign["data_inputs"][input_key],
+            "campaign_hash_match": None if input_key is None else actual_hash == campaign["data_inputs"][input_key],
+            "cleaned_unique_sorted_rows": int(len(cleaned)),
+            "rows_removed_by_timestamp_dedup": int(len(parsed) - len(cleaned)),
+            "cleaned_timezone": str(cleaned_index.tz),
+            "cleaned_min_timestamp": str(cleaned_index.min()),
+            "cleaned_max_timestamp": str(cleaned_index.max()),
+            "modal_bar_interval_seconds": float(modal.total_seconds()),
+            "gap_count_gt_2x_modal": int(len(gaps)),
+            "gap_seconds_max": None if gaps.empty else float(gaps.max().total_seconds()),
+            "gap_seconds_p50": None if gaps.empty else float(gaps.quantile(0.50).total_seconds()),
+            "gap_seconds_p95": None if gaps.empty else float(gaps.quantile(0.95).total_seconds()),
+            "session_label_counts": {str(k): int(v) for k, v in labeled["session"].value_counts(dropna=False).items()},
+            "train_end_inclusive": train_end,
+            "test_start_inclusive": test_start,
+            "train_rows": int(train_mask.sum()),
+            "test_rows": int(test_mask.sum()),
+            "between_split_rows": int((~(train_mask | test_mask)).sum()),
+            "split_overlap_rows": int((train_mask & test_mask).sum()),
+        }
+    )
+    return values
+
+
+reports = {
+    symbol: audit_symbol(symbol, filename)
+    for symbol, filename in cfg.data.m1_files.items()
+}
+result = {
+    "audit_date": "2026-10-16",
+    "repository_head": __import__("subprocess").check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+    "campaign_fingerprint": campaign.get("fingerprint"),
+    "campaign_path": str(CAMPAIGN.relative_to(ROOT)),
+    "config_path": str(CFG.relative_to(ROOT)),
+    "config_sha256": sha256(CFG),
+    "input_timezone_contract": str(cfg.data.tz),
+    "timezone_interpretation": "Raw MT5 timestamps contain no offset; source applies the configured fixed Etc/GMT-3 offset. This audit cannot establish broker DST behavior.",
+    "feed_and_terms": "Not established by file headers or repository evidence; broker/feed identity and data-use/publication terms remain unresolved.",
+    "symbols": reports,
+    "scope_note": "M1 bar-quality and calendar audit only. It does not validate ticks, cache-to-raw recomputation, assembled feature causality, or statistical/strategy validity.",
+}
+out = ROOT / "outputs/agent_state/g1_raw_m1_quality_audit_20261016.json"
+out.write_text(json.dumps(result, indent=2) + "\n")
+print(json.dumps({"output": str(out), "symbols": {k: {n: v[n] for n in ("rows", "cleaned_unique_sorted_rows", "gap_count_gt_2x_modal", "train_rows", "test_rows", "campaign_hash_match")} for k, v in reports.items()}}, indent=2))

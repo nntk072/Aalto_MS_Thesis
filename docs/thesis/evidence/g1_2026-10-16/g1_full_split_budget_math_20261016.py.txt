@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""Record full-split training-step arithmetic from the active campaign inputs."""
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import time
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+from quant_rl.config import load_config
+from quant_rl.data.clean import clean
+from quant_rl.data.loader import load_bars
+from quant_rl.data.session import add_session_labels
+from quant_rl.data.split import get_split_config, make_train_mask
+
+
+ROOT = Path("/scratch/work/nguyenl37/Aalto_MS_Thesis-main")
+CAMPAIGN = ROOT / "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016"
+campaign_path = CAMPAIGN / "campaign.json"
+campaign: dict[str, Any] = json.loads(campaign_path.read_text())
+cfg = load_config(config_path=ROOT / "quant_rl/config/default.yaml")
+symbol = str(cfg.data.primary)
+raw_path = (ROOT / str(cfg.data.raw_dir) / str(cfg.data.m1_files[symbol])).resolve()
+bars = clean(load_bars(raw_path), tz=str(cfg.data.tz))
+bars = add_session_labels(bars, tz=str(cfg.data.tz), ny_end=str(cfg.session.end))
+train_end, _ = get_split_config(cfg)
+train_mask = make_train_mask(pd.DatetimeIndex(bars.index), train_end)
+train = bars.loc[train_mask]
+ny_indices = np.flatnonzero(train["session"].eq("ny").to_numpy())
+obs_window = int(cfg.env.obs_window)
+episode_start = int(np.searchsorted(ny_indices, obs_window, side="left"))
+episode_steps = int(len(ny_indices) - episode_start)
+n_envs = int(campaign["n_envs"])
+target = int(campaign["timesteps"])
+per_env = target // n_envs
+
+workers: list[dict[str, Any]] = []
+worker_logs = CAMPAIGN / "logs/workers"
+for path in sorted(worker_logs.glob("*__attempt2.log")):
+    text = path.read_text(errors="replace")
+    starts = re.findall(r"Resuming PPO from .* at ([\d,]+)/([\d,]+) steps;", text)
+    values = re.findall(
+        r"^\|\s*total_timesteps\s*\|\s*([\d,]+)\s*\|\s*$",
+        text,
+        flags=re.MULTILINE,
+    )
+    if not values:
+        values = re.findall(
+            r"^\|\s*timesteps\s+([\d,]+)\s*\|\s*$",
+            text,
+            flags=re.MULTILINE,
+        )
+    if not starts or not values:
+        continue
+    start = int(starts[-1][0].replace(",", ""))
+    current = int(values[-1].replace(",", ""))
+    workers.append(
+        {
+            "log": path.name,
+            "resume_start_timesteps": start,
+            "latest_reported_total_timesteps": current,
+            "attempt2_timesteps_since_resume": current - start,
+            "attempt2_steps_per_env_since_resume": round((current - start) / n_envs, 2),
+            "log_age_seconds": round(time.time() - path.stat().st_mtime, 2),
+            "has_terminal_end_record": "END key=" in text,
+        }
+    )
+
+episode_files = [
+    str(path.relative_to(CAMPAIGN))
+    for path in (CAMPAIGN / "runs/attempts").rglob("episode_equity.csv")
+    if "/attempt2/" in path.as_posix()
+]
+campaign_sha = hashlib.sha256(campaign_path.read_bytes()).hexdigest()
+report = {
+    "schema_version": 1,
+    "repository_head": campaign["git_sha"],
+    "campaign_id": CAMPAIGN.name,
+    "campaign_fingerprint": campaign["fingerprint"],
+    "campaign_manifest_sha256": campaign_sha,
+    "symbol": symbol,
+    "raw_m1_path": str(raw_path),
+    "train_end_inclusive": str(train_end),
+    "train_rows": int(len(train)),
+    "ny_eligible_indices": int(len(ny_indices)),
+    "obs_window": obs_window,
+    "full_split_episode_steps_per_env": episode_steps,
+    "n_envs": n_envs,
+    "requested_aggregate_timesteps_per_variant": target,
+    "transitions_per_env_if_uninterrupted": per_env,
+    "full_split_episodes_per_env_if_uninterrupted": per_env // episode_steps,
+    "full_split_coverage_fraction_if_uninterrupted": round(per_env / episode_steps, 6),
+    "attempt2_resume_start_distribution": {},
+    "workers_with_live_progress_logs": len(workers),
+    "workers": workers,
+    "attempt2_episode_equity_files": episode_files,
+    "coverage_gate": "UNPROVEN",
+    "coverage_limit": (
+        "Timesteps-per-environment arithmetic is not episode evidence. Attempts load a PPO checkpoint into a fresh environment; "
+        "partial split traversal is reset at an allocation recovery. Require per-environment episode telemetry at terminal runs."
+    ),
+}
+starts = sorted({item["resume_start_timesteps"] for item in workers})
+report["attempt2_resume_start_distribution"] = {
+    str(start): sum(item["resume_start_timesteps"] == start for item in workers)
+    for start in starts
+}
+out = ROOT / "outputs/agent_state/g1_full_split_budget_math_20261016.json"
+out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+print(out)
+print(json.dumps({k: report[k] for k in ("train_rows", "ny_eligible_indices", "full_split_episode_steps_per_env", "n_envs", "requested_aggregate_timesteps_per_variant", "transitions_per_env_if_uninterrupted", "full_split_episodes_per_env_if_uninterrupted", "workers_with_live_progress_logs", "attempt2_resume_start_distribution", "attempt2_episode_equity_files", "coverage_gate")}, indent=2))

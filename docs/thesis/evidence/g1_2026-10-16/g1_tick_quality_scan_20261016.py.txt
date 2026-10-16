@@ -1,0 +1,105 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+ROOT = Path.cwd()
+sys.path.insert(0, str(ROOT))
+from quant_rl.config import load_config  # noqa: E402
+
+CFG = ROOT / "quant_rl/config/default.yaml"
+CAMPAIGN = ROOT / "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/campaign.json"
+cfg = load_config(config_path=CFG)
+campaign = json.loads(CAMPAIGN.read_text())
+
+
+def digest(path: Path) -> str:
+    result = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+            result.update(block)
+    return result.hexdigest()
+
+
+def scan(symbol: str, filename: str) -> dict[str, object]:
+    path = ROOT / str(cfg.data.raw_dir) / filename
+    cols = ["<DATE>", "<TIME>", "<BID>", "<ASK>"]
+    rows = invalid_time = invalid_quote = nonfinite_quote = nonpositive_quote = 0
+    crossed = locked = unsorted = adjacent_duplicate_ts = 0
+    min_ts = max_ts = previous_ts = None
+    bid_min = ask_min = float("inf")
+    bid_max = ask_max = float("-inf")
+    for chunk in pd.read_csv(
+        path, sep="\t", usecols=cols, dtype={name: "string" for name in cols},
+        keep_default_na=True, chunksize=1_000_000, engine="c",
+    ):
+        n = len(chunk)
+        rows += n
+        dt = pd.to_datetime(
+            chunk["<DATE>"].astype(str).to_numpy() + " " + chunk["<TIME>"].astype(str).to_numpy(),
+            format="%Y.%m.%d %H:%M:%S.%f", errors="coerce",
+        )
+        bid = pd.to_numeric(chunk["<BID>"], errors="coerce").to_numpy(dtype=float)
+        ask = pd.to_numeric(chunk["<ASK>"], errors="coerce").to_numpy(dtype=float)
+        invalid_time += int(dt.isna().sum())
+        invalid_quote += int((~np.isfinite(bid) | ~np.isfinite(ask)).sum())
+        finite = np.isfinite(bid) & np.isfinite(ask)
+        nonfinite_quote += int((~finite).sum())
+        nonpositive_quote += int(((bid <= 0) | (ask <= 0)).sum())
+        crossed += int(((ask < bid) & finite).sum())
+        locked += int(((ask == bid) & finite).sum())
+        valid_ts = dt[~dt.isna()]
+        if len(valid_ts):
+            cur = valid_ts.to_numpy(dtype="datetime64[ns]").astype("int64")
+            if previous_ts is not None:
+                unsorted += int(cur[0] < previous_ts)
+                adjacent_duplicate_ts += int(cur[0] == previous_ts)
+            if len(cur) > 1:
+                delta = np.diff(cur)
+                unsorted += int((delta < 0).sum())
+                adjacent_duplicate_ts += int((delta == 0).sum())
+            previous_ts = int(cur[-1])
+            lower, upper = int(cur.min()), int(cur.max())
+            min_ts = lower if min_ts is None else min(min_ts, lower)
+            max_ts = upper if max_ts is None else max(max_ts, upper)
+        if finite.any():
+            bid_min, bid_max = min(bid_min, float(bid[finite].min())), max(bid_max, float(bid[finite].max()))
+            ask_min, ask_max = min(ask_min, float(ask[finite].min())), max(ask_max, float(ask[finite].max()))
+    key = next((k for k in campaign.get("data_inputs", {}) if Path(k).name == filename), None)
+    actual_hash = digest(path)
+    return {
+        "path": str(path), "bytes": path.stat().st_size, "rows": rows,
+        "invalid_timestamp_rows": invalid_time, "invalid_or_missing_bid_ask_rows": invalid_quote,
+        "nonfinite_bid_ask_rows": nonfinite_quote, "nonpositive_bid_ask_rows": nonpositive_quote,
+        "crossed_quote_rows_ask_below_bid": crossed, "locked_quote_rows_ask_equals_bid": locked,
+        "raw_order_breaks": unsorted, "adjacent_duplicate_timestamp_rows": adjacent_duplicate_ts,
+        "min_timestamp_naive": None if min_ts is None else str(pd.Timestamp(min_ts)),
+        "max_timestamp_naive": None if max_ts is None else str(pd.Timestamp(max_ts)),
+        "bid_min": None if bid_min == float("inf") else bid_min,
+        "bid_max": None if bid_max == float("-inf") else bid_max,
+        "ask_min": None if ask_min == float("inf") else ask_min,
+        "ask_max": None if ask_max == float("-inf") else ask_max,
+        "sha256": actual_hash,
+        "campaign_expected_sha256": None if key is None else campaign["data_inputs"][key],
+        "campaign_hash_match": None if key is None else actual_hash == campaign["data_inputs"][key],
+    }
+
+
+files = {symbol: str(filename) for symbol, filename in cfg.data.tick_files.items()}
+result = {
+    "audit_date": "2026-10-16", "repository_head": __import__("subprocess").check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+    "campaign_fingerprint": campaign.get("fingerprint"), "config_sha256": digest(CFG),
+    "tick_execution_enabled": bool(cfg.costs.use_tick_execution),
+    "timezone_contract": str(cfg.data.tz),
+    "scope_note": "Streamed raw bid/ask tick scan; timestamp duplicates counted for adjacent rows, sufficient to identify duplicates when ordered. Does not verify broker/feed identity, clock offset/DST truth, full tick-cache equality, or every raw optional tick column.",
+    "feed_and_terms": "Not established by repository evidence; broker/feed identity and data-use/publication terms remain unresolved.",
+    "symbols": {symbol: scan(symbol, filename) for symbol, filename in files.items()},
+}
+out = ROOT / "outputs/agent_state/g1_tick_quality_scan_20261016.json"
+out.write_text(json.dumps(result, indent=2) + "\n")
+print(json.dumps({"output": str(out), "symbols": {k: {field: v[field] for field in ("rows", "raw_order_breaks", "adjacent_duplicate_timestamp_rows", "invalid_timestamp_rows", "invalid_or_missing_bid_ask_rows", "crossed_quote_rows_ask_below_bid", "campaign_hash_match")} for k, v in result["symbols"].items()}}, indent=2))

@@ -1,0 +1,122 @@
+{
+  "campaign_fingerprint": "3474621efd6a1481bd2a20bce0cfd2c0b69969df1849c6cd738d19dc5bb4ba34",
+  "repository_head": "8a98f7792f83ce4bbe5cb84f4a2137657d791c02",
+  "results": [
+    {
+      "variant": "ladder_a0_flat",
+      "strategy": "baseline",
+      "cache_path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/data/prebuilt_feature_cache/baseline.parquet",
+      "cache_exists": true,
+      "cache_bytes": 562442543,
+      "cache_sha256": "d6c450790b1799aa24f6688c32b91e1e5d7b4777cdc99a2914c4c80808e327c5",
+      "expected_feature_hash": "656b50e064710408",
+      "sidecar_value": "656b50e064710408",
+      "sidecar_matches_expected": true,
+      "htf_sweeps_sidecar_exists": false,
+      "raw_feature_to_cache": {
+        "fresh_shape": [
+          528760,
+          194
+        ],
+        "cached_shape": [
+          528760,
+          194
+        ],
+        "index_equal": true,
+        "columns_equal": true,
+        "compared_columns": 194,
+        "changed_columns": [],
+        "max_abs_delta": 0.0,
+        "value_mismatch_count": 0,
+        "nan_mask_mismatch_count": 0
+      }
+    },
+    {
+      "variant": "ladder_a1_sl",
+      "strategy": "baseline",
+      "cache_path": "cache/US100.cash_features_v19-causal-mtf-ifvg_a7af5788f698baf5.parquet",
+      "cache_exists": true,
+      "cache_bytes": 637810409,
+      "cache_sha256": "dd83e19edf2bed6963046fdafd02646488aabe4baf3088f90d48da3ab5d9817e",
+      "expected_feature_hash": "a7af5788f698baf5",
+      "sidecar_value": "a7af5788f698baf5",
+      "sidecar_matches_expected": true,
+      "htf_sweeps_sidecar_exists": false,
+      "raw_feature_to_cache": {
+        "fresh_shape": [
+          528760,
+          438
+        ],
+        "cached_shape": [
+          528760,
+          438
+        ],
+        "index_equal": true,
+        "columns_equal": true,
+        "compared_columns": 438,
+        "changed_columns": [],
+        "max_abs_delta": 0.0,
+        "value_mismatch_count": 0,
+        "nan_mask_mismatch_count": 0
+      }
+    },
+    {
+      "variant": "ladder_a0_flat_po3",
+      "strategy": "po3_ifvg",
+      "cache_path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/data/prebuilt_feature_cache/idea1_po3_ifvg.parquet",
+      "cache_exists": true,
+      "cache_bytes": 696577366,
+      "cache_sha256": "2a42897c3bb54f0d2b9973af104ca88b617c908b82fd5f33b4a7d99fb73936e1",
+      "expected_feature_hash": "75feaab2164f0ee9",
+      "sidecar_value": "75feaab2164f0ee9",
+      "sidecar_matches_expected": true,
+      "htf_sweeps_sidecar_exists": true,
+      "raw_feature_to_cache": {
+        "fresh_shape": [
+          528760,
+          532
+        ],
+        "cached_shape": [
+          528760,
+          532
+        ],
+        "index_equal": true,
+        "columns_equal": true,
+        "compared_columns": 532,
+        "changed_columns": [],
+        "max_abs_delta": 0.0,
+        "value_mismatch_count": 0,
+        "nan_mask_mismatch_count": 0
+      }
+    },
+    {
+      "variant": "ladder_a0_flat_dist",
+      "strategy": "distribution",
+      "cache_path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/data/prebuilt_feature_cache/idea2_distribution.parquet",
+      "cache_exists": true,
+      "cache_bytes": 698434858,
+      "cache_sha256": "87e65a8d4b775d10674f6b59193ef2662c8cab1d02daeebd938c30935b676fa9",
+      "expected_feature_hash": "c5c8b3d9e890a760",
+      "sidecar_value": "c5c8b3d9e890a760",
+      "sidecar_matches_expected": true,
+      "htf_sweeps_sidecar_exists": true,
+      "raw_feature_to_cache": {
+        "fresh_shape": [
+          528760,
+          538
+        ],
+        "cached_shape": [
+          528760,
+          538
+        ],
+        "index_equal": true,
+        "columns_equal": true,
+        "compared_columns": 538,
+        "changed_columns": [],
+        "max_abs_delta": 0.0,
+        "value_mismatch_count": 0,
+        "nan_mask_mismatch_count": 0
+      }
+    }
+  ]
+}

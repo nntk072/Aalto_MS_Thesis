@@ -1,0 +1,121 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+from omegaconf import OmegaConf
+
+ROOT = Path.cwd()
+sys.path.insert(0, str(ROOT))
+from quant_rl.config import apply_overrides, load_config  # noqa: E402
+from quant_rl.data.clean import clean  # noqa: E402
+from quant_rl.data.loader import load_bars  # noqa: E402
+from quant_rl.data.session import add_session_id, add_session_labels  # noqa: E402
+from quant_rl.data.split import get_split_config, make_train_mask  # noqa: E402
+from quant_rl.features.build import build_features, feature_cache_content_hash, feature_cache_path  # noqa: E402
+from quant_rl.train.variant_resolver import resolve_variant  # noqa: E402
+
+CAMPAIGN = ROOT / "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/campaign.json"
+VARIANTS = ["ladder_a0_flat", "ladder_a1_sl", "ladder_a0_flat_po3", "ladder_a0_flat_dist"]
+OUT = ROOT / "outputs/agent_state/g1_feature_cache_raw_parity_20261016.json"
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def resolved_config(name: str) -> tuple[Any, dict[str, Any]]:
+    resolved = resolve_variant(name)
+    cfg: Any = load_config(config_path=ROOT / str(resolved["base_config"]))
+    strategy_config = {
+        "po3_ifvg": ROOT / "config" / "2_po3_ifvg.yaml",
+        "distribution": ROOT / "config" / "3_distribution.yaml",
+    }.get(str(resolved["strategy"]))
+    if strategy_config is not None:
+        cfg = OmegaConf.merge(cfg, OmegaConf.load(strategy_config))
+    cfg = apply_overrides(cfg, list(resolved["overrides"]))
+    return cfg, resolved
+
+
+def compare(fresh: pd.DataFrame, cached: pd.DataFrame) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "fresh_shape": list(fresh.shape), "cached_shape": list(cached.shape),
+        "index_equal": bool(fresh.index.equals(cached.index)),
+        "columns_equal": list(fresh.columns) == list(cached.columns),
+        "compared_columns": 0, "changed_columns": [], "max_abs_delta": 0.0,
+        "value_mismatch_count": 0, "nan_mask_mismatch_count": 0,
+    }
+    if not result["index_equal"] or not result["columns_equal"]:
+        return result
+    for column in fresh.columns:
+        left = pd.to_numeric(fresh[column], errors="coerce").to_numpy(dtype=np.float64)
+        right = pd.to_numeric(cached[column], errors="coerce").to_numpy(dtype=np.float64)
+        nan_mismatch = np.isnan(left) != np.isnan(right)
+        finite = np.isfinite(left) & np.isfinite(right)
+        equal = np.ones(len(left), dtype=bool)
+        equal[finite] = np.isclose(left[finite], right[finite], rtol=1e-10, atol=1e-12)
+        nonfinite = ~finite
+        equal[nonfinite] = left[nonfinite] == right[nonfinite]
+        both_nan = np.isnan(left) & np.isnan(right)
+        equal[both_nan] = True
+        mismatch = ~equal | nan_mismatch
+        delta = float(np.max(np.abs(left[finite] - right[finite]))) if finite.any() else 0.0
+        result["max_abs_delta"] = max(float(result["max_abs_delta"]), delta)
+        result["value_mismatch_count"] += int(mismatch.sum())
+        result["nan_mask_mismatch_count"] += int(nan_mismatch.sum())
+        result["compared_columns"] += 1
+        if mismatch.any():
+            result["changed_columns"].append({"column": str(column), "mismatches": int(mismatch.sum()), "max_abs_delta": delta})
+    return result
+
+
+campaign = json.loads(CAMPAIGN.read_text())
+base = load_config(config_path=ROOT / "quant_rl/config/default.yaml")
+primary_symbol, secondary_symbol = str(base.data.primary), str(base.data.secondary)
+raw_dir = ROOT / str(base.data.raw_dir)
+primary = add_session_id(add_session_labels(clean(load_bars(raw_dir / str(base.data.m1_files[primary_symbol])), tz=str(base.data.tz)), tz=str(base.data.tz), ny_end=str(base.session.end)))
+secondary = add_session_id(add_session_labels(clean(load_bars(raw_dir / str(base.data.m1_files[secondary_symbol])), tz=str(base.data.tz)), tz=str(base.data.tz), ny_end=str(base.session.end)))
+train_end, _ = get_split_config(base)
+train_mask = make_train_mask(pd.DatetimeIndex(primary.index), train_end)
+results: list[dict[str, Any]] = []
+
+for variant in VARIANTS:
+    cfg, identity = resolved_config(variant)
+    cache = feature_cache_path(Path(str(cfg.data.cache_dir)), primary_symbol, cfg, primary, train_mask=train_mask, secondary=secondary)
+    prebuilt = OmegaConf.select(cfg, "data.prebuilt_feature_cache")
+    if prebuilt:
+        cache = Path(str(prebuilt)).expanduser()
+        if not cache.is_absolute():
+            cache = ROOT / cache
+        cache = cache.resolve()
+    sidecar = Path(str(cache) + ".hash")
+    expected_hash = feature_cache_content_hash(cfg, primary, train_mask=train_mask, secondary=secondary)
+    sidecar_value = sidecar.read_text(encoding="utf-8").strip() if sidecar.is_file() else None
+    print(f"rebuilding variant={variant} cache={cache} expected={expected_hash}", flush=True)
+    fresh = build_features(primary, secondary=secondary, cfg=cfg, train_mask=train_mask, force=True)
+    cached = pd.read_parquet(cache) if cache.is_file() else pd.DataFrame()
+    comparison = compare(fresh, cached)
+    result = {
+        "variant": variant, "strategy": identity.get("strategy"), "cache_path": str(cache),
+        "cache_exists": cache.is_file(), "cache_bytes": cache.stat().st_size if cache.is_file() else None,
+        "cache_sha256": sha256(cache) if cache.is_file() else None,
+        "expected_feature_hash": expected_hash, "sidecar_value": sidecar_value,
+        "sidecar_matches_expected": bool(sidecar_value == expected_hash),
+        "htf_sweeps_sidecar_exists": Path(str(cache) + ".htf_sweeps.parquet").is_file(),
+        "raw_feature_to_cache": comparison,
+    }
+    results.append(result)
+    OUT.write_text(json.dumps({"campaign_fingerprint": campaign.get("fingerprint"), "repository_head": __import__("subprocess").check_output(["git", "rev-parse", "HEAD"], text=True).strip(), "results": results}, indent=2) + "\n")
+    print(json.dumps({"variant": variant, "sidecar_matches": result["sidecar_matches_expected"], "index_equal": comparison["index_equal"], "columns_equal": comparison["columns_equal"], "value_mismatch_count": comparison["value_mismatch_count"], "max_abs_delta": comparison["max_abs_delta"]}), flush=True)
+    del fresh, cached
+
+print(f"report={OUT}", flush=True)

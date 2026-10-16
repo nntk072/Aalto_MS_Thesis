@@ -2,6 +2,20 @@
 
 **Status: OPEN — no independent reviewer has completed or signed this review.**
 
+### Evidence availability correction — 2026-10-16
+
+The prior checklist text below refers to files under
+`outputs/gpu_campaigns/readiness_reaudit_20261014/`. Those files and the
+`outputs/gpu_campaigns/real_market_frames_bundle_parity_20261013/` directory
+are absent from the current canonical checkout. A bounded A0/checkpoint parity
+report is not a substitute for the claimed all-18-variant report. Until that
+artifact is restored and hash-checked, reviewers must treat the all-18 parity
+claim as unverified. The feature-prefix report that is available has been
+archived under `evidence/g1_2026-10-16/`, but it used source snapshot
+`8a98f7792f83ce4bbe5cb84f4a2137657d791c02`; feature/config files changed
+afterward, so it does not establish prefix invariance for the current source.
+See the dated [G1 evidence inventory](evidence/g1_2026-10-16/README.md).
+
 This checklist prepares the remaining independent review of the Aalto thesis
 trading-system evidence. It is not itself independent sign-off, a strategy
 selection, or evidence that a strategy works. The internal source review is in
@@ -24,22 +38,19 @@ campaign decision and evidence boundary are in
   utilization peaks 97%/96%, and lacks allocation-wide cgroup memory and
   process-tree CPU-time measurements. It does not establish a sustained 20M
   resource profile.
-- The current-source real-market feature-prefix audit:
-  [`feature_prefix_causality.json`](../../outputs/gpu_campaigns/readiness_reaudit_20261014/feature_prefix_causality.json).
-  It passed 9/9 comparisons across the three registered profiles and three
-  cutoffs; recorded source, script and raw-data hashes were rechecked against
-  the current tree. Its scope is prefix invariance at those cutoffs only.
-- The current-source full-calendar frames/shared-bundle audit:
-  [`frames_bundle_parity.json`](../../outputs/gpu_campaigns/readiness_reaudit_20261014/frames_bundle_parity.json).
-  It completed all 18 variants, comparing a 49,925-step exposed test-calendar
-  trace and a 10,000-step active-action trace per variant, with zero failures
-  and maximum scalar delta 0.0. Its 166 source/config hashes, four raw-data
-  hashes and dirty-path manifest were rechecked against the current worktree.
-  The result is bounded to those fixed traces; review it alongside the
-  execution/reward source contract, not as proof of exhaustive policy-state
-  equivalence or strategy performance. See the
-  [human-readable summary](../../outputs/gpu_campaigns/readiness_reaudit_20261014/frames_bundle_parity.md)
-  and [Slurm accounting](../../outputs/gpu_campaigns/readiness_reaudit_20261014/reports/slurm_accounting_20951231.psv).
+- The archived real-market feature-prefix audit:
+  [`g1_real_market_feature_prefix_20261016_main.json`](evidence/g1_2026-10-16/g1_real_market_feature_prefix_20261016_main.json).
+  It passed 12/12 comparisons across four profiles and three cutoffs, but used
+  source snapshot `8a98f7792f83ce4bbe5cb84f4a2137657d791c02`. Since relevant
+  feature/config files changed, it is historical evidence only; rerun against
+  the frozen thesis source before relying on it.
+- **All-18-variant full-calendar frames/shared-bundle parity:** the earlier
+  checklist cited `outputs/gpu_campaigns/readiness_reaudit_20261014/` and
+  `outputs/gpu_campaigns/real_market_frames_bundle_parity_20261013/`, but
+  neither artifact directory exists in this checkout. Do not treat the prior
+  prose as verified evidence. Restore and hash-check the complete artifact, or
+  rerun the bounded parity audit against the frozen source. Existing A0 and
+  individual checkpoint parity reports cover narrower scopes.
 - The [training-year coverage audit](train_year_coverage_audit_2026-10-14.json).
   It distinguishes 351,550 raw train-period M1 rows from 99,504 NY-session
   agent steps per complete environment episode. The 20M aggregate PPO budget
@@ -486,4 +497,4 @@ The immutable [`live resource sample`](live_resource_snapshot_2026-10-14_1755.js
 
 ### Corrected A0 backend parity evidence — 2026-10-14 21:03 Helsinki time
 
-The current-source A0-only frames/shared-bundle audit passed with zero scalar delta across the 49,925-step test-calendar trace and 10,000 active-action steps; it opened 46 trades in the active trace. The report [`a0_frames_bundle_parity.json`](../../outputs/gpu_campaigns/readiness_reaudit_20261014/a0_current_parity/a0_frames_bundle_parity.json) has SHA-256 `6d40de0e4429ed2db0ce7016b0583d8362374f40a373834cea5df793c0921f86`; its retained driver hash is `81897d053d5ef7ee4190c8bb9e7e4421d6842dc63267d413f66e0b24527c094e`. This strengthens only bounded A0 backend parity. It does not satisfy independent review or prove strategy performance, and other current-source variant parity remains unverified.
+The 2026-10-14 note reported an A0-only frames/shared-bundle audit with zero scalar delta over a 49,925-step test-calendar trace and 10,000 active-action steps, opening 46 trades in the active trace. Its cited report path `outputs/gpu_campaigns/readiness_reaudit_20261014/a0_current_parity/a0_frames_bundle_parity.json` is now absent from this checkout, so the recorded SHA-256 `6d40de0e4429ed2db0ce7016b0583d8362374f40a373834cea5df793c0921f86` cannot be rechecked here. Treat this old result as unverified until restored. The current recovery campaign retains narrower baseline and distribution checkpoint parity reports under `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/`; they do not establish all-18-variant parity or final-checkpoint parity. No parity result establishes strategy performance or independent review.
