@@ -50,6 +50,40 @@ the job.
 Triton emails when many jobs last &lt; ~120s. Prefer one long shell (hours),
 never a burst of short diagnostic jobs.
 
+### Short-job / step monitor hard gate
+
+The cluster monitoring rule is operationally strict: a job or step with an
+elapsed time below **120 seconds** counts as short. Repeated short jobs/steps
+can trigger an account warning even when they are launched under one parent
+allocation or spread across nodes. Treat the reported situation (20 or more
+short jobs/steps, especially across two or more nodes) as a launch-control
+failure, not as an acceptable cost of campaign startup. Recent examples were
+job `20982346` (46 seconds, 2 steps across 2 nodes) and job `20982372` (110
+seconds, 22 steps across 2 nodes); these are incident evidence, not acceptable
+templates for future launches.
+
+Before starting or resuming any campaign, benchmark, test batch, or supervisor,
+inspect its launch path and establish the maximum number of Slurm jobs/steps it
+can create, including retries, health checks, worker fan-out, and shutdown. The
+default permitted count of **new short Slurm jobs/steps is zero**. Do not use
+one `srun` per worker, variant, retry, test, monitor, or node-local command.
+Run short commands directly in the login shell when CPU-only and permitted, or
+inside an already-running allocation without creating another Slurm step.
+For multi-node work, use only the already allocated node shells/persistent
+supervisors; do not fan out short steps across nodes. If the design cannot meet
+this rule, do not launch it: first change the launcher to a bounded number of
+persistent long-lived steps or direct child processes, then verify the topology
+before resuming. A parent job lasting hours does not make its short child steps
+compliant.
+
+After launch, inspect `squeue`/`sacct` step records and supervisor logs from the
+login node. If unexpected steps appear or any worker repeatedly exits before
+120 seconds, stop submitting/retrying work, preserve logs and allocation state,
+and diagnose the launcher. Do not cancel the allocation unless the user
+explicitly authorizes cancellation. Never attempt to evade the monitor by
+keeping a short command alive artificially; use a genuine persistent task or
+run the command inside an existing shell.
+
 ### Default workflow (no new job)
 
 1. `bash scripts/triton/status.sh` (or `find_gpu_session.sh`) on login.
@@ -78,11 +112,33 @@ never a burst of short diagnostic jobs.
 
 ### Still forbidden
 
-- Loops / bursts of short jobs or job steps (&lt; ~120s each).
+- Any loop/burst that submits short Slurm jobs or steps, including one `srun`
+  per variant, retry, test, or monitor. A task expected to take under 120s must
+  run as an ordinary command inside an already-running allocation; it must not
+  create a new job or step.
+- Launching a campaign worker through a separate Slurm step for every variant
+  when a persistent supervisor or direct child process can run it inside the
+  existing allocation. Pack workers into the fewest long-lived steps required
+  for GPU binding; do not turn each queue poll or retry into a step.
+- **Known launcher hazard:** `campaign_controller.py --worker-nodes ...` builds
+  one `srun --overlap` step per worker. Do not use that mode to launch a large
+  multi-worker campaign until its step topology is changed to one persistent
+  node supervisor per node (with trainer processes as children) or an
+  equivalent packed design. Before any campaign, inspect the actual launch
+  command and estimate the number of steps; reject a design that can fan out
+  dozens of short-lived steps during startup/failure recovery.
+- Rapid automatic retry after a worker exits early. Preserve its log, let the
+  supervisor record the failure, inspect the cause, then resume through the
+  campaign controller only after confirming that the retry is a sustained run.
+- Parallel one-off benchmark jobs on multiple nodes for work that fits the
+  current allocation. Prefer one allocation, one sampler, and a fixed benchmark
+  window long enough to include warm-up and steady-state throughput.
 - `scancel -u $USER` unless the user explicitly requests a full wipe.
 - Using `srun` for login-node checks (`ls`, log tails, plain `grep`).
-- More than **two GPUs** per allocation. One model uses 1 GPU. The six-run
-  encoder matrix uses 2. Do not request 3+.
+- GPU count limits are **partition and workload specific**, not global. Follow
+  the per-family caps in the table below; check Slurm availability and account
+  limits before each request. The two-GH200 cap below applies to the current
+  thesis campaign shape, not to V100 or every GPU family.
 
 ## Before allocating (after user OK) — check availability
 
@@ -100,6 +156,28 @@ squeue -p gpu-h200-141g-short,gpu-h200-141g-m,gpu-grace-h200-141g -o '%.18i %.9P
 
 Prefer partitions with **idle** or lightly **mixed** nodes and short queues.
 Confirm `MaxTime` before choosing wall-clock.
+
+### GPU family and partition limits
+
+The following is the Triton configuration observed on **2026-10-16** using
+`sinfo` and `scontrol`; node availability is transient. GPU counts are
+configured partition capacity, not a promise that those GPUs are free. Always
+query `sinfo`, `squeue`, `scontrol show node`, and account/QOS before a real
+request. The project has no universal two-GPU cap.
+
+| GPU family | VRAM / CUDA capability | Triton partition(s) | Partition MaxTime / MaxNodes | Project request guidance |
+|---|---|---|---|---|
+| V100 | 16 or 32 GiB / 7.0 | `gpu-v100-16g`, `gpu-v100-32g`; `gpu-interactive` is 32 GiB | 5d / max one node; interactive 4h / max one node | Representative nodes: 32 CPUs/375 GiB (`gpu35`); DGX 80 CPUs/516 GiB (`dgx1`, `dgx5`). The 2026-10-16 two-trainer probe used 1 V100, 16 CPUs, and 192 GiB requested RAM; it averaged 13 FPS per trainer at `n_envs=64`. The post-run profiler query did not finish; treat this as preliminary, not a campaign throughput guarantee. Use `.venv-v100`; `.venv-x86` cu130 lacks `sm_70`. |
+| A100 | 80 GiB / 8.0 | `gpu-a100-80g` | 5d / max one node | Representative node `gpu11`: 96 CPUs/515 GiB. Choose card count from benchmark and node capacity; no GH200-derived cap. |
+| H100 | 80 GiB / 9.0 | `gpu-h100-80g`, `gpu-h100-80g-short` | 5d or 2d / max one node | Representative node `gpu45`: 192 CPUs/990 GiB. Match runtime and environment/kernel support to the selected partition. |
+| H200 | 141 GiB / 9.0 | `gpu-h200-141g-m`, `gpu-h200-141g-short` | 8h or 2d / max one node | Representative node `gpu50`: 128 CPUs/1,980 GiB; full nodes expose up to 8 GPUs. Measure concurrency and request supported node resources. |
+| H200 partitioned | 71 GiB slice (H200 3g.71gb) / 9.0 | `gpu-h200-71g-ia` | 8h / max one node | `gpu49`: 128 CPUs/1,980 GiB and up to 8 71-GiB slices alongside 4 full H200s. Treat a slice as a partitioned GPU. Other 18/35-GiB IA partitions were not configured in this snapshot. |
+| GH200 | 141 GiB / 9.0 | `gpu-grace-h200-141g` | 5d / max two nodes | Representative node `gpuarm1`: 144 CPUs/1,100 GiB. Current 18-trainer campaign shape: at most 2 GH200, one per node. This is workload-specific, not a global GPU-count rule. |
+| B300 | 288 GiB / 10.3 | `gpu-b300-288g-short` | 2d / max one node | Representative node `gpu64`: 256 CPUs/3,000 GiB. Verify framework support and measured throughput before choosing it. |
+| AMD MI100 / MI210 | 32 GiB MI100 / 64 GiB MI210, ROCm (not CUDA) | `gpu-amd` | 5d / max one node | `gpuamd1`: 16 CPUs/250 GiB, 1 MI100 + 2 MI210. Requires ROCm-compatible PyTorch/runtime; CUDA environments do not apply. |
+
+These capability/partition values describe the configured server at the
+snapshot date. Refresh them from Triton before changing allocation guidance.
 
 ### GPU count
 
@@ -120,13 +198,15 @@ present the 18-trainer projection as a direct measurement.
 
 | Job | GPUs | Typical request | Why |
 |-----|------|-----------------|-----|
-| One model (one TCN / GRU / Transformer, 20M) | **1** | GH200: `--gpus=gh200:1 --mem=512G --cpus-per-task=48 --time=6:00:00` or `--time=12:00:00` | One process, one 141 GB GPU. 6h is the default 20M train. 12h when `MaxTime` allows and the user asks for the longer shell. |
-| Six-run matrix (overlay then baseline, three archs) | **2** | GH200: `--gpus=gh200:2 --mem=900G --cpus-per-task=128 --time=6:00:00` | Historical six-run launcher `scripts/run_6run_matrix_tmux.sh` is absent from this checkout. Check [current matrix scripts](../../scripts/matrix/) and allocation limits before selecting a launcher. |
+| One model (one TCN / GRU / Transformer, 20M) | **1** | Example GH200: `--gpus=gh200:1 --mem=512G --cpus-per-task=48 --time=6:00:00` or `--time=12:00:00` | GH200 example only; size CPU/RAM/time for the chosen family, partition, and measured workload. |
+| Six-run matrix (overlay then baseline, three archs) | **2 GH200** | `--gpus=gh200:2 --mem=900G --cpus-per-task=128 --time=6:00:00` | Historical GH200 shape only. The GH200 campaign cap does not set V100/A100/H100/H200/B300 caps. Check [current matrix scripts](../../scripts/matrix/) before use. |
+| V100 throughput probe (2026-10-16 user-authorized) | **1 V100, 2 trainers** | Actual probe: `gpu35`, `--gres=gpu:v100:1 --mem=192G --cpus-per-task=16 --time=4:00:00` | One V100 shared by two matched throughput workers. Benchmark-only; not thesis evidence or a validated general V100 cap. |
 
-H200 (`gpu-h200-141g-short`, `.venv-x86`) is still preferred for a **1-GPU** job
-when that partition has idle capacity. The six-run matrix stays on GH200
-(`gpu-grace-h200-141g`, `.venv`) because that node is 2 GPUs and the project
-env matches it. Do not request 3+ GPUs.
+Choose a GPU family based on availability and compatible runtime, not a global
+preference. `.venv-x86` cu130 supports H100/H200 but not V100; use the separate
+V100 environment only after its CUDA kernels and real GPU operation pass the
+preflight below. The six-run matrix's two-GH200 shape remains specific to that
+campaign.
 
 Setup x86 env once on an x86 node: `scripts/setup/setup_venv_x86.sh`. Inside any GPU
 shell: `source scripts/triton/activate_venv.sh` (picks `.venv` or `.venv-x86`).
@@ -236,12 +316,18 @@ redesigning the matrix:
   while CPU/RAM remained free).
 - `srun --test-only` validates shape and gives an estimate; it does not reserve
   resources. A pending job with `Reason=Priority` is not a malformed request.
-- The project's current `.venv-x86` uses `torch==2.14.0+cu130`, which does not
-  contain kernels for V100 compute capability 7.0. Do not use V100 partitions
-  for this training without changing and validating the PyTorch CUDA build.
+- The project's `.venv-x86` uses `torch==2.14.0+cu130`, which does not contain
+  kernels for V100 compute capability 7.0. The isolated `.venv-v100` built on
+  2026-10-16 uses `torch==2.14.0+cu126`, Python 3.12, SB3 2.9.0, Gymnasium
+  1.3.0, and NumPy 2.2.6; `torch.cuda.get_arch_list()` includes `sm_70`, the
+  detected capability is `(7, 0)`, and a 1024×1024 CUDA matmul succeeded.
+  `uv pip check` reported all installed packages compatible. This verifies the
+  environment and basic CUDA execution only; it does not yet establish
+  representative trainer compatibility or throughput.
 - H100/H200/B300 hardware may be compatible, but availability is separate from
-  compatibility. If two high-end nodes are not immediately allocatable, use
-  the verified two-GH200 shape rather than substituting V100.
+  compatibility. Select an eligible partition and a matching environment for
+  the GPU actually allocated; do not substitute a GPU family based on model
+  name or presumed speed.
 
 ## Reuse (when a GPU shell already exists)
 
@@ -295,4 +381,32 @@ srun --test-only -p gpu-grace-h200-141g -w gpuarm1 --gpus=gh200:1 --cpus-per-tas
 Replace the example values with the intended request; never blindly submit the example. `--test-only` reports Slurm's **estimated schedulability/start time** and does not start a GPU training job. It is a forecast, **not a guarantee** of immediate allocation. An apparently free GPU or low `AllocTRES` alone does not prove that Slurm can start the request; reservations, priorities, CPU, memory and duration matter.
 
 If the forecast is delayed, test realistic CPU/memory/walltime alternatives with `srun --test-only` **before** any real `srun` or `sbatch`. Test a minimal resource shape if necessary to distinguish GPU scheduling constraints from excessive CPU/RAM requests. For example, when even one GH200, one CPU and 1 GiB with the same walltime is delayed, reducing CPU/RAM cannot by itself guarantee an immediate start. Check `squeue` and `scontrol` for real jobs; dry-run job IDs are not live allocations. Do not repeatedly submit and cancel real jobs to probe availability.
-\n\n### Compare priority and GPU alternatives before waiting\n\nFor CPU-heavy PPO campaigns, minimize estimated total completion time: scheduler wait + measured training runtime. Do not lock to GH200 if A100, H100, H200, or B300 can start sooner and the node meets CPU/RAM, GPU VRAM, CUDA, architecture, environment, and walltime requirements.\n\nInspect account eligibility (sacctmgr show assoc user= format=Account,Partition,QOS) and partition priority (scontrol show partition <name>). Partition PriorityTier differs: on 2026-10-11 H100 gpu-h100-80g was tier 50 while GH200 gpu-grace-h200-141g was tier 1; this is a historical observation, not a permanent entitlement. Higher priority does not imply an unallocated GPU.\n\nCompare matching dry-runs on the login node, adjusting walltime to each partition limit:\n\n`ash\nsrun --test-only -p gpu-a100-80g --gpus=a100:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true\nsrun --test-only -p gpu-h100-80g --gpus=h100:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true\nsrun --test-only -p gpu-h200-141g-short --gpus=h200:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true\nsrun --test-only -p gpu-b300-288g-short --gpus=b300:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true\nsrun --test-only -p gpu-grace-h200-141g --gpus=gh200:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true\n`\n\nUse scontrol show node <node> to distinguish configured GPUs (CfgTRES) from currently allocated GPUs (AllocTRES). sinfo MIXED mostly describes node resources; it does not mean GPUs are free. Check actual GPU allocation and dry-run estimates independently. Slurm forecasts may be inaccurate or extremely far in the future; do not treat them as reservations. Verify the architecture-matching environment (H100/A100/H200/B300 x86_64 versus GH200 aarch64) and benchmark a short representative PPO run before choosing trainer concurrency. No real allocation should be launched solely because a dry-run predicted a fast start.\n
+
+
+### Compare priority and GPU alternatives before waiting
+
+For CPU-heavy PPO campaigns, minimize estimated total completion time:
+scheduler wait plus measured training runtime. Do not select GH200 by default
+if another supported family can start sooner and meets the workload's CPU, RAM,
+VRAM, CUDA, architecture, environment and walltime requirements.
+
+Inspect account eligibility with `sacctmgr show assoc user=$USER
+format=Account,Partition,QOS` and partition priority with
+`scontrol show partition <partition>`. Priority is not a reservation. Compare
+realistic resource shapes with login-node `srun --test-only` before any real
+allocation, while respecting each partition's maximum walltime:
+
+```bash
+srun --test-only -p gpu-a100-80g --gpus=a100:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true
+srun --test-only -p gpu-h100-80g --gpus=h100:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true
+srun --test-only -p gpu-h200-141g-short --gpus=h200:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true
+srun --test-only -p gpu-b300-288g-short --gpus=b300:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true
+srun --test-only -p gpu-grace-h200-141g --gpus=gh200:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true
+```
+
+Use `scontrol show node <node>` to distinguish configured GPUs (`CfgTRES`)
+from allocated GPUs (`AllocTRES`). A `MIXED` node state does not mean a GPU is
+free. Treat dry-run start estimates as forecasts, not reservations. Verify the
+environment on the requested architecture and use a representative training
+benchmark before increasing trainer concurrency. Never submit a real job only
+because a dry-run predicted a short wait.

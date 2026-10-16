@@ -170,13 +170,24 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
   bad log is not that yes. Do not pass `REPLACE=1`. The only exception is a
   job just submitted that stays PENDING with `StartTime=Unknown`: cancel that
   one request and stop.
-- **Before alloc:** check `sinfo`/`squeue` for free GPU/CPU/RAM. **1 GPU**
-  for one model (`gh200:1` or `h200:1`, `--mem=512G`, 48 CPUs, **6h or 12h**).
-  **2 GPUs** for the six-run matrix (`gh200:2`, `--mem=900G`, 128 CPUs, 6h).
-  Never 3+. Match venv arch: `source scripts/triton/activate_venv.sh` inside the
-  GPU shell (`.venv` on GH200/aarch64, `.venv-x86` on H200/x86_64). Login has no
-  GPU and not enough RAM for `n_envs=64`.
+- **Before alloc:** check `sinfo`/`squeue` for free GPU/CPU/RAM and apply the
+  partition and GPU-family guidance in `.agents/rules/triton-slurm.md`. There is
+  no universal two-GPU cap: the 2-GH200 limit applies to the current campaign
+  shape only. The 2026-10-16 V100 probe uses 1 V100 shared by 2 trainers;
+  `.venv-x86` cu130 is incompatible with V100, so use `.venv-v100` only after
+  checking `sm_70` support and a real CUDA operation. Match venv architecture
+  (`.venv` on GH200/aarch64, `.venv-x86` on H100/H200 x86_64). Login has no GPU
+  and not enough RAM for `n_envs=64`.
 - **Do not `scancel`** when a train finishes — keep the GPU bash + tmux for
   the next run until you explicitly ask to cancel the job.
 - Login SSH for `ls` / `squeue` / `sinfo` / `tmux capture-pane` / inspect-only
   `scripts/triton/*.sh`; never `srun` for those checks.
+- **Short-step monitor hard gate:** any job/step under 120 seconds counts as
+  short, including child steps inside a long allocation. Create zero new short
+  Slurm jobs/steps. Before launch/resume, inspect the full job/step topology,
+  including retries and fan-out; never use one `srun` per worker, variant,
+  retry, test, monitor, or node-local command. Run short work inside an existing
+  shell/allocation without another step. If unexpected early exits or steps
+  appear, stop submitting/retrying, preserve logs and allocation state, and
+  diagnose. Do not cancel without explicit user authorization. Follow the
+  detailed hard gate in `.agents/rules/triton-slurm.md`.
