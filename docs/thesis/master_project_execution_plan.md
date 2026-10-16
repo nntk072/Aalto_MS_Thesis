@@ -1141,6 +1141,16 @@ Verify:
   P2 remains open for completed-selected-checkpoint acceptance, repeated
   deterministic report validation, and the other schema/compatibility
   requirements above.
+- The same 12M `ladder_a0_flat_dist__seed50` attempt-3 training-split parity
+  audit was repeated on `main` at `15eef986974e45d162537cf5a086b4de4484dfb4`.
+  Again all frame/shared-bundle comparisons passed over 99,504 steps, with 59
+  completed trades and the same report-level metrics and provenance hashes as
+  the first audit. The repeated report is
+  `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/p2_checkpoint_frame_bundle_train_a0_dist_12m_repeat1_20261016/audit.json`.
+  This confirms repeatability of the reported parity outcome and summary values
+  for this checkpoint; the audit does not retain serialized cross-run trade
+  event rows, so it does not resolve the separate `level_type` determinism
+  finding or close P2.
 - The report-only evaluator reconstructs the run from frames even when the
   training snapshot says `data_source=bundle`. The backend parity contract must
   be demonstrated for each exact reported checkpoint and source/config
