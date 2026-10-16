@@ -20,6 +20,7 @@ class EnvSpec:
     config: Mapping[str, Any]
     episodic: bool = True
     use_vae: bool = False
+    evaluation: bool = False
 
     @classmethod
     def from_cfg(
@@ -32,6 +33,7 @@ class EnvSpec:
         bundle_dir: str,
         episodic: bool = True,
         use_vae: bool = False,
+        evaluation: bool = False,
     ) -> EnvSpec:
         """Copy resolved config primitives into a compact immutable worker spec."""
         raw = OmegaConf.to_container(cfg, resolve=True) if isinstance(cfg, DictConfig) else cfg
@@ -45,4 +47,5 @@ class EnvSpec:
             config={str(key): value for key, value in raw.items()},
             episodic=bool(episodic),
             use_vae=bool(use_vae),
+            evaluation=bool(evaluation),
         )

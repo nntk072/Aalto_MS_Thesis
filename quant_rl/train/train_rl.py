@@ -1530,6 +1530,7 @@ def main() -> None:
             arch=args.arch,
             bundle_dir=str(bundle_path),
             episodic=False,
+            evaluation=True,
         )
         test_bundle_path = build_env_bundle(
             cache_dir,
@@ -1548,6 +1549,7 @@ def main() -> None:
             arch=args.arch,
             bundle_dir=str(test_bundle_path),
             episodic=False,
+            evaluation=True,
         )
         best_count = min(20_000, train_bar_count)
         # .copy() detaches these from the full train arrays so that the
@@ -1745,6 +1747,7 @@ def main() -> None:
                 arch=args.arch,
                 bundle_dir=str(short_bundle),
                 episodic=False,
+                evaluation=True,
             )
             best_eval_factory = partial(make_bundle_env, best_eval_spec)
         else:

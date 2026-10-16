@@ -57,6 +57,58 @@ def test_worker_factory_matches_default_make_env(tmp_path: Path) -> None:
         assert left_step[4] == right_step[4]
 
 
+def test_evaluation_worker_disables_training_trailing_guardrails(tmp_path: Path) -> None:
+    """Evaluation keeps daily/max-loss gates but disables trailing kill-switches."""
+    from quant_rl.config import load_config
+    from quant_rl.envs.env_bundle_builder import build_env_bundle
+    from quant_rl.envs.env_spec import EnvSpec
+    from quant_rl.envs.strategies import BaselineStrategy
+    from quant_rl.envs.worker import make_bundle_env
+
+    bars = _make_deterministic_bars(n=96)
+    features = _make_features(bars)
+    cfg = load_config()
+    cfg.ftmo.trailing_dd_limit = 0.07
+    cfg.ftmo.soft_trailing_dd_limit = 0.02
+    bundle_path = build_env_bundle(
+        tmp_path,
+        bars,
+        features,
+        cfg,
+        raw_columns=list(BaselineStrategy().raw_columns),
+        feature_config_hash="worker-evaluation-guardrails-v1",
+        tickbook=None,
+        pre_ny_by_date=None,
+    )
+    training_env = make_bundle_env(
+        EnvSpec.from_cfg(
+            cfg,
+            algo="ppo",
+            reward="dsr",
+            arch="tcn",
+            bundle_dir=str(bundle_path),
+        )
+    )
+    evaluation_env = make_bundle_env(
+        EnvSpec.from_cfg(
+            cfg,
+            algo="ppo",
+            reward="dsr",
+            arch="tcn",
+            bundle_dir=str(bundle_path),
+            episodic=False,
+            evaluation=True,
+        )
+    )
+
+    assert training_env.guardrails.trailing_dd_limit == 0.07
+    assert training_env.guardrails.soft_trailing_dd_limit == 0.02
+    assert evaluation_env.guardrails.trailing_dd_limit == 0.0
+    assert evaluation_env.guardrails.soft_trailing_dd_limit == 0.0
+    assert evaluation_env.guardrails.daily_loss_limit == training_env.guardrails.daily_loss_limit
+    assert evaluation_env.guardrails.max_loss_limit == training_env.guardrails.max_loss_limit
+
+
 def test_worker_import_does_not_load_torch_or_sb3() -> None:
     """Bundle worker imports remain independent of the training stack."""
     result = subprocess.run(

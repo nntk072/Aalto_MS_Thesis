@@ -131,6 +131,12 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
         "trailing_dd_limit": float(ftmo.get("trailing_dd_limit", 0.07)),
         "soft_trailing_dd_limit": float(ftmo.get("soft_trailing_dd_limit", 0.0)),
     }
+    if spec.evaluation:
+        # Match train_rl._eval_guardrail_kwargs: evaluation reports apply the
+        # daily and initial-equity loss gates, while trailing drawdown remains
+        # a training kill switch only.
+        guardrail_kwargs["trailing_dd_limit"] = 0.0
+        guardrail_kwargs["soft_trailing_dd_limit"] = 0.0
     encoder = _block(cfg, "encoder")
     windows = {str(key): int(value) for key, value in (encoder.get("windows", {}) or {}).items()}
     return TradingEnv.from_bundle(

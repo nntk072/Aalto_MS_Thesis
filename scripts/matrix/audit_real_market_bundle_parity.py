@@ -404,6 +404,7 @@ def main() -> int:
                 arch=str(resolved["arch"]),
                 bundle_dir=str(bundle_path),
                 episodic=False,
+                evaluation=True,
             )
             shared = make_bundle_env(spec)
             action_schema = getattr(frames, "action_schema", None)

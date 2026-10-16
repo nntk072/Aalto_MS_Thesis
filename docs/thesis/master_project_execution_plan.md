@@ -1090,6 +1090,25 @@ Verify:
   This closes backend parity for this partial baseline checkpoint only; the
   repeat-run label mismatch, generic management-parameter forwarding, and
   parity for a completed selected checkpoint remain open.
+- Extending parity to the complete 351,550-bar in-sample training split first
+  returned a false backend mismatch (231 frame trades vs 202 bundle trades).
+  A lockstep trace isolated the first semantic divergence at step 394 / bar
+  index 2,294 (`2024-12-31 16:34:00+03:00`): the frame evaluator had the
+  evaluation trailing guardrail disabled (`trailing_ratio=0`), while the
+  bundle worker was using the training 7% trailing threshold
+  (`trailing_ratio=0.0175562`). The audit had built its bundle environment as
+  a training worker, unlike `_eval_guardrail_kwargs`; this was an evaluation
+  spec mismatch. `EnvSpec` now explicitly marks evaluation workers, and the
+  worker disables both trailing thresholds only for those specs. Training
+  workers retain their configured survival gate. Focused bundle/parity tests
+  pass (11 tests). Replaying the same saved checkpoint and entire training
+  split with the corrected evaluation spec matched all result fields and
+  aggregate metrics exactly: 99,504 steps and 231 trades per backend. Evidence:
+  `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/p2_checkpoint_frame_bundle_train_a0_14m_20261016/audit.json`,
+  its `source_snapshot.json`, and `initial_failure_diagnosis.json`. This is
+  in-sample parity for one interrupted checkpoint, not strategy or
+  confirmatory evidence; P2 remains open for the other regression requirements
+  and a completed selected checkpoint.
 - The report-only evaluator reconstructs the run from frames even when the
   training snapshot says `data_source=bundle`. The backend parity contract must
   be demonstrated for each exact reported checkpoint and source/config

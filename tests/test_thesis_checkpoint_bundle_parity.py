@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pandas as pd
-from scripts.thesis.audit_checkpoint_frame_bundle_parity import compare_results
+from scripts.thesis.audit_checkpoint_frame_bundle_parity import compare_results, select_split
 
 
 def _result() -> dict[str, object]:
@@ -52,3 +52,20 @@ def test_compare_results_detects_trade_metadata_divergence() -> None:
     assert comparisons["equity"] is True
     assert comparisons["trades"] is False
     assert all(value for key, value in comparisons.items() if key != "trades")
+
+
+def test_select_split_keeps_in_sample_and_report_only_roles_distinct() -> None:
+    train_bars = pd.DataFrame({"close": [1.0]})
+    test_bars = pd.DataFrame({"close": [2.0]})
+    train_features = pd.DataFrame({"x": [3.0]})
+    test_features = pd.DataFrame({"x": [4.0]})
+
+    selected_train = select_split("train", train_bars, test_bars, train_features, test_features)
+    selected_test = select_split("test", train_bars, test_bars, train_features, test_features)
+
+    assert selected_train[0] is train_bars
+    assert selected_train[1] is train_features
+    assert selected_train[2] == "in_sample_training"
+    assert selected_test[0] is test_bars
+    assert selected_test[1] is test_features
+    assert selected_test[2] == "previously_inspected_selection_acknowledged_test"

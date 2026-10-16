@@ -115,13 +115,28 @@ def compare_results(frame_result: dict[str, Any], bundle_result: dict[str, Any])
     return {field: _equal(frame_result[field], bundle_result[field]) for field in fields}
 
 
+def select_split(
+    split: str,
+    train_bars: pd.DataFrame,
+    test_bars: pd.DataFrame,
+    train_features: pd.DataFrame,
+    test_features: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, str]:
+    """Choose the exact saved training or report-only test split for parity."""
+    if split == "train":
+        return train_bars, train_features, "in_sample_training"
+    if split == "test":
+        return test_bars, test_features, "previously_inspected_selection_acknowledged_test"
+    raise ValueError(f"unsupported evaluation split: {split}")
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", type=Path, required=True, help="Saved source run directory")
     parser.add_argument("--checkpoint", type=Path, required=True, help="Checkpoint path")
     parser.add_argument("--output", type=Path, required=True, help="New JSON report path")
     parser.add_argument(
-        "--bundle-dir", type=Path, required=True, help="New directory for the test-split bundle"
+        "--bundle-dir", type=Path, required=True, help="New directory for the selected split bundle"
     )
     parser.add_argument(
         "--allow-historical",
@@ -135,6 +150,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--allow-legacy-action-schema", action="store_true")
     parser.add_argument("--allow-legacy-observation-schema", action="store_true")
+    parser.add_argument(
+        "--split",
+        choices=("train", "test"),
+        default="test",
+        help="Compare the complete saved training split or report-only test split (default: test)",
+    )
     return parser
 
 
@@ -206,15 +227,20 @@ def main() -> int:
         train_mask=train_mask,
         cache_path=feature_cache,
     )
-    _, test_bars, _, test_features = split_train_test(primary_m1, features, train_end, test_start)
+    train_bars, test_bars, train_features, test_features = split_train_test(
+        primary_m1, features, train_end, test_start
+    )
+    eval_bars, eval_features, split_role = select_split(
+        args.split, train_bars, test_bars, train_features, test_features
+    )
     primary_ticks = build_tick_books(cfg).get(primary_symbol)
-    test_tickbook = ticks_covering(primary_ticks, test_bars)
+    eval_tickbook = ticks_covering(primary_ticks, eval_bars)
     eval_common, _, _, _, _ = _build_eval_common(cfg, args=None, env_vae=None, pre_ny_by_date=None)
     frame_result = evaluate_model(
         model,
-        bars=test_bars,
-        features=test_features,
-        tickbook=test_tickbook,
+        bars=eval_bars,
+        features=eval_features,
+        tickbook=eval_tickbook,
         deterministic=True,
         **eval_common,
     )
@@ -223,12 +249,12 @@ def main() -> int:
     bundle_dir.parent.mkdir(parents=True, exist_ok=True)
     bundle_path = build_env_bundle(
         bundle_dir,
-        test_bars,
-        test_features,
+        eval_bars,
+        eval_features,
         cfg,
         raw_columns=list(strategy.raw_columns),
         feature_config_hash=feature_cache.stem,
-        tickbook=test_tickbook,
+        tickbook=eval_tickbook,
         pre_ny_by_date=None,
     )
     arch = "mtf" if bool(eval_common.get("mtf", False)) else "tcn"
@@ -239,6 +265,7 @@ def main() -> int:
         arch=arch,
         bundle_dir=str(bundle_path),
         episodic=False,
+        evaluation=True,
     )
     bundle_env = make_bundle_env(spec)
     bundle_result = evaluate_model(
@@ -277,10 +304,11 @@ def main() -> int:
         "feature_cache": str(feature_cache),
         "feature_cache_sha256": _sha256(feature_cache),
         "split": {
-            "role": "previously_inspected_selection_acknowledged_test",
+            "name": args.split,
+            "role": split_role,
             "train_end": train_end,
             "test_start": test_start,
-            "test_bars": int(len(test_bars)),
+            "bars": int(len(eval_bars)),
         },
         "policy_action_mode": "deterministic_saved_checkpoint",
         "backends": ["frames", "shared_bundle"],
@@ -294,7 +322,7 @@ def main() -> int:
         "bundle_steps": int(bundle_result["n_steps"]),
         "limitations": [
             "This is a single 14M-step interrupted baseline checkpoint, not a completed 20M campaign run.",
-            "The test split was previously inspected and selection-acknowledged; this is not pristine OOS or confirmatory evidence.",
+            "The test split was previously inspected and selection-acknowledged; the training split is in-sample. Neither is pristine confirmatory OOS evidence.",
             "Backend parity for this checkpoint does not establish strategy validity or campaign readiness.",
         ],
     }
