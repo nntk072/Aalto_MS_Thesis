@@ -5,6 +5,19 @@
 documented as historical evidence. Bounded post-repair checks passed, but P1 is
 still open; see the scope limits below and the master plan.
 
+**Replacement-data refresh (2026-10-17):** the source/cache schedule now covers
+training through 2025-12-31 and report-only testing from 2026-01-01 through
+2026-10-16, including July–October. The full-range M1/MTF/tick caches, three
+named feature caches, and exact resolver schedule passed the stated bounded
+parity/coverage checks. A 615-archive text screen found date references in 15
+archives; triage found source/config/manifests and two resource-telemetry
+snapshots, but no direct market-data or strategy-result member paths. This
+does not prove external or human non-exposure. Raw tick headers identify an
+MT5-style export format, but neither headers nor repository records identify
+the provider or applicable data-use/publication terms. See the
+[replacement-data report](evidence/replacement_data_20261017.md) and
+[archive triage report](evidence/replacement_data_20261017/candidate_holdout_archive_exposure_20261017_triaged.json).
+
 This brief is a short entry point for an independent reviewer of the thesis
 evidence. The full evidence inventory and review questions are in the
 [independent research review checklist](independent_research_review_checklist_2026-10-14.md),
@@ -35,10 +48,12 @@ The P4 validity gate remains open.
    causality, establish a valid market calendar, or clear G1/P1. The old
    campaign remains contaminated and cannot support selection or confirmation.
 2. **Bounded evaluator evidence.** The plan's P2 section and linked audit
-   reports document deterministic replays and frame/shared-bundle parity for
-   interrupted checkpoints. Review the exact checkpoint, split, and backend
-   scope in each report; this evidence does not close completed-selected-
-   checkpoint acceptance or all schema/compatibility requirements.
+   reports document deterministic repeats and frame/shared-bundle parity for
+   the legacy `ladder_a4b_distribution__seed50` checkpoint across its historical
+   train and already-inspected test splits. The exact source cache and explicit
+   legacy-schema opt-ins were used. Review the checkpoint, split, and backend
+   scope in each report; this evidence does not close acceptance on a clean,
+   admissible completed checkpoint or all schema/compatibility requirements.
 3. **Data provenance limitation.** The feed/export provider and data-use terms
    are not documented in the available project records. The data hashes and
    integrity checks establish file identity and observed properties, not
