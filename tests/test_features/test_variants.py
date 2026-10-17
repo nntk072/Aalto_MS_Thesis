@@ -225,7 +225,7 @@ def test_structure_bos_mtf_additive_and_causal(m1_bars):
     from quant_rl.features.build import build_features
 
     base = build_features(m1_bars, cfg=OmegaConf.create(_base_cfg()))
-    timeframes = ["M5", "M15", "M30", "H1", "H4", "D1"]
+    timeframes = ["M5", "M10", "M15", "M30", "H1", "H4", "D1"]
     cfg = _mtf_cfg(structure={"enabled": True, "timeframes": timeframes})
     mtf = build_features(m1_bars, cfg=cfg)
     cols = set(map(str, mtf.columns))
@@ -254,14 +254,16 @@ def test_liquidity_sweep_mtf_additive_and_causal(m1_bars):
     from quant_rl.features.build import build_features
 
     base = build_features(m1_bars, cfg=OmegaConf.create(_base_cfg()))
-    cfg = _mtf_cfg(liquidity={"enabled": True, "timeframes": ["M5"]})
+    cfg = _mtf_cfg(liquidity={"enabled": True, "timeframes": ["M5", "M10"]})
     mtf = build_features(m1_bars, cfg=cfg)
-    assert {"M5_sweep_high", "M5_sweep_low"} <= set(map(str, mtf.columns))
+    assert {"M5_sweep_high", "M5_sweep_low", "M10_sweep_high", "M10_sweep_low"} <= set(
+        map(str, mtf.columns)
+    )
     assert set(map(str, base.columns)) < set(map(str, mtf.columns))
 
     trunc = build_features(m1_bars.iloc[:400], cfg=cfg)
     overlap = trunc.index[:300]
-    check = ["M5_sweep_high", "M5_sweep_low"]
+    check = ["M5_sweep_high", "M5_sweep_low", "M10_sweep_high", "M10_sweep_low"]
     pd.testing.assert_frame_equal(mtf.loc[overlap, check], trunc.loc[overlap, check], rtol=1e-9)
 
 
@@ -270,14 +272,21 @@ def test_po3_state_mtf_behind_flag(m1_bars):
     from quant_rl.features.build import build_features
 
     cfg_on = _mtf_cfg(
-        include_strategy_state=True, po3_state_mtf={"enabled": True, "timeframes": ["M5"]}
+        include_strategy_state=True,
+        po3_state_mtf={"enabled": True, "timeframes": ["M5", "M10"]},
     )
     mtf = build_features(m1_bars, cfg=cfg_on)
     assert "M5_po3_manipulation_active" in set(map(str, mtf.columns))
+    assert "M10_po3_manipulation_active" in set(map(str, mtf.columns))
 
     trunc = build_features(m1_bars.iloc[:400], cfg=cfg_on)
     overlap = trunc.index[:300]
-    check = ["M5_po3_manipulation_active", "M5_po3_distribution"]
+    check = [
+        "M5_po3_manipulation_active",
+        "M5_po3_distribution",
+        "M10_po3_manipulation_active",
+        "M10_po3_distribution",
+    ]
     pd.testing.assert_frame_equal(mtf.loc[overlap, check], trunc.loc[overlap, check], rtol=1e-9)
 
 
@@ -288,10 +297,12 @@ def test_ifvg_mtf_behind_flag(m1_bars):
     cfg_on = _mtf_cfg(
         include_strategy_state=True,
         po3_phase_mode="reclaim_then_ifvg",
-        ifvg_mtf={"enabled": True, "timeframes": ["M5", "M15", "H1"]},
+        ifvg_mtf={"enabled": True, "timeframes": ["M5", "M10", "M15", "H1"]},
     )
     mtf = build_features(m1_bars, cfg=cfg_on)
-    assert {f"{tf}_ifvg_bull_active" for tf in ("M5", "M15", "H1")} <= set(map(str, mtf.columns))
+    assert {f"{tf}_ifvg_bull_active" for tf in ("M5", "M10", "M15", "H1")} <= set(
+        map(str, mtf.columns)
+    )
     assert {
         "po3_ifvg_confirmation_tf_code",
         "ifvg_bull_confirmation_tf_code",
@@ -300,7 +311,9 @@ def test_ifvg_mtf_behind_flag(m1_bars):
 
     trunc = build_features(m1_bars.iloc[:400], cfg=cfg_on)
     overlap = trunc.index[:300]
-    check = [f"{tf}_ifvg_{side}_active" for tf in ("M5", "M15", "H1") for side in ("bull", "bear")]
+    check = [
+        f"{tf}_ifvg_{side}_active" for tf in ("M5", "M10", "M15", "H1") for side in ("bull", "bear")
+    ]
     pd.testing.assert_frame_equal(mtf.loc[overlap, check], trunc.loc[overlap, check], rtol=1e-9)
 
 

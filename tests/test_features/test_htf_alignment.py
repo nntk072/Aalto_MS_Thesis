@@ -14,7 +14,7 @@ from quant_rl.data.resample import resample
 from quant_rl.features.build import build_features
 from quant_rl.features.indicators import build_indicators
 
-HTF_TFS = ["M5", "M15", "H1"]
+HTF_TFS = ["M5", "M10", "M15", "H1"]
 
 
 @pytest.fixture

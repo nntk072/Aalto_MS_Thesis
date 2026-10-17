@@ -1,5 +1,37 @@
 # Implementation continuation ledger — 2026-10-13
 
+## M10 feature-timeframe support and schedule-gap wording — 2026-10-17 21:48 Helsinki
+
+The replacement data showed that M10 bar resampling existed while several
+configurable MTF feature paths still lacked M10 swing parameters, the structure
+confirmation duration, sweep-reference codes, or IFVG confirmation codes. Added
+M10 to those paths for technical indicators, structure/BOS, liquidity sweeps,
+PO3 state, and IFVG zones. Existing default timeframe lists and the three named
+cache profiles were not changed; M10 remains opt-in per profile. The M10 swing
+ATR multiplier is the midpoint of the adjacent M5/M15 values (0.65), with the
+same 3-bar left/right pivot rule as M5. The focused alignment/feature suite
+passed **63 tests** on the GH200 node. Full-tree Ruff format, Ruff lint, and
+Mypy also passed (463 formatted files; 473 Mypy source files).
+The interpolated ATR threshold is a documented engineering default, not an
+empirically selected strategy parameter; it does not change existing profiles.
+
+The schedule-shape audit report now names `gap_minutes_between_observed_rows`
+and states that these counts measure elapsed minute labels only; it does not
+infer missing bars or scheduled closures. The report was regenerated from the
+replacement M1 cache and copied into the evidence package. For US100 the
+unobserved intervals are 2025-12-02 16:31, 17:29–17:30, 17:32–17:33, 17:35,
+17:37–17:39, and 2025-12-04 19:19–19:21 (configured broker clock, UTC+3).
+The tick reconstruction report records zero ticks in those minute bins and
+quotes before/after some intervals. This is compatible with a closure or
+reduced-hours window, but does not identify the cause; provider calendar and
+export semantics remain unknown. P1 schedule readiness remains open.
+
+Validation evidence: `outputs/data_refresh_20261017/mtf_m10_focused_pytest.log`,
+`outputs/data_refresh_20261017/replacement_schedule_shape.json`, and
+`docs/thesis/evidence/replacement_data_20261017/replacement_schedule_shape.json`.
+The repo remains on `main`; no campaign was started and no Slurm allocation
+was canceled.
+
 ## P1 same-session causality repair verified — 2026-10-17
 
 The live source uses the configured New York session bounds in

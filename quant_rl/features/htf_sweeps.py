@@ -12,7 +12,7 @@ from ..data.resample import resample
 from .indicators import atr
 from .swings import TIMEFRAME_CONFIG, detect_pivots
 
-_TF_MINUTES = {"M5": 5, "M15": 15, "M30": 30, "H1": 60, "H4": 240, "D1": 1440}
+_TF_MINUTES = {"M5": 5, "M10": 10, "M15": 15, "M30": 30, "H1": 60, "H4": 240, "D1": 1440}
 _TF_CODE = dict(_TF_MINUTES)
 
 
@@ -129,8 +129,8 @@ def detect_confirmed_htf_sweeps(
     including crosses too deep to qualify as sweeps.
 
     If a candle crosses multiple references on one side, select the finest
-    timeframe (M5, then M15, then H1), then the reference nearest the wick,
-    then the latest pivot, then the lower price as the stable final tie-break.
+    timeframe (M5, M10, M15, M30, H1, H4, then D1), then the reference nearest
+    the wick, then the latest pivot, then the lower price as the stable tie-break.
     With ``return_audit=True``, return every crossed reference and its
     qualification/selection status as a second frame.
     """

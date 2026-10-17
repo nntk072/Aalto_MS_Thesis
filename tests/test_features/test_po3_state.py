@@ -49,14 +49,19 @@ def empty_sweeps(index: pd.Index) -> pd.DataFrame:
 
 
 def test_configured_ifvg_timeframes_align_and_merge_causally() -> None:
-    """M5/M15/H1 confirmations join M1 only at source-bar completion."""
+    """Configured M5/M10/M15/H1 confirmations join M1 at source-bar completion."""
     index = pd.date_range("2025-01-06 00:00", periods=130, freq="1min", tz="UTC")
     close = np.full(len(index), 100.0)
     bars = pd.DataFrame(
         {"open": close, "high": close + 1.0, "low": close - 1.0, "close": close}, index=index
     )
     primary_zones = build_ifvg_zone_features(bars)
-    source_specs = {"M5": ("5min", 5), "M15": ("15min", 15), "H1": ("1h", 60)}
+    source_specs = {
+        "M5": ("5min", 5),
+        "M10": ("10min", 10),
+        "M15": ("15min", 15),
+        "H1": ("1h", 60),
+    }
     higher: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {}
     for tf, (frequency, _) in source_specs.items():
         tf_index = pd.date_range(index[0], periods=4, freq=frequency, tz="UTC")
@@ -74,22 +79,27 @@ def test_configured_ifvg_timeframes_align_and_merge_causally() -> None:
     higher["M5"][1].loc[higher["M5"][0].index[0], "ifvg_retest_bull"] = 1.0
     higher["M15"][1].loc[higher["M15"][0].index[[0, 1]], "ifvg_bull_confirmed"] = 1.0
     higher["H1"][1].loc[higher["H1"][0].index[0], "ifvg_bull_confirmed"] = 1.0
+    higher["M10"][1].loc[higher["M10"][0].index[0], "ifvg_bull_confirmed"] = 1.0
     merged, visible = align_ifvg_zone_timeframes(bars, primary_zones, higher)
 
-    event_rows = np.asarray([5, 15, 30, 60], dtype=int)
-    assert merged["ifvg_bull_confirmed"].iloc[event_rows].tolist() == [1.0] * 4
+    event_rows = np.asarray([5, 10, 15, 30, 60], dtype=int)
+    assert merged["ifvg_bull_confirmed"].iloc[event_rows].tolist() == [1.0] * 5
     assert merged["_ifvg_bull_confirmation_tf_code"].iloc[event_rows].tolist() == [
         5.0,
+        10.0,
         5.0,
         15.0,
         60.0,
     ]
     assert merged["ifvg_bull_confirmed"].iloc[:5].sum() == 0.0
-    assert merged["ifvg_bull_fvg_origin_bar"].iloc[event_rows].tolist() == [0.0] * 4
-    assert merged["ifvg_bull_low"].iloc[event_rows].tolist() == [99.5] * 4
-    assert {"M5_ifvg_bull_active", "M15_ifvg_bull_active", "H1_ifvg_bull_active"} <= set(
-        map(str, visible.columns)
-    )
+    assert merged["ifvg_bull_fvg_origin_bar"].iloc[event_rows].tolist() == [0.0] * 5
+    assert merged["ifvg_bull_low"].iloc[event_rows].tolist() == [99.5] * 5
+    assert {
+        "M5_ifvg_bull_active",
+        "M10_ifvg_bull_active",
+        "M15_ifvg_bull_active",
+        "H1_ifvg_bull_active",
+    } <= set(map(str, visible.columns))
     assert visible["M5_ifvg_retest_bull"].iloc[5] == 1.0
     assert visible["M5_ifvg_retest_bull"].iloc[6:10].sum() == 0.0
 

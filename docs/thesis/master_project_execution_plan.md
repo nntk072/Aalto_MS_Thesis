@@ -7,15 +7,19 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-17 21:39 Helsinki):** the replacement source exports
+**Live checkpoint (2026-10-17 21:48 Helsinki):** the replacement source exports
 cover 2024-12-30 through 2026-10-16. The configured training split is
 2024-12-30–2025-12-31 inclusive; the test split begins 2026-01-01 and runs
 through the last available bar. Full-day bar caches were rebuilt for US100 and
 US500 at M1, M5, M10, M15, M30, H1, H4, and D1. The three named prebuilt feature
 caches were transactionally rebuilt: baseline (630,787 rows/194 columns), Idea
 1 PO3/IFVG (630,787/532), and Idea 2 distribution (630,787/538). M10 resampling
-has a focused regression test. M10 bar-cache presence does not mean M10 is
-model-visible; configured feature timeframes remain profile-specific.
+has a focused regression test. The configurable feature path now also supports
+M10 technical indicators, structure/BOS, liquidity sweeps, PO3 state, and IFVG
+alignment. Existing profile defaults remain unchanged, so M10 is model-visible
+only when selected in that profile's timeframe configuration. A focused
+63-test MTF suite and full-tree Ruff/Mypy checks passed after this change;
+replacement named caches still represent the existing profile configs.
 
 Replacement M1 checks found no unparseable or duplicate timestamps, descending
 rows, nonfinite/missing numeric values, invalid OHLC ordering, negative spread,
@@ -67,12 +71,13 @@ gates; P2–P11 result, review, and manuscript work remains open. Readiness is
 **NOT READY**.
 
 Job `21020179` is RUNNING on `gpuarm1` and `gpuarm2`, with one GH200, 48 CPUs,
-and 512 GiB per node, six-hour limit (runtime 2:24:58 at this checkpoint).
+and 512 GiB per node, six-hour limit (runtime 2:34:21 at this checkpoint).
 The full CI step completed in login tmux `thesis-gate-21020179`, attached to the
 existing allocation shell; the cache build and long fold audit are complete.
 No campaign controller or trainer is running, and both GPUs report 0% use and
-0 MiB allocated VRAM. The shared checkout is clean at pushed HEAD
-`11aa4b8318309501249bea309525e9996cf5e149`. Do not cancel the allocation.
+0 MiB allocated VRAM. Current M10 support, tests, and documentation changes
+are being reviewed on `main` at HEAD `031f078ae1a7d57f7d505752f902273cc18a4c1a`;
+do not cancel the allocation.
 
 **Historical checkpoint (2026-10-17 18:26 Helsinki; superseded by the live checkpoint above):**
 

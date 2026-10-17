@@ -10,7 +10,8 @@ MTF extensions (mtf_feature_expansion_plan.md §§4.1-4.6): SMT divergence
 (§4.1), structure levels + BOS (§4.2) and liquidity sweeps (§4.3) follow the
 same resample → per-TF compute → ``align_timeframes`` pattern; FVG zones
 (§4.5) run over the full ladder (M1 + HTFs); PO3 manipulation/distribution
-state (§4.4) and IFVG active zones (§4.6) are scoped to M1/M5/M15.
+state (§4.4) and IFVG active zones (§4.6) are independently computed on
+configured standard timeframes, including M10, then aligned to the M1 spine.
 """
 
 from __future__ import annotations
@@ -317,7 +318,7 @@ OBS_RAW_PRICE_COLUMNS = MTF_RAW_SUFFIXES
 # Supported fallback timeframes for the state-heavy blocks (plan §8, option
 # (b)). Normal configs provide explicit subsets; IFVG can use any timeframe
 # supported by data.resample, while its M1 source is always included directly.
-_MTF_STATE_TFS = ("M1", "M5", "M15", "M30", "H1", "H4", "D1")
+_MTF_STATE_TFS = ("M1", "M5", "M10", "M15", "M30", "H1", "H4", "D1")
 
 # Default MTF subset for SMT divergence (§4.1), structure/BOS (§4.2), and
 # liquidity sweeps (§4.3). Each block accepts an explicit list of any standard
@@ -958,6 +959,7 @@ def build_features(
                         {
                             "M1": "1min",
                             "M5": "5min",
+                            "M10": "10min",
                             "M15": "15min",
                             "M30": "30min",
                             "H1": "1h",

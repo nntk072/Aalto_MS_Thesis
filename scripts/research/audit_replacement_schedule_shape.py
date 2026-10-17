@@ -41,11 +41,15 @@ def main() -> None:
                         "date": str(day),
                         "previous_bar": str(previous),
                         "next_bar": str(current),
-                        "missing_minute_bars": gap,
+                        "gap_minutes_between_observed_rows": gap,
                     }
                 )
         report[symbol] = {
             "path": str(path),
+            "gap_semantics": (
+                "Counts elapsed minute labels between observed NY-session rows; "
+                "does not establish expected trading hours or data loss."
+            ),
             "train_ny_rows": int(daily.sum()),
             "train_dates_with_ny_rows": int(len(observed_dates)),
             "intra_ny_gaps_over_one_minute": intraday_gaps,

@@ -412,6 +412,7 @@ def align_ifvg_zone_timeframes(
     tf_codes = {
         "M1": 1.0,
         "M5": 5.0,
+        "M10": 10.0,
         "M15": 15.0,
         "M30": 30.0,
         "H1": 60.0,

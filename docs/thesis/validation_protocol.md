@@ -6,8 +6,9 @@
 |-------|-----------------|-------------|
 | Train / IS | ≤ `data.split.train_end` | Fit policies, fit-scoped transforms |
 | Walk-forward folds | Inside the train calendar | Architecture / hyperparameter **selection** |
-| Exposed development period | 2026-01-01 through available 2026-07-03 data | Exploratory tuning only with explicit selection provenance; non-confirmatory |
-| Fresh locked OOS | Newly acquired data strictly after the exposed period | **Final report only** |
+| Exposed development period | 2026-01-01 through 2026-07-03 | Exploratory tuning only with explicit selection provenance; non-confirmatory |
+| Candidate fresh report period | 2026-07-04 through 2026-10-16 | Not accepted as fresh yet. Verify human/model exposure and freeze model + protocol before evaluation; otherwise classify as development data |
+| Fresh locked OOS | Data not used for training, selection, or prior inspection, after the accepted exposure boundary | **Final report only** |
 
 Default dates live in `quant_rl/config/default.yaml` and `config/experiments.yaml`
 (`train_end: 2025-12-31`, `test_start: 2026-01-01`).
@@ -35,10 +36,13 @@ Default dates live in `quant_rl/config/default.yaml` and `config/experiments.yam
     implementation decisions is historical evidence, not an untouched holdout.
     A later rerun on the same dates does not restore pristine holdout status;
     record its prior exposure in the run manifest and report.
-8. The configured 2026 period was previously inspected and is now explicitly
-    designated exposed development data. Available M1 and tick inputs end on
-    2026-07-03. Use newly acquired and frozen data after that boundary for a
-    genuinely fresh final test; until then, no final-holdout result exists.
+8. The 2026-01-01–2026-07-03 interval was previously inspected and is
+    permanently exposed development data. The replacement M1 and tick exports
+    continue through 2026-10-16. The later 2026-07-04–2026-10-16 interval is a
+    candidate fresh report period only: verify that it has not been used for
+    human or model selection, then freeze the model and protocol before
+    evaluation. If prior exposure cannot be established, report it as exposed
+    development data. No fresh or confirmatory holdout has yet been accepted.
 
 ## Engine
 

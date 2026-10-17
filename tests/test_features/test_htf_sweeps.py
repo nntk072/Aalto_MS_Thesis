@@ -73,7 +73,7 @@ def test_confirmation_after_sweep_cannot_change_prefix(monkeypatch: pytest.Monke
     assert full["sweep_low"].sum() == 0
 
 
-@pytest.mark.parametrize("timeframe", ["M5", "M15", "M30", "H1", "H4", "D1"])
+@pytest.mark.parametrize("timeframe", ["M5", "M10", "M15", "M30", "H1", "H4", "D1"])
 @pytest.mark.parametrize("side", ["high", "low"])
 def test_each_confirmed_timeframe_can_initiate_a_sweep(
     monkeypatch: pytest.MonkeyPatch, timeframe: str, side: str
@@ -89,7 +89,7 @@ def test_each_confirmed_timeframe_can_initiate_a_sweep(
     assert features[f"sweep_{side}"].iloc[2] == 1
     assert (
         features[f"sweep_{side}_ref_tf_code"].iloc[2]
-        == {"M5": 5, "M15": 15, "M30": 30, "H1": 60, "H4": 240, "D1": 1440}[timeframe]
+        == {"M5": 5, "M10": 10, "M15": 15, "M30": 30, "H1": 60, "H4": 240, "D1": 1440}[timeframe]
     )
 
 
@@ -121,6 +121,28 @@ def test_actual_resampled_pivot_uses_close_time_and_ignores_partial_bar() -> Non
     assert len(pivot_lows) == 1
     assert pivot_lows[0]["pivot_time"] == idx[15]
     assert pivot_lows[0]["confirmed_at"] == idx[35]
+
+
+def test_actual_resampled_m10_pivot_uses_m10_close_time() -> None:
+    idx = pd.date_range("2024-01-02 00:00", periods=80, freq="min", tz="UTC")
+    group_closes = [110.0, 109.0, 108.0, 100.0, 108.0, 109.0, 110.0, 111.0]
+    close = [group_closes[i // 10] for i in range(len(idx))]
+    bars = pd.DataFrame(
+        {
+            "open": close,
+            "high": [value + 0.2 for value in close],
+            "low": [value - 0.2 for value in close],
+            "close": close,
+        },
+        index=idx,
+    )
+
+    refs = htf_sweeps._pivot_references(bars, "M10")
+    pivot_lows = [ref for ref in refs if ref["side"] == "low"]
+
+    assert len(pivot_lows) == 1
+    assert pivot_lows[0]["pivot_time"] == idx[30]
+    assert pivot_lows[0]["confirmed_at"] == idx[70]
 
 
 def test_real_m1_sweep_waits_until_resampled_m5_pivot_is_confirmed() -> None:

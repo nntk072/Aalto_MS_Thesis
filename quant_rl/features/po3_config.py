@@ -464,7 +464,7 @@ def detect_htf_fvg(
     m1_bars : pd.DataFrame
         M1 OHLC DataFrame with DatetimeIndex.
     htf : str
-        Higher timeframe label (e.g., 'M5', 'M15', 'M30', 'H1').
+        Higher timeframe label (e.g., 'M5', 'M10', 'M15', 'M30', 'H1').
     config : FVGConfig, optional
         Configuration for FVG detection. Uses defaults if None.
 
@@ -536,7 +536,7 @@ def detect_ltf_ifvg(
     m1_bars : pd.DataFrame
         M1 OHLC DataFrame with DatetimeIndex.
     primary_tf : str
-        Primary timeframe label (e.g., 'M5', 'M15', 'M30').
+        Primary timeframe label (e.g., 'M5', 'M10', 'M15', 'M30').
     ltf : str
         Lower timeframe label (e.g., 'M1'). Default is 'M1'.
     fvg_config : FVGConfig, optional
