@@ -7,8 +7,9 @@ still open; see the scope limits below and the master plan.
 
 **Replacement-data refresh (2026-10-17):** the source/cache schedule now covers
 training through 2025-12-31 and report-only testing from 2026-01-01 through
-2026-10-16, including July–October. The full-range M1/MTF/tick caches, three
-named feature caches, and exact resolver schedule passed the stated bounded
+2026-10-16, including July–October. The full-range M1/MTF/tick caches, four
+resolved feature profiles (the three requested caches plus a baseline
+strategy-action profile), and exact resolver schedule passed the stated bounded
 parity/coverage checks. A 615-archive text screen found date references in 15
 archives; triage found source/config/manifests and two resource-telemetry
 snapshots, but no direct market-data or strategy-result member paths. This

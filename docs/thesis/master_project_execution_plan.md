@@ -7,7 +7,7 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-17 22:52 Helsinki):** work is on the sole checkout,
+**Live checkpoint (2026-10-17 23:35 Helsinki):** work is on the sole checkout,
 `/scratch/work/nguyenl37/Aalto_MS_Thesis`, branch `main`; before this update,
 `a2eac1b` was pushed to `origin/main`. The new tie-policy audit records that
 commit as its source base plus the working changes tested in the gate. The latest
@@ -35,18 +35,22 @@ preserved.
 The replacement source exports cover 2024-12-30 through 2026-10-16. The
 configured training split is 2024-12-30–2025-12-31 inclusive; report-only test
 starts 2026-01-01 and runs through 2026-10-16. Full-day bar caches were rebuilt
-for US100 and US500 at M1, M5, M10, M15, M30, H1, H4, and D1. Three named
-prebuilt feature caches were transactionally rebuilt: baseline (630,787 rows /
-194 columns), Idea 1 PO3/IFVG (630,787 / 532), and Idea 2 distribution
-(630,787 / 538). Replacement-data M1 integrity, tick quality, raw/cache parity,
+for US100 and US500 at M1, M5, M10, M15, M30, H1, H4, and D1. Four feature
+profiles were transactionally rebuilt and mapped to all 18 campaign variants:
+baseline (1 variant; 630,787 rows / 194 columns), supplemental baseline with
+strategy actions (5; 630,787 / 438), Idea 1 PO3/IFVG (6; 630,787 / 532), and
+Idea 2 distribution (6; 630,787 / 538). The 18 bindings and cache/source
+fingerprints are in
+[`named_feature_cache_rebuild_18variant_20261017_job21020179.json`](evidence/replacement_data_20261017/named_feature_cache_rebuild_18variant_20261017_job21020179.json).
+Replacement-data M1 integrity, tick quality, raw/cache parity,
 16/16 sampled prefix-invariance, and 20/20 fold-local poison checks passed.
 These are bounded input and feature checks, not proof of every path, policy
 performance, or confirmatory evidence. Reports are under
 [`replacement_data_20261017`](evidence/replacement_data_20261017/).
 
 The July 4–October 16, 2026 segment is included in the report-only test split
-and in each full-range timeframe and named feature cache; it is not omitted at
-the former July 3 cache boundary. The frozen test schedule has 79,069 US100
+and in each full-range timeframe and resolved variant feature cache; it is not
+omitted at the former July 3 cache boundary. The frozen test schedule has 79,069 US100
 and 79,068 US500 decisions through October 16, while training remains capped
 at December 31, 2025. This confirms dataset/cache setup, not that the test tail
 is untouched or valid for confirmatory claims.
@@ -87,9 +91,22 @@ is available. P1 therefore remains **NOT READY**; P2's current-code gate passes,
 but admissible-checkpoint replay and numerical report acceptance await P1. P3–P11
 remain downstream/open. Overall readiness remains **NOT READY**.
 
+The four-profile mapping code passed the latest full GH200-node gate on job
+`21020179`, step `.14`: Ruff format (467 files), Ruff lint, full-tree Mypy
+(480 source files), 1,738 tests (82 warnings), and cache plan-only validation.
+The transactionally rebuilt cache set completed on step `.15` in 7:31 with
+status `passed`; evidence is the 18-variant report linked above and the full
+log at [`named_feature_cache_rebuild_18variant_20261017_job21020179.log`](../../outputs/data_refresh_20261017/named_feature_cache_rebuild_18variant_20261017_job21020179.log).
+It preserved the prior cache set under
+`data/prebuilt_feature_cache/backups/pre-18-profile-rebuild_20261017_job21020179`.
+No training campaign or supervisor was started. The Dec 2/4 shorter observed
+session shapes remain unclassified: neither is a scheduled Nasdaq holiday or
+early close, and the unidentified CFD provider's hours/export rules are still
+unknown.
+
 Slurm job `21020179` is RUNNING on `gpuarm1` and `gpuarm2` with one GH200,
 48 CPUs, and 512 GiB per node, six-hour limit; it is scheduled to end at
-2026-10-18 01:13:58 Helsinki. At 22:39 both GPUs were at 0% utilization
+2026-10-18 01:13:58 Helsinki. At the last sample at 22:39 both GPUs were at 0% utilization
 (1 MiB and 0 MiB VRAM); host RAM use was about 22 GiB and 19 GiB. No trainer
 or campaign supervisor is active. Persistent login tmux is
 `thesis-gate-21020179`. Steps `.5` and `.6` were sustained validation attempts

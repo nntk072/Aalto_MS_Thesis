@@ -14,6 +14,7 @@ import pytest
 import yaml
 
 from quant_rl.train.variant_resolver import (
+    PREBUILT_FEATURE_CACHES,
     PROJECT_ROOT,
     VariantError,
     consistency_table,
@@ -54,6 +55,56 @@ def test_every_variant_resolves_and_declares_reward_mode() -> None:
         assert resolved["reward_mode"] in ("dsr", "pnl", "rr")
         assert resolved["steps"] == 100_000
         assert resolved["seeds"] == [42, 43, 44, 45, 46]
+
+
+def test_all_18_thesis_variants_use_their_prebuilt_feature_profile() -> None:
+    campaign_names = [
+        line.strip()
+        for line in (PROJECT_ROOT / "scripts" / "variant_list.txt").read_text().splitlines()
+        if line.strip()
+    ]
+    baseline_action_variants = {
+        "ladder_a1_sl",
+        "ladder_a2_tp",
+        "ladder_a3_multi_tp",
+        "ladder_a4b_entry_fsm",
+        "ladder_a4a_entry_fsm_hidden",
+    }
+    idea1_variants = {
+        "ladder_a0_flat_po3",
+        "ladder_a1_sl_po3",
+        "ladder_a2_tp_po3",
+        "ladder_a3_multi_tp_po3",
+        "ladder_a4b_po3_ifvg",
+        "ladder_a4a_entry_fsm_hidden_po3",
+    }
+    idea2_variants = {
+        "ladder_a0_flat_dist",
+        "ladder_a1_sl_dist",
+        "ladder_a2_tp_dist",
+        "ladder_a3_multi_tp_dist",
+        "ladder_a4b_distribution",
+        "ladder_a4a_entry_fsm_hidden_dist",
+    }
+    expected = {
+        "ladder_a0_flat": "data/prebuilt_feature_cache/baseline.parquet",
+        **{
+            name: "data/prebuilt_feature_cache/baseline_strategy_actions.parquet"
+            for name in baseline_action_variants
+        },
+        **{name: "data/prebuilt_feature_cache/idea1_po3_ifvg.parquet" for name in idea1_variants},
+        **{
+            name: "data/prebuilt_feature_cache/idea2_distribution.parquet"
+            for name in idea2_variants
+        },
+    }
+
+    assert len(campaign_names) == len(set(campaign_names)) == 18
+    assert set(campaign_names) == set(expected)
+    assert PREBUILT_FEATURE_CACHES == expected
+    for name, expected_path in expected.items():
+        resolved = resolve_variant(name)
+        assert f"data.prebuilt_feature_cache={expected_path}" in resolved["overrides"]
 
 
 def test_baseline_ladder_rungs_pin_baseline_strategy_name() -> None:

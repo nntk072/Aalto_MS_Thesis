@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage, verify, and transactionally publish the three named thesis caches.
+"""Stage, verify, and transactionally publish the thesis variant caches.
 
 Run only after the training source boundary. The script uses the same variant
 resolution and config merge path as ``train_rl``. It builds into a temporary
@@ -42,9 +42,20 @@ from quant_rl.train.variant_resolver import resolve_variant
 ROOT = Path(__file__).resolve().parents[2]
 VARIANTS = (
     "ladder_a0_flat",
+    "ladder_a1_sl",
     "ladder_a0_flat_po3",
     "ladder_a0_flat_dist",
 )
+CAMPAIGN_VARIANTS_PATH = ROOT / "scripts" / "variant_list.txt"
+REQUIRED_EXISTING_CACHE_FILES = {
+    name
+    for cache_name in (
+        "baseline.parquet",
+        "idea1_po3_ifvg.parquet",
+        "idea2_distribution.parquet",
+    )
+    for name in (cache_name, f"{cache_name}.hash")
+}
 STRATEGY_CONFIGS = {
     "po3_ifvg": "config/2_po3_ifvg.yaml",
     "distribution": "config/3_distribution.yaml",
@@ -135,6 +146,7 @@ def load_variant(name: str) -> tuple[dict[str, Any], DictConfig]:
         cache_path = ROOT / cache_path
     expected_name = {
         "ladder_a0_flat": "baseline.parquet",
+        "ladder_a1_sl": "baseline_strategy_actions.parquet",
         "ladder_a0_flat_po3": "idea1_po3_ifvg.parquet",
         "ladder_a0_flat_dist": "idea2_distribution.parquet",
     }[name]
@@ -210,8 +222,40 @@ def plan() -> list[dict[str, Any]]:
                 "cache_config_signature": _cache_config_signature(cfg),
             }
         )
-    if len({row["cache_path"] for row in rows}) != len(VARIANTS):
-        raise RuntimeError("named variants do not resolve to three unique cache files")
+    cache_paths = {row["cache_path"] for row in rows}
+    if len(cache_paths) != len(VARIANTS):
+        raise RuntimeError("feature-profile representatives must resolve to unique cache files")
+    relative_cache_paths = {
+        Path(path).resolve().relative_to(ROOT.resolve()).as_posix() for path in cache_paths
+    }
+    names = [
+        line.strip() for line in CAMPAIGN_VARIANTS_PATH.read_text().splitlines() if line.strip()
+    ]
+    if len(names) != 18 or len(names) != len(set(names)):
+        raise RuntimeError("the thesis campaign variant list must contain 18 unique variants")
+    bindings: dict[str, str] = {}
+    for name in names:
+        resolved = resolve_variant(name, steps=100_000, seeds=[42])
+        cache_override = next(
+            (
+                value.split("=", maxsplit=1)[1]
+                for value in resolved["overrides"]
+                if value.startswith("data.prebuilt_feature_cache=")
+            ),
+            None,
+        )
+        if cache_override is None:
+            raise RuntimeError(f"{name} does not resolve to an explicit prebuilt feature cache")
+        cache_path = Path(cache_override)
+        if not cache_path.is_absolute():
+            cache_path = ROOT / cache_path
+        relative_cache_path = cache_path.resolve().relative_to(ROOT.resolve()).as_posix()
+        if relative_cache_path not in relative_cache_paths:
+            raise RuntimeError(f"{name} maps outside the four verified feature profiles")
+        bindings[name] = relative_cache_path
+    if set(bindings.values()) != relative_cache_paths:
+        raise RuntimeError("not every prebuilt feature profile is referenced by the campaign")
+    rows[0]["campaign_variant_cache_bindings"] = bindings
     return rows
 
 
@@ -291,7 +335,11 @@ def rebuild(backup_dir: Path, report_path: Path) -> dict[str, Any]:
     required_files = [
         artifact for cache in cache_paths for artifact in (cache, Path(f"{cache}.hash"))
     ]
-    missing_required = [path for path in required_files if not path.is_file()]
+    missing_required = [
+        path
+        for path in required_files
+        if path.name in REQUIRED_EXISTING_CACHE_FILES and not path.is_file()
+    ]
     if missing_required:
         raise FileNotFoundError(
             f"existing caches must be complete before rebuild: {missing_required}"
@@ -354,8 +402,12 @@ def rebuild(backup_dir: Path, report_path: Path) -> dict[str, Any]:
                     "variant": name,
                     "target": target.relative_to(ROOT).as_posix(),
                     "feature_cache_hash": expected_hash,
-                    "previous_cache_sha256": sha256_file(target),
-                    "previous_sidecar_sha256": sha256_file(Path(f"{target}.hash")),
+                    "previous_cache_sha256": sha256_file(target) if target.is_file() else None,
+                    "previous_sidecar_sha256": (
+                        sha256_file(Path(f"{target}.hash"))
+                        if Path(f"{target}.hash").is_file()
+                        else None
+                    ),
                     "cache_sha256": sha256_file(staged_cache),
                     "sidecar_sha256": sha256_file(staged_hash),
                     "requires_htf_sweep_audit": _requires_htf_sweep_audit(cfg),
@@ -426,6 +478,9 @@ def rebuild(backup_dir: Path, report_path: Path) -> dict[str, Any]:
             "loaded_project_source_sha256": source_hashes,
             "loaded_project_source_count": len(source_hashes),
             "caches": cache_results,
+            "campaign_variant_cache_bindings": plan_by_variant[VARIANTS[0]][
+                "campaign_variant_cache_bindings"
+            ],
         }
         tmp_fd, tmp_name = tempfile.mkstemp(
             prefix=f".{report_path.name}.", suffix=".tmp", dir=report_path.parent

@@ -12,6 +12,24 @@ from scripts.matrix import rebuild_named_prebuilt_feature_caches as cache_builde
 
 
 @pytest.mark.unit
+def test_thesis_campaign_maps_all_18_variants_to_four_feature_caches() -> None:
+    rows = cache_builder.plan()
+    assert len(rows) == 4
+    bindings = rows[0]["campaign_variant_cache_bindings"]
+    assert len(bindings) == 18
+
+    counts: dict[str, int] = {}
+    for cache_path in bindings.values():
+        counts[cache_path] = counts.get(cache_path, 0) + 1
+    assert counts == {
+        "data/prebuilt_feature_cache/baseline.parquet": 1,
+        "data/prebuilt_feature_cache/baseline_strategy_actions.parquet": 5,
+        "data/prebuilt_feature_cache/idea1_po3_ifvg.parquet": 6,
+        "data/prebuilt_feature_cache/idea2_distribution.parquet": 6,
+    }
+
+
+@pytest.mark.unit
 def test_htf_confirmed_cache_requires_sweep_audit_parquet(tmp_path: Path) -> None:
     cache_path = tmp_path / "idea1.parquet"
     htf_cfg = OmegaConf.create({"features": {"po3_reference_mode": "htf_confirmed"}})

@@ -17,7 +17,7 @@ files have 630,787 US100 rows and 628,929 US500 rows; both start at
 2024-12-30 01:05 and end at 2026-10-16 23:49 in the configured broker clock.
 The complete July–October portion is included in that test split: July 4
 through October 16, 2026 is present in the rebuilt M1, M5, M10, M15, M30, H1,
-H4, and D1 caches and in all three variant feature caches. The test schedule
+H4, and D1 caches and in all four resolved variant feature caches. The test schedule
 ends on October 16 for both symbols (79,069 US100 and 79,068 US500 NY-session
 decisions); no July–October rows enter the 2025 training mask. The exact
 observed test timestamps are frozen in
@@ -69,11 +69,19 @@ arrival. Since source timestamps have only millisecond precision, actual
 sub-millisecond order inside a tie cannot be recovered. This is a documented
 precision limitation, not evidence of decreasing time.
 
-Three full-range named feature caches were rebuilt and verified against the
-replacement M1 inputs: baseline (630,787 rows, 194 columns), Idea 1 PO3/IFVG
-(630,787 rows, 532 columns), and Idea 2 distribution (630,787 rows, 538
-columns). The presence of an M10 bar cache does not mean M10 is visible to each
-profile; each profile follows its resolved feature-timeframe config.
+Four full-range feature profiles were transactionally rebuilt and verified
+against the replacement M1 inputs, then bound across all 18 campaign variants:
+the requested baseline cache (1 variant; 630,787 rows, 194 columns), a
+supplemental baseline-with-strategy-actions cache (5 variants; 630,787 rows,
+438 columns), Idea 1 PO3/IFVG (6 variants; 630,787 rows, 532 columns), and
+Idea 2 distribution (6 variants; 630,787 rows, 538 columns). The durable
+[18-variant rebuild report](replacement_data_20261017/named_feature_cache_rebuild_18variant_20261017_job21020179.json)
+records cache hashes, source M1 fingerprints, and each variant-to-cache
+binding. The three requested named caches remain present; the supplemental
+profile prevents five baseline strategy-action variants from falling back to
+an untracked runtime build. The presence of an M10 bar cache does not mean M10
+is visible to each profile; each profile follows its resolved
+feature-timeframe config.
 
 ## Causal checks
 
