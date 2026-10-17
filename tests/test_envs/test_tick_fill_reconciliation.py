@@ -368,6 +368,11 @@ def test_tick_mode_uses_correct_ask_and_records_actual_entry_quote(latency_ms: f
     assert opened["actual_tick_time"] == opened["fill_time"]
     assert opened["execution_arrival_time"] <= opened["actual_tick_time"]
     assert opened["execution_order_time"] == opened["order_submission_time"]
+    # TickBook timestamps are UTC, while the bar spine uses the broker zone.
+    # The equity index must stay homogeneous when a tick falls after the bar
+    # valuation boundary.
+    assert env.equity_times[-1].tzinfo is not None
+    assert env.equity_times[-1].utcoffset() == pd.Timedelta(hours=3)
 
 
 @pytest.mark.parametrize("latency_ms", [0.0, 30.0])

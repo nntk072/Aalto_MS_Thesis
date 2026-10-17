@@ -7,33 +7,55 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-17 17:50 Helsinki):** work remains on `main`; the
-previously dirty 55-entry working tree is committed, with no edits discarded.
-The latest current-tree verification completed
-naturally on two GH200 nodes in job `21019594` (one GH200, 64 CPUs, 512 GiB
-per node). CUDA smoke, full-tree Ruff format (459 files), Ruff lint, full-tree
-Mypy (468 source files), all **1,729 pytest tests** (82 warnings), P1 coverage
-audit, and whitespace checks passed. The log is
-[`validation.log`](../../outputs/gpu_ci_gates/current_tree_job21019594/validation.log).
-The same job audited every canonical v2/v3 tick cache and the matching caches
-in the separate fast-training worktree. The canonical US100 v2/v3 caches are
-identical and span 2025-12-28 through 2026-07-03 UTC; the separate worktree's
-v2 copy is identical. They therefore do not add the missing early training
-period. Schedule coverage remains 1,173/99,504 US100 training orders (1.1788%)
-and 49,925/49,925 test orders; US500 is fully covered in both splits. Reports:
-[`p1_tick_cache_timeline_20261017_job21019594.json`](evidence/p1_tick_cache_timeline_20261017_job21019594.json),
-[`p1_tick_execution_coverage_20261017_job21019594.json`](evidence/p1_tick_execution_coverage_20261017_job21019594.json),
-and the independent node-2 repeat
-[`p1_tick_execution_coverage_20261017_job21019594_node2.json`](evidence/p1_tick_execution_coverage_20261017_job21019594_node2.json).
-The cache audit's strict-increase flag is false; the builder stable-sorts by
-timestamp, so duplicates are possible and this flag alone does not establish
-out-of-order rows. Tick cache provenance and data-use/publication terms also
-remain undocumented. The job completed with exit 0 in 4:38; no training
-campaign or supervisor is active. The user clarified the allocation ceiling
-as 12 GH200 GPU-hours per request (one GPU up to 12h or two GPUs up to 6h);
-the 1-hour two-GH200 verification allocation was within that limit. Thesis
-readiness remains NOT READY: software CI and cache inventory do not close P1
-or constitute strategy evidence.
+**Live checkpoint (2026-10-17 18:23 Helsinki):** work remains on `main` at
+`f9681ed`; the current tree has the timestamp-normalization fix and three new
+evidence files described below. GH200 job `21019757` is active on `gpuarm1` and
+`gpuarm2`, with one GH200, 48 CPUs, and 512 GiB per node for six hours (12
+GPU-hours maximum). The full GPU-node gate passed: Ruff format (459 files),
+Ruff lint, Mypy (468 source files), and **1,729 pytest tests** (82 warnings,
+160.73 seconds). Log:
+[`ci.log`](../../outputs/gpu_ci_gates/job21019757/ci.log). A test-split
+frame/shared-bundle parity audit also passed all 25 fields for 177,210 bars;
+see [`p2_frame_bundle_a4b_seed50_test_20261017_job21019757.json`](evidence/p2_frame_bundle_a4b_seed50_test_20261017_job21019757.json).
+This is engineering-only evidence from a contaminated checkpoint and an
+already-inspected holdout.
+
+The same source checkpoint's full train-plus-test reanalysis was attempted on
+both nodes in job `21019651`. The two test replays logged the same rounded
+metrics, but the train replay stopped on 2025-04-28 with
+`TickExecutionUnavailable`: there was no executable US100 tick within the
+60-second quote wait. Strict execution did not substitute a candle fill, and
+the full numerical artifact package was therefore not written. Failure
+evidence is
+[`p1_train_replay_tick_gap_20261017_job21019651.json`](evidence/p1_train_replay_tick_gap_20261017_job21019651.json);
+worker logs remain under
+[`retry1`](../../outputs/thesis_engineering_reanalysis/job21019651/retry1/).
+The job ended FAILED after 14:32 due to the worker error; it was not cancelled.
+
+The array-level audit of all 18 shared-bundle manifests found 18 timestamp
+array files: six empty, six with 567,835 timestamps spanning 2025-12-28 through
+2025-12-31 UTC, and six with 48,592,649 timestamps spanning 2026-01-01 through
+2026-07-03 UTC. None contains the missing April 2025 train-period quotes. All
+nonempty arrays have zero descending adjacent pairs; repeated timestamps are
+present (183 in the shorter arrays, 62,083 in the longer arrays). This resolves
+the earlier ambiguity: the strict-increase flag reflected duplicates, not
+descending order. Report:
+[`p1_shared_bundle_tick_array_ranges_20261017_job21019757.json`](evidence/p1_shared_bundle_tick_array_ranges_20261017_job21019757.json).
+P1 remains BLOCKED by inadequate US100 train-period tick coverage and unknown
+feed-use/publication terms. No training campaign or supervisor is active; job
+`21019757` is the current audit allocation. Thesis readiness remains NOT READY.
+
+**P2 mixed-timezone equity-index repair (2026-10-17):** full real-tick replay
+exposed `TradingEnv` appending UTC `TickBook` fill times into an equity series
+whose bar timestamps use the broker timezone (`Etc/GMT-3`). The mixed-zone
+`DatetimeIndex` crashed after 38,779 positions. The environment now converts
+each event timestamp to the broker timezone before comparing/appending it;
+naive legacy event times follow `_bar_time`'s existing UTC-localization rule.
+A regression assertion was added to
+`tests/test_envs/test_tick_fill_reconciliation.py`. The focused four-file suite
+passed 32 tests, and the subsequent full 1,729-test gate passed. This repairs
+the output-index construction; it does not resolve missing execution ticks or
+make the contaminated checkpoint admissible.
 
 **P1 shared-bundle source inventory (2026-10-17 17:50 Helsinki):** a
 read-only inventory of all 18 `cache/shared_env/*/manifest.json` files found

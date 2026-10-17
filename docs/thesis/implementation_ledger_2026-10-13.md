@@ -1,5 +1,58 @@
 # Implementation continuation ledger — 2026-10-13
 
+## Tick-timezone repair, full GH200 gate, and bundle tick-array audit — 2026-10-17 18:23 Helsinki
+
+On the authorized two-node allocation, full tick-backed evaluation found a
+timestamp-index failure: UTC `TickBook` fill times could replace broker-zone
+bar valuation times in `TradingEnv.equity_times`, making pandas reject the
+mixed-zone index. `quant_rl/envs/trading_env.py` now localizes naive event times
+to UTC and converts all event times to `BAR_TIME_TZ` before comparison and
+append. A regression assertion in
+`tests/test_envs/test_tick_fill_reconciliation.py` checks the broker-zone
+invariant when a tick arrives after the bar valuation boundary. The focused
+four-file suite passed 32 tests; the subsequent full GH200 gate passed Ruff
+format (459 files), Ruff lint, Mypy (468 source files), and all **1,729 tests**
+(82 warnings, 160.73 seconds). Output:
+`outputs/gpu_ci_gates/job21019757/ci.log`.
+
+The full train-plus-test reanalysis of the preserved, contaminated seed-50
+checkpoint was attempted twice on job `21019651`. Both workers completed the
+historical test split and logged the same rounded metrics (Sharpe -1.320, two
+trades, approximately zero return), but each then stopped at 2025-04-28 during
+the train split because no US100 tick was executable within 60 seconds. The
+strict tick path correctly raised `TickExecutionUnavailable`; no candle fill
+was used and no complete numerical reanalysis package was emitted. This
+confirms the known P1 training tick gap in actual replay. The job ended FAILED
+after 14:32 following the worker failure; it was not cancelled. Structured
+record:
+`docs/thesis/evidence/p1_train_replay_tick_gap_20261017_job21019651.json`;
+logs:
+`outputs/thesis_engineering_reanalysis/job21019651/retry1/worker{0,1}.log`.
+
+Job `21019757` then passed current-tree frame/shared-bundle parity for the
+177,210-bar historical test split, with every compared output field and both
+metric dictionaries equal. The source checkpoint has previously inspected
+test data and contaminated training lineage, so this is backend engineering
+evidence only:
+`docs/thesis/evidence/p2_frame_bundle_a4b_seed50_test_20261017_job21019757.json`.
+
+The same job read every one of the 18 `cache/shared_env/*/tick_ts.npy` arrays
+read-only. Six arrays are empty; six contain 567,835 timestamps spanning
+2025-12-28 through 2025-12-31 UTC; six contain 48,592,649 timestamps spanning
+2026-01-01 through 2026-07-03 UTC. No array includes the missing 2025-04
+training period. Nonempty arrays contain zero descending adjacent pairs, but
+have repeated timestamps (183 or 62,083 depending on array size); the earlier
+strict-increase flag was therefore caused by duplicates, not out-of-order
+timestamps. Machine report:
+`docs/thesis/evidence/p1_shared_bundle_tick_array_ranges_20261017_job21019757.json`.
+
+Allocation `21019757` remains active on `gpuarm1` and `gpuarm2` (one GH200,
+48 CPUs, and 512 GiB RAM per node; six-hour limit). No training campaign or
+supervisor is active. P1 is blocked on complete authorized US100 train-period
+ticks and documented feed-use/publication terms. P2's engineering checks do
+not close the scientific acceptance gate, and overall readiness remains NOT
+READY.
+
 ## Shared-environment tick-source manifest inventory — 2026-10-17 17:50 Helsinki
 
 The canonical `cache/shared_env/` contains 18 manifests (24 GiB total bundle

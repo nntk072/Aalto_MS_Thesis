@@ -3723,8 +3723,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             event_time = event.get("fill_time")
             if event_time is None and event.get("time_precision") == "bar_interval":
                 event_time = event.get("event_time_end")
-            if event_time is not None and pd.Timestamp(event_time) > valuation_time:
-                valuation_time = pd.Timestamp(event_time)
+            if event_time is not None:
+                event_timestamp = pd.Timestamp(event_time)
+                if event_timestamp.tzinfo is None:
+                    event_timestamp = event_timestamp.tz_localize("UTC")
+                event_timestamp = event_timestamp.tz_convert(BAR_TIME_TZ)
+                if event_timestamp > valuation_time:
+                    valuation_time = event_timestamp
         self.equity_curve.append(self.account.equity)
         self.equity_times.append(valuation_time)
         pnl_step = self.account.equity - self.equity_curve[-2]
