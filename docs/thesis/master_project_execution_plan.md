@@ -7,11 +7,21 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Latest live state (2026-10-17 06:31 Helsinki):** the contaminated 18-variant
+**Latest live state (2026-10-17 06:49 Helsinki):** the contaminated 18-variant
 campaign remains preserved and no training campaign is running. MI210 allocation
 `21012389` remains RUNNING on `gpuamd1` (one MI210, 8 CPUs, 128 GiB; scheduled
-end 09:26 Helsinki). The current dirty tree passed full-tree Ruff format/lint,
-Mypy (460 files), ROCm smoke, and 1,664 tests (77 warnings). The validation
+end 09:26 Helsinki). The canonical current-tree gate run in job `21012389`,
+step `.9`, passed full-tree Ruff format/lint, Mypy from `.venv-x86` (460 files),
+MI210 smoke, and all 1,664 tests (77 warnings). Its tracked-source hash
+`c76ea5d3ddf72497f1c1375b43666d8f358fb570176884daaa63a220ded2066a` and
+separately recorded untracked-script/test hash
+`43a92db7b1f63fe6d73f606b147b5eba553a1d5773d711f1dbc38a0955ac43a9` match the
+now-committed source; that validated source was committed as `a611411`, and
+subsequent commits `bc3e78f` and `953a60a` were documentation-only. The separate
+job `21012957` used `.venv-mi210` for Mypy instead of the gate's `.venv-x86`; its
+three typing-stub errors are noncanonical and no code fixes from that check
+remain. Its logs are preserved in
+`outputs/gpu_ci_gates/q0_q7_full_validation_job21012957/`. The validation
 wrapper's report-generation phase safely refused to overwrite two existing
 immutable schema-v2 campaign summaries; their hashes and embedded script
 provenance were verified, and no report was changed. Current run log:
@@ -25,6 +35,18 @@ known leakage and a legacy stop-schema manifest. A replay of the latter can
 only provide exploratory evaluator evidence. No Q-stage experiment or new
 18-variant campaign has launched. Thesis readiness remains NOT READY; see the
 status board and [`q0_q7_implementation_audit_2026-10-17.md`](q0_q7_implementation_audit_2026-10-17.md).
+
+**Allocation continuity check (2026-10-17 06:49 Helsinki):** fresh `squeue` and
+`sacct` show MI210 allocation `21012389` still RUNNING on `gpuamd1`, with
+scheduled end 09:26 Helsinki and no active validation step beyond `.extern`.
+Its recorded steps `.0`, `.3`, and `.7` completed; `.1`, `.2`, `.4`–`.6`,
+`.8`, and `.9` failed after 3:57–5:17 each. The separate authorized validation
+allocation `21012957` is terminal FAILED after 2:25 when Mypy returned nonzero;
+its logs are preserved and the temporary annotation edits were reverted.
+Login inspection found no tmux server,
+campaign supervisor, or trainer process. No training is active, and no
+additional Slurm step or cancellation was issued. Any new verification or replay
+step in `21012389` requires explicit approval.
 
 **Execution update (2026-10-17 04:49 Helsinki):** MI210 job `21012389` remains
 RUNNING on `gpuamd1` with 8 CPUs, 128 GiB host-memory allocation, and one MI210;
@@ -2986,9 +3008,9 @@ worker counts in that note rather than in this roadmap.
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE — immutable campaign snapshots, manifests, fingerprints, user data, and exploratory failures remain preserved. H200 job `21004765` completed; no `scancel` was issued. MI210 job `21012389` remains on `gpuamd1` (1 MI210/8 CPUs/128 GiB) through 09:26 Helsinki. Current dirty-tree software validation passed Ruff format/lint, Mypy (460 files), ROCm smoke, and 1,664 tests. The wrapper safely refused to overwrite existing immutable summaries. No GH200 or new 18-variant campaign is active. | — | P1, P2, E0 |
-| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE BUT SCIENTIFICALLY CONTAMINATED — preserve as exploratory: model-visible `prev_ny_high`/`prev_ny_low` leakage affected 17/18 saved configs. Recovery records 11 succeeded, 4 train-survival failures, 3 interrupted, and full-split telemetry for 17/18 variants; `ladder_a0_flat` has no current-attempt completed-split record. Eight variants had zero train/test trades. Post-repair bounded prefix/fold-poison checks and transactional three-cache rebuild passed, but do not prove exhaustive causality/calendar correctness. Schema-v2 seed-50 summary artifacts and the current software code passed the full test suite. Vendor/use provenance, independent reviews, and a fresh admissible screen remain open. Finding: `docs/thesis/evidence/p1_18_variant_screen_disposition_2026-10-16.md` | P0 | P2, E0 |
-| P2 | Deterministic evaluator/schema repair | ACTIVE — evaluator determinism, cache/dataset/checkpoint provenance, schema checks, numerical report verifier, and Q5 resume guard are implemented. Current-tree Ruff format/lint, Mypy, MI210 smoke, and 1,664 tests passed. The gate wrapper refused to overwrite existing immutable reports. Exact checkpoint recovery/parity, repeated deterministic report, and completed-checkpoint acceptance remain open; software CI does not close P2 | P0 | P1, E0 |
+| P0 | Safe boundary/current snapshot | ACTIVE — immutable campaign snapshots, manifests, fingerprints, user data, and exploratory failures remain preserved. H200 job `21004765` completed; no `scancel` was issued. MI210 job `21012389` remains on `gpuamd1` (1 MI210/8 CPUs/128 GiB) through 09:26 Helsinki. The committed source matches the canonical full-tree gate hashes and passed Ruff, Mypy, MI210 smoke, and 1,664 tests; the wrapper then refused to overwrite existing immutable summaries. No GH200 or new 18-variant campaign is active. | — | P1, P2, E0 |
+| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE BUT SCIENTIFICALLY CONTAMINATED — preserve as exploratory: model-visible `prev_ny_high`/`prev_ny_low` leakage affected 17/18 saved configs. Recovery records 11 succeeded, 4 train-survival failures, 3 interrupted, and full-split telemetry for 17/18 variants; `ladder_a0_flat` has no current-attempt completed-split record. Eight variants had zero train/test trades. Post-repair bounded prefix/fold-poison checks and transactional three-cache rebuild passed, but do not prove exhaustive causality/calendar correctness. The seed-50 artifacts are immutable; canonical source and full tests passed, but that does not close data validity. Vendor/use provenance, independent reviews, and a fresh admissible screen remain open. Finding: `docs/thesis/evidence/p1_18_variant_screen_disposition_2026-10-16.md` | P0 | P2, E0 |
+| P2 | Deterministic evaluator/schema repair | ACTIVE — evaluator determinism, cache/dataset/checkpoint provenance, schema checks, numerical report verifier, and Q5 resume guard are implemented. Canonical full-tree Ruff format/lint, Mypy from `.venv-x86`, MI210 smoke, and 1,664 tests passed for source hashes matching the committed tree. The wrapper refused to overwrite existing immutable reports. Exact checkpoint recovery/parity, repeated deterministic report, and completed-checkpoint acceptance remain open; software CI does not close P2 | P0 | P1, E0 |
 | E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and all-attempt screen reconciler exist. The refreshed recovery index is `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/thesis_evidence_index_post_causal_repair_20261017.json` (fingerprint `91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e`; 11 succeeded, 4 failed, 3 interrupted; 230 source hashes: 220 verified, 10 mismatched, none missing; 172 checkpoint artifacts). The separate v3 index was also refreshed and records 18 interrupted runs, 228 source hashes (207 verified, 21 mismatched, none missing), and 188 checkpoint artifacts. Both indices explicitly do not establish chronological split exposure, successful checkpoint deserialization, or strategy validity; those require their separate audits. Post-repair feature evidence remains bounded to four profiles/one early fold and 12 sampled prefixes. The M1 inventory is PARTIAL because vendor/use provenance, broker calendar/DST, and tick quality are not established. Final canonical reports still await P1/P2 closure | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED — report contract covers annualization, equity endpoints, exposure, raw fills/positions/breaches, split completion, and source/runtime provenance. The read-only verifier and tests passed current full CI. No admissible completed-checkpoint report has been generated | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | Reviewer preparation includes bounded related-work/threat notes and the refreshed independent-review brief/checklist. The pre-repair fold-poison failure is historical; bounded post-repair fold/prefix checks pass their stated slices. No independent reviewer has signed off; market-data/use provenance, broker calendar/DST, tick validity, broader causal coverage, and the P3 evidence package remain open |

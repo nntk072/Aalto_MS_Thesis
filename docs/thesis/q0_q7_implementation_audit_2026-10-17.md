@@ -9,6 +9,29 @@ result, strategy evaluation, winner selection, or thesis-readiness decision.
 
 ## Addendum — source inventory refresh, 2026-10-17
 
+### Latest validation follow-up — 2026-10-17 06:45 Helsinki
+
+- A separate authorized MI210 allocation, job `21012957`, started on
+  `gpuamd1` with 8 CPUs, 96 GiB, and one MI210. A real ROCm matrix operation
+  succeeded. This ad-hoc attempt ran Ruff successfully but invoked Mypy from
+  `.venv-mi210`; the canonical GPU gate uses `.venv-x86` for Ruff and Mypy.
+  The three resulting errors in `ppo_policy.py` and `hybrid_actor.py` are
+  environment-specific and do not contradict the canonical gate. No source
+  changes from that attempt remain; the temporary annotations were reverted.
+  The allocation ended after 2m25s and its logs remain in
+  `outputs/gpu_ci_gates/q0_q7_full_validation_job21012957/`.
+- The canonical full-tree gate at 06:27 in job `21012389`, step `.9`, passed
+  Ruff format/lint, Mypy from `.venv-x86` (460 files), the MI210 smoke, and all
+  1,664 tests. The exact tracked-source diff hash
+  `c76ea5d3ddf72497f1c1375b43666d8f358fb570176884daaa63a220ded2066a` and
+  separately recorded hash for the then-untracked report verifier and test
+  `43a92db7b1f63fe6d73f606b147b5eba553a1d5773d711f1dbc38a0955ac43a9` match
+  the now-committed code. The wrapper's only failures were safe refusals to
+  overwrite existing immutable campaign summaries. The validated source was
+  committed as `a611411`; later commits `bc3e78f` and `953a60a` were
+  documentation-only. Thus no additional GPU step is needed to verify the
+  code currently in `main`.
+
 ### Current implementation validation — 2026-10-17 06:31 Helsinki
 
 - On MI210 allocation `21012389`, full-tree Ruff format, full-tree Ruff lint,
