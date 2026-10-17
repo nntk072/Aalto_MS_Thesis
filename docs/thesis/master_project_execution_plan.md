@@ -7,9 +7,11 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-17 18:23 Helsinki):** work remains on `main` at
-`f9681ed`; the current tree has the timestamp-normalization fix and three new
-evidence files described below. GH200 job `21019757` is active on `gpuarm1` and
+**Live checkpoint (2026-10-17 18:26 Helsinki):** work remains on canonical
+`main`, clean at commit `56ee424` (pushed to `origin/main`); its code and three
+new evidence files are described below. The parity report records the
+pre-commit tree `f9681ed` and its dirty state at generation. GH200 job
+`21019757` is active on `gpuarm1` and
 `gpuarm2`, with one GH200, 48 CPUs, and 512 GiB per node for six hours (12
 GPU-hours maximum). The full GPU-node gate passed: Ruff format (459 files),
 Ruff lint, Mypy (468 source files), and **1,729 pytest tests** (82 warnings,
