@@ -1,0 +1,18 @@
+{
+  "checkpoint_sha256": "0a84fa254c45335715ce5a1607679b32f37d809b58b804c885ba7908aead655e",
+  "errors": [
+    "training/evaluation backend parity requires a separate audit",
+    "training backend is not a verified frame backend",
+    "original run manifest action_schema is missing",
+    "reanalysis action_schema is missing",
+    "original run manifest observation_schema is missing",
+    "original run manifest stop_candidate_schema is missing",
+    "stop-candidate schema was evaluated through a legacy opt-in",
+    "reanalysis used an unsupported legacy schema opt-in: legacy_observation_schema_opt_in",
+    "reanalysis used an unsupported legacy schema opt-in: legacy_stop_schema_opt_in"
+  ],
+  "evidence_class": "historical_exploratory_not_confirmatory",
+  "run_dir": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/thesis_engineering_reanalysis/p2_seed42_a0_postfix_hashseed_20261018/run_hashseed1",
+  "schema_version": 1,
+  "status": "failed"
+}

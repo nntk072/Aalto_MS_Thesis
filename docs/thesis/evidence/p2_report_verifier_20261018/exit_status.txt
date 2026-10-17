@@ -1,0 +1,2 @@
+hashseed1_exit=1
+hashseed12_exit=1

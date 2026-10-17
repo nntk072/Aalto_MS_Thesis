@@ -168,6 +168,15 @@ and used legacy opt-ins. The old checkpoint is inactive (zero completed trades)
 and is not admissible. See
 [`p2_postfix_hashseed_replay_attempt_20261018.json`](evidence/p2_postfix_hashseed_replay_attempt_20261018.json)
 and [`p2_postfix_hashseed_seed42_a0_20261018.json`](evidence/p2_postfix_hashseed_seed42_a0_20261018.json).
+The canonical numerical-report verifier was also run against both deterministic
+hash-seed replays; both machine reports fail for missing schemas, legacy
+observation/stop opt-ins, and missing frame-backend parity acceptance. They
+retain the same checkpoint hash and are classified as historical exploratory,
+not confirmatory. This confirms the rejection boundary for those archives; it
+does not close P3 or P2. Reports:
+[`seed42_a0_hashseed1.json`](evidence/p2_report_verifier_20261018/seed42_a0_hashseed1.json),
+[`seed42_a0_hashseed12.json`](evidence/p2_report_verifier_20261018/seed42_a0_hashseed12.json),
+and [`exit_status.txt`](evidence/p2_report_verifier_20261018/exit_status.txt).
 P2 remains open for schema-complete admissible-checkpoint acceptance after the
 remaining P1 gates. New training manifests now fail closed on missing or
 malformed action/observation schemas, with 27 focused manifest/comparator tests
