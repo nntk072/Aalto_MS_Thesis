@@ -7,8 +7,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from omegaconf import OmegaConf
 
-from quant_rl.data.ticks import TickBook, _ffill_inplace, build_tick_book
+from quant_rl.data.pipeline import build_tick_books
+from quant_rl.data.ticks import (
+    TICK_CACHE_VERSION,
+    TickBook,
+    _ffill_inplace,
+    build_tick_book,
+)
 
 
 def _make_book() -> TickBook:
@@ -64,6 +71,47 @@ def _write_tick_csv(path: Path, rows: list[tuple[str, str, float, float]]) -> No
     path.write_text("\n".join(lines) + "\n")
 
 
+def test_build_tick_books_bypasses_legacy_tick_cache(tmp_path: Path):
+    symbol = "US100.cash"
+    csv_path = tmp_path / "ticks.csv"
+    _write_tick_csv(csv_path, [("2025.01.06", "16:30:00.000", 100.0, 100.6)])
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir()
+    legacy_cache = cache_dir / f"{symbol}_ticks_v2-full-day.parquet"
+    pd.DataFrame(
+        {
+            "ts_ns": [pd.Timestamp("2025-01-06 13:30:00", tz="UTC").value],
+            "bid": [np.inf],
+            "ask": [100.6],
+        }
+    ).to_parquet(legacy_cache, index=False)
+    legacy_cache_contents = legacy_cache.read_bytes()
+    config = OmegaConf.create(
+        {
+            "costs": {"use_tick_execution": True},
+            "data": {
+                "raw_dir": str(tmp_path),
+                "cache_dir": str(cache_dir),
+                "tick_files": {symbol: csv_path.name},
+                "symbols": [symbol],
+                "tz": "Etc/GMT-3",
+            },
+        }
+    )
+
+    books = build_tick_books(config)
+
+    book = books[symbol]
+    assert book is not None
+    quote = book.quote_at(pd.Timestamp("2025-01-06 16:30:00", tz="Etc/GMT-3"))
+    assert quote is not None
+    assert quote[0] == pytest.approx(100.0)
+    assert quote[1] == pytest.approx(100.6)
+    assert legacy_cache.is_file()
+    assert legacy_cache.read_bytes() == legacy_cache_contents
+    assert (cache_dir / f"{symbol}_ticks_{TICK_CACHE_VERSION}.parquet").is_file()
+
+
 def test_build_tick_book_chunked_matches_expected(tmp_path: Path):
     """Small synthetic CSV, forced to a 2-row chunksize to exercise the
     cross-chunk forward-fill / session-filter boundary logic."""
@@ -95,6 +143,30 @@ def test_build_tick_book_chunked_matches_expected(tmp_path: Path):
     bid, ask = quote
     assert bid == pytest.approx(100.0)  # forward-filled across the chunk boundary
     assert ask == pytest.approx(101.1)
+
+
+def test_build_tick_book_filters_nonfinite_nonpositive_and_crossed_quotes(tmp_path: Path):
+    csv_path = tmp_path / "invalid_quotes.csv"
+    _write_tick_csv(
+        csv_path,
+        [
+            ("2025.01.06", "16:30:00.000", 100.0, 100.6),
+            ("2025.01.06", "16:30:01.000", float("inf"), 101.2),
+            ("2025.01.06", "16:30:02.000", 102.0, float("inf")),
+            ("2025.01.06", "16:30:03.000", 102.0, 102.5),
+            ("2025.01.06", "16:30:04.000", 0.0, 0.0),
+            ("2025.01.06", "16:30:05.000", 104.0, 103.0),
+            ("2025.01.06", "16:30:06.000", np.nan, 104.5),
+        ],
+    )
+
+    book = build_tick_book(csv_path, tz="Etc/GMT-3", chunksize=3)
+    quotes = list(book.bar_quotes(pd.Timestamp("2025-01-06 16:30:00", tz="Etc/GMT-3")))
+
+    assert len(quotes) == 5
+    assert all(np.isfinite(bid) and np.isfinite(ask) and 0 < bid <= ask for _, bid, ask in quotes)
+    assert quotes[1][1:] == pytest.approx((100.0, 101.2))
+    assert quotes[-1][1:] == pytest.approx((104.0, 104.5))
 
 
 def test_ticks_available_outside_ny(tmp_path: Path):

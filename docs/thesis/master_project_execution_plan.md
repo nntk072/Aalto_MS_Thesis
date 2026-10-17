@@ -7,11 +7,40 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Latest live state (2026-10-17 06:49 Helsinki):** the contaminated 18-variant
+**Live checkpoint (2026-10-17 08:58 Helsinki):** checkout is `main` at
+`fe2d041e12cbd99a35fff38d921cd24cb3d25627` with preserved dirty research/code
+changes. MI210 allocation `21012389` is RUNNING on `gpuamd1` (1 MI210, 8 CPUs,
+128 GiB; scheduled end 09:26:40 Helsinki); no campaign trainer is active. In
+step `.14`, the current dirty-tree gate passed full-tree Ruff format/lint,
+full-tree Mypy (461 files), MI210 ROCm matrix smoke, and all 1,671 tests (77
+warnings). The validated tracked-source diff SHA-256 is
+`a52a452848e99f68232da7240ea0376490e549dd9770583d854333ab5a56a360`; complete
+log: `outputs/gpu_ci_gates/observation_schema_gate_job21012389/validation.log`.
+The observation-schema, bundle, sequence-manifest, tick-ingestion and related
+regressions are now software-validated on this exact tree. P1/P2 remain open:
+the existing 20/20 fold-fit report is from an earlier `features/build.py`
+source hash, so it does not validate that exact report scope after the final
+observation filter; a repeat took 3,759 seconds and cannot fit the remaining
+allocation window. No campaign trainer is active; Q0–Q7 have no empirical
+campaign results, and thesis readiness remains NOT READY. Steps `.12` and
+`.13` recorded the expected format/Mypy failures during correction; `.14` is
+the fully green current-tree gate. Do not use those failed attempts as a
+successful gate. The old 08:35 and earlier live-state notes below are
+historical snapshots.
+
+**Historical live checkpoint (2026-10-17 08:35 Helsinki):** the 08:35
+per-node inventory showed `gpuarm1` and `gpuarm2` idle, each configured with 2
+GH200s, 144 CPUs, and 1,100,000 MiB RAM, with no user jobs; `gpuamd1` had this
+MI210 allocation using 8/16 CPUs and 128 GiB, with 1 of 2 MI210s allocated.
+Availability was an inventory snapshot, not an allocation or start forecast.
+The P1 disposition and implementation ledger labeled the 1,664-test result as
+a historical source snapshot, not validation of the then-dirty tree.
+
+**Historical live-state snapshot (2026-10-17 06:49 Helsinki):** the contaminated 18-variant
 campaign remains preserved and no training campaign is running. MI210 allocation
 `21012389` remains RUNNING on `gpuamd1` (one MI210, 8 CPUs, 128 GiB; scheduled
-end 09:26 Helsinki). The canonical current-tree gate run in job `21012389`,
-step `.9`, passed full-tree Ruff format/lint, Mypy from `.venv-x86` (460 files),
+end 09:26 Helsinki). At that time, the then-current-tree gate run in job
+`21012389`, step `.9`, passed full-tree Ruff format/lint, Mypy from `.venv-x86` (460 files),
 MI210 smoke, and all 1,664 tests (77 warnings); the wrapper then exited nonzero
 only when the summary writers refused to overwrite existing immutable outputs.
 Its tracked-source hash
@@ -38,7 +67,7 @@ only provide exploratory evaluator evidence. No Q-stage experiment or new
 18-variant campaign has launched. Thesis readiness remains NOT READY; see the
 status board and [`q0_q7_implementation_audit_2026-10-17.md`](q0_q7_implementation_audit_2026-10-17.md).
 
-**Allocation continuity check (2026-10-17 06:49 Helsinki):** fresh `squeue` and
+**Historical allocation continuity check (2026-10-17 06:49 Helsinki):** `squeue` and
 `sacct` show MI210 allocation `21012389` still RUNNING on `gpuamd1`, with
 scheduled end 09:26 Helsinki and no active validation step beyond `.extern`.
 Its recorded steps `.0`, `.3`, and `.7` completed; `.1`, `.2`, `.4`–`.6`,
@@ -49,6 +78,85 @@ Login inspection found no tmux server,
 campaign supervisor, or trainer process. No training is active, and no
 additional Slurm step or cancellation was issued. Any new verification or replay
 step in `21012389` requires explicit approval.
+
+**P1 full-fold audit preparation (2026-10-17 07:01 Helsinki):** the untracked
+`docs/thesis/audit_real_market_fold_fit_scope_full_train_2026-10-17.py` now
+specifies five expanding purged folds across the configured training interval
+and four representative feature profiles. Its fail-closed preflight checks the
+campaign fingerprint, all 18 variant/config identities and config hashes, and
+the two M1 input hashes against both the campaign manifest and cache-resolution
+report. It also verifies that each feature profile maps to a single known
+strategy schema across its matched runs. A fold passes only when training
+features remain identical and at least one model-visible validation feature
+changes after the validation OHLC poison. Report publication is atomic and
+refuses overwrite. Temporary caches are explicitly rooted in node-local `/tmp`,
+and the report hashes the full feature/data construction source set, campaign
+manifest, configs, inputs, and runtime libraries. Its first invocation stopped
+during preflight because of a run-key comparison mismatch, corrected in the
+07:12 update below. The corrected audit later completed 20/20 profile-fold
+checks on the complete configured training interval; report and limitations
+are recorded in the 08:19 update below. No campaign cache, checkpoint, or user
+data was modified.
+
+**P1 tick-ingestion correction (2026-10-17 07:06 Helsinki):** the existing
+tick scan reports 50,146 non-finite quote rows for US100 and 136,559 for US500,
+but does not distinguish NaN from infinity. Static review found
+`build_tick_book()` forward-fills NaN but would retain infinities and did not
+exclude crossed quotes if present. The builder now treats non-finite/nonpositive
+sides as missing, retains side state across chunks, and excludes non-executable
+crossed pairs from `TickBook`. The pipeline now uses the separate
+`v3-validated-full-day` tick-cache key, leaving existing v2 files intact;
+focused regressions cover invalid quotes, chunk-boundary carry, and bypassing a
+legacy cache. The focused tick suite first passed 9/9 in step `.10`. The first
+runner attempt used the nonexistent parent-level `.venv-x86` and stopped the
+fold audit at its run-key preflight. Both paths were corrected; the subsequent
+step `.11` passed full-tree Ruff, full-tree Mypy, the focused tick suite, and
+the completed fold audit as recorded below. No real tick or campaign cache was
+rebuilt or changed.
+A single persistent validation runner is prepared at
+`scripts/research/run_p1_tick_fold_validation.sh`;
+it collects focused Ruff checks, full-tree Mypy, `tests/test_ticks.py`, and the
+full-fold audit in one step. Its first launch used an invalid `.venv-x86` path
+and a mismatched manifest/run-key comparison; it failed before the fold work
+began. Scheduler accounting records step `21012389.10` as FAILED after 9
+seconds, an unintended short-step incident under the project's 120-second
+hard gate. The diagnostic log is preserved at
+`outputs/gpu_ci_gates/p1_tick_fold_validation_job21012389/validation.log`.
+The runner now points at the repository's `.venv-x86`, and the audit compares
+the manifest's `key` against the resolution report's suffixed run key. A
+read-only metadata preflight confirmed all 18 keys, config hashes, seed 50, and
+the four strategy-consistent feature profiles. The allocation and logs remain
+preserved, and no job was canceled.
+
+**P1 full-fold and observation-input update (2026-10-17 08:19 Helsinki):** on
+the already-approved MI210 allocation, persistent step `.11` passed full-tree
+Ruff format/lint, full-tree Mypy (461 files), and `tests/test_ticks.py` (9/9).
+The five default expanding purged folds across the complete training interval
+were checked for four profiles; all 20 checks passed with unchanged training
+features and changed model-visible validation features. Report:
+[`g1_real_market_fold_fit_full_train_2026-10-17.json`](g1_real_market_fold_fit_full_train_2026-10-17.json),
+SHA-256 `1bb93c4afafd2a9c45b11355e51b17683d6559897c1a9afa60d9817b361be561`;
+runner log:
+`outputs/gpu_ci_gates/p1_tick_fold_validation_job21012389/validation.log`.
+This establishes fold-local fitting only for the tested configs and 20% OHLC
+perturbation. It is not an exhaustive causality proof, a market-calendar/data
+validity result, or strategy evidence.
+
+Reviewing the completed report exposed a separate observation defect: bare
+event timestamp and identifier columns (including `po3_ifvg_time_ns` and
+`sweep_high_pivot_time_ns`) survived `select_obs_columns()` and entered the
+model tensor as approximately 1e18 Unix-nanosecond values. The report's large
+raw deltas (up to 2.79e15) come from those timestamp fields, not price-feature
+scales. The working tree now excludes absolute timestamp, origin-bar, and
+setup-ID metadata from observations while retaining relative age/state fields;
+shared-bundle version is bumped to 3 so old tensor bundles are not reused.
+Training manifests now record ordered sequence-feature coordinates and their
+hash; evaluation checks both column order and checkpoint input width, with an
+explicit opt-in for legacy manifests. Regression tests cover metadata filtering,
+ordered-schema validation, and bundle-key invalidation. These observation and
+manifest changes are not yet validated; do not treat the earlier fold-fit report
+or old checkpoints as evidence for the corrected layout. The consolidated full
+gate awaits explicit approval for another Slurm step under the second-step rule.
 
 **Execution update (2026-10-17 04:49 Helsinki):** MI210 job `21012389` remains
 RUNNING on `gpuamd1` with 8 CPUs, 128 GiB host-memory allocation, and one MI210;
@@ -1709,17 +1817,19 @@ Verify:
   selects the manifest's latest attempt (failed attempt 4), rather than the
   preserved attempt-3 recovery pointers. Fix or replace that audit path after
   the active campaign boundary.
-- **P2 provenance hardening implemented and boundedly verified — 2026-10-17:**
+- **P2 provenance hardening implemented and boundedly verified on its source snapshot — 2026-10-17:**
   the evaluator now checks the selected checkpoint SHA-256 against its source run manifest when
   available and records legacy cases without that link. New training manifests
   and SB3 checkpoints also record the versioned RQ1 stop-menu contract, and
   evaluation/resume reject missing or mismatched expanded-menu semantics
-  unless a compatible latest-swing legacy replay is explicitly selected. The
-  current dirty-tree validation passed on the approved MI210 allocation:
+  unless a compatible latest-swing legacy replay is explicitly selected. At
+  that point, the then-current dirty-tree validation passed on the approved MI210 allocation:
   full-tree Ruff format/lint, full-tree Mypy (458 files), a real ROCm matrix
   operation, and all 1,603 tests. The exact log is
   `outputs/gpu_ci_gates/q0_q7_current_tree_20261017_job21012389/current_tree_validation.log`.
-  This closes bounded implementation verification only; it does not close
+  These results validate that recorded source snapshot only; subsequent dirty
+  changes require a new gate. This closes bounded implementation verification
+  only; it does not close
   checkpoint replay, deterministic evaluation parity, P2 research evidence,
   campaign readiness, or thesis readiness.
 - **P2 feature-cache parity guard in progress — 2026-10-17:** current
@@ -1838,8 +1948,9 @@ and sets the scalar `seed` only when every job has the same declared integer
 seed. Focused regressions cover homogeneous seed 50, mixed seeds, and missing
 seed metadata. The writer also refuses to overwrite either existing report
 artifact, and a regression checks that the prior files remain unchanged. The
-current-tree full suite passed, including these regressions. No replacement
-summary has been written; P3 remains open because the canonical numerical
+earlier 1,664-test source snapshot passed, including these regressions; the
+current dirty-tree gate is still pending. No replacement summary has been
+written; P3 remains open because the canonical numerical
 reports require the upstream P1/P2 evidence gates and the old screen remains
 contaminated. If a descriptive summary is regenerated, use a new output stem and
 preserve the campaign manifest and training evidence.
@@ -3003,18 +3114,19 @@ compress or skip evidence gates to meet either date.
 
 Update this table as the persistent agent control surface. It is status, not a second roadmap.
 
-Latest transient Slurm/process state is recorded in the dated
-[`live status note`](live_status_2026-10-17_0520.md); the immutable allocation
-snapshot remains separate. Keep job IDs, process IDs, countdowns, and live
-worker counts in that note rather than in this roadmap.
+Latest transient Slurm/process state is recorded in the live checkpoint at the
+top of this plan; the dated [`live status note`](live_status_2026-10-17_0520.md)
+is an earlier immutable snapshot. Keep transient job IDs, process IDs,
+countdowns, and worker counts in the live checkpoint, not in the long roadmap
+history.
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE — immutable campaign snapshots, manifests, fingerprints, user data, and exploratory failures remain preserved. H200 job `21004765` completed; no `scancel` was issued. MI210 job `21012389` remains on `gpuamd1` (1 MI210/8 CPUs/128 GiB) through 09:26 Helsinki. The committed source matches the canonical full-tree gate hashes and passed Ruff, Mypy, MI210 smoke, and 1,664 tests; the wrapper then refused to overwrite existing immutable summaries. No GH200 or new 18-variant campaign is active. | — | P1, P2, E0 |
-| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE BUT SCIENTIFICALLY CONTAMINATED — preserve as exploratory: model-visible `prev_ny_high`/`prev_ny_low` leakage affected 17/18 saved configs. Recovery records 11 succeeded, 4 train-survival failures, 3 interrupted, and full-split telemetry for 17/18 variants; `ladder_a0_flat` has no current-attempt completed-split record. Eight variants had zero train/test trades. Post-repair bounded prefix/fold-poison checks and transactional three-cache rebuild passed, but do not prove exhaustive causality/calendar correctness. The seed-50 artifacts are immutable; canonical source and full tests passed, but that does not close data validity. Vendor/use provenance, independent reviews, and a fresh admissible screen remain open. Finding: `docs/thesis/evidence/p1_18_variant_screen_disposition_2026-10-16.md` | P0 | P2, E0 |
-| P2 | Deterministic evaluator/schema repair | ACTIVE — evaluator determinism, cache/dataset/checkpoint provenance, schema checks, numerical report verifier, and Q5 resume guard are implemented. Canonical full-tree Ruff format/lint, Mypy from `.venv-x86`, MI210 smoke, and 1,664 tests passed for source hashes matching the committed tree. The wrapper refused to overwrite existing immutable reports. Exact checkpoint recovery/parity, repeated deterministic report, and completed-checkpoint acceptance remain open; software CI does not close P2 | P0 | P1, E0 |
-| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and all-attempt screen reconciler exist. The refreshed recovery index is `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/thesis_evidence_index_post_causal_repair_20261017.json` (fingerprint `91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e`; 11 succeeded, 4 failed, 3 interrupted; 230 source hashes: 220 verified, 10 mismatched, none missing; 172 checkpoint artifacts). The separate v3 index was also refreshed and records 18 interrupted runs, 228 source hashes (207 verified, 21 mismatched, none missing), and 188 checkpoint artifacts. Both indices explicitly do not establish chronological split exposure, successful checkpoint deserialization, or strategy validity; those require their separate audits. Post-repair feature evidence remains bounded to four profiles/one early fold and 12 sampled prefixes. The M1 inventory is PARTIAL because vendor/use provenance, broker calendar/DST, and tick quality are not established. Final canonical reports still await P1/P2 closure | P0 | P1, P2 |
-| P3 | Canonical numerical screen reports | BLOCKED — report contract covers annualization, equity endpoints, exposure, raw fills/positions/breaches, split completion, and source/runtime provenance. The read-only verifier and tests passed current full CI. No admissible completed-checkpoint report has been generated | P1 + P2 | per-checkpoint eval/package |
+| P0 | Safe boundary/current snapshot | ACTIVE — immutable campaign snapshots, manifests, fingerprints, user data, and exploratory failures remain preserved. MI210 job `21012389` is RUNNING on `gpuamd1` through 09:26; step `.14` passed the current-tree full software gate. No GH200, campaign supervisor, trainer, or new 18-variant campaign is active. No cancellation was issued. | — | P1, P2, E0 |
+| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE BUT SCIENTIFICALLY CONTAMINATED — preserve as exploratory: model-visible `prev_ny_high`/`prev_ny_low` leakage affected 17/18 saved configs. Recovery records 11 succeeded, 4 train-survival failures, 3 interrupted, and full-split telemetry for 17/18 variants; `ladder_a0_flat` has no current-attempt completed-split record. Eight variants had zero train/test trades. The full-training-interval report passed 20/20 perturbation checks on its hashed source snapshot, but current `features/build.py` has a different hash following the observation filter, so that report is not current post-fix fold evidence. Full-tree code/tests, including tick sanitation and observation filtering, now pass; real-data cache rebuild, tick/fold re-audit, vendor/use provenance, broker calendar/DST, independent reviews, and a fresh admissible screen remain open. Seed-50 artifacts remain immutable. Finding: `docs/thesis/evidence/p1_18_variant_screen_disposition_2026-10-16.md` | P0 | P2, E0 |
+| P2 | Deterministic evaluator/schema repair | ACTIVE — evaluator determinism, cache/dataset/checkpoint provenance, numerical report verifier, Q5 resume guard, and ordered sequence-feature schema are implemented. Current dirty-tree full Ruff/Mypy/MI210 smoke and 1,671-test gate passed on step `.14`; hash and log are in the live checkpoint. Exact checkpoint recovery/parity, repeated deterministic report, and completed-checkpoint acceptance remain open; software CI does not close P2 | P0 | P1, E0 |
+| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and all-attempt screen reconciler exist. The refreshed recovery index is `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/thesis_evidence_index_post_causal_repair_20261017.json` (fingerprint `91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e`; 11 succeeded, 4 failed, 3 interrupted; 230 source hashes: 220 verified, 10 mismatched, none missing; 172 checkpoint artifacts). The separate v3 index was also refreshed and records 18 interrupted runs, 228 source hashes (207 verified, 21 mismatched, none missing), and 188 checkpoint artifacts. Neither index establishes chronological split exposure, successful checkpoint deserialization, or strategy validity. The current-tree observation-schema integration passes frame/bundle and manifest software tests; the 20-check full-training-interval fold-fit result remains source-snapshot-specific and broader causality is open. The M1 inventory is PARTIAL because vendor/use provenance, broker calendar/DST, and tick validity are not established. Final canonical reports still await P1/P2 closure | P0 | P1, P2 |
+| P3 | Canonical numerical screen reports | BLOCKED — report contract covers annualization, equity endpoints, exposure, raw fills/positions/breaches, split completion, and source/runtime provenance. The verifier and tests pass the current full-tree software gate, but no admissible completed-checkpoint report has been generated | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | Reviewer preparation includes bounded related-work/threat notes and the refreshed independent-review brief/checklist. The pre-repair fold-poison failure is historical; bounded post-repair fold/prefix checks pass their stated slices. No independent reviewer has signed off; market-data/use provenance, broker calendar/DST, tick validity, broader causal coverage, and the P3 evidence package remain open |
 | P5 | Freeze matched design/baselines | BLOCKED | P4 | P6 prep, review |
 | P6 | Production runtime/resource freeze | PREP-ONLY | P4/screen-safe | paired-launch prep |
@@ -3023,7 +3135,7 @@ worker counts in that note rather than in this roadmap.
 | E1 | Result aggregation/finding cards | ACTIVE-AS-ARTIFACTS-ARRIVE | E0 | every terminal run |
 | P8 | Review + evidence freeze | PREP-ONLY | final P7 evidence | figure/result cross-checks |
 | P9 | `RESULTS_PACKAGE_COMPLETE` handoff | BLOCKED | P8 + E1 | archive/index QA |
-| Q0–Q7 | Required research program | COMPULSORY, NO RESEARCH RUNS — no stage result or winner exists. Q0/Q1, Q2 geometry, Q3 reward/risk, Q4A/B policies, Q5 primal-dual PPO, Q6 FSM, and Q7 encoders have source implementations with differing bounded test coverage. Q5 now uses gamma-matched discounted costs, exports evaluation cost diagnostics, and fails closed on policy-only resume; current full CI passed. Q4-parent freeze, campaign-level checkpoint parity, remaining stage integration/reviews, and every Q-stage experiment remain open. See [`q0_q7_implementation_audit_2026-10-17.md`](q0_q7_implementation_audit_2026-10-17.md). Run in dependency order after P11 by default; earlier work must meet entry gates and not displace thesis-critical tasks | ordered stage parents | implementation, validation, and evidence preparation |
+| Q0–Q7 | Required research program | COMPULSORY, NO RESEARCH RUNS — no stage result or winner exists. Q0/Q1, Q2 geometry, Q3 reward/risk, Q4A/B policies, Q5 primal-dual PPO, Q6 FSM, and Q7 encoders have source implementations with differing bounded test coverage. Q5 uses gamma-matched discounted costs, exports evaluation cost diagnostics, and fails closed on policy-only resume. The current dirty-tree gate passed 1,671 tests, full-tree Ruff/Mypy, and MI210 ROCm smoke; this is software validation, not a Q-stage result. Q4-parent freeze, campaign-level checkpoint parity, remaining stage integration/reviews, and every Q-stage experiment remain open. See [`q0_q7_implementation_audit_2026-10-17.md`](q0_q7_implementation_audit_2026-10-17.md). Run in dependency order after P11 by default; earlier work must meet entry gates and not displace thesis-critical tasks | ordered stage parents | implementation, validation, and evidence preparation |
 
 **GH200 allocation guard (user direction, 2026-10-16):** the thesis campaign
 may have at most **2 GH200 GPUs total across all active allocations**, and no

@@ -1,0 +1,535 @@
+#!/usr/bin/env python3
+"""Check fold-scoped feature fitting on the complete training interval.
+
+For each representative feature profile and every default purged walk-forward
+fold, poison validation-period OHLC in both instruments. Verify that fitted
+training features remain unchanged while validation features respond. Temporary
+feature caches are written under node-local /tmp and removed; campaign caches
+are read-only.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.metadata
+import json
+import os
+import platform
+import subprocess
+import tempfile
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+from omegaconf import DictConfig, OmegaConf
+from stable_baselines3 import __version__ as stable_baselines3_version
+
+from quant_rl.data.clean import clean
+from quant_rl.data.loader import load_bars
+from quant_rl.data.session import add_session_id, add_session_labels
+from quant_rl.data.split import get_split_config, make_train_mask
+from quant_rl.envs.strategies import BaselineStrategy, DistributionStrategy, PO3IFVGStrategy
+from quant_rl.evaluation.walkforward import purged_walk_forward
+from quant_rl.features.build import (
+    FEATURE_CACHE_VERSION,
+    build_walkforward_fold_features,
+    select_obs_columns,
+)
+
+ROOT = Path(__file__).resolve().parents[2]
+CAMPAIGN_ID = "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016"
+CAMPAIGN = ROOT / "outputs/gpu_campaigns" / CAMPAIGN_ID
+RESOLUTION_REPORT = ROOT / "docs/thesis/g1_campaign_feature_cache_resolution_2026-10-16.json"
+PRE_REPAIR_OUTPUT = ROOT / "docs/thesis/g1_real_market_fold_fit_scope_2026-10-16.json"
+DEFAULT_OUTPUT = ROOT / "docs/thesis/g1_real_market_fold_fit_full_train_2026-10-17.json"
+VARIANTS = ("ladder_a0_flat", "ladder_a1_sl", "ladder_a0_flat_po3", "ladder_a0_flat_dist")
+STRATEGIES = {
+    "baseline": BaselineStrategy,
+    "po3_ifvg": PO3IFVGStrategy,
+    "distribution": DistributionStrategy,
+}
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def frame_digest(frame: pd.DataFrame) -> str:
+    digest = hashlib.sha256()
+    digest.update(json.dumps(list(frame.columns), separators=(",", ":")).encode())
+    digest.update(pd.util.hash_pandas_object(frame, index=True).to_numpy().tobytes())
+    return digest.hexdigest()
+
+
+def max_numeric_delta(left: pd.DataFrame, right: pd.DataFrame) -> float:
+    if not left.index.equals(right.index) or list(left.columns) != list(right.columns):
+        raise RuntimeError("compared fold feature frames changed index or schema")
+    a = left.to_numpy(dtype=np.float64)
+    b = right.to_numpy(dtype=np.float64)
+    both_finite = np.isfinite(a) & np.isfinite(b)
+    if not both_finite.any():
+        return 0.0
+    return float(np.max(np.abs(a[both_finite] - b[both_finite])))
+
+
+def train_difference_detail(left: pd.DataFrame, right: pd.DataFrame) -> dict[str, Any]:
+    a = left.to_numpy(dtype=np.float64)
+    b = right.to_numpy(dtype=np.float64)
+    equal = (a == b) | (np.isnan(a) & np.isnan(b))
+    changed = ~equal
+    columns = list(left.columns)
+    changed_columns = [columns[i] for i in np.flatnonzero(changed.any(axis=0))]
+    rows: list[dict[str, Any]] = []
+    for row_index in np.flatnonzero(changed.any(axis=1))[:8]:
+        rows.append(
+            {
+                "timestamp": str(left.index[row_index]),
+                "columns": [columns[i] for i in np.flatnonzero(changed[row_index])[:12]],
+            }
+        )
+    return {
+        "changed_column_count": len(changed_columns),
+        "changed_columns": changed_columns,
+        "first_changed_rows": rows,
+    }
+
+
+def main() -> int:
+    started = time.perf_counter()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=DEFAULT_OUTPUT,
+        help="new JSON report path; existing artifacts are never overwritten",
+    )
+    args = parser.parse_args()
+    output_path = args.out if args.out.is_absolute() else ROOT / args.out
+    if output_path.exists():
+        raise FileExistsError(f"refusing to overwrite existing audit: {output_path}")
+    if not PRE_REPAIR_OUTPUT.is_file():
+        raise FileNotFoundError(f"pre-repair audit report missing: {PRE_REPAIR_OUTPUT}")
+    resolution = json.loads(RESOLUTION_REPORT.read_text(encoding="utf-8"))
+    campaign = json.loads((CAMPAIGN / "campaign.json").read_text(encoding="utf-8"))
+    if resolution["campaign_fingerprint"] != campaign["fingerprint"]:
+        raise RuntimeError("cache-resolution report and active campaign fingerprints differ")
+    resolution_results = resolution["results"]
+    if len(resolution_results) != 18:
+        raise RuntimeError(f"expected 18 resolved campaign configs, got {len(resolution_results)}")
+    resolved_profiles = {row["matched_parity_profile"] for row in resolution_results}
+    if resolved_profiles != set(VARIANTS):
+        raise RuntimeError(f"resolved profile set changed: {sorted(resolved_profiles)}")
+    resolved_variants = [row["variant"] for row in resolution_results]
+    if len(set(resolved_variants)) != 18:
+        raise RuntimeError("cache-resolution report contains duplicate campaign variants")
+    manifest_jobs = campaign["jobs"]
+    manifest_run_keys = [row["key"] for row in manifest_jobs]
+    if (
+        len(manifest_run_keys) != 18
+        or len(set(manifest_run_keys)) != 18
+        or set(manifest_run_keys) != set(resolved_variants)
+    ):
+        raise RuntimeError("campaign manifest and cache-resolution variant identities differ")
+    if any(int(row["seed"]) != 50 for row in manifest_jobs):
+        raise RuntimeError("campaign manifest contains a non-seed-50 run")
+    for row in resolution_results:
+        config_path = ROOT / row["config_path"]
+        if sha256_file(config_path) != row["config_sha256"]:
+            raise RuntimeError(f"campaign config hash changed: {row['config_path']}")
+    strategy_names_by_profile: dict[str, set[str]] = {}
+    for row in resolution_results:
+        cfg = OmegaConf.load(ROOT / row["config_path"])
+        strategy_name = str(OmegaConf.select(cfg, "strategy.name", default="baseline"))
+        if strategy_name not in STRATEGIES:
+            raise RuntimeError(
+                f"unsupported campaign strategy {strategy_name!r} in {row['config_path']}"
+            )
+        strategy_names_by_profile.setdefault(row["matched_parity_profile"], set()).add(
+            strategy_name
+        )
+    mixed_strategy_profiles = {
+        profile: sorted(names)
+        for profile, names in strategy_names_by_profile.items()
+        if len(names) != 1
+    }
+    if mixed_strategy_profiles:
+        raise RuntimeError(f"feature profiles mix strategy schemas: {mixed_strategy_profiles}")
+
+    resolution_by_profile: dict[str, dict[str, Any]] = {}
+    for row in resolution["results"]:
+        resolution_by_profile.setdefault(row["matched_parity_profile"], row)
+    config_by_variant = {
+        variant: ROOT / resolution_by_profile[variant]["config_path"] for variant in VARIANTS
+    }
+
+    configs: dict[str, DictConfig] = {}
+    for variant in VARIANTS:
+        cfg = OmegaConf.load(config_by_variant[variant])
+        if not isinstance(cfg, DictConfig):
+            raise TypeError(f"saved run config is not a mapping: {variant}")
+        configs[variant] = cfg
+
+    base = configs[VARIANTS[0]]
+    primary_symbol = str(base.data.primary)
+    secondary_symbol = str(base.data.secondary)
+    raw_dir = ROOT / str(base.data.raw_dir)
+    primary_path = raw_dir / str(base.data.m1_files[primary_symbol])
+    secondary_path = raw_dir / str(base.data.m1_files[secondary_symbol])
+    raw_input_hashes = {
+        str(path.relative_to(ROOT)): sha256_file(path) for path in (primary_path, secondary_path)
+    }
+    for relative_path, actual_hash in raw_input_hashes.items():
+        resolution_hash = resolution["raw_input_sha256"].get(relative_path)
+        campaign_hash = campaign["data_inputs"].get(relative_path)
+        if actual_hash != resolution_hash or actual_hash != campaign_hash:
+            raise RuntimeError(
+                f"M1 input hash does not match both campaign and cache-resolution evidence: "
+                f"{relative_path}"
+            )
+    primary = add_session_id(
+        add_session_labels(
+            clean(load_bars(primary_path), tz=str(base.data.tz)),
+            tz=str(base.data.tz),
+            ny_end=str(base.session.end),
+        )
+    )
+    secondary = add_session_id(
+        add_session_labels(
+            clean(load_bars(secondary_path), tz=str(base.data.tz)),
+            tz=str(base.data.tz),
+            ny_end=str(base.session.end),
+        )
+    )
+    train_end, _ = get_split_config(base)
+    full_train = primary.loc[make_train_mask(pd.DatetimeIndex(primary.index), train_end)]
+    # Cover the complete configured training interval with the repository's
+    # default five expanding, non-overlapping purged folds.
+    fold_input = full_train
+    splits = list(
+        purged_walk_forward(
+            len(fold_input),
+            n_splits=5,
+            test_size=0.2,
+            purge_bars=60,
+            embargo_bars=20,
+        )
+    )
+    if len(splits) != 5:
+        raise RuntimeError(f"expected five purged walk-forward folds, got {len(splits)}")
+
+    results: list[dict[str, Any]] = []
+    temp_root = Path(tempfile.mkdtemp(prefix="thesis-fold-fit-", dir="/tmp"))
+    try:
+        for variant, cfg in configs.items():
+            for split in splits:
+                fold_train = fold_input.iloc[split.train_idx]
+                fold_validation = fold_input.iloc[split.test_idx]
+                if fold_train.index.max() >= fold_validation.index.min():
+                    raise RuntimeError(f"purge/embargo failed to separate fold {split.fold}")
+
+                poisoned_primary = primary.copy()
+                poisoned_secondary = secondary.copy()
+                poisoned_rows: dict[str, int] = {}
+                for symbol, bars in (
+                    (primary_symbol, poisoned_primary),
+                    (secondary_symbol, poisoned_secondary),
+                ):
+                    overlap = bars.index.intersection(fold_validation.index)
+                    if overlap.empty:
+                        raise RuntimeError(
+                            f"fold {split.fold} has no validation overlap for {symbol}"
+                        )
+                    for column in ("open", "high", "low", "close"):
+                        bars.loc[overlap, column] *= 1.2
+                    poisoned_rows[symbol] = len(overlap)
+
+                cache_root = temp_root / variant / f"fold-{split.fold}"
+                (
+                    original_train,
+                    original_validation,
+                    original_cache,
+                ) = build_walkforward_fold_features(
+                    primary,
+                    secondary,
+                    cfg,
+                    fold_train,
+                    fold_validation,
+                    cache_root / "original",
+                    primary_symbol,
+                )
+                (
+                    poison_train,
+                    poison_validation,
+                    poison_cache,
+                ) = build_walkforward_fold_features(
+                    poisoned_primary,
+                    poisoned_secondary,
+                    cfg,
+                    fold_train,
+                    fold_validation,
+                    cache_root / "poisoned",
+                    primary_symbol,
+                )
+
+                train_delta = max_numeric_delta(original_train, poison_train)
+                validation_delta = max_numeric_delta(original_validation, poison_validation)
+                train_equal = original_train.equals(poison_train)
+                detail = train_difference_detail(original_train, poison_train)
+                validation_detail = train_difference_detail(original_validation, poison_validation)
+                strategy_name = str(OmegaConf.select(cfg, "strategy.name", default="baseline"))
+                strategy = STRATEGIES[strategy_name]()
+                observation_columns = select_obs_columns(
+                    original_train, strategy.raw_columns
+                ).columns
+                validation_changed = not original_validation.equals(poison_validation)
+                validation_changed_model_visible = any(
+                    column in observation_columns for column in validation_detail["changed_columns"]
+                )
+                passed = train_equal and validation_changed and validation_changed_model_visible
+
+                results.append(
+                    {
+                        "variant": variant,
+                        "campaign_cache_feature_hash": resolution_by_profile[variant][
+                            "feature_hash"
+                        ],
+                        "config_path": str(config_by_variant[variant].relative_to(ROOT)),
+                        "config_sha256": sha256_file(config_by_variant[variant]),
+                        "fold": int(split.fold),
+                        "train_rows": len(fold_train),
+                        "validation_rows": len(fold_validation),
+                        "purge_bars": 60,
+                        "embargo_bars": 20,
+                        "train_last": str(fold_train.index.max()),
+                        "validation_first": str(fold_validation.index.min()),
+                        "validation_last": str(fold_validation.index.max()),
+                        "poisoned_validation_rows": poisoned_rows,
+                        "train_features_identical_after_validation_poison": train_equal,
+                        "train_changed_feature_detail": detail,
+                        "train_max_abs_delta": train_delta,
+                        "validation_max_abs_delta": validation_delta,
+                        "validation_features_changed": validation_changed,
+                        "validation_changed_feature_detail": validation_detail,
+                        "validation_changed_features_model_visible": {
+                            column: column in observation_columns
+                            for column in validation_detail["changed_columns"]
+                        },
+                        "validation_changed_model_visible_feature": (
+                            validation_changed_model_visible
+                        ),
+                        "changed_features_model_visible": {
+                            column: column in observation_columns
+                            for column in detail["changed_columns"]
+                        },
+                        "passed": passed,
+                        "train_feature_sha256_original": frame_digest(original_train),
+                        "train_feature_sha256_poisoned": frame_digest(poison_train),
+                        "validation_feature_sha256_original": frame_digest(original_validation),
+                        "validation_feature_sha256_poisoned": frame_digest(poison_validation),
+                        "temporary_cache_keys": [original_cache.name, poison_cache.name],
+                    }
+                )
+                print(
+                    f"{'PASS' if passed else 'FAIL'} "
+                    f"{variant} fold={split.fold}: train_delta={train_delta:.3g}, "
+                    f"validation_delta={validation_delta:.3g}",
+                    flush=True,
+                )
+                del (
+                    original_train,
+                    original_validation,
+                    original_cache,
+                    poison_train,
+                    poison_validation,
+                    poison_cache,
+                    poisoned_primary,
+                    poisoned_secondary,
+                )
+    finally:
+        import shutil
+
+        shutil.rmtree(temp_root)
+
+    failed_profiles = {item["variant"] for item in results if not item["passed"]}
+    training_changed_profiles = sorted(
+        {
+            item["variant"]
+            for item in results
+            if not item["train_features_identical_after_validation_poison"]
+        }
+    )
+    validation_unresponsive_profiles = sorted(
+        {item["variant"] for item in results if not item["validation_features_changed"]}
+    )
+    no_visible_validation_response_profiles = sorted(
+        {
+            item["variant"]
+            for item in results
+            if not item["validation_changed_model_visible_feature"]
+        }
+    )
+    affected_campaign_runs = [
+        row for row in resolution["results"] if row["matched_parity_profile"] in failed_profiles
+    ]
+    changed_columns = sorted(
+        {
+            column
+            for item in results
+            for column in item["train_changed_feature_detail"]["changed_columns"]
+        }
+    )
+    source_paths = (
+        ROOT / "quant_rl/features/build.py",
+        ROOT / "quant_rl/features/htf_sweeps.py",
+        ROOT / "quant_rl/features/indicators.py",
+        ROOT / "quant_rl/features/liquidity.py",
+        ROOT / "quant_rl/features/normalize.py",
+        ROOT / "quant_rl/features/pd_context.py",
+        ROOT / "quant_rl/features/po3_config.py",
+        ROOT / "quant_rl/features/po3_ifvg_state.py",
+        ROOT / "quant_rl/features/po3_state.py",
+        ROOT / "quant_rl/features/session_ohlc.py",
+        ROOT / "quant_rl/features/smt.py",
+        ROOT / "quant_rl/features/structure.py",
+        ROOT / "quant_rl/features/swings.py",
+        ROOT / "quant_rl/data/align.py",
+        ROOT / "quant_rl/evaluation/walkforward.py",
+        ROOT / "quant_rl/data/clean.py",
+        ROOT / "quant_rl/data/loader.py",
+        ROOT / "quant_rl/data/resample.py",
+        ROOT / "quant_rl/data/session.py",
+        ROOT / "quant_rl/data/split.py",
+    )
+    if failed_profiles:
+        scope_note = (
+            f"FAILED: only {sum(bool(item['passed']) for item in results)}/{len(results)} "
+            "profile/fold perturbation checks passed. Training features changed for profiles "
+            f"{training_changed_profiles}; validation features did not respond for profiles "
+            f"{validation_unresponsive_profiles}; model-visible validation response was absent "
+            f"for profiles {no_visible_validation_response_profiles}. Changed training columns: "
+            f"{changed_columns}. The failed profiles map to {len(affected_campaign_runs)}/18 "
+            "saved campaign runs. "
+            "This is a real-market causality failure for the tested slice, not a strategy "
+            "result. The active campaign source was not changed."
+        )
+    else:
+        scope_note = (
+            "Five default expanding purged walk-forward folds over the complete configured "
+            "training interval were checked for four representative feature profiles. "
+            "Validation OHLC for both instruments was perturbed by 20 percent; training-fold "
+            "features remained exactly identical while model-visible validation features "
+            "changed. This is "
+            "empirical evidence for fold-local fitting under these configs and perturbations. "
+            "It is not an exhaustive proof of every causal transformation, a market-calendar "
+            "audit, or a strategy result."
+        )
+    report = {
+        "audit": "real_market_purged_fold_fit_scope_poison_test",
+        "feature_cache_version": FEATURE_CACHE_VERSION,
+        "scope_note": scope_note,
+        "previous_audit": {
+            "path": str(PRE_REPAIR_OUTPUT.relative_to(ROOT)),
+            "sha256": sha256_file(PRE_REPAIR_OUTPUT),
+            "disposition": "immutable pre-repair failure; not a result for current source",
+        },
+        "source_diagnosis": (
+            "This report evaluates the current source identified by source_sha256. "
+            "The prior report documented model-visible future NY-session extrema in "
+            "prev_ny_high/prev_ny_low; this field does not assume that diagnosis remains "
+            "true after repair. Per-profile poison results and current source hashes are "
+            "the evidence for this rerun."
+        ),
+        "affected_campaign_runs": [row["variant"] for row in affected_campaign_runs],
+        "affected_campaign_run_count": len(affected_campaign_runs),
+        "campaign_run_profile_mapping": [
+            {
+                "variant": row["variant"],
+                "matched_parity_profile": row["matched_parity_profile"],
+                "config_sha256": row["config_sha256"],
+            }
+            for row in resolution["results"]
+        ],
+        "strategy_name_by_profile": {
+            profile: next(iter(names))
+            for profile, names in sorted(strategy_names_by_profile.items())
+        },
+        "failed_profiles": sorted(failed_profiles),
+        "training_changed_profiles": training_changed_profiles,
+        "validation_unresponsive_profiles": validation_unresponsive_profiles,
+        "no_visible_validation_response_profiles": no_visible_validation_response_profiles,
+        "campaign_id": CAMPAIGN_ID,
+        "campaign_fingerprint": campaign["fingerprint"],
+        "campaign_git_sha": campaign["git_sha"],
+        "campaign_manifest_sha256": sha256_file(CAMPAIGN / "campaign.json"),
+        "runtime": {
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "pandas": pd.__version__,
+            "numpy": np.__version__,
+            "stable_baselines3": stable_baselines3_version,
+            "omegaconf": importlib.metadata.version("omegaconf"),
+            "pyarrow": importlib.metadata.version("pyarrow"),
+            "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+        },
+        "repository_head": subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+        ).strip(),
+        "working_tree_status": subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=ROOT, text=True
+        ).splitlines(),
+        "slurm_job_id": campaign.get("job_id"),
+        "raw_inputs_sha256": raw_input_hashes,
+        "raw_inputs_match_campaign_and_cache_resolution": True,
+        "campaign_config_hashes_match_resolution": True,
+        "source_sha256": {str(path.relative_to(ROOT)): sha256_file(path) for path in source_paths},
+        "cache_resolution_report_sha256": sha256_file(RESOLUTION_REPORT),
+        "fold_rows_available": len(fold_input),
+        "training_interval_start": str(fold_input.index.min()),
+        "training_interval_end": str(fold_input.index.max()),
+        "fold_count": len(splits),
+        "fold_parameters": {
+            "n_splits": 5,
+            "test_size": 0.2,
+            "purge_bars": 60,
+            "embargo_bars": 20,
+            "poison_multiplier": 1.2,
+            "poisoned_symbols": [primary_symbol, secondary_symbol],
+        },
+        "results": results,
+        "profile_count": len(configs),
+        "check_count": len(results),
+        "all_fold_profile_checks_pass": all(item["passed"] for item in results),
+        "temporary_cache_root_removed": not temp_root.exists(),
+        "completed_at": datetime.now().astimezone().isoformat(),
+        "elapsed_seconds": time.perf_counter() - started,
+    }
+    report["audit_script_sha256"] = sha256_file(Path(__file__).resolve())
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_output = output_path.with_name(f".{output_path.name}.{os.getpid()}.tmp")
+    try:
+        temporary_output.write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        # Hard-link publication is atomic and fails if another process already
+        # created the immutable destination report.
+        os.link(temporary_output, output_path)
+    finally:
+        temporary_output.unlink(missing_ok=True)
+    passed_count = sum(bool(item["passed"]) for item in results)
+    print(
+        f"AUDIT COMPLETE: {passed_count}/{len(results)} fold/profile checks pass; "
+        f"report={output_path}"
+    )
+    return 0 if report["all_fold_profile_checks_pass"] else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -2926,9 +2926,11 @@ menu. Reanalysis now also compares a selected checkpoint's SHA-256 with the
 source run manifest when one is recorded, and reports when legacy provenance
 does not provide that link. The schema records all effective stop-menu
 timeframes after configured encoder windows are merged; a custom-M30
-compatibility regression covers that path. The current dirty tree passed
-full-tree Ruff format/lint, full-tree Mypy (458 files), a MI210 ROCm matrix
-operation, and all 1,603 tests. The exact log is
+compatibility regression covers that path. At that point, the then-current
+dirty tree passed full-tree Ruff format/lint, full-tree Mypy (458 files), a
+MI210 ROCm matrix operation, and all 1,603 tests. The later P1 tick-ingestion
+and observation-schema changes are outside that validation boundary and still
+require a current-tree gate. The exact historical log is
 `outputs/gpu_ci_gates/q0_q7_current_tree_20261017_job21012389/current_tree_validation.log`.
 This closes bounded software verification only; no campaign checkpoint was
 replayed and no empirical result was produced.

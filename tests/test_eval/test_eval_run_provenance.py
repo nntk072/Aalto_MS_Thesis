@@ -1,6 +1,7 @@
 """Evaluation must preserve input runs and reproduce training fit scope."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -48,6 +49,28 @@ def test_legacy_input_provenance_reanalysis_requires_explicit_opt_in() -> None:
     )
     assert opted_in.allow_legacy_data_provenance is True
     assert opted_in.source_feature_cache == "cache/baseline.parquet"
+
+
+def test_legacy_sequence_schema_reanalysis_requires_explicit_opt_in() -> None:
+    default_args = eval_run._build_parser().parse_args(["--run", "source", "--output", "out"])
+    opted_in = eval_run._build_parser().parse_args(
+        ["--run", "source", "--output", "out", "--allow-legacy-sequence-schema"]
+    )
+
+    assert default_args.allow_legacy_sequence_schema is False
+    assert opted_in.allow_legacy_sequence_schema is True
+
+
+def test_checkpoint_sequence_width_must_match_ordered_feature_schema() -> None:
+    model = SimpleNamespace(
+        observation_space=SimpleNamespace(
+            spaces={"seq": SimpleNamespace(shape=(128, 7)), "account": object()}
+        )
+    )
+
+    assert eval_run._validate_sequence_input_width(model, 7) == 7
+    with pytest.raises(ValueError, match="sequence input width disagrees"):
+        eval_run._validate_sequence_input_width(model, 8)
 
 
 def test_reanalysis_feature_cache_requires_identity_or_legacy_opt_in(tmp_path: Path) -> None:

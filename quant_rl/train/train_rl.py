@@ -52,6 +52,7 @@ from quant_rl.eval.export import build_run_dir, save_run
 from quant_rl.eval.rollout import BAR_CLOSE_EXPOSURE_MEASURE, evaluate_model
 from quant_rl.eval.run_manifest import (
     array_sha256,
+    build_sequence_feature_schema,
     build_stop_candidate_schema,
     build_training_run_manifest,
     dataset_record,
@@ -964,6 +965,14 @@ def _observation_schema_manifest(env: Any) -> dict[str, Any] | None:
         return None
     result = to_dict()
     return result if isinstance(result, dict) else None
+
+
+def _sequence_feature_schema_manifest(env: Any) -> dict[str, Any]:
+    """Return ordered model sequence coordinates from the effective environment."""
+    columns = getattr(env, "_obs_columns", None)
+    if not isinstance(columns, (list, tuple)):
+        raise RuntimeError("training environment does not expose sequence feature columns")
+    return build_sequence_feature_schema([str(column) for column in columns])
 
 
 def _training_protocol_manifest(
@@ -2211,6 +2220,7 @@ def main() -> None:
         checkpoint_path = Path(f"{model_path}.zip")
         if not checkpoint_path.is_file():
             checkpoint_path = model_path
+        sequence_feature_schema = _sequence_feature_schema_manifest(train_env)
         manifest = build_training_run_manifest(
             repository=Path(__file__).resolve().parents[2],
             config_path=seed_dir / "config.yaml",
@@ -2221,6 +2231,7 @@ def main() -> None:
             completed_steps=int(model.num_timesteps),
             action_schema=_action_schema_manifest(train_env),
             observation_schema=_observation_schema_manifest(train_env),
+            sequence_feature_schema=sequence_feature_schema,
             stop_candidate_schema=stop_candidate_schema,
             feature_cache_path=feat_cache,
             feature_cache_hash=cache_hash,
@@ -2317,6 +2328,7 @@ def main() -> None:
                 "observation_account_dim": observation_account_dim,
                 "observation_space_shapes": observation_space_shapes,
                 "observation_schema": observation_schema,
+                "sequence_feature_schema": sequence_feature_schema,
                 "env_flags": env_flags,
                 "oos_role": oos_role,
                 "phase_timings_seconds": phase_timings_seconds,
@@ -2379,6 +2391,16 @@ def main() -> None:
         training_log["train_equity_reason"] = str(single["train_gate"]["reason"])
         training_log["early_abort_reason"] = single["abort_reason"] or ""
         training_log["timesteps_completed"] = single["model_num_timesteps"]
+
+    sequence_schemas = [
+        result["sequence_feature_schema"]
+        for result in seed_results
+        if result.get("sequence_feature_schema") is not None
+    ]
+    if sequence_schemas:
+        if any(schema != sequence_schemas[0] for schema in sequence_schemas[1:]):
+            raise ValueError("multi-seed run produced inconsistent sequence feature schemas")
+        training_log["sequence_feature_schema"] = sequence_schemas[0]
 
     training_log["phase_timings_seconds"] = {
         str(result["seed"]): result["phase_timings_seconds"] for result in seed_results

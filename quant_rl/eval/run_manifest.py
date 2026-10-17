@@ -17,6 +17,40 @@ import pandas as pd
 from omegaconf import DictConfig, OmegaConf
 
 STOP_CANDIDATE_SCHEMA_VERSION = "rq1-stop-menu-v1"
+SEQUENCE_FEATURE_SCHEMA_VERSION = "sequence-feature-columns-v1"
+
+
+def build_sequence_feature_schema(columns: list[str] | tuple[str, ...]) -> dict[str, Any]:
+    """Describe the ordered numeric feature coordinates supplied to the policy."""
+    names = [str(column) for column in columns]
+    if not names or len(names) != len(set(names)):
+        raise ValueError("sequence feature schema requires non-empty unique column names")
+    payload = json.dumps(names, separators=(",", ":")).encode("utf-8")
+    return {
+        "version": SEQUENCE_FEATURE_SCHEMA_VERSION,
+        "width": len(names),
+        "columns": names,
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def validate_sequence_feature_schema(
+    actual: dict[str, Any] | None,
+    expected: dict[str, Any],
+    *,
+    allow_legacy: bool = False,
+) -> str:
+    """Fail closed on missing or reordered model sequence coordinates."""
+    if actual is None:
+        if allow_legacy:
+            return "legacy_unverified"
+        raise ValueError(
+            "source run manifest lacks the sequence feature schema; pass "
+            "--allow-legacy-sequence-schema only for an explicitly unverified replay"
+        )
+    if actual != expected:
+        raise ValueError("evaluated sequence feature schema differs from the training manifest")
+    return "verified"
 
 
 def build_stop_candidate_schema(cfg: DictConfig) -> dict[str, Any]:
@@ -262,6 +296,7 @@ def build_training_run_manifest(
     completed_steps: int,
     action_schema: dict[str, Any] | None,
     observation_schema: dict[str, Any] | None = None,
+    sequence_feature_schema: dict[str, Any] | None = None,
     stop_candidate_schema: dict[str, Any] | None = None,
     feature_cache_path: Path | None,
     feature_cache_hash: str | None,
@@ -315,8 +350,13 @@ def build_training_run_manifest(
         )
     if not stop_candidate_schema:
         raise ValueError("run manifest requires an explicit stop-candidate schema")
+    if not isinstance(sequence_feature_schema, dict):
+        raise ValueError("run manifest requires an explicit sequence feature schema")
+    sequence_feature_schema = build_sequence_feature_schema(
+        sequence_feature_schema.get("columns", [])
+    )
     return {
-        "manifest_version": 4,
+        "manifest_version": 5,
         "repository": str(repository.resolve()),
         "source": _source_state(repository),
         "config": {
@@ -329,6 +369,7 @@ def build_training_run_manifest(
         "completed_steps": int(completed_steps),
         "action_schema": action_schema,
         "observation_schema": observation_schema,
+        "sequence_feature_schema": sequence_feature_schema,
         "stop_candidate_schema": stop_candidate_schema,
         "training_architecture": dict(training_architecture or {}),
         "training_protocol": dict(training_protocol or {}),

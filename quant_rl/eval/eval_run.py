@@ -50,11 +50,17 @@ from quant_rl.eval.reanalysis_provenance import (
 from quant_rl.eval.rollout import BAR_CLOSE_EXPOSURE_MEASURE, evaluate_model
 from quant_rl.eval.run_manifest import (
     build_evaluation_provenance,
+    build_sequence_feature_schema,
     build_stop_candidate_schema,
     file_sha256,
+    validate_sequence_feature_schema,
 )
 from quant_rl.evaluation import calculate_metrics, evaluation_periods_per_year
-from quant_rl.features.build import build_features
+from quant_rl.features.build import (
+    build_features,
+    select_legacy_obs_columns,
+    select_obs_columns,
+)
 from quant_rl.models.agent import (
     LegacyFourToFiveActionAdapter,
     validate_model_action_schema,
@@ -161,6 +167,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Explicitly opt in to an unversioned account-state-v1 checkpoint",
     )
     parser.add_argument(
+        "--allow-legacy-sequence-schema",
+        action="store_true",
+        help=(
+            "Explicitly allow a source manifest without ordered model-feature coordinates; "
+            "the replay is then labeled sequence-schema legacy_unverified"
+        ),
+    )
+    parser.add_argument(
         "--allow-legacy-stop-schema",
         action="store_true",
         help=(
@@ -235,6 +249,20 @@ def _build_parser() -> argparse.ArgumentParser:
 def _evaluate_checkpoint_split(model: Any, *, stochastic: bool, **kwargs: Any) -> dict[str, Any]:
     """Replay one final split using the explicitly selected policy action mode."""
     return evaluate_model(model, deterministic=not stochastic, **kwargs)
+
+
+def _validate_sequence_input_width(model: Any, expected_width: int) -> int:
+    """Require the checkpoint's sequence tensor width to match its feature schema."""
+    observation_spaces = getattr(getattr(model, "observation_space", None), "spaces", None)
+    get_space = getattr(observation_spaces, "get", None)
+    sequence_space = get_space("seq") if callable(get_space) else None
+    shape = getattr(sequence_space, "shape", None)
+    if not shape or int(shape[-1]) != int(expected_width):
+        raise ValueError(
+            "checkpoint sequence input width disagrees with evaluated feature coordinates: "
+            f"checkpoint={shape}, expected={expected_width}"
+        )
+    return int(shape[-1])
 
 
 def _validate_stop_candidate_schema(
@@ -494,7 +522,28 @@ def main() -> None:
 
     # Eval CLI does not expose training --algo / --reward flags; PPO replay
     # uses the configuration's saved environment defaults.
-    eval_common, _, _, _, _ = _build_eval_common(cfg, args=None, env_vae=None, pre_ny_by_date=None)
+    eval_common, eval_strategy, _, _, _ = _build_eval_common(
+        cfg, args=None, env_vae=None, pre_ny_by_date=None
+    )
+    sequence_schema_is_legacy = source_manifest.get("sequence_feature_schema") is None
+    observation_column_selector = (
+        select_legacy_obs_columns
+        if sequence_schema_is_legacy and args.allow_legacy_sequence_schema
+        else select_obs_columns
+    )
+    sequence_columns = [
+        str(column)
+        for column in observation_column_selector(features, eval_strategy.raw_columns).columns
+    ]
+    if "reachable_r" not in sequence_columns:
+        sequence_columns.append("reachable_r")
+    expected_sequence_schema = build_sequence_feature_schema(sequence_columns)
+    sequence_schema_disposition = validate_sequence_feature_schema(
+        source_manifest.get("sequence_feature_schema"),
+        expected_sequence_schema,
+        allow_legacy=bool(args.allow_legacy_sequence_schema),
+    )
+    _validate_sequence_input_width(model, expected_sequence_schema["width"])
 
     test_result = _evaluate_checkpoint_split(
         model,
@@ -597,6 +646,8 @@ def main() -> None:
             "eval_ftmo": True,
             "eval_policy_action_mode": policy_action_mode,
             "eval_seed": args.seed,
+            "sequence_feature_schema": expected_sequence_schema,
+            "sequence_feature_schema_disposition": sequence_schema_disposition,
         }
     )
     training_log_path.write_text(json.dumps(training_log, indent=2))
@@ -624,8 +675,11 @@ def main() -> None:
         "action_layout_key": getattr(model, "_action_layout_key", None),
         "action_schema": getattr(model, "_action_schema", None),
         "observation_schema": expected_observation_schema.to_dict(),
+        "sequence_feature_schema": expected_sequence_schema,
+        "sequence_feature_schema_disposition": sequence_schema_disposition,
         "legacy_action_schema_opt_in": bool(args.allow_legacy_action_schema),
         "legacy_observation_schema_opt_in": bool(args.allow_legacy_observation_schema),
+        "legacy_sequence_schema_opt_in": bool(args.allow_legacy_sequence_schema),
         "legacy_stop_schema_opt_in": bool(args.allow_legacy_stop_schema),
         "legacy_data_provenance_opt_in": bool(args.allow_legacy_data_provenance),
         "stop_schema_disposition": stop_schema_disposition,

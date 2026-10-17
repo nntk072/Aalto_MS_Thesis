@@ -19,10 +19,12 @@ from quant_rl.eval.run_manifest import (
     _source_state,
     array_sha256,
     build_evaluation_provenance,
+    build_sequence_feature_schema,
     build_stop_candidate_schema,
     build_training_run_manifest,
     dataframe_sha256,
     file_sha256,
+    validate_sequence_feature_schema,
     write_run_manifest,
 )
 
@@ -87,6 +89,9 @@ def test_manifest_records_config_dataset_checkpoint_and_split_hashes(tmp_path) -
             "observation_coordinates": [f"coordinate_{i}" for i in range(28)],
             "entry_state_visibility": False,
         },
+        sequence_feature_schema=build_sequence_feature_schema(
+            ["ema_9", "po3_ifvg_active", "reachable_r"]
+        ),
         stop_candidate_schema={
             "schema_version": "rq1-stop-menu-v1",
             "menu": "recent_confirmed_unswept_mtf_swings_v1",
@@ -125,7 +130,13 @@ def test_manifest_records_config_dataset_checkpoint_and_split_hashes(tmp_path) -
     assert manifest["training_protocol"]["requested_steps"] == 100
     assert manifest["feature_cache"]["sha256"] == "cache-identity"
     assert manifest["feature_cache"]["file_sha256"] == file_sha256(cache)
-    assert manifest["manifest_version"] == 4
+    assert manifest["manifest_version"] == 5
+    assert manifest["sequence_feature_schema"]["columns"] == [
+        "ema_9",
+        "po3_ifvg_active",
+        "reachable_r",
+    ]
+    assert manifest["sequence_feature_schema"]["width"] == 3
     assert manifest["stop_candidate_schema"]["menu"] == "recent_confirmed_unswept_mtf_swings_v1"
     assert manifest["training_architecture"]["physical_worker_count"] == 1
     assert manifest["training_architecture"]["encoder_channels"] == 96
@@ -134,6 +145,23 @@ def test_manifest_records_config_dataset_checkpoint_and_split_hashes(tmp_path) -
     write_run_manifest(output, manifest)
     assert json.loads(output.read_text()) == manifest
     assert not output.with_suffix(".json.tmp").exists()
+
+
+def test_sequence_feature_schema_is_order_sensitive_and_fails_closed() -> None:
+    expected = build_sequence_feature_schema(["ema_9", "reachable_r"])
+    same = build_sequence_feature_schema(["ema_9", "reachable_r"])
+    reordered = build_sequence_feature_schema(["reachable_r", "ema_9"])
+
+    assert expected["sha256"] == same["sha256"]
+    assert expected["sha256"] != reordered["sha256"]
+    assert validate_sequence_feature_schema(same, expected) == "verified"
+    with pytest.raises(ValueError, match="differs from the training manifest"):
+        validate_sequence_feature_schema(reordered, expected)
+    with pytest.raises(ValueError, match="lacks the sequence feature schema"):
+        validate_sequence_feature_schema(None, expected)
+    assert (
+        validate_sequence_feature_schema(None, expected, allow_legacy=True) == "legacy_unverified"
+    )
 
 
 def _expanded_stop_schema_config():

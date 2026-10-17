@@ -23,7 +23,7 @@ from .clean import clean
 from .loader import load_bars
 from .resample import resample
 from .session import add_session_id, add_session_labels
-from .ticks import TickBook, build_tick_book
+from .ticks import TICK_CACHE_VERSION, TickBook, build_tick_book
 
 log = logging.getLogger(__name__)
 
@@ -132,7 +132,7 @@ def build_tick_books(
             result[sym] = None
             continue
 
-        cache_p = cache_dir / f"{sym}_ticks_{BAR_CACHE_VERSION}.parquet"
+        cache_p = cache_dir / f"{sym}_ticks_{TICK_CACHE_VERSION}.parquet"
         try:
             result[sym] = build_tick_book(
                 path=tick_path,

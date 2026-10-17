@@ -30,6 +30,12 @@ def test_bundle_env_step_trace_matches_frames(
     features = _make_features(bars)
     features["atr_5"] = np.linspace(1.0, 4.0, len(bars))
     features["ema_21"] = features["london_high"]
+    # The bundle and frame paths must both exclude absolute event metadata
+    # from policy observations while retaining relative state features.
+    index_ns = np.asarray(bars.index, dtype="datetime64[ns]").astype(np.int64).astype(np.float64)
+    features["po3_ifvg_time_ns"] = index_ns
+    features["M5_sweep_high_pivot_time_ns"] = index_ns
+    features["po3_ifvg_age"] = np.arange(len(bars), dtype=np.float64)
     common: dict[str, Any] = {
         "obs_window": 10,
         "strategy_actions": strategy_actions,
@@ -52,6 +58,10 @@ def test_bundle_env_step_trace_matches_frames(
         pre_ny_by_date=None,
     )
     shared = TradingEnv.from_bundle(bundle_path, **common)
+    assert "po3_ifvg_time_ns" not in frames._obs_columns
+    assert "M5_sweep_high_pivot_time_ns" not in frames._obs_columns
+    assert "po3_ifvg_age" in frames._obs_columns
+    assert shared._obs_columns == frames._obs_columns
     obs_frames, _ = frames.reset(seed=41)
     obs_shared, _ = shared.reset(seed=41)
     ended = False

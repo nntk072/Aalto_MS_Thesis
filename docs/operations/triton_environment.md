@@ -45,11 +45,12 @@ save/load checks passed with this environment. This establishes a bounded test
 runtime, not parity with the locked CUDA 13.0 training stack or qualification
 for a research campaign. On 2026-10-17, job `21012389` repeated a real MI210 GPU
 operation and passed the full `pytest tests/ -q` suite (1,594 tests, 40
-warnings). A current-tree validation on the same allocation (step 3, HEAD
+warnings). A source-snapshot validation on the same allocation (step 3, HEAD
 `599741fe710fa8b342ef3797448132413c07e4db`) then passed full-tree Ruff
 format/lint, full-tree Mypy (458 files), a real MI210 matrix operation, and all
 1,603 tests with 38 warnings. Its log is
 `outputs/gpu_ci_gates/q0_q7_current_tree_20261017_job21012389/current_tree_validation.log`.
+This historical result does not validate later dirty-tree changes.
 This adds cross-runtime test evidence but still does not establish full trainer
 parity or throughput. An end-to-end trainer and resource/throughput benchmark
 remain required before MI210 training use.

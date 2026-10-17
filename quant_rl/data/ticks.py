@@ -9,7 +9,7 @@ Typical use
 ::
 
     tick_book = build_tick_book(path, tz="Etc/GMT-3",
-                                cache_path="cache/US100.cash_ticks_v2-full-day.parquet")
+                                cache_path="cache/US100.cash_ticks_v3-validated-full-day.parquet")
     train_ticks = tick_book.slice(pd.Timestamp("2025-01-01", tz="Etc/GMT-3"),
                                   pd.Timestamp("2025-12-31 23:59", tz="Etc/GMT-3"))
 """
@@ -27,6 +27,7 @@ import pandas as pd
 from .loader import iter_ticks_chunks
 
 log = logging.getLogger(__name__)
+TICK_CACHE_VERSION = "v3-validated-full-day"
 
 
 def _ffill_inplace(arr: np.ndarray[Any, Any]) -> None:
@@ -289,6 +290,12 @@ def build_tick_book(
         ask = raw_chunk["ask"].to_numpy(dtype=np.float32, copy=True)[mask]
         ts_ns = dt.values.astype("int64")[mask]
 
+        # Treat non-finite and non-positive sides as missing before carrying
+        # the last usable side forward. Infinity is not handled by
+        # ``_ffill_inplace`` and must never enter the executable quote book.
+        bid[~np.isfinite(bid) | (bid <= 0.0)] = np.nan
+        ask[~np.isfinite(ask) | (ask <= 0.0)] = np.nan
+
         # Patch the first element with the carried-forward quote so ffill
         # is continuous across the chunk boundary.
         if len(bid):
@@ -300,12 +307,14 @@ def build_tick_book(
         _ffill_inplace(bid)
         _ffill_inplace(ask)
 
-        valid = ~(np.isnan(bid) | np.isnan(ask))
-        if not valid.all():
-            bid, ask, ts_ns = bid[valid], ask[valid], ts_ns[valid]
-
+        # A side can update independently, so temporarily crossed pairs are
+        # possible while the other side catches up. Keep those side values as
+        # ffill state, but do not expose an invalid pair to execution.
+        valid = np.isfinite(bid) & np.isfinite(ask) & (bid > 0.0) & (ask >= bid)
         if len(bid):
             last_bid, last_ask = float(bid[-1]), float(ask[-1])
+        if not valid.all():
+            bid, ask, ts_ns = bid[valid], ask[valid], ts_ns[valid]
 
         if len(bid):
             ts_chunks.append(ts_ns)

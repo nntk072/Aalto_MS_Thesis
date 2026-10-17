@@ -297,6 +297,20 @@ MTF_RAW_SUFFIXES = (
     "decision_close",
 )
 
+# Absolute timestamps and row/setup identifiers are retained in the feature
+# frame for causal audits and strategy state, but are not model features. In
+# particular, Unix nanoseconds become ~1e18 float32 inputs and leak calendar
+# position into the policy without expressing a useful duration. Relative age
+# and elapsed-bar features remain eligible for the model.
+OBSERVATION_METADATA_SUFFIXES = (
+    "_time_ns",
+    "_at_ns",
+    "_time_ms",
+    "_at_ms",
+    "_origin_bar",
+    "_setup_id",
+)
+
 # Unprefixed raw price stems always dropped from model ``seq`` (baseline included).
 OBS_RAW_PRICE_COLUMNS = MTF_RAW_SUFFIXES
 
@@ -375,11 +389,11 @@ def _enabled(feat_cfg: object, key: str, default: bool) -> bool:
     return default
 
 
-def select_obs_columns(
+def select_legacy_obs_columns(
     features: pd.DataFrame,
     raw_columns: tuple[str, ...] | list[str] = (),
 ) -> pd.DataFrame:
-    """Numeric model columns: drop raw price levels, keep ATR distances."""
+    """Reproduce the pre-sequence-schema observation filter for explicit legacy replay."""
     drop_cols = [c for c in raw_columns if c in features.columns]
     mtf_raw = {
         c
@@ -389,6 +403,20 @@ def select_obs_columns(
     }
     kept = features.drop(columns=drop_cols + sorted(mtf_raw))
     return kept.select_dtypes(include="number")
+
+
+def select_obs_columns(
+    features: pd.DataFrame,
+    raw_columns: tuple[str, ...] | list[str] = (),
+) -> pd.DataFrame:
+    """Select model columns, excluding raw prices and absolute metadata."""
+    legacy = select_legacy_obs_columns(features, raw_columns)
+    metadata_cols = [
+        str(column)
+        for column in legacy.columns
+        if str(column).endswith(OBSERVATION_METADATA_SUFFIXES)
+    ]
+    return legacy.drop(columns=metadata_cols)
 
 
 def reachable_r_series(bars: pd.DataFrame, features: pd.DataFrame) -> pd.Series:

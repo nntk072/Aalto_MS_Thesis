@@ -16,7 +16,12 @@ import pandas as pd
 import pytest
 from omegaconf import OmegaConf
 
-from quant_rl.features.build import FEATURE_CACHE_VERSION, build_features, select_obs_columns
+from quant_rl.features.build import (
+    FEATURE_CACHE_VERSION,
+    build_features,
+    select_legacy_obs_columns,
+    select_obs_columns,
+)
 
 
 @pytest.fixture
@@ -167,6 +172,30 @@ class TestBuildFeaturesPipeline:
         valid = price.notna()
         decision_ms = features.index.to_numpy(dtype="datetime64[ns]").view(np.int64) // 1_000_000
         assert (confirmed.loc[valid].to_numpy() <= decision_ms[valid.to_numpy()]).all()
+
+    def test_absolute_event_metadata_is_not_exposed_as_model_features(self) -> None:
+        index = pd.date_range("2025-01-01", periods=2, freq="1min")
+        features = pd.DataFrame(
+            {
+                "po3_ifvg_time_ns": [1.7e18, 1.7e18 + 60_000_000_000],
+                "M5_sweep_high_pivot_time_ns": [1.7e18, 1.7e18 + 300_000_000_000],
+                "sweep_low_confirmed_at_ns": [1.7e18, 1.7e18 + 60_000_000_000],
+                "M5_swing_high_candidate_1_pivot_time_ms": [1.7e12, 1.7e12 + 300_000],
+                "previous_session_completed_at_ns": [1.7e18, 1.7e18 + 86_400_000_000_000],
+                "po3_ifvg_fvg_origin_bar": [1000.0, 1001.0],
+                "po3_setup_id": [42.0, 42.0],
+                "po3_ifvg_age": [1.0, 2.0],
+                "po3_ifvg_active": [1.0, 1.0],
+            },
+            index=index,
+        )
+
+        observed = select_obs_columns(features)
+        legacy_observed = select_legacy_obs_columns(features)
+
+        assert list(observed.columns) == ["po3_ifvg_age", "po3_ifvg_active"]
+        assert "po3_ifvg_time_ns" in legacy_observed.columns
+        assert "M5_sweep_high_pivot_time_ns" not in legacy_observed.columns
 
     def test_final_mtf_swing_profile_merges_with_default_config(self) -> None:
         base = OmegaConf.load("quant_rl/config/default.yaml")

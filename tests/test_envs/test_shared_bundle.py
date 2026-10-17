@@ -15,6 +15,17 @@ from tests.test_envs.test_trading_env_golden_traces import (
 )
 
 
+def test_observation_schema_bump_changes_default_bundle_identity() -> None:
+    """A new observation tensor layout must not reuse v2 bundles."""
+    from quant_rl.envs.shared_bundle import BUNDLE_VERSION, bundle_key
+
+    arrays, config = _fixture_bundle_inputs()
+    sources = {"bars": {"size": len(arrays["bar_time_ns"])}}
+
+    assert BUNDLE_VERSION > 2
+    assert bundle_key(config, sources) != bundle_key(config, sources, bundle_version=2)
+
+
 def _fixture_bundle_inputs() -> tuple[dict[str, np.ndarray[Any, Any]], dict[str, Any]]:
     """Return deterministic source arrays and an observation-relevant config."""
     bars = _make_deterministic_bars(n=32)

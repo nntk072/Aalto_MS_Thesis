@@ -9,6 +9,29 @@ result, strategy evaluation, winner selection, or thesis-readiness decision.
 
 ## Addendum — source inventory refresh, 2026-10-17
 
+### Current-tree software gate — 2026-10-17 08:58 Helsinki
+
+- MI210 job `21012389`, step `.14`, passed full-tree Ruff format/lint,
+  full-tree Mypy across 461 files, an actual MI210 ROCm matrix operation, and
+  the complete suite: **1,671 passed, 77 warnings**. The validated tracked
+  worktree diff SHA-256 is
+  `a52a452848e99f68232da7240ea0376490e549dd9770583d854333ab5a56a360`;
+  full log: `outputs/gpu_ci_gates/observation_schema_gate_job21012389/validation.log`.
+  This validates current code and tests, including the tick-ingestion and
+  observation-schema changes, but does not establish market-data provenance,
+  full-campaign causal validity, evaluator acceptance, strategy quality, or
+  thesis readiness.
+- The full-training-interval fold-fit report completed at 08:18 and took
+  3,758.9 seconds. Its hashed `quant_rl/features/build.py` is
+  `7df39268c985920d97aaddefeef3f3da9c96a58de04b9575375e61e7bda212af`; the
+  current source hash is
+  `256387fc132498d9846f1c17526ea19a900d90def012703b90582c92c44fdcc1`.
+  The 20/20 report remains valid for its recorded source snapshot but is not
+  current evidence for the final observation-column filter. The remaining
+  MI210 allocation window was shorter than the measured rerun duration, so no
+  repeat was launched. P1 remains open pending a suitable execution window
+  and subsequent real-data/cache audits.
+
 ### Latest validation follow-up — 2026-10-17 06:45 Helsinki
 
 - A separate authorized MI210 allocation, job `21012957`, started on
@@ -30,14 +53,17 @@ result, strategy evaluation, winner selection, or thesis-readiness decision.
   the now-committed code. The wrapper's only failures were safe refusals to
   overwrite existing immutable campaign summaries. The validated source was
   committed as `a611411`; later commits `bc3e78f` and `953a60a` were
-  documentation-only. Thus no additional GPU step is needed to verify the
-  code currently in `main`.
+  documentation-only at that point. Subsequent dirty-tree P1 tick-ingestion
+  and observation-schema changes invalidate the claim that this run verifies
+  the current source; a current-tree GPU gate is still required.
 
-### Current implementation validation — 2026-10-17 06:31 Helsinki
+### Prior implementation validation — 2026-10-17 06:31 Helsinki
 
-- On MI210 allocation `21012389`, full-tree Ruff format, full-tree Ruff lint,
+- On MI210 allocation `21012389`, before the later P1 tick-ingestion and
+  observation-schema edits now present in the dirty worktree, full-tree Ruff
+  format, full-tree Ruff lint,
   full-tree Mypy (460 files), a real ROCm matrix smoke, and the full test suite
-  passed on the current dirty tree: **1,664 passed**, 77 warnings. The complete
+  passed on that earlier source snapshot: **1,664 passed**, 77 warnings. The complete
   log is `outputs/gpu_ci_gates/p2_feature_cache_reanalysis_20261017/current_tree_validation.log`;
   the validated source diff hash recorded there is
   `c76ea5d3ddf72497f1c1375b43666d8f358fb570176884daaa63a220ded2066a`.
@@ -77,7 +103,7 @@ result, strategy evaluation, winner selection, or thesis-readiness decision.
   the actual `n_envs * n_steps` product. The correction was made at 05:38
   Helsinki after finding the previous `n_steps=8192` values were per
   environment, yielding 131,072/262,144/524,288-sample rollouts. The correction
-  and tests passed the current-tree MI210 gate.
+  and tests passed the earlier MI210 gate, not the current dirty-tree gate.
 - Q5 constructor validation rejects non-finite budget, dual-rate, and
   multiplier-bound settings. Discounted objective, resume guard, evaluation
   cost export, and report reconciliation tests also passed. This does not make
@@ -101,16 +127,17 @@ result, strategy evaluation, winner selection, or thesis-readiness decision.
   under a missing or changed checkpoint contract, and makes reanalysis of older
   checkpoints require `--allow-legacy-stop-schema`. The explicit legacy path
   does not claim the expanded menu was used. Focused tests and the GPU-node CI
-  gate now pass on the current dirty tree; see the exact run record in the
-  Verification boundary below.
+  gate passed on the earlier dirty-tree snapshot; the later P1 observation-
+  schema edits have not yet passed a GPU-node gate. See Verification boundary.
 
 **Q0–Q7 are compulsory in the master plan, but the research program is not
 complete. No Q-stage campaign has run and no stage winner is frozen.** Most
 stages have registered source arms and bounded unit coverage, but source
 presence does not make them empirically complete or ready to launch. Q5's
 previous registry placeholder has now been implemented as an opt-in,
-primal-dual scalarized-return PPO objective. The current dirty tree passed
-full-tree Ruff format/lint, Mypy, MI210 smoke, and 1,664 tests. The policy and
+primal-dual scalarized-return PPO objective. An earlier source snapshot passed
+full-tree Ruff format/lint, Mypy, MI210 smoke, and 1,664 tests; the current
+dirty tree has not yet passed its gate. The policy and
 dual update use matching gamma-discounted costs; Q5 evaluation costs are
 exported and independently reconciled, and policy-only resume fails closed.
 The CI wrapper exited 1 only because it safely refused to overwrite existing
@@ -123,11 +150,11 @@ parent and has not been run as a research experiment.
 |---|---|---|
 | Q0 | `q0_control_a3` registers the A3/account-state-v1 control and quality diagnostics. | Freeze full data/config/code/seed/budget provenance; run complete chronological training and deterministic train/test evaluation; package all outputs. No Q0 result exists. |
 | Q1 | Account-state-v2 schema, metadata validation, frame/shared-bundle wiring, and focused tests exist. | Revalidate the current final integration, then run a matched Q0/Q1 pair. Report behavior and economic metrics separately. No Q1 result exists. |
-| Q2 | The 16/32/64 arms declare per-environment `n_steps` 512/256/128 to hold aggregate rollout samples at 8,192; exact environment count is pinned, hardware PPO scaling is bypassed, and insufficient host-memory capacity fails closed. The current-tree full suite passed. | Freeze minibatch/update count, epochs, wall-clock/resource accounting, and parent checkpoint on one locked accelerator; no geometry comparison or winner exists. |
+| Q2 | The 16/32/64 arms declare per-environment `n_steps` 512/256/128 to hold aggregate rollout samples at 8,192; exact environment count is pinned, hardware PPO scaling is bypassed, and insufficient host-memory capacity fails closed. Current full-tree software checks pass (1,671 tests, Ruff, Mypy); no geometry comparison or winner exists. | Freeze minibatch/update count, epochs, wall-clock/resource accounting, and parent checkpoint on one locked accelerator; no geometry comparison or winner exists. |
 | Q3 | RR, fixed-risk, and `equity_delta_r` reward/risk code exists; `fixed_risk_usd` is a supported environment setting. | Validate quality-registry-to-trainer resolution and reward diagnostics; freeze one Q2 parent and one multi-arm comparison family. Keep reward return separate from PnL/equity. No run or winner exists. |
 | Q4A | Semantic Gaussian actor heads are wired into PPO and preserve the declared action-coordinate order. Focused tests cover distribution behavior, gradients, and checkpoint/schema behavior. A bounded MI210 semantic-head PPO update and save/load check is recorded in `docs/operations/triton_environment.md`. | Current registry arm is fail-closed. Revalidate on the campaign's locked CUDA stack and verify deterministic evaluator parity from the selected Q3 parent. No Q4A research run exists. |
 | Q4B | Hybrid categorical/Gaussian actor and PPO policy wiring exist; focused test source covers sampling, log-probability, entropy, gradients, and save/load. A bounded MI210 hybrid PPO update and save/load check is recorded in `docs/operations/triton_environment.md`. | It is opt-in and requires the shared actor architecture, a declared overlay `ActionSchema`, and an active exit coordinate when `exit` is present. Validate every category center against the environment decoder and campaign-locked trainer/evaluator/checkpoint integration. Registry arm remains fail-closed; no Q4B research run exists. |
-| Q5 | Opt-in primal-dual scalarized PPO uses the same gamma-discounted episodic composite risk cost in policy updates and dual-budget comparisons; schema-v2 checkpoint state stores gamma and refuses policy-only resume without restored environment/account history. Deterministic evaluation exports per-step/component costs, breach indicators, and discount factors; the numerical-report verifier reconciles them. Current-tree full CI passed (1,664 tests). Hard account guardrails are unchanged. | Freeze Q4 parent, budget/risk-cost interpretation, and evaluation protocol; then run the complete registered comparison and independent method review. No Q5 result exists; implementation tests are not a validated constrained policy or formal risk guarantee. |
+| Q5 | Opt-in primal-dual scalarized PPO uses the same gamma-discounted episodic composite risk cost in policy updates and dual-budget comparisons; schema-v2 checkpoint state stores gamma and refuses policy-only resume without restored environment/account history. Deterministic evaluation exports per-step/component costs, breach indicators, and discount factors; the numerical-report verifier reconciles them. Current full-tree software checks pass (1,671 tests, Ruff, Mypy). Hard account guardrails are unchanged. | Freeze Q4 parent, budget/risk-cost interpretation, and evaluation protocol; then run the complete registered comparison and independent method review. No Q5 result exists; implementation tests are not a validated constrained policy or formal risk guarantee. |
 | Q6 | Entry state machine, hidden/visible observation switch, no-FSM control, diagnostics, and three-arm registry exist. | Revalidate transition and observation semantics in both frame and shared-bundle paths. Preserve the three-arm design: no FSM, hidden FSM, visible FSM. Freeze the Q5 parent before a run. No Q6 result exists. |
 | Q7 | TCN and LiteTCN are selectable; LiteTCN has encoder and agent/checkpoint tests. | Validate matched trainer/evaluator/checkpoint integration and use the frozen Q6 parent, data, action/reward/risk semantics, budget, and seed plan. No Q7 result or winner exists. |
 
@@ -159,6 +186,37 @@ This is a wait/poll policy, not permission to cancel or overlap an allocation.
 The current user-provided `AGENTS.md` agrees. No duplicate or weaker rule was
 added.
 
+## Observation-schema issue found during P1 audit review
+
+The completed 20/20 fold-fit report exposed a separate model-input issue:
+absolute event timestamps and identifiers such as `po3_ifvg_time_ns`,
+`po3_ifvg_fvg_origin_time_ns`, and `sweep_high_pivot_time_ns` were included in
+the numeric observation tensor. Those values are Unix nanoseconds or absolute
+bar/setup IDs, not meaningful scaled state; the report's very large raw
+validation deltas are driven by these metadata fields. They do not indicate a
+price-feature magnitude or by themselves establish future leakage.
+
+The current working tree filters absolute timestamp, origin-bar, and setup-ID
+suffixes from observations, keeps relative age/state fields, and bumps
+shared-bundle version from 2 to 3 so stale observation tensors cannot be reused.
+Training manifests now record ordered sequence-feature coordinates and a hash;
+evaluation compares that contract and checkpoint sequence width, with an
+explicit opt-in for legacy manifests. Regressions cover bare and timeframe-
+prefixed metadata, order-sensitive schema hashes, bundle-key invalidation, and
+frame/shared-bundle observation parity with absolute metadata present. These
+current-tree regressions passed the full MI210 software gate at 08:58 (1,671
+tests, Ruff format/lint, full-tree Mypy, and ROCm smoke). The separate real-data
+fold-fit report still hashes the earlier `features/build.py` source; its 20/20
+result is not a post-filter full-interval audit. Archived checkpoints and the
+prior contaminated campaign retain their old layout; they are not retroactively
+corrected by this software change. Future runs must train and evaluate under
+the versioned observation schema. The consolidated full-tree Ruff/Mypy, MI210
+ROCm-kernel smoke, and full-pytest runner is
+`scripts/research/run_observation_schema_gate.sh`. Before the gates, the runner
+records the HEAD, git status, tracked diff SHA-256, and hashes of
+untracked files to bind validation to the dirty source snapshot. Q0–Q7 remain
+compulsory and empirically unrun.
+
 ## Verification boundary
 
 ### Real-checkpoint inventory for the next P2 replay
@@ -189,13 +247,15 @@ added.
 
 The deterministic-replay follow-up now adds the feature parquet's file
 SHA-256 to newly generated training manifests, as required by the verified
-reanalysis path. A focused run-manifest regression asserts this field. This
-change is outside the previously validated source boundary and remains
-untested; it does not retroactively upgrade historical manifests.
+reanalysis path. A focused run-manifest regression asserts this field. The
+current implementation and regression passed the full 1,671-test MI210 gate;
+this does not retroactively upgrade historical manifests.
 
 The P3 numerical verifier also checks that the saved equity curve has one
 initial point plus exactly one point per recorded evaluation step, and now
-reconciles Q5 cost exports. These regressions passed in the current full suite.
+reconciles Q5 cost exports. These regressions passed in the current 1,671-test
+MI210 source snapshot recorded above. This validates software behavior only;
+it does not produce an admissible P3 report or close P1/P2.
 
 An earlier source snapshot was validated on MI210 job `21012389`, step 3, at
 HEAD `599741fe710fa8b342ef3797448132413c07e4db`. The source diff for the
@@ -205,16 +265,17 @@ Ruff format and lint passed; full-tree Mypy passed for 458 source files; a real
 ROCm 6.3.1 / PyTorch 2.7.1+rocm6.3 MI210 matrix operation passed; and all 1,603
 tests passed with 38 warnings. The full log is
 `outputs/gpu_ci_gates/q0_q7_current_tree_20261017_job21012389/current_tree_validation.log`.
-That earlier snapshot is superseded for software validation by the current
-1,664-test run recorded above. The historical result remains evidence for its
-own source boundary.
+That earlier snapshot is superseded for software validation by the later
+1,664-test source snapshot recorded above. Both historical results remain
+evidence only for their respective source boundaries.
 
 At 05:19 Helsinki, the registry guard was extended to validate every declared
 quality override against the canonical default-config path and value type,
 then to reject unknown paths when applying a selectable lineage. This closes a
 concrete silent-configuration failure mode caused by `force_add=True`, which
 could create a typo key that the trainer never reads. Its regression test
-passed in the current full suite.
+passed in the earlier 1,664-test source snapshot and remains part of the pending
+current-tree validation.
 
 Earlier on 2026-10-17, H200 job `21004765` on `gpu59` (H200 x1, 48 CPUs,
 512 GiB) passed CUDA matrix smoke, full-tree Ruff format/lint, full-tree Mypy,

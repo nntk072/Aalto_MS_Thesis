@@ -54,7 +54,9 @@ JSON SHA-256 is
 schema-v1 campaign-level `seed: null` is a reporting defect because the
 manifest and all 18 run records declare seed 50. Preserve that report. A
 schema-v2 correction was generated under a new stem and its source plus
-artifact provenance passed the current-tree software gate. Its SHA-256 is
+artifact provenance passed the then-current software gate. That gate predates
+the current dirty-tree tick-ingestion and observation-schema changes and does
+not validate them. Its SHA-256 is
 `aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7`; it
 reports seed 50. No original report was overwritten.
 
@@ -73,7 +75,8 @@ summary row retains seed 50. The original schema-v1 report incorrectly has a
 null campaign-level `seed` because its generator hard-coded scalar reporting to
 seed 42. The schema-v2 source repair reports the actual seed set and only emits
 a scalar seed for complete homogeneous metadata. Its source tests passed in
-the 1,664-test current-tree suite. The recovery schema-v2 JSON SHA-256 is
+the earlier 1,664-test source snapshot, not the current dirty tree. The recovery
+schema-v2 JSON SHA-256 is
 `aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7`; the
 separate v3 schema-v2 JSON SHA-256 is
 `edbd0312b473d118982a68b6c38ebff2e1c5d0b254092e8a727e63b4751355c1`.

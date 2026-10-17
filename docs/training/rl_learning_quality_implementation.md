@@ -8,10 +8,12 @@
 > for the reconciled source status. Q5 primal-dual PPO is implemented with
 > gamma-matched discounted cost updates, checkpointed gamma, fail-closed
 > policy-only resume, and deterministic evaluation cost exports. The current
-> dirty tree passed Ruff format/lint, Mypy, MI210 smoke, and 1,664 tests. Q5 has
-> no research result and still awaits a frozen Q4 parent. The gate wrapper's
-> final summary step refused to overwrite existing immutable artifacts; see
-> the audit for exact hashes and limits.
+> source snapshot passed Ruff format/lint, Mypy, MI210 smoke, and 1,664 tests;
+> the later tick-ingestion and observation-schema edits in the current dirty
+> tree are outside that validation. Q5 has no research result and still awaits
+> a frozen Q4 parent. The gate wrapper's final summary step refused to
+> overwrite existing immutable artifacts; see the audit for exact hashes and
+> limits.
 
 This work is a separate research lineage. It does not change the historical
 experiment registry or the readiness state of the thesis campaign.
