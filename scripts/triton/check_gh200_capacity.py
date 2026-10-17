@@ -41,6 +41,7 @@ def node_has_capacity(
         cpu_used = int(_field(output, "CPUAlloc") or "0")
         memory_total = int(_field(output, "RealMemory") or "0")
         memory_used = int(_field(output, "AllocMem") or "0")
+        free_memory = int(_field(output, "FreeMem") or "0")
     except ValueError:
         return False
 
@@ -52,6 +53,7 @@ def node_has_capacity(
         configured_gpus - allocated_gpus >= gpus
         and cpu_total - cpu_used >= cpus
         and memory_total - memory_used >= memory_mb
+        and free_memory >= memory_mb
     )
 
 

@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+"""Quantify equal and decreasing tick timestamps in validated tick caches."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+ROOT = Path("/scratch/work/nguyenl37/Aalto_MS_Thesis")
+CACHES = {
+    "US100.cash": ROOT / "cache/us100_us500_20241230_20261016/US100.cash_ticks_v3-validated-full-day.parquet",
+    "US500.cash": ROOT / "cache/us100_us500_20241230_20261016/US500.cash_ticks_v3-validated-full-day.parquet",
+}
+OUT = ROOT / "outputs/data_refresh_20261017/tick_timestamp_ties.json"
+
+
+def audit(path: Path) -> dict[str, Any]:
+    frame = pd.read_parquet(path, columns=["ts_ns", "bid", "ask"])
+    ts = frame["ts_ns"].to_numpy(dtype=np.int64)
+    bid = frame["bid"].to_numpy(dtype=np.float64)
+    ask = frame["ask"].to_numpy(dtype=np.float64)
+    delta = np.diff(ts)
+    ties = delta == 0
+    tie_indices = np.flatnonzero(ties)
+    differing_tie_quotes = (bid[tie_indices] != bid[tie_indices + 1]) | (
+        ask[tie_indices] != ask[tie_indices + 1]
+    )
+    # Count duplicate timestamp groups and their maximum consecutive size.
+    starts = np.r_[0, np.flatnonzero(delta != 0) + 1]
+    ends = np.r_[starts[1:], len(ts)]
+    group_sizes = ends - starts
+    duplicate_groups = group_sizes > 1
+    largest = np.flatnonzero(duplicate_groups)
+    largest = sorted(largest, key=lambda i: (-int(group_sizes[i]), int(ts[starts[i]])))[:10]
+    return {
+        "path": str(path.relative_to(ROOT)),
+        "rows": len(ts),
+        "decreasing_adjacent_timestamp_pairs": int((delta < 0).sum()),
+        "equal_adjacent_timestamp_pairs": int(ties.sum()),
+        "duplicate_timestamp_groups": int(duplicate_groups.sum()),
+        "duplicate_rows_beyond_first_per_timestamp": int(group_sizes[duplicate_groups].sum() - duplicate_groups.sum()),
+        "equal_time_adjacent_pairs_with_different_quote": int(differing_tie_quotes.sum()),
+        "largest_duplicate_timestamp_groups": [
+            {
+                "timestamp_utc": pd.Timestamp(int(ts[starts[i]]), unit="ns", tz="UTC").isoformat(),
+                "rows": int(group_sizes[i]),
+                "quotes": [[float(bid[j]), float(ask[j])] for j in range(starts[i], ends[i])],
+            }
+            for i in largest
+        ],
+    }
+
+
+def main() -> None:
+    if OUT.exists():
+        raise FileExistsError(OUT)
+    report = {"audit": "validated_tick_cache_timestamp_ties", "symbols": {k: audit(v) for k, v in CACHES.items()}}
+    OUT.write_text(json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
+    print(json.dumps(report, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

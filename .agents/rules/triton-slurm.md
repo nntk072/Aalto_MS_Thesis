@@ -12,40 +12,27 @@ Helper scripts: [`scripts/triton/`](../../scripts/triton/) (`status.sh`, `find_g
   scratch path (or resolve the symlink) before any GPU-side command.
 - Do **not** treat a WSL or laptop checkout as the live Triton tree.
 
-## Hard rule: `srun` and `scancel` only with user confirmation
+## Slurm authorization, execution and preservation
 
-Agents **may** run `srun` / `attach_or_alloc.sh`, but **only after the user
-explicitly permits a new allocation in this chat** (e.g. “ok to srun”,
-“allocate a GPU”, “start the job”). Do **not** self-start allocations.
-
-Agents **may** run `scancel`, but **only after the user explicitly permits
-cancelling that job in this chat** (e.g. “scancel”, “cancel the GPU job”,
-“cancel this allocation”). Do **not** cancel a running or completing job on
-your own.
-
-Access is not permission to allocate. A login shell, SSH onto a node that
-already has this user's job, a live tmux pane, or “use the current GPU task”
-does **not** allow `srun`. These stay blocked until the user asks for a
-**new** allocation:
-
-- `srun` (batch, `--pty`, or interactive)
-- `srun --overlap`, `srun --jobid=<id>`, or any extra Slurm step
-- `attach_or_alloc.sh` when it would allocate
-
-Retrain, delete outputs, restart, or “the run is wrong” is **not** permission
-to `scancel`. Those stay blocked until the user names the cancel:
-
-- `scancel <jobid>` or `scancel` of a running train
-- `REPLACE=1` on `scripts/triton/two_trains_one_h200.sh` (it cancels other GPU jobs)
-- Replacing a job after OOM, a code change, or a bad log
-
-If a job was cancelled without that permission, do **not** `scancel` again.
-A replacement `srun` still needs its own explicit allocation permission.
-
-Stopping the foreground program inside an existing task, when the user says
-to stop it and continue, is not `scancel` and is not a new `srun`. Continue
-on that same node (SSH `step_extern` or `tmux send-keys`). Do not replace
-the job.
+- The user has granted standing authorization for necessary thesis GPU work.
+  Reuse an existing allocation first. When none is available, inspect each
+  candidate node's live GPU inventory, CPU allocation/free count, and host RAM
+  allocation/free amount using `squeue`, `sinfo`, and `scontrol show node`.
+- **Never use `srun --test-only`**, scheduler forecasts, or dry-run variants of
+  `srun` to check availability. Inspect live node inventory, then make the
+  planned substantive request directly.
+- **Run every new `srun` from a named, persistent tmux session on the login
+  node.** Start or attach to that tmux session first, then issue the bounded
+  `srun` there. Do not launch `srun` directly from a transient Codex/SSH
+  terminal. Reuse an existing allocation through its existing tmux shell.
+  Use `--immediate=60`; stop waiting/polling after 60 seconds and leave a
+  pending request untouched while inspecting alternatives.
+- **Never run `scancel`.** Preserve active and pending jobs and allocations,
+  including when training ends or a request waits too long. Never use
+  `REPLACE=1`. Only change this rule if the user explicitly revises it later.
+- Keep the thesis aggregate cap of 2 GH200 GPUs and budget of at most 12
+  GH200 GPU-hours per request. Do not exceed one GH200 per node for the
+  two-node layout.
 
 Triton emails when many jobs last &lt; ~120s. Prefer one long shell (hours),
 never a burst of short diagnostic jobs.
@@ -88,8 +75,7 @@ compliant.
 After launch, inspect `squeue`/`sacct` step records and supervisor logs from the
 login node. If unexpected steps appear or any worker repeatedly exits before
 120 seconds, stop submitting/retrying work, preserve logs and allocation state,
-and diagnose the launcher. Do not cancel the allocation unless the user
-explicitly authorizes cancellation. Never attempt to evade the monitor by
+and diagnose the launcher. Do not cancel the allocation. Never attempt to evade the monitor by
 keeping a short command alive artificially; use a genuine persistent task or
 run the command inside an existing shell.
 
@@ -112,7 +98,7 @@ automatically; inspect the trace and step topology first.
 3. If no user allocation exists, inspect per-node resources before selecting
    and requesting the next suitable allocation. The user's standing
    authorization in this conversation allows actual `srun` use when a suitable
-   GPU is idle; don't stop at `--test-only` when the authorized work can start.
+   GPU is idle; use the live inventory and request the authorized work directly.
 
 ### Allowed without asking
 
@@ -124,10 +110,7 @@ automatically; inspect the trace and step topology first.
 
 ### Requires explicit user confirmation in-chat
 
-- Any new `srun` (interactive, batch, `--overlap`, or `--jobid=`).
 - `bash scripts/triton/attach_or_alloc.sh` when it would start a new alloc.
-- `scancel` of a running or completing job, including `REPLACE=1`.
-  “Retrain” or “delete the old files” is not this permission.
 - Extra GPU jobs for “quick” pytest / ruff / mypy / CUDA smoke when no
   reusable shell exists (prefer asking for one long alloc, or login-only
   x86-safe tools).
@@ -158,7 +141,7 @@ automatically; inspect the trace and step topology first.
 - Parallel one-off benchmark jobs on multiple nodes for work that fits the
   current allocation. Prefer one allocation, one sampler, and a fixed benchmark
   window long enough to include warm-up and steady-state throughput.
-- `scancel -u $USER` unless the user explicitly requests a full wipe.
+- Any use of `scancel`, including job-specific cancellation and `REPLACE=1`.
 - Campaign launchers and supervisors must not call `scancel` automatically on
   rollover, successful completion, retry, or shutdown. They must preserve the
   current allocation and its evidence. If an allocation is unavailable after
@@ -218,8 +201,8 @@ matching environment before choosing wall-clock/resources.
 ### One-minute allocation wait limit and GPU-family fallback
 
 Before every real GPU allocation attempt, inspect each candidate node's GPU,
-CPU, and host-RAM availability as described above, then compare realistic
-resource shapes with `srun --test-only`. The user requires the agent to spend
+CPU, and host-RAM availability as described above. Never use
+`srun --test-only`. The user requires the agent to spend
 no more than **60 seconds waiting or polling** for an eligible allocation.
 For `srun`/`salloc`, use Slurm's immediate timeout (`--immediate=60`) where
 supported; the allocation attempt itself must return within 60 seconds. Never
@@ -253,18 +236,15 @@ Do not request resources that are already provided by a reusable allocation.
 Smaller validation or inspection work should share that allocation instead of
 creating another Slurm job/step.
 
-**An availability forecast is not a substitute for using an idle GPU.** When
-the user has authorized the work/allocation and a fresh per-node inventory
-shows a compatible GPU is idle, proceed with one real `srun` for the planned,
-sustained task (using `--immediate=60`), rather than stopping after
-`srun --test-only` or asking the user to repeat authorization. Do not create a
-short diagnostic job: bundle the required checks/work into the already planned
-long-running allocation, and ensure its Slurm step topology complies with the
-120-second short-step rule. If a new request does not start within 60 seconds,
-cancel only that new pending request as directed below, report the result, and
-inspect eligible alternatives before making another request. If no compatible
-GPU is idle, report the live inventory and forecast instead of submitting an
-unapproved or overlapping request.
+**Live per-node inventory decides whether to request a GPU.** When a fresh
+inventory shows a compatible GPU is idle, proceed with one real `srun` for the
+planned sustained task (using `--immediate=60`). Do not create a short
+diagnostic job: bundle checks/work into the planned allocation and comply with
+the 120-second short-step rule. If a new request does not start within 60
+seconds, leave it pending, stop polling it, report its state, and inspect
+eligible alternatives without creating an overlapping request. If no
+compatible GPU is idle, report the live inventory rather than using a
+schedulability forecast.
 
 If the request has not started by then, stop waiting and treat that resource
 shape as unavailable for immediate work. Stop polling it and search for an
@@ -272,12 +252,10 @@ eligible alternative. Before considering each alternative, inspect every
 candidate node's allocated/free CPUs, host RAM, and configured/allocated GPU
 inventory. Do not repeatedly poll, submit a duplicate, or create an overlapping
 replacement. This timeout does **not**
-authorize cancellation of an existing training/campaign job. The user has
-explicitly directed that a **new request created for this work** that remains
-pending at the one-minute cutoff be stopped and reported; cancel only that new
-pending request, then inspect eligible alternatives before submitting another.
-Never cancel an active or unrelated job under this rule. Compare alternatives
-using fresh per-node CPU/RAM/GPU checks and `srun --test-only` forecasts.
+authorize cancellation of an existing training/campaign job. The user's
+current direction is to preserve pending jobs as well; stop polling after the
+one-minute cutoff, then inspect alternatives using fresh per-node CPU/RAM/GPU
+checks without canceling or overlapping the pending request.
 
 This timer starts when a request is eligible to run. A previously approved
 successor held behind an explicit `afterany`/`afterok` dependency is waiting on
@@ -395,19 +373,15 @@ allocate. Do not probe other sizes first.
 | GPU | `--gpus=h200:1` | `h200:2`, `gh200:2` while those GPUs are already taken |
 | Mem | **`--mem=900G`** | 1024G, 1200G, 1400G (they stay PENDING) |
 | CPU | **`--cpus-per-task=64`** | 96 |
-| Time | **`--time=6:00:00`** | 12h on this shape (stays PENDING; `srun --test-only` can still say "now") |
+| Time | **`--time=6:00:00`** | 12h on this shape (historically stayed PENDING) |
 | Envs | `QUANT_RL_MAX_N_ENVS=64` | Leaving the cap unset: 900G selects 128 workers and OOMs |
 
 If a request remains pending after 60 seconds, stop polling and treat that
 resource shape as unavailable for immediate work, even if Slurm shows a later
-estimated start. Immediately compare eligible A100-or-better NVIDIA alternatives;
-do not leave a terminal or background poll running. For a new request made for
-this thesis work, cancel only that new request if it is still pending at 60
-seconds, as the user explicitly directs. Never cancel an existing campaign or
-unrelated job under this rule, and do not create an overlapping duplicate.
-Check the job reason and per-node CPU, RAM, and GPU availability; compare alternatives with
-`srun --test-only`, then follow explicit cancellation and allocation approval
-rules before switching.
+estimated start. Inspect eligible A100-or-better NVIDIA alternatives from
+fresh live per-node CPU/RAM/GPU inventories. Leave pending requests untouched,
+never cancel an existing campaign or unrelated job, and do not create an
+overlapping duplicate.
 
 Second train: a new tmux window that **`ssh`s the compute node**. That shell
 joins the same job (`SLURM_JOB_ID` is set). `srun --overlap` / `srun --jobid=`
@@ -477,8 +451,8 @@ shape or the one-minute alternative-selection rule above:
 - A node can be physically mixed and still have no free GPU. Check
   `AllocTRES`, not only CPU/RAM (`gpu45` showed all four H100 GPUs allocated
   while CPU/RAM remained free).
-- `srun --test-only` validates shape and gives an estimate; it does not reserve
-  resources. A pending job with `Reason=Priority` is not a malformed request.
+- Use live `AllocTRES` and per-node inventory to determine GPU availability. A
+  pending job with `Reason=Priority` is not a malformed request.
 - The project's `.venv-x86` uses `torch==2.14.0+cu130`, which does not contain
   kernels for V100 compute capability 7.0. The isolated `.venv-v100` built on
   2026-10-16 uses `torch==2.14.0+cu126`, Python 3.12, SB3 2.9.0, Gymnasium
@@ -541,19 +515,16 @@ Never `source` the wrong-arch venv on login (`.venv` is aarch64-only). Use
 - Prefer one invocation inside an existing (or user-approved) GPU shell.
 - After train finishes, leave the GPU bash / tmux window running.
 
-### Mandatory preflight: `srun --test-only`
+### GPU allocation preflight: live inventory, then real request
 
-Before requesting a new GPU allocation, run a Slurm dry-run on the login node with **the exact proposed partition, node, GPU type/count, CPU count, memory and walltime**:
-
-```bash
-squeue -u "$USER"
-scontrol show node gpuarm1 | grep -E 'State=|CfgTRES=|AllocTRES='
-srun --test-only -p gpu-grace-h200-141g -w gpuarm1 --gpus=gh200:1 --cpus-per-task=128 --mem=450G --time=12:00:00 /bin/true
-```
-
-Replace the example values with the intended request; never blindly submit the example. `--test-only` reports Slurm's **estimated schedulability/start time** and does not start a GPU training job. It is a forecast, **not a guarantee** of immediate allocation. An apparently free GPU or low `AllocTRES` alone does not prove that Slurm can start the request; reservations, priorities, CPU, memory and duration matter.
-
-If the forecast is delayed, test realistic CPU/memory/walltime alternatives with `srun --test-only` **before** any real `srun` or `sbatch`. Test a minimal resource shape if necessary to distinguish GPU scheduling constraints from excessive CPU/RAM requests. For example, when even one GH200, one CPU and 1 GiB with the same walltime is delayed, reducing CPU/RAM cannot by itself guarantee an immediate start. Check `squeue` and `scontrol` for real jobs; dry-run job IDs are not live allocations. Do not repeatedly submit and cancel real jobs to probe availability.
+Before requesting, inspect `squeue -u "$USER"`, then inspect each candidate
+with `scontrol show node <node>` and `sinfo -N`. Record the GPU family/count
+and actual allocation, CPU allocated/free, and host RAM allocated/free. Choose
+only a compatible idle GPU and request the planned resources directly with
+`srun --immediate=60` from a named tmux session. Do not use `srun --test-only`
+or other scheduler forecasts. If the request is still pending at 60 seconds,
+leave it untouched, stop polling, and inspect alternatives without submitting
+an overlapping allocation. Reuse an existing allocation whenever possible.
 
 
 ### Compare priority and GPU alternatives before waiting
@@ -564,22 +535,11 @@ if another supported family can start sooner and meets the workload's CPU, RAM,
 VRAM, CUDA, architecture, environment and walltime requirements.
 
 Inspect account eligibility with `sacctmgr show assoc user=$USER
-format=Account,Partition,QOS` and partition priority with
-`scontrol show partition <partition>`. Priority is not a reservation. Compare
-realistic resource shapes with login-node `srun --test-only` before any real
-allocation, while respecting each partition's maximum walltime:
-
-```bash
-srun --test-only -p gpu-a100-80g --gpus=a100:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true
-srun --test-only -p gpu-h100-80g --gpus=h100:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true
-srun --test-only -p gpu-h200-141g-short --gpus=h200:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true
-srun --test-only -p gpu-b300-288g-short --gpus=b300:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true
-srun --test-only -p gpu-grace-h200-141g --gpus=gh200:1 --cpus-per-task=32 --mem=180G --time=02:00:00 /bin/true
-```
+format=Account,Partition,QOS` and partition limits with
+`scontrol show partition <partition>`. Choose alternatives from fresh live
+node inventories, then make one bounded real request from tmux if authorized.
 
 Use `scontrol show node <node>` to distinguish configured GPUs (`CfgTRES`)
 from allocated GPUs (`AllocTRES`). A `MIXED` node state does not mean a GPU is
-free. Treat dry-run start estimates as forecasts, not reservations. Verify the
-environment on the requested architecture and use a representative training
-benchmark before increasing trainer concurrency. Never submit a real job only
-because a dry-run predicted a short wait.
+free. Verify the environment on the requested architecture and use a
+representative training benchmark before increasing trainer concurrency.

@@ -161,16 +161,18 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
 
 - **Reuse first:** if a GPU tmux/`srun` already exists, run train/eval/tests
   there (`tmux send-keys`).
-- **`srun` needs confirmation:** agents may allocate only after you explicitly
-  OK a **new** allocation in-chat. SSH, an existing tmux pane, or “use this
-  GPU task” is not that OK. `srun`, `srun --overlap`, `srun --jobid=`, and a
-  second step stay blocked. No self-started short diagnostic jobs (&lt;~120s).
-- **`scancel` needs the same kind of confirmation:** agents may cancel a job
-  only after you explicitly say to cancel it. Retrain, delete outputs, or a
-  bad log is not that yes. A 60-second wait timeout does not authorize
-  cancellation. Do not pass `REPLACE=1`; preserve the pending request while
-  comparing eligible alternatives, and ask before canceling it if the pending
-  request could later overlap the alternative.
+- **GPU allocation:** standing user authorization permits necessary thesis
+  allocations. Reuse an existing allocation first; before a new one, inspect
+  every candidate node's live GPU availability, allocated/free CPUs, and
+  allocated/free host RAM. Never use `srun --test-only` or scheduler forecasts;
+  when a compatible GPU is idle, make one real bounded request from a named,
+  persistent login tmux session with `--immediate=60`. Never launch a new
+  `srun` directly from a transient Codex/SSH terminal. Stop polling after 60
+  seconds. Leave pending requests untouched and inspect alternatives without
+  creating an overlapping request.
+  Do not create short diagnostic jobs or fan out Slurm steps.
+- **Cancellation:** never run `scancel`. Preserve active and pending
+  allocations; never pass `REPLACE=1`.
 - **Before alloc:** first check the user's current allocation and reuse it if
   available; otherwise check `sinfo`/`squeue` for free GPU/CPU/RAM and apply the
   partition and GPU-family guidance in `.agents/rules/triton-slurm.md`. The
@@ -179,15 +181,11 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
   no more than 60 seconds. For `srun`/`salloc`, pass Slurm's immediate timeout
   (`--immediate=60`) where supported; never leave a blocking allocation command
   waiting longer. For a submitted job, stop polling after 60 seconds.
-  This limits the agent's wait, not an allocation's runtime, and does not
-  authorize cancelling an existing campaign or unrelated job. The user has
-  directed that a new request created for this work still pending at 60 seconds
-  be stopped; cancel only that new pending request, report it, then search for
-  an eligible alternative without creating an overlapping request. Before
-  considering each alternative, inspect every candidate node's allocated and
-  free CPUs, host RAM, and configured/allocated GPU inventory. Compare only
-  candidates no lower than A100 using fresh per-node checks and
-  `srun --test-only`. An approved successor behind an explicit
+  This limits the agent's wait, not an allocation's runtime. Do not cancel a
+  pending request at the cutoff. Before considering an alternative, inspect
+  every candidate node's allocated and free CPUs, host RAM, and
+  configured/allocated GPU inventory. Do not use `srun --test-only`. An approved
+  successor behind an explicit
   dependency starts its 60-second resource-wait clock only after the dependency
   clears. MI210 is excluded for the current thesis work. Preserve the
   cancellation approval rules for every existing or unrelated job.
@@ -207,8 +205,8 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
   checking `sm_70` support and a real CUDA operation. Match venv architecture
   (`.venv` on GH200/aarch64, `.venv-x86` on H100/H200 x86_64). Login has no GPU
   and not enough RAM for `n_envs=64`.
-- **Do not `scancel`** when a train finishes — keep the GPU bash + tmux for
-  the next run until you explicitly ask to cancel the job.
+- **Never `scancel`** when a train finishes or for any other reason; keep the
+  GPU bash + tmux allocation available for subsequent work.
 - Login SSH for `ls` / `squeue` / `sinfo` / `tmux capture-pane` / inspect-only
   `scripts/triton/*.sh`; never `srun` for those checks.
 - **Short-step monitor hard gate:** any job/step under 120 seconds counts as
@@ -218,5 +216,5 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
   retry, test, monitor, or node-local command. Run short work inside an existing
   shell/allocation without another step. If unexpected early exits or steps
   appear, stop submitting/retrying, preserve logs and allocation state, and
-  diagnose. Do not cancel without explicit user authorization. Follow the
+  diagnose. Never cancel Slurm jobs or allocations. Follow the
   detailed hard gate in `.agents/rules/triton-slurm.md`.

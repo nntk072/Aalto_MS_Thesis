@@ -7,7 +7,76 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-17 18:26 Helsinki):** work remains on canonical
+**Live checkpoint (2026-10-17 21:34 Helsinki):** the replacement source exports
+cover 2024-12-30 through 2026-10-16. The configured training split is
+2024-12-30–2025-12-31 inclusive; the test split begins 2026-01-01 and runs
+through the last available bar. Full-day bar caches were rebuilt for US100 and
+US500 at M1, M5, M10, M15, M30, H1, H4, and D1. The three named prebuilt feature
+caches were transactionally rebuilt: baseline (630,787 rows/194 columns), Idea
+1 PO3/IFVG (630,787/532), and Idea 2 distribution (630,787/538). M10 resampling
+has a focused regression test. M10 bar-cache presence does not mean M10 is
+model-visible; configured feature timeframes remain profile-specific.
+
+Replacement M1 checks found no unparseable or duplicate timestamps, descending
+rows, nonfinite/missing numeric values, invalid OHLC ordering, negative spread,
+or negative tick volume. The source reports zero real-volume values on every
+bar. Train/test rows are US100 351,432/279,355 and US500 349,973/278,956. Tick
+coverage is complete for the schedule produced by the current resolver and
+cache: US100 99,492/99,492 train and 79,069/79,069 test; US500 99,482/99,482
+train and 79,068/79,068 test. The current US100 resolver schedule has 12 fewer train decisions than the
+historical 99,504 count. Session-shape review found 382 bars on Dec 2 and 388
+on Dec 4 versus the common 391-bar session. Treat these as schedule exceptions;
+holiday or broker-specific reduced hours may explain them. The tick export has
+no quotes in the corresponding minute bins and cannot reconstruct bars there,
+but that does not establish missing data. The official NYSE Group 2025 cash-
+equity calendar does not list Dec 2 or Dec 4 as holidays or early closes
+([calendar](https://www.nasdaq.com/press-release/nyse-group-announces-2025-2026-and-2027-holiday-and-early-closings-calendar-2024-11));
+this does not determine the unidentified CFD provider’s hours or export
+semantics. US500 also has 22 minute-level schedule differences that need
+calendar-aware interpretation. Obtain the
+provider holiday/special-hours calendar and export semantics, then reconcile
+the exact campaign schedule. Do not classify intervals as missing or impute
+prices before that review. Tick caches contain
+135,043,551 US100 and
+37,246,832 US500 rows, with no descending timestamp pairs. Millisecond ties
+remain (300,381 US100 and 29,090 US500 adjacent equal-time pairs, each with
+different quotes); stable source-row order selects among those ties, so their
+sub-millisecond chronology is unknowable. Input evidence is collected under
+[`replacement_data_20261017`](evidence/replacement_data_20261017/).
+
+On GH200 job `21020179`, the targeted same-session future-poison regression
+passed in the full suite after the `prev_ny_high_low` repair. Prefix-invariance
+checks passed 16/16 sampled cutoff/profile cases (zero changed feature values),
+and the full-training fold-local poison check passed 20/20 across five
+expanding purged folds and four representative configured feature profiles.
+These are bounded feature-construction checks, not proof of every
+feature/execution path, a backtest, policy performance, or confirmation. They do not resolve the
+unknown feed provider, data-use/publication terms, broker calendar/timezone/DST,
+or stale/zero real-volume interpretation. The prior Jan 1–Jul 3, 2026 period
+was previously inspected; Jul 4–Oct 16 remains only a candidate fresh segment
+if exposure logging confirms it was not used for model or human selection and
+the protocol is frozen before evaluation.
+
+The current-tree GH200 gate passed: Ruff format (460 files), Ruff lint,
+full-tree Mypy (471 source files), and **1,731 tests** (82 warnings, 200.30s;
+see [`full_ci_gate_final.log`](../outputs/data_refresh_20261017/full_ci_gate_final.log)).
+No new-data campaign or supervisor has launched; no new-data checkpoint exists.
+The historical 18-way campaign remains unusable for selection. P1 remains
+blocked on the remaining provenance/terms, schedule-freeze, and admissibility
+gates; P2–P11 result, review, and manuscript work remains open. Readiness is
+**NOT READY**.
+
+Job `21020179` is still RUNNING on `gpuarm1` and `gpuarm2`, with one GH200,
+48 CPUs, and 512 GiB per node, six-hour limit (observed runtime 2:20:48 at this
+checkpoint). The full CI step completed in login tmux `thesis-gate-21020179`;
+the cache build and long fold audit are complete, and there is no campaign
+controller/trainer running. The allocation itself was started earlier outside
+the persistent login tmux; any future `srun` must originate in named login
+tmux per the updated rule. Do not cancel the current allocation.
+
+**Historical checkpoint (2026-10-17 18:26 Helsinki; superseded by the live checkpoint above):**
+
+Work then remained on canonical
 `main`, with the validated code/evidence change in commit `56ee424` and the
 roadmap updates pushed to `origin/main`; the tree is clean. The parity report
 records the pre-commit tree `f9681ed` and its dirty state at generation. GH200 job
@@ -207,25 +276,39 @@ coverage audit used zero delay. The cached US100 TickBook has the same 49,160,48
 rows and exact array hash as the raw export; it is a verified cache copy, not a
 longer-period tick source.
 
-**P1 data-intake acceptance, derived from the executable contract (2026-10-17):**
-to reopen the US100 screen, supply a raw US100.cash bid/ask tick export that
-covers every scheduled training decision time in the configured
-2024-12-30–2025-12-31 split, including the first currently unavailable time
-`2024-12-30T13:31:00Z`, and retains adequate observations for the standard
-`[0, 30 ms)` latency plus the 60-second quote-wait check. Coverage must be
-verified by the existing schedule audit at **99,504/99,504 training decision
-times**, with the existing complete test coverage preserved. The fill contract
-uses the first tick at or after the sampled arrival time; no earlier quote,
-candle fallback, interpolation, or use of US500 quotes may fill US100 orders.
-On intake, record the provider/feed, export method, broker timezone, and
-data-use/publication terms; hash and validate the raw file; rebuild the TickBook
-cache from that raw source; require exact raw/cache array parity; audit ordering,
-duplicates, raw invalid-row counts, session mapping, and full train/test
-schedule coverage. Confirm that every retained executable quote is finite,
-positive, and uncrossed under the documented TickBook filtering, then obtain
-independent acceptance of any additional feed-quality thresholds. This
-specifies acceptance checks only; it does
-not assert that the missing source or its usage rights have been obtained.
+**P1 replacement-data intake status (2026-10-17):** the earlier intake note's
+first-missing-tick example and 99,504-step count refer to the superseded
+2025–Jul 2026 source and historical screen contract. The replacement raw
+exports now cover 2024-12-30–2026-10-16, and the current resolver/cache
+coverage audit passes 99,492/99,492 US100 training decisions and
+79,069/79,069 test decisions with the `[0, 30 ms)` execution-delay contract;
+US500 coverage is also complete for its current schedule. Raw/cache identities
+match, and the new full-range TickBooks were rebuilt from the supplied exports.
+The 12-decision US100 difference from the historical count is associated
+with shorter NY-labeled sessions on Dec 2 (382 bars) and Dec 4 (388), versus
+the common 391-bar count. These may reflect holidays or broker-specific
+reduced-hours schedules; they are not established missing data. The TickBooks
+have no quotes in the corresponding minute bins, which cannot distinguish a
+scheduled closure from an export omission. US500 has 22 minute-level schedule
+differences that also need calendar-aware interpretation. Adjacent source bars
+match bid-tick OHLC at cent precision (9/9 US100, 29/29 US500), supporting only
+the sampled candle interval/price-side convention. Obtain provider holiday and
+special-hours rules and reconcile the exact campaign schedule before launch;
+do not impute prices. The
+buy-at-ask/sell-at-bid and first-tick-at-or-after
+arrival contract remains strict: no earlier quote, candle fallback,
+interpolation, or US500 quote may fill US100 orders. All scanned quotes are
+finite, positive, and uncrossed; timestamp ties and their source-order policy
+are documented in the replacement-data evidence note.
+
+The provider/feed identity, export method, data-use/publication terms, and
+authoritative broker calendar/timezone/DST interpretation remain undocumented.
+Therefore the raw-coverage and bounded causal/fold audits pass, but the feed
+has not received independent source/use acceptance and the new-data screen is
+not admitted for thesis selection or publication. Preserve this distinction;
+do not use coverage or feature audits as a proxy for authorization or strategy
+performance. See
+[`replacement_data_20261017.md`](evidence/replacement_data_20261017.md).
 
 GPU throughput probe `21017302` completed on an H200 3g.71GB slice (`gpu49`)
 with 8 CPUs, 128 GiB requested RAM, and the shared bundle. The 81,920-step PPO
@@ -1106,10 +1189,16 @@ are not guessed.
 ### 4.9 Validation-calendar contract
 
 - `<= 2025-12-31`: train/in-sample and walk-forward selection domain.
-- `2026-01-01` through the available `2026-07-03` data: **exposed development / exploratory report-only evidence** because outcomes have already been inspected.
-- A later rerun on those dates does not restore pristine holdout status.
-- A truly fresh final OOS period must be newly acquired after the exposed
-  boundary, frozen before inspection, and never used to select the model.
+- `2026-01-01` through `2026-07-03`: **exposed development / exploratory
+  report-only evidence** because outcomes have already been inspected.
+- `2026-07-04` through the available `2026-10-16` data is a **candidate fresh
+  segment**, not yet confirmatory evidence. Verify that its outcomes were not
+  previously inspected or used for selection; freeze the model and evaluation
+  protocol before running the final evaluation. If that exposure check cannot
+  be established, report it as development data.
+- A later rerun on exposed dates does not restore pristine holdout status.
+- A truly fresh final OOS period must remain untouched until the model and
+  protocol are frozen, and must never be used to select the model.
 - Changing calendar roles/dates is human-gated.
 - Absence of fresh data does not justify relabelling exposed data; it changes the
   strength of the conclusion.
@@ -1312,20 +1401,27 @@ live checkpoint above as authoritative, not as persistent cluster telemetry.
 2. The historical 18-variant screen is terminal and reconciled: 11 succeeded,
    4 failed the train-survival gate, and 3 were interrupted. Lookahead was
    found in 17/18 configurations; the sole clean profile failed survival, so
-   there is no admissible winner. US100 train-period tick coverage is 1.1788%,
-   and an actual train replay stopped in April 2025 for lack of an executable
-   tick. This screen cannot select a thesis treatment or be resumed as a valid
-   campaign. Complete authorized US100 training ticks and the other P1 gates
-   before a fresh screen.
+   there is no admissible winner. Its old training payloads have been removed
+   after inventory; the historical campaign cannot select a thesis treatment
+   or be resumed as a valid campaign. The replacement full-range data now has
+   exact M1/tick cache parity and 100% randomized `[0,30 ms)` scheduled-step
+   coverage for US100/US500 training and report-only testing. This closes the
+   earlier US100 tick-coverage gap for these inputs. Feed identity and data-use
+   terms remain unknown, and replacement-data causality/fold audits and a new
+   screen are still open.
 3. The evaluator observation-schema forwarding and randomized-fill seeding
    fixes are in main. The 2026-10-17 mixed-timezone equity-index crash was
-   fixed in commit `56ee424`; the full 1,729-test suite and source/static gates
-   passed. Current-source test-split frame/bundle parity passed on a historical
-   checkpoint, but train replay still fails closed at the tick gap. Full train
+   fixed in commit `56ee424`; the current replacement-data tree has passed
+   full-tree Ruff, Mypy, and **1,731 tests** on aarch64/GH200. Current-source
+   test-split frame/bundle parity passed on a historical checkpoint, but that
+   checkpoint used old data and is not eligible for new-data claims. Full train
    and test numerical reports on an admissible checkpoint remain open.
-4. The 2026 report interval has been inspected and is permanently exposed.
-   No pristine confirmatory holdout is currently available in the retained
-   dataset; the historical test-split replay is engineering evidence only.
+4. The 2026-01-01–2026-07-03 report interval has been inspected and is
+   permanently exposed. The new export continues through 2026-10-16; Jul 4–Oct
+   16 is only a candidate fresh segment. Verify it was not previously inspected
+   or used for selection, then freeze the model and evaluation protocol before
+   final evaluation. Otherwise report it as development data. Historical
+   test-split replay is engineering evidence only.
 5. Independent research sign-off remains open.
 6. A previous planning snapshot described a coherent full manuscript draft, but
    its source was not found in the canonical checkout during the 2026-10-16
@@ -3497,10 +3593,10 @@ history.
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE — canonical `main` is clean and pushed; the validated code/evidence change is commit `56ee424`, with subsequent roadmap-only updates. Separate worktrees and historical artifacts remain preserved. Current audit job `21019757` has one GH200, 48 CPUs, and 512 GiB per node on gpuarm1/gpuarm2, six-hour limit, 12 GH200 GPU-hours maximum. Full-tree Ruff, Mypy, and 1,729 tests passed in that allocation. No training campaign or supervisor is active. No campaign was started because US100 training ticks are incomplete. MI210 remains excluded. | — | P1, P2, E0 |
-| P1 | 18-way/full-split one-seed screen reconciliation | HISTORICAL ACCOUNTING RECONCILED; ADMISSIBLE SCREEN BLOCKED — preserve as exploratory: lookahead affected 17/18 saved configs; the 18-way status accounting and prior-attempt exposure are recorded in the disposition file. US100 has 1,173/99,504 (1.1788%) scheduled train-order coverage; US100 test and both US500 splits are fully covered. The raw US100 export and all 18 shared-bundle manifests point to the same incomplete source. Direct timestamp-array scan found six empty arrays, six ending 2025-12-31, and six starting 2026-01-01; none covers the 2025 training period. Full tick replay stopped at 2025-04-28 with `TickExecutionUnavailable` and made no candle-price substitution. Source/feed-use terms and broker calendar/DST remain unknown. No admissible screen or fresh campaign can proceed until complete authorized US100 training ticks and remaining P1 gates are met. Existing seed-50 artifacts remain immutable. Evidence: [`p1_train_replay_tick_gap_20261017_job21019651.json`](evidence/p1_train_replay_tick_gap_20261017_job21019651.json), [`p1_shared_bundle_tick_array_ranges_20261017_job21019757.json`](evidence/p1_shared_bundle_tick_array_ranges_20261017_job21019757.json), [`p1_18_variant_screen_disposition_2026-10-16.md`](evidence/p1_18_variant_screen_disposition_2026-10-16.md). | P0 | P2, E0 |
-| P2 | Deterministic evaluator/schema repair | ACTIVE, PARTIALLY VERIFIED — seeded randomized-fill evaluation and schema forwarding remain in place. A new `TradingEnv.equity_times` mixed-timezone crash was fixed by normalizing tick event timestamps to the broker zone; focused tests, full Ruff/Mypy, and 1,729 repository tests passed. Current-source test-split frame/bundle parity passed all compared fields on a contaminated checkpoint with previously inspected holdout. Complete train replay remains blocked by P1 missing ticks; admissible selected-checkpoint acceptance and full train/test repeat remain open. See [`p2_frame_bundle_a4b_seed50_test_20261017_job21019757.json`](evidence/p2_frame_bundle_a4b_seed50_test_20261017_job21019757.json). | P0 | P1, E0 |
-| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and screen reconciler exist. Current tree has full software-gate evidence and current-source test-split parity for the historical checkpoint. The train-plus-test replay failed closed at the missing US100 quote before producing a complete numerical package. Full-split deterministic repeat, admissible selected checkpoint, and canonical reports remain open. The 20-check fold-fit result remains source-snapshot-specific and broader causality is open. Data-use provenance and broker calendar/DST remain undocumented. | P0 | P1, P2 |
+| P0 | Safe boundary/current snapshot | ACTIVE — canonical `main` remains the shared checkout and is dirty. GH200 audit allocation `21020179` is RUNNING on gpuarm1/gpuarm2, one GH200/48 CPUs/512 GiB per node. Current-tree full gate passed: Ruff format, Ruff lint, full-tree Mypy, and 1,731 tests (82 warnings). Three replacement feature caches and 100% tick coverage for the current resolver schedule are verified; the 12-step US100 schedule difference is under calendar review, not classified as missing data. No new-data campaign/supervisor is running. Do not cancel the allocation. | — | P1, P2, E0 |
+| P1 | 18-way/full-split one-seed screen reconciliation | HISTORICAL SCREEN ACCOUNTING RECONCILED; BOUNDED REPLACEMENT INPUT/CAUSAL AUDITS PASS; NEW SCREEN NOT ADMITTED — the old 18-way run remains invalid for selection (lookahead in 17/18 configs; baseline failed its training survival gate). The `prev_ny_high_low` same-session future-poison regression now passes; 16/16 sampled prefix checks and 20/20 fold-local poison checks pass on replacement data, but do not constitute exhaustive causality certification. Replacement data spans 2024-12-30–2026-10-16; current resolver tick coverage is complete for its 99,492 US100 / 99,482 US500 train decisions and test schedules. The 12-step US100 difference from the old 99,504 contract is under calendar/schedule interpretation; Dec 2/4 are not standard NYSE Group cash-equity holiday or early-close dates, while the CFD provider and export semantics remain unknown. Before a new screen, freeze and verify its exact schedule, source/feed-use terms, broker calendar/timezone/DST, and test-exposure protocol. Keep the old contaminated screen unusable for selection. See [`replacement_data_20261017.md`](evidence/replacement_data_20261017.md) and [`p1_18_variant_screen_disposition_2026-10-16.md`](evidence/p1_18_variant_screen_disposition_2026-10-16.md). | P0 | P2, E0 |
+| P2 | Deterministic evaluator/schema repair | ACTIVE, PARTIALLY VERIFIED — evaluator schema forwarding, deterministic randomized-fill seeding, legacy observation recovery, cache/data provenance guards, and mixed-timezone equity timestamps are implemented and covered by the current full gate (1,731 tests). Historical engineering-only checks passed exact repeated train/test replay and frame/shared-bundle parity on one contaminated legacy checkpoint; the holdout was previously inspected and required explicit legacy-schema opt-ins. This verifies bounded mechanics only. Acceptance on an admissible, provenance-complete selected checkpoint remains open until P1 clears and a new screen produces one. See [`p2_engineering_reanalysis_a4b_seed50_2026-10-17.md`](evidence/p2_engineering_reanalysis_a4b_seed50_2026-10-17.md). | P0 | P1, E0 |
+| E0 | Evidence/result pipeline + indexes | ACTIVE — prior provenance/index/reconciliation tools remain available. Replacement M1/tick/cache, prefix-invariance, and fold-poison evidence is now machine-indexed under `evidence/replacement_data_20261017/`. There is no new-data checkpoint or canonical numerical strategy report; the old checkpoint remains inadmissible. Exact new campaign schedule, tick-tie precision policy, provider/use provenance, broker calendar/DST, deterministic full-split repeats, and final report package remain open. | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED — report contract covers annualization, equity endpoints, exposure, raw fills/positions/breaches, split completion, and source/runtime provenance. Current verifier/software tests pass, but no admissible completed-checkpoint report has been generated. | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | Expanded M5/M15/H1 swing and mirrored long/short IFVG stop regressions passed in GH200 job `21019594` and the 1,729-test suite; this closes that source/test slice only. Reviewer preparation includes bounded related-work/threat notes and the refreshed independent-review brief/checklist. No independent reviewer has signed off; market-data/use provenance, broker calendar/DST, tick validity, broader causal coverage, final run identity, and the P3 evidence package remain open |
 | P5 | Freeze matched design/baselines | BLOCKED on P4; the default five-coordinate enforce-gate contrast was found behaviorally redundant and rejected; a shared six-coordinate direction-control pair is documented as an unverified candidate in §13.1 | P4 | P6 prep, review |

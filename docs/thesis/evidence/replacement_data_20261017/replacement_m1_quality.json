@@ -1,0 +1,96 @@
+{
+  "created_at_utc": "2026-10-17T16:48:28.869786+00:00",
+  "limitations": [
+    "Gap counts include market closures and are not classified as missing bars without an authoritative calendar.",
+    "CSV integrity does not establish vendor identity, data-use/publication rights, or executable-market authenticity.",
+    "Zero VOL is reported descriptively; MT5 CFD tick volume is not real traded volume.",
+    "This is not feature causality, policy performance, or confirmatory holdout evidence."
+  ],
+  "repository_head": "b7fbf4796383ecc36c1c3f859259afb3c9c2f9c6",
+  "runtime": {
+    "numpy": "2.2.6",
+    "pandas": "2.3.2",
+    "python": "3.12.15"
+  },
+  "schema": "aalto.replacement_m1_quality_inventory.v1",
+  "split": {
+    "requested_data_end": "2026-10-16",
+    "test_start_inclusive": "2026-01-01",
+    "train_end_inclusive": "2025-12-31"
+  },
+  "symbols": {
+    "US100.cash": {
+      "adjacent_gaps_seconds": {
+        "greater_than_300": 478,
+        "greater_than_3600": 467,
+        "greater_than_60": 503,
+        "largest": [
+          263760,
+          204660,
+          191160,
+          191160,
+          191160,
+          190260,
+          177360,
+          177360,
+          177360,
+          177360
+        ]
+      },
+      "duplicate_timestamps": 0,
+      "first_timestamp_broker_clock_naive": "2024-12-30T01:05:00",
+      "invalid_ohlc_order_rows": 0,
+      "last_timestamp_broker_clock_naive": "2026-10-16T23:49:00",
+      "negative_spread_rows": 0,
+      "negative_tick_volume_rows": 0,
+      "out_of_order_adjacent_timestamps": 0,
+      "path": "data/US100.cash_M1_202412300105_202610162349.csv",
+      "rows": 630787,
+      "rows_with_nonfinite_or_missing_numeric_values": 0,
+      "sha256": "4c46c6c9820cba15cea38487228d9c334467087b8bb109e3ffad7ca234d83f8c",
+      "size_bytes": 42077931,
+      "symbol": "US100.cash",
+      "test_rows_2026_01_01_through_available_end": 279355,
+      "training_rows_through_2025_12_31": 351432,
+      "unparseable_timestamps": 0,
+      "zero_real_volume_rows": 630787
+    },
+    "US500.cash": {
+      "adjacent_gaps_seconds": {
+        "greater_than_300": 475,
+        "greater_than_3600": 468,
+        "greater_than_60": 2249,
+        "largest": [
+          263760,
+          204660,
+          191160,
+          191160,
+          191160,
+          190260,
+          177360,
+          177360,
+          177360,
+          177360
+        ]
+      },
+      "duplicate_timestamps": 0,
+      "first_timestamp_broker_clock_naive": "2024-12-30T01:05:00",
+      "invalid_ohlc_order_rows": 0,
+      "last_timestamp_broker_clock_naive": "2026-10-16T23:49:00",
+      "negative_spread_rows": 0,
+      "negative_tick_volume_rows": 0,
+      "out_of_order_adjacent_timestamps": 0,
+      "path": "data/US500.cash_M1_202412300105_202610162349.csv",
+      "rows": 628929,
+      "rows_with_nonfinite_or_missing_numeric_values": 0,
+      "sha256": "e5929a798083b77ce631407132d4d2efeb658512d49bea296c578b3724a57b51",
+      "size_bytes": 38404762,
+      "symbol": "US500.cash",
+      "test_rows_2026_01_01_through_available_end": 278956,
+      "training_rows_through_2025_12_31": 349973,
+      "unparseable_timestamps": 0,
+      "zero_real_volume_rows": 628929
+    }
+  },
+  "timestamp_interpretation": "Naive timestamps are reported as stored broker-clock strings. The broker timezone/DST schedule and authoritative market calendar are not independently established."
+}

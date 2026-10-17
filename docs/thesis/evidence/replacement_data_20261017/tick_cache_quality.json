@@ -1,0 +1,36 @@
+{
+  "comparisons_to_first_path_per_symbol": {
+    "US100.cash": [],
+    "US500.cash": []
+  },
+  "entries": [
+    {
+      "bytes": 1403552982,
+      "file_sha256": "08a5fc05b6527327f7a12a8a61146faa17e0fa29db015a5256d79b9d56aece95",
+      "finite_bid_ask_rows": 135043551,
+      "first_tick_utc": "2024-12-29T22:05:00.196000+00:00",
+      "last_tick_utc": "2026-10-16T20:49:58.664000+00:00",
+      "logical_sha256": "bfb19e0815c72b82e18ef720e1f1986e235de89a90ea39e91b67be1dd5e58a30",
+      "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/us100_us500_20241230_20261016/US100.cash_ticks_v3-validated-full-day.parquet",
+      "positive_bid_ask_rows": 135043551,
+      "rows": 135043551,
+      "strictly_increasing_timestamps": false,
+      "uncrossed_rows": 135043551
+    },
+    {
+      "bytes": 354609545,
+      "file_sha256": "e6b12e30b334e87f0429402bb44dfebac3951ce10ed87a68e608823d3767ff3e",
+      "finite_bid_ask_rows": 37246832,
+      "first_tick_utc": "2024-12-29T22:05:00.497000+00:00",
+      "last_tick_utc": "2026-10-16T20:49:56.701000+00:00",
+      "logical_sha256": "4cfbda95edebbc852593005f296ae9305588a5225e3e2ed1c5d5543f85b81202",
+      "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/us100_us500_20241230_20261016/US500.cash_ticks_v3-validated-full-day.parquet",
+      "positive_bid_ask_rows": 37246832,
+      "rows": 37246832,
+      "strictly_increasing_timestamps": false,
+      "uncrossed_rows": 37246832
+    }
+  ],
+  "schema_version": "tick-cache-timeline-audit-v1",
+  "scope_note": "Parquet cache inspection only. Interval bounds do not prove schedule-wide quote coverage, source provenance, or data-use/publication rights."
+}

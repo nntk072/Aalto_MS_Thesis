@@ -3,24 +3,25 @@
 
 data:
   raw_dir: "data"                      # relative to project root
-  cache_dir: "cache"                   # parquet cache
+  cache_dir: "cache/us100_us500_20241230_20261016"  # versioned raw-bar/tick caches
   prebuilt_feature_cache: null          # optional named cache path; content hash is verified
   tz: "Etc/GMT-3"                      # broker server timezone (UTC+3)
   symbols: ["US100.cash", "US500.cash"]
   primary: "US100.cash"
   secondary: "US500.cash"              # used only for SMT divergence
-  timeframes: ["M1", "M5", "M15", "M30", "H1", "H4", "D1"]
+  timeframes: ["M1", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]
   split:
     train_end: "2025-12-31"            # inclusive: in-sample ≤ this date
     test_start: "2026-01-01"           # inclusive: out-of-sample ≥ this date
-  # True M1 source files (other TF files are known duplicates – see README)
+  # Full M1 inputs for the refreshed 2024-12-30 through 2026-10-16 dataset.
+  # Higher-timeframe caches are causally derived from these M1 bars.
   m1_files:
-    US100.cash: "US100.cash_M1_202412300105_202607031959.csv"
-    US500.cash: "US500.cash_M1_202412300105_202607031959.csv"
+    US100.cash: "US100.cash_M1_202412300105_202610162349.csv"
+    US500.cash: "US500.cash_M1_202412300105_202610162349.csv"
   # Real tick (bid/ask) files for accurate fill pricing
   tick_files:
-    US100.cash: "US100.cash_202512290105_202607031959.csv"
-    US500.cash: "US500.cash_202412300105_202607031959.csv"
+    US100.cash: "US100.cash_202412300105_202610162349.csv"
+    US500.cash: "US500.cash_202412300105_202610162349.csv"
 
 session:
   tz: "Etc/GMT-3"                      # session times below are in this tz

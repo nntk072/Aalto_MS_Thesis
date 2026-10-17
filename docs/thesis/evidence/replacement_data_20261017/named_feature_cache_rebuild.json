@@ -1,0 +1,1745 @@
+{
+  "schema_version": 2,
+  "status": "passed",
+  "created_at_utc": "2026-10-17T16:28:05.911738+00:00",
+  "runtime": {
+    "python": "3.12.15",
+    "platform": "Linux-5.14.0-687.57.1.el9_8.aarch64-aarch64-with-glibc2.34",
+    "architecture": "aarch64",
+    "hostname": "gpuarm1.int.triton.aalto.fi",
+    "slurm_job_id": "21020179",
+    "packages": {
+      "python": "3.12.15",
+      "numpy": "2.2.6",
+      "pandas": "2.3.2",
+      "pyarrow": "25.0.0",
+      "omegaconf": "2.3.1"
+    },
+    "dependency_files_sha256": {
+      "pyproject.toml": "d6ca651ba8e2506c18a0ae95b16e6e38c013867acb98e4303ce18d3eb3ba0ab6",
+      "uv.lock": "87cc7fd0dbf82da5d5f12bc15af897e1b933a6afd53e823877771d09bc5306f2"
+    }
+  },
+  "repository_head": "b7fbf4796383ecc36c1c3f859259afb3c9c2f9c6",
+  "repository_dirty": true,
+  "repository_status_porcelain": [
+    " M .agents/rules/README.md",
+    " M .agents/rules/triton-slurm.md",
+    " M AGENTS.md",
+    " M quant_rl/config/default.yaml",
+    " M quant_rl/data/resample.py",
+    " M scripts/triton/campaign_srun_gh200_guard.sh",
+    " M scripts/triton/check_gh200_capacity.py",
+    " M tests/test_triton_gh200_capacity.py",
+    "?? tests/test_data/test_resample_m10.py"
+  ],
+  "tracked_diff_sha256": "52ceac9ef18dcf831e2fc1af75a5d78f1b99e424e36582b12f2086b780d3f9d9",
+  "feature_cache_version": "v22-causal-configured-ny-session",
+  "bar_ingestion": {
+    "source": "raw_m1_csv",
+    "force_rebuild": true,
+    "intermediate_cache": "isolated_temporary_directory",
+    "shared_bar_cache_modified": false
+  },
+  "backup_dir": "outputs/data_refresh_20261017/previous_named_feature_cache",
+  "raw_m1_sha256": {
+    "US100.cash": "4c46c6c9820cba15cea38487228d9c334467087b8bb109e3ffad7ca234d83f8c",
+    "US500.cash": "e5929a798083b77ce631407132d4d2efeb658512d49bea296c578b3724a57b51"
+  },
+  "loaded_project_source_sha256": {
+    "quant_rl/__init__.py": "5978c727c8ce3871f6f7a8de7e1734863746f6fa8a20d2442ed02aa45799444a",
+    "quant_rl/action_schema.py": "7dc50534458b8b55df848e6bb8fd330348848736f37c824eba0bfe08699c8a15",
+    "quant_rl/backtest/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "quant_rl/backtest/account.py": "1d02b06028d0bf94babbf00a9a4f8c421cfdaa4c2b602cea704e2c56b7cf3926",
+    "quant_rl/backtest/broker.py": "7024b0a28cb8ec8264353bb31e11ea1c248449e7f6891e3df58733422e4accc7",
+    "quant_rl/backtest/costs.py": "c280b42c87c7b99c728f9856d40b139ca561fe813ac2be09aadcbf7ed6dbb605",
+    "quant_rl/backtest/guardrails.py": "5bb7d326c1e42374b9ee61109682de6eaca30bbbff5495deec12df6d8fb4373e",
+    "quant_rl/backtest/risk.py": "71152a6228b0b215500d053a2aef196b78ef5970730741ef96bfd5fb31e88222",
+    "quant_rl/config/__init__.py": "cf196e77e94d0b131012bba8287fb6ed3509584b88c8d9ef4107b7db59af2cf8",
+    "quant_rl/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "quant_rl/data/activity.py": "d3084176e9d316a9b079c240b6d81e80f2b5cb6b5d3384b8054c58f694ab41e3",
+    "quant_rl/data/align.py": "08555b4728d145d9fb2b77fcea7772fa201cb17b699e540fcf9553a29e9b2aea",
+    "quant_rl/data/clean.py": "93eb07b3f3041458ad5570cb87a5b936e92061470ab4db6804690d5fc9f1c0c5",
+    "quant_rl/data/loader.py": "9a4cb249006913b8c945266481c3555beb37b5a60aa0dbcdfda714e6bcbfa040",
+    "quant_rl/data/pipeline.py": "652e1cb6e8b5d60f3e3c166649b1c994597a868189aad1299c64230f47780169",
+    "quant_rl/data/resample.py": "eaffd8fec64df77a612932a686487e0359cc0a6aea71871313871bf08681d811",
+    "quant_rl/data/session.py": "b9cfb04b2b98ee3c8b4faf282040f04861a095e6f9ba04f8a14fd0e54e072129",
+    "quant_rl/data/split.py": "88cce652a8348f106e9203d82700ebe85f2208ca28e68a086a579e86808ca654",
+    "quant_rl/data/ticks.py": "cae4683990885fdbe0233b84d4220a9e87a9c5f3f2b278eb356b5a880188e692",
+    "quant_rl/envs/__init__.py": "13276e89ff4e4aaf07f8d53150c7f46178117871f0ab25a5176df26489a8aa96",
+    "quant_rl/envs/distribution_reward.py": "fcd308812b7b31ef8022756244a7428280414224a91f2c7390f86b656c0e1409",
+    "quant_rl/envs/entry_state.py": "5b8f3258c2d0f14a9a9127f13881a818c99e76cc98b43a5b7c5db36d1600994e",
+    "quant_rl/envs/feature_row.py": "ed205ade95c786af9043063987456a43386b4ff922a5885baaff830762744910",
+    "quant_rl/envs/observation.py": "0f34f884c635ac6088302a18098aa211d7c4c9588e91707915446cff9212d3b1",
+    "quant_rl/envs/po3_reward.py": "fd4dc2711f3fb698140c703b2a21c55a6a75bb5518b3c1a55cd652744f7c984c",
+    "quant_rl/envs/reward.py": "5878298d5df8a9ae018b1644b740cb086600ba36863e37ad8c4f615f077b03a9",
+    "quant_rl/envs/strategies/__init__.py": "98154c2ebef22595a0d25c8ae867d6ad9e85d422332ff8323e90e03432de534b",
+    "quant_rl/envs/strategies/base.py": "037a3823a7f4a517a268b180ad5f676fa7a96fcc99513f5371f8b3fbee7e0275",
+    "quant_rl/envs/strategies/baseline.py": "396e31caeab71d6b500daea6e8202723a17e028036b3a8fecdb5dee66281120d",
+    "quant_rl/envs/strategies/distribution.py": "5fc6a9ddf52130942446a209cac4d6b13f18f89fc9a574213d84ef80cf3bfa8b",
+    "quant_rl/envs/strategies/po3_ifvg.py": "20d0509385a28f48d13641a84e94b5ed4b3f1c5ef6025e5fb6e7e203085462e4",
+    "quant_rl/envs/sweep_reward.py": "8af247217878466cb87a609515dc0ae62ba887b355cc245ed8953d2d15318341",
+    "quant_rl/envs/trading_env.py": "f5942f575656eb9666c80085754433846535353d6012ede51a65927303203b5a",
+    "quant_rl/eval/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "quant_rl/eval/decision_diversity.py": "412ea41d111523d938d1fdedd6a6c3418d8679016e3a0d32cfc2677c574bba50",
+    "quant_rl/eval/export.py": "a7da74602c1997cbc1763cf1f994f1e1c4ef7fd3e2298e23a628a787f9c67224",
+    "quant_rl/eval/reward_attribution.py": "b8322714710d6d096f1bdf13e87c48da1f1c37ef3fcf2e57d971b966577e6ed8",
+    "quant_rl/eval/rollout.py": "5dd9a8b41d7825eca7b93d0d16917d53482d3be1de5ce903babedb12839c7ff8",
+    "quant_rl/eval/run_manifest.py": "6c1db43d7b5469f0dee00397d02c19b4aa653f70fe9e851f990238aa2974eb7c",
+    "quant_rl/evaluation/__init__.py": "f1ae7cd3c2ef5c0d11b738b7718721f9928053de6ad21e7faa7e950d6c3cc572",
+    "quant_rl/evaluation/bootstrap_ci.py": "5f77d952a08fc716a87c30976001f0072a4d28b24564420719c2e3c2cced783a",
+    "quant_rl/evaluation/calibration.py": "5e77ec66ca63f34fff5dc2981cbf62da08533ca7d5e3bbf503f8389fcfdb2f75",
+    "quant_rl/evaluation/distributions.py": "7fea945538c135f6df5a46657cc614621edefc3868cdb16822108837e141abbd",
+    "quant_rl/evaluation/metrics.py": "431dc2476fba47c89d49a3ef336c325745ae775969236401367146247aa41174",
+    "quant_rl/evaluation/report.py": "0d74adbb1cc368d9546d6684d09ccf45034e8d9631e32fed1a39039d2dad45f5",
+    "quant_rl/evaluation/runner.py": "a368f60d9bd2db6ed0b42969a58be3d3166b8a68b73ac90b378655d8908b31e7",
+    "quant_rl/evaluation/temporal.py": "5e96a2da18881f9373e5b5c08ba4bbe18aff9a2f35ac37420955f33ccfc16df9",
+    "quant_rl/evaluation/walkforward.py": "3b36abfd158903bad02d988d396a436d62ef6a464556c619538eb70bd4a4dc35",
+    "quant_rl/features/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "quant_rl/features/build.py": "256387fc132498d9846f1c17526ea19a900d90def012703b90582c92c44fdcc1",
+    "quant_rl/features/htf_sweeps.py": "de9d750e77b3684fc9c6cc2452aee91f9354f38452b5d107b7d61b50933cefe1",
+    "quant_rl/features/indicators.py": "8983222a31406084b617e34eeee5c58adcde9efdfc9593124a872fbeb1c64ffe",
+    "quant_rl/features/liquidity.py": "3fbf4f02e5b8592dac81a6295b8738f894f3cf8911e80d7051e3d6e4dd37d62b",
+    "quant_rl/features/normalize.py": "7b357053db23d7143204b688c6d50bdb7c8447ba5b031dabc139b148130182ec",
+    "quant_rl/features/pd_context.py": "798202fa85506a10d301bffaf1f98df291aa309b68240fa08872407a69ebd287",
+    "quant_rl/features/po3_config.py": "a60b67e9cc8b518aa044888d07e380887604da2a3e3c880111aaeae6c028b9f2",
+    "quant_rl/features/po3_ifvg_state.py": "09c4baf01bc3e217a307114cd64c8adb54920ddc78c1ef7d834a0a8b1609d5cb",
+    "quant_rl/features/po3_state.py": "261e900a1041872788ce8f2f9e193e229aa0d2c1c98577ebf4aa7f4b0d2640fe",
+    "quant_rl/features/session_ohlc.py": "88fad94d3afc3a1aff558ece1efe62fb7be1be5556da1bf363ae2c1fab196533",
+    "quant_rl/features/smt.py": "66076c2ea4710c419a952ab95b1b299d2f4bbddd0559226835fd9e606fab896f",
+    "quant_rl/features/structure.py": "d78d27af53149f6bc799a64ab34a9b30648499d4507155da859a7dd7066721e9",
+    "quant_rl/features/swings.py": "9d3a2b6ebf531e26c6d8169f5ef105af8b6ddce3acbdc84528e9f5309a2a1638",
+    "quant_rl/models/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "quant_rl/models/agent.py": "fdc147c835ce167c94f8133bc817c368c80a8f8fccbc8ea2078651520cb209f6",
+    "quant_rl/models/auxiliary.py": "42e8449722f6b90a4434016030a22706fa468327f02d35e996b74ad1478da5f8",
+    "quant_rl/models/ppo_policy.py": "504f0d2aa9912c1028651bdb24cfe3278b73a051abc5cf4f44bebb56cf5b030a",
+    "quant_rl/observation_schema.py": "cd1dca8dd5be82a8ffca2bb0ab70d3adcc2103a2f8d3d034e017fefd911c241c",
+    "quant_rl/train/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "quant_rl/train/ablation_utils.py": "e5e7aed1577118b9bcd758167b5182537e5648fe9bfaa749c534fd8defdabc3f",
+    "quant_rl/train/auxiliary_training.py": "a9605857f1137ee3b26cf250486567f710af8c4d776891540f5f52f5404a6b1d",
+    "quant_rl/train/callbacks.py": "a100ce909636d3d3d07b337a5dd384d4e9087474a16d49ae11ec016708992b24",
+    "quant_rl/train/dashboard.py": "8685b5c265b95a20eef4bfbb1c571c4a9e1ca0af9a31fe5676feaf32ed667626",
+    "quant_rl/train/debug_trace.py": "38021c29d677891da94e63ac7b38939a37c160de3cd4bcdb887eb24801bd5259",
+    "quant_rl/train/equity_gate.py": "2d2d7187965b75da6b59261b4b400115e02202610c165910e321895e252351e0",
+    "quant_rl/train/train_rl.py": "7d03126e42ff2a3bfbe9640f07a4ac40935b38646bfdef7e926665a80d7e7db2",
+    "quant_rl/train/variant_resolver.py": "3efb2fdbb44a69fdd9576633fb01bcd84815bb8678686d6588dbc3d0b686053f",
+    "quant_rl/utils/__init__.py": "d4d2839e52133fc87b4cbeba5deefdc3e7f47b8faeac32ccb2e0923a54859a12",
+    "quant_rl/utils/box_table.py": "0dcd038252019773dc5ee39d5d6e7cc3fc7fa9b692231f792b94ccf8d89009ab",
+    "quant_rl/utils/device.py": "95a8c03fc9d8b29cb9fc43e9460f4a95fbadb4c0d36385a7536ec12c1f8ec1c0",
+    "scripts/matrix/rebuild_named_prebuilt_feature_caches.py": "c84e5de8462fe88b68696de6e74f87c3d6fb3b18a4037c6e963a2d62e7e5bf8a"
+  },
+  "loaded_project_source_count": 80,
+  "caches": [
+    {
+      "variant": "ladder_a0_flat",
+      "target": "data/prebuilt_feature_cache/baseline.parquet",
+      "feature_cache_hash": "ea5a8a3dc0bd7e97",
+      "previous_cache_sha256": "f9724bab6fe6115803aa5a9a78bb1d8e37379e3aab2388945bdc6aa9e79a441d",
+      "previous_sidecar_sha256": "570d5bd2cd4a793708d2629a3e3acc9968aad87d7b761af900dd5841e7a1cf4d",
+      "cache_sha256": "ca4b07659db1e449b0e3d6a8fd3023724060eb82fa27505831fb4f4c36fd98a5",
+      "sidecar_sha256": "15199465249224a160124fec77f9b7348cdd3c65b2e804a8474bca86fc9ca8b4",
+      "requires_htf_sweep_audit": false,
+      "htf_sweep_audit_path": null,
+      "previous_htf_sweep_audit_sha256": null,
+      "htf_sweep_audit_sha256": null,
+      "rows": 630787,
+      "columns": 194,
+      "resolved_variant": {
+        "variant": "ladder_a0_flat",
+        "strategy": "baseline",
+        "feature_profile": "default",
+        "base_config": "quant_rl/config/default.yaml",
+        "resolved_overrides": [
+          "env.allow_agent_sl_mode=false",
+          "env.agent_direction_control=false",
+          "env.strategy_actions=false",
+          "strategy.name=baseline",
+          "env.reward_mode=dsr",
+          "ppo.total_timesteps=100000",
+          "data.prebuilt_feature_cache=data/prebuilt_feature_cache/baseline.parquet"
+        ],
+        "strategy_config": null,
+        "config_sha256": {
+          "config/experiments.yaml": "1b9510d5bd5fab71dd14b2285d15560c4a5ff6a24646d8a6cee5868c66d39b03",
+          "config/features/pd_context.yaml": "e0587bc6b6ed0b2a7dc215ecb4d6c1a1c7c4f1187ed2a11851b8972760ec0e20",
+          "quant_rl/config/default.yaml": "7bd7acd8b9aa8bf7f3894fcc8781a7cbe89761ad8b2335fa91af630f5307b50d"
+        },
+        "effective_config": {
+          "sha256": "23a499e43da416c9c6b530f68439948b2d309047a721604071ae63fd96f6759e",
+          "value": {
+            "data": {
+              "raw_dir": "data",
+              "cache_dir": "cache/us100_us500_20241230_20261016",
+              "prebuilt_feature_cache": "data/prebuilt_feature_cache/baseline.parquet",
+              "tz": "Etc/GMT-3",
+              "symbols": [
+                "US100.cash",
+                "US500.cash"
+              ],
+              "primary": "US100.cash",
+              "secondary": "US500.cash",
+              "timeframes": [
+                "M1",
+                "M5",
+                "M10",
+                "M15",
+                "M30",
+                "H1",
+                "H4",
+                "D1"
+              ],
+              "split": {
+                "train_end": "2025-12-31",
+                "test_start": "2026-01-01"
+              },
+              "m1_files": {
+                "US100.cash": "US100.cash_M1_202412300105_202610162349.csv",
+                "US500.cash": "US500.cash_M1_202412300105_202610162349.csv"
+              },
+              "tick_files": {
+                "US100.cash": "US100.cash_202412300105_202610162349.csv",
+                "US500.cash": "US500.cash_202412300105_202610162349.csv"
+              }
+            },
+            "session": {
+              "tz": "Etc/GMT-3",
+              "start": "16:30",
+              "end": "23:00",
+              "dst_flag": true
+            },
+            "account": {
+              "initial_balance": 100000.0,
+              "currency": "USD",
+              "leverage": 50,
+              "margin_pct": 0.02,
+              "contract_size": 1.0
+            },
+            "evaluation": {
+              "periods_per_year": 98280,
+              "annualization_convention": "252 sessions/year x 390 NY-session M1 bars/session"
+            },
+            "costs": {
+              "spread_us100": 0.6,
+              "spread_us500": 1.53,
+              "slippage_points": 5.0,
+              "commission_per_lot": 0.0,
+              "point_size": 0.01,
+              "use_tick_execution": true
+            },
+            "execution": {
+              "fill_delay_ms": 0,
+              "randomized_fill_latency_ms": 0.0,
+              "max_tick_quote_wait_ms": 60000
+            },
+            "ftmo": {
+              "daily_loss_limit": 5000.0,
+              "soft_daily_loss_limit": 2000.0,
+              "soft_max_loss_limit": 5000.0,
+              "max_loss_limit": 10000.0,
+              "trailing_dd_limit": 0.07,
+              "soft_trailing_dd_limit": 0.0,
+              "risk_per_trade_limit": 1000.0,
+              "profit_target": 10000.0
+            },
+            "live_risk_overrides": {
+              "risk_per_symbol": 0.01,
+              "max_total_risk": 0.02,
+              "default_lot_size": 0.1,
+              "stop_loss_pips": 50.0,
+              "interval_minutes": 1
+            },
+            "features": {
+              "window": 60,
+              "ema_periods": [
+                9,
+                13,
+                21,
+                50,
+                200
+              ],
+              "rsi_period": 14,
+              "macd_fast": 12,
+              "macd_slow": 26,
+              "macd_signal": 9,
+              "atr_period": 14,
+              "adx_period": 14,
+              "bb_period": 20,
+              "bb_std": 2.0,
+              "stoch_k": 14,
+              "stoch_d": 3,
+              "vwap_session": true,
+              "return_horizons": [
+                1,
+                5,
+                15,
+                30
+              ],
+              "realized_vol_period": 20,
+              "smt_swing_period": 5,
+              "smt_corr_window": 20,
+              "zscore_window": 252,
+              "htf_timeframes": [
+                "M5",
+                "M15",
+                "H1"
+              ],
+              "include_po3": false,
+              "include_fvg_ifvg": false,
+              "include_po3_full": false,
+              "include_strategy_state": false,
+              "po3_reference_mode": "m1_legacy",
+              "po3_reference_timeframes": [
+                "M5",
+                "M15",
+                "H1"
+              ],
+              "po3_phase_mode": "legacy",
+              "include_pd_context": false,
+              "po3_htf": "M15",
+              "po3_ltf": "M5",
+              "smt": {
+                "enabled": false,
+                "timeframes": [
+                  "M5",
+                  "M15",
+                  "H1"
+                ]
+              },
+              "structure": {
+                "enabled": false,
+                "timeframes": [
+                  "M5",
+                  "M15",
+                  "H1"
+                ],
+                "swing_candidate_count": 1,
+                "candidate_price_increment": null
+              },
+              "liquidity": {
+                "enabled": false,
+                "timeframes": [
+                  "M5",
+                  "M15",
+                  "H1"
+                ]
+              },
+              "po3_state_mtf": {
+                "enabled": false,
+                "timeframes": [
+                  "M1",
+                  "M5",
+                  "M15"
+                ]
+              },
+              "ifvg_mtf": {
+                "enabled": false,
+                "timeframes": [
+                  "M5",
+                  "M15",
+                  "H1"
+                ]
+              },
+              "include_session_ohlc": false,
+              "sessions": {
+                "tz": "America/Chicago",
+                "asian": {
+                  "start": "19:00",
+                  "end": "23:00"
+                },
+                "london": {
+                  "start": "02:00",
+                  "end": "05:00"
+                },
+                "ny": {
+                  "start": "08:30",
+                  "end": "15:00"
+                },
+                "week_start": "MON",
+                "quadrant_ranges": [
+                  "yesterday",
+                  "lastweek"
+                ]
+              }
+            },
+            "env": {
+              "obs_window": 60,
+              "observation_schema_version": "account-state-v1",
+              "observation_age_scale_bars": 60,
+              "data_source": "frames",
+              "n_envs": 8,
+              "vector_backend": "subproc",
+              "vector_shards": 0,
+              "action_type": "discrete",
+              "max_episode_steps": null,
+              "reward_dsr_eta": 0.01,
+              "strategy_actions": false,
+              "entry_state_machine": false,
+              "candidate_max_age_bars": 5,
+              "arm_requires_retest": false,
+              "entry_state_observation": true,
+              "strict_research_eligibility": false,
+              "entry_intensity_threshold": 0.0,
+              "reward_mode": "dsr",
+              "fixed_risk_usd": 0,
+              "risk_mode": "dynamic",
+              "allow_ema_exit": true,
+              "allow_agent_sl_mode": false,
+              "sl_mode_defer_threshold": 0.1,
+              "allow_agent_tp_mode": false,
+              "tp_mode_defer_threshold": 0.1,
+              "allow_multi_tp": false,
+              "allow_simplex": true,
+              "tp_breakeven_alpha": 0.5,
+              "peak_trailing_dd_limit": 0.0,
+              "max_entries_per_session": 0,
+              "open_manipulation_bars": 10,
+              "entry_cooldown_bars": 15,
+              "sl_buffer_pts": 0.0,
+              "block_overnight": true,
+              "eod_risk": {
+                "max_loss_usd": 1100.0,
+                "respect_planned_risk": true,
+                "planned_risk_mult": 1.1,
+                "max_age_hours": 8,
+                "stale_bars": 60,
+                "progress_threshold_atr": 0.25,
+                "breakeven_trigger_r": 1.0,
+                "breakeven_buffer_pts": 2.0
+              },
+              "agent_direction_control": false,
+              "direction_override_threshold": 0.0
+            },
+            "ppo": {
+              "actor_arch": "shared",
+              "policy_distribution": "clamped_diagonal_gaussian",
+              "semantic_head_width": 64,
+              "n_steps": 2048,
+              "batch_size": 512,
+              "n_epochs": 15,
+              "rollout_buffer_on_device": true,
+              "learning_rate": 0.0003,
+              "gamma": 0.99,
+              "gae_lambda": 0.95,
+              "clip_range": 0.2,
+              "ent_coef": 0.01,
+              "ent_coef_continuous": 0.001,
+              "log_std_init": 0.0,
+              "log_std_min": -0.7,
+              "log_std_max": 0.0,
+              "mode_prior_coef": 0.001,
+              "checkpoint_freq": 1000000,
+              "total_timesteps": 100000
+            },
+            "constrained_rl": {
+              "enabled": false,
+              "episode_cost_budget": 1.0,
+              "dual_learning_rate": 0.1,
+              "lambda_initial": 0.0,
+              "lambda_max": 100.0
+            },
+            "quality_execution": {
+              "requested_n_envs": null,
+              "effective_n_envs": null,
+              "exact_n_envs": false
+            },
+            "sac": {
+              "learning_rate": 0.0003,
+              "buffer_size": 100000,
+              "batch_size": 512,
+              "tau": 0.005,
+              "gamma": 0.99,
+              "train_freq": 1,
+              "gradient_steps": 1,
+              "ent_coef": 0.01,
+              "learning_starts": 500
+            },
+            "encoder": {
+              "windows": {
+                "m5": 24,
+                "m15": 16,
+                "h1": 12
+              }
+            },
+            "agent": {
+              "type": "ppo",
+              "arch": "tcn",
+              "lite_tcn": {
+                "channels": 96,
+                "dilations": [
+                  1,
+                  4,
+                  10
+                ],
+                "kernel_size": 3,
+                "dropout": 0.1,
+                "latent_dim": 128
+              },
+              "head_arch": {
+                "tcn": [
+                  256,
+                  128
+                ],
+                "lite_tcn": [
+                  128,
+                  64
+                ],
+                "gru": [
+                  256,
+                  128
+                ],
+                "transformer": [
+                  256,
+                  128
+                ],
+                "mtf": [
+                  256,
+                  128
+                ]
+              },
+              "use_narrative": false
+            },
+            "device": "auto",
+            "quality_diagnostics": {
+              "enabled": false
+            },
+            "output": {
+              "report_profile": "full",
+              "dir": "outputs",
+              "save_plots": true,
+              "save_html": false,
+              "save_csv": true,
+              "max_order_charts": 0,
+              "dpi": 150,
+              "candle_tf": "15min",
+              "price_plot_max_points": 3000,
+              "trade_chart_show_mae_mfe": true,
+              "trade_chart_show_sl_tp": true
+            },
+            "backtest": {
+              "validation": {
+                "max_loss_per_trade_usd": 100.0,
+                "take_profit_per_trade_usd": null,
+                "include_costs_in_trade_risk": true,
+                "validation_mode": false
+              }
+            },
+            "risk": {
+              "min_lot": 0.01,
+              "max_lot": 100.0,
+              "default_risk_frac": 0.01,
+              "sl_mode": "fixed",
+              "tp_mode": "fixed",
+              "tp_reference": "structural",
+              "min_sl_atr_mult": 0.5,
+              "min_sl_points": 10.0,
+              "swing_buffer_pts": 1.0,
+              "rr_ratio_default": 2.0
+            },
+            "training": {
+              "mode": "full",
+              "episode_mode": "full_split",
+              "use_m1_only": false,
+              "primary_only": false,
+              "max_days": null,
+              "total_timesteps_mvp": 8192,
+              "early_abort": {
+                "enabled": true,
+                "min_timesteps": 5000000,
+                "window": 4,
+                "stop_on_nonfinite": true,
+                "stop_on_no_trades": false,
+                "stop_on_equity_gate": false
+              },
+              "dashboard": {
+                "enabled": true,
+                "eval_every": 100000,
+                "eval_bars": 20000,
+                "log_every": 100000,
+                "diversity": {
+                  "sl_top_share": 0.8,
+                  "tp_top_share": 0.8,
+                  "rr_p75": 1.25,
+                  "ema_lo": 0.02,
+                  "ema_hi": 0.98,
+                  "action_std": 0.05,
+                  "min_prior_trades": 50,
+                  "min_prior_sl_choices": 30,
+                  "min_prior_tp_choices": 30,
+                  "min_prior_direction_choices": 30,
+                  "rank_edge": 0.05,
+                  "direction_min_share": 0.9,
+                  "min_prior_risk_steps": 1000,
+                  "risk_u_max": 0.05
+                }
+              },
+              "debug": {
+                "enabled": true,
+                "ring_size": 5,
+                "ev_floor": 0.2,
+                "ev_windows": 5,
+                "std_min": 0.497,
+                "std_max": 1.0,
+                "part_vs_pnl": 10.0,
+                "corr_floor": 0.3,
+                "corr_windows": 3
+              }
+            },
+            "auxiliary": {
+              "aux_weight": 0.0,
+              "prediction_horizon": 5,
+              "lr": 0.0001,
+              "grad_steps": 4
+            },
+            "strategy": {
+              "name": "baseline",
+              "manipulation_filter": "against",
+              "session": {
+                "timezone": "Etc/GMT-3"
+              },
+              "liquidity": {
+                "swing_period": 5,
+                "require_reclaim": true,
+                "max_age_bars": 120
+              },
+              "po3": {
+                "require_manipulation_sweep": true,
+                "require_distribution_confirmation": true
+              },
+              "ifvg": {
+                "enabled": true,
+                "max_age_bars": 50,
+                "require_price_retest": true,
+                "close_through_threshold": 0.5,
+                "require_opposing_fvg": false
+              },
+              "risk": {
+                "sl_mode": "fixed",
+                "tp_mode": "fixed",
+                "tp_reference": "structural",
+                "sl_buffer_pts": 1.0,
+                "risk_frac_range": [
+                  0.0,
+                  0.01
+                ],
+                "rr_range": [
+                  1.5,
+                  5.0
+                ]
+              },
+              "tp": {
+                "mode": "agent",
+                "allowed_targets": [
+                  "rr",
+                  "buyside_liquidity",
+                  "sellside_liquidity",
+                  "previous_day_high_low"
+                ],
+                "invalid_target_policy": "rr_fallback"
+              },
+              "entry": {
+                "mode": "legacy",
+                "enforce_gate": false
+              },
+              "reward": {
+                "entry_bonus": 0.01,
+                "manipulation_penalty": 0.02,
+                "invalid_ifvg_penalty": 0.01,
+                "distribution_bonus": 0.005,
+                "strategy_weight": 0.01
+              },
+              "batch_windows": 256
+            }
+          }
+        },
+        "cache_path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/data/prebuilt_feature_cache/baseline.parquet",
+        "cache_path_exists": true,
+        "sidecar_exists": true,
+        "requires_htf_sweep_audit": false,
+        "htf_sweep_audit_exists": false,
+        "cache_config_signature": "{\"cache_dir\": \"cache/us100_us500_20241230_20261016\", \"m1_files\": {\"US100.cash\": \"US100.cash_M1_202412300105_202610162349.csv\", \"US500.cash\": \"US500.cash_M1_202412300105_202610162349.csv\"}, \"primary\": \"US100.cash\", \"raw_dir\": \"data\", \"secondary\": \"US500.cash\", \"split\": {\"test_start\": \"2026-01-01\", \"train_end\": \"2025-12-31\"}, \"symbols\": [\"US100.cash\", \"US500.cash\"], \"tick_files\": {\"US100.cash\": \"US100.cash_202412300105_202610162349.csv\", \"US500.cash\": \"US500.cash_202412300105_202610162349.csv\"}, \"timeframes\": [\"M1\", \"M5\", \"M10\", \"M15\", \"M30\", \"H1\", \"H4\", \"D1\"], \"tz\": \"Etc/GMT-3\"}"
+      }
+    },
+    {
+      "variant": "ladder_a0_flat_po3",
+      "target": "data/prebuilt_feature_cache/idea1_po3_ifvg.parquet",
+      "feature_cache_hash": "342d37068ab82a0e",
+      "previous_cache_sha256": "40697116988ef5cfdb1c54f2989e771006097575f484d50fa08384e72d79fbc0",
+      "previous_sidecar_sha256": "7408a8cd4317eb6b76c3aeb23ead77ee4892be127f0542e8f00aa92cbc8ce027",
+      "cache_sha256": "4d9d635c0201363e68bd4dd0458222d8a8c8e9e7ffb28836a28eeb428f6a4a3a",
+      "sidecar_sha256": "cae358d9fe5b4bb01d4bde90e474063c90e120458444f336f5110b09fc139361",
+      "requires_htf_sweep_audit": true,
+      "htf_sweep_audit_path": "data/prebuilt_feature_cache/idea1_po3_ifvg.parquet.htf_sweeps.parquet",
+      "previous_htf_sweep_audit_sha256": "d1ddafa61b57f88271fc364baa0599693cbebbcb30a5fb44b58abd99724d2c26",
+      "htf_sweep_audit_sha256": "56045808eb871a0171c59f466347ba2267a93f14bfd6070bf4fd50e493f8ebc3",
+      "rows": 630787,
+      "columns": 532,
+      "resolved_variant": {
+        "variant": "ladder_a0_flat_po3",
+        "strategy": "po3_ifvg",
+        "feature_profile": "full_po3",
+        "base_config": "config/features/full_po3_mtf.yaml",
+        "resolved_overrides": [
+          "features.include_session_ohlc=true",
+          "features.liquidity.enabled=true",
+          "features.po3_state_mtf.enabled=true",
+          "features.ifvg_mtf.enabled=true",
+          "features.include_strategy_state=true",
+          "env.open_manipulation_bars=0",
+          "env.peak_trailing_dd_limit=0",
+          "features.include_pd_context=true",
+          "features.structure.enabled=true",
+          "env.allow_agent_sl_mode=false",
+          "env.strategy_actions=true",
+          "env.reward_mode=pnl",
+          "ppo.total_timesteps=100000",
+          "data.prebuilt_feature_cache=data/prebuilt_feature_cache/idea1_po3_ifvg.parquet"
+        ],
+        "strategy_config": "config/2_po3_ifvg.yaml",
+        "config_sha256": {
+          "config/2_po3_ifvg.yaml": "d6d64101bd348cb77da4b11652c8be250bfe87a62b850204aafe888f40bc6e13",
+          "config/experiments.yaml": "1b9510d5bd5fab71dd14b2285d15560c4a5ff6a24646d8a6cee5868c66d39b03",
+          "config/features/full_po3_mtf.yaml": "61d597590f6da34531bdb0e4078173cc820ad51e909237ad8aaf813089125178",
+          "config/features/pd_context.yaml": "e0587bc6b6ed0b2a7dc215ecb4d6c1a1c7c4f1187ed2a11851b8972760ec0e20",
+          "quant_rl/config/default.yaml": "7bd7acd8b9aa8bf7f3894fcc8781a7cbe89761ad8b2335fa91af630f5307b50d"
+        },
+        "effective_config": {
+          "sha256": "c553c967a0733e169ee2b37230a007302819ad3cb3b651dfa757707376eac179",
+          "value": {
+            "data": {
+              "raw_dir": "data",
+              "cache_dir": "cache/us100_us500_20241230_20261016",
+              "prebuilt_feature_cache": "data/prebuilt_feature_cache/idea1_po3_ifvg.parquet",
+              "tz": "Etc/GMT-3",
+              "symbols": [
+                "US100.cash",
+                "US500.cash"
+              ],
+              "primary": "US100.cash",
+              "secondary": "US500.cash",
+              "timeframes": [
+                "M1",
+                "M5",
+                "M10",
+                "M15",
+                "M30",
+                "H1",
+                "H4",
+                "D1"
+              ],
+              "split": {
+                "train_end": "2025-12-31",
+                "test_start": "2026-01-01"
+              },
+              "m1_files": {
+                "US100.cash": "US100.cash_M1_202412300105_202610162349.csv",
+                "US500.cash": "US500.cash_M1_202412300105_202610162349.csv"
+              },
+              "tick_files": {
+                "US100.cash": "US100.cash_202412300105_202610162349.csv",
+                "US500.cash": "US500.cash_202412300105_202610162349.csv"
+              }
+            },
+            "session": {
+              "tz": "Etc/GMT-3",
+              "start": "16:30",
+              "end": "23:00",
+              "dst_flag": true
+            },
+            "account": {
+              "initial_balance": 100000.0,
+              "currency": "USD",
+              "leverage": 50,
+              "margin_pct": 0.02,
+              "contract_size": 1.0
+            },
+            "evaluation": {
+              "periods_per_year": 98280,
+              "annualization_convention": "252 sessions/year x 390 NY-session M1 bars/session"
+            },
+            "costs": {
+              "spread_us100": 0.6,
+              "spread_us500": 1.53,
+              "slippage_points": 5.0,
+              "commission_per_lot": 0.0,
+              "point_size": 0.01,
+              "use_tick_execution": true
+            },
+            "execution": {
+              "fill_delay_ms": 0,
+              "randomized_fill_latency_ms": 0.0,
+              "max_tick_quote_wait_ms": 60000
+            },
+            "ftmo": {
+              "daily_loss_limit": 5000.0,
+              "soft_daily_loss_limit": 2000.0,
+              "soft_max_loss_limit": 5000.0,
+              "max_loss_limit": 10000.0,
+              "trailing_dd_limit": 0.07,
+              "soft_trailing_dd_limit": 0.0,
+              "risk_per_trade_limit": 1000.0,
+              "profit_target": 10000.0
+            },
+            "live_risk_overrides": {
+              "risk_per_symbol": 0.01,
+              "max_total_risk": 0.02,
+              "default_lot_size": 0.1,
+              "stop_loss_pips": 50.0,
+              "interval_minutes": 1
+            },
+            "features": {
+              "window": 60,
+              "ema_periods": [
+                9,
+                13,
+                21,
+                50,
+                200
+              ],
+              "rsi_period": 14,
+              "macd_fast": 12,
+              "macd_slow": 26,
+              "macd_signal": 9,
+              "atr_period": 14,
+              "adx_period": 14,
+              "bb_period": 20,
+              "bb_std": 2.0,
+              "stoch_k": 14,
+              "stoch_d": 3,
+              "vwap_session": true,
+              "return_horizons": [
+                1,
+                5,
+                15,
+                30
+              ],
+              "realized_vol_period": 20,
+              "smt_swing_period": 5,
+              "smt_corr_window": 20,
+              "zscore_window": 252,
+              "htf_timeframes": [
+                "M5",
+                "M15",
+                "H1"
+              ],
+              "include_po3": true,
+              "include_fvg_ifvg": true,
+              "include_po3_full": true,
+              "include_strategy_state": true,
+              "po3_reference_mode": "htf_confirmed",
+              "po3_reference_timeframes": [
+                "M5",
+                "M15",
+                "H1"
+              ],
+              "po3_phase_mode": "reclaim_then_ifvg",
+              "include_pd_context": true,
+              "po3_htf": "M15",
+              "po3_ltf": "M5",
+              "smt": {
+                "enabled": false,
+                "timeframes": [
+                  "M5",
+                  "M15",
+                  "H1"
+                ]
+              },
+              "structure": {
+                "enabled": true,
+                "timeframes": [
+                  "M5",
+                  "M15",
+                  "H1"
+                ],
+                "swing_candidate_count": 1,
+                "candidate_price_increment": null
+              },
+              "liquidity": {
+                "enabled": true,
+                "timeframes": [
+                  "M5",
+                  "M15",
+                  "H1"
+                ]
+              },
+              "po3_state_mtf": {
+                "enabled": true,
+                "timeframes": [
+                  "M1",
+                  "M5",
+                  "M15"
+                ]
+              },
+              "ifvg_mtf": {
+                "enabled": true,
+                "timeframes": [
+                  "M5",
+                  "M15",
+                  "H1"
+                ]
+              },
+              "include_session_ohlc": true,
+              "sessions": {
+                "tz": "America/Chicago",
+                "asian": {
+                  "start": "19:00",
+                  "end": "23:00"
+                },
+                "london": {
+                  "start": "02:00",
+                  "end": "05:00"
+                },
+                "ny": {
+                  "start": "08:30",
+                  "end": "15:00"
+                },
+                "week_start": "MON",
+                "quadrant_ranges": [
+                  "yesterday",
+                  "lastweek"
+                ]
+              }
+            },
+            "env": {
+              "obs_window": 60,
+              "observation_schema_version": "account-state-v1",
+              "observation_age_scale_bars": 60,
+              "data_source": "frames",
+              "n_envs": 8,
+              "vector_backend": "subproc",
+              "vector_shards": 0,
+              "action_type": "discrete",
+              "max_episode_steps": null,
+              "reward_dsr_eta": 0.01,
+              "strategy_actions": true,
+              "entry_state_machine": false,
+              "candidate_max_age_bars": 5,
+              "arm_requires_retest": false,
+              "entry_state_observation": true,
+              "strict_research_eligibility": false,
+              "entry_intensity_threshold": 0.0,
+              "reward_mode": "pnl",
+              "fixed_risk_usd": 0,
+              "risk_mode": "dynamic",
+              "allow_ema_exit": true,
+              "allow_agent_sl_mode": false,
+              "sl_mode_defer_threshold": 0.1,
+              "allow_agent_tp_mode": false,
+              "tp_mode_defer_threshold": 0.1,
+              "allow_multi_tp": false,
+              "allow_simplex": true,
+              "tp_breakeven_alpha": 0.5,
+              "peak_trailing_dd_limit": 0,
+              "max_entries_per_session": 0,
+              "open_manipulation_bars": 0,
+              "entry_cooldown_bars": 15,
+              "sl_buffer_pts": 1.0,
+              "block_overnight": true,
+              "eod_risk": {
+                "max_loss_usd": 1100.0,
+                "respect_planned_risk": true,
+                "planned_risk_mult": 1.1,
+                "max_age_hours": 8,
+                "stale_bars": 60,
+                "progress_threshold_atr": 0.25,
+                "breakeven_trigger_r": 1.0,
+                "breakeven_buffer_pts": 2.0
+              },
+              "agent_direction_control": false,
+              "direction_override_threshold": 0.0
+            },
+            "ppo": {
+              "actor_arch": "shared",
+              "policy_distribution": "clamped_diagonal_gaussian",
+              "semantic_head_width": 64,
+              "n_steps": 2048,
+              "batch_size": 512,
+              "n_epochs": 15,
+              "rollout_buffer_on_device": true,
+              "learning_rate": 0.0003,
+              "gamma": 0.99,
+              "gae_lambda": 0.95,
+              "clip_range": 0.2,
+              "ent_coef": 0.01,
+              "ent_coef_continuous": 0.001,
+              "log_std_init": 0.0,
+              "log_std_min": -0.7,
+              "log_std_max": 0.0,
+              "mode_prior_coef": 0.001,
+              "checkpoint_freq": 1000000,
+              "total_timesteps": 100000
+            },
+            "constrained_rl": {
+              "enabled": false,
+              "episode_cost_budget": 1.0,
+              "dual_learning_rate": 0.1,
+              "lambda_initial": 0.0,
+              "lambda_max": 100.0
+            },
+            "quality_execution": {
+              "requested_n_envs": null,
+              "effective_n_envs": null,
+              "exact_n_envs": false
+            },
+            "sac": {
+              "learning_rate": 0.0003,
+              "buffer_size": 100000,
+              "batch_size": 512,
+              "tau": 0.005,
+              "gamma": 0.99,
+              "train_freq": 1,
+              "gradient_steps": 1,
+              "ent_coef": 0.01,
+              "learning_starts": 500
+            },
+            "encoder": {
+              "windows": {
+                "m5": 24,
+                "m15": 16,
+                "h1": 12
+              }
+            },
+            "agent": {
+              "type": "ppo",
+              "arch": "tcn",
+              "lite_tcn": {
+                "channels": 96,
+                "dilations": [
+                  1,
+                  4,
+                  10
+                ],
+                "kernel_size": 3,
+                "dropout": 0.1,
+                "latent_dim": 128
+              },
+              "head_arch": {
+                "tcn": [
+                  256,
+                  128
+                ],
+                "lite_tcn": [
+                  128,
+                  64
+                ],
+                "gru": [
+                  256,
+                  128
+                ],
+                "transformer": [
+                  256,
+                  128
+                ],
+                "mtf": [
+                  256,
+                  128
+                ]
+              },
+              "use_narrative": false
+            },
+            "device": "auto",
+            "quality_diagnostics": {
+              "enabled": false
+            },
+            "output": {
+              "report_profile": "full",
+              "dir": "outputs",
+              "save_plots": true,
+              "save_html": false,
+              "save_csv": true,
+              "max_order_charts": 0,
+              "dpi": 150,
+              "candle_tf": "15min",
+              "price_plot_max_points": 3000,
+              "trade_chart_show_mae_mfe": true,
+              "trade_chart_show_sl_tp": true
+            },
+            "backtest": {
+              "validation": {
+                "max_loss_per_trade_usd": 100.0,
+                "take_profit_per_trade_usd": null,
+                "include_costs_in_trade_risk": true,
+                "validation_mode": false
+              }
+            },
+            "risk": {
+              "min_lot": 0.01,
+              "max_lot": 100.0,
+              "default_risk_frac": 0.01,
+              "sl_mode": "fixed",
+              "tp_mode": "fixed",
+              "tp_reference": "structural",
+              "min_sl_atr_mult": 0.5,
+              "min_sl_points": 10.0,
+              "swing_buffer_pts": 1.0,
+              "rr_ratio_default": 2.0
+            },
+            "training": {
+              "mode": "full",
+              "episode_mode": "full_split",
+              "use_m1_only": false,
+              "primary_only": false,
+              "max_days": null,
+              "total_timesteps_mvp": 8192,
+              "early_abort": {
+                "enabled": true,
+                "min_timesteps": 5000000,
+                "window": 4,
+                "stop_on_nonfinite": true,
+                "stop_on_no_trades": false,
+                "stop_on_equity_gate": false
+              },
+              "dashboard": {
+                "enabled": true,
+                "eval_every": 100000,
+                "eval_bars": 20000,
+                "log_every": 100000,
+                "diversity": {
+                  "sl_top_share": 0.8,
+                  "tp_top_share": 0.8,
+                  "rr_p75": 1.25,
+                  "ema_lo": 0.02,
+                  "ema_hi": 0.98,
+                  "action_std": 0.05,
+                  "min_prior_trades": 50,
+                  "min_prior_sl_choices": 30,
+                  "min_prior_tp_choices": 30,
+                  "min_prior_direction_choices": 30,
+                  "rank_edge": 0.05,
+                  "direction_min_share": 0.9,
+                  "min_prior_risk_steps": 1000,
+                  "risk_u_max": 0.05
+                }
+              },
+              "debug": {
+                "enabled": true,
+                "ring_size": 5,
+                "ev_floor": 0.2,
+                "ev_windows": 5,
+                "std_min": 0.497,
+                "std_max": 1.0,
+                "part_vs_pnl": 10.0,
+                "corr_floor": 0.3,
+                "corr_windows": 3
+              }
+            },
+            "auxiliary": {
+              "aux_weight": 0.0,
+              "prediction_horizon": 5,
+              "lr": 0.0001,
+              "grad_steps": 4
+            },
+            "strategy": {
+              "name": "po3_ifvg",
+              "manipulation_filter": "against",
+              "session": {
+                "timezone": "Etc/GMT-3"
+              },
+              "liquidity": {
+                "swing_period": 5,
+                "require_reclaim": true,
+                "max_age_bars": 120
+              },
+              "po3": {
+                "require_manipulation_sweep": true,
+                "require_distribution_confirmation": true
+              },
+              "ifvg": {
+                "enabled": true,
+                "max_age_bars": 50,
+                "require_price_retest": false,
+                "close_through_threshold": 0.0,
+                "require_opposing_fvg": true
+              },
+              "risk": {
+                "sl_mode": "exact",
+                "tp_mode": "fixed",
+                "tp_reference": "structural",
+                "sl_buffer_pts": 1.0,
+                "risk_frac_range": [
+                  0.0,
+                  0.01
+                ],
+                "rr_range": [
+                  1.5,
+                  5.0
+                ]
+              },
+              "tp": {
+                "mode": "agent",
+                "allowed_targets": [
+                  "rr",
+                  "buyside_liquidity",
+                  "sellside_liquidity",
+                  "previous_day_high_low"
+                ],
+                "invalid_target_policy": "rr_fallback"
+              },
+              "entry": {
+                "mode": "confirmed_first_eligible",
+                "enforce_gate": true
+              },
+              "reward": {
+                "entry_bonus": 0.01,
+                "manipulation_penalty": 0.02,
+                "invalid_ifvg_penalty": 0.01,
+                "distribution_bonus": 0.005,
+                "strategy_weight": 0.01,
+                "sweep_penalty": 0.02
+              },
+              "batch_windows": 256,
+              "variant_id": "po3_confirmed_ifvg_htf_mtf_v1"
+            }
+          }
+        },
+        "cache_path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/data/prebuilt_feature_cache/idea1_po3_ifvg.parquet",
+        "cache_path_exists": true,
+        "sidecar_exists": true,
+        "requires_htf_sweep_audit": true,
+        "htf_sweep_audit_exists": true,
+        "cache_config_signature": "{\"cache_dir\": \"cache/us100_us500_20241230_20261016\", \"m1_files\": {\"US100.cash\": \"US100.cash_M1_202412300105_202610162349.csv\", \"US500.cash\": \"US500.cash_M1_202412300105_202610162349.csv\"}, \"primary\": \"US100.cash\", \"raw_dir\": \"data\", \"secondary\": \"US500.cash\", \"split\": {\"test_start\": \"2026-01-01\", \"train_end\": \"2025-12-31\"}, \"symbols\": [\"US100.cash\", \"US500.cash\"], \"tick_files\": {\"US100.cash\": \"US100.cash_202412300105_202610162349.csv\", \"US500.cash\": \"US500.cash_202412300105_202610162349.csv\"}, \"timeframes\": [\"M1\", \"M5\", \"M10\", \"M15\", \"M30\", \"H1\", \"H4\", \"D1\"], \"tz\": \"Etc/GMT-3\"}"
+      }
+    },
+    {
+      "variant": "ladder_a0_flat_dist",
+      "target": "data/prebuilt_feature_cache/idea2_distribution.parquet",
+      "feature_cache_hash": "5ea6961ec026f8e5",
+      "previous_cache_sha256": "5386f72697868396de9109a32c608dbea1bb2d2d7266d280366fb04a069f8d9a",
+      "previous_sidecar_sha256": "c29890665f11253867bc573416d89ecd217893ab2088c01a91e47de1bb3e14f7",
+      "cache_sha256": "7ab985d043f07d31690dce5a1ff20c482c84da5ed00d27f9e2826d1de173c957",
+      "sidecar_sha256": "1fd96f52ed25f40b4c099477082526914a74c81c28525ccf33d99d7eeb1aebaa",
+      "requires_htf_sweep_audit": true,
+      "htf_sweep_audit_path": "data/prebuilt_feature_cache/idea2_distribution.parquet.htf_sweeps.parquet",
+      "previous_htf_sweep_audit_sha256": "d1ddafa61b57f88271fc364baa0599693cbebbcb30a5fb44b58abd99724d2c26",
+      "htf_sweep_audit_sha256": "56045808eb871a0171c59f466347ba2267a93f14bfd6070bf4fd50e493f8ebc3",
+      "rows": 630787,
+      "columns": 538,
+      "resolved_variant": {
+        "variant": "ladder_a0_flat_dist",
+        "strategy": "distribution",
+        "feature_profile": "full_po3",
+        "base_config": "config/features/full_po3_mtf.yaml",
+        "resolved_overrides": [
+          "features.include_session_ohlc=true",
+          "features.liquidity.enabled=true",
+          "features.po3_state_mtf.enabled=true",
+          "features.ifvg_mtf.enabled=true",
+          "features.include_strategy_state=true",
+          "env.open_manipulation_bars=0",
+          "env.peak_trailing_dd_limit=0",
+          "features.include_pd_context=true",
+          "features.structure.enabled=true",
+          "env.allow_agent_sl_mode=false",
+          "env.strategy_actions=true",
+          "env.reward_mode=pnl",
+          "ppo.total_timesteps=100000",
+          "data.prebuilt_feature_cache=data/prebuilt_feature_cache/idea2_distribution.parquet"
+        ],
+        "strategy_config": "config/3_distribution.yaml",
+        "config_sha256": {
+          "config/3_distribution.yaml": "92a70f9f046d7fd8c20574f0e8d73858e6aa6b1f5f4fb13688dff8c76186afc3",
+          "config/experiments.yaml": "1b9510d5bd5fab71dd14b2285d15560c4a5ff6a24646d8a6cee5868c66d39b03",
+          "config/features/full_po3_mtf.yaml": "61d597590f6da34531bdb0e4078173cc820ad51e909237ad8aaf813089125178",
+          "config/features/pd_context.yaml": "e0587bc6b6ed0b2a7dc215ecb4d6c1a1c7c4f1187ed2a11851b8972760ec0e20",
+          "quant_rl/config/default.yaml": "7bd7acd8b9aa8bf7f3894fcc8781a7cbe89761ad8b2335fa91af630f5307b50d"
+        },
+        "effective_config": {
+          "sha256": "6dd5ba089e316240c327fec4e506b6315c43765e3cd27fa9b9a3ae4171a4bc88",
+          "value": {
+            "data": {
+              "raw_dir": "data",
+              "cache_dir": "cache/us100_us500_20241230_20261016",
+              "prebuilt_feature_cache": "data/prebuilt_feature_cache/idea2_distribution.parquet",
+              "tz": "Etc/GMT-3",
+              "symbols": [
+                "US100.cash",
+                "US500.cash"
+              ],
+              "primary": "US100.cash",
+              "secondary": "US500.cash",
+              "timeframes": [
+                "M1",
+                "M5",
+                "M10",
+                "M15",
+                "M30",
+                "H1",
+                "H4",
+                "D1"
+              ],
+              "split": {
+                "train_end": "2025-12-31",
+                "test_start": "2026-01-01"
+              },
+              "m1_files": {
+                "US100.cash": "US100.cash_M1_202412300105_202610162349.csv",
+                "US500.cash": "US500.cash_M1_202412300105_202610162349.csv"
+              },
+              "tick_files": {
+                "US100.cash": "US100.cash_202412300105_202610162349.csv",
+                "US500.cash": "US500.cash_202412300105_202610162349.csv"
+              }
+            },
+            "session": {
+              "tz": "Etc/GMT-3",
+              "start": "16:30",
+              "end": "23:00",
+              "dst_flag": true
+            },
+            "account": {
+              "initial_balance": 100000.0,
+              "currency": "USD",
+              "leverage": 50,
+              "margin_pct": 0.02,
+              "contract_size": 1.0
+            },
+            "evaluation": {
+              "periods_per_year": 98280,
+              "annualization_convention": "252 sessions/year x 390 NY-session M1 bars/session"
+            },
+            "costs": {
+              "spread_us100": 0.6,
+              "spread_us500": 1.53,
+              "slippage_points": 5.0,
+              "commission_per_lot": 0.0,
+              "point_size": 0.01,
+              "use_tick_execution": true
+            },
+            "execution": {
+              "fill_delay_ms": 0,
+              "randomized_fill_latency_ms": 0.0,
+              "max_tick_quote_wait_ms": 60000
+            },
+            "ftmo": {
+              "daily_loss_limit": 5000.0,
+              "soft_daily_loss_limit": 2000.0,
+              "soft_max_loss_limit": 5000.0,
+              "max_loss_limit": 10000.0,
+              "trailing_dd_limit": 0.07,
+              "soft_trailing_dd_limit": 0.0,
+              "risk_per_trade_limit": 1000.0,
+              "profit_target": 10000.0
+            },
+            "live_risk_overrides": {
+              "risk_per_symbol": 0.01,
+              "max_total_risk": 0.02,
+              "default_lot_size": 0.1,
+              "stop_loss_pips": 50.0,
+              "interval_minutes": 1
+            },
+            "features": {
+              "window": 60,
+              "ema_periods": [
+                9,
+                13,
+                21,
+                50,
+                200
+              ],
+              "rsi_period": 14,
+              "macd_fast": 12,
+              "macd_slow": 26,
+              "macd_signal": 9,
+              "atr_period": 14,
+              "adx_period": 14,
+              "bb_period": 20,
+              "bb_std": 2.0,
+              "stoch_k": 14,
+              "stoch_d": 3,
+              "vwap_session": true,
+              "return_horizons": [
+                1,
+                5,
+                15,
+                30
+              ],
+              "realized_vol_period": 20,
+              "smt_swing_period": 5,
+              "smt_corr_window": 20,
+              "zscore_window": 252,
+              "htf_timeframes": [
+                "M5",
+                "M15",
+                "H1"
+              ],
+              "include_po3": true,
+              "include_fvg_ifvg": true,
+              "include_po3_full": true,
+              "include_strategy_state": true,
+              "po3_reference_mode": "htf_confirmed",
+              "po3_reference_timeframes": [
+                "M5",
+                "M15",
+                "H1"
+              ],
+              "po3_phase_mode": "reclaim_then_ifvg",
+              "include_pd_context": true,
+              "po3_htf": "M15",
+              "po3_ltf": "M5",
+              "smt": {
+                "enabled": false,
+                "timeframes": [
+                  "M5",
+                  "M15",
+                  "H1"
+                ]
+              },
+              "structure": {
+                "enabled": true,
+                "timeframes": [
+                  "M5",
+                  "M15",
+                  "H1"
+                ],
+                "swing_candidate_count": 1,
+                "candidate_price_increment": null
+              },
+              "liquidity": {
+                "enabled": true,
+                "timeframes": [
+                  "M5",
+                  "M15",
+                  "H1"
+                ]
+              },
+              "po3_state_mtf": {
+                "enabled": true,
+                "timeframes": [
+                  "M1",
+                  "M5",
+                  "M15"
+                ]
+              },
+              "ifvg_mtf": {
+                "enabled": true,
+                "timeframes": [
+                  "M5",
+                  "M15",
+                  "H1"
+                ]
+              },
+              "include_session_ohlc": true,
+              "sessions": {
+                "tz": "America/Chicago",
+                "asian": {
+                  "start": "19:00",
+                  "end": "23:00"
+                },
+                "london": {
+                  "start": "02:00",
+                  "end": "05:00"
+                },
+                "ny": {
+                  "start": "08:30",
+                  "end": "15:00"
+                },
+                "week_start": "MON",
+                "quadrant_ranges": [
+                  "yesterday",
+                  "lastweek"
+                ]
+              },
+              "include_previous_session_pd": true
+            },
+            "env": {
+              "obs_window": 60,
+              "observation_schema_version": "account-state-v1",
+              "observation_age_scale_bars": 60,
+              "data_source": "frames",
+              "n_envs": 8,
+              "vector_backend": "subproc",
+              "vector_shards": 0,
+              "action_type": "discrete",
+              "max_episode_steps": null,
+              "reward_dsr_eta": 0.01,
+              "strategy_actions": true,
+              "entry_state_machine": false,
+              "candidate_max_age_bars": 5,
+              "arm_requires_retest": false,
+              "entry_state_observation": true,
+              "strict_research_eligibility": false,
+              "entry_intensity_threshold": 0.0,
+              "reward_mode": "pnl",
+              "fixed_risk_usd": 0,
+              "risk_mode": "dynamic",
+              "allow_ema_exit": true,
+              "allow_agent_sl_mode": false,
+              "sl_mode_defer_threshold": 0.1,
+              "allow_agent_tp_mode": false,
+              "tp_mode_defer_threshold": 0.1,
+              "allow_multi_tp": false,
+              "allow_simplex": true,
+              "tp_breakeven_alpha": 0.5,
+              "peak_trailing_dd_limit": 0,
+              "max_entries_per_session": 0,
+              "open_manipulation_bars": 0,
+              "entry_cooldown_bars": 15,
+              "sl_buffer_pts": 1.0,
+              "block_overnight": true,
+              "eod_risk": {
+                "max_loss_usd": 1100.0,
+                "respect_planned_risk": true,
+                "planned_risk_mult": 1.1,
+                "max_age_hours": 8,
+                "stale_bars": 60,
+                "progress_threshold_atr": 0.25,
+                "breakeven_trigger_r": 1.0,
+                "breakeven_buffer_pts": 2.0
+              },
+              "agent_direction_control": false,
+              "direction_override_threshold": 0.0
+            },
+            "ppo": {
+              "actor_arch": "shared",
+              "policy_distribution": "clamped_diagonal_gaussian",
+              "semantic_head_width": 64,
+              "n_steps": 2048,
+              "batch_size": 512,
+              "n_epochs": 15,
+              "rollout_buffer_on_device": true,
+              "learning_rate": 0.0003,
+              "gamma": 0.99,
+              "gae_lambda": 0.95,
+              "clip_range": 0.2,
+              "ent_coef": 0.01,
+              "ent_coef_continuous": 0.001,
+              "log_std_init": 0.0,
+              "log_std_min": -0.7,
+              "log_std_max": 0.0,
+              "mode_prior_coef": 0.001,
+              "checkpoint_freq": 1000000,
+              "total_timesteps": 100000
+            },
+            "constrained_rl": {
+              "enabled": false,
+              "episode_cost_budget": 1.0,
+              "dual_learning_rate": 0.1,
+              "lambda_initial": 0.0,
+              "lambda_max": 100.0
+            },
+            "quality_execution": {
+              "requested_n_envs": null,
+              "effective_n_envs": null,
+              "exact_n_envs": false
+            },
+            "sac": {
+              "learning_rate": 0.0003,
+              "buffer_size": 100000,
+              "batch_size": 512,
+              "tau": 0.005,
+              "gamma": 0.99,
+              "train_freq": 1,
+              "gradient_steps": 1,
+              "ent_coef": 0.01,
+              "learning_starts": 500
+            },
+            "encoder": {
+              "windows": {
+                "m5": 24,
+                "m15": 16,
+                "h1": 12
+              }
+            },
+            "agent": {
+              "type": "ppo",
+              "arch": "tcn",
+              "lite_tcn": {
+                "channels": 96,
+                "dilations": [
+                  1,
+                  4,
+                  10
+                ],
+                "kernel_size": 3,
+                "dropout": 0.1,
+                "latent_dim": 128
+              },
+              "head_arch": {
+                "tcn": [
+                  256,
+                  128
+                ],
+                "lite_tcn": [
+                  128,
+                  64
+                ],
+                "gru": [
+                  256,
+                  128
+                ],
+                "transformer": [
+                  256,
+                  128
+                ],
+                "mtf": [
+                  256,
+                  128
+                ]
+              },
+              "use_narrative": false
+            },
+            "device": "auto",
+            "quality_diagnostics": {
+              "enabled": false
+            },
+            "output": {
+              "report_profile": "full",
+              "dir": "outputs",
+              "save_plots": true,
+              "save_html": false,
+              "save_csv": true,
+              "max_order_charts": 0,
+              "dpi": 150,
+              "candle_tf": "15min",
+              "price_plot_max_points": 3000,
+              "trade_chart_show_mae_mfe": true,
+              "trade_chart_show_sl_tp": true
+            },
+            "backtest": {
+              "validation": {
+                "max_loss_per_trade_usd": 100.0,
+                "take_profit_per_trade_usd": null,
+                "include_costs_in_trade_risk": true,
+                "validation_mode": false
+              }
+            },
+            "risk": {
+              "min_lot": 0.01,
+              "max_lot": 100.0,
+              "default_risk_frac": 0.01,
+              "sl_mode": "fixed",
+              "tp_mode": "fixed",
+              "tp_reference": "structural",
+              "min_sl_atr_mult": 0.5,
+              "min_sl_points": 10.0,
+              "swing_buffer_pts": 1.0,
+              "rr_ratio_default": 2.0
+            },
+            "training": {
+              "mode": "full",
+              "episode_mode": "full_split",
+              "use_m1_only": false,
+              "primary_only": false,
+              "max_days": null,
+              "total_timesteps_mvp": 8192,
+              "early_abort": {
+                "enabled": true,
+                "min_timesteps": 5000000,
+                "window": 4,
+                "stop_on_nonfinite": true,
+                "stop_on_no_trades": false,
+                "stop_on_equity_gate": false
+              },
+              "dashboard": {
+                "enabled": true,
+                "eval_every": 100000,
+                "eval_bars": 20000,
+                "log_every": 100000,
+                "diversity": {
+                  "sl_top_share": 0.8,
+                  "tp_top_share": 0.8,
+                  "rr_p75": 1.25,
+                  "ema_lo": 0.02,
+                  "ema_hi": 0.98,
+                  "action_std": 0.05,
+                  "min_prior_trades": 50,
+                  "min_prior_sl_choices": 30,
+                  "min_prior_tp_choices": 30,
+                  "min_prior_direction_choices": 30,
+                  "rank_edge": 0.05,
+                  "direction_min_share": 0.9,
+                  "min_prior_risk_steps": 1000,
+                  "risk_u_max": 0.05
+                }
+              },
+              "debug": {
+                "enabled": true,
+                "ring_size": 5,
+                "ev_floor": 0.2,
+                "ev_windows": 5,
+                "std_min": 0.497,
+                "std_max": 1.0,
+                "part_vs_pnl": 10.0,
+                "corr_floor": 0.3,
+                "corr_windows": 3
+              }
+            },
+            "auxiliary": {
+              "aux_weight": 0.0,
+              "prediction_horizon": 5,
+              "lr": 0.0001,
+              "grad_steps": 4
+            },
+            "strategy": {
+              "name": "distribution",
+              "manipulation_filter": "against",
+              "session": {
+                "timezone": "Etc/GMT-3"
+              },
+              "liquidity": {
+                "swing_period": 5,
+                "require_reclaim": true,
+                "max_age_bars": 120
+              },
+              "po3": {
+                "require_manipulation_sweep": true,
+                "require_distribution_confirmation": true
+              },
+              "ifvg": {
+                "enabled": true,
+                "max_age_bars": 50,
+                "require_price_retest": true,
+                "close_through_threshold": 0.0,
+                "require_opposing_fvg": true
+              },
+              "risk": {
+                "sl_mode": "exact",
+                "tp_mode": "fixed",
+                "tp_reference": "structural",
+                "sl_buffer_pts": 1.0,
+                "risk_frac_range": [
+                  0.0,
+                  0.01
+                ],
+                "rr_range": [
+                  1.5,
+                  5.0
+                ]
+              },
+              "tp": {
+                "mode": "agent",
+                "allowed_targets": [
+                  "rr",
+                  "buyside_liquidity",
+                  "sellside_liquidity",
+                  "previous_day_high_low"
+                ],
+                "invalid_target_policy": "rr_fallback"
+              },
+              "entry": {
+                "mode": "confirmed_first_eligible",
+                "enforce_gate": true,
+                "previous_session_pd_gate": true
+              },
+              "reward": {
+                "entry_bonus": 0.01,
+                "manipulation_penalty": 0.02,
+                "invalid_ifvg_penalty": 0.01,
+                "distribution_bonus": 0.005,
+                "strategy_weight": 0.01,
+                "sweep_penalty": 0.02
+              },
+              "batch_windows": 256,
+              "variant_id": "distribution_prev_session_pd_mtf_v1"
+            }
+          }
+        },
+        "cache_path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/data/prebuilt_feature_cache/idea2_distribution.parquet",
+        "cache_path_exists": true,
+        "sidecar_exists": true,
+        "requires_htf_sweep_audit": true,
+        "htf_sweep_audit_exists": true,
+        "cache_config_signature": "{\"cache_dir\": \"cache/us100_us500_20241230_20261016\", \"m1_files\": {\"US100.cash\": \"US100.cash_M1_202412300105_202610162349.csv\", \"US500.cash\": \"US500.cash_M1_202412300105_202610162349.csv\"}, \"primary\": \"US100.cash\", \"raw_dir\": \"data\", \"secondary\": \"US500.cash\", \"split\": {\"test_start\": \"2026-01-01\", \"train_end\": \"2025-12-31\"}, \"symbols\": [\"US100.cash\", \"US500.cash\"], \"tick_files\": {\"US100.cash\": \"US100.cash_202412300105_202610162349.csv\", \"US500.cash\": \"US500.cash_202412300105_202610162349.csv\"}, \"timeframes\": [\"M1\", \"M5\", \"M10\", \"M15\", \"M30\", \"H1\", \"H4\", \"D1\"], \"tz\": \"Etc/GMT-3\"}"
+      }
+    }
+  ]
+}

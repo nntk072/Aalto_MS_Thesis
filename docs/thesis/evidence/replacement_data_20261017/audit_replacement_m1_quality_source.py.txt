@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""Inventory integrity of the replacement US100/US500 M1 exports.
+
+This is a bounded source-data audit. It does not infer a trading calendar,
+broker identity, data rights, or strategy validity from the files.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import platform
+import subprocess
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+ROOT = Path("/scratch/work/nguyenl37/Aalto_MS_Thesis")
+INPUTS = {
+    "US100.cash": ROOT / "data/US100.cash_M1_202412300105_202610162349.csv",
+    "US500.cash": ROOT / "data/US500.cash_M1_202412300105_202610162349.csv",
+}
+TRAIN_END = pd.Timestamp("2025-12-31")
+TEST_START = pd.Timestamp("2026-01-01")
+
+
+def file_hash(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def inventory(symbol: str, path: Path) -> dict[str, Any]:
+    frame = pd.read_csv(path, sep="\t")
+    timestamps = pd.to_datetime(
+        frame["<DATE>"].astype(str) + " " + frame["<TIME>"].astype(str),
+        format="%Y.%m.%d %H:%M:%S",
+        errors="coerce",
+    )
+    value_columns = ("<OPEN>", "<HIGH>", "<LOW>", "<CLOSE>", "<TICKVOL>", "<VOL>", "<SPREAD>")
+    values = frame.loc[:, value_columns].apply(pd.to_numeric, errors="coerce")
+    finite = np.isfinite(values.to_numpy(dtype=np.float64)).all(axis=1)
+    open_price, high, low, close = (values[name] for name in ("<OPEN>", "<HIGH>", "<LOW>", "<CLOSE>"))
+    ohlc_order = (
+        (high >= low)
+        & (high >= open_price)
+        & (high >= close)
+        & (low <= open_price)
+        & (low <= close)
+    )
+    gaps = timestamps.diff().dt.total_seconds().dropna()
+    dates = timestamps.dt.normalize()
+    valid_dates = dates.notna()
+    train = valid_dates & (dates <= TRAIN_END)
+    test = valid_dates & (dates >= TEST_START)
+    return {
+        "symbol": symbol,
+        "path": str(path.relative_to(ROOT)),
+        "sha256": file_hash(path),
+        "size_bytes": path.stat().st_size,
+        "rows": len(frame),
+        "first_timestamp_broker_clock_naive": timestamps.iloc[0].isoformat() if len(frame) else None,
+        "last_timestamp_broker_clock_naive": timestamps.iloc[-1].isoformat() if len(frame) else None,
+        "unparseable_timestamps": int(timestamps.isna().sum()),
+        "duplicate_timestamps": int(timestamps.duplicated().sum()),
+        "out_of_order_adjacent_timestamps": int((gaps < 0).sum()),
+        "training_rows_through_2025_12_31": int(train.sum()),
+        "test_rows_2026_01_01_through_available_end": int(test.sum()),
+        "rows_with_nonfinite_or_missing_numeric_values": int((~finite).sum()),
+        "invalid_ohlc_order_rows": int((finite & ~ohlc_order.to_numpy()).sum()),
+        "negative_tick_volume_rows": int((values["<TICKVOL>"] < 0).sum()),
+        "negative_spread_rows": int((values["<SPREAD>"] < 0).sum()),
+        "zero_real_volume_rows": int((values["<VOL>"] == 0).sum()),
+        "adjacent_gaps_seconds": {
+            "greater_than_60": int((gaps > 60).sum()),
+            "greater_than_300": int((gaps > 300).sum()),
+            "greater_than_3600": int((gaps > 3600).sum()),
+            "largest": sorted((int(value) for value in gaps if pd.notna(value)), reverse=True)[:10],
+        },
+    }
+
+
+def main() -> None:
+    result = {
+        "schema": "aalto.replacement_m1_quality_inventory.v1",
+        "created_at_utc": datetime.now(UTC).isoformat(),
+        "repository_head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+        "runtime": {"python": platform.python_version(), "pandas": pd.__version__, "numpy": np.__version__},
+        "split": {"train_end_inclusive": "2025-12-31", "test_start_inclusive": "2026-01-01", "requested_data_end": "2026-10-16"},
+        "timestamp_interpretation": "Naive timestamps are reported as stored broker-clock strings. The broker timezone/DST schedule and authoritative market calendar are not independently established.",
+        "symbols": {symbol: inventory(symbol, path) for symbol, path in INPUTS.items()},
+        "limitations": [
+            "Gap counts include market closures and are not classified as missing bars without an authoritative calendar.",
+            "CSV integrity does not establish vendor identity, data-use/publication rights, or executable-market authenticity.",
+            "Zero VOL is reported descriptively; MT5 CFD tick volume is not real traded volume.",
+            "This is not feature causality, policy performance, or confirmatory holdout evidence.",
+        ],
+    }
+    out = ROOT / "outputs/data_refresh_20261017/replacement_m1_quality.json"
+    out.write_text(json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
+    print(json.dumps({symbol: {key: value for key, value in stats.items() if key in ("rows", "first_timestamp_broker_clock_naive", "last_timestamp_broker_clock_naive", "unparseable_timestamps", "duplicate_timestamps", "rows_with_nonfinite_or_missing_numeric_values", "invalid_ohlc_order_rows", "training_rows_through_2025_12_31", "test_rows_2026_01_01_through_available_end")} for symbol, stats in result["symbols"].items()}, indent=2))
+    print(f"report={out}")
+
+
+if __name__ == "__main__":
+    main()

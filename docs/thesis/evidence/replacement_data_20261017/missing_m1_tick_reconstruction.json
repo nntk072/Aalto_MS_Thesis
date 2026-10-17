@@ -1,0 +1,1142 @@
+{
+  "US100.cash": {
+    "adjacent_source_bar_tick_parity": [
+      {
+        "bar_timestamp": "2025-12-02 16:30:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 25428.05078125,
+          "high": 25450.650390625,
+          "low": 25423.94921875,
+          "open": 25442.25
+        },
+        "source_m1_ohlc": {
+          "close": 25428.05,
+          "high": 25450.65,
+          "low": 25423.95,
+          "open": 25442.25
+        },
+        "tick_count": 301
+      },
+      {
+        "bar_timestamp": "2025-12-02 16:32:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 25445.94921875,
+          "high": 25457.44921875,
+          "low": 25435.94921875,
+          "open": 25437.650390625
+        },
+        "source_m1_ohlc": {
+          "close": 25445.95,
+          "high": 25457.45,
+          "low": 25435.95,
+          "open": 25437.65
+        },
+        "tick_count": 343
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:28:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 25552.05078125,
+          "high": 25567.349609375,
+          "low": 25550.44921875,
+          "open": 25565.44921875
+        },
+        "source_m1_ohlc": {
+          "close": 25552.05,
+          "high": 25567.35,
+          "low": 25550.45,
+          "open": 25565.45
+        },
+        "tick_count": 270
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:31:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 25514.55078125,
+          "high": 25517.44921875,
+          "low": 25514.150390625,
+          "open": 25515.150390625
+        },
+        "source_m1_ohlc": {
+          "close": 25514.55,
+          "high": 25517.45,
+          "low": 25514.15,
+          "open": 25515.15
+        },
+        "tick_count": 16
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:34:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 25504.650390625,
+          "high": 25507.44921875,
+          "low": 25501.650390625,
+          "open": 25503.44921875
+        },
+        "source_m1_ohlc": {
+          "close": 25504.65,
+          "high": 25507.45,
+          "low": 25501.65,
+          "open": 25503.45
+        },
+        "tick_count": 76
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:36:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 25503.150390625,
+          "high": 25510.150390625,
+          "low": 25497.44921875,
+          "open": 25510.150390625
+        },
+        "source_m1_ohlc": {
+          "close": 25503.15,
+          "high": 25510.15,
+          "low": 25497.45,
+          "open": 25510.15
+        },
+        "tick_count": 239
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:40:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 25541.150390625,
+          "high": 25542.650390625,
+          "low": 25528.849609375,
+          "open": 25530.44921875
+        },
+        "source_m1_ohlc": {
+          "close": 25541.15,
+          "high": 25542.65,
+          "low": 25528.85,
+          "open": 25530.45
+        },
+        "tick_count": 205
+      },
+      {
+        "bar_timestamp": "2025-12-04 19:18:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 25576.55078125,
+          "high": 25582.849609375,
+          "low": 25575.349609375,
+          "open": 25580.44921875
+        },
+        "source_m1_ohlc": {
+          "close": 25576.55,
+          "high": 25582.85,
+          "low": 25575.35,
+          "open": 25580.45
+        },
+        "tick_count": 256
+      },
+      {
+        "bar_timestamp": "2025-12-04 19:22:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 25564.55078125,
+          "high": 25565.55078125,
+          "low": 25564.349609375,
+          "open": 25565.349609375
+        },
+        "source_m1_ohlc": {
+          "close": 25564.55,
+          "high": 25565.55,
+          "low": 25564.35,
+          "open": 25565.35
+        },
+        "tick_count": 23
+      }
+    ],
+    "all_adjacent_sample_bars_match_bid_tick_ohlc_at_cent_precision": true,
+    "all_missing_minutes_have_validated_ticks": false,
+    "missing_train_ny_minute_bars": [
+      {
+        "bar_timestamp": "2025-12-02 16:31:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 25438.650390625,
+          "bid": 25437.650390625,
+          "time_utc": "2025-12-02 13:32:12.064000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 25429.05078125,
+          "bid": 25428.05078125,
+          "time_utc": "2025-12-02 13:30:42.546000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:29:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 25516.150390625,
+          "bid": 25515.150390625,
+          "time_utc": "2025-12-02 14:31:32.439000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 25553.05078125,
+          "bid": 25552.05078125,
+          "time_utc": "2025-12-02 14:28:49.476000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:30:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 25516.150390625,
+          "bid": 25515.150390625,
+          "time_utc": "2025-12-02 14:31:32.439000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 25553.05078125,
+          "bid": 25552.05078125,
+          "time_utc": "2025-12-02 14:28:49.476000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:32:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 25504.44921875,
+          "bid": 25503.44921875,
+          "time_utc": "2025-12-02 14:34:18.826000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 25515.55078125,
+          "bid": 25514.55078125,
+          "time_utc": "2025-12-02 14:31:34.550000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:33:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 25504.44921875,
+          "bid": 25503.44921875,
+          "time_utc": "2025-12-02 14:34:18.826000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 25515.55078125,
+          "bid": 25514.55078125,
+          "time_utc": "2025-12-02 14:31:34.550000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:35:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 25511.150390625,
+          "bid": 25510.150390625,
+          "time_utc": "2025-12-02 14:36:22.622000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 25505.650390625,
+          "bid": 25504.650390625,
+          "time_utc": "2025-12-02 14:34:29.848000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:37:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": null,
+        "last_quote_before_minute": {
+          "ask": 25504.150390625,
+          "bid": 25503.150390625,
+          "time_utc": "2025-12-02 14:36:57.847000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:38:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 25531.44921875,
+          "bid": 25530.44921875,
+          "time_utc": "2025-12-02 14:40:26.626000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 25504.150390625,
+          "bid": 25503.150390625,
+          "time_utc": "2025-12-02 14:36:57.847000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:39:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 25531.44921875,
+          "bid": 25530.44921875,
+          "time_utc": "2025-12-02 14:40:26.626000+00:00"
+        },
+        "last_quote_before_minute": null,
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-04 19:19:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": null,
+        "last_quote_before_minute": {
+          "ask": 25577.150390625,
+          "bid": 25576.55078125,
+          "time_utc": "2025-12-04 16:18:51.848000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-04 19:20:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 25565.94921875,
+          "bid": 25565.349609375,
+          "time_utc": "2025-12-04 16:22:56.523000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 25577.150390625,
+          "bid": 25576.55078125,
+          "time_utc": "2025-12-04 16:18:51.848000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-04 19:21:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 25565.94921875,
+          "bid": 25565.349609375,
+          "time_utc": "2025-12-04 16:22:56.523000+00:00"
+        },
+        "last_quote_before_minute": null,
+        "tick_count": 0
+      }
+    ]
+  },
+  "US500.cash": {
+    "adjacent_source_bar_tick_parity": [
+      {
+        "bar_timestamp": "2025-02-17 19:16:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6124.7099609375,
+          "high": 6124.7099609375,
+          "low": 6124.7099609375,
+          "open": 6124.7099609375
+        },
+        "source_m1_ohlc": {
+          "close": 6124.71,
+          "high": 6124.71,
+          "low": 6124.71,
+          "open": 6124.71
+        },
+        "tick_count": 1
+      },
+      {
+        "bar_timestamp": "2025-02-17 19:18:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6124.7099609375,
+          "high": 6124.7099609375,
+          "low": 6124.7099609375,
+          "open": 6124.7099609375
+        },
+        "source_m1_ohlc": {
+          "close": 6124.71,
+          "high": 6124.71,
+          "low": 6124.71,
+          "open": 6124.71
+        },
+        "tick_count": 1
+      },
+      {
+        "bar_timestamp": "2025-02-17 19:37:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6126.7099609375,
+          "high": 6126.7099609375,
+          "low": 6126.7099609375,
+          "open": 6126.7099609375
+        },
+        "source_m1_ohlc": {
+          "close": 6126.71,
+          "high": 6126.71,
+          "low": 6126.71,
+          "open": 6126.71
+        },
+        "tick_count": 1
+      },
+      {
+        "bar_timestamp": "2025-02-17 19:39:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6126.7099609375,
+          "high": 6126.7099609375,
+          "low": 6126.7099609375,
+          "open": 6126.7099609375
+        },
+        "source_m1_ohlc": {
+          "close": 6126.71,
+          "high": 6126.71,
+          "low": 6126.71,
+          "open": 6126.71
+        },
+        "tick_count": 1
+      },
+      {
+        "bar_timestamp": "2025-02-17 19:46:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6126.2099609375,
+          "high": 6126.2099609375,
+          "low": 6125.7099609375,
+          "open": 6126.009765625
+        },
+        "source_m1_ohlc": {
+          "close": 6126.21,
+          "high": 6126.21,
+          "low": 6125.71,
+          "open": 6126.01
+        },
+        "tick_count": 4
+      },
+      {
+        "bar_timestamp": "2025-02-17 19:48:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6126.509765625,
+          "high": 6126.7099609375,
+          "low": 6126.2099609375,
+          "open": 6126.509765625
+        },
+        "source_m1_ohlc": {
+          "close": 6126.51,
+          "high": 6126.71,
+          "low": 6126.21,
+          "open": 6126.51
+        },
+        "tick_count": 6
+      },
+      {
+        "bar_timestamp": "2025-09-01 17:38:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6468.60986328125,
+          "high": 6468.60986328125,
+          "low": 6468.60986328125,
+          "open": 6468.60986328125
+        },
+        "source_m1_ohlc": {
+          "close": 6468.61,
+          "high": 6468.61,
+          "low": 6468.61,
+          "open": 6468.61
+        },
+        "tick_count": 1
+      },
+      {
+        "bar_timestamp": "2025-09-01 17:40:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6468.41015625,
+          "high": 6468.60986328125,
+          "low": 6468.41015625,
+          "open": 6468.41015625
+        },
+        "source_m1_ohlc": {
+          "close": 6468.41,
+          "high": 6468.61,
+          "low": 6468.41,
+          "open": 6468.41
+        },
+        "tick_count": 7
+      },
+      {
+        "bar_timestamp": "2025-09-01 18:41:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6472.10986328125,
+          "high": 6472.10986328125,
+          "low": 6471.91015625,
+          "open": 6472.10986328125
+        },
+        "source_m1_ohlc": {
+          "close": 6472.11,
+          "high": 6472.11,
+          "low": 6471.91,
+          "open": 6472.11
+        },
+        "tick_count": 7
+      },
+      {
+        "bar_timestamp": "2025-09-01 18:43:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6472.41015625,
+          "high": 6472.60986328125,
+          "low": 6472.10986328125,
+          "open": 6472.10986328125
+        },
+        "source_m1_ohlc": {
+          "close": 6472.41,
+          "high": 6472.61,
+          "low": 6472.11,
+          "open": 6472.11
+        },
+        "tick_count": 4
+      },
+      {
+        "bar_timestamp": "2025-09-01 19:20:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6467.91015625,
+          "high": 6467.91015625,
+          "low": 6467.60986328125,
+          "open": 6467.81005859375
+        },
+        "source_m1_ohlc": {
+          "close": 6467.91,
+          "high": 6467.91,
+          "low": 6467.61,
+          "open": 6467.81
+        },
+        "tick_count": 4
+      },
+      {
+        "bar_timestamp": "2025-09-01 19:22:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6468.10986328125,
+          "high": 6468.10986328125,
+          "low": 6468.10986328125,
+          "open": 6468.10986328125
+        },
+        "source_m1_ohlc": {
+          "close": 6468.11,
+          "high": 6468.11,
+          "low": 6468.11,
+          "open": 6468.11
+        },
+        "tick_count": 1
+      },
+      {
+        "bar_timestamp": "2025-10-27 21:10:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6861.4599609375,
+          "high": 6861.9599609375,
+          "low": 6861.16015625,
+          "open": 6861.9599609375
+        },
+        "source_m1_ohlc": {
+          "close": 6861.46,
+          "high": 6861.96,
+          "low": 6861.16,
+          "open": 6861.96
+        },
+        "tick_count": 9
+      },
+      {
+        "bar_timestamp": "2025-10-27 21:12:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6861.4599609375,
+          "high": 6861.4599609375,
+          "low": 6861.16015625,
+          "open": 6861.16015625
+        },
+        "source_m1_ohlc": {
+          "close": 6861.46,
+          "high": 6861.46,
+          "low": 6861.16,
+          "open": 6861.16
+        },
+        "tick_count": 9
+      },
+      {
+        "bar_timestamp": "2025-11-27 18:43:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6813.759765625,
+          "high": 6814.06005859375,
+          "low": 6813.759765625,
+          "open": 6813.759765625
+        },
+        "source_m1_ohlc": {
+          "close": 6813.76,
+          "high": 6814.06,
+          "low": 6813.76,
+          "open": 6813.76
+        },
+        "tick_count": 7
+      },
+      {
+        "bar_timestamp": "2025-11-27 18:45:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6813.56005859375,
+          "high": 6813.759765625,
+          "low": 6813.259765625,
+          "open": 6813.56005859375
+        },
+        "source_m1_ohlc": {
+          "close": 6813.56,
+          "high": 6813.76,
+          "low": 6813.26,
+          "open": 6813.56
+        },
+        "tick_count": 6
+      },
+      {
+        "bar_timestamp": "2025-11-27 19:27:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6811.759765625,
+          "high": 6812.06005859375,
+          "low": 6811.66015625,
+          "open": 6811.85986328125
+        },
+        "source_m1_ohlc": {
+          "close": 6811.76,
+          "high": 6812.06,
+          "low": 6811.66,
+          "open": 6811.86
+        },
+        "tick_count": 10
+      },
+      {
+        "bar_timestamp": "2025-11-27 19:29:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6812.06005859375,
+          "high": 6812.06005859375,
+          "low": 6811.85986328125,
+          "open": 6812.06005859375
+        },
+        "source_m1_ohlc": {
+          "close": 6812.06,
+          "high": 6812.06,
+          "low": 6811.86,
+          "open": 6812.06
+        },
+        "tick_count": 3
+      },
+      {
+        "bar_timestamp": "2025-11-27 19:35:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6813.259765625,
+          "high": 6813.259765625,
+          "low": 6813.16015625,
+          "open": 6813.16015625
+        },
+        "source_m1_ohlc": {
+          "close": 6813.26,
+          "high": 6813.26,
+          "low": 6813.16,
+          "open": 6813.16
+        },
+        "tick_count": 2
+      },
+      {
+        "bar_timestamp": "2025-11-27 19:37:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6813.259765625,
+          "high": 6813.259765625,
+          "low": 6813.06005859375,
+          "open": 6813.06005859375
+        },
+        "source_m1_ohlc": {
+          "close": 6813.26,
+          "high": 6813.26,
+          "low": 6813.06,
+          "open": 6813.06
+        },
+        "tick_count": 2
+      },
+      {
+        "bar_timestamp": "2025-11-27 19:56:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6812.759765625,
+          "high": 6812.759765625,
+          "low": 6812.66015625,
+          "open": 6812.66015625
+        },
+        "source_m1_ohlc": {
+          "close": 6812.76,
+          "high": 6812.76,
+          "low": 6812.66,
+          "open": 6812.66
+        },
+        "tick_count": 10
+      },
+      {
+        "bar_timestamp": "2025-11-27 19:58:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6812.759765625,
+          "high": 6813.06005859375,
+          "low": 6812.759765625,
+          "open": 6813.06005859375
+        },
+        "source_m1_ohlc": {
+          "close": 6812.76,
+          "high": 6813.06,
+          "low": 6812.76,
+          "open": 6813.06
+        },
+        "tick_count": 6
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:28:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6835.06982421875,
+          "high": 6838.06982421875,
+          "low": 6834.56982421875,
+          "open": 6837.8701171875
+        },
+        "source_m1_ohlc": {
+          "close": 6835.07,
+          "high": 6838.07,
+          "low": 6834.57,
+          "open": 6837.87
+        },
+        "tick_count": 75
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:31:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6828.56982421875,
+          "high": 6828.77001953125,
+          "low": 6828.27001953125,
+          "open": 6828.56982421875
+        },
+        "source_m1_ohlc": {
+          "close": 6828.57,
+          "high": 6828.77,
+          "low": 6828.27,
+          "open": 6828.57
+        },
+        "tick_count": 5
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:34:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6826.56982421875,
+          "high": 6827.06982421875,
+          "low": 6826.06982421875,
+          "open": 6826.27001953125
+        },
+        "source_m1_ohlc": {
+          "close": 6826.57,
+          "high": 6827.07,
+          "low": 6826.07,
+          "open": 6826.27
+        },
+        "tick_count": 27
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:36:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6827.06982421875,
+          "high": 6828.77001953125,
+          "low": 6825.77001953125,
+          "open": 6828.77001953125
+        },
+        "source_m1_ohlc": {
+          "close": 6827.07,
+          "high": 6828.77,
+          "low": 6825.77,
+          "open": 6828.77
+        },
+        "tick_count": 76
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:40:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6834.56982421875,
+          "high": 6834.56982421875,
+          "low": 6832.06982421875,
+          "open": 6832.27001953125
+        },
+        "source_m1_ohlc": {
+          "close": 6834.57,
+          "high": 6834.57,
+          "low": 6832.07,
+          "open": 6832.27
+        },
+        "tick_count": 47
+      },
+      {
+        "bar_timestamp": "2025-12-04 19:18:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6853.47021484375,
+          "high": 6854.47021484375,
+          "low": 6852.97021484375,
+          "open": 6853.77001953125
+        },
+        "source_m1_ohlc": {
+          "close": 6853.47,
+          "high": 6854.47,
+          "low": 6852.97,
+          "open": 6853.77
+        },
+        "tick_count": 21
+      },
+      {
+        "bar_timestamp": "2025-12-04 19:22:00+03:00",
+        "bid_ohlc_match_at_source_cent_precision": true,
+        "bid_tick_ohlc": {
+          "close": 6852.97021484375,
+          "high": 6853.27001953125,
+          "low": 6852.97021484375,
+          "open": 6853.27001953125
+        },
+        "source_m1_ohlc": {
+          "close": 6852.97,
+          "high": 6853.27,
+          "low": 6852.97,
+          "open": 6853.27
+        },
+        "tick_count": 2
+      }
+    ],
+    "all_adjacent_sample_bars_match_bid_tick_ohlc_at_cent_precision": true,
+    "all_missing_minutes_have_validated_ticks": false,
+    "missing_train_ny_minute_bars": [
+      {
+        "bar_timestamp": "2025-02-17 19:17:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6124.990234375,
+          "bid": 6124.7099609375,
+          "time_utc": "2025-02-17 16:18:07.198000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6124.990234375,
+          "bid": 6124.7099609375,
+          "time_utc": "2025-02-17 16:16:35.200000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-02-17 19:38:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6126.990234375,
+          "bid": 6126.7099609375,
+          "time_utc": "2025-02-17 16:39:06.988000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6126.990234375,
+          "bid": 6126.7099609375,
+          "time_utc": "2025-02-17 16:37:49.189000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-02-17 19:47:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6126.7900390625,
+          "bid": 6126.509765625,
+          "time_utc": "2025-02-17 16:48:00.480000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6126.490234375,
+          "bid": 6126.2099609375,
+          "time_utc": "2025-02-17 16:46:53.182000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-09-01 17:39:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6468.68994140625,
+          "bid": 6468.41015625,
+          "time_utc": "2025-09-01 14:40:03.332000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6468.89013671875,
+          "bid": 6468.60986328125,
+          "time_utc": "2025-09-01 14:38:26.732000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-09-01 18:42:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6472.39013671875,
+          "bid": 6472.10986328125,
+          "time_utc": "2025-09-01 15:43:04.813000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6472.39013671875,
+          "bid": 6472.10986328125,
+          "time_utc": "2025-09-01 15:41:38.536000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-09-01 19:21:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6468.39013671875,
+          "bid": 6468.10986328125,
+          "time_utc": "2025-09-01 16:22:59.213000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6468.18994140625,
+          "bid": 6467.91015625,
+          "time_utc": "2025-09-01 16:20:58.213000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-10-27 21:11:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6861.33984375,
+          "bid": 6861.16015625,
+          "time_utc": "2025-10-27 18:12:07.834000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6861.64013671875,
+          "bid": 6861.4599609375,
+          "time_utc": "2025-10-27 18:10:41.353000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-11-27 18:44:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6813.740234375,
+          "bid": 6813.56005859375,
+          "time_utc": "2025-11-27 15:45:01.881000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6813.93994140625,
+          "bid": 6813.759765625,
+          "time_utc": "2025-11-27 15:43:57.182000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-11-27 19:28:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6812.240234375,
+          "bid": 6812.06005859375,
+          "time_utc": "2025-11-27 16:29:20.285000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6811.93994140625,
+          "bid": 6811.759765625,
+          "time_utc": "2025-11-27 16:27:52.520000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-11-27 19:36:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6813.240234375,
+          "bid": 6813.06005859375,
+          "time_utc": "2025-11-27 16:37:33.183000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6813.43994140625,
+          "bid": 6813.259765625,
+          "time_utc": "2025-11-27 16:35:39.802000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-11-27 19:57:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6813.240234375,
+          "bid": 6813.06005859375,
+          "time_utc": "2025-11-27 16:58:00.082000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6812.93994140625,
+          "bid": 6812.759765625,
+          "time_utc": "2025-11-27 16:56:48.181000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:29:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6829.1298828125,
+          "bid": 6828.56982421875,
+          "time_utc": "2025-12-02 14:31:32.439000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6835.52978515625,
+          "bid": 6835.06982421875,
+          "time_utc": "2025-12-02 14:28:49.610000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:30:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6829.1298828125,
+          "bid": 6828.56982421875,
+          "time_utc": "2025-12-02 14:31:32.439000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6835.52978515625,
+          "bid": 6835.06982421875,
+          "time_utc": "2025-12-02 14:28:49.610000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:32:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6826.830078125,
+          "bid": 6826.27001953125,
+          "time_utc": "2025-12-02 14:34:18.826000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6829.1298828125,
+          "bid": 6828.56982421875,
+          "time_utc": "2025-12-02 14:31:34.550000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:33:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6826.830078125,
+          "bid": 6826.27001953125,
+          "time_utc": "2025-12-02 14:34:18.826000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6829.1298828125,
+          "bid": 6828.56982421875,
+          "time_utc": "2025-12-02 14:31:34.550000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:35:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6829.330078125,
+          "bid": 6828.77001953125,
+          "time_utc": "2025-12-02 14:36:22.622000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6827.1298828125,
+          "bid": 6826.56982421875,
+          "time_utc": "2025-12-02 14:34:29.850000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:37:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": null,
+        "last_quote_before_minute": {
+          "ask": 6827.6298828125,
+          "bid": 6827.06982421875,
+          "time_utc": "2025-12-02 14:36:57.049000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:38:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6832.830078125,
+          "bid": 6832.27001953125,
+          "time_utc": "2025-12-02 14:40:26.631000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6827.6298828125,
+          "bid": 6827.06982421875,
+          "time_utc": "2025-12-02 14:36:57.049000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-02 17:39:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6832.830078125,
+          "bid": 6832.27001953125,
+          "time_utc": "2025-12-02 14:40:26.631000+00:00"
+        },
+        "last_quote_before_minute": null,
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-04 19:19:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": null,
+        "last_quote_before_minute": {
+          "ask": 6853.72998046875,
+          "bid": 6853.47021484375,
+          "time_utc": "2025-12-04 16:18:48.748000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-04 19:20:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6853.52978515625,
+          "bid": 6853.27001953125,
+          "time_utc": "2025-12-04 16:22:56.523000+00:00"
+        },
+        "last_quote_before_minute": {
+          "ask": 6853.72998046875,
+          "bid": 6853.47021484375,
+          "time_utc": "2025-12-04 16:18:48.748000+00:00"
+        },
+        "tick_count": 0
+      },
+      {
+        "bar_timestamp": "2025-12-04 19:21:00+03:00",
+        "bid_ohlc_from_validated_ticks": null,
+        "first_quote_after_minute": {
+          "ask": 6853.52978515625,
+          "bid": 6853.27001953125,
+          "time_utc": "2025-12-04 16:22:56.523000+00:00"
+        },
+        "last_quote_before_minute": null,
+        "tick_count": 0
+      }
+    ]
+  }
+}

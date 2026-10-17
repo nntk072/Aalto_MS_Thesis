@@ -44,12 +44,8 @@ campaign_srun_gh200_guard() {
     return 2
   fi
   printf 'GH200 per-node preflight passed: %s\n' "$result" >&2
-  command srun --test-only \
-    --partition=gpu-grace-h200-141g \
-    --nodelist="$CAMPAIGN_GH200_SELECTED_NODES" \
-    --nodes=2 --ntasks=2 --ntasks-per-node=1 \
-    --cpus-per-task=48 --gpus-per-node=gh200:1 --mem=512G \
-    --time=06:00:00 true
+  printf 'GH200 live inventory passed; selected nodes: %s\n' \
+    "$CAMPAIGN_GH200_SELECTED_NODES" >&2
 }
 
 srun() {

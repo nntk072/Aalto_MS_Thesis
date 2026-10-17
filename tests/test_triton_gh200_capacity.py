@@ -15,7 +15,7 @@ def _node(
 ) -> str:
     return (
         f"NodeName=gpuarm1 State={state} CPUAlloc={cpu_alloc} CPUTot=144 "
-        f"RealMemory=1100000 AllocMem={memory_alloc} "
+        f"RealMemory=1100000 AllocMem={memory_alloc} FreeMem=1100000 "
         "CfgTRES=cpu=144,mem=1100000M,gres/gpu=2,gres/gpu:gh200=2 "
         f"AllocTRES=cpu={cpu_alloc},mem={memory_alloc}M,gres/gpu={gpu_alloc},"
         f"gres/gpu:gh200={gpu_alloc}"
@@ -31,6 +31,7 @@ def test_node_capacity_rejects_busy_gpu_or_insufficient_cpu_or_ram() -> None:
         _node(gpu_alloc=2),
         _node(cpu_alloc=100),
         _node(memory_alloc=700000),
+        _node().replace("FreeMem=1100000", "FreeMem=128000"),
         _node(state="DRAIN"),
     ):
         assert not capacity.node_has_capacity(
