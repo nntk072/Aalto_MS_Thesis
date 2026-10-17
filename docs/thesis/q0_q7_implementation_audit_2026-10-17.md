@@ -7,6 +7,47 @@ registered variants, trainer/model/environment wiring, focused tests, and
 available validation notes. It is an implementation audit, not a campaign
 result, strategy evaluation, winner selection, or thesis-readiness decision.
 
+## Current-tree validation — 2026-10-17 11:18 Helsinki
+
+- On MI210 job `21014127`, the final source tree passed full-tree Ruff format,
+  Ruff lint, and Mypy (464 files); a real ROCm 6.3.1/PyTorch 2.7.1 MI210 matrix
+  operation passed; and all **1,682 tests passed with 77 warnings** in 3:41.
+  After formatting, the directly relevant environment, observation, evaluation,
+  numerical-report, comparator, registry, and Lagrangian tests passed again:
+  **112 passed, 37 warnings**. Log:
+  `outputs/gpu_ci_gates/q0_q7_current_tree_job21014127/validation.log`.
+- The first targeted run caught a defect: legacy-sequence shared bundles
+  received the same key as standard bundles because the root-level mode flag
+  was absent from `shared_bundle._RELEVANT_CONFIG_PATHS`. The key now includes
+  `legacy_sequence_columns`; the regression and frame/bundle parity tests pass.
+- The deterministic reanalysis comparator now verifies that action,
+  observation, stop-candidate, sequence-feature, and backend contracts match
+  the source run manifest. For a source lacking sequence coordinates, it
+  requires the explicit legacy disposition and opt-in. Cache identity,
+  source datasets/checkpoint/config, evaluator/runtime identity, legacy modes,
+  and raw numerical artifacts are also checked by the comparator.
+- This gate validates source behavior on the MI210 runtime, not equivalence to
+  the thesis's locked CUDA/GH200 trainer, data provenance, Q-stage training,
+  policy quality, or thesis readiness. Q2/Q3/Q4/Q6 remain registry
+  `implementation_unverified` and therefore fail closed; Q5 is selectable only
+  after its Q4 parent is frozen. The Q stages have no completed research run or
+  winner.
+- The same approved allocation completed the P1 raw-tick audit. The job-specific
+  split-aware report is
+  `docs/thesis/g1_tick_quality_current_recovery_2026-10-17_job21014127_v2.json`
+  (SHA-256 `6db8e4a88c13dec284ca357039c32f10cdf5614929f865d280e451061f4cae5a`).
+  It verifies campaign input hashes and records 100% test-period minute
+  coverage, but only 1.16% US100 and 99.82% US500 coverage over training.
+  This limits the existing strategy/cost evidence and does not provide feed
+  rights, broker timezone/DST, fill-source parity, or an acceptance threshold.
+
+Q0 must not be conflated with the thesis's pure-legacy reference baseline.
+`q0_control_a3` is the account-state-v1/A3 development control used inside the
+quality program; the thesis's pure-legacy A0 reference is `ladder_a0_flat`
+(`strategy_actions=false`). They answer different comparison questions. Keep
+the registered Q0/Q1 quality-program contrast distinct from the frozen thesis
+control/treatment unless a later protocol explicitly aligns them.
+
 ## Addendum — source inventory refresh, 2026-10-17
 
 ### Current-tree software gate — 2026-10-17 08:58 Helsinki
@@ -136,8 +177,9 @@ stages have registered source arms and bounded unit coverage, but source
 presence does not make them empirically complete or ready to launch. Q5's
 previous registry placeholder has now been implemented as an opt-in,
 primal-dual scalarized-return PPO objective. An earlier source snapshot passed
-full-tree Ruff format/lint, Mypy, MI210 smoke, and 1,664 tests; the current
-dirty tree has not yet passed its gate. The policy and
+full-tree Ruff format/lint, Mypy, MI210 smoke, and 1,664 tests; the later
+current-tree gate on job `21014127` passed Ruff format/lint, Mypy, MI210 smoke,
+and 1,682 tests. The policy and
 dual update use matching gamma-discounted costs; Q5 evaluation costs are
 exported and independently reconciled, and policy-only resume fails closed.
 The CI wrapper exited 1 only because it safely refused to overwrite existing
@@ -150,11 +192,11 @@ parent and has not been run as a research experiment.
 |---|---|---|
 | Q0 | `q0_control_a3` registers the A3/account-state-v1 control and quality diagnostics. | Freeze full data/config/code/seed/budget provenance; run complete chronological training and deterministic train/test evaluation; package all outputs. No Q0 result exists. |
 | Q1 | Account-state-v2 schema, metadata validation, frame/shared-bundle wiring, and focused tests exist. | Revalidate the current final integration, then run a matched Q0/Q1 pair. Report behavior and economic metrics separately. No Q1 result exists. |
-| Q2 | The 16/32/64 arms declare per-environment `n_steps` 512/256/128 to hold aggregate rollout samples at 8,192; exact environment count is pinned, hardware PPO scaling is bypassed, and insufficient host-memory capacity fails closed. Current full-tree software checks pass (1,671 tests, Ruff, Mypy); no geometry comparison or winner exists. | Freeze minibatch/update count, epochs, wall-clock/resource accounting, and parent checkpoint on one locked accelerator; no geometry comparison or winner exists. |
+| Q2 | The 16/32/64 arms declare per-environment `n_steps` 512/256/128 to hold aggregate rollout samples at 8,192; exact environment count is pinned, hardware PPO scaling is bypassed, and insufficient host-memory capacity fails closed. Current-tree full tests (1,682), Ruff, Mypy, and MI210 smoke pass. Registry arms still fail closed as `implementation_unverified`; no geometry comparison or winner exists. | Complete implementation/integration validation, freeze minibatch/update count, epochs, wall-clock/resource accounting, and parent checkpoint on one locked accelerator; then run and review the geometry comparison. |
 | Q3 | RR, fixed-risk, and `equity_delta_r` reward/risk code exists; `fixed_risk_usd` is a supported environment setting. | Validate quality-registry-to-trainer resolution and reward diagnostics; freeze one Q2 parent and one multi-arm comparison family. Keep reward return separate from PnL/equity. No run or winner exists. |
 | Q4A | Semantic Gaussian actor heads are wired into PPO and preserve the declared action-coordinate order. Focused tests cover distribution behavior, gradients, and checkpoint/schema behavior. A bounded MI210 semantic-head PPO update and save/load check is recorded in `docs/operations/triton_environment.md`. | Current registry arm is fail-closed. Revalidate on the campaign's locked CUDA stack and verify deterministic evaluator parity from the selected Q3 parent. No Q4A research run exists. |
 | Q4B | Hybrid categorical/Gaussian actor and PPO policy wiring exist; focused test source covers sampling, log-probability, entropy, gradients, and save/load. A bounded MI210 hybrid PPO update and save/load check is recorded in `docs/operations/triton_environment.md`. | It is opt-in and requires the shared actor architecture, a declared overlay `ActionSchema`, and an active exit coordinate when `exit` is present. Validate every category center against the environment decoder and campaign-locked trainer/evaluator/checkpoint integration. Registry arm remains fail-closed; no Q4B research run exists. |
-| Q5 | Opt-in primal-dual scalarized PPO uses the same gamma-discounted episodic composite risk cost in policy updates and dual-budget comparisons; schema-v2 checkpoint state stores gamma and refuses policy-only resume without restored environment/account history. Deterministic evaluation exports per-step/component costs, breach indicators, and discount factors; the numerical-report verifier reconciles them. Current full-tree software checks pass (1,671 tests, Ruff, Mypy). Hard account guardrails are unchanged. | Freeze Q4 parent, budget/risk-cost interpretation, and evaluation protocol; then run the complete registered comparison and independent method review. No Q5 result exists; implementation tests are not a validated constrained policy or formal risk guarantee. |
+| Q5 | Opt-in primal-dual scalarized PPO uses the same gamma-discounted episodic composite risk cost in policy updates and dual-budget comparisons; schema-v2 checkpoint state stores gamma and refuses policy-only resume without restored environment/account history. Deterministic evaluation exports per-step/component costs, breach indicators, and discount factors; the numerical-report verifier reconciles them. Current-tree full tests (1,682), Ruff, Mypy, and MI210 smoke pass. Hard account guardrails are unchanged. | Freeze Q4 parent, budget/risk-cost interpretation, and evaluation protocol; independently review the method; then run the complete comparison. No Q5 result exists; implementation tests do not validate a constrained policy or formal risk guarantee. |
 | Q6 | Entry state machine, hidden/visible observation switch, no-FSM control, diagnostics, and three-arm registry exist. | Revalidate transition and observation semantics in both frame and shared-bundle paths. Preserve the three-arm design: no FSM, hidden FSM, visible FSM. Freeze the Q5 parent before a run. No Q6 result exists. |
 | Q7 | TCN and LiteTCN are selectable; LiteTCN has encoder and agent/checkpoint tests. | Validate matched trainer/evaluator/checkpoint integration and use the frozen Q6 parent, data, action/reward/risk semantics, budget, and seed plan. No Q7 result or winner exists. |
 
@@ -185,6 +227,49 @@ than A100 or MI210 using fresh per-node inventory and `srun --test-only`.
 This is a wait/poll policy, not permission to cancel or overlap an allocation.
 The current user-provided `AGENTS.md` agrees. No duplicate or weaker rule was
 added.
+
+## Source-level implementation boundary refresh — 2026-10-17 11:03 Helsinki
+
+The registry and trainer guards were re-read against the Q-stage table. The
+registry has seven stage records because Q0 is the control arm inside the Q1
+state-comparison stage; it still has the full required arm inventory. The
+resolver allows only `control`, `implemented_unit_tested`, and
+`existing_encoder_implementation` statuses. Q2, Q3, Q4A/B, and Q6 arms remain
+`implementation_unverified` and fail closed; Q7's LiteTCN is present but still
+depends on a frozen Q6 winner. Source presence or unit coverage does not make
+these arms selectable, integrated, or empirically complete.
+
+Q5's Lagrangian line is implemented in source and has bounded callback,
+checkpoint, evaluation-export, and verifier regressions in the earlier
+validated source snapshot. Its current dirty-tree changes are not validated.
+The implementation uses the maximum of the three per-step normalized risk-cost
+increments (daily, max-loss, trailing) as one scalar cost, discounts that cost
+through completed full-split episodes, and performs projected dual ascent
+against one scalar budget. It is a scalarized primal-dual experiment, not three
+independent constraints and not a formal risk guarantee. It rejects MVP,
+risk-terminated and policy-only-resume cases. No Q5 run exists, and a Q4 parent
+must be frozen before Q5 can be selected.
+
+Q2's registered `n_envs` arms preserve 8,192 aggregate rollout samples using
+512/256/128 steps per environment and fail closed on resource scaling that
+changes the declared count or aggregate rollout. That software contract does
+not yet freeze minibatch/update count, wall-time accounting, or a measured
+quality/throughput winner. Q4B's hybrid actor has source/tests but remains
+fail-closed pending action-center/environment-decoder and full checkpoint,
+trainer, and deterministic-evaluator integration review. The full per-stage
+implementation and missing-evidence matrix is in the table above; no Q-stage
+campaign, stage result, or winner exists.
+
+The deterministic reanalysis comparator was also tightened to verify the
+actual evaluated feature-cache file hash and identity against the original
+training cache, copied source-manifest identities, complete evaluator/runtime
+identity, and explicit legacy-mode flags, and reject legacy/unverified cache
+dispositions. Its report records both evaluated cache paths and hashes.
+Regression fixtures cover detached cache identity, cache tampering, source
+dataset-manifest drift, evaluator-code identity, and source-schema mismatch.
+The focused suite and full current-tree GPU-node suite now pass, including this
+comparator. As of the 11:18 checkpoint, no reanalysis package has yet been
+generated or compared, so P2/P3 report acceptance remains open.
 
 ## Observation-schema issue found during P1 audit review
 

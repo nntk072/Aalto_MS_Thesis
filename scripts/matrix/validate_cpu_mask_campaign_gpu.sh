@@ -2,7 +2,7 @@
 # Required repository checks for the CPU-mask campaign fix; run on a GPU node.
 set -Eeuo pipefail
 
-REPO="${TRITON_REPO:-/scratch/work/nguyenl37/Aalto_MS_Thesis-main}"
+REPO="${TRITON_REPO:-/scratch/work/nguyenl37/Aalto_MS_Thesis}"
 OUT_DIR="${CAMPAIGN_OUT_DIR:?CAMPAIGN_OUT_DIR is required}"
 LOG="$OUT_DIR/logs/gpu_ci_gate.log"
 cd "$REPO"

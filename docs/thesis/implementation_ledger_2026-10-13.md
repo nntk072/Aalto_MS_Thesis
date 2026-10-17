@@ -1,5 +1,105 @@
 # Implementation continuation ledger — 2026-10-13
 
+## Current-tree GPU validation and Q-stage audit — 2026-10-17
+
+Authorized allocation `21014127` on `gpuamd1` (MI210 x1, 8 CPUs, 128 GiB;
+scheduled end 17:05 Helsinki) validated the finalized dirty source tree.
+Full-tree Ruff format/lint and Mypy passed (464 source files), a real
+ROCm 6.3.1/PyTorch 2.7.1 matrix operation passed, and the full suite passed
+**1,682 tests with 77 warnings**. A final focused rerun passed **112 tests**.
+The detailed log is
+`outputs/gpu_ci_gates/q0_q7_current_tree_job21014127/validation.log`.
+
+The focused run found and fixed a shared-bundle cache identity defect: legacy
+sequence observation mode was omitted from the relevant-config whitelist, so
+its bundle key collided with the standard observation layout. The legacy-mode
+flag now contributes to the key. The deterministic reanalysis comparator also
+now binds action, observation, stop-candidate, sequence-feature, and training
+backend schemas to the original run manifest. These checks improve software
+correctness and repeatability; they do not establish campaign validity,
+strategy quality, data rights, or thesis readiness.
+
+Q0–Q7 inventory: source foundations exist for all stages, including the Q5
+Lagrangian/primal-dual scalarized PPO, but there are no Q-stage research runs or
+winners. Q2/Q3/Q4/Q6 remain marked `implementation_unverified` and fail closed
+in the registry. Q5 is not a formal risk guarantee and remains dependent on a
+frozen Q4 parent. Full source/test details and entry gates are recorded in
+`docs/thesis/q0_q7_implementation_audit_2026-10-17.md`.
+
+The P1 tick audit verified the recovery campaign's configured bar/tick hashes.
+Training-minute raw tick coverage is only 4,095/351,550 (1.16%) for US100 and
+349,484/350,098 (99.82%) for US500; the test split is fully covered for both.
+The US100 tick file begins 2025-12-29, so most training execution falls back to
+bar pricing when no usable tick exists. Provider/use terms, broker timezone/DST,
+and feed-specific quality thresholds remain unknown; this result keeps P1 open.
+The report is
+`docs/thesis/g1_tick_quality_current_recovery_2026-10-17_job21014127_v2.json`
+(SHA-256 `6db8e4a88c13dec284ca357039c32f10cdf5614929f865d280e451061f4cae5a`).
+
+The 60-second Slurm wait cap, per-node GPU/CPU/RAM inventory, and A100-or-better/
+MI210 fallback were already present in `.agents/rules/triton-slurm.md`; this
+run confirmed gpuamd1 was idle and the exact MI210 request forecast an immediate
+start.
+
+## P1 tick/fold validation update — 2026-10-17
+
+Approved MI210 allocation `21013436` on `gpuamd1` ran for 1:03:45 and ended
+naturally. Full-tree Ruff format/lint and Mypy, campaign shell/path/no-auto-
+scancel checks, and `tests/test_ticks.py` (9/9) passed. The raw tick audit did
+not produce a report: `valid_timestamp` was already a NumPy array, but the audit
+called `.to_numpy()` on it. That source line has been corrected; validation and
+the raw-data report remain pending because the approved allocation is complete.
+Source review also found that a zero exit code only proved input hash matches,
+not quote-quality acceptance. The audit report now marks quote findings as
+descriptive and not acceptance-gated because no feed-specific thresholds or
+authoritative source terms are available. This correction remains unvalidated
+until the GPU-node gate runs; it does not close tick-quality validity.
+
+## P2 legacy observation replay correction — 2026-10-17
+
+Source review found that `--allow-legacy-sequence-schema` selected the old
+feature coordinates only for schema/width validation; frame evaluation still
+constructed `TradingEnv` with the current absolute-metadata filter. Added an
+explicit legacy sequence-column mode through `evaluate_model`/`TradingEnv`,
+legacy observation arrays in shared bundles with a separate bundle identity,
+and exact-cache/data-fingerprint support in the frame/shared-bundle parity
+auditor. Regression tests cover legacy frame coordinates, evaluator flag
+forwarding, bundle identity, and frame/bundle tensor equality. Added a
+repeatability comparator that requires common provenance and byte-identical
+train/test equity, trades, fills, positions, metrics, and evaluation diagnostics;
+tests cover matching outputs and checkpoint/trade-output mismatches. No tests or
+replay were run for these new changes; the 20M checkpoint candidate remains
+engineering-only due to known lookahead contamination. P2 remains open.
+
+The comparator now additionally requires `feature_cache_disposition` to be
+`verified` or `source_cache_replay_verified`, records the absolute evaluated
+cache path in each new reanalysis manifest, and hashes that file before
+accepting a repeatability comparison. It binds the copied config, checkpoint,
+feature-cache, and dataset identities to the original training run manifest.
+It also checks that the evaluated cache identity/content hash matches the
+source cache record; requires complete evaluator source/runtime provenance;
+and compares evaluator identity plus explicit legacy-mode flags. Regression
+coverage includes cache tampering, detached identity,
+source-dataset-manifest drift, and a changed evaluator-code identity.
+At the time of this entry, these changes had not yet been run. They were later
+validated on MI210 job `21014127`; the current gate and source-schema checks are
+recorded at the top of this ledger. P2 remains open for checkpoint recovery,
+repeatability evidence, and admissible report acceptance.
+
+The subsequent full-training-interval fold audit completed 20/20 checks for
+four representative feature profiles across five expanding purged folds. In
+all completed checks, training features were byte-identical after validation
+OHLC poisoning, while at least one model-visible validation feature changed.
+Runtime was 3,807.7 seconds. Report:
+[`g1_real_market_fold_fit_full_train_post_observation_schema_2026-10-17.json`](g1_real_market_fold_fit_full_train_post_observation_schema_2026-10-17.json),
+SHA-256 `4abd839414dcf69390ce72de7d800157e3c571cae70ec75bc38306278a107f94`;
+full job log:
+`outputs/gpu_ci_gates/p1_tick_fold_validation_job21013436/validation.log`.
+The report is bounded empirical evidence, not exhaustive causality proof,
+market-data provenance, strategy performance, or readiness. The combined job is
+FAILED because the tick audit failed; the successful fold audit is recorded
+separately. No training campaign or Slurm allocation remains active.
+
 ## MTF swing and IFVG integration continuation
 
 The M1 PO3 state can now consume causally aligned IFVG confirmations from all

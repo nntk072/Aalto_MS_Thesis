@@ -142,3 +142,24 @@ def test_v2_entry_fsm_coordinates_follow_the_state_machine() -> None:
         obs, _, terminated, truncated, _ = env.step(0)
         if terminated or truncated:
             break
+
+
+def test_legacy_sequence_column_mode_reconstructs_pre_filter_coordinates() -> None:
+    bars = _make_bars(120)
+    features = _make_features(bars)
+    features["po3_ifvg_time_ns"] = np.asarray(bars.index, dtype="datetime64[ns]").astype(np.int64)
+
+    current = TradingEnv(bars=bars, features=features, obs_window=10)
+    legacy = TradingEnv(
+        bars=bars,
+        features=features,
+        obs_window=10,
+        episodic=False,
+        legacy_sequence_columns=True,
+    )
+
+    assert "po3_ifvg_time_ns" not in current._obs_columns
+    assert "po3_ifvg_time_ns" in legacy._obs_columns
+    current_obs, _ = current.reset(seed=7)
+    legacy_obs, _ = legacy.reset(seed=7)
+    assert legacy_obs["seq"].shape[1] == current_obs["seq"].shape[1] + 1

@@ -12,7 +12,7 @@ from numpy.typing import NDArray
 from omegaconf import DictConfig, OmegaConf
 
 from ..data.ticks import TickBook
-from ..features.build import attach_reachable_r, select_obs_columns
+from ..features.build import attach_reachable_r, select_legacy_obs_columns, select_obs_columns
 from .shared_bundle import build_bundle, load_bundle
 
 
@@ -20,9 +20,12 @@ def observation_features(
     bars: pd.DataFrame,
     features: pd.DataFrame,
     raw_columns: list[str] | tuple[str, ...],
+    *,
+    legacy_sequence_columns: bool = False,
 ) -> tuple[NDArray[np.float32], list[str]]:
     """Build the same contiguous float32 observation matrix used by training."""
-    frame = attach_reachable_r(select_obs_columns(features, raw_columns), bars, features)
+    selector = select_legacy_obs_columns if legacy_sequence_columns else select_obs_columns
+    frame = attach_reachable_r(selector(features, raw_columns), bars, features)
     array = np.ascontiguousarray(frame.to_numpy(dtype=np.float32))
     return array, [str(column) for column in frame.columns]
 
@@ -135,9 +138,12 @@ def build_env_bundle(
     tickbook: TickBook | None,
     pre_ny_by_date: Mapping[Any, NDArray[Any]] | None,
     reuse_only: bool = False,
+    legacy_sequence_columns: bool = False,
 ) -> Path:
     """Build the complete read-only data bundle for one train split."""
-    obs_features, obs_columns = observation_features(bars, features, raw_columns)
+    obs_features, obs_columns = observation_features(
+        bars, features, raw_columns, legacy_sequence_columns=legacy_sequence_columns
+    )
     feature_values, feature_columns = _numeric_feature_array(features)
     session_codes, session_labels = _session_codes(bars)
     pre_ny_sequences, pre_ny_rows = _pre_ny_arrays(pre_ny_by_date)
@@ -190,6 +196,9 @@ def build_env_bundle(
     strategy_config = dict(config.get("strategy", {}) or {})
     strategy_config["raw_columns"] = list(raw_columns)
     config["strategy"] = strategy_config
+    if legacy_sequence_columns:
+        # Keep an explicit cache-key discriminator for opt-in historical replay.
+        config["legacy_sequence_columns"] = True
     config["feature_config_hash"] = feature_config_hash
     input_signature = {
         "rows": len(bars),

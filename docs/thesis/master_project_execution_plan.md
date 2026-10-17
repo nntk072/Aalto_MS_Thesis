@@ -7,26 +7,47 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-17 09:01 Helsinki):** checkout is clean on `main` at
-`168671e1363eeb011f8fd6498d9c35211447bf6d`, pushed to `origin/main`. MI210
-validation allocation `21012389` is RUNNING on `gpuamd1` (1 MI210, 8 CPUs,
-128 GiB; scheduled end 09:26:40 Helsinki); no campaign trainer or supervisor
-is active, and no successor allocation is pending. In step `.14`, the current
-source gate passed full-tree Ruff format/lint,
-full-tree Mypy (461 files), MI210 ROCm matrix smoke, and all 1,671 tests (77
-warnings). The validated tracked-source diff SHA-256 is
-`a52a452848e99f68232da7240ea0376490e549dd9770583d854333ab5a56a360`; complete
-log: `outputs/gpu_ci_gates/observation_schema_gate_job21012389/validation.log`.
-The observation-schema, bundle, sequence-manifest, tick-ingestion and related
-regressions are now software-validated on this exact tree. P1/P2 remain open:
-the existing 20/20 fold-fit report is from an earlier `features/build.py`
-source hash, so it does not validate that exact report scope after the final
-observation filter; a repeat took 3,759 seconds and cannot fit the remaining
-allocation window. Q0–Q7 have no empirical
-campaign results, and thesis readiness remains NOT READY. Steps `.12` and
-`.13` recorded the expected format/Mypy failures during correction; `.14` is
-the fully green current-tree gate. Do not use those failed attempts as a
-successful gate. Earlier live-state entries below are historical snapshots.
+**Live checkpoint (2026-10-17 11:35 Helsinki):** checkout is on `main` at
+`585059ab8aa1925a779bd6fe819d1900d7008c77`; existing dirty edits and untracked
+artifacts are preserved. There is no training campaign, supervisor, or tmux
+session. Authorized MI210 allocation `21014127` is active on `gpuamd1` with one
+MI210, 8 CPUs, 128 GiB, and a scheduled end of 17:05 Helsinki. No job was
+cancelled or training launched.
+
+The allocation completed current-tree verification in
+`outputs/gpu_ci_gates/q0_q7_current_tree_job21014127/validation.log`: full-tree
+Ruff format/lint and Mypy passed (464 source files), a real ROCm MI210 matrix
+operation passed, and the full suite passed **1,682 tests with 77 warnings** in
+3:41. The post-format focused rerun passed **112 tests**. The P1 validation
+wrapper repeated full Ruff/Mypy/MI210/full-Pytest gates and the tick audit. It
+verified campaign hashes, then found training raw-tick coverage of **1.16% for
+US100.cash** (4,095/351,550 M1 minutes) and **99.82% for US500.cash**
+(349,484/350,098); test-period coverage is 100% for both symbols. Report:
+[`g1_tick_quality_current_recovery_2026-10-17_job21014127_v2.json`](g1_tick_quality_current_recovery_2026-10-17_job21014127_v2.json)
+(SHA-256 `6db8e4a88c13dec284ca357039c32f10cdf5614929f865d280e451061f4cae5a`).
+The US100 tick file begins 2025-12-29, leaving almost all training M1 minutes
+without a valid same-minute quote; execution falls back to bar pricing when a
+tick is unavailable or rejected. The training and test splits therefore may
+use different execution-price sources for US100; actual per-split fill-source
+counts and a common cost protocol must be checked before P3 acceptance.
+Feed/use terms, broker clock/DST, and feed-specific quality thresholds remain
+unknown, so quote quality is descriptive and P1 is not cleared. The initial
+tests also caught and fixed a shared-bundle cache-key omission for legacy
+sequence columns. The repeatability
+comparator now binds action, observation, stop, sequence-feature, backend, and
+legacy-schema contracts to the original training manifest. None of this
+software validation establishes strategy quality, market-data rights, campaign
+validity, or thesis readiness.
+
+The 60-second allocation limit, pre-allocation per-node GPU/CPU/RAM inspection,
+and A100-or-better/MI210 fallback are already documented in
+`.agents/rules/triton-slurm.md`; the request for MI210 started immediately after
+the exact resource forecast. The previous full-fold audit remains bounded and
+source-snapshot-specific. P1 still needs feed/use provenance, calendar/DST,
+execution-source acceptance review, and current cache/data audits. Q0–Q7 have
+implementation foundations but no empirical stage result or
+winner. Thesis readiness remains NOT READY. Earlier live-state entries below
+are historical snapshots.
 
 **Historical live checkpoint (2026-10-17 08:35 Helsinki):** the 08:35
 per-node inventory showed `gpuarm1` and `gpuarm2` idle, each configured with 2
@@ -1804,6 +1825,42 @@ Verify:
   training snapshot says `data_source=bundle`. The backend parity contract must
   be demonstrated for each exact reported checkpoint and source/config
   lineage; a generic unit test or checkpoint hash is insufficient.
+- **Completed-checkpoint P2 replay candidate reviewed — 2026-10-17:** the
+  `ladder_a4b_distribution__seed50` attempt-1 run has a saved 20M-step
+  checkpoint, source manifest, training cache, and complete train/report-only
+  split fingerprints. Its manifest identifies bundle training and the v20
+  feature cache (`f7b463019fc2fde4`, file SHA-256
+  `87e65a8d4b775d10674f6b59193ef2662c8cab1d02daeebd938c30935b676fa9`); that
+  667 MiB cache remains present. The manifest has neither
+  `sequence_feature_schema` nor `stop_candidate_schema`. Current reanalysis
+  therefore rejects it by default; it can only be used for an explicitly
+  legacy/unverified engineering replay using the exact source-cache path and
+  the legacy sequence/stop-schema opt-ins; the evaluator must still reproduce
+  the checkpoint input width, full saved data fingerprints, and saved stop
+  configuration. The run's lineage includes the known NY-session
+  lookahead affecting 17/18 variants. Any replay may test deterministic
+  recovery and evaluator/backend parity only; it cannot satisfy admissible
+  P1/P3 strategy evidence, select a variant, or support a confirmatory claim.
+  No replay was launched in this audit because no Slurm allocation is active.
+- **P2 legacy-observation replay defect found and repaired in source —
+  2026-10-17:** `eval_run` previously let an explicit missing-sequence-schema
+  opt-in select legacy feature columns for a width check, but constructed
+  `TradingEnv` with the current metadata filter. The old checkpoint could
+  therefore pass preflight and still receive a different observation tensor.
+  The opt-in now reaches frame evaluation, bundle observation construction, and
+  the frame/shared-bundle parity auditor. That auditor can replay an exact
+  source cache, checks source config/checkpoint and full train/test data hashes,
+  and records the legacy-unverified schema disposition. Legacy bundles receive
+  a distinct cache identity, preventing reuse of current-schema observations.
+  Regression coverage was added for frame columns, bundle identity,
+  frame/bundle tensor equality, and evaluator flag forwarding. Added
+  `scripts/thesis/compare_deterministic_reanalysis.py` to compare immutable
+  repeated train/test numerical packages and verify common source/checkpoint/
+  cache identities; focused pass/mismatch tests are also added. These source
+  changes and tests are not yet validated; P2 remains open until focused tests,
+  the full GPU-node gate, repeated deterministic report, and real checkpoint
+  parity run pass. This repairs replay mechanics only and does not
+  change the contaminated checkpoint's evidence role.
 - All 18 exact attempt-3 resume checkpoints selected for attempt 4 were
   checksum-checked and sequentially deserialized with `PPO.load(...,
   device="cpu")` on `gpuarm1`. Each loaded timestep matched the recovery record
@@ -3122,11 +3179,11 @@ history.
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE — immutable campaign snapshots, manifests, fingerprints, user data, and exploratory failures remain preserved. MI210 job `21012389` is RUNNING on `gpuamd1` through 09:26; step `.14` passed the current-tree full software gate. No GH200, campaign supervisor, trainer, or new 18-variant campaign is active. No cancellation was issued. | — | P1, P2, E0 |
-| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE BUT SCIENTIFICALLY CONTAMINATED — preserve as exploratory: model-visible `prev_ny_high`/`prev_ny_low` leakage affected 17/18 saved configs. Recovery records 11 succeeded, 4 train-survival failures, 3 interrupted, and full-split telemetry for 17/18 variants; `ladder_a0_flat` has no current-attempt completed-split record. Eight variants had zero train/test trades. The full-training-interval report passed 20/20 perturbation checks on its hashed source snapshot, but current `features/build.py` has a different hash following the observation filter, so that report is not current post-fix fold evidence. Full-tree code/tests, including tick sanitation and observation filtering, now pass; real-data cache rebuild, tick/fold re-audit, vendor/use provenance, broker calendar/DST, independent reviews, and a fresh admissible screen remain open. Seed-50 artifacts remain immutable. Finding: `docs/thesis/evidence/p1_18_variant_screen_disposition_2026-10-16.md` | P0 | P2, E0 |
-| P2 | Deterministic evaluator/schema repair | ACTIVE — evaluator determinism, cache/dataset/checkpoint provenance, numerical report verifier, Q5 resume guard, and ordered sequence-feature schema are implemented. Current dirty-tree full Ruff/Mypy/MI210 smoke and 1,671-test gate passed on step `.14`; hash and log are in the live checkpoint. Exact checkpoint recovery/parity, repeated deterministic report, and completed-checkpoint acceptance remain open; software CI does not close P2 | P0 | P1, E0 |
-| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and all-attempt screen reconciler exist. The refreshed recovery index is `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/thesis_evidence_index_post_causal_repair_20261017.json` (fingerprint `91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e`; 11 succeeded, 4 failed, 3 interrupted; 230 source hashes: 220 verified, 10 mismatched, none missing; 172 checkpoint artifacts). The separate v3 index was also refreshed and records 18 interrupted runs, 228 source hashes (207 verified, 21 mismatched, none missing), and 188 checkpoint artifacts. Neither index establishes chronological split exposure, successful checkpoint deserialization, or strategy validity. The current-tree observation-schema integration passes frame/bundle and manifest software tests; the 20-check full-training-interval fold-fit result remains source-snapshot-specific and broader causality is open. The M1 inventory is PARTIAL because vendor/use provenance, broker calendar/DST, and tick validity are not established. Final canonical reports still await P1/P2 closure | P0 | P1, P2 |
-| P3 | Canonical numerical screen reports | BLOCKED — report contract covers annualization, equity endpoints, exposure, raw fills/positions/breaches, split completion, and source/runtime provenance. The verifier and tests pass the current full-tree software gate, but no admissible completed-checkpoint report has been generated | P1 + P2 | per-checkpoint eval/package |
+| P0 | Safe boundary/current snapshot | ACTIVE — immutable campaign snapshots, manifests, fingerprints, user data, and exploratory failures remain preserved. No training campaign, supervisor, or tmux GPU shell is active. MI210 validation allocation `21014127` is running through 17:05 Helsinki; no cancellation was issued. The worktree is dirty and all existing edits/untracked evidence are being preserved. | — | P1, P2, E0 |
+| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE BUT SCIENTIFICALLY CONTAMINATED — preserve as exploratory: model-visible `prev_ny_high`/`prev_ny_low` leakage affected 17/18 saved configs. Recovery records 11 succeeded, 4 train-survival failures, 3 interrupted, and full-split telemetry for 17/18 variants; `ladder_a0_flat` has no current-attempt completed-split record. Eight variants had zero train/test trades. The 20/20 fold report applies to its recorded source snapshot, not the later observation filter. Raw tick input hashes verify, but training-minute quote coverage is 1.16% for US100 and 99.82% for US500; test-minute coverage is 100% for both. The US100 tick file begins 2025-12-29 and execution falls back to bar pricing for most training minutes, so per-split fill-source counts and a common cost protocol must be checked before P3. Feed/use provenance, broker calendar/DST, feed-specific acceptance thresholds, current post-fix fold/cache audit, independent reviews, and a fresh admissible screen remain open. Seed-50 artifacts remain immutable. Tick report: `docs/thesis/g1_tick_quality_current_recovery_2026-10-17_job21014127_v2.json`. Finding: `docs/thesis/evidence/p1_18_variant_screen_disposition_2026-10-16.md` | P0 | P2, E0 |
+| P2 | Deterministic evaluator/schema repair | ACTIVE — evaluator determinism, cache/dataset/checkpoint provenance, numerical report verifier, Q5 resume guard, and ordered sequence-feature schema are implemented. Current-tree validation on MI210 job `21014127` passed full-tree Ruff format/lint and Mypy (464 files), real MI210 smoke, and 1,682 tests; the focused post-format set passed 112 tests. The gate caught and fixed a legacy-sequence shared-bundle cache-key omission. Exact checkpoint recovery/parity, repeated deterministic report, and completed-checkpoint acceptance remain open; software CI does not close P2 | P0 | P1, E0 |
+| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and all-attempt screen reconciler exist. The refreshed recovery index is `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/thesis_evidence_index_post_causal_repair_20261017.json` (fingerprint `91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e`; 11 succeeded, 4 failed, 3 interrupted; 230 source hashes: 220 verified, 10 mismatched, none missing; 172 checkpoint artifacts). The separate v3 index was also refreshed and records 18 interrupted runs, 228 source hashes (207 verified, 21 mismatched, none missing), and 188 checkpoint artifacts. Neither index establishes chronological split exposure, successful checkpoint deserialization, or strategy validity. Current-tree frame/bundle, legacy replay, comparator, numerical-report, registry, and Q5 tests passed in the 1,682-test MI210 suite; no completed deterministic reanalysis report has been produced. The 20-check full-training-interval fold-fit result remains source-snapshot-specific and broader causality is open. The M1 inventory is PARTIAL because vendor/use provenance, broker calendar/DST, and tick validity are not established. Final canonical reports still await P1/P2 closure | P0 | P1, P2 |
+| P3 | Canonical numerical screen reports | BLOCKED — report contract covers annualization, equity endpoints, exposure, raw fills/positions/breaches, split completion, and source/runtime provenance. Current verifier/software tests pass, but no admissible completed-checkpoint report has been generated. | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | Reviewer preparation includes bounded related-work/threat notes and the refreshed independent-review brief/checklist. The pre-repair fold-poison failure is historical; bounded post-repair fold/prefix checks pass their stated slices. No independent reviewer has signed off; market-data/use provenance, broker calendar/DST, tick validity, broader causal coverage, and the P3 evidence package remain open |
 | P5 | Freeze matched design/baselines | BLOCKED | P4 | P6 prep, review |
 | P6 | Production runtime/resource freeze | PREP-ONLY | P4/screen-safe | paired-launch prep |
@@ -3135,7 +3192,7 @@ history.
 | E1 | Result aggregation/finding cards | ACTIVE-AS-ARTIFACTS-ARRIVE | E0 | every terminal run |
 | P8 | Review + evidence freeze | PREP-ONLY | final P7 evidence | figure/result cross-checks |
 | P9 | `RESULTS_PACKAGE_COMPLETE` handoff | BLOCKED | P8 + E1 | archive/index QA |
-| Q0–Q7 | Required research program | COMPULSORY, NO RESEARCH RUNS — no stage result or winner exists. Q0/Q1, Q2 geometry, Q3 reward/risk, Q4A/B policies, Q5 primal-dual PPO, Q6 FSM, and Q7 encoders have source implementations with differing bounded test coverage. Q5 uses gamma-matched discounted costs, exports evaluation cost diagnostics, and fails closed on policy-only resume. The current dirty-tree gate passed 1,671 tests, full-tree Ruff/Mypy, and MI210 ROCm smoke; this is software validation, not a Q-stage result. Q4-parent freeze, campaign-level checkpoint parity, remaining stage integration/reviews, and every Q-stage experiment remain open. See [`q0_q7_implementation_audit_2026-10-17.md`](q0_q7_implementation_audit_2026-10-17.md). Run in dependency order after P11 by default; earlier work must meet entry gates and not displace thesis-critical tasks | ordered stage parents | implementation, validation, and evidence preparation |
+| Q0–Q7 | Required research program | COMPULSORY, NO RESEARCH RUNS — no stage result or winner exists. Q0/Q1, Q2 geometry, Q3 reward/risk, Q4A/B policies, Q5 primal-dual PPO, Q6 FSM, and Q7 encoders have source implementations with differing bounded coverage. Current-tree software validation passed 1,682 tests plus full-tree Ruff/Mypy and MI210 smoke; this does not make the arms empirically complete or launchable. Q2/Q3/Q4/Q6 remain fail-closed pending implementation/integration validation; Q5 is an opt-in scalarized PPO method, not a formal constraint guarantee. Parent freezes, campaign-level checkpoint parity, independent reviews, and every Q-stage experiment remain open. See [`q0_q7_implementation_audit_2026-10-17.md`](q0_q7_implementation_audit_2026-10-17.md). Run in dependency order after P11 by default; earlier work must meet entry gates and not displace thesis-critical tasks | ordered stage parents | implementation, validation, and evidence preparation |
 
 **GH200 allocation guard (user direction, 2026-10-16):** the thesis campaign
 may have at most **2 GH200 GPUs total across all active allocations**, and no

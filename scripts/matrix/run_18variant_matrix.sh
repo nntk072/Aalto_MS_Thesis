@@ -226,17 +226,15 @@ allocation_remaining_seconds() {
 }
 
 monitor_srun_allocation() {
-  local srun_pid="$1" job_name="$2" job_id remaining
+  local srun_pid="$1" job_name="$2" job_id remaining warned=0
   while kill -0 "$srun_pid" 2>/dev/null; do
     job_id="$(squeue -h -u "$USER" -n "$job_name" -o '%A' 2>/dev/null | head -n 1)"
     if [[ -n "$job_id" ]]; then
       remaining="$(squeue -h -j "$job_id" -o '%L' 2>/dev/null | head -n 1)"
       remaining="$(duration_seconds "$remaining" 2>/dev/null || echo 0)"
-      if (( remaining < MIN_BATCH_REMAINING_SECONDS )); then
-        echo "ROLLOVER: srun job=$job_id name=$job_name has ${remaining}s remaining; stopping before hard timeout"
-        scancel "$job_id"
-        wait "$srun_pid" 2>/dev/null || true
-        return 75
+      if (( remaining < MIN_BATCH_REMAINING_SECONDS && warned == 0 )); then
+        echo "TIME_LIMIT_WARNING: srun job=$job_id name=$job_name has ${remaining}s remaining; preserving it to finish or reach its Slurm time limit"
+        warned=1
       fi
     fi
     sleep 30
@@ -379,12 +377,8 @@ echo "SELECTED resources: gpus=$GPUS time=$TIME mem=$MEM cpus=$CPUS n_envs=$ENVS
 echo "SELECTED variants (${#SELECTED_VARIANTS[@]}): ${SELECTED_VARIANTS[*]}"
 
 if [[ "$IN_CURRENT_ALLOCATION" -eq 2 ]]; then
-  echo "REUSE: entering existing allocation $REUSE_JOB_ID with an srun step"
-  exec srun --jobid="$REUSE_JOB_ID" --overlap --ntasks=1 \
-    --cpus-per-task="$CPUS" --chdir="$REPO" \
-    env TRITON_REPO="$REPO" RUN_STAMP="$RUN_STAMP" OUT_DIR="$OUT_DIR" \
-    LOG_DIR="$LOG_DIR" SEED="$SEED" STEPS="$STEPS" \
-    bash "$REPO/scripts/matrix/run_18variant_matrix.sh" "$SELECTION"
+  echo "REUSE_BLOCKED: an existing allocation is visible, but this login shell cannot safely join it with srun --jobid. Attach to its existing compute shell/tmux and run the matrix there." >&2
+  exit 4
 fi
 
 run_variant() {
@@ -425,6 +419,7 @@ run_same_node_allocation() {
   fi
   local job_name="matrix-${RUN_STAMP}-${start}"
   srun --job-name="$job_name" --kill-on-bad-exit=1 \
+    --immediate=60 \
     --partition="$PARTITION" --nodelist="$NODE_A" \
     --gpus="$GPU_TYPE:$GPUS" --time="$TIME" --mem="$MEM" \
     --ntasks=1 --cpus-per-task="$CPUS" --chdir="$REPO" \
@@ -447,6 +442,7 @@ run_split_allocation() {
     return
   fi
   srun --partition="$PARTITION" --nodelist="$node" \
+    --immediate=60 \
     --gpus="$GPU_TYPE:1" --time="$TIME" --mem="$MEM" \
     --ntasks=1 --cpus-per-task="$CPUS" --chdir="$REPO" \
     env OUT_DIR="$OUT_DIR" SEED="$SEED" STEPS="$STEPS" ENVS="$ENVS" \
@@ -458,37 +454,14 @@ run_split_allocation() {
       run_split_batch '$start' '$node'"
 }
 
-rollover_allocation() {
-  local start="$1" remaining_selection child_status
-  remaining_selection="$(IFS=,; echo "${SELECTED_VARIANTS[*]:start}")"
-  echo "ROLLOVER: allocation ${SLURM_JOB_ID:-unknown} has less than 4.5h remaining; requesting same config for variants starting at index $start"
-  echo "ROLLOVER resources: partition=$PARTITION node=$NODE_A gpus=$GPU_TYPE:$GPUS mem=$MEM cpus=$CPUS time=$TIME"
-
-  set +e
-  srun --partition="$PARTITION" --nodelist="$NODE_A" \
-    --gpus="$GPU_TYPE:$GPUS" --time="$TIME" --mem="$MEM" \
-    --ntasks=1 --cpus-per-task="$CPUS" --chdir="$REPO" \
-    env TRITON_REPO="$REPO" RUN_STAMP="$RUN_STAMP" OUT_DIR="$OUT_DIR" \
-    LOG_DIR="$LOG_DIR" SEED="$SEED" STEPS="$STEPS" \
-    bash "$REPO/scripts/matrix/run_18variant_matrix.sh" "$remaining_selection"
-  child_status=$?
-  set -e
-
-  if [[ "$child_status" -eq 0 ]]; then
-    echo "ROLLOVER: replacement allocation completed; cancelling old allocation ${SLURM_JOB_ID:-unknown}"
-    [[ -n "${SLURM_JOB_ID:-}" ]] && scancel "$SLURM_JOB_ID" || true
-  fi
-  return "$child_status"
-}
-
 FAILURES=()
 for ((start = 0, batch = 0; start < ${#SELECTED_VARIANTS[@]}; start += PER_BATCH, batch++)); do
   echo "=== MATRIX batch=$batch start=$(date -Is) ==="
   if [[ "$IN_CURRENT_ALLOCATION" -eq 1 ]]; then
     remaining_seconds="$(allocation_remaining_seconds || echo 0)"
     if (( remaining_seconds < MIN_BATCH_REMAINING_SECONDS )); then
-      rollover_allocation "$start"
-      exit $?
+      echo "ROLLOVER_BLOCKED: current allocation has ${remaining_seconds}s remaining; no automatic srun or scancel will be issued. Preserve incomplete variants and continue only through a separately authorized allocation."
+      exit 75
     fi
   fi
   set +e
@@ -504,10 +477,6 @@ for ((start = 0, batch = 0; start < ${#SELECTED_VARIANTS[@]}; start += PER_BATCH
   fi
   set -e
   if [[ "$status" -ne 0 ]]; then
-    if [[ "$status" -eq 75 ]]; then
-      echo "ROLLOVER: retrying batch=$batch from checkpoints with a fresh allocation"
-      continue
-    fi
     FAILURES+=("batch_$batch")
     echo "FAILED batch=$batch status=$status" | tee "$OUT_DIR/FAILED.txt"
     break

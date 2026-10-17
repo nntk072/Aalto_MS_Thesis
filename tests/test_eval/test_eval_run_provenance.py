@@ -61,6 +61,30 @@ def test_legacy_sequence_schema_reanalysis_requires_explicit_opt_in() -> None:
     assert opted_in.allow_legacy_sequence_schema is True
 
 
+def test_checkpoint_replay_forwards_legacy_sequence_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_evaluate_model(
+        _model: object, *, deterministic: bool, **kwargs: object
+    ) -> dict[str, str]:
+        captured["deterministic"] = deterministic
+        captured.update(kwargs)
+        return {"status": "captured"}
+
+    monkeypatch.setattr(eval_run, "evaluate_model", fake_evaluate_model)
+    result = eval_run._evaluate_checkpoint_split(
+        object(),
+        stochastic=False,
+        bars=pd.DataFrame(),
+        features=pd.DataFrame(),
+        legacy_sequence_columns=True,
+    )
+
+    assert result == {"status": "captured"}
+    assert captured["deterministic"] is True
+    assert captured["legacy_sequence_columns"] is True
+
+
 def test_checkpoint_sequence_width_must_match_ordered_feature_schema() -> None:
     model = SimpleNamespace(
         observation_space=SimpleNamespace(

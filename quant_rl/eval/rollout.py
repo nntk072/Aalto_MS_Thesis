@@ -147,6 +147,7 @@ def evaluate_model(
     mtf: bool = False,
     mtf_windows: dict[str, int] | None = None,
     env: TradingEnv | None = None,
+    legacy_sequence_columns: bool = False,
 ) -> dict[str, Any]:
     """Walk a trained RL ``model`` over *bars*/*features* and collect trades.
 
@@ -156,6 +157,10 @@ def evaluate_model(
     pass the same ranges used to build the training environment or the
     model's learned action semantics will not line up.
 
+    ``legacy_sequence_columns`` is reserved for explicit historical checkpoint
+    replay when the source manifest lacks ordered feature coordinates. It must
+    not be used to train a new policy.
+
     Returns
     -------
     dict with keys ``equity``, ``trades``, ``account``, ``breaches``,
@@ -163,6 +168,14 @@ def evaluate_model(
     ``n_sessions_with_trades``, ``n_sessions_skipped`` — the same shape
     produced by ``quant_rl.backtest.engine.run_backtest``.
     """
+    if (
+        env is not None
+        and legacy_sequence_columns
+        and not bool(getattr(env, "_legacy_sequence_columns", False))
+    ):
+        raise ValueError(
+            "supplied evaluation environment does not use the requested legacy sequence columns"
+        )
     if env is None:
         env = TradingEnv(
             bars=bars,
@@ -201,6 +214,7 @@ def evaluate_model(
             entry_state_observation=entry_state_observation,
             observation_schema_version=observation_schema_version,
             observation_age_scale_bars=observation_age_scale_bars,
+            legacy_sequence_columns=legacy_sequence_columns,
             strict_research_eligibility=strict_research_eligibility,
             strategy_reward=strategy_reward,
             strategy_weight=strategy_weight,

@@ -17,17 +17,34 @@ from gymnasium import spaces
 
 from quant_rl.action_schema import build_action_schema
 from quant_rl.data.pipeline import build_tick_books, run_pipeline
-from quant_rl.data.split import get_split_config, split_train_test
+from quant_rl.data.split import get_split_config, split_bars, split_train_test
 from quant_rl.data.ticks import ticks_covering
 from quant_rl.envs.env_bundle_builder import build_env_bundle
 from quant_rl.envs.env_spec import EnvSpec
 from quant_rl.envs.worker import make_bundle_env
 from quant_rl.eval import eval_run
-from quant_rl.eval.reanalysis_provenance import _feature_build_scope
+from quant_rl.eval.reanalysis_provenance import (
+    _evaluation_dataset_records,
+    _feature_build_scope,
+    _load_exact_source_feature_cache,
+    _validate_reanalysis_datasets,
+)
 from quant_rl.eval.rollout import BAR_CLOSE_EXPOSURE_MEASURE, evaluate_model
+from quant_rl.eval.run_manifest import (
+    build_sequence_feature_schema,
+    build_stop_candidate_schema,
+    validate_sequence_feature_schema,
+)
 from quant_rl.evaluation import calculate_metrics, evaluation_periods_per_year
-from quant_rl.features.build import build_features
-from quant_rl.models.agent import validate_model_action_schema, validate_model_observation_schema
+from quant_rl.features.build import (
+    build_features,
+    select_legacy_obs_columns,
+    select_obs_columns,
+)
+from quant_rl.models.agent import (
+    validate_model_action_schema,
+    validate_model_observation_schema,
+)
 from quant_rl.observation_schema import build_observation_schema
 from quant_rl.train.train_rl import _build_eval_common, _strategy_from_cfg
 
@@ -176,6 +193,18 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--allow-legacy-action-schema", action="store_true")
     parser.add_argument("--allow-legacy-observation-schema", action="store_true")
+    parser.add_argument("--allow-legacy-stop-schema", action="store_true")
+    parser.add_argument(
+        "--allow-legacy-sequence-schema",
+        action="store_true",
+        help="Explicitly replay a manifest without ordered sequence coordinates as unverified.",
+    )
+    parser.add_argument(
+        "--source-feature-cache",
+        type=Path,
+        default=None,
+        help="Read-only exact training feature cache to use for historical checkpoint parity.",
+    )
     parser.add_argument(
         "--split",
         choices=("train", "test"),
@@ -207,7 +236,27 @@ def main() -> int:
 
     provenance_path, provenance = _checkpoint_provenance(run_dir, checkpoint)
     cfg = getattr(eval_run, "_load_run_config")(run_dir)
+    manifest_path = run_dir / "run_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        raise TypeError("source run manifest must be a JSON object")
+    sequence_schema_is_legacy = manifest.get("sequence_feature_schema") is None
+    if sequence_schema_is_legacy and not args.allow_legacy_sequence_schema:
+        raise ValueError(
+            "source run lacks ordered sequence coordinates; pass "
+            "--allow-legacy-sequence-schema only for explicitly unverified replay"
+        )
+    use_legacy_sequence_columns = bool(
+        sequence_schema_is_legacy and args.allow_legacy_sequence_schema
+    )
     model = eval_run._load_checkpoint(checkpoint, legacy_layout_key=args.legacy_action_layout)
+    checkpoint_hash_disposition = eval_run._validate_checkpoint_manifest_hash(checkpoint, manifest)
+    stop_schema_disposition = eval_run._validate_stop_candidate_schema(
+        checkpoint_schema=getattr(model, "stop_candidate_schema", None),
+        manifest_schema=manifest.get("stop_candidate_schema"),
+        expected_schema=build_stop_candidate_schema(cfg),
+        allow_legacy=bool(args.allow_legacy_stop_schema),
+    )
     expected_schema = build_observation_schema(
         str(cfg.env.get("observation_schema_version", "account-state-v1")),
         entry_state_visibility=bool(
@@ -243,35 +292,83 @@ def main() -> int:
     primary_m1 = data[primary_symbol]["M1"]
     secondary_m1 = data.get(secondary_symbol, {}).get("M1")
     train_end, test_start = get_split_config(cfg)
-    train_mask, feature_cache = _feature_build_scope(
-        primary_m1, cfg, Path(cfg.data.cache_dir), primary_symbol, train_end, secondary_m1
-    )
-    features = build_features(
-        primary_m1,
-        secondary=secondary_m1,
-        cfg=cfg,
-        train_mask=train_mask,
-        cache_path=feature_cache,
-    )
+    if args.source_feature_cache is not None:
+        config_record = manifest.get("config")
+        expected_config_hash = (
+            config_record.get("sha256") if isinstance(config_record, dict) else None
+        )
+        if not isinstance(expected_config_hash, str) or _sha256(run_dir / "config.yaml") != (
+            expected_config_hash
+        ):
+            raise ValueError("saved run config does not match the source manifest")
+        cache_path = args.source_feature_cache.expanduser()
+        if not cache_path.is_absolute():
+            cache_path = (Path.cwd() / cache_path).resolve()
+        features, feature_cache, _, _ = _load_exact_source_feature_cache(
+            manifest.get("feature_cache"), cache_path
+        )
+    else:
+        train_mask, feature_cache = _feature_build_scope(
+            primary_m1, cfg, Path(cfg.data.cache_dir), primary_symbol, train_end, secondary_m1
+        )
+        features = build_features(
+            primary_m1,
+            secondary=secondary_m1,
+            cfg=cfg,
+            train_mask=train_mask,
+            cache_path=feature_cache,
+        )
     train_bars, test_bars, train_features, test_features = split_train_test(
         primary_m1, features, train_end, test_start
+    )
+    train_secondary, test_secondary = (None, None)
+    if secondary_m1 is not None and not secondary_m1.empty:
+        train_secondary, test_secondary = split_bars(secondary_m1, train_end, test_start)
+    primary_ticks = build_tick_books(cfg).get(primary_symbol)
+    dataset_disposition = _validate_reanalysis_datasets(
+        manifest.get("datasets"),
+        _evaluation_dataset_records(
+            train_bars=train_bars,
+            train_features=train_features,
+            test_bars=test_bars,
+            test_features=test_features,
+            train_secondary=train_secondary,
+            test_secondary=test_secondary,
+            primary_ticks=primary_ticks,
+        ),
+        allow_legacy=False,
     )
     eval_bars, eval_features, split_role = select_split(
         args.split, train_bars, test_bars, train_features, test_features
     )
-    primary_ticks = build_tick_books(cfg).get(primary_symbol)
     eval_tickbook = ticks_covering(primary_ticks, eval_bars)
     eval_common, _, _, _, _ = _build_eval_common(cfg, args=None, env_vae=None, pre_ny_by_date=None)
+    strategy = _strategy_from_cfg(cfg)[0]
+    sequence_selector = (
+        select_legacy_obs_columns if use_legacy_sequence_columns else select_obs_columns
+    )
+    sequence_columns = [
+        str(column) for column in sequence_selector(features, strategy.raw_columns).columns
+    ]
+    if "reachable_r" not in sequence_columns:
+        sequence_columns.append("reachable_r")
+    sequence_schema = build_sequence_feature_schema(sequence_columns)
+    sequence_schema_disposition = validate_sequence_feature_schema(
+        manifest.get("sequence_feature_schema"),
+        sequence_schema,
+        allow_legacy=use_legacy_sequence_columns,
+    )
+    eval_run._validate_sequence_input_width(model, sequence_schema["width"])
     frame_result = evaluate_model(
         model,
         bars=eval_bars,
         features=eval_features,
         tickbook=eval_tickbook,
         deterministic=True,
+        legacy_sequence_columns=use_legacy_sequence_columns,
         **eval_common,
     )
 
-    strategy = _strategy_from_cfg(cfg)[0]
     bundle_dir.parent.mkdir(parents=True, exist_ok=True)
     bundle_path = build_env_bundle(
         bundle_dir,
@@ -282,6 +379,7 @@ def main() -> int:
         feature_config_hash=feature_cache.stem,
         tickbook=eval_tickbook,
         pre_ny_by_date=None,
+        legacy_sequence_columns=use_legacy_sequence_columns,
     )
     arch = "mtf" if bool(eval_common.get("mtf", False)) else "tcn"
     spec = EnvSpec.from_cfg(
@@ -328,10 +426,17 @@ def main() -> int:
         "source_run": str(run_dir),
         "checkpoint": str(checkpoint),
         "checkpoint_sha256": _sha256(checkpoint),
+        "checkpoint_manifest_hash_disposition": checkpoint_hash_disposition,
+        "stop_schema_disposition": stop_schema_disposition,
         "checkpoint_timesteps": int(model.num_timesteps),
         "attempt_provenance": str(provenance_path),
         "attempt_provenance_sha256": _sha256(provenance_path),
         "config_sha256": _sha256(run_dir / "config.yaml"),
+        "sequence_feature_schema": sequence_schema,
+        "sequence_feature_schema_disposition": sequence_schema_disposition,
+        "legacy_sequence_columns_used": use_legacy_sequence_columns,
+        "dataset_parity_disposition": dataset_disposition,
+        "source_feature_cache_replay": args.source_feature_cache is not None,
         "feature_cache": str(feature_cache),
         "feature_cache_sha256": _sha256(feature_cache),
         "split": {

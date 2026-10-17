@@ -439,3 +439,64 @@ def test_bundle_worker_preserves_strict_eligibility_and_simplex_flags(tmp_path: 
     shared_obs, _ = shared.reset(seed=41)
     for key in frames_obs:
         np.testing.assert_array_equal(frames_obs[key], shared_obs[key])
+
+
+def test_legacy_sequence_columns_match_between_frame_and_bundle(tmp_path: Path) -> None:
+    from quant_rl.envs.env_bundle_builder import build_env_bundle
+    from quant_rl.envs.strategies import BaselineStrategy
+    from quant_rl.envs.trading_env import TradingEnv
+
+    bars = _make_deterministic_bars(n=120)
+    features = _make_features(bars)
+    features["po3_ifvg_time_ns"] = np.asarray(bars.index, dtype="datetime64[ns]").astype(np.int64)
+    strategy = BaselineStrategy()
+    frame_env = TradingEnv(
+        bars=bars,
+        features=features,
+        obs_window=10,
+        episodic=False,
+        strategy=strategy,
+        legacy_sequence_columns=True,
+    )
+    bundle_dir = tmp_path / "legacy_bundle"
+    bundle_cfg = OmegaConf.create(
+        {
+            "env": {"strategy_actions": False, "obs_window": 10},
+            "data": {"raw_dir": str(tmp_path), "m1_files": {}, "tick_files": {}},
+        }
+    )
+    current_bundle_path = build_env_bundle(
+        bundle_dir,
+        bars,
+        features,
+        bundle_cfg,
+        raw_columns=strategy.raw_columns,
+        feature_config_hash="legacy-observation-columns-v1",
+        tickbook=None,
+        pre_ny_by_date=None,
+    )
+    bundle_path = build_env_bundle(
+        bundle_dir,
+        bars,
+        features,
+        bundle_cfg,
+        raw_columns=strategy.raw_columns,
+        feature_config_hash="legacy-observation-columns-v1",
+        tickbook=None,
+        pre_ny_by_date=None,
+        legacy_sequence_columns=True,
+    )
+    bundle_env = TradingEnv.from_bundle(
+        bundle_path,
+        obs_window=10,
+        episodic=False,
+        strategy=BaselineStrategy(),
+    )
+
+    assert "po3_ifvg_time_ns" in frame_env._obs_columns
+    assert current_bundle_path != bundle_path
+    assert bundle_env._obs_columns == frame_env._obs_columns
+    assert bundle_env._legacy_sequence_columns is True
+    frame_obs, _ = frame_env.reset(seed=11)
+    bundle_obs, _ = bundle_env.reset(seed=11)
+    np.testing.assert_array_equal(frame_obs["seq"], bundle_obs["seq"])

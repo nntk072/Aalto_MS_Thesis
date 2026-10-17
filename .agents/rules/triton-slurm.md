@@ -120,13 +120,16 @@ run the command inside an existing shell.
   when a persistent supervisor or direct child process can run it inside the
   existing allocation. Pack workers into the fewest long-lived steps required
   for GPU binding; do not turn each queue poll or retry into a step.
-- **Known launcher hazard:** `campaign_controller.py --worker-nodes ...` builds
-  one `srun --overlap` step per worker. Do not use that mode to launch a large
-  multi-worker campaign until its step topology is changed to one persistent
-  node supervisor per node (with trainer processes as children) or an
-  equivalent packed design. Before any campaign, inspect the actual launch
-  command and estimate the number of steps; reject a design that can fan out
-  dozens of short-lived steps during startup/failure recovery.
+- **Campaign worker dispatch:** `campaign_controller.py --worker-nodes ...`
+  constructs one `srun --overlap` command per worker. It is allowed only when
+  the allocation starts one persistent `campaign_worker_dispatch.py --manager`
+  on each node and prepends `scripts/triton/campaign_worker_bin` to `PATH`, so
+  each worker request is handled as a direct child process rather than a Slurm
+  step. The GH200 supervisor must pass through
+  `campaign_srun_gh200_guard.sh`; direct controller invocation without the
+  managers and shim is forbidden. Before any campaign, inspect the launch
+  topology and confirm there is one long-lived manager per node, no per-worker
+  `srun` steps, and no short-step retry fan-out.
 - Rapid automatic retry after a worker exits early. Preserve its log, let the
   supervisor record the failure, inspect the cause, then resume through the
   campaign controller only after confirming that the retry is a sustained run.
@@ -134,6 +137,11 @@ run the command inside an existing shell.
   current allocation. Prefer one allocation, one sampler, and a fixed benchmark
   window long enough to include warm-up and steady-state throughput.
 - `scancel -u $USER` unless the user explicitly requests a full wipe.
+- Campaign launchers and supervisors must not call `scancel` automatically on
+  rollover, successful completion, retry, or shutdown. They must preserve the
+  current allocation and its evidence. If an allocation is unavailable after
+  the one-minute limit, stop that request and do not automatically resubmit the
+  same shape; inspect alternatives and current per-node resources first.
 - Using `srun` for login-node checks (`ls`, log tails, plain `grep`).
 - GPU count limits are **partition and workload specific**, not global. Follow
   the per-family caps in the table below; check Slurm availability and account

@@ -170,8 +170,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--allow-legacy-sequence-schema",
         action="store_true",
         help=(
-            "Explicitly allow a source manifest without ordered model-feature coordinates; "
-            "the replay is then labeled sequence-schema legacy_unverified"
+            "Explicitly replay a manifest without ordered model-feature coordinates using "
+            "the pre-filter sequence columns; the schema remains legacy_unverified"
         ),
     )
     parser.add_argument(
@@ -526,10 +526,11 @@ def main() -> None:
         cfg, args=None, env_vae=None, pre_ny_by_date=None
     )
     sequence_schema_is_legacy = source_manifest.get("sequence_feature_schema") is None
+    use_legacy_sequence_columns = bool(
+        sequence_schema_is_legacy and args.allow_legacy_sequence_schema
+    )
     observation_column_selector = (
-        select_legacy_obs_columns
-        if sequence_schema_is_legacy and args.allow_legacy_sequence_schema
-        else select_obs_columns
+        select_legacy_obs_columns if use_legacy_sequence_columns else select_obs_columns
     )
     sequence_columns = [
         str(column)
@@ -551,6 +552,7 @@ def main() -> None:
         bars=test_bars,
         features=test_feat,
         tickbook=ticks_covering(primary_ticks, test_bars),
+        legacy_sequence_columns=use_legacy_sequence_columns,
         **eval_common,
     )
     test_result["initial_balance"] = cfg.account.initial_balance
@@ -577,6 +579,7 @@ def main() -> None:
         bars=train_bars,
         features=train_feat,
         tickbook=ticks_covering(primary_ticks, train_bars),
+        legacy_sequence_columns=use_legacy_sequence_columns,
         **eval_common,
     )
     train_result["initial_balance"] = cfg.account.initial_balance
@@ -677,6 +680,7 @@ def main() -> None:
         "observation_schema": expected_observation_schema.to_dict(),
         "sequence_feature_schema": expected_sequence_schema,
         "sequence_feature_schema_disposition": sequence_schema_disposition,
+        "legacy_sequence_columns_used": use_legacy_sequence_columns,
         "legacy_action_schema_opt_in": bool(args.allow_legacy_action_schema),
         "legacy_observation_schema_opt_in": bool(args.allow_legacy_observation_schema),
         "legacy_sequence_schema_opt_in": bool(args.allow_legacy_sequence_schema),
@@ -688,6 +692,7 @@ def main() -> None:
         "feature_cache_identity": feat_cache.name,
         "feature_cache_hash": evaluated_feature_cache_hash or None,
         "feature_cache_file_sha256": evaluated_feature_cache_file_sha256,
+        "evaluated_feature_cache_path": str(feat_cache.resolve()),
         "source_feature_cache_replay_path": (
             str(feat_cache) if source_cache_replay_path is not None else None
         ),

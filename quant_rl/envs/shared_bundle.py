@@ -23,6 +23,7 @@ _ARRAY_NAME = re.compile(r"^[A-Za-z0-9_]+$")
 _RELEVANT_CONFIG_PATHS = (
     "env.obs_window",
     "env.strategy_actions",
+    "legacy_sequence_columns",
     "strategy.raw_columns",
     "features",
     "feature_config_hash",

@@ -40,7 +40,11 @@ from ..envs.feature_row import BarView, FeatureRow
 from ..envs.reward import DSRReward, EquityDeltaReward, PnLReward, RMultipleReward
 from ..envs.strategies import BaselineStrategy, TradingStrategy
 from ..envs.sweep_reward import CompositeReward, SweepConfirmationReward
-from ..features.build import attach_reachable_r, select_obs_columns
+from ..features.build import (
+    attach_reachable_r,
+    select_legacy_obs_columns,
+    select_obs_columns,
+)
 
 if TYPE_CHECKING:
     from ..models.vae import VAE
@@ -312,6 +316,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         observation_age_scale_bars: float = 60.0,
         bundle_data: Any | None = None,
         strict_research_eligibility: bool = False,
+        legacy_sequence_columns: bool | None = None,
     ):
         """Initialize trading environment.
 
@@ -353,6 +358,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             session — mirroring ``quant_rl.backtest.engine.run_backtest`` — so a
             single call to ``reset()`` + repeated ``step()`` calls can walk the
             *entire* data split without terminating early.
+        legacy_sequence_columns : bool | None
+            Explicitly reproduce the pre-metadata-filter sequence coordinates
+            for historical evaluation. Legacy coordinates are rejected for
+            episodic training environments.
         use_sweep_reward : bool
             If True, use SweepConfirmationReward instead of DSRReward.
         sweep_alpha : float
@@ -543,6 +552,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._breakeven_buffer_pts = float(eod.get("breakeven_buffer_pts", 2.0))
         self._ny_pos = 0
         self.episodic = episodic
+        if legacy_sequence_columns is True and episodic:
+            raise ValueError("legacy sequence columns are restricted to non-episodic replay")
         self.use_sweep_reward = use_sweep_reward
         self.min_sl_atr_mult = float(min_sl_atr_mult)
         self.min_sl_points = float(min_sl_points)
@@ -742,8 +753,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # be cast to float32 and are not part of the model's normalized observation.
         if self._bundle_arrays is None:
             assert bars is not None and features is not None
+            self._legacy_sequence_columns = bool(legacy_sequence_columns)
+            select_columns = (
+                select_legacy_obs_columns if self._legacy_sequence_columns else select_obs_columns
+            )
             self._obs_features: pd.DataFrame = attach_reachable_r(
-                select_obs_columns(features, self.strategy.raw_columns),
+                select_columns(features, self.strategy.raw_columns),
                 bars,
                 features,
             )
@@ -752,6 +767,18 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             assert bundle_data is not None
             self._obs_features = cast(pd.DataFrame, None)
             self._obs_columns = list(bundle_data.manifest["column_names"]["obs_features"])
+            saved_legacy_columns = bool(
+                bundle_data.manifest.get("config", {}).get("legacy_sequence_columns", False)
+            )
+            if legacy_sequence_columns is not None and bool(legacy_sequence_columns) != (
+                saved_legacy_columns
+            ):
+                raise ValueError(
+                    "requested legacy sequence-column mode differs from the saved env bundle"
+                )
+            self._legacy_sequence_columns = saved_legacy_columns
+        if self._legacy_sequence_columns and episodic:
+            raise ValueError("legacy sequence columns are restricted to non-episodic replay")
         self._obs_features_mmap = obs_features_mmap
 
         # Cache numpy arrays for hot-path env stepping — avoids per-step pandas
