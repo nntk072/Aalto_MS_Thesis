@@ -544,6 +544,65 @@ def _policy_env(
     )
 
 
+def test_po3_gate_pair_requires_shared_direction_control_for_a_real_contrast() -> None:
+    bars = _bars(n=20)
+    feats = _features(bars, ctx_dir=1.0)
+    feats["po3_ifvg_confirmed"] = 1.0
+    feats["po3_distribution_direction"] = 1.0
+    control_strategy = PO3IFVGStrategy(
+        enforce_gate=False,
+        entry_mode="confirmed_first_eligible",
+    )
+    treatment_strategy = PO3IFVGStrategy(
+        enforce_gate=True,
+        entry_mode="confirmed_first_eligible",
+    )
+
+    # The legacy five-coordinate overlay takes its side from context, making
+    # enforce_gate behaviorally redundant when both arms use that action schema.
+    control_5d = _policy_env(feats, bars, strategy=control_strategy)
+    treatment_5d = _policy_env(feats, bars, strategy=treatment_strategy)
+    assert control_5d.action_space.shape == treatment_5d.action_space.shape == (5,)
+    context_side = np.array([0.9, 0.0, 0.5, 0.0, -1.0], dtype=np.float32)
+    for env in (control_5d, treatment_5d):
+        env.reset()
+        env.step(context_side)
+        assert env.position is not None
+        assert env.position.direction == 1
+
+    # With the same six-coordinate direction-control schema in both arms, the
+    # control can take the agent's opposite-side proposal; the gate treatment
+    # rejects it because the confirmed structural context is long.
+    control_6d = _policy_env(
+        feats,
+        bars,
+        direction_control=True,
+        strategy=PO3IFVGStrategy(
+            enforce_gate=False,
+            entry_mode="confirmed_first_eligible",
+        ),
+    )
+    treatment_6d = _policy_env(
+        feats,
+        bars,
+        direction_control=True,
+        strategy=PO3IFVGStrategy(
+            enforce_gate=True,
+            entry_mode="confirmed_first_eligible",
+        ),
+    )
+    assert control_6d.action_schema.to_dict() == treatment_6d.action_schema.to_dict()
+    opposite_side = np.array([-1.0, 0.9, 0.0, 0.5, 0.0, -1.0], dtype=np.float32)
+    control_6d.reset()
+    control_6d.step(opposite_side)
+    treatment_6d.reset()
+    _obs, _reward, _done, _trunc, info = treatment_6d.step(opposite_side)
+    assert control_6d.position is not None
+    assert control_6d.position.direction == -1
+    assert treatment_6d.position is None
+    assert info["entry_rejection_reason"] == "entry_gate"
+
+
 def test_sweep_entry_stays_open_while_manipulation_is_active() -> None:
     bars = _bars(n=20)
     feats = _features(bars)

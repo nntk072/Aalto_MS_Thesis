@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import subprocess
+from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -47,6 +48,22 @@ from quant_rl.models.agent import (
 )
 from quant_rl.observation_schema import build_observation_schema
 from quant_rl.train.train_rl import _build_eval_common, _strategy_from_cfg
+
+__all__ = ["evaluation_periods_per_year"]
+
+LEGACY_M1_ANNUALIZATION_CONVENTION = (
+    "legacy M1 default: 252 sessions/year x 390 NY-session M1 bars/session"
+)
+
+
+def _annualization_convention(cfg: Any) -> str:
+    """Describe configured annualization, including the legacy config fallback."""
+    evaluation = cfg.get("evaluation", {})
+    if isinstance(evaluation, Mapping):
+        convention = evaluation.get("annualization_convention")
+        if isinstance(convention, str) and convention.strip():
+            return convention
+    return LEGACY_M1_ANNUALIZATION_CONVENTION
 
 
 def _sha256(path: Path) -> str:
@@ -145,6 +162,7 @@ def _evaluate_bundle_result(
     *,
     strategy_actions: bool,
     continuous_actions: bool,
+    execution_seed: int | None,
 ) -> dict[str, Any]:
     """Replay a bundle env with the same policy action interpretation as frames."""
     return evaluate_model(
@@ -154,6 +172,7 @@ def _evaluate_bundle_result(
         deterministic=True,
         continuous_actions=continuous_actions,
         strategy_actions=strategy_actions,
+        execution_seed=execution_seed,
         env=bundle_env,
     )
 
@@ -343,6 +362,10 @@ def main() -> int:
     )
     eval_tickbook = ticks_covering(primary_ticks, eval_bars)
     eval_common, _, _, _, _ = _build_eval_common(cfg, args=None, env_vae=None, pre_ny_by_date=None)
+    execution_seed = eval_run._resolve_execution_seed(None, manifest)
+    if eval_common["randomized_fill_latency_ms"] > 0 and execution_seed is None:
+        raise ValueError("randomized tick-fill parity requires a seed in the source run manifest")
+    eval_common["execution_seed"] = execution_seed
     strategy = _strategy_from_cfg(cfg)[0]
     sequence_selector = (
         select_legacy_obs_columns if use_legacy_sequence_columns else select_obs_columns
@@ -397,6 +420,7 @@ def main() -> int:
         bundle_env,
         continuous_actions=bool(eval_common["continuous_actions"]),
         strategy_actions=bool(eval_common["strategy_actions"]),
+        execution_seed=execution_seed,
     )
     comparisons = compare_results(frame_result, bundle_result)
     frame_metrics = _metrics(frame_result, cfg)
@@ -450,7 +474,7 @@ def main() -> int:
         "metrics_protocol": {
             "annualization": {
                 "periods_per_year": evaluation_periods_per_year(cfg),
-                "convention": str(cfg.evaluation.annualization_convention),
+                "convention": _annualization_convention(cfg),
             },
             "initial_balance": float(cfg.account.initial_balance),
             "frequency": "bar_close_equity",

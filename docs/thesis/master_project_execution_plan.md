@@ -7,58 +7,221 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-17 12:31 Helsinki):** work is on `main` at HEAD
-`21db5ee`; the checkout has uncommitted P1 fill-source instrumentation, an
-MI210 environment-selector fix, and the Q0–Q7 implementation audit. There is no
-training campaign, supervisor, or tmux session. MI210 allocation `21015952`
-completed successfully after 6:06. The real MI210 matrix smoke passed;
-full-tree Ruff format, Ruff lint, and Mypy passed; and the full suite passed
-**1,686 tests (82 warnings, 3:41)**. Validation log:
-[`P1 full validation`](../../outputs/gpu_ci_gates/p1_tick_quality_job21015952/validation.log).
-An initial corrected-gate attempt, `21015950`, ended after 8 seconds because
-Ruff found an unsorted import in the new selector test. The lint issue was
-fixed, the output/logs were preserved, and the complete gate was rerun once to
-success in `21015952`; its short-step incident is recorded rather than hidden.
-Earlier MI210 validation `21015880` and the pre-selector attempt remain
-historical evidence only. No training was launched.
+**Live checkpoint (2026-10-17 17:43 Helsinki):** work remains on `main`; the
+previously dirty 55-entry working tree is committed, with no edits discarded.
+The latest current-tree verification completed
+naturally on two GH200 nodes in job `21019594` (one GH200, 64 CPUs, 512 GiB
+per node). CUDA smoke, full-tree Ruff format (459 files), Ruff lint, full-tree
+Mypy (468 source files), all **1,729 pytest tests** (82 warnings), P1 coverage
+audit, and whitespace checks passed. The log is
+[`validation.log`](../../outputs/gpu_ci_gates/current_tree_job21019594/validation.log).
+The same job audited every canonical v2/v3 tick cache and the matching caches
+in the separate fast-training worktree. The canonical US100 v2/v3 caches are
+identical and span 2025-12-28 through 2026-07-03 UTC; the separate worktree's
+v2 copy is identical. They therefore do not add the missing early training
+period. Schedule coverage remains 1,173/99,504 US100 training orders (1.1788%)
+and 49,925/49,925 test orders; US500 is fully covered in both splits. Reports:
+[`p1_tick_cache_timeline_20261017_job21019594.json`](evidence/p1_tick_cache_timeline_20261017_job21019594.json),
+[`p1_tick_execution_coverage_20261017_job21019594.json`](evidence/p1_tick_execution_coverage_20261017_job21019594.json),
+and the independent node-2 repeat
+[`p1_tick_execution_coverage_20261017_job21019594_node2.json`](evidence/p1_tick_execution_coverage_20261017_job21019594_node2.json).
+The cache audit's strict-increase flag is false; the builder stable-sorts by
+timestamp, so duplicates are possible and this flag alone does not establish
+out-of-order rows. Tick cache provenance and data-use/publication terms also
+remain undocumented. The job completed with exit 0 in 4:38; no training
+campaign or supervisor is active. The user clarified the allocation ceiling
+as 12 GH200 GPU-hours per request (one GPU up to 12h or two GPUs up to 6h);
+the 1-hour two-GH200 verification allocation was within that limit. Thesis
+readiness remains NOT READY: software CI and cache inventory do not close P1
+or constitute strategy evidence.
 
-The current P1 tick audit verified campaign input hashes and reports
-training-minute valid-quote coverage of **1.1648% for US100.cash**
-(4,095/351,550) and **99.8246% for US500.cash** (349,484/350,098). Report:
-[`g1_tick_quality_current_recovery_2026-10-17_job21015952.json`](g1_tick_quality_current_recovery_2026-10-17_job21015952.json)
-(SHA-256 `5f0d7fe63a052940abad3957d20d4a4ea749b6f22e4cb0acb15b4182951398ff`).
-Its quote-quality disposition is explicitly descriptive, not acceptance-gated.
-The local `data/` inventory contains the four M1/tick CSVs and feature-cache
-artifacts, but no feed/vendor/license manifest or source sidecar. Their
-MetaTrader-style column headers identify an export format, not the broker or
-feed. Feed/use terms, broker clock/DST, feed-specific thresholds, and per-split
-fill-source acceptance remain unresolved; P1 is not cleared. New RL fill rows
-now identify tick, bar-open, bar-close, or OHLC-level pricing, and exports plus
-the numerical verifier reconcile source counts. The MI210 activation script
-selects the ROCm environment for `gpu-amd`; its live allocation selection and
-real MI210 matrix operation passed, as did its selector regression tests.
-The 60-second resource wait/fallback rule already exists in
-`.agents/rules/triton-slurm.md`; the audit adds no duplicate rule. None of these
-engineering checks establishes strategy quality, data-use rights, campaign
-validity, or thesis readiness.
+**P2 randomized-fill determinism correction (2026-10-17 16:42 Helsinki):**
+Source review found that `deterministic=True` fixes policy actions but did not
+seed Gymnasium's environment RNG. The newly wired `[0, 30 ms)` fill latency
+samples through that RNG, while `evaluate_model()` reset the environment
+without a seed. Evaluation now accepts an explicit `execution_seed`; training
+evaluation uses the campaign seed, checkpoint reanalysis uses `--seed` or the
+source-manifest seed, and positive randomized latency fails closed without one.
+Reanalysis records the seed, and the repeatability comparator treats it as an
+identity field. Frame/bundle parity and seed-sensitivity replay pass that seed
+through too. Regression tests were added but have not run; current-tree CI and
+randomized-fill repeatability remain unverified until a GPU gate completes.
 
-**GH200 availability check (2026-10-17 12:31 Helsinki):** `gpuarm1` and
-`gpuarm2` are idle, each configured with 2 GH200s, 144 CPUs, and about 1.1 TB
-RAM. Slurm `--test-only --immediate=60` forecast 2026-10-20 for both a two-node
-request (one GH200/node, 48 CPUs, 512 GiB/node) and a single-node request
-(1 GH200, 16 CPUs, 128 GiB). No GH200 job was submitted or left pending. The
-MI210 validation allocation had already completed naturally, so nothing was
-canceled. These idle-node inventories do not imply near-term schedulability.
+**P2 current-tree verification update (2026-10-17 16:54 Helsinki):** the
+deterministic execution-seed changes and regression tests have now passed the
+full GH200 gate: Ruff format/lint, full-tree Mypy, and all 1,721 repository
+tests. This verifies the code and test suite; the seed-50 comparator/parity
+artifacts remain bounded engineering evidence on the contaminated, previously
+inspected checkpoint. An admissible selected-checkpoint acceptance is still
+required to close P2.
 
-The 60-second allocation limit, pre-allocation per-node GPU/CPU/RAM inspection,
-and A100-or-better/MI210 fallback are already documented in
-`.agents/rules/triton-slurm.md`; the request for MI210 started immediately after
-the exact resource forecast. The previous full-fold audit remains bounded and
-source-snapshot-specific. P1 still needs feed/use provenance, calendar/DST,
-execution-source acceptance review, and current cache/data audits. Q0–Q7 have
-implementation foundations but no empirical stage result or
-winner. Thesis readiness remains NOT READY. Earlier live-state entries below
-are historical snapshots.
+GH200 job `21017747` validated the current tree: full-tree Ruff format (457
+files), Ruff lint, full-tree Mypy (**466 source files, no issues**), and
+`pytest tests/ -q` (**1,701 passed, 82 warnings, 162.35 seconds**) all passed.
+The audit script type issue from job `21017706` was fixed before this final
+gate. Evidence and regenerated report are
+[`validation.log`](../../outputs/gpu_ci_gates/p1_final_data_validation_job21017747/validation.log)
+and [`p1_tick_execution_coverage_20261017_job21017747.json`](evidence/p1_tick_execution_coverage_20261017_job21017747.json).
+No campaign was started and thesis readiness remains NOT READY.
+
+P2 follow-up on GH200 job `21018273` completed the exact repeat comparator and
+frame/shared-bundle parity for both splits on the same legacy seed-50
+checkpoint. The comparator passed with no errors; train and test artifacts
+were byte-identical across repeats. Both backend audits passed all 25 compared
+fields, and the focused suite passed 40 tests (42 warnings). The parity job
+completed with exit 0. Results cover the 6-trade training split and 2-trade
+historical test split. See
+[`p2_engineering_reanalysis_a4b_seed50_2026-10-17.md`](evidence/p2_engineering_reanalysis_a4b_seed50_2026-10-17.md)
+and its linked JSON reports. This closes only those bounded engineering checks;
+it does not make the contaminated, previously inspected checkpoint eligible
+for thesis conclusions. `sacct` reports both enclosing validation wrappers as
+`FAILED`/exit 1, and their stdout/stderr are absent from the repository. Thus
+the JSON artifacts pass their own comparisons, but the full current-tree CI
+gate is not claimed complete; rerun and persist it on the next eligible GPU
+allocation.
+
+The last H200 test job `21019023` is terminal `FAILED`/exit 2 after 49 seconds.
+Its preserved log shows the check script ran mutating `ruff format` against a
+path list containing YAML; Ruff reformatted four Python files, then exited on
+the YAML parse error. No lint, Mypy, or pytest gate ran. The original script
+and log are preserved. A corrected check-only full-tree runner is at
+[`run_current_tree_gpu_ci.sh`](../../scripts/triton/run_current_tree_gpu_ci.sh),
+which will also write a new 30 ms coverage report with the base YAML and
+variant-resolver settings recorded separately; neither has yet been rerun.
+At 16:33, test-only forecasts were H200-M at 17:16:07 and H200 3g.71GB at
+18:21:39. The 16:26 forecasts for H100 (17:19), GH200 (Oct 20), A100 (Oct 18),
+and B300 (Oct 18) are historical and require fresh per-node checks before use.
+No job was submitted or left pending because none could start within the
+one-minute resource-wait rule.
+
+**P1 current-data tick execution audit (2026-10-17):** GH200 job `21017747`
+recomputed M1 data from raw bars, rebuilt TickBooks from raw ticks, and matched
+both results exactly against the training M1/tick caches for US100 and US500.
+Under the trainer's NY-session step schedule, mapping each eligible step to
+its next market-bar quote, randomized latency `[0, 30 ms)`, and a 60-second
+quote-wait bound, configured primary US100 has only **1,173/99,504 (1.1788%)**
+training-step coverage (98,331 unavailable) and **49,925/49,925** test-step
+coverage. US500 is fully covered for its own split schedule: **99,493/99,493**
+training steps and **49,925/49,925** test steps. US500 is descriptive evidence
+only; the default primary remains US100 and no instrument change is authorized.
+The raw tick scan matched the recovery campaign's input hashes. It found
+50,146 nonfinite US100 quotes and 136,559 nonfinite US500 quotes, with no
+nonpositive or crossed quotes and no raw timestamp order breaks; quote-quality
+acceptance thresholds, provider identity, and data-use/publication terms remain
+unknown. These findings do not qualify US500 as a thesis instrument or make
+the overall data gate pass.
+
+Artifacts: [`p1_tick_execution_coverage_20261017_job21017747.json`](evidence/p1_tick_execution_coverage_20261017_job21017747.json),
+[`g1_tick_quality_current_recovery_2026-10-17_job21017706.json`](g1_tick_quality_current_recovery_2026-10-17_job21017706.json),
+and [`validation.log`](../../outputs/gpu_ci_gates/p1_final_data_validation_job21017747/validation.log).
+
+Two early GH200 attempts in this turn were short: `21017546` ended after 1
+second after the hardware snapshot, and `21017550` failed after 39 seconds
+because the login PATH selected an x86_64 `uv` binary on ARM64 (`Exec format
+error`). Both are recorded launch-control incidents. The final substantive
+validation used the ARM64 venv's Ruff/Python tools directly and the documented
+node-local Mypy staging workflow; do not repeat either short-job pattern.
+
+**P1 implementation update (2026-10-17 14:21 Helsinki):** randomized tick
+execution with seeded uniform latency in `[0, 30 ms)` is wired through the
+training environment and custom backtest. The custom backtest now resolves a
+tick quote only when an order executes, records order/arrival/actual-tick times,
+and fails closed on candle-only protective triggers in this mode. The standalone
+backtest command reads the execution settings from config and uses its seed.
+The base config remains `0.0` for direct/legacy invocations, while the standard
+thesis variant resolver now appends `execution.randomized_fill_latency_ms=30.0`
+after variant overrides, so standard new variant runs cannot silently disable
+the `[0, 30 ms)` seeded delay. Historical campaign configs and fingerprints
+remain unchanged. The current coverage audit uses the same `[0, 30 ms)` interval;
+its report separately records the base-config value and resolver value. The
+early coverage report used all M1 rows and
+recorded **4,095/351,549 (1.1648%)** US100 training coverage and
+**177,209/177,209 (100%)** test coverage. Those counts are not the NY-step
+schedule; the authoritative schedule-specific result is the current-data audit
+in the live checkpoint above. Six focused test files passed **64 tests**;
+full-tree Ruff format (456 files) and lint passed, and full-tree Mypy passed
+across **465 source files**. These are bounded software and input-preflight
+checks, not P1 campaign/data readiness. The full repository suite also passed:
+**1,701 passed, 82 warnings, 27 subtests** in 130.97 seconds. The full-suite
+log is [`pytest_full.log`](../../outputs/gpu_ci_gates/p1_tick_randomized_wiring_job21017331/pytest_full.log)
+(SHA-256 `17a58c105072bb04af115be05b4ef7dca973ca826ba03a050910f4ca0fd76e2b`).
+The captured gate log is
+[`validation.log`](../../outputs/gpu_ci_gates/p1_tick_randomized_wiring_job21017331/validation.log)
+(SHA-256 `76cbfbd0a4ffa0cdda04b3c32c7bd87c4628c083883b80f0d582bb7a80ecbfac`).
+The split-coverage artifact is
+[`tick_execution_preflight.json`](../../outputs/gpu_ci_gates/p1_tick_randomized_wiring_job21017331/tick_execution_preflight.json)
+(SHA-256 `b57bba0b50c139ed805ca1976892534914107e144697235d5a14a09d4bb4f329`).
+
+The current-year tick coverage audit found valid quotes in only
+**4,095/351,550 US100 training minutes (1.1648%)**, versus
+**349,484/350,098 US500 minutes (99.8246%)**; feed identity and data-use terms
+remain undocumented. P1/P2 still block a new campaign until a defensible
+US100 execution-data source/coverage solution and provenance are established.
+No full-year candle fallback or silent extrapolation is permitted.
+The configured raw US100 tick export is one 49.16-million-row file spanning
+2025-12-29 through 2026-07-03 in broker time (`Etc/GMT-3`). It is full for its
+recorded export interval but does not cover the configured training year
+2024-12-30 through 2025-12-31; a 30 ms delay and 60-second quote wait cannot
+create ticks for the missing earlier months. The P1 report's
+`configured_randomized_latency_ms: 0.0` refers to the legacy base YAML; that report audited
+the explicit 30 ms interval. Do not interpret that field as evidence that the
+coverage audit used zero delay. The cached US100 TickBook has the same 49,160,484
+rows and exact array hash as the raw export; it is a verified cache copy, not a
+longer-period tick source.
+
+**P1 data-intake acceptance, derived from the executable contract (2026-10-17):**
+to reopen the US100 screen, supply a raw US100.cash bid/ask tick export that
+covers every scheduled training decision time in the configured
+2024-12-30–2025-12-31 split, including the first currently unavailable time
+`2024-12-30T13:31:00Z`, and retains adequate observations for the standard
+`[0, 30 ms)` latency plus the 60-second quote-wait check. Coverage must be
+verified by the existing schedule audit at **99,504/99,504 training decision
+times**, with the existing complete test coverage preserved. The fill contract
+uses the first tick at or after the sampled arrival time; no earlier quote,
+candle fallback, interpolation, or use of US500 quotes may fill US100 orders.
+On intake, record the provider/feed, export method, broker timezone, and
+data-use/publication terms; hash and validate the raw file; rebuild the TickBook
+cache from that raw source; require exact raw/cache array parity; audit ordering,
+duplicates, raw invalid-row counts, session mapping, and full train/test
+schedule coverage. Confirm that every retained executable quote is finite,
+positive, and uncrossed under the documented TickBook filtering, then obtain
+independent acceptance of any additional feed-quality thresholds. This
+specifies acceptance checks only; it does
+not assert that the missing source or its usage rights have been obtained.
+
+GPU throughput probe `21017302` completed on an H200 3g.71GB slice (`gpu49`)
+with 8 CPUs, 128 GiB requested RAM, and the shared bundle. The 81,920-step PPO
+core result is recorded at
+[`outputs/fps_h200_71gb_a0_n64_81920_20261017.json`](../../outputs/fps_h200_71gb_a0_n64_81920_20261017.json):
+2,167.6 aggregate environment steps/s, 4,017.1 rollout/framework steps/s,
+1.36 average CPU cores used, 4.74 GiB cgroup memory after training, and 1.69
+GiB allocated / 2.05 GiB reserved peak GPU memory. GPU utilization percentage
+and production callback/evaluation/checkpoint costs were not measured. Treat
+this as an exploratory PPO-core measurement on an H200 slice, not a full-H200,
+campaign-throughput, or thesis-result claim.
+
+MI210 benchmark attempt `21017091` ended at the user's direction after 37:19
+while ROCm/MIOpen was still tuning convolution kernels; PPO did not start and
+no FPS result was produced. No MI210 training is authorized by that attempt.
+
+MI210 job `21015952` completed full-tree Ruff format/lint, Mypy, a real matrix
+smoke, and **1,686 tests (82 warnings)**. The later MI210 job `21015996` again
+passed the full software gates and completed one full deterministic
+train/test-split reanalysis. The user then directed stopping MI210; the job was
+canceled at 25:42 during its second replay. Its log and completed run-2 output
+remain preserved at `outputs/gpu_ci_gates/p2_repeat_parity_job21015996/` and
+`outputs/thesis_engineering_reanalysis/`. Run 3, independent comparison, and
+frame/shared-bundle parity did not complete. The completed replay is
+engineering-only and contaminated by known lookahead; its run-2 diagnostics
+show candle-derived entries/exits alongside ticks. MI210 is not eligible for
+future work, and no MI210 PPO training FPS was measured.
+
+The dirty `TickBook` correction returns no quote after the final recorded tick,
+avoiding stale-price fills. The resolver selects the first observed tick after
+order arrival when an order precedes the first stored tick, subject to its
+60-second maximum quote wait. The randomized execution path remains opt-in and
+does not bypass the coverage/provenance gate above. Thesis readiness remains
+NOT READY; earlier live-state entries below are historical snapshots.
 
 One completed-checkpoint P2 reanalysis now exists for
 `ladder_a4b_distribution__seed50`, using its exact source cache and full
@@ -1701,6 +1864,19 @@ survival gate. See the evidence-backed
 and campaign JSON report; do not use the screen for selection or confirmatory
 claims.
 
+The 2026-10-17 cross-source reconciliation closes the historical screen's
+identity/status accounting: all 18 variants are matched across manifest,
+controller, and saved report; statuses are 11 succeeded, 4 train-survival
+failures, and 3 interrupted. Full-split telemetry is confirmed for 17/18
+current recovery attempts (1,088 of 1,152 environments); the missing baseline
+record is retained as a specific telemetry gap. PnL reconciliation is 32
+verified, 0 mismatched, and 4 unavailable. This closes accounting and
+disposition of the old screen only. The campaign remains invalid for selection,
+and P1's admissible-screen/data gates remain open. Report:
+[`p1_18_variant_screen_disposition_2026-10-16.md`](evidence/p1_18_variant_screen_disposition_2026-10-16.md);
+machine summary:
+[`campaign_results_summary_v2.json`](../../outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json).
+
 ### Exit criterion
 
 Exactly 18 terminal identities are reconciled. Every successful training run
@@ -2080,6 +2256,35 @@ Do not rerun every bounded unit test merely for ceremony. Revalidate the parts
 whose source or integration boundary changed and run the repository-required
 full quality gate before the final experiment source is frozen.
 
+**HTF swing-stop source/test audit (2026-10-17):** the required mechanism is
+implemented but is not yet integrated into a final RQ1 run. The opt-in profile
+[`pd_context_mtf_swing_candidates.yaml`](../../config/features/pd_context_mtf_swing_candidates.yaml)
+requests three recent distinct unswept confirmed swings per side on M5/M15/H1.
+[`recent_unswept_swing_candidates`](../../quant_rl/features/swings.py) assigns
+pivot, confirmation, and source-bar age metadata; `build.py` aligns the
+configured timeframe outputs; and `entry_levels._stop_menu` rejects missing or
+future provenance, wrong-side levels, and minimum-distance violations while
+recording deterministic candidate audits. The run-manifest schema captures the
+effective menu in both manifests and checkpoints, and resume/evaluation reject
+schema mismatches. The current GH200 suite passed 1,721 tests, including
+candidate-feature, stop-menu provenance, and checkpoint-schema tests. The
+previous coverage was bounded: it built M5 features and used M5-long/H1-short
+stop-menu examples separately. This turn expands the feature test to load the
+actual M5/M15/H1 opt-in profile and adds mirrored long/short menu tests covering
+all nine candidates, their provenance, and selection through the stop action
+coordinate. It also mirrors the actual PO3/IFVG far-edge and observed through-zone
+stop tests across long and short geometry, including minimum-distance rejection
+and action-coordinate selection of each stop candidate;
+the prior stop-menu tests exercised only long positions. A feature-state regression
+checks that observed excursions update causally and mirror in both directions.
+GH200 job `21019521` passed these expanded regressions and the 1,727-test suite,
+as well as full-tree Ruff and Mypy. The profile remains opt-in and defaults
+remain at one legacy swing. Before P7, enable the frozen profile in both matched
+arms and verify that the resolved configuration and checkpoint/report identity
+record the exact schema. This closes the expanded source/test verification slice,
+not all of G0: final run identity and independent review remain required, while
+G1 still blocks experiment freeze. This audit does not authorize training.
+
 ### G1 — data/feature/evaluation validity
 
 Complete a thesis-ready data audit:
@@ -2220,6 +2425,36 @@ context. Their action schemas and reward/strategy semantics differ. The current
 matched run identity after P4, aligning the reward, action schema, feature
 exposure, risk/management candidates, costs, and runtime before changing only
 the predeclared structural entry intervention.
+
+**Provisional RQ1 mechanism review — 2026-10-17; no pair frozen.** The initial
+candidate of toggling only `strategy.entry.enforce_gate` while retaining the
+default five-coordinate strategy action is invalid: with
+`agent_direction_control=false`, `_decode_action` takes the side directly from
+`context_direction`, so any non-hold request already matches the PO3/IFVG gate.
+The toggle is behaviorally redundant in that action schema and cannot support an
+RQ1 effect claim.
+
+A testable single-factor candidate is to hold `agent_direction_control=true`
+(the same six-coordinate action schema in both arms), the `po3_ifvg` strategy,
+full PO3/IFVG features, `confirmed_first_eligible` mode, reward, and all
+risk/management settings constant, then compare `enforce_gate=false` (control)
+with `true` (treatment). The policy can propose either side in both arms; the
+treatment's `validate_entry` requires that side to match the current confirmed
+PO3/IFVG context, while the control leaves that final check open. The existing
+manipulation-side lock remains common to both arms. This appears to create a
+behavioral contrast while changing only the eligibility gate, but it is still a
+P5 candidate: a resolved-config diff and end-to-end action trace must confirm
+the contrast, and both arms must retain `entry_state_machine=false`.
+
+Regression tests for the no-op five-coordinate case and the six-coordinate
+control/treatment contrast have been added but have not yet run on the required
+GPU validation node. Before freezing the pair, P4 must pass and the resolved
+configs/source must confirm that `validate_entry` is the only path changed by
+the gate and that reward, observations, action schema, strategy mode,
+stop/target menus, costs, data/splits, seed, update budget, checkpoint rule,
+and evaluation are matched. If the action trace does not show the intended
+eligibility difference, discard this candidate. No RQ1 run identity or
+treatment is frozen by this note.
 
 ### 13.2 RQ3 mechanism evidence
 
@@ -2379,6 +2614,15 @@ shows a new bottleneck.
 Use the measured high-concurrency result only as a starting candidate. Reconfirm
 campaign-level behavior because PPO-core throughput excludes callbacks,
 evaluation, checkpointing, report export, and multi-run coordination.
+
+The 2026-10-17 H200 3g.71GB PPO-core probe above is a single exploratory
+measurement. It used `n_envs=64`, eight sharded-bundle workers, rollout buffer
+staging on the device, 15 PPO epochs, and a 2,048 minibatch. Its 2,167.6 total
+FPS (4,017.1 rollout/framework FPS) cannot be compared directly with prior
+full-GH200 or multi-trainer figures because the GPU partition and measurement
+scope differ. The benchmark-only progress prints used a 1,000-step cadence;
+the normal training logger remains unchanged. P6 still requires matched
+measurement on the frozen final profile and campaign-level runtime accounting.
 
 ### 14.3 Concurrency and `n_envs`
 
@@ -2692,6 +2936,11 @@ No corresponding `.tex`, `.docx`, or `.odt` source was found. Keep the deck as a
 separate existing artifact. The P10 source/draft prerequisite remains
 unresolved until the author supplies or identifies the manuscript, or the P9
 evidence package is ready for new authoring.
+
+**Read-only source search follow-up (2026-10-17):** a filename search under
+`/home/nguyenl37` to depth four found no thesis/dissertation `.tex`, `.docx`,
+`.odt`, or `.pdf` source. This search is bounded to that tree/depth and does not
+rule out a draft elsewhere; no manuscript was edited or created.
 
 **Submission-format and AI-use checks — 2026-10-17:** Aalto's current general
 instructions require the final thesis to be one PDF/A submitted through
@@ -3202,20 +3451,20 @@ history.
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE — immutable campaign snapshots, manifests, fingerprints, user data, and exploratory failures remain preserved. No training campaign, supervisor, tmux GPU shell, or Slurm job is active. MI210 full validation job `21015952` completed naturally; no cancellation was issued. Checkout is dirty on `main` with reviewed implementation/evidence changes awaiting commit. | — | P1, P2, E0 |
-| P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE BUT SCIENTIFICALLY CONTAMINATED — preserve as exploratory: model-visible `prev_ny_high`/`prev_ny_low` leakage affected 17/18 saved configs. Recovery records 11 succeeded, 4 train-survival failures, 3 interrupted, and full-split telemetry for 17/18 variants; `ladder_a0_flat` has no current-attempt completed-split record. Eight variants had zero train/test trades. The 20/20 fold report applies to its recorded source snapshot, not the later observation filter. Raw tick input hashes verify, but training-minute quote coverage is 1.1648% for US100 and 99.8246% for US500; test-minute coverage is 100% for both. The US100 tick file begins 2025-12-29 and execution falls back to bar pricing for most training minutes, so per-split fill-source counts and a common cost protocol must be checked before P3. Feed/use provenance, broker calendar/DST, feed-specific acceptance thresholds, current post-fix fold/cache audit, independent reviews, and a fresh admissible screen remain open. Seed-50 artifacts remain immutable. Tick report: `docs/thesis/g1_tick_quality_current_recovery_2026-10-17_job21015952.json`. Finding: `docs/thesis/evidence/p1_18_variant_screen_disposition_2026-10-16.md` | P0 | P2, E0 |
-| P2 | Deterministic evaluator/schema repair | ACTIVE — evaluator determinism, cache/dataset/checkpoint provenance, numerical report verifier, Q5 resume guard, and ordered sequence-feature schema are implemented. Current-tree MI210 job `21015952` passed full-tree Ruff format/lint and Mypy (465 files), real MI210 smoke, and 1,686 tests; the P1 tick audit also completed. Exact checkpoint recovery/parity, repeated deterministic report, and completed-checkpoint acceptance remain open; software CI does not close P2. | P0 | P1, E0 |
+| P0 | Safe boundary/current snapshot | ACTIVE — preserved artifacts and dirty work remain intact; checkout is `main` and the previous 55-entry working tree is committed with no edits discarded. GH200 job `21019594` completed naturally on gpuarm1/gpuarm2 (one GH200, 64 CPUs, 512 GiB each): CUDA smoke, full-tree Ruff format/lint, full-tree Mypy, all 1,729 tests, P1 tick audits, and whitespace check passed. `squeue` is empty and no tmux session exists; no campaign/supervisor is active. Both GH200 nodes returned IDLE with 144 CPUs and 1,100,000 MiB configured RAM each; no allocation is reserved. No campaign started because US100 training tick coverage and provenance remain insufficient. MI210 remains excluded. | — | P1, P2, E0 |
+| P1 | 18-way/full-split one-seed screen reconciliation | HISTORICAL ACCOUNTING RECONCILED; ADMISSIBLE SCREEN BLOCKED — preserve as exploratory: model-visible `prev_ny_high`/`prev_ny_low` leakage affected 17/18 saved configs. Recovery records 11 succeeded, 4 train-survival failures, 3 interrupted, and full-split telemetry for 17/18 variants; `ladder_a0_flat` has no current-attempt completed-split record. Eight variants had zero train/test trades. The 20/20 fold report applies to its recorded source snapshot, not the later observation filter. Latest GH200 schedule audit `21019594` confirms exact M1/tick cache parity but only 1,173/99,504 (1.1788%) eligible US100 training-step coverage; US100 test and both US500 splits are fully covered. Cache timeline audit confirms US100 v2/v3 and alternate-worktree v2 caches are identical and start 2025-12-28 UTC, still missing most of the 2024-12-30–2025-12-31 training year. US500 quotes cannot execute US100 orders and no instrument substitution is authorized. The `[0,30 ms)` randomized delay and 60-second quote wait cannot create missing historical quotes. The trainer correctly aborts before training when scheduled order times lack ticks. Provider/use terms, broker calendar/DST, quality thresholds, source acceptance, fresh causality/cache audits, independent reviews, and a fresh admissible screen remain open. Seed-50 artifacts remain immutable. Audits: [`p1_tick_execution_coverage_20261017_job21019594.json`](evidence/p1_tick_execution_coverage_20261017_job21019594.json), [`p1_tick_cache_timeline_20261017_job21019594.json`](evidence/p1_tick_cache_timeline_20261017_job21019594.json). Finding: [`p1_18_variant_screen_disposition_2026-10-16.md`](evidence/p1_18_variant_screen_disposition_2026-10-16.md) | P0 | P2, E0 |
+| P2 | Deterministic evaluator/schema repair | ACTIVE — deterministic evaluator now seeds randomized fill execution from the run seed or explicit evaluation seed; reanalysis manifests and comparator identity include that seed. Existing bounded legacy seed-50 comparator/parity results remain engineering-only because the source campaign is lookahead-contaminated and its historical test was inspected. Current-tree GH200 job `21019594` passed full-tree Ruff, Mypy, and all 1,729 tests. This verifies software behavior but does not validate a thesis-admissible checkpoint. P2 remains open until an admissible selected-checkpoint acceptance passes. | P0 | P1, E0 |
 | E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and all-attempt screen reconciler exist. The refreshed recovery index is `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/thesis_evidence_index_post_causal_repair_20261017.json` (fingerprint `91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e`; 11 succeeded, 4 failed, 3 interrupted; 230 source hashes: 220 verified, 10 mismatched, none missing; 172 checkpoint artifacts). The separate v3 index was also refreshed and records 18 interrupted runs, 228 source hashes (207 verified, 21 mismatched, none missing), and 188 checkpoint artifacts. Neither index establishes chronological split exposure, successful checkpoint deserialization, or strategy validity. The current full-tree suite covers frame/bundle, legacy replay, comparator, numerical-report, registry, Q5 and selector contracts. One completed deterministic engineering reanalysis report exists; an independent repeat and exact-checkpoint frame/bundle parity remain open. The 20-check full-training-interval fold-fit result remains source-snapshot-specific and broader causality is open. The M1 inventory is PARTIAL because vendor/use provenance, broker calendar/DST, and tick validity are not established. Final canonical reports still await P1/P2 closure. | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED — report contract covers annualization, equity endpoints, exposure, raw fills/positions/breaches, split completion, and source/runtime provenance. Current verifier/software tests pass, but no admissible completed-checkpoint report has been generated. | P1 + P2 | per-checkpoint eval/package |
-| P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | Reviewer preparation includes bounded related-work/threat notes and the refreshed independent-review brief/checklist. The pre-repair fold-poison failure is historical; bounded post-repair fold/prefix checks pass their stated slices. No independent reviewer has signed off; market-data/use provenance, broker calendar/DST, tick validity, broader causal coverage, and the P3 evidence package remain open |
-| P5 | Freeze matched design/baselines | BLOCKED | P4 | P6 prep, review |
+| P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | Expanded M5/M15/H1 swing and mirrored long/short IFVG stop regressions passed in GH200 job `21019594` and the 1,729-test suite; this closes that source/test slice only. Reviewer preparation includes bounded related-work/threat notes and the refreshed independent-review brief/checklist. No independent reviewer has signed off; market-data/use provenance, broker calendar/DST, tick validity, broader causal coverage, final run identity, and the P3 evidence package remain open |
+| P5 | Freeze matched design/baselines | BLOCKED on P4; the default five-coordinate enforce-gate contrast was found behaviorally redundant and rejected; a shared six-coordinate direction-control pair is documented as an unverified candidate in §13.1 | P4 | P6 prep, review |
 | P6 | Production runtime/resource freeze | PREP-ONLY | P4/screen-safe | paired-launch prep |
 | P7 | Final selected-pair >=5-seed robustness + cost stress | BLOCKED | all single-seed findings + P5 + P6 | eval/package terminal seeds |
 | S0 | Statistics + final figures | PREP-ONLY | schema can be built early; final values need P7 | finished-seed analysis |
 | E1 | Result aggregation/finding cards | ACTIVE-AS-ARTIFACTS-ARRIVE | E0 | every terminal run |
 | P8 | Review + evidence freeze | PREP-ONLY | final P7 evidence | figure/result cross-checks |
 | P9 | `RESULTS_PACKAGE_COMPLETE` handoff | BLOCKED | P8 + E1 | archive/index QA |
-| Q0–Q7 | Required research program | COMPULSORY, NO RESEARCH RUNS — no stage result or winner exists. Q0/Q1, Q2 geometry, Q3 reward/risk, Q4A/B policies, Q5 primal-dual PPO, Q6 FSM, and Q7 encoders have source implementations with differing bounded coverage. The latest MI210 run passed full-tree Ruff format/lint, Mypy, a real device smoke, and all 1,686 tests. This bounded software gate does not make any arm empirically complete or launchable. Q2/Q3/Q4/Q6 remain fail-closed pending their stage integration/parent gates; Q5 is an opt-in scalarized PPO method, not a formal constraint guarantee. Parent freezes, campaign-level checkpoint parity, independent reviews, and every Q-stage experiment remain open. See [`q0_q7_implementation_audit_2026-10-17.md`](q0_q7_implementation_audit_2026-10-17.md). Run in dependency order after P11 by default; earlier work must meet entry gates and not displace thesis-critical tasks | ordered stage parents | implementation, validation, and evidence preparation |
+| Q0–Q7 | Required research program | COMPULSORY, NO RESEARCH RUNS — no stage result or winner exists. Q0/Q1, Q2 geometry, Q3 reward/risk, Q4A/B policies, Q5 primal-dual PPO, Q6 FSM, and Q7 encoders have source implementations with differing bounded coverage. Historical MI210 gates passed full-tree Ruff format/lint, Mypy, a real device smoke, and all 1,686 tests; the user has directed no further MI210 use. This bounded software gate does not make any arm empirically complete or launchable. Q2/Q3/Q4/Q6 remain fail-closed pending their stage integration/parent gates; Q5 is an opt-in scalarized PPO method, not a formal constraint guarantee. Parent freezes, campaign-level checkpoint parity, independent reviews, the tick-only execution fix, adequate training-tick coverage, and every Q-stage experiment remain open. See [`q0_q7_implementation_audit_2026-10-17.md`](q0_q7_implementation_audit_2026-10-17.md). Run in dependency order after P11 by default; earlier work must meet entry gates and not displace thesis-critical tasks | ordered stage parents | implementation, validation, and evidence preparation |
 
 **GH200 allocation guard (user direction, 2026-10-16):** the thesis campaign
 may have at most **2 GH200 GPUs total across all active allocations**, and no

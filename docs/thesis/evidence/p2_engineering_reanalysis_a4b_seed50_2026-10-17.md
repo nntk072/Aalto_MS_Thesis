@@ -4,7 +4,7 @@
 
 **Role:** legacy deterministic-evaluator engineering evidence only
 
-**Status:** one replay complete; repeat and backend parity remain open
+**Status:** deterministic repeat and train/test frame/shared-bundle parity passed; evidence remains engineering-only
 
 ## Source and execution
 
@@ -33,9 +33,21 @@ Output directory: `outputs/thesis_engineering_reanalysis/a4b_distribution_seed50
 - Test metrics SHA-256: `0e77cb68df6b47217646aa0171747ff689ee53819d7650d5d60c71f705570af5`
 - Manifest marks checkpoint-manifest hash and dataset parity `verified`, cache disposition `source_cache_replay_verified`, historical holdout inspected `true`, artifact role `historical_reanalysis`, and the validity note “Historical inspected holdout; not pristine OOS evidence.”
 
+## Repeatability and backend parity follow-up
+
+- Independent exact replay outputs: `outputs/thesis_engineering_reanalysis/a4b_distribution_seed50_20261017_run2_gh200/` and `.../run3_gh200/`.
+- Comparator: `docs/thesis/evidence/p2_repeatability_a4b_seed50_20261017_gh200_stop_legacy_fix.json`; status `passed`, `errors=[]`, with required train/test numerical artifacts byte-identical.
+- Training frame/shared-bundle parity: `docs/thesis/evidence/p2_frame_bundle_a4b_seed50_train_20261017_gh200_retry1.json`; status `passed`, all 25 compared behavior/metric fields agree, 6 trades.
+- Historical test frame/shared-bundle parity: `docs/thesis/evidence/p2_frame_bundle_a4b_seed50_test_20261017_gh200_retry1.json`; status `passed`, all 25 compared behavior/metric fields agree, 2 trades.
+- Comparator and parity regression tests were added. Slurm accounting shows validation wrappers `21018094` and `21018146` ended `FAILED` with exit code 1; their stdout/stderr were not retained in the repository, so these jobs do not count as a successful current-tree CI gate. The individual comparator/parity JSON artifacts pass, but full current-tree verification must be rerun and logged on an eligible GPU allocation.
+
+This closes only the bounded repeatability and backend-parity checks for this exact
+legacy checkpoint/config/cache. It does not accept the checkpoint as a thesis
+result or close P2 globally: its source campaign is lookahead-contaminated, the
+historical holdout was inspected, the schema required explicit legacy opt-ins,
+and no admissible completed checkpoint has passed the plan's broader acceptance.
+
 ## Remaining P2 acceptance work
 
-1. Repeat the exact replay into a new immutable output directory.
-2. Run `scripts/thesis/compare_deterministic_reanalysis.py` against both outputs and retain its verification report.
-3. Run frame/shared-bundle parity for this exact checkpoint and its source cache, with the same explicit legacy schema dispositions.
-4. Preserve all legacy and contamination limitations. This checkpoint cannot close P1/P3 validity, select a variant, or support confirmatory thesis claims.
+1. Apply completed-checkpoint acceptance to a checkpoint from an admissible, uncontaminated, provenance-complete campaign after P1 is cleared.
+2. Preserve all legacy and contamination limitations. This checkpoint cannot close P1/P3 validity, select a variant, or support confirmatory thesis claims.

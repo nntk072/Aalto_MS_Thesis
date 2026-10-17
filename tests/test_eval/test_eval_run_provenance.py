@@ -32,6 +32,23 @@ def test_checkpoint_reanalysis_defaults_to_deterministic_actions() -> None:
     assert sampled_args.seed == 42
 
 
+def test_execution_seed_uses_explicit_override_then_source_seed() -> None:
+    manifest = {
+        "seed": 50,
+        "training_protocol": {"seed": 51},
+        "metrics_protocol": {"execution_seed": 52},
+    }
+
+    assert eval_run._resolve_execution_seed(7, manifest) == 7
+    assert eval_run._resolve_execution_seed(None, manifest) == 50
+
+
+def test_execution_seed_rejects_negative_and_reports_missing_seed() -> None:
+    with pytest.raises(ValueError, match="non-negative"):
+        eval_run._resolve_execution_seed(-1, {})
+    assert eval_run._resolve_execution_seed(None, {}) is None
+
+
 def test_legacy_input_provenance_reanalysis_requires_explicit_opt_in() -> None:
     args = eval_run._build_parser().parse_args(["--run", "source", "--output", "out"])
     assert args.allow_legacy_data_provenance is False

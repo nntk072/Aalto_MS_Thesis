@@ -11,6 +11,11 @@ Every order fill uses a ``(bid, ask)`` quote obtained in this priority:
 Mark-to-market and per-trade stop checks use the bar-close quote (long @ bid,
 short @ ask).
 
+When ``randomized_fill_latency_ms`` is positive, submitted orders instead use
+the first recorded quote at or after a seeded random arrival time strictly
+below the configured latency bound. That mode fails closed when no timely tick
+exists and never substitutes a candle quote for an execution.
+
 Bar indexes are left-labeled. Equity observations are marked at each bar's
 close timestamp, after current-bar protective events and session liquidation,
 but before policy orders that execute on a later quote. OHLC-only protective
@@ -26,6 +31,7 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 import pandas as pd
 
+from ..data.ticks import TickExecutionUnavailable, resolve_tick_execution, resolve_tick_exit
 from .account import AccountState
 from .broker import Broker, Position
 from .costs import COST_US100, CostModel
@@ -123,8 +129,44 @@ def _fill_quote_event(
     tickbook: TickBook | None,
     *,
     bar_close_time: pd.Timestamp | None = None,
-) -> tuple[tuple[float, float], pd.Timestamp, str]:
-    """Return quote, execution timestamp and source for a delayed fill."""
+    rng: np.random.Generator | None = None,
+    randomized_fill_latency_ms: float = 0.0,
+    max_tick_quote_wait_ms: int = 60_000,
+    tick_execution_required: bool = False,
+) -> tuple[tuple[float, float], pd.Timestamp, str, dict[str, Any]]:
+    """Return a delayed execution quote and timing/source metadata."""
+    if randomized_fill_latency_ms > 30.0 or randomized_fill_latency_ms < 0.0:
+        raise ValueError("randomized_fill_latency_ms must be in [0, 30]")
+    if max_tick_quote_wait_ms <= 0:
+        raise ValueError("max_tick_quote_wait_ms must be positive")
+    if tick_execution_required or randomized_fill_latency_ms > 0:
+        if tickbook is None or rng is None:
+            raise TickExecutionUnavailable("tick-only fills require a TickBook and RNG")
+        execution = resolve_tick_execution(
+            tickbook,
+            fill_instant,
+            rng,
+            max_latency_ns_exclusive=int(randomized_fill_latency_ms * 1_000_000),
+            max_quote_wait_ns=max_tick_quote_wait_ms * 1_000_000,
+        )
+        if execution is None:
+            raise TickExecutionUnavailable(
+                f"no executable tick within {max_tick_quote_wait_ms}ms of {fill_instant}"
+            )
+        return (
+            (execution.bid, execution.ask),
+            execution.tick_time,
+            "tick",
+            {
+                "order_submission_time": execution.order_time,
+                "execution_order_time": execution.order_time,
+                "execution_arrival_time": execution.arrival_time,
+                "execution_latency_ns": execution.latency_ns,
+                "actual_tick_time": execution.tick_time,
+                "fill_quote_source": "tick",
+            },
+        )
+
     bar_spread = _bar_spread_price_units(row, cost_model)
     if tickbook is not None:
         q = tickbook.quote_at(fill_instant)
@@ -134,15 +176,30 @@ def _fill_quote_event(
             lo = float(row["low"])
             hi = float(row["high"])
             buffer = max(hi - lo, bar_spread or 0.0, cost_model.spread_points)
-            if lo - buffer <= mid <= hi + buffer:
-                return q, fill_instant, "tick"
-            # Outlier/gap tick (mid far outside the executing bar's range):
-            # fall through to the bar-based quote below instead of returning
-            # a fill price disconnected from the visible candles.
+            if tick_execution_required or lo - buffer <= mid <= hi + buffer:
+                return (
+                    q,
+                    fill_instant,
+                    "tick",
+                    {
+                        "order_submission_time": fill_instant,
+                        "execution_order_time": fill_instant,
+                        "execution_arrival_time": fill_instant,
+                        "execution_latency_ns": 0,
+                        "actual_tick_time": fill_instant,
+                        "fill_quote_source": "tick",
+                    },
+                )
+            # In legacy mode, reject outlier ticks and use the candle quote.
+    if tick_execution_required:
+        raise TickExecutionUnavailable(
+            f"no executable tick within {max_tick_quote_wait_ms}ms of {fill_instant}"
+        )
     return (
         cost_model.bar_quote(float(row["close"]), bar_spread=bar_spread),
         fill_instant if bar_close_time is None else bar_close_time,
         "bar_close",
+        {},
     )
 
 
@@ -173,6 +230,10 @@ def run_backtest(
     take_profit_per_trade_usd: float | None = None,
     tickbook: TickBook | None = None,
     fill_delay_ms: int = 0,
+    randomized_fill_latency_ms: float = 0.0,
+    max_tick_quote_wait_ms: int = 60_000,
+    tick_execution_required: bool = False,
+    execution_seed: int = 0,
     use_structure_sl_tp: bool = False,
     risk_frac: float = 0.01,
     rr_ratio: float = 2.0,
@@ -207,6 +268,17 @@ def run_backtest(
     block_overnight : bool
         If True (default), force-close on the last NY bar of a session so
         positions do not carry the overnight gap. Matches ``TradingEnv``.
+    randomized_fill_latency_ms : float
+        A positive value up to 30 samples seeded latency in ``[0, value)``
+        milliseconds. In required tick mode, zero means an immediate tick
+        lookup and never selects candle pricing.
+    tick_execution_required : bool
+        Require every fill to use an observed TickBook quote. When false,
+        legacy candle fallback remains available.
+    max_tick_quote_wait_ms : int
+        Maximum wait from sampled arrival to the first executable quote.
+    execution_seed : int
+        Seed for deterministic order-latency sampling.
     """
     broker = Broker(cost_model=cost_model, **(broker_kwargs or {}))
     guardrails = FTMOGuardrails(**(guardrail_kwargs or {}))
@@ -234,9 +306,15 @@ def run_backtest(
     feat_array = np.nan_to_num(feat_array, nan=0.0).astype(np.float32)
     n_bars = len(bars)
     position_sequence = 0
+    execution_rng = np.random.default_rng(int(execution_seed))
+    current_execution_meta: dict[str, Any] = {}
+    if (tick_execution_required or randomized_fill_latency_ms > 0) and tickbook is None:
+        raise TickExecutionUnavailable("tick-only execution requires a TickBook")
 
     def stamp_exit(pos: Position, record: dict[str, Any], fill_price: float) -> None:
         """Attach one exactly-once fill and completed-position accounting row."""
+        for key, value in current_execution_meta.items():
+            record.setdefault(key, value)
         record.setdefault(
             "order_submission_time",
             record.get("decision_time", pos.entry_timestamp),
@@ -300,13 +378,32 @@ def run_backtest(
             fill_instant = bar_time
             fill_row = row
             fill_bar_close = bar_time + bar_duration
-        fq, execution_time, fill_source = _fill_quote_event(
-            fill_instant,
-            fill_row,
-            cost_model,
-            tickbook,
-            bar_close_time=fill_bar_close,
-        )
+        execution_event: tuple[tuple[float, float], pd.Timestamp, str, dict[str, Any]] | None = None
+
+        def resolve_bar_execution() -> tuple[
+            tuple[float, float], pd.Timestamp, str, dict[str, Any]
+        ]:
+            nonlocal execution_event, current_execution_meta
+            if execution_event is None:
+                execution_event = _fill_quote_event(
+                    fill_instant,
+                    fill_row,
+                    cost_model,
+                    tickbook,
+                    bar_close_time=fill_bar_close,
+                    rng=execution_rng,
+                    randomized_fill_latency_ms=randomized_fill_latency_ms,
+                    max_tick_quote_wait_ms=max_tick_quote_wait_ms,
+                    tick_execution_required=tick_execution_required,
+                )
+                current_execution_meta = execution_event[3]
+            return execution_event
+
+        # Preserve legacy quote timing. In randomized mode, resolve a quote
+        # only when an order actually needs to execute; idle bars must not
+        # consume latency draws or require tick coverage.
+        if randomized_fill_latency_ms == 0 and not tick_execution_required:
+            fq, execution_time, fill_source, execution_meta = resolve_bar_execution()
 
         tick_hit = None
         if (
@@ -315,16 +412,49 @@ def run_backtest(
             and tickbook is not None
             and (position.sl_price is not None or position.tp_price is not None)
         ):
-            tick_hit = tickbook.delayed_exit_event(
-                bar_time,
-                int(position.direction),
-                None if position.sl_price is None else float(position.sl_price),
-                None if position.tp_price is None else float(position.tp_price),
-                pd.Timedelta(milliseconds=fill_delay_ms),
-                earliest_time=entry_time,
-            )
+            if tick_execution_required or randomized_fill_latency_ms > 0:
+                resolved_exit = resolve_tick_exit(
+                    tickbook,
+                    bar_time,
+                    int(position.direction),
+                    None if position.sl_price is None else float(position.sl_price),
+                    None if position.tp_price is None else float(position.tp_price),
+                    execution_rng,
+                    bar_minutes=max(1, int(round(bar_duration.total_seconds() / 60.0))),
+                    max_latency_ns_exclusive=int(randomized_fill_latency_ms * 1_000_000),
+                    max_quote_wait_ns=max_tick_quote_wait_ms * 1_000_000,
+                    earliest_time=entry_time,
+                )
+                if resolved_exit is not None:
+                    quote = resolved_exit.quote
+                    tick_hit = (
+                        resolved_exit.kind,
+                        quote.tick_time,
+                        quote.bid,
+                        quote.ask,
+                        {
+                            "order_submission_time": resolved_exit.trigger_time,
+                            "execution_order_time": quote.order_time,
+                            "execution_arrival_time": quote.arrival_time,
+                            "execution_latency_ns": quote.latency_ns,
+                            "actual_tick_time": quote.tick_time,
+                            "fill_quote_source": "tick",
+                        },
+                    )
+            else:
+                legacy_hit = tickbook.delayed_exit_event(
+                    bar_time,
+                    int(position.direction),
+                    None if position.sl_price is None else float(position.sl_price),
+                    None if position.tp_price is None else float(position.tp_price),
+                    pd.Timedelta(milliseconds=fill_delay_ms),
+                    earliest_time=entry_time,
+                )
+                if legacy_hit is not None:
+                    tick_hit = (*legacy_hit, {"fill_quote_source": "tick"})
         if tick_hit is not None and position is not None:
-            kind, fill_time, bid, ask = tick_hit
+            kind, fill_time, bid, ask, tick_execution_meta = tick_hit
+            current_execution_meta = tick_execution_meta
             closed_position = position
             pnl, fill_price = broker.close_position(acc, closed_position, (bid, ask))
             record = {
@@ -335,11 +465,31 @@ def run_backtest(
                 "bar": i,
                 "time": fill_time,
                 "equity": acc.equity,
+                **tick_execution_meta,
             }
             stamp_exit(closed_position, record, fill_price)
             trade_log.append(record)
             sessions_with_trades.add(session)
             position = None
+
+        if (
+            (tick_execution_required or randomized_fill_latency_ms > 0)
+            and position is not None
+            and tick_hit is None
+        ):
+            sl_touched = position.sl_price is not None and (
+                (position.direction == 1 and float(row["low"]) <= position.sl_price)
+                or (position.direction == -1 and float(row["high"]) >= position.sl_price)
+            )
+            tp_touched = position.tp_price is not None and (
+                (position.direction == 1 and float(row["high"]) >= position.tp_price)
+                or (position.direction == -1 and float(row["low"]) <= position.tp_price)
+            )
+            if sl_touched or tp_touched:
+                raise TickExecutionUnavailable(
+                    "OHLC indicates a protective level was reached, but no matching "
+                    "tick trigger was found; candle fallback is disabled"
+                )
 
         if (
             position is not None
@@ -389,6 +539,7 @@ def run_backtest(
                 max_loss_per_trade_usd
             ):
                 assert position is not None
+                fq, execution_time, fill_source, execution_meta = resolve_bar_execution()
                 closed_position = position
                 pnl, fill_price = broker.close_position(acc, closed_position, fq)
                 record = {
@@ -449,6 +600,7 @@ def run_backtest(
             # Fallback: global USD-based TP
             if acc.open_pnl >= abs(take_profit_per_trade_usd):
                 assert position is not None
+                fq, execution_time, fill_source, execution_meta = resolve_bar_execution()
                 closed_position = position
                 pnl, fill_price = broker.close_position(acc, closed_position, fq)
                 record = {
@@ -482,6 +634,7 @@ def run_backtest(
             )
             if position is not None:
                 assert position is not None
+                fq, execution_time, fill_source, execution_meta = resolve_bar_execution()
                 closed_position = position
                 pnl, fill_price = broker.close_position(acc, closed_position, fq)
                 record = {
@@ -505,17 +658,37 @@ def run_backtest(
         if block_overnight and last_ny and position is not None:
             closed_position = position
             session_close_time = bar_time + bar_duration
-            pnl, fill_price = broker.close_position(acc, closed_position, bq)
+            if tick_execution_required or randomized_fill_latency_ms > 0:
+                session_quote, session_fill_time, session_source, session_execution_meta = (
+                    _fill_quote_event(
+                        session_close_time,
+                        row,
+                        cost_model,
+                        tickbook,
+                        rng=execution_rng,
+                        randomized_fill_latency_ms=randomized_fill_latency_ms,
+                        max_tick_quote_wait_ms=max_tick_quote_wait_ms,
+                        tick_execution_required=tick_execution_required,
+                    )
+                )
+                current_execution_meta = session_execution_meta
+            else:
+                session_quote = bq
+                session_fill_time = session_close_time
+                session_source = "permitted_session_bar_close"
+                session_execution_meta = {}
+            pnl, fill_price = broker.close_position(acc, closed_position, session_quote)
             record = {
                 "type": "eod_close",
                 "pnl": pnl,
                 "price": fill_price,
                 "reason": "session_end",
                 "bar": i,
-                "time": session_close_time,
-                "fill_time": session_close_time,
-                "fill_quote_source": "permitted_session_bar_close",
+                "time": session_fill_time,
+                "fill_time": session_fill_time,
+                "fill_quote_source": session_source,
                 "equity": acc.equity,
+                **session_execution_meta,
             }
             stamp_exit(closed_position, record, fill_price)
             trade_log.append(record)
@@ -544,6 +717,7 @@ def run_backtest(
         if action == exit_action and position is not None:
             # Explicit exit action (e.g., 2 for MACD)
             assert position is not None
+            fq, execution_time, fill_source, execution_meta = resolve_bar_execution()
             closed_position = position
             pnl, fill_price = broker.close_position(acc, closed_position, fq)
             record = {
@@ -565,6 +739,7 @@ def run_backtest(
         elif action in (1, -1):
             if position is not None and position.direction != action:
                 assert position is not None
+                fq, execution_time, fill_source, execution_meta = resolve_bar_execution()
                 closed_position = position
                 pnl, fill_price = broker.close_position(acc, closed_position, fq)
                 record = {
@@ -591,6 +766,7 @@ def run_backtest(
                     or str(bars.iloc[i + 1]["session"]) == "ny",
                 ):
                     continue
+                fq, execution_time, fill_source, execution_meta = resolve_bar_execution()
                 # Extract structure features if available
                 sl_price = None
                 tp_price = None
@@ -697,12 +873,14 @@ def run_backtest(
                             "fill_time": execution_time,
                             "fill_quote_source": fill_source,
                             "equity": acc.equity,
+                            **execution_meta,
                         }
                     )
                     sessions_with_trades.add(session)
 
         elif action == 0 and position is not None and not hold_on_zero:
             # Close position on action=0 (unless hold_on_zero is True)
+            fq, execution_time, fill_source, execution_meta = resolve_bar_execution()
             closed_position = position
             pnl, fill_price = broker.close_position(acc, closed_position, fq)
             record = {
@@ -724,8 +902,25 @@ def run_backtest(
     if position is not None:
         last_row = bars.iloc[-1]
         last_time = bar_times[-1]
-        last_fq = _bar_quote(last_row, cost_model)
         terminal_close_time = last_time + bar_duration
+        if tick_execution_required or randomized_fill_latency_ms > 0:
+            last_fq, terminal_close_time, terminal_source, terminal_execution_meta = (
+                _fill_quote_event(
+                    terminal_close_time,
+                    last_row,
+                    cost_model,
+                    tickbook,
+                    rng=execution_rng,
+                    randomized_fill_latency_ms=randomized_fill_latency_ms,
+                    max_tick_quote_wait_ms=max_tick_quote_wait_ms,
+                    tick_execution_required=tick_execution_required,
+                )
+            )
+            current_execution_meta = terminal_execution_meta
+        else:
+            last_fq = _bar_quote(last_row, cost_model)
+            terminal_source = "terminal_bar_close"
+            terminal_execution_meta = {}
         assert position is not None
         closed_position = position
         pnl, fill_price = broker.close_position(acc, closed_position, last_fq)
@@ -736,8 +931,9 @@ def run_backtest(
             "bar": n_bars - 1,
             "time": terminal_close_time,
             "fill_time": terminal_close_time,
-            "fill_quote_source": "terminal_bar_close",
+            "fill_quote_source": terminal_source,
             "equity": acc.equity,
+            **terminal_execution_meta,
         }
         stamp_exit(closed_position, record, fill_price)
         trade_log.append(record)

@@ -107,6 +107,15 @@ def test_parity_metrics_use_saved_m1_annualization_and_initial_balance() -> None
     assert metrics["calmar"] == pytest.approx(2.0)
 
 
+def test_legacy_config_uses_and_labels_m1_annualization_fallback() -> None:
+    cfg = OmegaConf.create({"account": {"initial_balance": 100.0}})
+
+    assert parity.evaluation_periods_per_year(cfg) == 252 * 390
+    assert parity._annualization_convention(cfg) == (
+        "legacy M1 default: 252 sessions/year x 390 NY-session M1 bars/session"
+    )
+
+
 def test_select_split_keeps_in_sample_and_report_only_roles_distinct() -> None:
     train_bars = pd.DataFrame({"close": [1.0]})
     test_bars = pd.DataFrame({"close": [2.0]})
@@ -134,10 +143,15 @@ def test_bundle_replay_preserves_overlay_action_vector(monkeypatch) -> None:
     monkeypatch.setattr(parity, "evaluate_model", fake_evaluate_model)
 
     result = parity._evaluate_bundle_result(
-        object(), object(), strategy_actions=True, continuous_actions=False
+        object(),
+        object(),
+        strategy_actions=True,
+        continuous_actions=False,
+        execution_seed=50,
     )
 
     assert result == {"status": "captured"}
     assert captured["strategy_actions"] is True
     assert captured["continuous_actions"] is False
     assert captured["deterministic"] is True
+    assert captured["execution_seed"] == 50

@@ -27,7 +27,12 @@ from ..backtest.costs import COST_US100, CostModel
 from ..backtest.guardrails import FTMOGuardrails
 from ..backtest.risk import compute_lots, compute_sl_tp_long, compute_sl_tp_short
 from ..data.session import ny_session_mask
-from ..data.ticks import TickBook
+from ..data.ticks import (
+    TickBook,
+    TickExecutionUnavailable,
+    resolve_tick_execution,
+    resolve_tick_exit,
+)
 from ..envs.entry_state import (
     ENTRY_STATE_DIM,
     EntryCandidate,
@@ -293,7 +298,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         obs_features_mmap: str | None = None,
         peak_trailing_dd_limit: float = 0.0,
         tickbook: TickBook | None = None,
+        tick_execution_required: bool = False,
         fill_delay_ms: int = 0,
+        randomized_fill_latency_ms: float = 0.0,
+        max_tick_quote_wait_ms: int = 60_000,
         agent_direction_control: bool = False,
         direction_override_threshold: float = 0.0,
         risk_floor: float = 0.0005,
@@ -615,7 +623,20 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             raise ValueError("observation_age_scale_bars must be positive")
         self.risk_floor = float(risk_floor)
         self._tickbook = tickbook
+        self.tick_execution_required = bool(tick_execution_required)
         self._fill_delay_ms = int(fill_delay_ms)
+        self.randomized_fill_latency_ms = float(randomized_fill_latency_ms)
+        self.max_tick_quote_wait_ms = int(max_tick_quote_wait_ms)
+        if self.randomized_fill_latency_ms < 0:
+            raise ValueError("randomized_fill_latency_ms cannot be negative")
+        if self.randomized_fill_latency_ms > 30.0:
+            raise ValueError("randomized_fill_latency_ms must be at most 30ms exclusive")
+        if self.max_tick_quote_wait_ms <= 0:
+            raise ValueError("max_tick_quote_wait_ms must be positive")
+        if (
+            self.tick_execution_required or self.randomized_fill_latency_ms > 0
+        ) and tickbook is None:
+            raise ValueError("tick-only execution requires a TickBook")
         # Resolve trader/strategy action flag early (needed for reward + spaces).
         _strategy_actions = (
             bool(trader_actions) if trader_actions is not None else bool(strategy_actions)
@@ -1063,6 +1084,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.equity_times: list[Any] = [t0]
         self.pnl_history = [0.0]
         self.trade_log: list[dict[str, Any]] = []
+        self._active_step_execution: dict[str, Any] | None = None
         self._position_sequence = 0
         self._episode_identity = getattr(self, "_episode_identity", 0) + 1
         # Step counter within the current episode (0 at reset). Distinct
@@ -1285,6 +1307,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         if reason:
             if self.position is not None:
+                execution_meta: dict[str, Any] = {}
+                if getattr(self, "tick_execution_required", False):
+                    quote, execution_meta = self._resolve_randomized_tick_quote(
+                        pd.Timestamp(fill_time if fill_time is not None else bar_time)
+                    )
+                    fill_bid, fill_ask = quote.bid, quote.ask
+                    fill_time = quote.tick_time
                 pnl, fill_price = self.broker.close_position(
                     self.account, self.position, (fill_bid, fill_ask)
                 )
@@ -1298,6 +1327,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     "decision_time": bar_time,
                     "fill_time": fill_time if fill_time is not None else bar_time,
                     "equity": self.account.equity,
+                    **execution_meta,
                 }
                 self._stamp_exit(record, fill_price)
                 self.trade_log.append(record)
@@ -1343,6 +1373,16 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             return False
         self._peak_dd_fired = True
         if self.position is not None:
+            execution_meta: dict[str, Any] = {}
+            if getattr(self, "tick_execution_required", False):
+                order_time = (
+                    pd.Timestamp(fill_time)
+                    if fill_time is not None
+                    else pd.Timestamp(bar_time) + pd.Timedelta(minutes=self._minutes_per_step)
+                )
+                quote, execution_meta = self._resolve_randomized_tick_quote(order_time)
+                fill_bid, fill_ask = quote.bid, quote.ask
+                fill_time = quote.tick_time
             pnl, fill_price = self.broker.close_position(
                 self.account, self.position, (fill_bid, fill_ask)
             )
@@ -1356,6 +1396,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 "decision_time": bar_time,
                 "fill_time": fill_time if fill_time is not None else bar_time,
                 "equity": self.account.equity,
+                **execution_meta,
             }
             self._stamp_exit(record, fill_price)
             self.trade_log.append(record)
@@ -1406,7 +1447,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         tick_hit = None if has_tick_slots else self._tick_exit_quote(log_time)
         if tick_hit is not None:
-            kind, quote, fill_time = tick_hit
+            kind, quote, fill_time, execution_meta = tick_hit
             pnl, fill_price = self.broker.close_position(self.account, self.position, quote)
             record = {
                 "type": "stop_close" if kind == "sl" else "tp_close",
@@ -1417,12 +1458,42 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 "bar": idx,
                 "time": fill_time,
                 "equity": self.account.equity,
+                **execution_meta,
             }
             self._stamp_exit(record, fill_price)
             self.trade_log.append(record)
             self.position = None
             self.sessions_with_trades.add(self._current_session_id())
             self._note_close(pnl)
+            return
+
+        if (
+            getattr(self, "tick_execution_required", False)
+            or getattr(self, "randomized_fill_latency_ms", 0.0) > 0
+        ):
+            position = self.position
+            assert position is not None
+            stop_touched = position.sl_price is not None and (
+                (position.direction == 1 and float(bar.low) <= position.sl_price)
+                or (position.direction == -1 and float(bar.high) >= position.sl_price)
+            )
+            target_levels = [getattr(position, f"tp{slot}_price") for slot in (1, 2, 3)]
+            if not any(target is not None for target in target_levels):
+                target_levels = [position.tp_price]
+            target_touched = any(
+                target is not None
+                and (
+                    (position.direction == 1 and float(bar.high) >= target)
+                    or (position.direction == -1 and float(bar.low) <= target)
+                )
+                for target in target_levels
+            )
+            if stop_touched or target_touched:
+                raise TickExecutionUnavailable(
+                    "OHLC indicates a protective level was reached, but no matching "
+                    "tick trigger was found; candle fallback is disabled"
+                )
+            self._maybe_ema_exit(bar, idx, log_time)
             return
 
         sl_hit = False
@@ -1621,7 +1692,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             return False
         had_fill = False
         last_fill_ns = -1
-        for tick_time, bid, ask in book.bar_quotes(bar_time):
+        randomized_by_trigger: dict[int, tuple[Any, dict[str, Any]]] = {}
+        bar_minutes = max(1, int(round(getattr(self, "_minutes_per_step", 1.0))))
+        for tick_time, bid, ask in book.bar_quotes(bar_time, bar_minutes=bar_minutes):
             if self.position is not pos or pos.size <= 0:
                 break
             if tick_time.value < last_fill_ns:
@@ -1637,12 +1710,37 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 or (pos.direction == -1 and exit_side >= sl)
             )
             if stop_hit:
-                fill_time = tick_time + pd.Timedelta(milliseconds=self._fill_delay_ms)
-                quote_event = book.quote_event_at(fill_time)
-                if quote_event is None:
-                    continue
-                quote_time, bid, ask = quote_event
-                execution_time = max(fill_time, quote_time)
+                execution_meta: dict[str, Any] = {}
+                if (
+                    getattr(self, "tick_execution_required", False)
+                    or getattr(self, "randomized_fill_latency_ms", 0.0) > 0
+                ):
+                    cached = randomized_by_trigger.get(tick_time.value)
+                    if cached is None:
+                        quote, execution_meta = self._resolve_randomized_tick_quote(tick_time)
+                        execution_meta["order_submission_time"] = tick_time
+                        cached = (quote, execution_meta)
+                        randomized_by_trigger[tick_time.value] = cached
+                    quote, execution_meta = cached
+                    bid, ask = quote.bid, quote.ask
+                    execution_time = quote.tick_time
+                else:
+                    fill_time = tick_time + pd.Timedelta(milliseconds=self._fill_delay_ms)
+                    quote_event = book.quote_event_at(fill_time)
+                    if quote_event is None:
+                        continue
+                    quote_time, bid, ask = quote_event
+                    execution_time = max(fill_time, quote_time)
+                    execution_meta = {
+                        "order_submission_time": tick_time,
+                        "execution_order_time": tick_time,
+                        "execution_arrival_time": fill_time,
+                        "execution_latency_ns": int(
+                            pd.Timedelta(milliseconds=self._fill_delay_ms).value
+                        ),
+                        "actual_tick_time": quote_time,
+                        "fill_quote_source": "tick",
+                    }
                 remaining = pos.size
                 pnl, fill_price = self.broker.close_position(self.account, pos, (bid, ask))
                 record = {
@@ -1655,6 +1753,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     "time": execution_time,
                     "equity": self.account.equity,
                     "size": remaining,
+                    **execution_meta,
                 }
                 self._stamp_exit(record, fill_price)
                 self.trade_log.append(record)
@@ -1675,12 +1774,37 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 )
                 if not target_hit:
                     continue
-                fill_time = tick_time + pd.Timedelta(milliseconds=self._fill_delay_ms)
-                quote_event = book.quote_event_at(fill_time)
-                if quote_event is None:
-                    continue
-                quote_time, bid, ask = quote_event
-                execution_time = max(fill_time, quote_time)
+                execution_meta = {}
+                if (
+                    getattr(self, "tick_execution_required", False)
+                    or getattr(self, "randomized_fill_latency_ms", 0.0) > 0
+                ):
+                    cached = randomized_by_trigger.get(tick_time.value)
+                    if cached is None:
+                        quote, execution_meta = self._resolve_randomized_tick_quote(tick_time)
+                        execution_meta["order_submission_time"] = tick_time
+                        cached = (quote, execution_meta)
+                        randomized_by_trigger[tick_time.value] = cached
+                    quote, execution_meta = cached
+                    bid, ask = quote.bid, quote.ask
+                    execution_time = quote.tick_time
+                else:
+                    fill_time = tick_time + pd.Timedelta(milliseconds=self._fill_delay_ms)
+                    quote_event = book.quote_event_at(fill_time)
+                    if quote_event is None:
+                        continue
+                    quote_time, bid, ask = quote_event
+                    execution_time = max(fill_time, quote_time)
+                    execution_meta = {
+                        "order_submission_time": tick_time,
+                        "execution_order_time": tick_time,
+                        "execution_arrival_time": fill_time,
+                        "execution_latency_ns": int(
+                            pd.Timedelta(milliseconds=self._fill_delay_ms).value
+                        ),
+                        "actual_tick_time": quote_time,
+                        "fill_quote_source": "tick",
+                    }
                 last_fill_ns = max(last_fill_ns, execution_time.value)
                 remaining_slots = [
                     slot
@@ -1725,6 +1849,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     "equity": self.account.equity,
                     "tp_slot": slot_num,
                     "size": close_size,
+                    **execution_meta,
                 }
                 self._stamp_exit(record, fill_price)
                 self.trade_log.append(record)
@@ -1759,7 +1884,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
     def _tick_exit_quote(
         self, bar_time: pd.Timestamp
-    ) -> tuple[str, tuple[float, float], pd.Timestamp] | None:
+    ) -> tuple[str, tuple[float, float], pd.Timestamp, dict[str, Any]] | None:
         """Delayed tick quote for a stop or target, or ``None`` to use the level."""
         book = self._tickbook
         pos = self.position
@@ -1767,7 +1892,36 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             return None
         if pos.sl_price is None and pos.tp_price is None:
             return None
-        hit = book.delayed_exit_event(
+        if getattr(self, "tick_execution_required", False) or self.randomized_fill_latency_ms > 0:
+            hit = resolve_tick_exit(
+                book,
+                pd.Timestamp(bar_time),
+                int(pos.direction),
+                None if pos.sl_price is None else float(pos.sl_price),
+                None if pos.tp_price is None else float(pos.tp_price),
+                self.np_random,
+                bar_minutes=max(1, int(round(self._minutes_per_step))),
+                max_latency_ns_exclusive=int(self.randomized_fill_latency_ms * 1_000_000),
+                max_quote_wait_ns=self.max_tick_quote_wait_ms * 1_000_000,
+                earliest_time=(
+                    None
+                    if pos.entry_timestamp is None
+                    else pd.Timestamp(cast(Any, pos.entry_timestamp))
+                ),
+            )
+            if hit is None:
+                return None
+            quote = hit.quote
+            meta = {
+                "order_submission_time": hit.trigger_time,
+                "execution_order_time": quote.order_time,
+                "execution_arrival_time": quote.arrival_time,
+                "execution_latency_ns": quote.latency_ns,
+                "actual_tick_time": quote.tick_time,
+                "fill_quote_source": "tick",
+            }
+            return hit.kind, (quote.bid, quote.ask), quote.tick_time, meta
+        legacy_hit = book.delayed_exit_event(
             pd.Timestamp(bar_time),
             int(pos.direction),
             None if pos.sl_price is None else float(pos.sl_price),
@@ -1779,10 +1933,53 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 else pd.Timestamp(cast(Any, pos.entry_timestamp))
             ),
         )
-        if hit is None:
+        if legacy_hit is None:
             return None
-        kind, fill_time, bid, ask = hit
-        return kind, (bid, ask), fill_time
+        kind, fill_time, bid, ask = legacy_hit
+        return (
+            kind,
+            (bid, ask),
+            fill_time,
+            {
+                "order_submission_time": pd.Timestamp(bar_time),
+                "execution_order_time": pd.Timestamp(bar_time),
+                "execution_arrival_time": pd.Timestamp(bar_time),
+                "execution_latency_ns": 0,
+                "actual_tick_time": fill_time,
+                "fill_quote_source": "tick",
+            },
+        )
+
+    def _resolve_randomized_tick_quote(
+        self, order_time: pd.Timestamp
+    ) -> tuple[Any, dict[str, Any]]:
+        """Resolve the first eligible tick and return auditable execution fields.
+
+        A configured latency of zero is an immediate tick lookup, not a candle
+        fill. Positive values sample integer nanoseconds below the configured
+        exclusive upper bound.
+        """
+        if self._tickbook is None:
+            raise TickExecutionUnavailable("tick-only execution requires a TickBook")
+        quote = resolve_tick_execution(
+            self._tickbook,
+            pd.Timestamp(order_time),
+            self.np_random,
+            max_latency_ns_exclusive=int(self.randomized_fill_latency_ms * 1_000_000),
+            max_quote_wait_ns=self.max_tick_quote_wait_ms * 1_000_000,
+        )
+        if quote is None:
+            raise TickExecutionUnavailable(
+                f"no executable quote within {self.max_tick_quote_wait_ms}ms of {order_time}"
+            )
+        return quote, {
+            "order_submission_time": quote.order_time,
+            "execution_order_time": quote.order_time,
+            "execution_arrival_time": quote.arrival_time,
+            "execution_latency_ns": quote.latency_ns,
+            "actual_tick_time": quote.tick_time,
+            "fill_quote_source": "tick",
+        }
 
     def _sl_tp_fill_quote(self, direction: int, hit_price: float) -> tuple[float, float]:
         """Bid/ask that closes at *hit_price*, worsened only by adverse slippage.
@@ -1851,6 +2048,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         pos = self.position
         if pos is None or "fill_id" in record:
             return
+        active_execution = getattr(self, "_active_step_execution", None)
+        if active_execution is not None:
+            for key, value in active_execution["metadata"].items():
+                record.setdefault(key, value)
         # The environment uses observed ticks only for triggered stop/target
         # exits. Other fills use the bar open, bar close, or an OHLC-derived
         # level. Preserve that distinction in every raw fill record so reports
@@ -1955,18 +2156,34 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         pos.best_favorable = max(float(pos.best_favorable), favorable)
         if pos.best_favorable + 1e-12 < risk or not crossed or not np.isfinite(self._ema21_at(idx)):
             return
-        # The bar close is the bid. A short buy-to-cover executes at the ask.
-        pnl, fill_price = self.broker.close_position(self.account, pos, self._bar_quote(bar))
+        execution = getattr(self, "_active_step_execution", None)
+        if execution is not None:
+            quote = execution["quote"]
+            fill_quote = (quote.bid, quote.ask)
+            fill_time = quote.tick_time
+            execution_meta = dict(execution["metadata"])
+        elif getattr(self, "tick_execution_required", False):
+            order_time = pd.Timestamp(log_time) + pd.Timedelta(minutes=self._minutes_per_step)
+            quote, execution_meta = self._resolve_randomized_tick_quote(order_time)
+            fill_quote = (quote.bid, quote.ask)
+            fill_time = quote.tick_time
+        else:
+            fill_quote = self._bar_quote(bar)
+            fill_time = log_time + pd.Timedelta(minutes=self._minutes_per_step)
+            execution_meta = {}
+        pnl, fill_price = self.broker.close_position(self.account, pos, fill_quote)
         record = {
             "type": "close",
             "pnl": pnl,
             "price": fill_price,
             "reason": "ema_21_exit",
+            "fill_quote_source": "tick" if execution_meta else "bar_close",
             "bar": idx,
             "time": log_time,
             "decision_time": log_time,
-            "fill_time": log_time + pd.Timedelta(minutes=self._minutes_per_step),
+            "fill_time": fill_time,
             "equity": self.account.equity,
+            **execution_meta,
         }
         self._stamp_exit(record, fill_price)
         self.trade_log.append(record)
@@ -1999,6 +2216,31 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         and geometrically valid; otherwise the entry is rejected to avoid
         naked positions.
         """
+        execution_meta: dict[str, Any] = {}
+        if (
+            getattr(self, "tick_execution_required", False)
+            or getattr(self, "randomized_fill_latency_ms", 0.0) > 0
+        ):
+            active_execution = getattr(self, "_active_step_execution", None)
+            if active_execution is not None:
+                execution_quote = active_execution["quote"]
+                execution_meta = dict(active_execution["metadata"])
+                execution_order_time = execution_quote.order_time
+            else:
+                execution_order_time = (
+                    pd.Timestamp(fill_time)
+                    if self.fill_latency_bars > 0
+                    else pd.Timestamp(
+                        fill_time if order_submission_time is None else order_submission_time
+                    )
+                )
+                execution_quote, execution_meta = self._resolve_randomized_tick_quote(
+                    execution_order_time
+                )
+            fill_bid, fill_ask = execution_quote.bid, execution_quote.ask
+            fill_time = execution_quote.tick_time
+            execution_meta["execution_order_time"] = execution_order_time
+
         if self.position is not None and self.position.direction != discrete_action:
             pnl, fill_price = self.broker.close_position(
                 self.account, self.position, (fill_bid, fill_ask)
@@ -2007,7 +2249,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 "type": "close",
                 "pnl": pnl,
                 "price": fill_price,
-                "fill_quote_source": "bar_open",
+                "fill_quote_source": "tick" if execution_meta else "bar_open",
                 "bar": self.step_idx,
                 "time": fill_time,
                 "decision_time": bar_time,
@@ -2016,6 +2258,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 ),
                 "fill_time": fill_time,
                 "equity": self.account.equity,
+                **execution_meta,
             }
             self._stamp_exit(record, fill_price)
             self.trade_log.append(record)
@@ -2285,8 +2528,8 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                             "signal_time": signal_time,
                             "order_submission_bar": signal_bar,
                             "fill_bar": self.step_idx if fill_bar_idx is None else fill_bar_idx,
-                            "fill_phase": "bar_open",
-                            "fill_quote_source": "bar_open",
+                            "fill_phase": "tick" if execution_meta else "bar_open",
+                            "fill_quote_source": "tick" if execution_meta else "bar_open",
                             "entry_mode": str(getattr(self.strategy, "entry_mode", "legacy")),
                             "time": fill_time,
                             "decision_time": bar_time,
@@ -2349,6 +2592,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                                 else {}
                             ),
                             "equity": self.account.equity,
+                            **execution_meta,
                             **(
                                 {
                                     "entry_setup_types": list(entry_candidate.setup_types),
@@ -3108,10 +3352,24 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             if next_market_idx < self._n_bars
             else bar_time + pd.Timedelta(minutes=self._minutes_per_step)
         )
+        self._active_step_execution = None
+        if self.randomized_fill_latency_ms > 0:
+            execution_order_time = pd.Timestamp(entry_fill_time)
+            quote, execution_meta = self._resolve_randomized_tick_quote(execution_order_time)
+            self._active_step_execution = {
+                "quote": quote,
+                "metadata": execution_meta,
+            }
+            entry_fill_bid, entry_fill_ask = quote.bid, quote.ask
+            entry_fill_time = quote.tick_time
+            fill_time = quote.tick_time
         fill_bid, fill_ask, next_bar = self._progress_market(
             bar, feat_row, bar_time, session_id, market_fill_idx
         )
-        if market_fill_idx < self._n_bars:
+        if self._active_step_execution is not None:
+            quote = self._active_step_execution["quote"]
+            fill_bid, fill_ask = quote.bid, quote.ask
+        elif market_fill_idx < self._n_bars:
             entry_fill_bid, entry_fill_ask = self._bar_open_quote(self._bar_at(market_fill_idx))
         else:
             entry_fill_bid, entry_fill_ask = fill_bid, fill_ask
@@ -3346,19 +3604,30 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         if not done and not pending_due:
             if not self.strategy_actions and action == 19:  # exit action
                 if self.position is not None:
+                    execution_meta = {}
+                    action_fill_bid, action_fill_ask = fill_bid, fill_ask
+                    action_fill_time = fill_time
+                    if getattr(self, "tick_execution_required", False):
+                        quote, execution_meta = self._resolve_randomized_tick_quote(
+                            pd.Timestamp(fill_time)
+                        )
+                        action_fill_bid, action_fill_ask = quote.bid, quote.ask
+                        action_fill_time = quote.tick_time
                     pnl, fill_price = self.broker.close_position(
-                        self.account, self.position, (fill_bid, fill_ask)
+                        self.account, self.position, (action_fill_bid, action_fill_ask)
                     )
                     record = {
                         "type": "close",
                         "pnl": pnl,
                         "price": fill_price,
+                        "fill_quote_source": "tick" if execution_meta else "bar_open",
                         "bar": self.step_idx,
-                        "time": fill_time,
+                        "time": action_fill_time,
                         "decision_time": bar_time,
                         "order_submission_time": bar_time,
-                        "fill_time": fill_time,
+                        "fill_time": action_fill_time,
                         "equity": self.account.equity,
+                        **execution_meta,
                     }
                     self._stamp_exit(record, fill_price)
                     self.trade_log.append(record)
@@ -3946,7 +4215,18 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             fill_bid, fill_ask = bid, ask
 
         if self.block_overnight and self.position is not None and self._is_ny_session_boundary():
-            pnl, fill_price = self.broker.close_position(self.account, self.position, (bid, ask))
+            eod_quote = (bid, ask)
+            eod_fill_time = bar_time + pd.Timedelta(minutes=self._minutes_per_step)
+            execution_meta: dict[str, Any] = {}
+            if getattr(self, "tick_execution_required", False):
+                execution, execution_meta = self._resolve_randomized_tick_quote(eod_fill_time)
+                eod_quote = (execution.bid, execution.ask)
+                eod_fill_time = execution.tick_time
+            elif self._active_step_execution is not None:
+                execution = self._active_step_execution["quote"]
+                eod_quote = (execution.bid, execution.ask)
+                eod_fill_time = execution.tick_time
+            pnl, fill_price = self.broker.close_position(self.account, self.position, eod_quote)
             record = {
                 "type": "eod_close",
                 "pnl": pnl,
@@ -3955,8 +4235,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 "bar": self.step_idx,
                 "time": bar_time,
                 "order_submission_time": bar_time,
-                "fill_time": bar_time + pd.Timedelta(minutes=self._minutes_per_step),
+                "fill_time": eod_fill_time,
                 "equity": self.account.equity,
+                **execution_meta,
             }
             self._stamp_exit(record, fill_price)
             self.trade_log.append(record)
@@ -4556,6 +4837,16 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
     ) -> None:
         if self.position is None:
             return
+        execution_meta: dict[str, Any] = {}
+        if getattr(self, "tick_execution_required", False):
+            order_time = (
+                pd.Timestamp(fill_time)
+                if fill_time is not None
+                else pd.Timestamp(bar_time) + pd.Timedelta(minutes=self._minutes_per_step)
+            )
+            quote, execution_meta = self._resolve_randomized_tick_quote(order_time)
+            fill_bid, fill_ask = quote.bid, quote.ask
+            fill_time = quote.tick_time
         pnl, fill_price = self.broker.close_position(
             self.account, self.position, (fill_bid, fill_ask)
         )
@@ -4569,6 +4860,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             "decision_time": bar_time,
             "fill_time": fill_time if fill_time is not None else bar_time,
             "equity": self.account.equity,
+            **execution_meta,
         }
         self._stamp_exit(record, fill_price)
         self.trade_log.append(record)

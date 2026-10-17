@@ -139,6 +139,8 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
         guardrail_kwargs["soft_trailing_dd_limit"] = 0.0
     encoder = _block(cfg, "encoder")
     windows = {str(key): int(value) for key, value in (encoder.get("windows", {}) or {}).items()}
+    costs = _block(cfg, "costs")
+    execution = _block(cfg, "execution")
     return TradingEnv.from_bundle(
         spec.bundle_dir,
         obs_window=int(env.get("obs_window", 60)),
@@ -190,7 +192,10 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
         allow_simplex=bool(env.get("allow_simplex", True)),
         tp_breakeven_alpha=float(env.get("tp_breakeven_alpha", 0.5)),
         risk_floor=float(env.get("risk_floor", 0.0005)),
-        fill_delay_ms=int(_block(cfg, "execution").get("fill_delay_ms", 0)),
+        tick_execution_required=bool(costs.get("use_tick_execution", False)),
+        fill_delay_ms=int(execution.get("fill_delay_ms", 0)),
+        randomized_fill_latency_ms=float(execution.get("randomized_fill_latency_ms", 0.0)),
+        max_tick_quote_wait_ms=int(execution.get("max_tick_quote_wait_ms", 60_000)),
         mtf=spec.arch == "mtf",
         mtf_windows=windows,
     )

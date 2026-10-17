@@ -171,7 +171,8 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
   cancellation. Do not pass `REPLACE=1`; preserve the pending request while
   comparing eligible alternatives, and ask before canceling it if the pending
   request could later overlap the alternative.
-- **Before alloc:** check `sinfo`/`squeue` for free GPU/CPU/RAM and apply the
+- **Before alloc:** first check the user's current allocation and reuse it if
+  available; otherwise check `sinfo`/`squeue` for free GPU/CPU/RAM and apply the
   partition and GPU-family guidance in `.agents/rules/triton-slurm.md`. The
   user requires a per-node CPU, host-RAM, and GPU inventory before each real
   allocation request. The agent must wait/poll for an eligible allocation for
@@ -179,23 +180,24 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
   (`--immediate=60`) where supported; never leave a blocking allocation command
   waiting longer. For a submitted job, stop polling after 60 seconds.
   This limits the agent's wait, not an allocation's runtime, and does not
-  authorize cancelling a pending job. If still pending at 60 seconds, treat
-  that shape as unavailable for immediate work even if Slurm shows a later
-  estimated start; stop polling and immediately search for an eligible
-  alternative without creating an overlapping request. Before
+  authorize cancelling an existing campaign or unrelated job. The user has
+  directed that a new request created for this work still pending at 60 seconds
+  be stopped; cancel only that new pending request, report it, then search for
+  an eligible alternative without creating an overlapping request. Before
   considering each alternative, inspect every candidate node's allocated and
   free CPUs, host RAM, and configured/allocated GPU inventory. Compare only
-  candidates no lower than A100 or MI210 using fresh per-node checks and
+  candidates no lower than A100 using fresh per-node checks and
   `srun --test-only`. An approved successor behind an explicit
   dependency starts its 60-second resource-wait clock only after the dependency
-  clears. MI210 requires a validated ROCm environment. Preserve the repository's
-  cancellation approval rules.
+  clears. MI210 is excluded for the current thesis work. Preserve the
+  cancellation approval rules for every existing or unrelated job.
   The current thesis campaign has a user-set hard cap of **2 GH200 GPUs total**
   across all active allocations, and at most 2 GH200s in any one request. This
   is an aggregate cap: do not combine jobs or node requests whose GH200 counts
   sum to more than 2 (for example, 1 on gpuarm1 plus 2 on gpuarm2, or 2 on
-  gpuarm1 plus 1 on gpuarm2). For this campaign, use at most 1 GH200 on each
-  node; the two-GPU layout is exactly one on gpuarm1 and one on gpuarm2. A
+  gpuarm1 plus 1 on gpuarm2). Prefer one GH200 on each of two nodes; if that
+  layout is unavailable, two GH200s on one eligible node are permitted within
+  the same aggregate cap. A
   single 2-GH200 successor may be queued only with a
   Slurm dependency that guarantees it starts after the active allocation ends;
   include the pending successor in the aggregate check. This cap does not

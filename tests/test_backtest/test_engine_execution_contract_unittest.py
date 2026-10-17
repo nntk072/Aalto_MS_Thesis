@@ -1,11 +1,14 @@
 """End-to-end bounded checks for structural exits in the backtest engine."""
 
+from typing import cast
+
 import numpy as np
 import pandas as pd
+import pytest
 
 from quant_rl.backtest.costs import CostModel
 from quant_rl.backtest.engine import _sl_tp_fill_quote, run_backtest
-from quant_rl.data.ticks import TickBook
+from quant_rl.data.ticks import TickBook, TickExecutionUnavailable
 
 
 def _bars(index: pd.DatetimeIndex) -> pd.DataFrame:
@@ -213,3 +216,197 @@ def test_terminal_liquidation_updates_equity_at_bar_close_time() -> None:
     assert result["equity"].index[-1] == expected_close
     assert result["equity"].iloc[-1] == result["account"].equity
     assert result["equity_valuation_times"].is_monotonic_increasing
+
+
+def test_randomized_tick_fills_are_seeded_and_record_order_and_fill_times() -> None:
+    index = pd.date_range("2026-01-05 14:00", periods=5, freq="1min", tz="UTC")
+    tick_times = pd.DatetimeIndex(
+        [
+            index[2] + pd.Timedelta(milliseconds=50),
+            index[4] + pd.Timedelta(minutes=1, milliseconds=50),
+        ]
+    )
+    tickbook = TickBook(
+        tick_times.to_numpy(dtype="datetime64[ns]").astype(np.int64),
+        np.asarray([100.0, 100.1, 100.2, 100.3]),
+        np.asarray([100.5, 100.6, 100.7, 100.8]),
+    )
+
+    def run(seed: int) -> pd.DataFrame:
+        actions = iter([1, 0, 0, 0])
+        result = run_backtest(
+            _bars(index),
+            pd.DataFrame(index=index),
+            lambda _obs: next(actions),
+            obs_window=1,
+            cost_model=CostModel(spread_points=0.0, point_size=0.01),
+            tickbook=tickbook,
+            randomized_fill_latency_ms=30.0,
+            execution_seed=seed,
+            hold_on_zero=True,
+            block_overnight=False,
+        )
+        return cast(pd.DataFrame, result["trades"])
+
+    first = run(19)
+    repeated = run(19)
+    assert first["type"].tolist() == ["open", "eod_close"]
+    pd.testing.assert_frame_equal(first, repeated)
+    assert first["fill_quote_source"].eq("tick").all()
+    assert first["execution_latency_ns"].between(0, 29_999_999).all()
+    assert first["order_submission_time"].equals(first["execution_order_time"])
+    assert (first["execution_arrival_time"] >= first["execution_order_time"]).all()
+    assert (first["actual_tick_time"] >= first["execution_arrival_time"]).all()
+    assert first["actual_tick_time"].equals(first["fill_time"])
+
+
+def test_zero_latency_required_tick_fills_use_observed_ask_and_bid() -> None:
+    index = pd.date_range("2026-01-05 14:00", periods=5, freq="1min", tz="UTC")
+    tick_times = pd.DatetimeIndex([*index[2:], index[-1] + pd.Timedelta(minutes=1)])
+    tickbook = TickBook(
+        tick_times.to_numpy(dtype="datetime64[ns]").astype(np.int64),
+        np.full(len(tick_times), 99.9),
+        np.full(len(tick_times), 100.2),
+    )
+    actions = iter([1, 0, 0, 0])
+
+    result = run_backtest(
+        _bars(index),
+        pd.DataFrame(index=index),
+        lambda _obs: next(actions),
+        obs_window=1,
+        cost_model=CostModel(spread_points=0.0, point_size=0.01),
+        tickbook=tickbook,
+        tick_execution_required=True,
+        randomized_fill_latency_ms=0.0,
+        hold_on_zero=True,
+        block_overnight=False,
+    )
+
+    trades = cast(pd.DataFrame, result["trades"])
+    opened = trades.loc[trades["type"] == "open"].iloc[0]
+    closed = trades.loc[trades["type"] == "eod_close"].iloc[-1]
+    assert opened["fill_quote_source"] == "tick"
+    assert opened["price"] == pytest.approx(100.2)  # Long buys at ask.
+    assert closed["fill_quote_source"] == "tick"
+    assert closed["price"] == pytest.approx(99.9)  # Long sells at bid.
+    assert trades["actual_tick_time"].notna().all()
+
+
+def test_zero_latency_required_protective_exit_uses_crossing_tick_bid() -> None:
+    index = pd.date_range("2026-01-05 14:00", periods=5, freq="1min", tz="UTC")
+    tick_times = pd.DatetimeIndex(
+        [index[2], index[2] + pd.Timedelta(seconds=5), index[-1] + pd.Timedelta(minutes=1)]
+    )
+    tickbook = TickBook(
+        tick_times.to_numpy(dtype="datetime64[ns]").astype(np.int64),
+        np.asarray([100.0, 98.8, 98.7]),
+        np.asarray([100.5, 99.2, 99.1]),
+    )
+    features = pd.DataFrame({"last_swing_low": [99.0] * len(index)}, index=index)
+    actions = iter([1, 0, 0, 0])
+
+    result = run_backtest(
+        _bars(index),
+        features,
+        lambda _obs: next(actions),
+        obs_window=1,
+        cost_model=CostModel(spread_points=0.0, point_size=0.01),
+        tickbook=tickbook,
+        tick_execution_required=True,
+        randomized_fill_latency_ms=0.0,
+        use_structure_sl_tp=True,
+        swing_buffer_pts=0.0,
+        min_lot=0.01,
+        max_lot=1.0,
+        hold_on_zero=True,
+        block_overnight=False,
+    )
+
+    trades = cast(pd.DataFrame, result["trades"])
+    opened = trades.loc[trades["type"] == "open"].iloc[0]
+    stopped = trades.loc[trades["type"] == "stop_close"].iloc[0]
+    assert opened["price"] == pytest.approx(100.5)  # Long buys at ask.
+    assert stopped["price"] == pytest.approx(98.8)  # Long stop sells at crossing bid.
+    assert stopped["fill_time"] == tick_times[1]
+    assert stopped["fill_quote_source"] == "tick"
+    assert stopped["actual_tick_time"] == tick_times[1]
+
+
+def test_randomized_backtest_needs_no_tick_quote_when_no_order_is_placed() -> None:
+    index = pd.date_range("2026-01-05 14:00", periods=5, freq="1min", tz="UTC")
+    tickbook = TickBook(
+        np.asarray([], dtype=np.int64),
+        np.asarray([], dtype=np.float64),
+        np.asarray([], dtype=np.float64),
+    )
+    actions = iter([0, 0, 0, 0])
+
+    result = run_backtest(
+        _bars(index),
+        pd.DataFrame(index=index),
+        lambda _obs: next(actions),
+        obs_window=1,
+        cost_model=CostModel(spread_points=0.0, point_size=0.01),
+        tickbook=tickbook,
+        randomized_fill_latency_ms=30.0,
+        hold_on_zero=True,
+        block_overnight=False,
+    )
+
+    assert result["trades"].empty
+
+
+@pytest.mark.parametrize("latency_ms", [0.0, 30.0])
+def test_tick_only_backtest_rejects_candle_only_protective_fill(latency_ms: float) -> None:
+    index = pd.date_range("2026-01-05 14:00", periods=5, freq="1min", tz="UTC")
+    tick_time = index[2] + pd.Timedelta(milliseconds=50)
+    tickbook = TickBook(
+        np.asarray([tick_time.value], dtype=np.int64),
+        np.asarray([100.0]),
+        np.asarray([100.5]),
+    )
+    actions = iter([1, 0, 0, 0])
+    features = pd.DataFrame({"last_swing_low": [99.0] * len(index)}, index=index)
+
+    with pytest.raises(TickExecutionUnavailable, match="candle fallback is disabled"):
+        run_backtest(
+            _bars(index),
+            features,
+            lambda _obs: next(actions),
+            obs_window=1,
+            cost_model=CostModel(spread_points=0.0, point_size=0.01),
+            tickbook=tickbook,
+            tick_execution_required=True,
+            randomized_fill_latency_ms=latency_ms,
+            use_structure_sl_tp=True,
+            swing_buffer_pts=0.0,
+            min_lot=0.01,
+            max_lot=1.0,
+            hold_on_zero=True,
+            block_overnight=False,
+        )
+
+
+def test_randomized_backtest_fails_closed_without_tick_after_order_arrival() -> None:
+    index = pd.date_range("2026-01-05 14:00", periods=5, freq="1min", tz="UTC")
+    tickbook = TickBook(
+        np.asarray([index[2].value - 1], dtype=np.int64),
+        np.asarray([100.0]),
+        np.asarray([100.5]),
+    )
+    actions = iter([1, 0, 0, 0])
+
+    with pytest.raises(TickExecutionUnavailable, match="no executable tick"):
+        run_backtest(
+            _bars(index),
+            pd.DataFrame(index=index),
+            lambda _obs: next(actions),
+            obs_window=1,
+            cost_model=CostModel(spread_points=0.0, point_size=0.01),
+            tickbook=tickbook,
+            randomized_fill_latency_ms=30.0,
+            max_tick_quote_wait_ms=1,
+            hold_on_zero=True,
+            block_overnight=False,
+        )

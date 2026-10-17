@@ -1,8 +1,8 @@
 """Real-tick bid/ask execution book.
 
 ``TickBook`` provides ``quote_at(ts) → (bid, ask)`` using the first tick at or
-after a given timestamp.  It is the primary fill-price source; the bar-spread
-fallback in ``CostModel.bar_quote`` is used when no tick is available.
+after a given timestamp. It never forward-fills beyond the last recorded tick;
+callers must treat a missing quote as unavailable execution data.
 
 Typical use
 -----------
@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -28,6 +29,141 @@ from .loader import iter_ticks_chunks
 
 log = logging.getLogger(__name__)
 TICK_CACHE_VERSION = "v3-validated-full-day"
+
+
+@dataclass(frozen=True, slots=True)
+class TickExecutionQuote:
+    """A causal tick quote selected after a sampled order-arrival latency."""
+
+    order_time: pd.Timestamp
+    arrival_time: pd.Timestamp
+    tick_time: pd.Timestamp
+    bid: float
+    ask: float
+    latency_ns: int
+
+
+@dataclass(frozen=True, slots=True)
+class TickExitExecution:
+    """A protective exit trigger and its latency-adjusted executable quote."""
+
+    kind: str
+    trigger_time: pd.Timestamp
+    quote: TickExecutionQuote
+
+
+class TickExecutionUnavailable(RuntimeError):
+    """Raised when an order cannot be matched to an admissible later tick."""
+
+
+def resolve_tick_execution(
+    book: TickBook,
+    order_time: pd.Timestamp,
+    rng: np.random.Generator,
+    *,
+    max_latency_ns_exclusive: int = 30_000_000,
+    max_quote_wait_ns: int | None = 60_000_000_000,
+) -> TickExecutionQuote | None:
+    """Apply optional sub-30 ms latency and select the first eligible tick.
+
+    A positive latency bound samples uniformly over integer nanoseconds in
+    ``[0, max_latency_ns_exclusive)``; a zero bound means zero delay. The
+    selected quote is the first tick at or after arrival; a pre-arrival quote
+    is never eligible.
+    The caller must treat ``None`` as unavailable tick execution, not substitute
+    a candle quote.
+    """
+    if max_latency_ns_exclusive < 0:
+        raise ValueError("max_latency_ns_exclusive cannot be negative")
+    submitted = pd.Timestamp(order_time)
+    # A zero-latency order still executes from the first observed tick at or
+    # after submission. Zero disables random delay; it never enables candle
+    # pricing.
+    latency_ns = (
+        0 if max_latency_ns_exclusive == 0 else int(rng.integers(0, max_latency_ns_exclusive))
+    )
+    arrival = submitted + pd.Timedelta(latency_ns, unit="ns")
+    # Execution differs from a valuation lookup: if the order arrives just
+    # before the first observed tick, that first tick is still the first
+    # executable quote at or after arrival. ``quote_event_at`` intentionally
+    # treats pre-coverage timestamps as unavailable for ordinary lookups.
+    event = book.execution_quote_event_at(arrival)
+    if event is None:
+        return None
+    tick_time, bid, ask = event
+    if tick_time < arrival:
+        raise RuntimeError("TickBook returned a pre-arrival quote for execution")
+    if max_quote_wait_ns is not None and tick_time.value - arrival.value > max_quote_wait_ns:
+        return None
+    return TickExecutionQuote(
+        order_time=submitted,
+        arrival_time=arrival,
+        tick_time=tick_time,
+        bid=bid,
+        ask=ask,
+        latency_ns=latency_ns,
+    )
+
+
+def resolve_tick_exit(
+    book: TickBook,
+    bar_start: pd.Timestamp,
+    direction: int,
+    sl: float | None,
+    tp: float | None,
+    rng: np.random.Generator,
+    *,
+    bar_minutes: int = 1,
+    earliest_time: pd.Timestamp | None = None,
+    max_latency_ns_exclusive: int = 30_000_000,
+    max_quote_wait_ns: int | None = 60_000_000_000,
+) -> TickExitExecution | None:
+    """Resolve the first tick-triggered SL/TP after randomized execution latency.
+
+    Stop wins if a single tick is beyond both levels. Once a trigger is found,
+    execution uses the first quote at or after the sampled arrival time. A
+    triggered order without a timely subsequent quote raises rather than
+    silently becoming a candle-priced fill.
+    """
+    if direction not in (-1, 1):
+        raise ValueError("direction must be -1 or 1")
+    start = pd.Timestamp(bar_start)
+    start_ns = start.value
+    if earliest_time is not None:
+        start_ns = max(start_ns, pd.Timestamp(earliest_time).value)
+    end_ns = start.value + int(pd.Timedelta(minutes=bar_minutes).value)
+    i0 = int(np.searchsorted(book._ts, start_ns, side="left"))
+    i1 = int(np.searchsorted(book._ts, end_ns, side="left"))
+    if i0 >= i1:
+        return None
+
+    side = book._bid if direction == 1 else book._ask
+    for i in range(i0, i1):
+        price = float(side[i])
+        sl_cross = sl is not None and (
+            (direction == 1 and price <= sl) or (direction == -1 and price >= sl)
+        )
+        tp_cross = tp is not None and (
+            (direction == 1 and price >= tp) or (direction == -1 and price <= tp)
+        )
+        if not sl_cross and not tp_cross:
+            continue
+        kind = "sl" if sl_cross else "tp"
+        trigger_time = pd.Timestamp(int(book._ts[i]), unit="ns", tz="UTC")
+        quote = resolve_tick_execution(
+            book,
+            trigger_time,
+            rng,
+            max_latency_ns_exclusive=max_latency_ns_exclusive,
+            max_quote_wait_ns=max_quote_wait_ns,
+        )
+        if quote is None:
+            raise TickExecutionUnavailable(
+                f"{kind.upper()} triggered at {trigger_time}, but no timely quote "
+                "exists after its sampled order-arrival time"
+            )
+        return TickExitExecution(kind=kind, trigger_time=trigger_time, quote=quote)
+    return None
 
 
 def _ffill_inplace(arr: np.ndarray[Any, Any]) -> None:
@@ -58,9 +194,9 @@ class TickBook:
     def quote_at(self, ts: pd.Timestamp) -> tuple[float, float] | None:
         """Return ``(bid, ask)`` for the first tick at or after *ts*.
 
-        Returns ``None`` when *ts* is before the first recorded tick (no
-        coverage yet — caller should fall back to ``CostModel.bar_quote``).
-        Forward-fills with the last quote when *ts* is after the final tick.
+        Returns ``None`` when *ts* is outside the recorded tick interval,
+        including after the final recorded tick. A caller must not reuse a
+        stale final quote as an execution price.
         """
         event = self.quote_event_at(ts)
         if event is None:
@@ -78,7 +214,28 @@ class TickBook:
             return None
         i = int(np.searchsorted(self._ts, ts_ns, side="left"))
         if i >= n:
-            i = n - 1
+            return None
+        return (
+            pd.Timestamp(int(self._ts[i]), unit="ns", tz="UTC"),
+            float(self._bid[i]),
+            float(self._ask[i]),
+        )
+
+    def execution_quote_event_at(
+        self, ts: pd.Timestamp
+    ) -> tuple[pd.Timestamp, float, float] | None:
+        """Return the first quote at or after an execution arrival time.
+
+        Unlike ``quote_event_at``, this permits an arrival timestamp earlier
+        than the first stored tick. Callers still need a finite quote-wait
+        limit so that a distant first observation cannot masquerade as a fill.
+        """
+        n = len(self._ts)
+        if n == 0:
+            return None
+        i = int(np.searchsorted(self._ts, pd.Timestamp(ts).value, side="left"))
+        if i >= n:
+            return None
         return (
             pd.Timestamp(int(self._ts[i]), unit="ns", tz="UTC"),
             float(self._bid[i]),
@@ -204,6 +361,66 @@ def ticks_covering(book: TickBook | None, bars: pd.DataFrame) -> TickBook | None
     if len(sliced) == 0:
         return None
     return sliced
+
+
+def tick_execution_coverage(
+    book: TickBook | None,
+    order_times: pd.DatetimeIndex,
+    *,
+    max_latency_ns_exclusive: int,
+    max_quote_wait_ms: int,
+) -> dict[str, Any]:
+    """Measure whether every candidate order time has a timely executable tick.
+
+    For a positive latency bound, coverage is guaranteed for every latency in
+    ``[0, max_latency)`` when a valid quote follows the latest possible
+    arrival within ``max_quote_wait``. A zero bound checks the immediate order
+    time. This is a conservative preflight for environments requiring tick
+    quotes at each candidate market step.
+    """
+    if max_latency_ns_exclusive < 0 or max_latency_ns_exclusive > 30_000_000:
+        raise ValueError("max_latency_ns_exclusive must be in [0, 30_000_000]")
+    if max_quote_wait_ms <= 0:
+        raise ValueError("max_quote_wait_ms must be positive")
+    if order_times.tz is None:
+        raise ValueError("order_times must be timezone-aware")
+
+    order_ns = order_times.to_numpy(dtype="datetime64[ns]").astype(np.int64)
+    if order_ns.size == 0:
+        return {
+            "order_count": 0,
+            "covered_count": 0,
+            "unavailable_count": 0,
+            "coverage_fraction": 1.0,
+            "first_unavailable_order_time": None,
+        }
+
+    covered = np.zeros(order_ns.size, dtype=bool)
+    if book is not None and len(book) > 0:
+        latest_arrival_ns = (
+            order_ns if max_latency_ns_exclusive == 0 else order_ns + max_latency_ns_exclusive - 1
+        )
+        candidate_idx = np.searchsorted(book._ts, latest_arrival_ns, side="left")
+        has_quote = candidate_idx < len(book)
+        if has_quote.any():
+            covered[has_quote] = (
+                book._ts[candidate_idx[has_quote]] - order_ns[has_quote]
+                <= max_quote_wait_ms * 1_000_000
+            )
+
+    unavailable = np.flatnonzero(~covered)
+    first_missing = (
+        None
+        if unavailable.size == 0
+        else pd.Timestamp(int(order_ns[unavailable[0]]), unit="ns", tz="UTC").isoformat()
+    )
+    return {
+        "order_count": int(order_ns.size),
+        "covered_count": int(covered.sum()),
+        "unavailable_count": int(unavailable.size),
+        "coverage_fraction": float(covered.mean()),
+        "first_unavailable_order_time": first_missing,
+    }
 
 
 def build_tick_book(

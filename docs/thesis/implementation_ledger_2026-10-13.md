@@ -1,5 +1,152 @@
 # Implementation continuation ledger — 2026-10-13
 
+## Two-node GH200 CI and tick-cache timeline audit — 2026-10-17 17:43 Helsinki
+
+The user clarified the allocation preference: first two GPUs on separate nodes,
+then two on one node, subject to a budget of 12 GH200 GPU-hours per request
+(one GPU up to 12 hours or two GPUs up to 6 hours). The Triton rule now records
+the GPU-hour budget, current allocation-first behavior, resource ranking,
+one-minute pending cutoff, and cancellation scope. With no reusable allocation
+or queued job, the user-authorized two-node request got one GH200, 64 CPUs, and
+512 GiB per node on `gpuarm1` and `gpuarm2`. It completed naturally in 4:38;
+no campaign was launched or stopped.
+
+The current-tree gate passed CUDA smoke, full-tree Ruff format (459 files),
+full-tree Ruff lint, full-tree Mypy (468 source files), all 1,729 tests (82
+warnings, 166.68 seconds), the P1 input audit, and whitespace checks. Slurm
+reported job `21019594` `COMPLETED`, exit code `0:0`. Full log:
+`outputs/gpu_ci_gates/current_tree_job21019594/validation.log`.
+
+The cache timeline audit compared canonical US100/US500 v2 and v3 caches with
+the same cache variants in the separate fast-training worktree. Canonical
+US100 v2/v3 and the separate-worktree v2 cache are byte/logically identical;
+their interval is 2025-12-28 22:05:00.618 through 2026-07-03 16:59:44.709 UTC.
+No inspected cache supplies the early US100 training period. The separate
+worktree's older `US100.cash_ticks.parquet` starts 2025-12-29 13:30 UTC and is
+also incomplete. Timeline report:
+`docs/thesis/evidence/p1_tick_cache_timeline_20261017_job21019594.json`.
+
+The independent scheduled-coverage run reproduced 1,173/99,504 (1.1788%)
+US100 training order-time coverage and full US100 test and US500 train/test
+coverage. Reports are
+`docs/thesis/evidence/p1_tick_execution_coverage_20261017_job21019594.json`
+and `docs/thesis/evidence/p1_tick_execution_coverage_20261017_job21019594_node2.json`;
+the CI wrapper also emitted the first report. The timeline audit marks strict
+timestamp increase false. This is not proof of disorder: the tick loader
+stable-sorts by timestamp, and equal timestamps can explain the flag. A later
+data-quality refinement should separately report equal timestamps and actual
+descending adjacent pairs if needed. Exact raw/cache parity and coverage do not
+establish feed provenance or data-use/publication rights. P1 and thesis
+readiness remain NOT READY; no strategy or campaign evidence was produced.
+
+## Current-tree verification with P4 regressions — 2026-10-17 17:28 Helsinki
+
+After the 17:14 checkpoint noted new P4 swing-menu and IFVG regressions, the
+user-authorized real GH200 allocation `21019521` ran the full current-tree
+gate. The allocation used one GH200, 8 CPUs, and 128 GiB on `gpuarm1`; it
+completed naturally in 4:35. CUDA smoke, full-tree Ruff format (457 files),
+full-tree Ruff lint, full-tree Mypy (466 source files), all 1,727 tests (82
+warnings, 164.14 seconds), P1 raw/cache coverage audit, and whitespace checks
+completed. The log is
+`outputs/gpu_ci_gates/current_tree_job21019521/validation.log`. A previous
+full-suite attempt passed all tests but caught one Mypy annotation issue in the
+new MTF fixture; that annotation was corrected and the subsequent complete gate
+passed.
+
+The P1 report `docs/thesis/evidence/p1_tick_execution_coverage_20261017_job21019521.json`
+again found exact raw/cache parity but only 1,173/99,504 US100 training order
+times covered (1.1788%); the missing first scheduled time is
+`2024-12-30T13:31:00Z`. US100 test coverage and US500 train/test coverage are
+100%. The current `data/` inventory contains one US100 tick CSV starting
+2025-12-29, so it does not cover the earlier part of the training split. The
+P1 data-source and publication-use terms are still undocumented. The gate
+verifies software and regression mechanics, not a valid US100 research run or
+strategy performance; P1 and overall thesis readiness remain NOT READY. No
+campaign was launched, and the Slurm job ended naturally with exit 0.
+
+## Current-tree tick-fill verification — 2026-10-17 16:54 Helsinki
+
+The user clarified that GPU availability should lead to actual authorized work,
+not just a test-only estimate. The Triton rule now directs agents to inspect the
+candidate node and, when a compatible GPU is idle and work is authorized, start
+the sustained task with `srun --immediate=60`; it retains the no-short-step,
+no-duplicate, and no-unauthorized-cancellation constraints.
+
+On GH200 job `21019319` (`gpuarm1`, 1 GPU, 8 CPUs, 128 GiB), the current-tree
+software gate passed: CUDA smoke, full-tree Ruff format (457 files), full-tree
+Ruff lint, full-tree Mypy (466 source files), all 1,721 tests (82 warnings,
+164.84 seconds), and whitespace validation. The full log is
+`outputs/gpu_ci_gates/current_tree_job21019319/validation.log`. The preceding
+job `21019253` recorded the earlier failures and is retained as diagnostic
+evidence; they were corrected before the passing run. No training campaign was
+launched and neither job was cancelled.
+
+The accompanying P1 raw/cache audit again found exact M1 and tick cache parity
+for US100 and US500. The source inventory contains one US100 tick CSV, spanning
+2025-12-29 01:05 through 2026-07-03 19:59, whereas the configured training bars
+begin 2024-12-30. Strict tick execution therefore has only 1,173/99,504 US100
+training order times covered (1.1788%); test coverage is 100%. US500 coverage
+is 100% in train and test. Evidence is
+`docs/thesis/evidence/p1_tick_execution_coverage_20261017_job21019319.json`.
+The gate does not establish feed provenance or data-use/publication terms; P1
+and thesis readiness remain NOT READY. The separate software pass is not
+strategy-performance or confirmatory evidence.
+
+## Tick execution coverage clarification and P2 bounded closure — 2026-10-17 16:22 Helsinki
+
+The configured US100 tick CSV is one 49,160,484-row export spanning
+2025-12-29 01:05 through 2026-07-03 19:59 in the configured broker timezone
+(`Etc/GMT-3`). It is full for that file interval, but the current training split
+starts 2024-12-30 and ends 2025-12-31. Its 30 ms seeded execution delay chooses
+the first valid tick at or after randomized arrival; neither that delay nor the
+60-second quote-wait can supply missing earlier dates. The schedule audit finds
+US100 valid tick coverage at 1,173/99,504 (1.1788%) training steps and 49,925/
+49,925 test steps. P1 remains blocked on admissible full-period training ticks
+and unresolved feed/data-use provenance.
+
+The base YAML remains at randomized latency 0.0 for direct and legacy runs.
+`variant_resolver.train_args()` now appends `execution.randomized_fill_latency_ms=30.0`
+after per-variant overrides for standard variant launches; historical campaign
+configs/fingerprints are untouched. The coverage-audit script now records the
+base-config and standard-resolver values separately. Current-tree GPU
+validation is still required before treating these latest edits as verified.
+
+On the exact legacy `ladder_a4b_distribution__seed50` checkpoint, GH200 jobs
+`21018094` and `21018146` completed repeatability and train/test frame/shared-
+bundle parity. The comparator passed with no errors and byte-identical required
+train/test artifacts. Both backend audits passed all 25 compared fields (6
+training trades; 2 already-inspected historical-test trades). These close only
+bounded evaluator-engineering checks. The checkpoint remains ineligible for
+thesis conclusions because it comes from a lookahead-contaminated campaign,
+uses explicit legacy schema opt-ins, and its historical holdout was inspected.
+Reports are linked from `docs/thesis/evidence/p2_engineering_reanalysis_a4b_seed50_2026-10-17.md`.
+
+Validation incident: H200 3g.71GB job `21019023` failed after 49 seconds
+(exit 2) because its launch script ran mutating Ruff formatting on a path list
+that included YAML. Four Python files were reformatted before Ruff rejected the
+YAML input. No lint, Mypy, or pytest ran. The original script/log are preserved;
+the replacement full-tree GPU gate uses check-only formatting at
+`scripts/triton/run_current_tree_gpu_ci.sh`; it also regenerates P1 coverage
+with explicit 30 ms latency and provenance for the base config and resolver.
+No GPU allocation is currently
+active. A current H200 3g.71GB test-only forecast is 16:36:49; the other
+eligible-family forecasts are later, so none meets the one-minute start rule.
+
+**Execution-price invariant clarified by the user:** zero delay still means the
+first eligible recorded tick at or after the order time; candle prices never
+set a fill. Buys execute at ask and sells at bid (long entry/short exit at ask;
+short entry/long exit at bid). The current dirty-tree patch adds deterministic
+zero-latency TickBook lookup, propagates `costs.use_tick_execution` into train,
+evaluation, standalone backtest, and baseline paths, and makes those configured
+paths fail closed rather than substitute candle prices when an eligible tick
+is missing. Focused tests cover zero-latency quote selection, bid/ask sides,
+and candle-only protective triggers. These edits are **not yet verified**.
+The only validation attempt stopped at formatting before Ruff lint, Mypy, or
+pytest; a replacement H200 allocation had no free slice within the one-minute
+window and the candidate A100 also did not start in that window. No allocation
+is active. P1 remains NOT READY: strict tick execution cannot provide the
+missing US100 training-period coverage or the unrecorded feed/data-use terms.
+
 ## Current-tree verification refresh — 2026-10-17 12:31 Helsinki
 
 MI210 allocation `21015952` completed naturally in 6:06 on `gpuamd1` with one
@@ -3062,3 +3209,45 @@ require a current-tree gate. The exact historical log is
 `outputs/gpu_ci_gates/q0_q7_current_tree_20261017_job21012389/current_tree_validation.log`.
 This closes bounded software verification only; no campaign checkpoint was
 replayed and no empirical result was produced.
+
+## Tick-only zero-latency exit follow-up — 2026-10-17 16:34 Helsinki
+
+Source review found two remaining execution inconsistencies in the in-progress
+P1 patch: custom backtest protective exits did not scan ticks when strict
+execution was configured at zero latency, and environment multi-target exits
+used the legacy quote lookup for zero-latency strict execution. These paths now
+resolve the observed crossing tick (or the first eligible quote after sampled
+latency), preserve the correct bid/ask side, and fail closed rather than use
+OHLC as an execution price. Protective tick-window scans now use the bar
+spacing for resampled timeframes. Added regressions for zero-latency crossing
+fills, candle-only stop rejection at both zero and 30 ms, and a five-minute tick
+exit window. The shared-bundle worker already forwards strict execution,
+latency, and quote-wait settings; a new worker-construction regression captures
+and asserts those values.
+
+These latest source/test edits have **not been executed or validated**. At
+16:33 Helsinki, no suitable GPU allocation could start within the one-minute
+limit: gpuarm1/gpuarm2 were idle with 2 GH200s each (144 CPUs, 1,100,000 MiB
+RAM, 0 allocated) but the one-GH200 test-only forecast was Oct 20; gpu52 had
+all 8 H200s allocated; A100 and H100 nodes had all 4 GPUs allocated; gpu65 had
+2 of 8 B300s free but forecast Oct 19. The nearest H100 test-only forecast was
+17:19 Helsinki. No allocation or training job was submitted. Re-run the
+corrected full-tree GPU gate at the next eligible free A100/H100/H200/GH200/B300
+allocation; keep the result and readiness status explicitly unverified until
+that gate completes.
+
+Independent input re-inventory confirmed there is no second earlier US100 tick
+export under `data/`. The configured US100 BID/ASK tick CSV begins on
+2025-12-29; `data/examples/US100.cash_M1_202412300105_202607031959.csv` is an
+OHLC M1 candle file, not a tick source. This confirms the existing 1.1788%
+US100 training-step coverage result rather than changing the P1 data decision.
+
+### Scheduler recheck — 2026-10-17 16:40 Helsinki
+
+No user Slurm job or tmux allocation is active. `gpuarm1` remains idle with
+2/2 GH200s, 144/144 CPUs and 1,100,000 MiB configured host memory free, but a
+fresh one-GH200 `srun --test-only --immediate=60` forecasts 2026-10-20 04:39.
+H100 node `gpu45` has 4/4 GPUs allocated (24/192 CPUs and 320 GiB reserved) and
+forecasts 22:38 today; the previously inspected A100/H200/B300 candidates also
+remain outside the one-minute window. No job was submitted. Keep the source
+gate unverified and rerun it on the next genuinely startable suitable GPU.

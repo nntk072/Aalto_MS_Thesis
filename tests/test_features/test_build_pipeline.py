@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 import pytest
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 
 from quant_rl.features.build import (
     FEATURE_CACHE_VERSION,
@@ -149,17 +149,19 @@ class TestBuildFeaturesPipeline:
         self, deterministic_bars: pd.DataFrame
     ) -> None:
         cfg_dict = _default_cfg()
-        cfg_dict["features"]["structure"] = {
-            "enabled": True,
-            "timeframes": ["M5"],
-            "swing_candidate_count": 3,
-            "candidate_price_increment": 0.01,
-        }
-        cfg = OmegaConf.create(cfg_dict)
+        cfg = cast(
+            DictConfig,
+            OmegaConf.merge(
+                OmegaConf.create(cfg_dict),
+                OmegaConf.create({"costs": {"point_size": 0.01}}),
+                OmegaConf.load("config/features/pd_context_mtf_swing_candidates.yaml"),
+            ),
+        )
 
         features = build_features(deterministic_bars, cfg=cfg)
         candidates = [
-            f"M5_swing_{side}_candidate_{slot}{suffix}"
+            f"{timeframe}_swing_{side}_candidate_{slot}{suffix}"
+            for timeframe in ("M5", "M15", "H1")
             for side in ("high", "low")
             for slot in range(1, 4)
             for suffix in ("", "_pivot_time_ms", "_confirmed_at_ms", "_age_bars")
@@ -167,11 +169,20 @@ class TestBuildFeaturesPipeline:
         assert set(candidates).issubset(features.columns)
         assert features[candidates].notna().any().any()
         assert set(candidates).isdisjoint(select_obs_columns(features).columns)
-        price = features["M5_swing_low_candidate_1"]
-        confirmed = features["M5_swing_low_candidate_1_confirmed_at_ms"]
-        valid = price.notna()
         decision_ms = features.index.to_numpy(dtype="datetime64[ns]").view(np.int64) // 1_000_000
-        assert (confirmed.loc[valid].to_numpy() <= decision_ms[valid.to_numpy()]).all()
+        for timeframe in ("M5", "M15", "H1"):
+            for side in ("high", "low"):
+                for slot in range(1, 4):
+                    name = f"{timeframe}_swing_{side}_candidate_{slot}"
+                    price = features[name]
+                    pivot = features[f"{name}_pivot_time_ms"]
+                    confirmed = features[f"{name}_confirmed_at_ms"]
+                    age = features[f"{name}_age_bars"]
+                    valid = price.notna()
+                    valid_decisions = decision_ms[valid.to_numpy()]
+                    assert (pivot.loc[valid].to_numpy() <= confirmed.loc[valid].to_numpy()).all()
+                    assert (confirmed.loc[valid].to_numpy() <= valid_decisions).all()
+                    assert (age.loc[valid].to_numpy() >= 0.0).all()
 
     def test_absolute_event_metadata_is_not_exposed_as_model_features(self) -> None:
         index = pd.date_range("2025-01-01", periods=2, freq="1min")

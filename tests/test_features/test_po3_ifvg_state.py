@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from quant_rl.features.po3_ifvg_state import build_po3_ifvg_state
 
@@ -117,3 +118,28 @@ def test_short_setup_mirrors_reference_reclaim_and_ifvg_direction() -> None:
     assert state["po3_manipulation_end"].iloc[3] == 1
     assert state["po3_ifvg_confirmed"].iloc[4] == 1
     assert state["po3_distribution_direction"].iloc[4] == -1
+
+
+def test_through_zone_excursion_is_causal_and_mirrored_for_both_directions() -> None:
+    for direction in (1, -1):
+        bars, sweeps, zones = _inputs(direction=direction)
+        if direction == 1:
+            bars.loc[bars.index[4], ["low", "high"]] = [99.8, 100.2]
+            bars.loc[bars.index[5], ["low", "high"]] = [99.6, 100.1]
+            bars.loc[bars.index[6], ["low", "high"]] = [99.1, 99.4]
+        else:
+            bars.loc[bars.index[4], ["low", "high"]] = [99.8, 100.2]
+            bars.loc[bars.index[5], ["low", "high"]] = [99.9, 100.4]
+            bars.loc[bars.index[6], ["low", "high"]] = [100.6, 101.0]
+
+        full = build_po3_ifvg_state(bars, sweeps, zones)
+        prefix = build_po3_ifvg_state(bars.iloc[:6], sweeps.iloc[:6], zones.iloc[:6])
+
+        assert full["po3_ifvg_confirmed"].iloc[4] == 1.0
+        expected_initial = 99.8 if direction == 1 else 100.2
+        expected_excursion = 99.6 if direction == 1 else 100.4
+        through_zone = full["po3_ifvg_through_zone_extreme"]
+        assert through_zone.iloc[4] == pytest.approx(expected_initial)
+        assert through_zone.iloc[5] == pytest.approx(expected_excursion)
+        assert through_zone.iloc[6] == pytest.approx(expected_excursion)
+        pd.testing.assert_frame_equal(full.iloc[:6], prefix, check_freq=False)

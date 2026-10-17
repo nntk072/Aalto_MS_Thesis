@@ -10,8 +10,28 @@ import pytest
 from quant_rl.backtest.account import AccountState
 from quant_rl.backtest.broker import Broker
 from quant_rl.backtest.costs import CostModel
-from quant_rl.data.ticks import TickBook
+from quant_rl.data.ticks import TickBook, TickExecutionUnavailable
+from quant_rl.envs.feature_row import BarView
 from quant_rl.envs.trading_env import TradingEnv
+
+
+def test_tick_quote_sides_match_buy_ask_and_sell_bid_for_entries_and_exits() -> None:
+    quote = (99.0, 101.0)
+    broker = Broker(cost_model=CostModel(spread_points=0.0, commission_per_lot=0.0))
+
+    long_account = AccountState(initial_balance=100_000.0)
+    long_position = broker.open_position(long_account, quote, 1.0, 1)
+    assert long_position is not None
+    assert long_position.entry_price == pytest.approx(101.0)  # Buy at ask.
+    _, long_exit = broker.close_position(long_account, long_position, quote)
+    assert long_exit == pytest.approx(99.0)  # Sell at bid.
+
+    short_account = AccountState(initial_balance=100_000.0)
+    short_position = broker.open_position(short_account, quote, 1.0, -1)
+    assert short_position is not None
+    assert short_position.entry_price == pytest.approx(99.0)  # Sell at bid.
+    _, short_exit = broker.close_position(short_account, short_position, quote)
+    assert short_exit == pytest.approx(101.0)  # Buy at ask.
 
 
 def test_tick_exit_ignores_crossings_before_position_entry_time() -> None:
@@ -287,6 +307,107 @@ def test_trading_env_step_reconciles_partial_target_then_stop_reward() -> None:
     )
     assert stop_reward == pytest.approx(fills[-1]["net_pnl"] / initial_balance)
     assert stop_info["reward_parts"]["pnl"] == pytest.approx(stop_reward)
+
+
+@pytest.mark.parametrize("latency_ms", [0.0, 30.0])
+def test_tick_mode_uses_correct_ask_and_records_actual_entry_quote(latency_ms: float) -> None:
+    index = pd.date_range("2026-01-05T14:30:00Z", periods=8, freq="min")
+    close = np.full(len(index), 100.0)
+    bars = pd.DataFrame(
+        {
+            "open": close,
+            "high": close + 0.5,
+            "low": close - 0.5,
+            "close": close,
+            "volume": np.full(len(index), 1000.0),
+            "spread": np.zeros(len(index)),
+            "session_id": np.ones(len(index), dtype=np.int64),
+        },
+        index=index,
+    )
+    features = pd.DataFrame(
+        {
+            "last_swing_high": np.full(len(index), 105.0),
+            "last_swing_low": np.full(len(index), 95.0),
+            "london_high": np.full(len(index), 99.0),
+            "london_low": np.full(len(index), 90.0),
+            "asian_high": np.full(len(index), 99.0),
+            "asian_low": np.full(len(index), 90.0),
+            "volume_spike": np.full(len(index), 2.0),
+        },
+        index=index,
+    )
+    tick_times = index + pd.Timedelta(milliseconds=100)
+    book = TickBook(
+        tick_times.to_numpy(dtype="datetime64[ns]").astype(np.int64),
+        np.full(len(index), 100.0),
+        np.full(len(index), 100.2),
+    )
+    env = TradingEnv(
+        bars,
+        features,
+        obs_window=1,
+        episodic=False,
+        reward_mode="pnl",
+        block_overnight=False,
+        tickbook=book,
+        tick_execution_required=True,
+        randomized_fill_latency_ms=latency_ms,
+    )
+    env.reset(seed=73)
+
+    env.step(1)
+
+    opened = next(row for row in env.trade_log if row.get("type") == "open")
+    assert opened["fill_quote_source"] == "tick"
+    assert opened["price"] == pytest.approx(100.2)  # Long buys execute at ask.
+    if latency_ms:
+        assert 0 <= opened["execution_latency_ns"] < int(latency_ms * 1_000_000)
+    else:
+        assert opened["execution_latency_ns"] == 0
+    assert opened["actual_tick_time"] == opened["fill_time"]
+    assert opened["execution_arrival_time"] <= opened["actual_tick_time"]
+    assert opened["execution_order_time"] == opened["order_submission_time"]
+
+
+@pytest.mark.parametrize("latency_ms", [0.0, 30.0])
+def test_tick_only_mode_rejects_candle_only_stop_fill(latency_ms: float) -> None:
+    index = pd.date_range("2026-01-05T14:30:00Z", periods=4, freq="min")
+    close = np.full(len(index), 100.0)
+    bars = pd.DataFrame(
+        {
+            "open": close,
+            "high": close + 0.5,
+            "low": close - 0.5,
+            "close": close,
+            "volume": np.full(len(index), 1000.0),
+            "spread": np.zeros(len(index)),
+            "session_id": np.ones(len(index), dtype=np.int64),
+        },
+        index=index,
+    )
+    features = pd.DataFrame(index=index)
+    tick_time = index[0] + pd.Timedelta(seconds=10)
+    book = TickBook(np.array([tick_time.value]), np.array([100.0]), np.array([100.2]))
+    env = TradingEnv(
+        bars,
+        features,
+        obs_window=1,
+        block_overnight=False,
+        tickbook=book,
+        tick_execution_required=True,
+        randomized_fill_latency_ms=latency_ms,
+    )
+    env.reset(seed=73)
+    pos = env.broker.open_position(env.account, (100.0, 100.0), 1.0, 1)
+    assert pos is not None
+    pos.entry_timestamp = env._bar_time(env.step_idx) - pd.Timedelta(minutes=1)
+    pos.sl_price = 99.5
+    env.position = pos
+    bar = BarView(open=100.0, low=99.0, high=100.5, close=100.0)
+
+    with pytest.raises(TickExecutionUnavailable, match="candle fallback is disabled"):
+        env._check_sl_tp(bar, 100.0, 100.2, env.step_idx)
 
 
 if __name__ == "__main__":

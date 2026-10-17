@@ -68,6 +68,30 @@ have zero samples, so this report cannot support GPU-utilization claims. The
 evaluation protocol records previously inspected, selection-acknowledged data;
 it is not pristine confirmatory OOS evidence.
 
+### Tick execution coverage addendum — 2026-10-17
+
+The configured US100 source is one 49,160,484-row raw tick export spanning
+2025-12-29 through 2026-07-03 in the configured broker timezone (`Etc/GMT-3`).
+The corresponding TickBook cache has the same rows and exact array hash as this
+file. The file/cache are complete for that recorded interval, but the configured
+training split begins 2024-12-30 and ends 2025-12-31. A conservative preflight
+over the full randomized-latency interval `[0, 30 ms)` requires the first valid
+tick at or after arrival within 60 seconds and finds only 1,173/99,504 (1.1788%)
+US100 training-step coverage; test-step coverage is 49,925/49,925. The latency
+rule is implemented for the standard thesis variant launcher, but these source dates cannot support
+tick fills for most of the training year. The older audit JSON's recorded base
+config value `0.0` is distinct from its explicitly audited 30 ms interval.
+Provider identity and data-use/publication terms remain undocumented. This is
+an execution-input coverage result, not a strategy result or evidence that the
+screen's historical candle/tick fills were valid. See
+`docs/thesis/evidence/p1_tick_execution_coverage_20261017_job21017747.json`.
+
+The data directory also contains a separate US500 tick export spanning
+2024-12-30 through 2026-07-03. It covers the configured US500 train and test
+step schedules, but US500 quotes cannot be used to execute US100 orders. The
+current study keeps US100 as its primary instrument; the US500 coverage is
+descriptive and does not resolve the US100 training-data gap.
+
 ### Seed-summary correction — 2026-10-17
 
 The campaign manifest declares seed `50` for all 18 jobs, and every per-run

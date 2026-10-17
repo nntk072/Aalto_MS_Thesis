@@ -75,6 +75,7 @@ def _write_reanalysis(path: Path) -> None:
             "training_data_source": "frames",
             "stop_schema_disposition": "versioned",
             "policy_action_mode": "deterministic",
+            "execution_seed": 50,
             "source_run": str(source_run),
             "source_config_sha256": hashlib.sha256(source_config.read_bytes()).hexdigest(),
             "checkpoint": str(checkpoint),
@@ -108,6 +109,65 @@ def test_reanalysis_comparator_accepts_identical_packages(tmp_path: Path) -> Non
     assert report["status"] == "passed"
     assert len(report["numerical_artifacts"]) == len(SPLITS) * len(NUMERICAL_ARTIFACTS)
     assert report["errors"] == []
+
+
+def test_reanalysis_comparator_rejects_different_execution_seeds(tmp_path: Path) -> None:
+    first, second = tmp_path / "first", tmp_path / "second"
+    _write_reanalysis(first)
+    _write_reanalysis(second)
+    manifest_path = second / "reanalysis_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["execution_seed"] = 51
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    report = compare_reanalyses(first, second)
+
+    assert report["status"] == "failed"
+    assert "reanalysis identity differs: execution_seed" in report["errors"]
+
+
+def test_reanalysis_comparator_accepts_explicit_legacy_stop_schema(tmp_path: Path) -> None:
+    first, second = tmp_path / "first", tmp_path / "second"
+    _write_reanalysis(first)
+    _write_reanalysis(second)
+    source_manifest_path = tmp_path / "source_run" / "run_manifest.json"
+    source_manifest = json.loads(source_manifest_path.read_text(encoding="utf-8"))
+    source_manifest.pop("stop_candidate_schema")
+    source_manifest_path.write_text(json.dumps(source_manifest), encoding="utf-8")
+    for run_dir in (first, second):
+        manifest_path = run_dir / "reanalysis_manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["stop_candidate_schema"] = None
+        manifest["stop_schema_disposition"] = "legacy_opt_in"
+        manifest["legacy_stop_schema_opt_in"] = True
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    report = compare_reanalyses(first, second)
+
+    assert report["status"] == "passed"
+    assert report["errors"] == []
+
+
+def test_reanalysis_comparator_rejects_missing_stop_schema_without_opt_in(tmp_path: Path) -> None:
+    first, second = tmp_path / "first", tmp_path / "second"
+    _write_reanalysis(first)
+    _write_reanalysis(second)
+    source_manifest_path = tmp_path / "source_run" / "run_manifest.json"
+    source_manifest = json.loads(source_manifest_path.read_text(encoding="utf-8"))
+    source_manifest.pop("stop_candidate_schema")
+    source_manifest_path.write_text(json.dumps(source_manifest), encoding="utf-8")
+    for run_dir in (first, second):
+        manifest_path = run_dir / "reanalysis_manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["stop_candidate_schema"] = None
+        manifest["stop_schema_disposition"] = "legacy_opt_in"
+        manifest["legacy_stop_schema_opt_in"] = False
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    report = compare_reanalyses(first, second)
+
+    assert report["status"] == "failed"
+    assert "first missing source stop-candidate schema lacks explicit opt-in" in report["errors"]
 
 
 def test_reanalysis_comparator_rejects_changed_raw_trade_artifact(tmp_path: Path) -> None:

@@ -62,6 +62,15 @@ job `20982346` (46 seconds, 2 steps across 2 nodes) and job `20982372` (110
 seconds, 22 steps across 2 nodes); these are incident evidence, not acceptable
 templates for future launches.
 
+Validation job `21019023` is another launch-control incident: it exited after
+49 seconds because a mutating `ruff format` command included
+`quant_rl/config/default.yaml`. Ruff reformatted four Python files before
+rejecting the YAML input; lint, Mypy, and pytest never ran. Preserve its log and
+the resulting source changes. GPU validation launchers must use
+`ruff format --check .` for the gate, and any corrective formatter invocation
+must target Python files only (or the repository root), never a mixed-language
+list.
+
 Before starting or resuming any campaign, benchmark, test batch, or supervisor,
 inspect its launch path and establish the maximum number of Slurm jobs/steps it
 can create, including retries, health checks, worker fan-out, and shutdown. The
@@ -86,11 +95,15 @@ run the command inside an existing shell.
 
 ### Default workflow (no new job)
 
-1. `bash scripts/triton/status.sh` (or `find_gpu_session.sh`) on login.
-2. If a GPU tmux/`srun` already exists → reuse it (`tmux send-keys`); do not
-   allocate another node.
-3. If none exists and CUDA is required → **ask the user** before any
-   `srun` / `attach_or_alloc.sh`.
+1. `bash scripts/triton/status.sh` (or `find_gpu_session.sh`) on login and
+   inspect `squeue` for the user's actual allocation.
+2. If a GPU tmux/`srun` allocation already exists, reuse it for the work;
+   don't create another `srun` for a small task that fits there. Run required
+   commands on that allocation node rather than x86 login.
+3. If no user allocation exists, inspect per-node resources before selecting
+   and requesting the next suitable allocation. The user's standing
+   authorization in this conversation allows actual `srun` use when a suitable
+   GPU is idle; don't stop at `--test-only` when the authorized work can start.
 
 ### Allowed without asking
 
@@ -150,8 +163,9 @@ run the command inside an existing shell.
   and **2 per allocation request**. Count GPUs across jobs and nodes, including
   pending jobs that could overlap. For example, requesting 1 GH200 on gpuarm1
   plus 2 on gpuarm2 (or 2 on gpuarm1 plus 1 on gpuarm2) is forbidden because
-  the combined total is 3. For this campaign, use at most 1 GH200 per node;
-  the two-GPU layout is exactly one on gpuarm1 and one on gpuarm2. This cap
+  the combined total is 3. Prefer one GH200 per node across two nodes; if that
+  shape is unavailable, two GH200s on one eligible node are allowed within the
+  same aggregate cap. This cap
   does not apply to V100 or other GPU families.
 - Before any GH200 request, inspect all active and pending campaign jobs with
   `squeue` and `scontrol show job`. Never request more than 2 GH200 in one job,
@@ -208,16 +222,53 @@ after 60 seconds. Once Slurm grants
 the allocation, the training or other authorized work may run for its full
 requested walltime; the one-minute limit is not a runtime limit.
 
+### User's current allocation shape and cutoff preference
+
+For this thesis work, first reuse any current user allocation. If none exists,
+inspect each candidate node's allocated/free CPUs, host RAM, and GPU type/count
+before requesting. When the task needs a new GPU allocation, prefer, in order:
+
+1. Two GPUs on different nodes, one GPU per node.
+2. Two GPUs on the same node when the two-node shape is unavailable.
+3. One GPU on each node with 64 CPUs and 512 GiB per node, or one GPU on one
+   node with 64 CPUs and 900 GiB, when that shape best fits the task and
+   eligible inventory.
+
+The user's allocation budget is at most **12 GH200 GPU-hours per request**:
+request up to 12 hours with one GH200, or up to 6 hours with two GH200s. Keep
+the existing GH200 aggregate cap; prefer one GPU on `gpuarm1` and one on
+`gpuarm2`, but two on one node are permitted if the preferred two-node shape is
+unavailable. A shorter bounded task may
+request less when that is sufficient, but do not exceed the GPU-hour budget.
+Do not request resources that are already provided by a reusable allocation.
+Smaller validation or inspection work should share that allocation instead of
+creating another Slurm job/step.
+
+**An availability forecast is not a substitute for using an idle GPU.** When
+the user has authorized the work/allocation and a fresh per-node inventory
+shows a compatible GPU is idle, proceed with one real `srun` for the planned,
+sustained task (using `--immediate=60`), rather than stopping after
+`srun --test-only` or asking the user to repeat authorization. Do not create a
+short diagnostic job: bundle the required checks/work into the already planned
+long-running allocation, and ensure its Slurm step topology complies with the
+120-second short-step rule. If a new request does not start within 60 seconds,
+cancel only that new pending request as directed below, report the result, and
+inspect eligible alternatives before making another request. If no compatible
+GPU is idle, report the live inventory and forecast instead of submitting an
+unapproved or overlapping request.
+
 If the request has not started by then, stop waiting and treat that resource
 shape as unavailable for immediate work. Stop polling it and search for an
 eligible alternative. Before considering each alternative, inspect every
 candidate node's allocated/free CPUs, host RAM, and configured/allocated GPU
 inventory. Do not repeatedly poll, submit a duplicate, or create an overlapping
 replacement. This timeout does **not**
-authorize `scancel` or terminate an already-pending job: follow the cancellation
-authorization rule, preserve the pending job, and resolve it before requesting
-an alternative if it could overlap. Compare alternatives using fresh per-node
-CPU/RAM/GPU checks and `srun --test-only` forecasts.
+authorize cancellation of an existing training/campaign job. The user has
+explicitly directed that a **new request created for this work** that remains
+pending at the one-minute cutoff be stopped and reported; cancel only that new
+pending request, then inspect eligible alternatives before submitting another.
+Never cancel an active or unrelated job under this rule. Compare alternatives
+using fresh per-node CPU/RAM/GPU checks and `srun --test-only` forecasts.
 
 This timer starts when a request is eligible to run. A previously approved
 successor held behind an explicit `afterany`/`afterok` dependency is waiting on
@@ -225,14 +276,15 @@ its predecessor, not waiting for free resources; preserve that single chained
 request and start its 60-second resource timer only after the dependency clears.
 
 When the preferred GPU family is unavailable within the limit, search for a
-compatible GPU **no lower than A100 or MI210**. Candidate families include
-A100, MI210, H100, H200, GH200, and B300 when the specific node and partition
-can satisfy the job. Compare predicted start time and measured end-to-end
-makespan, not model names alone. MI210 requires a validated ROCm-compatible
-environment; do not send the CUDA-only environment to it. NVIDIA alternatives
-require their matching CUDA/PyTorch environment and representative-kernel
-validation. If no eligible candidate is available, report the resource block
-and continue independent work; do not silently drop below the GPU floor.
+compatible NVIDIA GPU **no lower than A100**. Candidate families are A100,
+H100, H200, GH200, and B300 when the specific node and partition can satisfy
+the job. Compare predicted start time and measured end-to-end makespan, not
+model names alone. For current thesis work, the user has explicitly excluded
+MI210; historical MI210 validation and benchmark records remain evidence only
+and do not authorize future MI210 use. NVIDIA alternatives require their
+matching CUDA/PyTorch environment and representative-kernel validation. If no
+eligible candidate is available, report the resource block and continue
+independent work; do not silently drop below the GPU floor.
 Respect the current thesis cap of two GH200s across active and pending jobs; it
 does not apply to other families. Do not switch a live or dependency-queued job
 to another family by submitting an overlapping replacement.
@@ -279,7 +331,7 @@ present the 18-trainer projection as a direct measurement.
 
 | Job | GPUs | Typical request | Why |
 |-----|------|-----------------|-----|
-| One model (one TCN / GRU / Transformer, 20M) | **1** | Example GH200: `--gpus=gh200:1 --mem=512G --cpus-per-task=48 --time=6:00:00` or `--time=12:00:00` | GH200 example only; size CPU/RAM/time for the chosen family, partition, and measured workload. |
+| One model (one TCN / GRU / Transformer, 20M) | **1** | Example GH200: `--gpus=gh200:1 --mem=512G --cpus-per-task=48 --time=12:00:00` | GH200 example only; size CPU/RAM/time for the chosen family, partition, and measured workload. |
 | Six-run matrix (overlay then baseline, three archs) | **2 GH200** | `--gpus=gh200:2 --mem=900G --cpus-per-task=128 --time=6:00:00` | Historical GH200 shape only. The GH200 campaign cap does not set V100/A100/H100/H200/B300 caps. Check [current matrix scripts](../../scripts/matrix/) before use. |
 | 18-trainer full-split screen (campaign-specific) | **2 total, one per node** | GH200: `--nodes=2 --ntasks=2 --cpus-per-task=48 --gpus-per-node=gh200:1 --mem=512G --time=6:00:00` | Current active allocation shape: 18 workers across two nodes (9/node), 5 CPUs/worker, `n_envs=64`, shared bundle. Keep this distinct from two GPUs on one node; recheck cgroup memory and controller placement before reuse. |
 | V100 throughput probe (2026-10-16 user-authorized) | **1 V100, 2 trainers** | Actual probe: `gpu35`, `--gres=gpu:v100:1 --mem=192G --cpus-per-task=16 --time=4:00:00` | One V100 shared by two matched throughput workers. Benchmark-only; not thesis evidence or a validated general V100 cap. |
@@ -297,22 +349,23 @@ shell: `source scripts/triton/activate_venv.sh` (picks `.venv` or `.venv-x86`).
 
 | Knob | 1 GPU (one model) | 2 GPU (six-run) |
 |------|-------------------|-----------------|
-| Time | **6h or 12h.** Default `--time=6:00:00`. Use `--time=12:00:00` when the partition `MaxTime` allows it and the user asked for 12h. | **`--time=6:00:00`** |
+| Time | **`--time=12:00:00`** when using one GH200 and the partition allows it. | **`--time=6:00:00`** when using two GH200s. |
 | Mem | **`--mem=512G`** for one `n_envs=64` train. Steady use is ~300G; this feature set peaked ~473G. 256G OOMs at worker start. | **`--mem=900G`** (stay under the ~1.1 TB node). Same 900G figure for two trains on **one** H200 — see below. |
 | CPUs | **`--cpus-per-task=48`** | **`--cpus-per-task=128`** (node has 144) |
 | Tasks | `--ntasks=1` | `--ntasks=1` |
 
-Example, one TCN, GH200 free, user OK (6h, or 12h if they asked):
+Example, one TCN, GH200 free, user OK (one-GPU request, up to 12h):
 
 ```bash
-srun --partition=gpu-grace-h200-141g --gpus=gh200:1 --time=6:00:00 \
+srun --partition=gpu-grace-h200-141g --gpus=gh200:1 --time=12:00:00 \
   --mem=512G --ntasks=1 --cpus-per-task=48 --pty bash
 ```
 
-The historical two-GH200-on-one-node example is intentionally removed: the
-current thesis campaign permits at most one GH200 on each of two nodes. Follow
-the live per-node inventory and scheduler forecast before constructing any
-two-node request.
+Prefer the two-GH200 layout with one GH200 per node. If the two-node shape is
+unavailable, the user permits a two-GH200 allocation on one eligible node,
+subject to the aggregate cap and the 12-GH200-GPU-hour request budget. Follow
+the live per-node inventory and scheduler forecast before constructing either
+shape.
 
 `attach_or_alloc.sh` follows the same priority when it allocates (override with
 `PARTITION` / `GPUS` / `TIME` / `MEM` / `CPUS` env vars).
@@ -320,8 +373,9 @@ two-node request.
 ## Historical two-trainer H200 probe (2026-10-14)
 
 This profile documents a past probe, not a standing allocation instruction.
-Apply the current per-node inventory, 60-second wait limit, A100-or-better/MI210
-fallback, environment compatibility, and allocation-approval rules above.
+Apply the current per-node inventory, 60-second wait limit, A100-or-better
+NVIDIA fallback, environment compatibility, and allocation-approval rules
+above.
 
 Idea 1 (`po3_ifvg`) and Idea 2 (`distribution`) at `n_envs=64` share **one**
 H200. Run `bash scripts/triton/two_trains_one_h200.sh` after the user says to
@@ -337,10 +391,12 @@ allocate. Do not probe other sizes first.
 
 If a request remains pending after 60 seconds, stop polling and treat that
 resource shape as unavailable for immediate work, even if Slurm shows a later
-estimated start. Immediately compare eligible A100-or-better/MI210 alternatives;
-do not leave a terminal or background poll running. Do not automatically
-cancel the pending request or create an overlapping duplicate. Check the job
-reason and per-node CPU, RAM, and GPU availability; compare alternatives with
+estimated start. Immediately compare eligible A100-or-better NVIDIA alternatives;
+do not leave a terminal or background poll running. For a new request made for
+this thesis work, cancel only that new request if it is still pending at 60
+seconds, as the user explicitly directs. Never cancel an existing campaign or
+unrelated job under this rule, and do not create an overlapping duplicate.
+Check the job reason and per-node CPU, RAM, and GPU availability; compare alternatives with
 `srun --test-only`, then follow explicit cancellation and allocation approval
 rules before switching.
 
@@ -348,11 +404,11 @@ Second train: a new tmux window that **`ssh`s the compute node**. That shell
 joins the same job (`SLURM_JOB_ID` is set). `srun --overlap` / `srun --jobid=`
 fails here with `Insane message length`. Do not retry overlap.
 
-For this thesis campaign, the approved two-GH200 layout is one GH200 on each
-of two different nodes; do not request both GPUs on one node. If `AllocTRES`
-shows all GH200s occupied on the intended nodes, do not submit that shape or
-keep waiting on it. Apply the one-minute limit above, inspect per-node state
-for eligible A100-or-better or MI210 alternatives, then follow the allocation
+For this thesis campaign, prefer one GH200 on each of two different nodes. If
+that layout is unavailable, the user permits both GH200s on one eligible node
+within the aggregate cap. If `AllocTRES` shows the requested GH200s occupied,
+do not submit that shape or keep waiting on it. Apply the one-minute limit above, inspect per-node state
+for eligible A100-or-better NVIDIA alternatives, then follow the allocation
 approval and no-overlap rules.
 
 ## Historical 18-variant matrix measurements
@@ -441,6 +497,16 @@ before environment installation or diagnosis. It covers ARM64/x86_64
 selection, persistent Lustre versus ephemeral node storage, uv/venv checks,
 runtime profiling, process I/O symptoms, and reproducibility. Preserve
 current jobs and worktree changes.
+
+Before submitting a substantive shell to a GPU node, verify its entrypoint is
+native to that node. On the current GH200 login path, `/home/nguyenl37/.local/bin/uv`
+is an x86_64 executable and fails with `Exec format error` on aarch64 even after
+the ARM64 venv is activated. On GH200, use the activated venv's `ruff` and
+`python -m pytest` directly; use the documented node-local staging procedure
+for full-tree Mypy. Do not submit a job whose first command can fail on an
+architecture-mismatched tool before reaching the substantive workload. If an
+early exit does occur, preserve its log, diagnose on login, and do not resubmit
+until the command is corrected; short-job count must remain zero.
 
 ### Mypy startup on Lustre
 

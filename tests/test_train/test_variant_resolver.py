@@ -115,6 +115,12 @@ def test_steps_and_seeds_overrides_flow_into_args() -> None:
     assert "--seeds" not in args
 
 
+def test_variant_runs_force_sub_30ms_randomized_tick_execution() -> None:
+    resolved = resolve_variant("ladder_a0_flat")
+
+    assert train_args(resolved, 42)[-1] == "execution.randomized_fill_latency_ms=30.0"
+
+
 def test_overrides_come_after_strategy_and_have_no_duplicates() -> None:
     resolved = resolve_variant("ladder_a4b_po3_ifvg")
     keys = _overrides_by_key(resolved)  # asserts uniqueness
@@ -153,6 +159,7 @@ def test_launcher_dry_run_prints_every_seed() -> None:
     for seed in (42, 43, 44, 45, 46):
         assert f"ablation_sac_agent__seed{seed}" in proc.stdout
     assert "--algo sac" in proc.stdout and "--arch gru" in proc.stdout
+    assert "execution.randomized_fill_latency_ms=30.0" in proc.stdout
     assert not any(Path(out_dir).glob("*.done"))  # dry run must not write markers
 
 

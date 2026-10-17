@@ -1,0 +1,252 @@
+{
+  "architecture": "aarch64",
+  "config_path": "quant_rl/config/default.yaml",
+  "config_sha256": "c4fd3195da6ba41b98888b495d32e3969e1ce2584054b732e4145fce35c108d7",
+  "configured_primary": "US100.cash",
+  "configured_secondary": "US500.cash",
+  "created_at": "2026-10-17T16:53:53.965575+03:00",
+  "disposition": "BLOCKED_PRIMARY_TICK_COVERAGE_OR_CACHE_INPUT_MISMATCH",
+  "execution_contract": {
+    "audited_randomized_latency_interval_ms": "[0, 30.0)",
+    "base_config_randomized_latency_ms": 0.0,
+    "coverage_audit_matches_thesis_variant_resolver": true,
+    "coverage_semantics": "Conservative preflight: every allowed latency draw must have a valid cached quote at/after arrival and within the quote-wait bound from each candidate environment step timestamp.",
+    "max_tick_quote_wait_ms": 60000,
+    "schedule": "NY-labeled M1 environment steps, each mapped to the next market-bar timestamp as in train_rl._tick_execution_split_coverage",
+    "thesis_variant_resolver_randomized_latency_ms": 30.0
+  },
+  "feed_identity_and_data_use_terms": "Unknown; no provider or publication-use terms are documented in the available repository evidence.",
+  "host": "gpuarm1.int.triton.aalto.fi",
+  "repository_head": "b7a32542aa5cb53c53fd01a36b16d92558610aea",
+  "runtime": {
+    "numpy": "2.2.6",
+    "pandas": "2.3.2",
+    "python": "3.12.15"
+  },
+  "schema_version": 1,
+  "scope_limitations": [
+    "This is an input coverage and exact cache-parity audit, not a backtest, model evaluation, or strategy result.",
+    "US500 coverage is descriptive only; it does not authorize changing the configured US100 primary instrument.",
+    "Coverage and cache parity do not establish feed identity, data-use rights, or publication permission.",
+    "No campaign readiness or thesis readiness is implied."
+  ],
+  "slurm_job_id": "21019319",
+  "source_sha256": {
+    "quant_rl/config/default.yaml": "c4fd3195da6ba41b98888b495d32e3969e1ce2584054b732e4145fce35c108d7",
+    "quant_rl/data/clean.py": "93eb07b3f3041458ad5570cb87a5b936e92061470ab4db6804690d5fc9f1c0c5",
+    "quant_rl/data/loader.py": "9a4cb249006913b8c945266481c3555beb37b5a60aa0dbcdfda714e6bcbfa040",
+    "quant_rl/data/pipeline.py": "652e1cb6e8b5d60f3e3c166649b1c994597a868189aad1299c64230f47780169",
+    "quant_rl/data/session.py": "b9cfb04b2b98ee3c8b4faf282040f04861a095e6f9ba04f8a14fd0e54e072129",
+    "quant_rl/data/split.py": "88cce652a8348f106e9203d82700ebe85f2208ca28e68a086a579e86808ca654",
+    "quant_rl/data/ticks.py": "cae4683990885fdbe0233b84d4220a9e87a9c5f3f2b278eb356b5a880188e692",
+    "quant_rl/train/train_rl.py": "7d03126e42ff2a3bfbe9640f07a4ac40935b38646bfdef7e926665a80d7e7db2",
+    "quant_rl/train/variant_resolver.py": "3efb2fdbb44a69fdd9576633fb01bcd84815bb8678686d6588dbc3d0b686053f",
+    "scripts/research/audit_tick_execution_coverage.py": "f832c2531e72db6771ab7cc8dd6e07ddc60f7477bebe44ae1a1c18f2ed44df74"
+  },
+  "split": {
+    "test_start_inclusive": "2026-01-01",
+    "train_end_inclusive": "2025-12-31"
+  },
+  "symbols": {
+    "US100.cash": {
+      "fresh_tick_rebuild": {
+        "array_sha256": "a63d3ce7d36dc1e471951e892367ec6b621f3dcb61a21d88e569221319a79bc3",
+        "coverage": {
+          "test": {
+            "coverage_fraction": 1.0,
+            "covered_count": 49925,
+            "first_unavailable_order_time": null,
+            "order_count": 49925,
+            "unavailable_count": 0
+          },
+          "train": {
+            "coverage_fraction": 0.011788470815243608,
+            "covered_count": 1173,
+            "first_unavailable_order_time": "2024-12-30T13:31:00+00:00",
+            "order_count": 99504,
+            "unavailable_count": 98331
+          }
+        },
+        "rows": 49160484
+      },
+      "is_configured_primary": true,
+      "m1_cache": {
+        "bytes": 11999992,
+        "columns": [
+          "open",
+          "high",
+          "low",
+          "close",
+          "tickvol",
+          "vol",
+          "spread",
+          "gap_flag",
+          "session",
+          "session_id"
+        ],
+        "first_bar": "2024-12-30 01:05:00+03:00",
+        "last_bar": "2026-07-03 19:59:00+03:00",
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/US100.cash_M1_v2-full-day.parquet",
+        "rows": 528760,
+        "sha256": "fd620a26792359222c56789cf3ef5993b4643858a7faa13d7e5b2c1d79dfbdf8",
+        "source_cache_exact_match": true
+      },
+      "m1_source": {
+        "bytes": 35247226,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/data/US100.cash_M1_202412300105_202607031959.csv",
+        "sha256": "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897"
+      },
+      "tick_cache": {
+        "array_sha256": "a63d3ce7d36dc1e471951e892367ec6b621f3dcb61a21d88e569221319a79bc3",
+        "bytes": 516876032,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/US100.cash_ticks_v3-validated-full-day.parquet",
+        "rows": 49160484,
+        "sha256": "37590c6a996b43ea3f7acf824e7bb4b0a46286a58a349770e6433b5b241b32d1",
+        "source_cache_exact_match": true
+      },
+      "tick_source": {
+        "bytes": 2310141631,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/data/US100.cash_202512290105_202607031959.csv",
+        "sha256": "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91"
+      },
+      "training_tick_cache_coverage": {
+        "test": {
+          "coverage_fraction": 1.0,
+          "covered_count": 49925,
+          "first_unavailable_order_time": null,
+          "order_count": 49925,
+          "unavailable_count": 0
+        },
+        "train": {
+          "coverage_fraction": 0.011788470815243608,
+          "covered_count": 1173,
+          "first_unavailable_order_time": "2024-12-30T13:31:00+00:00",
+          "order_count": 99504,
+          "unavailable_count": 98331
+        }
+      }
+    },
+    "US500.cash": {
+      "fresh_tick_rebuild": {
+        "array_sha256": "3e244e647f4a5ede728acc5797d18fe7612d30829b574f2e5e30fb4ae2c7d9d4",
+        "coverage": {
+          "test": {
+            "coverage_fraction": 1.0,
+            "covered_count": 49925,
+            "first_unavailable_order_time": null,
+            "order_count": 49925,
+            "unavailable_count": 0
+          },
+          "train": {
+            "coverage_fraction": 1.0,
+            "covered_count": 99493,
+            "first_unavailable_order_time": null,
+            "order_count": 99493,
+            "unavailable_count": 0
+          }
+        },
+        "rows": 31134588
+      },
+      "is_configured_primary": false,
+      "m1_cache": {
+        "bytes": 9692793,
+        "columns": [
+          "open",
+          "high",
+          "low",
+          "close",
+          "tickvol",
+          "vol",
+          "spread",
+          "gap_flag",
+          "session",
+          "session_id"
+        ],
+        "first_bar": "2024-12-30 01:05:00+03:00",
+        "last_bar": "2026-07-03 19:59:00+03:00",
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/US500.cash_M1_v2-full-day.parquet",
+        "rows": 527139,
+        "sha256": "e67d9fa196147aed7a2588af02ea08b3b17d3c7bbe644f32fc7f3648f616efb3",
+        "source_cache_exact_match": true
+      },
+      "m1_source": {
+        "bytes": 32185188,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/data/US500.cash_M1_202412300105_202607031959.csv",
+        "sha256": "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9"
+      },
+      "tick_cache": {
+        "array_sha256": "3e244e647f4a5ede728acc5797d18fe7612d30829b574f2e5e30fb4ae2c7d9d4",
+        "bytes": 297770085,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/US500.cash_ticks_v3-validated-full-day.parquet",
+        "rows": 31134588,
+        "sha256": "22131a0ea87972b9304e57ff99ca885ec07d2b6e2541e2c57419867dddaa53a3",
+        "source_cache_exact_match": true
+      },
+      "tick_source": {
+        "bytes": 1400100598,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/data/US500.cash_202412300105_202607031959.csv",
+        "sha256": "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+      },
+      "training_tick_cache_coverage": {
+        "test": {
+          "coverage_fraction": 1.0,
+          "covered_count": 49925,
+          "first_unavailable_order_time": null,
+          "order_count": 49925,
+          "unavailable_count": 0
+        },
+        "train": {
+          "coverage_fraction": 1.0,
+          "covered_count": 99493,
+          "first_unavailable_order_time": null,
+          "order_count": 99493,
+          "unavailable_count": 0
+        }
+      }
+    }
+  },
+  "tracked_worktree_diff_sha256": "2300c97096f7d7a1d4b719f40ce04ae647ea718686ab0ff0f6c34b28aaaba7fb",
+  "working_tree_status": [
+    " M .agents/rules/ci-verification.md",
+    " M .agents/rules/triton-slurm.md",
+    " M docs/thesis/evidence/p1_18_variant_screen_disposition_2026-10-16.md",
+    " M docs/thesis/evidence/p2_engineering_reanalysis_a4b_seed50_2026-10-17.md",
+    " M docs/thesis/implementation_ledger_2026-10-13.md",
+    " M docs/thesis/master_project_execution_plan.md",
+    " M quant_rl/backtest/engine.py",
+    " M quant_rl/config/default.yaml",
+    " M quant_rl/data/ticks.py",
+    " M quant_rl/envs/trading_env.py",
+    " M quant_rl/envs/worker.py",
+    " M quant_rl/eval/eval_run.py",
+    " M quant_rl/eval/rollout.py",
+    " M quant_rl/train/run_backtest.py",
+    " M quant_rl/train/run_baselines.py",
+    " M quant_rl/train/train_rl.py",
+    " M quant_rl/train/variant_resolver.py",
+    " M scripts/strategy_checks/eval_seed_variance.py",
+    " M scripts/thesis/audit_checkpoint_frame_bundle_parity.py",
+    " M scripts/thesis/compare_deterministic_reanalysis.py",
+    " M tests/test_backtest/test_engine_execution_contract_unittest.py",
+    " M tests/test_envs/test_bundle_env_equivalence.py",
+    " M tests/test_envs/test_bundle_worker.py",
+    " M tests/test_envs/test_eligibility_wiring.py",
+    " M tests/test_envs/test_tick_fill_reconciliation.py",
+    " M tests/test_eval/test_eval_run_provenance.py",
+    " M tests/test_rollout.py",
+    " M tests/test_thesis_checkpoint_bundle_parity.py",
+    " M tests/test_thesis_deterministic_reanalysis_comparator.py",
+    " M tests/test_ticks.py",
+    " M tests/test_train/test_variant_resolver.py",
+    "?? docs/thesis/evidence/p1_tick_execution_coverage_20261017_job21017706.json",
+    "?? docs/thesis/evidence/p1_tick_execution_coverage_20261017_job21017747.json",
+    "?? docs/thesis/evidence/p1_tick_execution_coverage_20261017_job21019253.json",
+    "?? docs/thesis/evidence/p2_frame_bundle_a4b_seed50_test_20261017_gh200_retry1.json",
+    "?? docs/thesis/evidence/p2_frame_bundle_a4b_seed50_train_20261017_gh200_retry1.json",
+    "?? docs/thesis/evidence/p2_repeatability_a4b_seed50_20261017_gh200.json",
+    "?? docs/thesis/evidence/p2_repeatability_a4b_seed50_20261017_gh200_stop_legacy_fix.json",
+    "?? docs/thesis/g1_tick_quality_current_recovery_2026-10-17_job21017706.json",
+    "?? scripts/research/audit_tick_execution_coverage.py",
+    "?? scripts/triton/run_current_tree_gpu_ci.sh"
+  ]
+}

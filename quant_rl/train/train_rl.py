@@ -37,8 +37,14 @@ from omegaconf import DictConfig, OmegaConf
 from quant_rl.backtest.costs import CostModel
 from quant_rl.config import apply_overrides, load_config
 from quant_rl.data.pipeline import build_tick_books, run_pipeline
-from quant_rl.data.split import get_split_config, make_train_mask, split_bars, split_train_test
-from quant_rl.data.ticks import TickBook, ticks_covering
+from quant_rl.data.session import ny_session_mask
+from quant_rl.data.split import (
+    get_split_config,
+    make_train_mask,
+    split_bars,
+    split_train_test,
+)
+from quant_rl.data.ticks import TickBook, tick_execution_coverage, ticks_covering
 from quant_rl.envs.distribution_reward import DistributionReward
 from quant_rl.envs.po3_reward import PO3Reward
 from quant_rl.envs.strategies import (
@@ -454,6 +460,14 @@ def _build_eval_common(
         "agent_direction_control": bool(cfg.env.get("agent_direction_control", False)),
         "direction_override_threshold": float(cfg.env.get("direction_override_threshold", 0.0)),
         "fill_delay_ms": _fill_delay_ms(cfg),
+        "randomized_fill_latency_ms": _randomized_fill_latency_ms(cfg),
+        "tick_execution_required": _tick_execution_required(cfg),
+        "max_tick_quote_wait_ms": _max_tick_quote_wait_ms(cfg),
+        "execution_seed": (
+            int(getattr(args, "seed"))
+            if args is not None and getattr(args, "seed", None) is not None
+            else None
+        ),
         "allow_multi_tp": bool(cfg.env.get("allow_multi_tp", False)),
         "allow_simplex": bool(cfg.env.get("allow_simplex", True)),
         "allow_ema_exit": bool(cfg.env.get("allow_ema_exit", True)),
@@ -581,6 +595,83 @@ def _fill_delay_ms(cfg: Any) -> int:
         return 0
 
 
+def _randomized_fill_latency_ms(cfg: Any) -> float:
+    """Maximum exclusive randomized tick latency; zero means immediate tick."""
+    execution = cfg.get("execution") if hasattr(cfg, "get") else None
+    if execution is None:
+        return 0.0
+    try:
+        return float(execution.get("randomized_fill_latency_ms", 0.0))
+    except Exception:
+        return 0.0
+
+
+def _tick_execution_required(cfg: Any) -> bool:
+    """Whether the effective config forbids candle-priced execution fills."""
+    costs = cfg.get("costs", {}) if hasattr(cfg, "get") else {}
+    return bool(costs.get("use_tick_execution", False)) if hasattr(costs, "get") else False
+
+
+def _max_tick_quote_wait_ms(cfg: Any) -> int:
+    """Maximum permitted delay from sampled arrival to the next tick quote."""
+    execution = cfg.get("execution") if hasattr(cfg, "get") else None
+    if execution is None:
+        return 60_000
+    try:
+        return int(execution.get("max_tick_quote_wait_ms", 60_000))
+    except Exception:
+        return 60_000
+
+
+def _tick_execution_split_coverage(
+    tickbook: TickBook | None,
+    index: pd.DatetimeIndex,
+    train_mask: pd.Series,
+    test_start: str,
+    *,
+    session_labels: pd.Series | None = None,
+    max_latency_ns_exclusive: int,
+    max_quote_wait_ms: int,
+) -> dict[str, dict[str, Any]]:
+    """Preflight tick quotes at the timestamps actually used by NY env steps.
+
+    ``TradingEnv`` advances through NY-eligible bars and resolves each step's
+    execution/valuation quote at the following market bar. Requiring coverage
+    for every overnight M1 row is unrelated to this environment's execution
+    schedule and can reject otherwise complete NY-session tick data.
+    """
+    if session_labels is None:
+        ny_mask = ny_session_mask(index).to_numpy(dtype=bool)
+    else:
+        if not session_labels.index.equals(index):
+            raise ValueError("session_labels index must match tick-preflight index")
+        ny_mask = session_labels.astype(str).eq("ny").to_numpy(dtype=bool)
+
+    train_mask_values = np.asarray(train_mask.to_numpy(), dtype=bool)
+    if len(train_mask_values) != len(index) or not train_mask.index.equals(index):
+        raise ValueError("train_mask index must match tick-preflight index")
+    test_start_ts = pd.Timestamp(test_start)
+    if index.tz is not None:
+        if test_start_ts.tzinfo is None:
+            test_start_ts = test_start_ts.tz_localize(index.tz)
+        else:
+            test_start_ts = test_start_ts.tz_convert(index.tz)
+
+    # Match TradingEnv._step_untraced: every eligible NY step consumes the
+    # following M1 market quote (clamped to the final available row).
+    next_market = np.minimum(np.arange(len(index), dtype=np.int64) + 1, len(index) - 1)
+    train_times = index[next_market[train_mask_values & ny_mask]]
+    test_times = index[next_market[(index >= test_start_ts) & ny_mask]]
+    options = {
+        "max_latency_ns_exclusive": max_latency_ns_exclusive,
+        "max_quote_wait_ms": max_quote_wait_ms,
+    }
+    return {
+        "train": tick_execution_coverage(tickbook, train_times, **options),
+        "test": tick_execution_coverage(tickbook, test_times, **options),
+    }
+
+
 def _mtf_settings(cfg: Any, arch: str | None) -> tuple[bool, dict[str, int]]:
     """``mtf`` is on only when the selected architecture is the multi-window encoder."""
     from quant_rl.envs.observation import DEFAULT_HTF_WINDOWS
@@ -697,7 +788,10 @@ def make_env(
         tp_breakeven_alpha=float(cfg.env.get("tp_breakeven_alpha", 0.5)),
         risk_floor=float(cfg.env.get("risk_floor", 0.0005)),
         tickbook=tickbook,
+        tick_execution_required=_tick_execution_required(cfg),
         fill_delay_ms=_fill_delay_ms(cfg),
+        randomized_fill_latency_ms=_randomized_fill_latency_ms(cfg),
+        max_tick_quote_wait_ms=_max_tick_quote_wait_ms(cfg),
         use_vae=use_vae,
         vae=vae,
         pre_ny_by_date=pre_ny_by_date,
@@ -1445,6 +1539,35 @@ def main() -> None:
         cast(pd.DatetimeIndex, primary_m1.index),
         train_end,
     )
+    randomized_fill_latency_ms = _randomized_fill_latency_ms(cfg)
+    tick_execution_required = _tick_execution_required(cfg)
+    if tick_execution_required or randomized_fill_latency_ms > 0.0:
+        execution_coverage = _tick_execution_split_coverage(
+            primary_ticks,
+            cast(pd.DatetimeIndex, primary_m1.index),
+            train_mask,
+            test_start,
+            session_labels=(primary_m1["session"] if "session" in primary_m1.columns else None),
+            max_latency_ns_exclusive=int(randomized_fill_latency_ms * 1_000_000),
+            max_quote_wait_ms=_max_tick_quote_wait_ms(cfg),
+        )
+        for split_name, report in execution_coverage.items():
+            log.info(
+                "Tick execution coverage [%s]: covered=%d/%d (%.4f%%)",
+                split_name,
+                report["covered_count"],
+                report["order_count"],
+                100.0 * report["coverage_fraction"],
+            )
+            if report["unavailable_count"]:
+                raise SystemExit(
+                    "Tick-only execution preflight failed for "
+                    f"{split_name}: {report['unavailable_count']}/"
+                    f"{report['order_count']} candidate order times lack a quote "
+                    "that is available for every allowed latency draw within "
+                    f"{_max_tick_quote_wait_ms(cfg)} ms; first unavailable order "
+                    f"time={report['first_unavailable_order_time']}. Training not started."
+                )
     prebuilt_cache_value = OmegaConf.select(cfg, "data.prebuilt_feature_cache")
     if prebuilt_cache_value:
         feat_cache = Path(str(prebuilt_cache_value)).expanduser()
@@ -2261,6 +2384,7 @@ def main() -> None:
                     "convention": str(cfg.evaluation.annualization_convention),
                 },
                 "initial_balance": float(cfg.account.initial_balance),
+                "execution_seed": int(seed),
                 "historical_test_role": "previously_inspected_holdout",
                 "frequency": "bar_close_equity",
                 "exposure_measure": BAR_CLOSE_EXPOSURE_MEASURE,

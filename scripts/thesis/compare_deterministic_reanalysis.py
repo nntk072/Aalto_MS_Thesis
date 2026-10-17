@@ -50,6 +50,7 @@ IDENTITY_FIELDS = (
     "train_end",
     "test_start",
     "seed",
+    "execution_seed",
     "metrics_protocol",
     "policy_action_mode",
 )
@@ -178,7 +179,7 @@ def _source_manifest_errors(
     # The numerical-report verifier applies these same compatibility gates.
     # Repeatability is meaningless if both replays silently used a different
     # action, observation, stop, or sequence-feature contract than training.
-    for schema_key in ("action_schema", "observation_schema", "stop_candidate_schema"):
+    for schema_key in ("action_schema", "observation_schema"):
         original_schema = source_manifest.get(schema_key)
         replay_schema = reanalysis_manifest.get(schema_key)
         if not isinstance(original_schema, dict):
@@ -217,15 +218,33 @@ def _source_manifest_errors(
 
     if reanalysis_manifest.get("checkpoint_manifest_hash_disposition") != "verified":
         errors.append(f"{label} checkpoint manifest hash is not verified")
-    if reanalysis_manifest.get("stop_schema_disposition") != "versioned":
-        errors.append(f"{label} stop-candidate schema is not versioned")
     for opt_in in (
         "legacy_action_schema_opt_in",
         "legacy_observation_schema_opt_in",
-        "legacy_stop_schema_opt_in",
     ):
         if reanalysis_manifest.get(opt_in) is not False:
             errors.append(f"{label} used unsupported legacy schema opt-in: {opt_in}")
+
+    original_stop_schema = source_manifest.get("stop_candidate_schema")
+    replay_stop_schema = reanalysis_manifest.get("stop_candidate_schema")
+    stop_disposition = reanalysis_manifest.get("stop_schema_disposition")
+    legacy_stop_opt_in = reanalysis_manifest.get("legacy_stop_schema_opt_in")
+    if isinstance(original_stop_schema, dict):
+        if replay_stop_schema != original_stop_schema:
+            errors.append(f"{label} stop-candidate schema differs from original run manifest")
+        if stop_disposition != "versioned":
+            errors.append(f"{label} stop-candidate schema is not versioned")
+        if legacy_stop_opt_in is not False:
+            errors.append(
+                f"{label} used unsupported legacy schema opt-in: legacy_stop_schema_opt_in"
+            )
+    else:
+        if replay_stop_schema is not None:
+            errors.append(f"{label} replay claims a stop-candidate schema absent from the source")
+        if stop_disposition != "legacy_opt_in":
+            errors.append(f"{label} missing source stop-candidate schema is not marked legacy")
+        if legacy_stop_opt_in is not True:
+            errors.append(f"{label} missing source stop-candidate schema lacks explicit opt-in")
     original_protocol = source_manifest.get("execution_protocol")
     if not isinstance(original_protocol, dict) or original_protocol.get(
         "data_source"

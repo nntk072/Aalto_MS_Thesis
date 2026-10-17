@@ -61,6 +61,10 @@ execution:
   # Fill on the tick that crosses SL or TP. 0 = that tick, not a later one.
   # A prop-firm stop fills at the level or worse; a later tick can bounce back.
   fill_delay_ms: 0
+  # Direct/legacy runs default to no additional random latency.
+  # The thesis variant resolver forces 30 ms (seeded uniform in [0, 30)).
+  randomized_fill_latency_ms: 0.0
+  max_tick_quote_wait_ms: 60000
 
 ftmo:
   # Hard daily loss (5% of $100k): force-close + block the rest of that session.

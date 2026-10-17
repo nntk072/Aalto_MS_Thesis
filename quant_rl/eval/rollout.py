@@ -130,7 +130,11 @@ def evaluate_model(
     entry_intensity_threshold: float = 0.0,
     peak_trailing_dd_limit: float = 0.0,
     tickbook: Any | None = None,
+    tick_execution_required: bool = False,
     fill_delay_ms: int = 0,
+    randomized_fill_latency_ms: float = 0.0,
+    max_tick_quote_wait_ms: int = 60_000,
+    execution_seed: int | None = None,
     agent_direction_control: bool = False,
     direction_override_threshold: float = 0.0,
     sl_mode: str = "fixed",
@@ -176,6 +180,15 @@ def evaluate_model(
         raise ValueError(
             "supplied evaluation environment does not use the requested legacy sequence columns"
         )
+    if execution_seed is not None and execution_seed < 0:
+        raise ValueError("execution_seed must be non-negative")
+    effective_latency_ms = randomized_fill_latency_ms
+    if env is not None:
+        effective_latency_ms = float(
+            getattr(env, "randomized_fill_latency_ms", randomized_fill_latency_ms)
+        )
+    if effective_latency_ms > 0 and execution_seed is None:
+        raise ValueError("execution_seed is required for randomized tick-fill evaluation")
     if env is None:
         env = TradingEnv(
             bars=bars,
@@ -232,7 +245,10 @@ def evaluate_model(
             entry_intensity_threshold=entry_intensity_threshold,
             peak_trailing_dd_limit=peak_trailing_dd_limit,
             tickbook=tickbook,
+            tick_execution_required=tick_execution_required,
             fill_delay_ms=fill_delay_ms,
+            randomized_fill_latency_ms=randomized_fill_latency_ms,
+            max_tick_quote_wait_ms=max_tick_quote_wait_ms,
             agent_direction_control=agent_direction_control,
             direction_override_threshold=direction_override_threshold,
             sl_mode=sl_mode,
@@ -250,7 +266,10 @@ def evaluate_model(
             mtf_windows=mtf_windows,
         )
 
-    obs, _ = env.reset()
+    if execution_seed is None:
+        obs, _ = env.reset()
+    else:
+        obs, _ = env.reset(seed=execution_seed)
     done = False
     truncated = False
     action_fn = make_action_fn(

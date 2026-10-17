@@ -251,6 +251,27 @@ def _evaluate_checkpoint_split(model: Any, *, stochastic: bool, **kwargs: Any) -
     return evaluate_model(model, deterministic=not stochastic, **kwargs)
 
 
+def _resolve_execution_seed(
+    requested_seed: int | None, source_manifest: dict[str, Any]
+) -> int | None:
+    """Use an explicit replay seed or the recorded training seed for fill jitter."""
+    if requested_seed is not None:
+        if requested_seed < 0:
+            raise ValueError("evaluation seed must be non-negative")
+        return requested_seed
+    training_protocol = source_manifest.get("training_protocol")
+    metrics_protocol = source_manifest.get("metrics_protocol")
+    candidates = (
+        source_manifest.get("seed"),
+        training_protocol.get("seed") if isinstance(training_protocol, dict) else None,
+        metrics_protocol.get("execution_seed") if isinstance(metrics_protocol, dict) else None,
+    )
+    for candidate in candidates:
+        if isinstance(candidate, int) and not isinstance(candidate, bool) and candidate >= 0:
+            return candidate
+    return None
+
+
 def _validate_sequence_input_width(model: Any, expected_width: int) -> int:
     """Require the checkpoint's sequence tensor width to match its feature schema."""
     observation_spaces = getattr(getattr(model, "observation_space", None), "spaces", None)
@@ -525,6 +546,12 @@ def main() -> None:
     eval_common, eval_strategy, _, _, _ = _build_eval_common(
         cfg, args=None, env_vae=None, pre_ny_by_date=None
     )
+    execution_seed = _resolve_execution_seed(args.seed, source_manifest)
+    if eval_common["randomized_fill_latency_ms"] > 0 and execution_seed is None:
+        raise ValueError(
+            "randomized tick-fill reanalysis requires --seed or a seed in the source run manifest"
+        )
+    eval_common["execution_seed"] = execution_seed
     sequence_schema_is_legacy = source_manifest.get("sequence_feature_schema") is None
     use_legacy_sequence_columns = bool(
         sequence_schema_is_legacy and args.allow_legacy_sequence_schema
@@ -649,6 +676,7 @@ def main() -> None:
             "eval_ftmo": True,
             "eval_policy_action_mode": policy_action_mode,
             "eval_seed": args.seed,
+            "eval_execution_seed": execution_seed,
             "sequence_feature_schema": expected_sequence_schema,
             "sequence_feature_schema_disposition": sequence_schema_disposition,
         }
@@ -722,6 +750,7 @@ def main() -> None:
             "exposure_measure": BAR_CLOSE_EXPOSURE_MEASURE,
         },
         "policy_action_mode": policy_action_mode,
+        "execution_seed": execution_seed,
         "reanalysis_timestamp": datetime.now().isoformat(),
         "validity_note": "Historical inspected holdout; not pristine OOS evidence.",
     }

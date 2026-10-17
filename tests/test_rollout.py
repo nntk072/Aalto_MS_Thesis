@@ -133,8 +133,10 @@ class _ExposureEnv:
         self.breached_sessions: set[str] = set()
         self.account = object()
         self._entry_diag: dict[str, int] = {}
+        self.reset_seed: int | None = None
 
-    def reset(self) -> tuple[dict[str, object], dict[str, object]]:
+    def reset(self, *, seed: int | None = None) -> tuple[dict[str, object], dict[str, object]]:
+        self.reset_seed = seed
         return {}, {}
 
     def step(
@@ -171,6 +173,32 @@ def test_evaluate_model_reports_bar_close_exposure_fraction() -> None:
     assert result["exposure_bars"] == 2
     assert result["exposure_fraction"] == 2 / 3
     assert result["exposure_measure"] == "fraction_of_evaluation_steps_with_position_at_bar_close"
+
+
+def test_evaluate_model_seeds_environment_execution_rng() -> None:
+    env = _ExposureEnv()
+
+    evaluate_model(
+        _ScriptedModel({}),
+        bars=pd.DataFrame(),
+        features=pd.DataFrame(),
+        env=env,  # type: ignore[arg-type]
+        randomized_fill_latency_ms=30.0,
+        execution_seed=17,
+    )
+
+    assert env.reset_seed == 17
+
+
+def test_randomized_tick_evaluation_requires_execution_seed() -> None:
+    with pytest.raises(ValueError, match="execution_seed is required"):
+        evaluate_model(
+            _ScriptedModel({}),
+            bars=pd.DataFrame(),
+            features=pd.DataFrame(),
+            env=_ExposureEnv(),  # type: ignore[arg-type]
+            randomized_fill_latency_ms=30.0,
+        )
 
 
 def test_q5_evaluation_reports_discounted_constraint_costs() -> None:

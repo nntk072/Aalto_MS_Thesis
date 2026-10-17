@@ -147,6 +147,59 @@ def test_mtf_swing_candidates_require_causal_provenance_and_are_audited() -> Non
     ]
 
 
+@pytest.mark.parametrize(("direction", "side"), [(1, "low"), (-1, "high")])
+def test_final_mtf_swing_menu_exposes_and_selects_all_candidates_for_both_sides(
+    direction: int, side: str
+) -> None:
+    decision_at = pd.Timestamp("2026-01-05 12:00:00", tz="UTC")
+    timeframe_minutes = {"M5": 5, "M15": 15, "H1": 60}
+    expected_distances: dict[str, float] = {}
+    values: dict[str, float] = {"ema_21": 101.0}
+    candidate_index = 0
+    for timeframe in ("M5", "M15", "H1"):
+        for slot in range(1, 4):
+            candidate_index += 1
+            name = f"{timeframe}_swing_{side}_candidate_{slot}"
+            distance = 5.0 + 0.5 * (candidate_index - 1)
+            level = 100.0 - distance if direction == 1 else 100.0 + distance
+            confirmed_at = decision_at - pd.Timedelta(minutes=slot)
+            pivot_at = confirmed_at - pd.Timedelta(minutes=timeframe_minutes[timeframe])
+            values[name] = level
+            values[f"{name}_pivot_time_ms"] = pivot_at.value // 1_000_000
+            values[f"{name}_confirmed_at_ms"] = confirmed_at.value // 1_000_000
+            values[f"{name}_age_bars"] = float(slot)
+            expected_distances[name] = distance
+
+    row = pd.Series(values, name=decision_at)
+    menu = _place(
+        row,
+        direction=direction,
+        min_dist=1.0,
+        exit_mode="ema_21",
+        price_increment=0.01,
+    )
+    assert {name for name, _price in menu.sl_menu} == set(expected_distances)
+    assert all(
+        item["status"] == "eligible" and item.get("provenance") for item in menu.sl_candidate_audit
+    )
+
+    # Every candidate lies in the reachable stop-coordinate range [nearest, 2x nearest].
+    nearest_distance = min(expected_distances.values())
+    for name, distance in expected_distances.items():
+        selected = _place(
+            row,
+            direction=direction,
+            sl_fraction=distance / nearest_distance,
+            min_dist=1.0,
+            exit_mode="ema_21",
+            price_increment=0.01,
+        )
+        assert selected.sl_ref == name
+        assert any(
+            item["name"] == name and item["selected"] for item in selected.sl_candidate_audit
+        )
+
+
 def test_mtf_swing_candidate_with_future_confirmation_fails_closed() -> None:
     decision_at = pd.Timestamp("2026-01-05 10:00:00", tz="UTC")
     future = pd.Timestamp("2026-01-05 10:05:00", tz="UTC")
@@ -493,23 +546,39 @@ def test_end_bar_restores_gap_stops_and_a_short_leg_drops_them() -> None:
     assert "fvg" not in short.sl_ref
 
 
-def test_revised_ifvg_stop_menu_includes_zone_edge_and_observed_excursion() -> None:
+@pytest.mark.parametrize(
+    ("direction", "zone_low", "zone_high", "through", "expected_edge", "expected_through"),
+    [
+        (1, 90.0, 95.0, 88.0, 89.0, 87.0),
+        (-1, 105.0, 110.0, 112.0, 111.0, 113.0),
+    ],
+)
+def test_revised_ifvg_stop_menu_includes_zone_edge_and_observed_excursion(
+    direction: int,
+    zone_low: float,
+    zone_high: float,
+    through: float,
+    expected_edge: float,
+    expected_through: float,
+) -> None:
     from quant_rl.envs.strategies import PO3IFVGStrategy
 
+    feat_row = _row(
+        po3_ifvg_low=zone_low,
+        po3_ifvg_high=zone_high,
+        po3_ifvg_through_zone_extreme=through,
+        prev_day_high=130.0,
+        prev_day_low=70.0,
+    )
     placed = place_strategy_order(
         PO3IFVGStrategy(
             enforce_gate=False,
             entry_mode="confirmed_first_eligible",
             require_price_retest=False,
         ),
-        direction=1,
+        direction=direction,
         entry_price=100.0,
-        feat_row=_row(
-            po3_ifvg_low=90.0,
-            po3_ifvg_high=95.0,
-            po3_ifvg_through_zone_extreme=88.0,
-            prev_day_high=130.0,
-        ),
+        feat_row=feat_row,
         min_dist=10.0,
         sl_fraction=0.0,
         tp_fraction=0.0,
@@ -518,16 +587,44 @@ def test_revised_ifvg_stop_menu_includes_zone_edge_and_observed_excursion() -> N
         max_tp_distance=float("nan"),
     )
 
-    assert ("ifvg_far_edge", 89.0) in placed.sl_menu
-    assert ("ifvg_through_zone_extreme", 87.0) in placed.sl_menu
-    assert any(item["selected"] for item in placed.sl_candidate_audit)
+    assert ("ifvg_far_edge", expected_edge) in placed.sl_menu
+    assert ("ifvg_through_zone_extreme", expected_through) in placed.sl_menu
+    assert placed.sl_ref == "ifvg_far_edge"
+    excursion_distance = abs(100.0 - expected_through)
+    edge_distance = abs(100.0 - expected_edge)
+    excursion_placed = place_strategy_order(
+        PO3IFVGStrategy(
+            enforce_gate=False,
+            entry_mode="confirmed_first_eligible",
+            require_price_retest=False,
+        ),
+        direction=direction,
+        entry_price=100.0,
+        feat_row=feat_row,
+        min_dist=10.0,
+        sl_fraction=excursion_distance / edge_distance,
+        tp_fraction=0.0,
+        exit_mode="structural",
+        buffer_pts=1.0,
+        max_tp_distance=float("nan"),
+    )
+    assert excursion_placed.sl_ref == "ifvg_through_zone_extreme"
     assert {item["name"] for item in placed.sl_candidate_audit} >= {
         "ifvg_far_edge",
         "ifvg_through_zone_extreme",
     }
 
 
-def test_revised_ifvg_stop_audit_records_minimum_distance_rejections() -> None:
+@pytest.mark.parametrize(
+    ("direction", "zone_low", "zone_high", "through"),
+    [
+        (1, 95.0, 97.0, 92.0),
+        (-1, 103.0, 105.0, 108.0),
+    ],
+)
+def test_revised_ifvg_stop_audit_records_minimum_distance_rejections(
+    direction: int, zone_low: float, zone_high: float, through: float
+) -> None:
     from quant_rl.envs.strategies import PO3IFVGStrategy
 
     placed = place_strategy_order(
@@ -536,12 +633,12 @@ def test_revised_ifvg_stop_audit_records_minimum_distance_rejections() -> None:
             entry_mode="confirmed_first_eligible",
             require_price_retest=False,
         ),
-        direction=1,
+        direction=direction,
         entry_price=100.0,
         feat_row=_row(
-            po3_ifvg_low=95.0,
-            po3_ifvg_high=97.0,
-            po3_ifvg_through_zone_extreme=92.0,
+            po3_ifvg_low=zone_low,
+            po3_ifvg_high=zone_high,
+            po3_ifvg_through_zone_extreme=through,
             prev_day_high=130.0,
         ),
         min_dist=10.0,

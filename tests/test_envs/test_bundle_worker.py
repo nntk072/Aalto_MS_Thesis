@@ -6,6 +6,7 @@ import pickle
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -25,6 +26,7 @@ def test_worker_factory_matches_default_make_env(tmp_path: Path) -> None:
     bars = _make_deterministic_bars(n=96)
     features = _make_features(bars)
     cfg = load_config()
+    cfg.costs.use_tick_execution = False
     bundle_path = build_env_bundle(
         tmp_path,
         bars,
@@ -55,6 +57,42 @@ def test_worker_factory_matches_default_make_env(tmp_path: Path) -> None:
             np.testing.assert_array_equal(left_step[0][key], right_step[0][key])
         assert left_step[1:4] == right_step[1:4]
         assert left_step[4] == right_step[4]
+
+
+def test_bundle_worker_forwards_tick_execution_contract(monkeypatch, tmp_path: Path) -> None:
+    """Shared-bundle workers receive the same strict tick fill settings."""
+    from quant_rl.config import load_config
+    from quant_rl.envs.env_spec import EnvSpec
+    from quant_rl.envs.trading_env import TradingEnv
+    from quant_rl.envs.worker import make_bundle_env
+
+    cfg = load_config()
+    cfg.costs.use_tick_execution = True
+    cfg.execution.fill_delay_ms = 0
+    cfg.execution.randomized_fill_latency_ms = 30.0
+    cfg.execution.max_tick_quote_wait_ms = 12_345
+    spec = EnvSpec.from_cfg(
+        cfg,
+        algo="ppo",
+        reward="dsr",
+        arch="tcn",
+        bundle_dir=str(tmp_path),
+    )
+    captured: dict[str, object] = {}
+    expected = object()
+
+    def capture_from_bundle(cls: Any, /, bundle_path: Any, **kwargs: Any) -> object:
+        captured["bundle_path"] = bundle_path
+        captured.update(kwargs)
+        return expected
+
+    monkeypatch.setattr(TradingEnv, "from_bundle", classmethod(capture_from_bundle))
+
+    assert make_bundle_env(spec) is expected
+    assert captured["tick_execution_required"] is True
+    assert captured["fill_delay_ms"] == 0
+    assert captured["randomized_fill_latency_ms"] == 30.0
+    assert captured["max_tick_quote_wait_ms"] == 12_345
 
 
 def test_evaluation_worker_disables_training_trailing_guardrails(tmp_path: Path) -> None:
@@ -139,6 +177,7 @@ def test_worker_factory_matches_strategy_actions(tmp_path: Path) -> None:
     features = _make_features(bars)
     features["atr_5"] = np.linspace(1.0, 3.0, len(bars))
     cfg = load_config()
+    cfg.costs.use_tick_execution = False
     cfg.env.strategy_actions = True
     cfg.strategy.name = "baseline"
     bundle_path = build_env_bundle(

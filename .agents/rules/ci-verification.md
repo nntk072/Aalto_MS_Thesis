@@ -60,6 +60,13 @@ If `ruff format --check .` reports files that would be reformatted:
 2. Re-run `uv run ruff format --check .` until it exits 0.
 3. Include the formatting diff in the commit (do not push unformatted code).
 
+Ruff format handles Python source, not YAML. Do not pass YAML/config files in a
+mixed path list to `ruff format`; it can reformat Python files and then fail on
+the unsupported file type. Job `21019023` demonstrated the resulting short-job
+failure. In a GPU validation script, keep formatting check-only; if correction
+is required, run the formatter on `.` or Python-only paths, then rerun the full
+tree check.
+
 Never treat “lint already passed earlier in the chat” as a substitute — re-run the
 gate on the **final** tree you are about to commit.
 

@@ -123,6 +123,10 @@ def main() -> None:
             max_loss_per_trade_usd=max_loss_per_trade,
             take_profit_per_trade_usd=take_profit_per_trade,
             tickbook=ticks,
+            tick_execution_required=bool(cfg.costs.use_tick_execution),
+            randomized_fill_latency_ms=cfg.execution.randomized_fill_latency_ms,
+            max_tick_quote_wait_ms=cfg.execution.max_tick_quote_wait_ms,
+            execution_seed=args.seed,
         )
         result["initial_balance"] = cfg.account.initial_balance
         m = calculate_metrics(

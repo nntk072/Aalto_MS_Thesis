@@ -40,8 +40,11 @@ from quant_rl.train.train_rl import (
     _eval_guardrail_kwargs,
     _fill_delay_ms,
     _max_loss_per_trade,
+    _max_tick_quote_wait_ms,
+    _randomized_fill_latency_ms,
     _strategy_from_cfg,
     _strategy_risk_ranges,
+    _tick_execution_required,
 )
 
 
@@ -90,6 +93,9 @@ def _eval_kwargs(cfg: Any) -> dict[str, Any]:
         agent_direction_control=bool(cfg.env.get("agent_direction_control", False)),
         direction_override_threshold=float(cfg.env.get("direction_override_threshold", 0.0)),
         fill_delay_ms=_fill_delay_ms(cfg),
+        randomized_fill_latency_ms=_randomized_fill_latency_ms(cfg),
+        tick_execution_required=_tick_execution_required(cfg),
+        max_tick_quote_wait_ms=_max_tick_quote_wait_ms(cfg),
     )
 
 
@@ -141,6 +147,7 @@ def main() -> int:
                 bars=bars,
                 features=feat,
                 tickbook=ticks_covering(ticks, bars),
+                execution_seed=seed,
                 **eval_common,
             )
             m = calculate_metrics(

@@ -28,6 +28,7 @@ from typing import Any
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+THESIS_RANDOMIZED_FILL_LATENCY_MS = 30.0
 EXPERIMENTS_PATH = PROJECT_ROOT / "config" / "experiments.yaml"
 DEFAULT_BASE = "quant_rl/config/default.yaml"
 FULL_PO3_BASE = "config/features/full_po3_mtf.yaml"
@@ -202,7 +203,13 @@ def train_args(resolved: dict[str, Any], seed: int) -> list[str]:
     ]
     if resolved["use_vae"]:
         args += ["--use-vae", "--vae-path", str(resolved["vae_path"])]
-    return args + list(resolved["overrides"])
+    # Every new variant run uses the thesis tick-fill contract. The value is
+    # emitted last so a base or variant config cannot silently disable it.
+    return (
+        args
+        + list(resolved["overrides"])
+        + [f"execution.randomized_fill_latency_ms={THESIS_RANDOMIZED_FILL_LATENCY_MS:.1f}"]
+    )
 
 
 def consistency_table(names: list[str], **kwargs: Any) -> list[dict[str, Any]]:

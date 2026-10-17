@@ -13,8 +13,12 @@ from quant_rl.data.pipeline import build_tick_books
 from quant_rl.data.ticks import (
     TICK_CACHE_VERSION,
     TickBook,
+    TickExecutionUnavailable,
     _ffill_inplace,
     build_tick_book,
+    resolve_tick_execution,
+    resolve_tick_exit,
+    tick_execution_coverage,
 )
 
 
@@ -47,6 +51,211 @@ def test_quote_at_before_first_tick_returns_none():
     book = _make_book()
     ts = pd.Timestamp("2025-01-06 16:29:00", tz="UTC")
     assert book.quote_at(ts) is None
+
+
+def test_quote_at_after_last_tick_returns_none_instead_of_stale_quote():
+    book = _make_book()
+    ts = pd.Timestamp("2025-01-06 16:30:11", tz="UTC")
+    assert book.quote_at(ts) is None
+    assert book.quote_event_at(ts) is None
+
+
+def test_randomized_tick_execution_is_reproducible_and_never_uses_prearrival_tick():
+    start = pd.Timestamp("2025-01-06 16:30:00", tz="UTC")
+    tick_times = pd.to_datetime(
+        [start + pd.Timedelta(milliseconds=10), start + pd.Timedelta(milliseconds=40)],
+        utc=True,
+    )
+    book = TickBook(
+        tick_times.values.astype("int64"),
+        np.array([100.0, 101.0]),
+        np.array([100.5, 101.5]),
+    )
+
+    first = resolve_tick_execution(book, start, np.random.default_rng(1729))
+    repeated = resolve_tick_execution(book, start, np.random.default_rng(1729))
+
+    assert first == repeated
+    assert first is not None
+    assert 0 <= first.latency_ns < 30_000_000
+    assert first.tick_time >= first.arrival_time
+
+
+def test_randomized_execution_can_use_first_tick_after_coverage_start():
+    start = pd.Timestamp("2025-01-06 16:30:00", tz="UTC")
+    first_tick = start + pd.Timedelta(seconds=1)
+    book = TickBook(
+        np.array([first_tick.value], dtype=np.int64),
+        np.array([100.0]),
+        np.array([100.5]),
+    )
+
+    fill = resolve_tick_execution(book, start, np.random.default_rng(1729))
+
+    assert fill is not None
+    assert fill.tick_time == first_tick
+    assert fill.tick_time >= fill.arrival_time
+    assert fill.bid == pytest.approx(100.0)
+
+
+def test_zero_latency_execution_uses_first_tick_at_or_after_order_time():
+    start = pd.Timestamp("2025-01-06 16:30:00", tz="UTC")
+    tick_time = start + pd.Timedelta(milliseconds=2)
+    book = TickBook(
+        np.array([tick_time.value], dtype=np.int64),
+        np.array([100.0]),
+        np.array([100.5]),
+    )
+
+    fill = resolve_tick_execution(
+        book,
+        start,
+        np.random.default_rng(1729),
+        max_latency_ns_exclusive=0,
+    )
+
+    assert fill is not None
+    assert fill.latency_ns == 0
+    assert fill.arrival_time == start
+    assert fill.tick_time == tick_time
+    assert fill.tick_time >= fill.arrival_time
+
+
+def test_randomized_execution_rejects_first_tick_beyond_quote_wait_limit():
+    start = pd.Timestamp("2025-01-06 16:30:00", tz="UTC")
+    book = TickBook(
+        np.array([(start + pd.Timedelta(seconds=2)).value], dtype=np.int64),
+        np.array([100.0]),
+        np.array([100.5]),
+    )
+    assert (
+        resolve_tick_execution(
+            book,
+            start,
+            np.random.default_rng(1729),
+            max_quote_wait_ns=1_000_000_000,
+        )
+        is None
+    )
+
+
+def test_tick_execution_coverage_requires_quote_for_all_allowed_latencies():
+    start = pd.Timestamp("2025-01-06 16:30:00", tz="UTC")
+    order_times = pd.date_range(start, periods=2, freq="1min")
+    book = TickBook(
+        np.array([(order_times[0] + pd.Timedelta(milliseconds=30)).value], dtype=np.int64),
+        np.array([100.0]),
+        np.array([100.5]),
+    )
+
+    report = tick_execution_coverage(
+        book,
+        order_times,
+        max_latency_ns_exclusive=30_000_000,
+        max_quote_wait_ms=1_000,
+    )
+
+    assert report["order_count"] == 2
+    assert report["covered_count"] == 1
+    assert report["unavailable_count"] == 1
+    assert report["coverage_fraction"] == 0.5
+    assert report["first_unavailable_order_time"] == order_times[1].isoformat()
+
+
+def test_tick_execution_coverage_accepts_quote_at_latest_arrival_edge():
+    start = pd.Timestamp("2025-01-06 16:30:00", tz="UTC")
+    order_time = pd.DatetimeIndex([start])
+    book = TickBook(
+        np.array([(start + pd.Timedelta(nanoseconds=29_999_999)).value]),
+        np.array([100.0]),
+        np.array([100.5]),
+    )
+
+    report = tick_execution_coverage(
+        book,
+        order_time,
+        max_latency_ns_exclusive=30_000_000,
+        max_quote_wait_ms=30,
+    )
+
+    assert report["coverage_fraction"] == 1.0
+    assert report["unavailable_count"] == 0
+
+
+def test_randomized_tick_exit_records_trigger_arrival_and_executable_quote():
+    start = pd.Timestamp("2025-01-06 16:30:00", tz="UTC")
+    trigger = start + pd.Timedelta(seconds=5)
+    tick_times = pd.to_datetime(
+        [trigger, trigger + pd.Timedelta(milliseconds=10), trigger + pd.Timedelta(milliseconds=40)],
+        utc=True,
+    )
+    book = TickBook(
+        tick_times.values.astype("int64"),
+        np.array([94.0, 95.0, 96.0]),
+        np.array([94.5, 95.5, 96.5]),
+    )
+
+    result = resolve_tick_exit(
+        book,
+        start,
+        direction=1,
+        sl=95.0,
+        tp=None,
+        rng=np.random.default_rng(1729),
+    )
+
+    assert result is not None
+    assert result.kind == "sl"
+    assert result.trigger_time == trigger
+    assert 0 <= result.quote.latency_ns < 30_000_000
+    assert result.quote.tick_time >= result.quote.arrival_time
+    assert result.quote.bid in (94.0, 95.0, 96.0)
+
+
+def test_tick_exit_respects_multi_minute_bar_window():
+    start = pd.Timestamp("2025-01-06 16:30:00", tz="UTC")
+    trigger = start + pd.Timedelta(minutes=3)
+    book = TickBook(
+        np.array([trigger.value], dtype=np.int64),
+        np.array([94.0]),
+        np.array([94.5]),
+    )
+
+    result = resolve_tick_exit(
+        book,
+        start,
+        direction=1,
+        sl=95.0,
+        tp=None,
+        rng=np.random.default_rng(7),
+        bar_minutes=5,
+        max_latency_ns_exclusive=0,
+    )
+
+    assert result is not None
+    assert result.kind == "sl"
+    assert result.trigger_time == trigger
+    assert result.quote.tick_time == trigger
+    assert result.quote.bid == 94.0
+
+
+def test_randomized_tick_exit_fails_closed_when_trigger_has_no_later_quote():
+    start = pd.Timestamp("2025-01-06 16:30:00", tz="UTC")
+    book = TickBook(
+        np.array([(start + pd.Timedelta(seconds=5)).value], dtype=np.int64),
+        np.array([94.0]),
+        np.array([94.5]),
+    )
+
+    with pytest.raises(TickExecutionUnavailable, match="no timely quote"):
+        resolve_tick_exit(
+            book,
+            start,
+            direction=1,
+            sl=95.0,
+            tp=None,
+            rng=np.random.default_rng(1729),
+        )
 
 
 def test_ffill_inplace_fills_internal_nans():
