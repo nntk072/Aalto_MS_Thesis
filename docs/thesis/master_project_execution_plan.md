@@ -8,8 +8,9 @@
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
 **Live checkpoint (2026-10-17 22:39 Helsinki):** work is on the sole checkout,
-`/scratch/work/nguyenl37/Aalto_MS_Thesis`, branch `main`, based on `13196f8`;
-the current changes and evidence are being committed on this branch. The latest
+`/scratch/work/nguyenl37/Aalto_MS_Thesis`, branch `main`; the latest code/evidence
+commit `e1a5121` is pushed to `origin/main`. The new audit artifacts record their
+source base as `13196f8` plus the working changes tested in that commit. The latest
 full GH200-node gate passed Ruff format (465 files), Ruff lint, full-tree Mypy
 (478 source files), and **1,735 tests** (82 warnings; 161.34 seconds). The
 durable gate summary is
