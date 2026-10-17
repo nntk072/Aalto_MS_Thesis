@@ -1301,25 +1301,31 @@ behavioural, failure, or mechanism observations from earlier stages.
 
 ## 5. Current state that determines the first actions
 
-Treat this as a planning snapshot, not live cluster telemetry.
+Planning snapshot refreshed 2026-10-17. Treat allocation/job status in the
+live checkpoint above as authoritative, not as persistent cluster telemetry.
 
 1. The bounded correctness/implementation packages for action schemas, fill
    accounting, causal SL/TP behavior, costs/timing, metrics, fold fitting,
    strict eligibility, structural targets, matched-comparison tooling,
    provenance, parity, and documentation have focused regression evidence.
    They do **not** by themselves prove end-to-end strategy quality.
-2. The current thesis screening lineage is the 18-variant full-split campaign:
-   six mechanism rungs across baseline, PO3/IFVG, and distribution families,
-   one discovery seed, 20M PPO timesteps, `n_envs=64`, shared-bundle backend.
-   Treat it as in progress until all 18 identities are reconciled to terminal
-   artifacts.
-3. The evaluator observation-schema forwarding defect was fixed in main commit
-   `f65e6ff` and its focused regression passed. P2 implementation is in place;
-   end-to-end deterministic recovery from a real saved checkpoint remains open.
-   Repair evaluation and recover valid checkpoints instead of retraining them.
+2. The historical 18-variant screen is terminal and reconciled: 11 succeeded,
+   4 failed the train-survival gate, and 3 were interrupted. Lookahead was
+   found in 17/18 configurations; the sole clean profile failed survival, so
+   there is no admissible winner. US100 train-period tick coverage is 1.1788%,
+   and an actual train replay stopped in April 2025 for lack of an executable
+   tick. This screen cannot select a thesis treatment or be resumed as a valid
+   campaign. Complete authorized US100 training ticks and the other P1 gates
+   before a fresh screen.
+3. The evaluator observation-schema forwarding and randomized-fill seeding
+   fixes are in main. The 2026-10-17 mixed-timezone equity-index crash was
+   fixed in commit `56ee424`; the full 1,729-test suite and source/static gates
+   passed. Current-source test-split frame/bundle parity passed on a historical
+   checkpoint, but train replay still fails closed at the tick gap. Full train
+   and test numerical reports on an admissible checkpoint remain open.
 4. The 2026 report interval has been inspected and is permanently exposed.
    No pristine confirmatory holdout is currently available in the retained
-   dataset.
+   dataset; the historical test-split replay is engineering evidence only.
 5. Independent research sign-off remains open.
 6. A previous planning snapshot described a coherent full manuscript draft, but
    its source was not found in the canonical checkout during the 2026-10-16
@@ -1360,9 +1366,11 @@ Treat this as a planning snapshot, not live cluster telemetry.
    findings, candidate selection, evaluation, and runtime decisions are frozen.
 
 Therefore the immediate objective is **not to design more model families**. It
-is to finish/reconcile the current screen, make final evaluation trustworthy,
-freeze a valid matched experiment, and obtain the complete evidence package needed
-for thesis writing afterward.
+is to obtain/accept the missing training-period ticks and data-use terms, then
+run a fresh causally admissible screen, complete full-split checkpoint
+evaluation, freeze the matched experiment, and produce the evidence package
+needed for thesis writing afterward. The historical 18-way screen is reconciled
+and must remain classified as invalid for selection.
 
 ### Live execution update — 2026-10-16 12:04 Helsinki
 
@@ -3489,10 +3497,10 @@ history.
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE — preserved artifacts and dirty work remain intact; checkout is `main` and the previous 55-entry working tree is committed with no edits discarded. GH200 job `21019594` completed naturally on gpuarm1/gpuarm2 (one GH200, 64 CPUs, 512 GiB each): CUDA smoke, full-tree Ruff format/lint, full-tree Mypy, all 1,729 tests, P1 tick audits, and whitespace check passed. `squeue` is empty and no tmux session exists; no campaign/supervisor is active. Both GH200 nodes returned IDLE with 144 CPUs and 1,100,000 MiB configured RAM each; no allocation is reserved. No campaign started because US100 training tick coverage and provenance remain insufficient. MI210 remains excluded. | — | P1, P2, E0 |
-| P1 | 18-way/full-split one-seed screen reconciliation | HISTORICAL ACCOUNTING RECONCILED; ADMISSIBLE SCREEN BLOCKED — preserve as exploratory: model-visible `prev_ny_high`/`prev_ny_low` leakage affected 17/18 saved configs. Recovery records 11 succeeded, 4 train-survival failures, 3 interrupted, and full-split telemetry for 17/18 variants; `ladder_a0_flat` has no current-attempt completed-split record. Eight variants had zero train/test trades. The 20/20 fold report applies to its recorded source snapshot, not the later observation filter. Latest GH200 schedule audit `21019594` confirms exact M1/tick cache parity but only 1,173/99,504 (1.1788%) eligible US100 training-step coverage; US100 test and both US500 splits are fully covered. Cache timeline audit confirms US100 v2/v3 and alternate-worktree v2 caches are identical and start 2025-12-28 UTC, still missing most of the 2024-12-30–2025-12-31 training year. A new 18-manifest shared-bundle inventory finds one recorded US100 tick source across all bundles, the same incomplete raw export; cached timestamp values still need direct inspection. US500 quotes cannot execute US100 orders and no instrument substitution is authorized. The `[0,30 ms)` randomized delay and 60-second quote wait cannot create missing historical quotes. The trainer correctly aborts before training when scheduled order times lack ticks. Provider/use terms, broker calendar/DST, quality thresholds, source acceptance, fresh causality/cache audits, independent reviews, and a fresh admissible screen remain open. Seed-50 artifacts remain immutable. Audits: [`p1_tick_execution_coverage_20261017_job21019594.json`](evidence/p1_tick_execution_coverage_20261017_job21019594.json), [`p1_tick_cache_timeline_20261017_job21019594.json`](evidence/p1_tick_cache_timeline_20261017_job21019594.json), [`p1_shared_bundle_tick_source_inventory_20261017.json`](evidence/p1_shared_bundle_tick_source_inventory_20261017.json). Finding: [`p1_18_variant_screen_disposition_2026-10-16.md`](evidence/p1_18_variant_screen_disposition_2026-10-16.md) | P0 | P2, E0 |
-| P2 | Deterministic evaluator/schema repair | ACTIVE — deterministic evaluator now seeds randomized fill execution from the run seed or explicit evaluation seed; reanalysis manifests and comparator identity include that seed. Existing bounded legacy seed-50 comparator/parity results remain engineering-only because the source campaign is lookahead-contaminated and its historical test was inspected. Current-tree GH200 job `21019594` passed full-tree Ruff, Mypy, and all 1,729 tests. This verifies software behavior but does not validate a thesis-admissible checkpoint. P2 remains open until an admissible selected-checkpoint acceptance passes. | P0 | P1, E0 |
-| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and all-attempt screen reconciler exist. The refreshed recovery index is `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/thesis_evidence_index_post_causal_repair_20261017.json` (fingerprint `91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e`; 11 succeeded, 4 failed, 3 interrupted; 230 source hashes: 220 verified, 10 mismatched, none missing; 172 checkpoint artifacts). The separate v3 index was also refreshed and records 18 interrupted runs, 228 source hashes (207 verified, 21 mismatched, none missing), and 188 checkpoint artifacts. Neither index establishes chronological split exposure, successful checkpoint deserialization, or strategy validity. The current full-tree suite covers frame/bundle, legacy replay, comparator, numerical-report, registry, Q5 and selector contracts. One completed deterministic engineering reanalysis report exists; an independent repeat and exact-checkpoint frame/bundle parity remain open. The 20-check full-training-interval fold-fit result remains source-snapshot-specific and broader causality is open. The M1 inventory is PARTIAL because vendor/use provenance, broker calendar/DST, and tick validity are not established. Final canonical reports still await P1/P2 closure. | P0 | P1, P2 |
+| P0 | Safe boundary/current snapshot | ACTIVE — canonical `main` is clean at `380340d`, pushed to origin; separate worktrees and historical artifacts remain preserved. Current audit job `21019757` has one GH200, 48 CPUs, and 512 GiB per node on gpuarm1/gpuarm2, six-hour limit, 12 GH200 GPU-hours maximum. Full-tree Ruff, Mypy, and 1,729 tests passed in that allocation. No training campaign or supervisor is active. No campaign was started because US100 training ticks are incomplete. MI210 remains excluded. | — | P1, P2, E0 |
+| P1 | 18-way/full-split one-seed screen reconciliation | HISTORICAL ACCOUNTING RECONCILED; ADMISSIBLE SCREEN BLOCKED — preserve as exploratory: lookahead affected 17/18 saved configs; the 18-way status accounting and prior-attempt exposure are recorded in the disposition file. US100 has 1,173/99,504 (1.1788%) scheduled train-order coverage; US100 test and both US500 splits are fully covered. The raw US100 export and all 18 shared-bundle manifests point to the same incomplete source. Direct timestamp-array scan found six empty arrays, six ending 2025-12-31, and six starting 2026-01-01; none covers the 2025 training period. Full tick replay stopped at 2025-04-28 with `TickExecutionUnavailable` and made no candle-price substitution. Source/feed-use terms and broker calendar/DST remain unknown. No admissible screen or fresh campaign can proceed until complete authorized US100 training ticks and remaining P1 gates are met. Existing seed-50 artifacts remain immutable. Evidence: [`p1_train_replay_tick_gap_20261017_job21019651.json`](evidence/p1_train_replay_tick_gap_20261017_job21019651.json), [`p1_shared_bundle_tick_array_ranges_20261017_job21019757.json`](evidence/p1_shared_bundle_tick_array_ranges_20261017_job21019757.json), [`p1_18_variant_screen_disposition_2026-10-16.md`](evidence/p1_18_variant_screen_disposition_2026-10-16.md). | P0 | P2, E0 |
+| P2 | Deterministic evaluator/schema repair | ACTIVE, PARTIALLY VERIFIED — seeded randomized-fill evaluation and schema forwarding remain in place. A new `TradingEnv.equity_times` mixed-timezone crash was fixed by normalizing tick event timestamps to the broker zone; focused tests, full Ruff/Mypy, and 1,729 repository tests passed. Current-source test-split frame/bundle parity passed all compared fields on a contaminated checkpoint with previously inspected holdout. Complete train replay remains blocked by P1 missing ticks; admissible selected-checkpoint acceptance and full train/test repeat remain open. See [`p2_frame_bundle_a4b_seed50_test_20261017_job21019757.json`](evidence/p2_frame_bundle_a4b_seed50_test_20261017_job21019757.json). | P0 | P1, E0 |
+| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and screen reconciler exist. Current tree has full software-gate evidence and current-source test-split parity for the historical checkpoint. The train-plus-test replay failed closed at the missing US100 quote before producing a complete numerical package. Full-split deterministic repeat, admissible selected checkpoint, and canonical reports remain open. The 20-check fold-fit result remains source-snapshot-specific and broader causality is open. Data-use provenance and broker calendar/DST remain undocumented. | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED — report contract covers annualization, equity endpoints, exposure, raw fills/positions/breaches, split completion, and source/runtime provenance. Current verifier/software tests pass, but no admissible completed-checkpoint report has been generated. | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | Expanded M5/M15/H1 swing and mirrored long/short IFVG stop regressions passed in GH200 job `21019594` and the 1,729-test suite; this closes that source/test slice only. Reviewer preparation includes bounded related-work/threat notes and the refreshed independent-review brief/checklist. No independent reviewer has signed off; market-data/use provenance, broker calendar/DST, tick validity, broader causal coverage, final run identity, and the P3 evidence package remain open |
 | P5 | Freeze matched design/baselines | BLOCKED on P4; the default five-coordinate enforce-gate contrast was found behaviorally redundant and rejected; a shared six-coordinate direction-control pair is documented as an unverified candidate in §13.1 | P4 | P6 prep, review |
