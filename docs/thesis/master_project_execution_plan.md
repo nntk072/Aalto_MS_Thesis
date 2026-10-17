@@ -7,14 +7,13 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-17 11:42 Helsinki):** work is on `main`; the
-validated implementation snapshot is commit `e2c878e`. A docs-only commit
-followed to refresh this checkpoint. The audit manifest records the
-pre-commit HEAD and dirty-tree fingerprint used when the files were run. There
-is no training campaign, supervisor, or tmux session. Authorized MI210
-allocation `21014127` is active on `gpuamd1` with one
-MI210, 8 CPUs, 128 GiB, and a scheduled end of 17:05 Helsinki. No job was
-cancelled or training launched.
+**Live checkpoint (2026-10-17 12:02 Helsinki):** work is on `main`; the
+validated implementation snapshot is commit `e2c878e`; current HEAD is
+`5bceb9f`, with documentation-only commits after that code snapshot. The audit
+manifest records the pre-commit HEAD and dirty-tree fingerprint used when the files were run. There
+is no training campaign, supervisor, or tmux session. MI210 allocation
+`21014127` completed naturally at 12:01 Helsinki; no cancellation was issued.
+No new allocation or training campaign is active.
 
 The allocation completed current-tree verification in
 `outputs/gpu_ci_gates/q0_q7_current_tree_job21014127/validation.log`: full-tree
@@ -50,6 +49,18 @@ execution-source acceptance review, and current cache/data audits. Q0–Q7 have
 implementation foundations but no empirical stage result or
 winner. Thesis readiness remains NOT READY. Earlier live-state entries below
 are historical snapshots.
+
+One completed-checkpoint P2 reanalysis now exists for
+`ladder_a4b_distribution__seed50`, using its exact source cache and full
+train/test splits. Checkpoint, dataset, and cache identities verified. The
+source checkpoint lacks sequence-feature and stop-candidate schema records, so
+the run explicitly opted into legacy replay; it also belongs to the known
+lookahead-contaminated campaign and its historical test split was already
+inspected. The report is engineering-only: 6 training trades and 2 historical
+test trades, with near-zero returns. The independent repeated replay, exact
+frame/shared-bundle parity, and deterministic comparator are still outstanding.
+Evidence and artifact hashes:
+[`p2_engineering_reanalysis_a4b_seed50_2026-10-17.md`](evidence/p2_engineering_reanalysis_a4b_seed50_2026-10-17.md).
 
 **Historical live checkpoint (2026-10-17 08:35 Helsinki):** the 08:35
 per-node inventory showed `gpuarm1` and `gpuarm2` idle, each configured with 2
@@ -3181,10 +3192,10 @@ history.
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE — immutable campaign snapshots, manifests, fingerprints, user data, and exploratory failures remain preserved. No training campaign, supervisor, or tmux GPU shell is active. MI210 validation allocation `21014127` is running through 17:05 Helsinki; no cancellation was issued. The worktree is dirty and all existing edits/untracked evidence are being preserved. | — | P1, P2, E0 |
+| P0 | Safe boundary/current snapshot | ACTIVE — immutable campaign snapshots, manifests, fingerprints, user data, and exploratory failures remain preserved. No training campaign, supervisor, or tmux GPU shell is active. MI210 validation allocation `21014127` completed naturally at 12:01 Helsinki; no cancellation was issued. Main checkout HEAD was `5bceb9f` before this docs update; only the master plan and new P2 evidence note are modified/untracked. | — | P1, P2, E0 |
 | P1 | 18-way/full-split one-seed screen reconciliation | ACTIVE BUT SCIENTIFICALLY CONTAMINATED — preserve as exploratory: model-visible `prev_ny_high`/`prev_ny_low` leakage affected 17/18 saved configs. Recovery records 11 succeeded, 4 train-survival failures, 3 interrupted, and full-split telemetry for 17/18 variants; `ladder_a0_flat` has no current-attempt completed-split record. Eight variants had zero train/test trades. The 20/20 fold report applies to its recorded source snapshot, not the later observation filter. Raw tick input hashes verify, but training-minute quote coverage is 1.16% for US100 and 99.82% for US500; test-minute coverage is 100% for both. The US100 tick file begins 2025-12-29 and execution falls back to bar pricing for most training minutes, so per-split fill-source counts and a common cost protocol must be checked before P3. Feed/use provenance, broker calendar/DST, feed-specific acceptance thresholds, current post-fix fold/cache audit, independent reviews, and a fresh admissible screen remain open. Seed-50 artifacts remain immutable. Tick report: `docs/thesis/g1_tick_quality_current_recovery_2026-10-17_job21014127_v2.json`. Finding: `docs/thesis/evidence/p1_18_variant_screen_disposition_2026-10-16.md` | P0 | P2, E0 |
 | P2 | Deterministic evaluator/schema repair | ACTIVE — evaluator determinism, cache/dataset/checkpoint provenance, numerical report verifier, Q5 resume guard, and ordered sequence-feature schema are implemented. Current-tree validation on MI210 job `21014127` passed full-tree Ruff format/lint and Mypy (464 files), real MI210 smoke, and 1,682 tests; the focused post-format set passed 112 tests. The gate caught and fixed a legacy-sequence shared-bundle cache-key omission. Exact checkpoint recovery/parity, repeated deterministic report, and completed-checkpoint acceptance remain open; software CI does not close P2 | P0 | P1, E0 |
-| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and all-attempt screen reconciler exist. The refreshed recovery index is `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/thesis_evidence_index_post_causal_repair_20261017.json` (fingerprint `91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e`; 11 succeeded, 4 failed, 3 interrupted; 230 source hashes: 220 verified, 10 mismatched, none missing; 172 checkpoint artifacts). The separate v3 index was also refreshed and records 18 interrupted runs, 228 source hashes (207 verified, 21 mismatched, none missing), and 188 checkpoint artifacts. Neither index establishes chronological split exposure, successful checkpoint deserialization, or strategy validity. Current-tree frame/bundle, legacy replay, comparator, numerical-report, registry, and Q5 tests passed in the 1,682-test MI210 suite; no completed deterministic reanalysis report has been produced. The 20-check full-training-interval fold-fit result remains source-snapshot-specific and broader causality is open. The M1 inventory is PARTIAL because vendor/use provenance, broker calendar/DST, and tick validity are not established. Final canonical reports still await P1/P2 closure | P0 | P1, P2 |
+| E0 | Evidence/result pipeline + indexes | ACTIVE — provenance index, dispatcher, paired-seed analysis utility, six-campaign trial ledger, and all-attempt screen reconciler exist. The refreshed recovery index is `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/thesis_evidence_index_post_causal_repair_20261017.json` (fingerprint `91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e`; 11 succeeded, 4 failed, 3 interrupted; 230 source hashes: 220 verified, 10 mismatched, none missing; 172 checkpoint artifacts). The separate v3 index was also refreshed and records 18 interrupted runs, 228 source hashes (207 verified, 21 mismatched, none missing), and 188 checkpoint artifacts. Neither index establishes chronological split exposure, successful checkpoint deserialization, or strategy validity. Current-tree frame/bundle, legacy replay, comparator, numerical-report, registry, and Q5 tests passed in the 1,682-test MI210 suite. One completed deterministic engineering reanalysis report now exists; an independent repeat and exact-checkpoint frame/bundle parity remain open. The 20-check full-training-interval fold-fit result remains source-snapshot-specific and broader causality is open. The M1 inventory is PARTIAL because vendor/use provenance, broker calendar/DST, and tick validity are not established. Final canonical reports still await P1/P2 closure | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED — report contract covers annualization, equity endpoints, exposure, raw fills/positions/breaches, split completion, and source/runtime provenance. Current verifier/software tests pass, but no admissible completed-checkpoint report has been generated. | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | Reviewer preparation includes bounded related-work/threat notes and the refreshed independent-review brief/checklist. The pre-repair fold-poison failure is historical; bounded post-repair fold/prefix checks pass their stated slices. No independent reviewer has signed off; market-data/use provenance, broker calendar/DST, tick validity, broader causal coverage, and the P3 evidence package remain open |
 | P5 | Freeze matched design/baselines | BLOCKED | P4 | P6 prep, review |
