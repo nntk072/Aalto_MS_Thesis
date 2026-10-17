@@ -1,5 +1,24 @@
 # Implementation continuation ledger — 2026-10-13
 
+## Shared-environment tick-source manifest inventory — 2026-10-17 17:50 Helsinki
+
+The canonical `cache/shared_env/` contains 18 manifests (24 GiB total bundle
+directory size). A bounded read-only `jq` inventory found the same recorded
+US100 raw tick input, `US100.cash_202512290105_202607031959.csv`, in all 18
+manifests; the US500 input name is also consistent across all 18. Twelve
+manifests report a nonempty `tick_ts.npy` array, and six report 48,592,649
+timestamps. No manifest identifies a separate longer-period US100 input.
+
+The machine-readable inventory is
+`docs/thesis/evidence/p1_shared_bundle_tick_source_inventory_20261017.json`
+(SHA-256 `0ceb4b4db7e97a10cb6fd0a02611eae7700f97f2823f86d2b612694ccd9bfc1c`).
+This is manifest-level source evidence only; timestamp array values were not
+read, so cached arrays have not been independently checked for their min/max
+times, ordering, or coverage. Provider identity and data-use/publication terms
+remain unknown. P1 still blocks the US100 training screen. Scan the timestamp
+arrays during a substantive GPU-node audit inside a reusable allocation; do
+not start a short diagnostic allocation for this task.
+
 ## Two-node GH200 CI and tick-cache timeline audit — 2026-10-17 17:43 Helsinki
 
 The user clarified the allocation preference: first two GPUs on separate nodes,
