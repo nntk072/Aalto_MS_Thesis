@@ -27,7 +27,7 @@ from gymnasium import spaces
 from stable_baselines3 import PPO
 from stable_baselines3.common.save_util import json_to_data
 
-from quant_rl.action_schema import build_action_schema
+from quant_rl.action_schema import build_action_schema, build_discrete_trading_action_schema
 from quant_rl.data.pipeline import build_tick_books, run_pipeline
 from quant_rl.data.split import (
     get_split_config,
@@ -64,6 +64,7 @@ from quant_rl.features.build import (
 from quant_rl.models.agent import (
     LegacyFourToFiveActionAdapter,
     validate_model_action_schema,
+    validate_model_discrete_action_schema,
 )
 from quant_rl.models.encoder import LegacyTCNEncoderV1, TCNEncoder
 from quant_rl.models.ppo_policy import (
@@ -203,7 +204,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Explicit layout for an unversioned checkpoint; must match the run config "
-            "(for example 5, 6_dir, 6_sl, 7, 8, 11). Use legacy4_no_exit_v1 only "
+            "(for example 5, 6_dir, 6_sl, 7, 8, 11, discrete-20). Use legacy4_no_exit_v1 only "
             "for the documented 4D no-exit policy migration."
         ),
     )
@@ -453,6 +454,18 @@ def main() -> None:
             model = LegacyFourToFiveActionAdapter(model)
     elif isinstance(model.action_space, spaces.Box):
         raise ValueError("Box checkpoint with non-overlay run config: action semantics unclear")
+    elif isinstance(model.action_space, spaces.Discrete):
+        discrete_schema = build_discrete_trading_action_schema(int(model.action_space.n))
+        source_action_schema = source_manifest.get("action_schema")
+        if source_action_schema is not None and not isinstance(source_action_schema, dict):
+            raise ValueError("source run manifest action_schema must be an object or null")
+        validate_model_discrete_action_schema(
+            model,
+            discrete_schema,
+            source_action_schema,
+            allow_legacy=bool(args.allow_legacy_action_schema),
+            legacy_layout_key=args.legacy_action_layout,
+        )
 
     data = run_pipeline(cfg, force=args.force)
     primary_m1 = data[cfg.data.primary]["M1"]

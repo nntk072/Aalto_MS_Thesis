@@ -16,6 +16,7 @@ import pandas as pd
 import pytest
 from gymnasium.spaces import Box, Discrete
 
+from quant_rl.action_schema import build_discrete_trading_action_schema
 from quant_rl.envs.reward import DSRReward
 from quant_rl.envs.strategies import BaselineStrategy
 from quant_rl.envs.sweep_reward import CompositeReward
@@ -112,6 +113,7 @@ class TestBaselineActionSpace:
         assert not env.strategy_actions
         assert isinstance(env.action_space, Discrete)
         assert env.action_space.n == 20
+        assert env.action_schema.to_dict() == build_discrete_trading_action_schema().to_dict()
 
     def test_strategy_actions_false_with_continuous_uses_box(
         self, bars: pd.DataFrame, features: pd.DataFrame

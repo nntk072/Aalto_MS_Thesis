@@ -153,7 +153,16 @@ P2 remains open for schema-complete admissible-checkpoint acceptance after the
 remaining P1 gates. New training manifests now fail closed on missing or
 malformed action/observation schemas, with 27 focused manifest/comparator tests
 passing; this protects future run provenance but does not rehabilitate the
-historical legacy checkpoint.
+historical legacy checkpoint. Applying that contract to the configured
+`ladder_a0_flat` control exposed a missing categorical action declaration:
+`Discrete(20)` now carries a named, ordered schema from training through the
+checkpoint and deterministic evaluation validator, with explicit exact-layout
+legacy opt-in. The decoder order is hold, nine long risk/RR combinations, nine
+short combinations, and exit. The focused environment, action-schema
+checkpoint/SB3 round-trip, run-manifest, and evaluation-provenance tests pass
+(80 tests), as do full-tree Mypy (487 source files) and scoped Ruff format/lint.
+This repairs future control-run admissibility at the implementation boundary;
+P2 remains open until an admissible checkpoint and replay are accepted.
 P3–P11 remain downstream/open. Overall readiness remains **NOT READY**.
 
 The provisional RQ1 entry-gate candidate now has a bounded source-path review

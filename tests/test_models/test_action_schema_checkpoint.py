@@ -4,11 +4,14 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from gymnasium import spaces
 
-from quant_rl.action_schema import build_action_schema
+from quant_rl.action_schema import build_action_schema, build_discrete_trading_action_schema
 from quant_rl.models.agent import (
     LegacyFourToFiveActionAdapter,
+    bind_discrete_action_schema,
     validate_model_action_schema,
+    validate_model_discrete_action_schema,
 )
 
 
@@ -89,6 +92,45 @@ def test_checkpoint_validation_exposes_versioned_schema_manifest() -> None:
     assert model._action_schema["version"] == schema.version
     assert model._action_schema["key"] == schema.key
     assert model._action_schema["checkpoint_metadata"] == "versioned"
+
+
+def test_discrete_checkpoint_requires_and_validates_named_categories() -> None:
+    schema = build_discrete_trading_action_schema()
+    model = SimpleNamespace(action_space=spaces.Discrete(schema.width), policy=SimpleNamespace())
+    with pytest.raises(ValueError, match="unversioned discrete"):
+        validate_model_discrete_action_schema(model, schema, schema.to_dict())
+
+    bind_discrete_action_schema(model, schema)
+
+    assert validate_model_discrete_action_schema(model, schema, schema.to_dict()) == "verified"
+    assert model._action_schema["coordinates"][0] == "hold"
+    assert model._action_schema["coordinates"][1] == "enter_long_risk_low_rr_low"
+    assert model._action_schema["coordinates"][10] == "enter_short_risk_low_rr_low"
+    assert model._action_schema["coordinates"][-1] == "exit"
+
+
+def test_discrete_checkpoint_legacy_schema_requires_exact_opt_in() -> None:
+    schema = build_discrete_trading_action_schema()
+    model = SimpleNamespace(action_space=spaces.Discrete(schema.width), policy=SimpleNamespace())
+
+    with pytest.raises(ValueError, match="exact discrete layout key"):
+        validate_model_discrete_action_schema(
+            model,
+            schema,
+            source_schema=None,
+            allow_legacy=True,
+        )
+
+    disposition = validate_model_discrete_action_schema(
+        model,
+        schema,
+        source_schema=None,
+        allow_legacy=True,
+        legacy_layout_key=schema.key,
+    )
+
+    assert disposition == "legacy_unverified"
+    assert model._action_schema["checkpoint_metadata"] == "legacy_unverified"
 
 
 def test_checkpoint_rejects_mismatched_width_even_with_legacy_opt_in() -> None:

@@ -22,7 +22,7 @@ import torch
 from gymnasium import spaces
 from omegaconf import DictConfig
 
-from quant_rl.action_schema import ActionSchema
+from quant_rl.action_schema import ActionSchema, DiscreteActionSchema
 from quant_rl.utils.device import enable_extractor_autocast
 
 try:
@@ -32,6 +32,22 @@ try:
     _SB3_AVAILABLE = True
 except ImportError:
     _SB3_AVAILABLE = False
+
+
+def bind_discrete_action_schema(model: Any, schema: DiscreteActionSchema) -> None:
+    """Persist a categorical schema on both SB3 model and policy metadata."""
+    action_space = getattr(model, "action_space", None)
+    if not isinstance(action_space, spaces.Discrete) or action_space.n != schema.width:
+        raise ValueError("discrete action schema width differs from the model action space")
+    manifest = schema.to_dict()
+    setattr(model, "_action_schema_version", schema.version)
+    setattr(model, "_action_layout_key", schema.key)
+    setattr(model, "_action_schema", manifest)
+    policy = getattr(model, "policy", None)
+    if policy is not None:
+        setattr(policy, "_action_schema_version", schema.version)
+        setattr(policy, "_action_layout_key", schema.key)
+        setattr(policy, "_action_schema", manifest)
 
 
 def validate_model_action_schema(
@@ -125,6 +141,65 @@ def validate_model_action_schema(
     if policy is not None:
         setattr(policy, "_action_schema", manifest)
     return None
+
+
+def validate_model_discrete_action_schema(
+    model: Any,
+    expected_schema: DiscreteActionSchema,
+    source_schema: dict[str, Any] | None,
+    *,
+    allow_legacy: bool = False,
+    legacy_layout_key: str | None = None,
+) -> str:
+    """Validate the ordered categorical action meaning for a discrete checkpoint."""
+    action_space = getattr(model, "action_space", None)
+    if not isinstance(action_space, spaces.Discrete) or action_space.n != expected_schema.width:
+        actual_n = getattr(action_space, "n", None)
+        raise ValueError(
+            "checkpoint discrete action count disagrees with the run schema: "
+            f"checkpoint={actual_n}, expected={expected_schema.width}"
+        )
+
+    expected = expected_schema.to_dict()
+    if source_schema is None:
+        if not allow_legacy or legacy_layout_key != expected_schema.key:
+            raise ValueError(
+                "source run manifest lacks the discrete action schema; explicit legacy opt-in "
+                "and the exact discrete layout key are required"
+            )
+        disposition = "legacy_unverified"
+    elif source_schema != expected:
+        raise ValueError("source run manifest discrete action schema differs from the run config")
+    else:
+        disposition = "verified"
+
+    version = getattr(model, "_action_schema_version", None)
+    layout_key = getattr(model, "_action_layout_key", None)
+    checkpoint_schema = getattr(model, "_action_schema", None)
+    policy = getattr(model, "policy", None)
+    if version is None and checkpoint_schema is None:
+        if not allow_legacy or legacy_layout_key != expected_schema.key:
+            raise ValueError(
+                "unversioned discrete action checkpoint needs explicit legacy opt-in "
+                "and the exact discrete layout key"
+            )
+        disposition = "legacy_unverified"
+    elif (
+        version != expected_schema.version
+        or layout_key != expected_schema.key
+        or checkpoint_schema != expected
+    ):
+        raise ValueError("checkpoint discrete action schema differs from the run config")
+
+    manifest = dict(expected)
+    manifest["checkpoint_metadata"] = (
+        "versioned" if disposition == "verified" else "legacy_unverified"
+    )
+    bind_discrete_action_schema(model, expected_schema)
+    setattr(model, "_action_schema", manifest)
+    if policy is not None:
+        setattr(policy, "_action_schema", manifest)
+    return disposition
 
 
 def validate_model_observation_schema(
@@ -485,6 +560,13 @@ def build_agent(
             schema_manifest = schema.to_dict()
             setattr(ppo_model, "_action_schema", schema_manifest)
             setattr(ppo_model.policy, "_action_schema", schema_manifest)
+    elif isinstance(env.action_space, spaces.Discrete):
+        schema = getattr(env, "action_schema", None)
+        if not isinstance(schema, DiscreteActionSchema):
+            raise ValueError(
+                "discrete trading actions require a declared categorical action schema"
+            )
+        bind_discrete_action_schema(ppo_model, schema)
     from .rollout_buffer import install_single_copy_add
 
     install_single_copy_add(ppo_model.rollout_buffer)

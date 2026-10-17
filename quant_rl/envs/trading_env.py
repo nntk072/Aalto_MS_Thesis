@@ -20,7 +20,12 @@ import numpy as np
 import pandas as pd
 from gymnasium import spaces
 
-from ..action_schema import ActionSchema, build_action_schema
+from ..action_schema import (
+    ActionSchema,
+    DiscreteActionSchema,
+    build_action_schema,
+    build_discrete_trading_action_schema,
+)
 from ..backtest.account import AccountState
 from ..backtest.broker import Broker, Position
 from ..backtest.costs import COST_US100, CostModel
@@ -862,6 +867,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # Action space: strategy actions, continuous, or discrete
         self.continuous_actions = continuous_actions
         self.max_risk_frac = max_risk_frac
+        self.action_schema: ActionSchema | DiscreteActionSchema
 
         # VAE for narrative embedding
         self.use_vae = use_vae
@@ -948,6 +954,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         else:
             # Discrete action space: 0=hold, 1-9=enter_long, 10-18=enter_short, 19=exit
             self.action_space = spaces.Discrete(20)
+            self.action_schema = build_discrete_trading_action_schema(20)
 
         # Per-step entry diagnostics (strategy_actions); reset each episode.
         self._entry_diag: dict[str, int] = _empty_entry_diag(self.entry_state_machine is not None)
@@ -3075,6 +3082,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
           variants, 19=exit. Those ids still use the fixed RR menu.
         """
         if self.strategy_actions:
+            assert isinstance(self.action_schema, ActionSchema)
             arr = np.asarray(action, dtype=np.float32).reshape(-1)
             if arr.size != self.action_schema.width:
                 raise ValueError(
@@ -3091,6 +3099,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._decision_action = _empty_decision()
         self._entry_rejection_reason = ""
         if self.strategy_actions:
+            assert isinstance(self.action_schema, ActionSchema)
             raw = np.clip(arr, -1.0, 1.0)
             u = 0.5 * (raw + 1.0)
             indices = self.action_schema.indices

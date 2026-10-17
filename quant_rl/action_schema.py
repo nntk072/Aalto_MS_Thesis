@@ -10,6 +10,59 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 SCHEMA_VERSION = "overlay-action-v2"
+DISCRETE_TRADING_SCHEMA_VERSION = "discrete-trading-v1"
+
+
+@dataclass(frozen=True)
+class DiscreteActionSchema:
+    """Named categorical actions for the legacy 20-action trading interface."""
+
+    names: tuple[str, ...]
+    version: str = DISCRETE_TRADING_SCHEMA_VERSION
+
+    @property
+    def width(self) -> int:
+        """Number of categorical choices in the discrete action space."""
+        return len(self.names)
+
+    @property
+    def key(self) -> str:
+        return f"discrete-{self.width}"
+
+    def to_dict(self) -> dict[str, object]:
+        """Return the complete ordered category contract."""
+        return {
+            "kind": "discrete",
+            "version": self.version,
+            "key": self.key,
+            "width": self.width,
+            "n_actions": self.width,
+            "coordinates": list(self.names),
+            "has_direction": False,
+            "has_sl_mode": False,
+            "has_tp_mode": False,
+            "has_multi_tp": False,
+            "has_simplex": False,
+        }
+
+
+def build_discrete_trading_action_schema(n_actions: int = 20) -> DiscreteActionSchema:
+    """Describe the exact categorical menu used by ``TradingEnv`` Discrete(20)."""
+    if n_actions != 20:
+        raise ValueError(
+            f"the discrete trading action contract requires 20 choices, got {n_actions}"
+        )
+    risk_levels = ("low", "mid", "high")
+    rr_levels = ("low", "mid", "high")
+    names = ["hold"]
+    names.extend(
+        f"enter_{direction}_risk_{risk}_rr_{rr}"
+        for direction in ("long", "short")
+        for risk in risk_levels
+        for rr in rr_levels
+    )
+    names.append("exit")
+    return DiscreteActionSchema(tuple(names))
 
 
 @dataclass(frozen=True)
