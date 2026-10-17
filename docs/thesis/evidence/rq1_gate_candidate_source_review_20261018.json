@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "status": "partial_source_path_review",
+  "reviewed_at": "2026-10-18",
+  "purpose": "Trace the provisional RQ1 enforce_gate intervention in the candidate production path.",
+  "source_files": {
+    "quant_rl/train/train_rl.py": "20be11dcc804da123eff1c2251184c1036291c9f3712a887be3b0320f779083a",
+    "quant_rl/envs/strategies/po3_ifvg.py": "20d0509385a28f48d13641a84e94b5ed4b3f1c5ef6025e5fb6e7e203085462e4",
+    "quant_rl/envs/trading_env.py": "f5942f575656eb9666c80085754433846535353d6012ede51a65927303203b5a",
+    "tests/test_envs/test_trader_actions.py": "71b1f9d379dd8c0207bb19d6797c6360f112274b27ed91e17efcc068cda9952c"
+  },
+  "trace": [
+    "train_rl._strategy_from_cfg reads strategy.entry.enforce_gate and passes it to PO3IFVGStrategy.",
+    "PO3IFVGStrategy.validate_entry returns true when the option is false; when true, it delegates to entry_setup for the proposed direction.",
+    "In the candidate preflight mode with the entry FSM disabled and strategy actions enabled, TradingEnv calls validate_entry on a proposed new position. A rejection becomes a hold and records entry_gate.",
+    "The paired fixture test exercises TradingEnv.step with the shared six-coordinate direction-control action schema: control accepts the opposite-context proposal and treatment rejects it with entry_gate."
+  ],
+  "verification": {
+    "command": "UV_PROJECT_ENVIRONMENT=.venv-x86 uv run pytest tests/test_envs/test_trader_actions.py -k po3_gate_pair_requires_shared_direction_control_for_a_real_contrast -q",
+    "result": "passed",
+    "passed": 1,
+    "deselected": 32
+  },
+  "limits": [
+    "This is a source-path review plus a synthetic fixture action trace, not a real-data policy action trace.",
+    "The source trace does not certify all reward, observation, stop/target, cost, runtime, or evaluation identities across a final pair.",
+    "P4 remains open; no RQ1 pair, seed, budget, or runtime is frozen, and no RQ1 training run is admitted by this report."
+  ],
+  "related_evidence": "rq1_gate_candidate_config_preflight_20261017.json"
+}

@@ -2741,6 +2741,19 @@ difference, discard this candidate. No RQ1 run identity or treatment is
 frozen by this note. The passing GH200 gate log is
 [`rq1_candidate_preflight_gate_20261017_job21020179_retry1.log`](../../outputs/data_refresh_20261017/rq1_candidate_preflight_gate_20261017_job21020179_retry1.log).
 
+**Source-path review — 2026-10-18; partial, no pair frozen.** The current
+candidate path carries `strategy.entry.enforce_gate` from config construction
+into `PO3IFVGStrategy.validate_entry`; in the candidate preflight mode, the
+environment consults that method before accepting a proposed new position.
+The shared six-coordinate fixture test passed again (1 selected test), with
+control accepting an opposite-context proposal and treatment recording
+`entry_gate`. This narrows the source-path claim but remains a synthetic
+fixture trace, not a real-data policy action trace or an end-to-end pair audit.
+Hashes, command, trace, and limits are recorded in
+[`rq1_gate_candidate_source_review_20261018.json`](evidence/rq1_gate_candidate_source_review_20261018.json).
+P4, full pair-identity review, real-data trace, and seed/budget/runtime freeze
+remain open; no training run is admitted by this review.
+
 ### 13.2 RQ3 mechanism evidence
 
 Use the 18-way screen to choose the smallest set of management mechanisms worth
@@ -3750,7 +3763,7 @@ history.
 | E0 | Evidence/result pipeline + indexes | ACTIVE — prior provenance/index/reconciliation tools remain available. Replacement M1/tick/cache, prefix-invariance, fold-poison, fresh raw-tick coverage, exact observed decision-schedule fingerprint, cache-wide tie-policy, and 18-variant cache mapping evidence are machine-readable under `evidence/replacement_data_20261017/`. There is no admissible new-data checkpoint or canonical numerical strategy report; the historical checkpoint/replay remains inadmissible. Training use is user-authorized; feed identity, historical export/publication terms, broker calendar/DST, true sub-millisecond ordering, external holdout exposure, deterministic admissible full-split repeats, and final report package remain open. | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED — report contract covers annualization, equity endpoints, exposure, raw fills/positions/breaches, split completion, and source/runtime provenance. Current verifier/software tests pass, but no admissible completed-checkpoint report has been generated. | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | Expanded M5/M15/H1 swing and mirrored long/short IFVG stop regressions passed in GH200 job `21019594` and the 1,729-test suite; this closes that source/test slice only. Reviewer preparation includes bounded related-work/threat notes and the refreshed independent-review brief/checklist. No independent reviewer has signed off; market-data/use provenance, broker calendar/DST, tick validity, broader causal coverage, final run identity, and the P3 evidence package remain open |
-| P5 | Freeze matched design/baselines | BLOCKED on P4; the default five-coordinate enforce-gate contrast is behaviorally redundant and rejected. A provisional shared six-coordinate direction-control candidate has a production-merge config diff showing only `strategy.entry.enforce_gate` changes and a passing fixture action trace; a real-data trace, P4 acceptance, and final seed/budget/runtime freeze remain open. See §13.1 and [`rq1_gate_candidate_config_preflight_20261017.json`](evidence/rq1_gate_candidate_config_preflight_20261017.json). | P4 | P6 prep, review |
+| P5 | Freeze matched design/baselines | BLOCKED on P4; the default five-coordinate enforce-gate contrast is behaviorally redundant and rejected. The provisional shared six-coordinate candidate has a production-merge config diff showing only `strategy.entry.enforce_gate` changes, a passing fixture action trace, and a source-path review. A real-data action trace, complete pair-identity review, P4 acceptance, and final seed/budget/runtime freeze remain open. See §13.1 and [`rq1_gate_candidate_source_review_20261018.json`](evidence/rq1_gate_candidate_source_review_20261018.json). | P4 | P6 prep, review |
 | P6 | Production runtime/resource freeze | PREP-ONLY | P4/screen-safe | paired-launch prep |
 | P7 | Final selected-pair >=5-seed robustness + cost stress | BLOCKED | all single-seed findings + P5 + P6 | eval/package terminal seeds |
 | S0 | Statistics + final figures | PREP-ONLY | schema can be built early; final values need P7 | finished-seed analysis |
