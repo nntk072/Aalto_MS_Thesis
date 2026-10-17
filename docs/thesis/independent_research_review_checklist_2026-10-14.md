@@ -2,6 +2,22 @@
 
 **Status: OPEN — no independent reviewer has completed or signed this review.**
 
+### Current source and data-use note — 2026-10-18
+
+The user identifies the replacement US100.cash/US500.cash exports as coming
+from the FTMO Demo server and explicitly authorizes their use for internal
+model training. The underlying liquidity providers are unknown, and no
+account-specific export or publication record is available. Treat training as
+user-authorized; do not describe provider identity or thesis-publication rights
+as independently verified. This provenance limitation is relevant to public
+disclosure and raw-data packaging. The FTMO-aware v23 named-cache rebuild passed
+for all 18 variants; fresh v23 fold-fit and real-market prefix audits are
+running and have not yet been independently reviewed. The complete
+2026-01-01–2026-10-16 interval remains exposed exploratory/report-only evidence
+because January–July outcomes were previously inspected. See the current
+[master plan checkpoint](master_project_execution_plan.md) and the
+[provenance record](evidence/replacement_data_20261017/provider_provenance_status_20261018.json).
+
 ### Evidence availability correction — 2026-10-16
 
 The prior checklist text below refers to files under
@@ -90,9 +106,11 @@ checklist remains the detailed evidence inventory.
   These bounded checks do not prove exhaustive causality or market-calendar/DST
   correctness. The original 18-variant campaign remains contaminated and
   inadmissible for variant selection or confirmation. P1/G1 remains open pending
-  independent review, data-provider/use provenance, broker timezone and
-  authoritative session-calendar validation, tick quote-aging/impact validity,
-  and broader causal/cache evidence. This is internal evidence, not sign-off.
+  independent review, broker timezone and authoritative session-calendar
+  validation, tick quote-aging/impact validity, and broader causal/cache
+  evidence. The user's training-use authorization is recorded; unknown provider
+  identity and absent publication terms remain disclosure limitations. This is
+  internal evidence, not sign-off.
 - **All-18-variant full-calendar frames/shared-bundle parity:** the earlier
   checklist cited `outputs/gpu_campaigns/readiness_reaudit_20261014/` and
   `outputs/gpu_campaigns/real_market_frames_bundle_parity_20261013/`, but
@@ -132,7 +150,7 @@ checklist remains the detailed evidence inventory.
 | Topic | Question for the independent reviewer | Current boundary |
 | --- | --- | --- |
 | Experiment design | Do the registered contrasts support the thesis claims? Which results, if any, are valid within each family? | Baseline, PO3/IFVG, and distribution families differ in reward and action/strategy semantics; do not interpret cross-family differences as isolated causal effects. |
-| Data provenance and use | Can the source feed, export provenance, broker clock/DST schedule, and thesis/publication data-use terms be established independently? | The user identifies FTMO as the prop firm. FTMO's current [public terms](https://ftmo.com/en/terms-and-conditions/) say its data feed is powered by liquidity providers, but do not identify the provider for this account or establish rights to use/publish these exports. Hashes and quality scans identify exact files and observed integrity, not source or publication rights. Obtain the applicable account/export records or retain this as an unresolved validity/publication limitation. |
+| Data provenance and use | Are source identity, export context, broker clock/DST schedule, and publication limits represented accurately? | The user identifies FTMO Demo and authorizes internal training; underlying liquidity providers and account-specific export/publication terms are unknown. FTMO's current [public terms](https://ftmo.com/en/terms-and-conditions/) say its data feed is powered by liquidity providers but do not identify the provider for this account or establish publication rights for these files. Hashes and quality scans identify exact files and observed integrity, not independent source identity or publication rights. Review disclosure and raw-data packaging; do not treat the unknown provider as absence of the user's training authorization. |
 | Execution and accounting | Are order timing, tick/quote fills, stops, take profits, costs, equity, and drawdown calculations correct for the stated market assumptions? | Code review and focused regressions exist; no independent broker integration or exhaustive reviewer sign-off exists. |
 | Reward and risk | Are the training/evaluation breach penalties, shaped rewards, risk limits, and hard train-equity/survival gates appropriate and consistently interpreted? | Reward is not a profitability metric. All 18 historical 100k pilot gates failed under the then-current rule. The active recovery campaign (`20990395`, source `413729e`) resumes checkpoints originating from source `937bae5`; the prior migration campaign used source `c2261ca`. This training-policy boundary must remain explicit. Its effective configs disable no-trade and interim equity-gate early aborts. The current final training-survival gate treats PnL, equity slope, and activity as report metrics; max-loss breach or peak trailing drawdown above 10% fail survival. Review the old checkpoint phase, current continuation policy, and final train/test reports separately. |
 | Feature causality | Are the MTF close-time alignments, swing/structure availability, train-only fitting, split boundaries, and cache identities causal? | On 2026-10-14, seven MTF/HTF/variant/swing/sweep/PO3/IFVG files passed 126/126 fixture tests; six causal-feature/split/fit-scope/cache/assembled-causality/leakage files passed 29/29; four entry-gate/eligibility/golden-trace files passed 30/30. The immutable pre-repair real-market fold-fit poison audit failed for three profiles mapped to 17/18 configs. After repair, a bounded four-profile/one-early-fold poison audit passed and the four-profile prefix audit passed 12/12 sampled comparisons; the named caches were rebuilt with pre-repair copies preserved. These checks do not prove exhaustive causality or resolve broker timezone/DST, market-calendar, tick-aging/impact, or data-use provenance. The old campaign remains inadmissible for selection; the all-18 frames/shared-bundle parity artifact remains absent. G1 stays OPEN pending independent review and broader validity evidence. |
