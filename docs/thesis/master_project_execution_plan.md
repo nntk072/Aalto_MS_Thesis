@@ -18,9 +18,13 @@ provenance were verified, and no report was changed. Current run log:
 `outputs/gpu_ci_gates/p2_feature_cache_reanalysis_20261017/current_tree_validation.log`.
 Q5 now has gamma-matched policy and dual cost updates, deterministic evaluation
 cost exports, report reconciliation, and fail-closed policy-only resume, all
-covered by bounded software checks. No Q-stage experiment or new 18-variant
-campaign has launched. Thesis readiness remains NOT READY; see the status board
-below and [`q0_q7_implementation_audit_2026-10-17.md`](q0_q7_implementation_audit_2026-10-17.md).
+covered by bounded software checks. A real-checkpoint inventory found no
+screen model that can close P2/P3: the bounded-clean baseline stopped before
+full-split episode coverage, while the fully exposed candidate carries the
+known leakage and a legacy stop-schema manifest. A replay of the latter can
+only provide exploratory evaluator evidence. No Q-stage experiment or new
+18-variant campaign has launched. Thesis readiness remains NOT READY; see the
+status board and [`q0_q7_implementation_audit_2026-10-17.md`](q0_q7_implementation_audit_2026-10-17.md).
 
 **Execution update (2026-10-17 04:49 Helsinki):** MI210 job `21012389` remains
 RUNNING on `gpuamd1` with 8 CPUs, 128 GiB host-memory allocation, and one MI210;

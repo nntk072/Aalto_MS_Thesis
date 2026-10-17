@@ -137,6 +137,32 @@ added.
 
 ## Verification boundary
 
+### Real-checkpoint inventory for the next P2 replay
+
+- The sole bounded-clean profile, `ladder_a0_flat`, has a saved
+  `ppo_final.zip` (SHA-256
+  `1d7e9f7e678b8240c22935cc23eeb419928803578544499a7d037043c72a8879`) and
+  manifest, but the recovery report records the train-equity stop
+  `max_loss_stopped_trading`, zero completed full-split episodes across its 64
+  environments, and no completed annual train episode. It is not a completed
+  training-policy acceptance candidate.
+- `ladder_a4b_distribution` is the most complete available replay candidate:
+  its run manifest records 20,003,008 aggregate steps, 64/64 complete 99,504-step
+  training-split episodes, checkpoint SHA-256
+  `7d81739de7e1bc54d818149a0bacd6525e58d1e06b4d7e88c2b060dc55f21ba3`, and an
+  exact source-cache identity/file hash. Its report-only test traded on only
+  two of 130 days; the source configuration is among the 17/18 profiles with
+  the pre-repair NY-session lookahead, and its run manifest lacks the current
+  versioned stop-candidate schema. A deterministic replay of it can test
+  evaluator behavior under an explicitly legacy schema opt-in. The numerical
+  verifier correctly will not accept that legacy report as canonical P3
+  evidence. It cannot support selection, close P2's completed-selected-checkpoint
+  criterion, or establish a successful policy.
+- Thus no available checkpoint from this screen can close P2/P3 end to end:
+  the baseline is clean but did not complete training-split exposure, while the
+  complete candidate is scientifically contaminated and schema-legacy. A
+  future replay is narrowly engineering evidence, clearly labelled exploratory.
+
 The deterministic-replay follow-up now adds the feature parquet's file
 SHA-256 to newly generated training manifests, as required by the verified
 reanalysis path. A focused run-manifest regression asserts this field. This
