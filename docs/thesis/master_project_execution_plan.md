@@ -7,7 +7,7 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-18 01:13 Helsinki):** work is on the sole checkout,
+**Live checkpoint (2026-10-18 01:15 Helsinki):** work is on the sole checkout,
 `/scratch/work/nguyenl37/Aalto_MS_Thesis`, branch `main`; local `main` is ahead
 of `origin/main` (no push performed). Preserve the two untracked data
 rebuild scripts; the comparator report is committed. No alternate checkout or
@@ -116,11 +116,14 @@ are recorded in
 FTMO's generic MT4/MT5 server clock is documented as GMT+2 plus US daylight
 time, but the account-specific host/export path remains unverified. The fixed
 GMT+3 time carrier previously shifted winter CT feature windows by one hour for
-17 variants. The FTMO-aware feature correction passed 58 focused tests, but
-the v23 cache rebuild and all 18 variant rebindings remain pending. Provider
-identity, historical export terms, and publication rights remain unverified;
-other P1 validity/audit gates are also open. P1 therefore remains **NOT READY**.
-The corrected explicit hash-seed replay was byte-stable
+17 variants. The FTMO-aware feature correction passed 58 focused tests, and
+the v23 named-cache rebuild/rebinding has now passed for all four profiles and
+18 variants (report linked above). The user authorizes these FTMO Demo exports
+for internal model training; unknown liquidity-provider identity and absent
+account-specific export/publication terms remain disclosure limitations, but
+are not a reason to block that user-authorized training. Other P1
+validity/audit gates remain open, so P1 is still **NOT READY**. The corrected
+explicit hash-seed replay was byte-stable
 across all 12 train/test numerical artifacts, but its comparator rejected the
 reports because the legacy source manifests omit action/observation schemas
 and used legacy opt-ins. The old checkpoint is inactive (zero completed trades)
