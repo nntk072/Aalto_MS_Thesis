@@ -7,11 +7,12 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-17 08:58 Helsinki):** checkout is `main` at
-`fe2d041e12cbd99a35fff38d921cd24cb3d25627` with preserved dirty research/code
-changes. MI210 allocation `21012389` is RUNNING on `gpuamd1` (1 MI210, 8 CPUs,
-128 GiB; scheduled end 09:26:40 Helsinki); no campaign trainer is active. In
-step `.14`, the current dirty-tree gate passed full-tree Ruff format/lint,
+**Live checkpoint (2026-10-17 09:01 Helsinki):** checkout is clean on `main` at
+`168671e1363eeb011f8fd6498d9c35211447bf6d`, pushed to `origin/main`. MI210
+validation allocation `21012389` is RUNNING on `gpuamd1` (1 MI210, 8 CPUs,
+128 GiB; scheduled end 09:26:40 Helsinki); no campaign trainer or supervisor
+is active, and no successor allocation is pending. In step `.14`, the current
+source gate passed full-tree Ruff format/lint,
 full-tree Mypy (461 files), MI210 ROCm matrix smoke, and all 1,671 tests (77
 warnings). The validated tracked-source diff SHA-256 is
 `a52a452848e99f68232da7240ea0376490e549dd9770583d854333ab5a56a360`; complete
@@ -21,12 +22,11 @@ regressions are now software-validated on this exact tree. P1/P2 remain open:
 the existing 20/20 fold-fit report is from an earlier `features/build.py`
 source hash, so it does not validate that exact report scope after the final
 observation filter; a repeat took 3,759 seconds and cannot fit the remaining
-allocation window. No campaign trainer is active; Q0–Q7 have no empirical
+allocation window. Q0–Q7 have no empirical
 campaign results, and thesis readiness remains NOT READY. Steps `.12` and
 `.13` recorded the expected format/Mypy failures during correction; `.14` is
 the fully green current-tree gate. Do not use those failed attempts as a
-successful gate. The old 08:35 and earlier live-state notes below are
-historical snapshots.
+successful gate. Earlier live-state entries below are historical snapshots.
 
 **Historical live checkpoint (2026-10-17 08:35 Helsinki):** the 08:35
 per-node inventory showed `gpuarm1` and `gpuarm2` idle, each configured with 2
