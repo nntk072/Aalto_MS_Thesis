@@ -12,7 +12,9 @@ campaign remains preserved and no training campaign is running. MI210 allocation
 `21012389` remains RUNNING on `gpuamd1` (one MI210, 8 CPUs, 128 GiB; scheduled
 end 09:26 Helsinki). The canonical current-tree gate run in job `21012389`,
 step `.9`, passed full-tree Ruff format/lint, Mypy from `.venv-x86` (460 files),
-MI210 smoke, and all 1,664 tests (77 warnings). Its tracked-source hash
+MI210 smoke, and all 1,664 tests (77 warnings); the wrapper then exited nonzero
+only when the summary writers refused to overwrite existing immutable outputs.
+Its tracked-source hash
 `c76ea5d3ddf72497f1c1375b43666d8f358fb570176884daaa63a220ded2066a` and
 separately recorded untracked-script/test hash
 `43a92db7b1f63fe6d73f606b147b5eba553a1d5773d711f1dbc38a0955ac43a9` match the

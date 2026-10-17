@@ -22,7 +22,8 @@ result, strategy evaluation, winner selection, or thesis-readiness decision.
   `outputs/gpu_ci_gates/q0_q7_full_validation_job21012957/`.
 - The canonical full-tree gate at 06:27 in job `21012389`, step `.9`, passed
   Ruff format/lint, Mypy from `.venv-x86` (460 files), the MI210 smoke, and all
-  1,664 tests. The exact tracked-source diff hash
+  1,664 tests. The wrapper then exited nonzero only because summary generation
+  refused to overwrite existing immutable outputs. The exact tracked-source diff hash
   `c76ea5d3ddf72497f1c1375b43666d8f358fb570176884daaa63a220ded2066a` and
   separately recorded hash for the then-untracked report verifier and test
   `43a92db7b1f63fe6d73f606b147b5eba553a1d5773d711f1dbc38a0955ac43a9` match
