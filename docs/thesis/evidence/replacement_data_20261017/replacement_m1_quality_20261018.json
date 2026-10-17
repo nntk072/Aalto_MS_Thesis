@@ -1,0 +1,151 @@
+{
+  "audit_script": "scripts/research/audit_replacement_m1_quality.py",
+  "audit_script_sha256": "a60b01d3135686d28ce94124bd3d3eae4f330e6c940903d3433e7fedbf08f13b",
+  "configuration": {
+    "config_path": "quant_rl/config/default.yaml",
+    "config_sha256": "3e8b7bb0b9c8a45dd64b7d7a1dec2d9b7a1fa4ce069b9d9c8f7e168703462af5",
+    "split": {
+      "test_start_inclusive": "2026-01-01",
+      "train_end_inclusive": "2025-12-31"
+    },
+    "symbols": [
+      "US100.cash",
+      "US500.cash"
+    ]
+  },
+  "created_at_utc": "2026-10-17T23:38:26.974053+00:00",
+  "data_role": {
+    "confirmatory_or_fresh_holdout": false,
+    "prior_exposure": "January-July 2026 outcomes were previously inspected",
+    "report_only_test_end_inclusive": "2026-10-16",
+    "report_only_test_start": "2026-01-01",
+    "test_interval": "continuous; exploratory/report-only",
+    "train_end_inclusive": "2025-12-31",
+    "training_start": "2024-12-30"
+  },
+  "evidence_role": "bounded replacement M1 source integrity and row coverage inventory; not data-rights, feed-authenticity, schedule-validity, or strategy evidence",
+  "input_reports": {
+    "full_period_cache_report": {
+      "path": "docs/thesis/evidence/replacement_data_20261017/full_period_data_cache_rebuild_20261017_job21020179_rerun1.json",
+      "sha256": "f0c5faba69b19c4277f4a302c7ccaf04cdc15802b3f743cd87aa56fe5824b91e"
+    },
+    "named_feature_cache_report": {
+      "path": "docs/thesis/evidence/replacement_data_20261017/named_feature_cache_rebuild_18variant_20261018_job21020179_clockfix.json",
+      "sha256": "01ddd3212fe365c70fca872eff2919b1888753b509037d644692127a58ea0d67"
+    }
+  },
+  "interpretation_limits": [
+    "Elapsed timestamp gaps are observed wall-clock discontinuities; no authoritative FTMO CFD trading calendar was provided to classify them as missing bars.",
+    "The scan checks the raw M1 bar files only. Tick quality, feature causality, fold-local fitting, MTF alignment, cache behavior, and model performance require their separate evidence.",
+    "M1 CFD VOL is not asserted to be exchange traded volume; the zero-volume count is reported as an export property.",
+    "The complete 2026-01-01 through 2026-10-16 interval is exposed exploratory/report-only evidence, not a fresh holdout."
+  ],
+  "m1_files": {
+    "US100.cash": {
+      "bytes": 42077931,
+      "duplicate_timestamps": 0,
+      "first_timestamp_broker_wall_clock": "2024-12-30T01:05:00",
+      "invalid_ohlc_order_rows_with_finite_numeric_values": 0,
+      "last_timestamp_broker_wall_clock": "2026-10-16T23:49:00",
+      "matches_named_cache_rebuild_source_hash": true,
+      "negative_real_volume_rows": 0,
+      "negative_spread_rows": 0,
+      "negative_tick_volume_rows": 0,
+      "observed_adjacent_wall_clock_gaps_seconds": {
+        "greater_than_300": 478,
+        "greater_than_3600": 467,
+        "greater_than_60": 503,
+        "largest_10": [
+          263760,
+          204660,
+          191160,
+          191160,
+          191160,
+          190260,
+          177360,
+          177360,
+          177360,
+          177360
+        ]
+      },
+      "out_of_order_adjacent_timestamps": 0,
+      "path": "data/US100.cash_M1_202412300105_202610162349.csv",
+      "report_only_rows_2026_01_01_through_2026_10_16": 279355,
+      "row_count": 630787,
+      "rows_after_report_only_end": 0,
+      "rows_before_train_start": 0,
+      "rows_with_nonfinite_or_missing_numeric_values": 0,
+      "sha256": "4c46c6c9820cba15cea38487228d9c334467087b8bb109e3ffad7ca234d83f8c",
+      "symbol": "US100.cash",
+      "timestamp_parse_failures": 0,
+      "train_rows_inclusive_through_2025_12_31": 351432,
+      "zero_real_volume_rows": 630787
+    },
+    "US500.cash": {
+      "bytes": 38404762,
+      "duplicate_timestamps": 0,
+      "first_timestamp_broker_wall_clock": "2024-12-30T01:05:00",
+      "invalid_ohlc_order_rows_with_finite_numeric_values": 0,
+      "last_timestamp_broker_wall_clock": "2026-10-16T23:49:00",
+      "matches_named_cache_rebuild_source_hash": true,
+      "negative_real_volume_rows": 0,
+      "negative_spread_rows": 0,
+      "negative_tick_volume_rows": 0,
+      "observed_adjacent_wall_clock_gaps_seconds": {
+        "greater_than_300": 475,
+        "greater_than_3600": 468,
+        "greater_than_60": 2249,
+        "largest_10": [
+          263760,
+          204660,
+          191160,
+          191160,
+          191160,
+          190260,
+          177360,
+          177360,
+          177360,
+          177360
+        ]
+      },
+      "out_of_order_adjacent_timestamps": 0,
+      "path": "data/US500.cash_M1_202412300105_202610162349.csv",
+      "report_only_rows_2026_01_01_through_2026_10_16": 278956,
+      "row_count": 628929,
+      "rows_after_report_only_end": 0,
+      "rows_before_train_start": 0,
+      "rows_with_nonfinite_or_missing_numeric_values": 0,
+      "sha256": "e5929a798083b77ce631407132d4d2efeb658512d49bea296c578b3724a57b51",
+      "symbol": "US500.cash",
+      "timestamp_parse_failures": 0,
+      "train_rows_inclusive_through_2025_12_31": 349973,
+      "zero_real_volume_rows": 628929
+    }
+  },
+  "repository_head": "4bfe95136b676c29af11ba3edd560ac8a3a11698",
+  "runtime": {
+    "pandas": "2.3.2",
+    "python": "3.12.14"
+  },
+  "schema": "aalto.replacement_m1_quality_audit.v1",
+  "source_identity": {
+    "publication_or_export_terms": "not provided",
+    "timezone_assumption": {
+      "account_specific_export_path_independently_verified": false,
+      "timestamp_clock_model": "ftmo_mt5_us_dst",
+      "wall_clock_carrier": "Etc/GMT-3"
+    },
+    "training_use": "user-authorized",
+    "underlying_liquidity_provider": "unknown",
+    "user_attested_source": "FTMO Demo server"
+  },
+  "summary": {
+    "file_count": 2,
+    "raw_source_hashes_match_feature_rebuild": true,
+    "zero_duplicates": true,
+    "zero_invalid_ohlc": true,
+    "zero_nonfinite_or_missing_numeric": true,
+    "zero_out_of_order": true,
+    "zero_timestamp_parse_failures": true
+  }
+}
