@@ -1,11 +1,9 @@
 """Tests for CT-anchored session OHLC levels, prior-period high/low,
 range quadrants and raw VWAP level (quant_rl.features.session_ohlc).
 
-The DST tests are the critical ones: session windows are defined in
-America/Chicago wall-clock time while the data index is fixed Etc/GMT-3
-(no DST rules), so a naive fixed-offset implementation shifts windows by
-one hour for weeks around each US transition. See the implementation plan
-(§0) for the failure mode these tests pin down.
+The session windows are defined in America/Chicago wall-clock time. Native
+fixed-offset tests preserve legacy behavior; the FTMO server-clock regression
+uses the documented GMT+2/GMT+3 US-DST model to check the production mapping.
 """
 
 from __future__ import annotations
@@ -202,6 +200,67 @@ def test_session_mask_january_broker_times() -> None:
     assert len(masked) == 48
     assert masked[0].hour == 4 and masked[0].minute == 0
     assert masked[-1].hour == 7 and masked[-1].minute == 55
+
+
+@pytest.mark.unit
+def test_ftmo_server_clock_maps_winter_and_summer_to_same_ct_session() -> None:
+    """FTMO MT5 server wall time remains NY-open aligned across US DST."""
+    idx = pd.DatetimeIndex(
+        [
+            "2025-01-15 16:29",
+            "2025-01-15 16:30",
+            "2025-01-15 16:31",
+            "2025-01-15 16:32",
+            "2025-07-15 16:29",
+            "2025-07-15 16:30",
+            "2025-07-15 16:31",
+            "2025-07-15 16:32",
+            "2025-11-03 16:29",
+            "2025-11-03 16:30",
+            "2025-11-03 16:31",
+            "2025-11-03 16:32",
+        ],
+        tz=DATA_TZ,
+    )
+
+    native = session_mask(idx, "08:30", "08:32", SESSION_TZ)
+    ftmo = session_mask(
+        idx,
+        "08:30",
+        "08:32",
+        SESSION_TZ,
+        source_clock_model="ftmo_mt5_us_dst",
+    )
+
+    assert native.tolist() == [
+        False,
+        False,
+        False,
+        False,
+        False,
+        True,
+        True,
+        False,
+        False,
+        False,
+        False,
+        False,
+    ]
+    assert ftmo.tolist() == [
+        False,
+        True,
+        True,
+        False,
+        False,
+        True,
+        True,
+        False,
+        False,
+        True,
+        True,
+        False,
+    ]
+    assert ftmo.index.equals(idx)
 
 
 @pytest.mark.unit
@@ -596,9 +655,66 @@ def test_build_features_session_ohlc_additive() -> None:
 
 
 @pytest.mark.integration
+def test_build_features_uses_ftmo_clock_model_for_ct_sessions() -> None:
+    """The resolved config must carry FTMO clock correction into the CT block."""
+    from quant_rl.features.build import build_features
+
+    idx = pd.DatetimeIndex(
+        [
+            "2025-01-15 16:29",
+            "2025-01-15 16:30",
+            "2025-01-15 16:31",
+            "2025-01-15 16:32",
+            "2025-07-15 16:29",
+            "2025-07-15 16:30",
+            "2025-07-15 16:31",
+            "2025-07-15 16:32",
+            "2025-11-03 16:29",
+            "2025-11-03 16:30",
+            "2025-11-03 16:31",
+            "2025-11-03 16:32",
+        ],
+        tz=DATA_TZ,
+    )
+    close = np.arange(100.0, 112.0)
+    bars = pd.DataFrame(
+        {
+            "open": close,
+            "high": close + 1.0,
+            "low": close - 1.0,
+            "close": close,
+            "tickvol": np.full(len(idx), 10.0),
+            "volume": np.zeros(len(idx)),
+        },
+        index=idx,
+    )
+    cfg = OmegaConf.merge(
+        OmegaConf.create(_sess_base_cfg()),
+        OmegaConf.create(
+            {
+                "data": {"timestamp_clock": "ftmo_mt5_us_dst"},
+                "features": {
+                    "include_session_ohlc": True,
+                    "include_previous_session_pd": True,
+                    "sessions": {"ny": {"start": "08:30", "end": "08:32"}},
+                },
+            }
+        ),
+    )
+
+    features = build_features(bars, cfg=cast(DictConfig, cfg))
+
+    starts = idx[idx.time == pd.Timestamp("2000-01-01 16:30").time()]
+    assert features.loc[starts, "ny_ct_open"].tolist() == [101.0, 105.0, 109.0]
+    closes = idx[idx.time == pd.Timestamp("2000-01-01 16:32").time()]
+    assert features.loc[closes, "previous_session_high"].tolist() == [103.0, 107.0, 111.0]
+
+
+@pytest.mark.integration
 def test_default_config_carries_sessions_block() -> None:
     """default.yaml ships the sessions block, flag off by default."""
     cfg = OmegaConf.load("quant_rl/config/default.yaml")
+    assert cfg.data.timestamp_clock == "ftmo_mt5_us_dst"
     assert cfg.features.include_session_ohlc is False
     assert cfg.features.sessions.tz == "America/Chicago"
     assert cfg.features.sessions.asian.start == "19:00"

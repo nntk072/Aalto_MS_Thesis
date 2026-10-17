@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "status": "source_clock_correction_implemented_cache_rebuild_pending",
+  "reviewed_at": "2026-10-18",
+  "subject": {
+    "symbols": ["US100.cash", "US500.cash"],
+    "source_period": ["2024-12-30", "2026-10-16"],
+    "user_reported_platform": "FTMO Demo server",
+    "underlying_liquidity_providers": "unknown"
+  },
+  "official_platform_clock_evidence": [
+    {
+      "url": "https://ftmo.com/en/faq/what-are-the-account-specifications/",
+      "retrieved_at": "2026-10-18",
+      "claim": "FTMO lists MetaTrader 4 and MetaTrader 5 platform server time as GMT+2 plus daylight saving time."
+    },
+    {
+      "url": "https://ftmo.com/en/blog/trading-updates/trading-update-6-mar-2025/",
+      "retrieved_at": "2026-10-18",
+      "claim": "FTMO describes MT platform time as GMT+2 until the US DST change on 2025-03-09, then GMT+3."
+    },
+    {
+      "url": "https://ftmo.com/en/blog/trading-updates/trading-update-30-oct-2025/",
+      "retrieved_at": "2026-10-18",
+      "claim": "FTMO describes MT platform time as GMT+3 through 2025-11-02, then GMT+2 after the US DST change."
+    },
+    {
+      "url": "https://ftmo.com/en/blog/trading-updates/trading-update-5-mar-2026/",
+      "retrieved_at": "2026-10-18",
+      "claim": "FTMO again documents GMT+2 before, and GMT+3 after, the US DST change in 2026."
+    }
+  ],
+  "scope_limit": "These are FTMO's generic MetaTrader platform rules. The user identifies the source as FTMO Demo, but the exact account/server login and export path for these files are not independently verified.",
+  "repository_finding": {
+    "fixed_carrier_timezone": "Etc/GMT-3",
+    "profile_use": {
+      "include_session_ohlc_false": 1,
+      "include_session_ohlc_true": 17,
+      "variants_mapped_to_true_profiles": 17
+    },
+    "affected_code": [
+      "quant_rl/features/session_ohlc.py converts the fixed-offset index to America/Chicago for CT session windows.",
+      "quant_rl/features/build.py enables the CT session block for three of four replacement feature profiles."
+    ],
+    "example": {
+      "server_wall_time": "2025-01-15 16:30",
+      "correct_ftmo_winter_interpretation": "GMT+2 -> 2025-01-15 14:30 UTC -> 2025-01-15 08:30 America/Chicago",
+      "previous_fixed_gmt_plus_3_interpretation": "2025-01-15 13:30 UTC -> 2025-01-15 07:30 America/Chicago",
+      "difference": "one hour"
+    }
+  },
+  "implementation": {
+    "model": "ftmo_mt5_us_dst",
+    "method": "For CT feature conversion, subtract seven hours from the recorded FTMO server wall time, localize the resulting New York wall time with America/New_York rules, then convert to the requested session timezone. Ambiguous or nonexistent source wall times fail closed.",
+    "feature_cache_version": "v23-ftmo-mt5-us-dst-session-clock",
+    "files_changed": [
+      "quant_rl/config/default.yaml",
+      "quant_rl/data/clean.py",
+      "quant_rl/features/build.py",
+      "quant_rl/features/session_ohlc.py",
+      "tests/test_features/test_session_ohlc.py"
+    ]
+  },
+  "validation": {
+    "ruff_format_check": "passed",
+    "ruff_check": "passed",
+    "mypy": "passed; 482 source files",
+    "pytest": "passed; 58 tests across session, build pipeline, variants, and causal features"
+  },
+  "remaining": [
+    "Rebuild all four named feature profiles under cache version v23 and verify all 18 variant bindings before any screen or training run.",
+    "Reconcile raw report timestamps and any other code paths that interpret the fixed-offset carrier as absolute time.",
+    "Retain the exploratory/report-only status of the continuous 2026 test interval.",
+    "Keep feed-provider identity, account-specific export rights, and publication permissions as separate unresolved provenance items."
+  ],
+  "training_disposition": "The user authorizes training use. No training was launched; this code correction does not itself admit a campaign because the versioned feature caches and remaining P1/P2 gates are not yet validated."
+}

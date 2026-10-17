@@ -100,7 +100,7 @@ from .swings import swing_history
 # v16: SL modes (state machine + agent veto), prev-NY session H/L, swing
 #      history columns (swing_high_{1..3}/swing_low_{1..3}), TF-SMT enablement.
 # v22: causal completed prior-NY levels use the configured NY session window.
-FEATURE_CACHE_VERSION = "v22-causal-configured-ny-session"
+FEATURE_CACHE_VERSION = "v23-ftmo-mt5-us-dst-session-clock"
 
 
 def feature_cache_content_hash(
@@ -129,7 +129,12 @@ def feature_cache_content_hash(
         cost_point_size = OmegaConf.select(cfg, "costs.point_size", default=None)
         if cost_point_size is not None:
             payload["costs.point_size"] = float(cost_point_size)
-        for path in ("data.tz", "session.tz", "strategy.session.timezone"):
+        for path in (
+            "data.tz",
+            "data.timestamp_clock",
+            "session.tz",
+            "strategy.session.timezone",
+        ):
             node: Any = cfg
             ok = True
             for part in path.split("."):
@@ -1301,6 +1306,14 @@ def build_features(
     if feat_cfg is not None and bool(getattr(feat_cfg, "include_session_ohlc", False)):
         sess_cfg = feat_cfg.sessions
         sess_tz = str(sess_cfg.get("tz", "America/Chicago"))
+        source_clock_model = str(
+            (
+                OmegaConf.select(cfg, "data.timestamp_clock", default="native")
+                if cfg is not None
+                else "native"
+            )
+            or "native"
+        )
         for name in ("asian", "london", "ny"):
             window = sess_cfg[name]
             ohlc = session_ohlc(
@@ -1309,17 +1322,23 @@ def build_features(
                 str(window["end"]),
                 session_tz=sess_tz,
                 prefix=f"{name}_ct",
+                source_clock_model=source_clock_model,
             )
             feat = pd.concat([feat, ohlc], axis=1)
 
-        yday = prior_period_high_low(primary, freq="D", tz=sess_tz)
-        lweek = prior_period_high_low(primary, freq="W", tz=sess_tz)
+        yday = prior_period_high_low(
+            primary, freq="D", tz=sess_tz, source_clock_model=source_clock_model
+        )
+        lweek = prior_period_high_low(
+            primary, freq="W", tz=sess_tz, source_clock_model=source_clock_model
+        )
         ny_window = sess_cfg["ny"]
         prev_ny = prev_ny_high_low(
             primary,
             start_ct=str(ny_window["start"]),
             end_ct=str(ny_window["end"]),
             session_tz=sess_tz,
+            source_clock_model=source_clock_model,
         )
         feat = pd.concat([feat, yday, lweek, prev_ny], axis=1)
 
@@ -1358,7 +1377,12 @@ def build_features(
         feat = pd.concat(
             [
                 feat,
-                previous_labeled_session_ohlc(primary, windows, session_tz=sess_tz),
+                previous_labeled_session_ohlc(
+                    primary,
+                    windows,
+                    session_tz=sess_tz,
+                    source_clock_model=source_clock_model,
+                ),
             ],
             axis=1,
         )

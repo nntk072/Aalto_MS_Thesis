@@ -35,6 +35,20 @@
     ],
     "scope_limit": "Current public terms do not identify the liquidity provider for this account or establish historical export or thesis-publication rights for these CSVs."
   },
+  "official_platform_clock_reference": {
+    "urls": [
+      "https://ftmo.com/en/faq/what-are-the-account-specifications/",
+      "https://ftmo.com/en/blog/trading-updates/trading-update-6-mar-2025/",
+      "https://ftmo.com/en/blog/trading-updates/trading-update-30-oct-2025/",
+      "https://ftmo.com/en/blog/trading-updates/trading-update-5-mar-2026/"
+    ],
+    "retrieved_at": "2026-10-18",
+    "claims_used": [
+      "FTMO documents MetaTrader 4/5 server time as GMT+2 plus daylight saving time.",
+      "FTMO's 2025 and 2026 updates document GMT+2 before the US DST transition and GMT+3 after it."
+    ],
+    "scope_limit": "This documents FTMO's generic MetaTrader platform clock, not the exact login/server or export path for these particular files. The fixed Etc/GMT-3 carrier in the existing caches does not encode the winter offset; see ftmo_mt5_time_mapping_audit_20261018.json."
+  },
   "not_established": [
     "The specific liquidity provider or providers for these historical US100.cash and US500.cash exports; the user reports no account-specific identity is available.",
     "The account-specific platform and export path for these exact files.",

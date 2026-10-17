@@ -18,6 +18,23 @@ The provenance disposition is recorded in
 
 ## Dataset and cache identity
 
+### FTMO MetaTrader timestamp basis — 2026-10-18
+
+The user identifies the source as the FTMO Demo server. FTMO's public account
+specification documents MetaTrader server time as GMT+2 plus daylight saving;
+its 2025 and 2026 notices document the switch to GMT+3 with the US DST change
+and back to GMT+2 in November. The exact account login/server and export path
+for these CSVs remain unverified. The repository previously assigned every
+naive timestamp a fixed `Etc/GMT-3` offset. For winter dates this made a server
+wall time of 16:30 appear as 07:30 CT, while FTMO's GMT+2 clock implies 08:30
+CT. Three of the four named feature profiles (17 of 18 variants) enable the
+CT-based session feature block. The versioned correction and source references
+are recorded in
+[`ftmo_mt5_time_mapping_audit_20261018.json`](replacement_data_20261017/ftmo_mt5_time_mapping_audit_20261018.json).
+The correction passed 58 focused tests plus full-tree format, lint, and Mypy;
+the v23 feature caches have not yet been rebuilt. Do not use v22 session-feature
+caches for a new screen.
+
 The requested chronological split is training through 2025-12-31 inclusive and
 one continuous test/report interval from 2026-01-01 through the last available
 bar on 2026-10-16. The full interval is exposed exploratory/report-only evidence:

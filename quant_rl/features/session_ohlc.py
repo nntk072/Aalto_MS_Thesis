@@ -5,8 +5,10 @@ Session windows are defined in wall-clock ``America/Chicago`` (CT) time and
 resolved per bar via tz-aware conversion (``DatetimeIndex.tz_convert``), so
 US DST transitions are handled by the tz database on every bar. Never map a
 CT ``HH:MM`` boundary into the data timezone once and reuse the result as a
-static string: the data feed tz (e.g. fixed ``Etc/GMT-3``) has no DST rules,
-so a static mapping drifts by one hour for weeks around each US transition.
+static string. A fixed-offset index cannot represent source DST rules. For
+FTMO MT4/5 server wall timestamps, pass
+``source_clock_model="ftmo_mt5_us_dst"`` so conversion uses the documented
+GMT+2/+3 platform clock.
 
 Levels follow "live/running" semantics (matching
 ``features.structure.detect_session_levels``): O/H/L/C update bar-by-bar
@@ -31,20 +33,47 @@ def _parse_hhmm(value: str) -> dt.time:
     return pd.Timestamp(f"2000-01-01 {value}").time()
 
 
+def _session_reference_index(
+    index: pd.DatetimeIndex,
+    source_clock_model: str,
+) -> pd.DatetimeIndex:
+    """Return an index with the instants implied by its source clock model.
+
+    FTMO MT4/MT5 exports use server wall time at GMT+2 in US standard time
+    and GMT+3 in US daylight time. The repository index keeps those wall-clock
+    values in a fixed-offset timezone for compatibility. Subtracting seven
+    hours and localizing to New York reconstructs the corresponding NY clock
+    and UTC instants for CT session calculations. Ambiguous/nonexistent source
+    wall times fail closed because the export alone cannot resolve them.
+    """
+    if index.tz is None:
+        raise ValueError("index must be timezone-aware (data tz), got naive index")
+    if source_clock_model == "native":
+        return index
+    if source_clock_model != "ftmo_mt5_us_dst":
+        raise ValueError(f"unsupported source clock model: {source_clock_model!r}")
+
+    new_york_wall = index.tz_localize(None) - pd.Timedelta(hours=7)
+    return new_york_wall.tz_localize("America/New_York", ambiguous="raise", nonexistent="raise")
+
+
 def session_mask(
     idx: pd.DatetimeIndex,
     start_ct: str,
     end_ct: str,
     session_tz: str = "America/Chicago",
+    source_clock_model: str = "native",
 ) -> pd.Series:
     """Boolean mask of bars whose local wall-clock time falls in ``[start, end)``.
 
     Each bar's timestamp is converted into ``session_tz`` so DST rules are
-    resolved per bar by the tz database (see module docstring).
+    resolved per bar. ``source_clock_model`` controls how source wall-clock
+    labels are interpreted before that timezone conversion.
     """
     if idx.tz is None:
         raise ValueError("index must be timezone-aware (data tz), got naive index")
-    t = idx.tz_convert(session_tz).time
+    reference_index = _session_reference_index(idx, source_clock_model)
+    t = reference_index.tz_convert(session_tz).time
     start_t = _parse_hhmm(start_ct)
     end_t = _parse_hhmm(end_ct)
     if start_t <= end_t:
@@ -74,6 +103,7 @@ def session_ohlc(
     end_ct: str,
     session_tz: str = "America/Chicago",
     prefix: str = "session",
+    source_clock_model: str = "native",
 ) -> pd.DataFrame:
     """Causal per-session OHLC levels for the ``[start_ct, end_ct)`` window.
 
@@ -95,9 +125,11 @@ def session_ohlc(
         Column prefix; returns ``{prefix}_open/_high/_low/_close``.
     """
     idx = pd.DatetimeIndex(df.index)
-    mask = session_mask(idx, start_ct, end_ct, session_tz)
-    idx_ct = idx.tz_convert(session_tz)
-    grp = _session_dates(idx_ct, _parse_hhmm(start_ct), _parse_hhmm(end_ct)).where(mask)
+    reference_index = _session_reference_index(idx, source_clock_model)
+    mask = session_mask(idx, start_ct, end_ct, session_tz, source_clock_model)
+    idx_ct = reference_index.tz_convert(session_tz)
+    session_dates = _session_dates(idx_ct, _parse_hhmm(start_ct), _parse_hhmm(end_ct)).to_numpy()
+    grp = pd.Series(session_dates, index=idx).where(mask)
 
     open_in = df["open"].where(mask)
     high_in = df["high"].where(mask)
@@ -120,6 +152,7 @@ def prior_period_high_low(
     freq: str,
     tz: str = "America/Chicago",
     prefix: str | None = None,
+    source_clock_model: str = "native",
 ) -> pd.DataFrame:
     """Previous *completed* calendar-period high/low, causally shifted.
 
@@ -135,7 +168,7 @@ def prior_period_high_low(
     idx = pd.DatetimeIndex(df.index)
     if idx.tz is None:
         raise ValueError("index must be timezone-aware (data tz), got naive index")
-    idx_tz = idx.tz_convert(tz)
+    idx_tz = _session_reference_index(idx, source_clock_model).tz_convert(tz)
     freq_norm = freq.lower()
     if freq_norm.startswith("d"):
         keys = pd.Series(idx_tz.date, index=idx)
@@ -188,6 +221,7 @@ def prev_ny_high_low(
     start_ct: str = "08:30",
     end_ct: str = "15:00",
     session_tz: str = "America/Chicago",
+    source_clock_model: str = "native",
 ) -> pd.DataFrame:
     """Latest clock-completed NY session high/low, available without lookahead.
 
@@ -198,8 +232,9 @@ def prev_ny_high_low(
     before the first session close are NaN.
     """
     idx = pd.DatetimeIndex(df.index)
-    mask = session_mask(idx, start_ct, end_ct, session_tz)
-    idx_ct = idx.tz_convert(session_tz)
+    reference_index = _session_reference_index(idx, source_clock_model)
+    mask = session_mask(idx, start_ct, end_ct, session_tz, source_clock_model)
+    idx_ct = reference_index.tz_convert(session_tz)
     start_t = _parse_hhmm(start_ct)
     end_t = _parse_hhmm(end_ct)
     mask_values = mask.to_numpy(dtype=bool)
@@ -234,6 +269,7 @@ def previous_labeled_session_ohlc(
     session_tz: str = "America/Chicago",
     *,
     bar_minutes: int = 1,
+    source_clock_model: str = "native",
 ) -> pd.DataFrame:
     """Expose the latest fully completed configured session's range.
 
@@ -256,7 +292,8 @@ def previous_labeled_session_ohlc(
         raise ValueError("bar_minutes must be positive")
     labels = sorted(sessions)
     code_for = {label: code for code, label in enumerate(labels, start=1)}
-    local = idx.tz_convert(session_tz)
+    reference_index = _session_reference_index(idx, source_clock_model)
+    local = reference_index.tz_convert(session_tz)
     chosen_high = np.full(len(df), np.nan, dtype=float)
     chosen_low = np.full(len(df), np.nan, dtype=float)
     chosen_code = np.zeros(len(df), dtype=float)
@@ -271,7 +308,13 @@ def previous_labeled_session_ohlc(
         window = sessions[label]
         start_t = _parse_hhmm(window["start"])
         end_t = _parse_hhmm(window["end"])
-        mask = session_mask(idx, window["start"], window["end"], session_tz).to_numpy()
+        mask = session_mask(
+            idx,
+            window["start"],
+            window["end"],
+            session_tz,
+            source_clock_model,
+        ).to_numpy()
         dates = _session_dates(local, start_t, end_t).to_numpy()
         group_keys = [(dates[i], label) if mask[i] else None for i in range(len(idx))]
         positions: dict[tuple[dt.date, str], list[int]] = {}
@@ -284,13 +327,16 @@ def previous_labeled_session_ohlc(
             )
             close_local = pd.Timestamp.combine(session_date, end_t).tz_localize(session_tz)
             expected_last = close_local - pd.Timedelta(minutes=bar_minutes)
-            last_bar = idx[rows[-1]]
+            last_bar = reference_index[rows[-1]]
             expected_count = int(
                 (close_local.tz_convert("UTC") - start_local.tz_convert("UTC")).total_seconds()
                 // (bar_minutes * 60)
             )
             actual_times = (
-                idx[rows].tz_convert("UTC").to_numpy(dtype="datetime64[ns]").view(np.int64)
+                reference_index[rows]
+                .tz_convert("UTC")
+                .to_numpy(dtype="datetime64[ns]")
+                .view(np.int64)
             )
             contiguous = len(rows) == expected_count and (
                 len(rows) <= 1
@@ -302,11 +348,13 @@ def previous_labeled_session_ohlc(
             low = float(np.nanmin(low_values[rows]))
             if not np.isfinite(high) or not np.isfinite(low):
                 continue
-            completed.append((close_local.tz_convert(idx.tz), high, low, code_for[label]))
+            completed.append(
+                (close_local.tz_convert(reference_index.tz), high, low, code_for[label])
+            )
 
     completed.sort(key=lambda item: item[0])
     close_ns = np.asarray([item[0].value for item in completed], dtype=np.int64)
-    for i, timestamp in enumerate(idx):
+    for i, timestamp in enumerate(reference_index):
         j = int(np.searchsorted(close_ns, timestamp.value, side="right") - 1)
         if j >= 0:
             close_at, high, low, code = completed[j]

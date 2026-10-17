@@ -15,7 +15,8 @@ def clean(df: pd.DataFrame, tz: str = "Etc/GMT-3") -> pd.DataFrame:
     df:
         Raw bar DataFrame from :func:`quant_rl.data.loader.load_bars`.
     tz:
-        Broker server timezone string (IANA, default UTC+3).
+        Timezone used to carry naive source wall-clock labels in the index.
+        It is not an absolute-timezone claim when the source clock observes DST.
     """
     df = df.copy()
     # Remove duplicate timestamps (keep last – most recent update wins)

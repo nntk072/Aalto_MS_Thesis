@@ -5,7 +5,8 @@ data:
   raw_dir: "data"                      # relative to project root
   cache_dir: "cache/us100_us500_20241230_20261016"  # versioned raw-bar/tick caches
   prebuilt_feature_cache: null          # optional named cache path; content hash is verified
-  tz: "Etc/GMT-3"                      # broker server timezone (UTC+3)
+  tz: "Etc/GMT-3"                      # fixed-offset carrier for server wall-clock labels
+  timestamp_clock: "ftmo_mt5_us_dst"    # FTMO MT4/5: GMT+2 standard / GMT+3 US DST
   symbols: ["US100.cash", "US500.cash"]
   primary: "US100.cash"
   secondary: "US500.cash"              # used only for SMT divergence
@@ -24,10 +25,10 @@ data:
     US500.cash: "US500.cash_202412300105_202610162349.csv"
 
 session:
-  tz: "Etc/GMT-3"                      # session times below are in this tz
+  tz: "Etc/GMT-3"                      # wall-clock labels; not an absolute-timezone rule
   start: "16:30"                       # NY open proxy
   end:   "23:00"                       # NY close proxy
-  # DST caveat: broker tz shift ~1 h around DST transitions; flag only, no fix
+  # Session times are FTMO server wall time; CT feature conversion uses timestamp_clock.
   dst_flag: true
 
 account:
