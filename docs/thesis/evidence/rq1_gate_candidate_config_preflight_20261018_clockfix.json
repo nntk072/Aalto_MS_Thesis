@@ -1,0 +1,86 @@
+{
+  "action_schema": {
+    "coordinates": [
+      "direction",
+      "intensity",
+      "stop",
+      "risk",
+      "target",
+      "exit"
+    ],
+    "has_direction": true,
+    "has_multi_tp": false,
+    "has_simplex": false,
+    "has_sl_mode": false,
+    "has_tp_mode": false,
+    "key": "6_dir",
+    "version": "overlay-action-v2",
+    "width": 6
+  },
+  "cache": "data/prebuilt_feature_cache/idea1_po3_ifvg.parquet",
+  "candidate_intervention": "strategy.entry.enforce_gate",
+  "changed_config_paths": [
+    "strategy.entry.enforce_gate"
+  ],
+  "checks": {
+    "confirmed_first_eligible": true,
+    "control_gate_off": true,
+    "entry_fsm_disabled": true,
+    "matching_feature_cache": true,
+    "new_full_period_us100_m1": true,
+    "new_full_period_us100_ticks": true,
+    "new_full_period_us500_m1": true,
+    "new_full_period_us500_ticks": true,
+    "quote_wait_60s": true,
+    "seeded_latency_below_30ms": true,
+    "shared_direction_control": true,
+    "six_coordinate_schema": true,
+    "strategy": true,
+    "strategy_actions": true,
+    "test_from_2026": true,
+    "tick_execution_enabled": true,
+    "train_through_2025": true,
+    "treatment_gate_on": true
+  },
+  "control_config_sha256": "345a8f01024ea335796c1a4ba78c1c7e3a4e7433cdff0b7c6dd3cdafed0dbfbe",
+  "control_gate": false,
+  "excluded_from_preflight": [
+    "seed and training budget freeze",
+    "P4 validity and independent review acceptance",
+    "real-data model action trace",
+    "training, checkpoint selection, and performance claims"
+  ],
+  "execution": {
+    "fill_delay_ms": 0,
+    "max_tick_quote_wait_ms": 60000,
+    "randomized_fill_latency_ms": 30.0
+  },
+  "market_inputs": {
+    "m1_files": {
+      "US100.cash": "US100.cash_M1_202412300105_202610162349.csv",
+      "US500.cash": "US500.cash_M1_202412300105_202610162349.csv"
+    },
+    "test_start": "2026-01-01",
+    "tick_files": {
+      "US100.cash": "US100.cash_202412300105_202610162349.csv",
+      "US500.cash": "US500.cash_202412300105_202610162349.csv"
+    },
+    "train_end": "2025-12-31"
+  },
+  "role": "provisional_only_not_frozen_not_trained_not_evaluated",
+  "schema_version": 1,
+  "shared_settings_sha256": "4f044925c39ba64396f5d506d85cc306f8a3bd389ac589c1ff79ff64bf21489b",
+  "source_files": [
+    "config/experiments.yaml",
+    "config/2_po3_ifvg.yaml",
+    "config/features/full_po3_mtf.yaml",
+    "quant_rl/config/default.yaml",
+    "quant_rl/train/train_rl.py",
+    "quant_rl/train/variant_resolver.py",
+    "quant_rl/action_schema.py"
+  ],
+  "status": "candidate_config_preflight_passed",
+  "treatment_config_sha256": "2618fadf57d2a968e1def1d5b576b4cb514c7d1ccc9370b49f7a40b14dc97dc7",
+  "treatment_gate": true,
+  "variant_template": "ladder_a0_flat_po3"
+}
