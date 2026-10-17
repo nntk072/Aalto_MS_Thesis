@@ -1,5 +1,27 @@
 # Implementation continuation ledger — 2026-10-13
 
+## P1 repository-level candidate-tail exposure inventory — 2026-10-17 21:55 Helsinki
+
+The pre-intake US100 and US500 M1 parquet caches both end at 2026-07-03
+19:59 broker time (528,760 and 527,139 rows). The supplied full-range source
+M1 files have modification times 2026-10-17 18:57 and 19:02 Helsinki time.
+The reproducible inventory searched pre-intake text artifacts in `outputs/`,
+`cache/`, and `data/prebuilt_feature_cache/`; it retained date-string match
+examples for manual inspection rather than treating every date hit as market
+data exposure. Reviewed examples include UTC campaign/log timestamps on Oct
+15 and unrelated date text. The underlying pre-intake M1 caches provide a
+stronger market-data boundary: neither extends beyond July 3. Report:
+`docs/thesis/evidence/replacement_data_20261017/candidate_holdout_exposure.json`;
+generator: `scripts/research/audit_candidate_holdout_repository_exposure.py`.
+
+This supports classifying 2026-07-04 through 2026-10-16 as a repository-level
+candidate report segment, not as an accepted locked holdout. Filesystem times
+are not an authenticated acquisition log; archives, external files, and
+undocumented human exposure are not established by this scan. No replacement-
+data training or strategy evaluation has run. P1 remains NOT READY pending
+provider/feed-use terms, broker calendar/timezone interpretation, schedule
+resolution, external exposure review, and a frozen evaluation protocol.
+
 ## M10 feature-timeframe support and schedule-gap wording — 2026-10-17 21:48 Helsinki
 
 The replacement data showed that M10 bar resampling existed while several
