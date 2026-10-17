@@ -44,6 +44,17 @@ have zero samples, so this report cannot support GPU-utilization claims. The
 evaluation protocol records previously inspected, selection-acknowledged data;
 it is not pristine confirmatory OOS evidence.
 
+### Seed-summary correction — 2026-10-17
+
+The campaign manifest declares seed `50` for all 18 jobs, and every per-run
+summary row retains seed 50. The original schema-v1 report incorrectly has a
+null campaign-level `seed` because its generator hard-coded scalar reporting to
+seed 42. A schema-v2 source repair now reports the actual seed set and only
+emits a scalar seed for complete homogeneous metadata. Its regressions and a
+new descriptive report are still pending verification; retain the original
+report unchanged until that gate passes. This metadata defect does not alter
+the campaign results, run identities, or fingerprint.
+
 ## Evidence
 
 - Campaign summary JSON: `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary.json`

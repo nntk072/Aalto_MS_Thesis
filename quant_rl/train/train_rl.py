@@ -52,6 +52,7 @@ from quant_rl.eval.export import build_run_dir, save_run
 from quant_rl.eval.rollout import evaluate_model
 from quant_rl.eval.run_manifest import (
     array_sha256,
+    build_stop_candidate_schema,
     build_training_run_manifest,
     dataset_record,
     file_sha256,
@@ -1726,6 +1727,14 @@ def main() -> None:
                 seed=int(seed),
             )
             learning_timesteps = int(timesteps)
+        stop_candidate_schema = build_stop_candidate_schema(cfg)
+        checkpoint_stop_schema = getattr(model, "stop_candidate_schema", None)
+        if args.resume_checkpoint and checkpoint_stop_schema != stop_candidate_schema:
+            raise ValueError(
+                "resume checkpoint stop-candidate schema is missing or differs from the current "
+                "run config; do not resume under a silently changed stop menu"
+            )
+        setattr(model, "stop_candidate_schema", stop_candidate_schema)
         _log_effective_ppo(model, cfg)
 
         aux_cb = None
@@ -2149,6 +2158,7 @@ def main() -> None:
             completed_steps=int(model.num_timesteps),
             action_schema=_action_schema_manifest(train_env),
             observation_schema=_observation_schema_manifest(train_env),
+            stop_candidate_schema=stop_candidate_schema,
             feature_cache_path=feat_cache,
             feature_cache_hash=cache_hash,
             checkpoint_path=checkpoint_path,

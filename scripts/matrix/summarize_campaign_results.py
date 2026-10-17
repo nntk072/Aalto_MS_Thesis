@@ -431,15 +431,32 @@ def build_summary(campaign_dir: Path) -> dict[str, Any]:
             for item in jobs
         ),
     }
+    declared_seed_values = [item.get("seed") for item in jobs]
+    declared_seeds = sorted(
+        {
+            value
+            for value in declared_seed_values
+            if isinstance(value, int) and not isinstance(value, bool)
+        }
+    )
+    seed_metadata_complete = bool(jobs) and all(
+        isinstance(value, int) and not isinstance(value, bool) for value in declared_seed_values
+    )
+    homogeneous_seed = (
+        declared_seeds[0] if seed_metadata_complete and len(declared_seeds) == 1 else None
+    )
+
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "campaign_dir": str(campaign_dir),
         "campaign_created_utc": campaign.get("created"),
         "campaign_job_id": campaign.get("job_id"),
         "campaign_git_sha": campaign.get("git_sha"),
         "campaign_fingerprint": campaign.get("fingerprint"),
         "requested_steps_per_variant": campaign.get("timesteps"),
-        "seed": 42 if jobs and all(item.get("seed") == 42 for item in jobs) else None,
+        "seed": homogeneous_seed,
+        "seeds": declared_seeds,
+        "seed_metadata_complete": seed_metadata_complete,
         "data_source": campaign.get("data_source"),
         "n_envs": campaign.get("n_envs"),
         "worker_cpus": campaign.get("worker_cpus"),
@@ -481,7 +498,9 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "",
         f"**Controller status as of:** {summary.get('controller_status_as_of_utc')}",
         f"**Slurm job:** {summary.get('campaign_job_id')}  ",
-        f"**Specification:** {summary.get('requested_steps_per_variant')} steps per variant; seed {summary.get('seed')}; "
+        f"**Specification:** {summary.get('requested_steps_per_variant')} steps per variant; "
+        f"seeds {', '.join(str(seed) for seed in summary.get('seeds', [])) or 'unknown'}"
+        f"{'' if summary.get('seed_metadata_complete', False) else ' (incomplete metadata)'}; "
         f"{summary.get('n_envs')} environments; {summary.get('data_source')} backend.",
         f"**Evaluation role:** {summary.get('evaluation_protocol', {}).get('locked_oos_role')} "
         f"({summary.get('evaluation_protocol', {}).get('locked_oos_exposure')}).",
@@ -618,12 +637,28 @@ def render_markdown(summary: dict[str, Any]) -> str:
             f"- Summary script SHA-256: `{summary.get('summary_script_sha256')}`",
             "- Profit and trade counts are reported as metrics. The train survival gate covers risk-limit breach and peak trailing drawdown; evidence hashes are listed in the adjacent JSON file.",
             "- Launch-time source-hash comparison with the current repository is recorded in [the source-fidelity audit](source_fidelity_audit.md).",
-            f"- This report covers the declared {summary.get('requested_steps_per_variant')} steps per variant and campaign data role. It cannot establish statistical significance or strategy viability beyond the evidence and seed shown above.",
+            f"- This report covers the declared {summary.get('requested_steps_per_variant')} steps per variant and campaign data role. It cannot establish statistical significance or strategy viability beyond the evidence and seeds shown above.",
             "- Do not select a variant from this report. Preserve all failed gates and low/no-trade outcomes.",
             "",
         ]
     )
     return "\n".join(lines)
+
+
+def _write_summary_outputs(summary: dict[str, Any], out_stem: Path) -> tuple[Path, Path]:
+    """Write a new report pair without replacing prior campaign evidence."""
+    json_path = out_stem.with_suffix(".json")
+    markdown_path = out_stem.with_suffix(".md")
+    existing = [path for path in (json_path, markdown_path) if path.exists()]
+    if existing:
+        raise FileExistsError(
+            "refusing to overwrite campaign summary artifact(s): "
+            + ", ".join(str(path) for path in existing)
+        )
+    out_stem.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(json.dumps(summary, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    markdown_path.write_text(render_markdown(summary), encoding="utf-8")
+    return markdown_path, json_path
 
 
 def main() -> int:
@@ -634,13 +669,9 @@ def main() -> int:
     campaign_dir = args.campaign_dir.resolve()
     out_stem = args.out_stem or campaign_dir / "reports" / "campaign_results_summary"
     summary = build_summary(campaign_dir)
-    out_stem.parent.mkdir(parents=True, exist_ok=True)
-    out_stem.with_suffix(".json").write_text(
-        json.dumps(summary, indent=2, allow_nan=False) + "\n", encoding="utf-8"
-    )
-    out_stem.with_suffix(".md").write_text(render_markdown(summary), encoding="utf-8")
-    print(out_stem.with_suffix(".md"))
-    print(out_stem.with_suffix(".json"))
+    markdown_path, json_path = _write_summary_outputs(summary, out_stem)
+    print(markdown_path)
+    print(json_path)
     return 0
 
 

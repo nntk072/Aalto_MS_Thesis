@@ -12,6 +12,7 @@ from quant_rl.eval.reanalysis_provenance import (
     _load_run_config,
     _validate_reanalysis_request,
 )
+from quant_rl.eval.run_manifest import file_sha256
 from quant_rl.features.build import feature_cache_path
 
 
@@ -23,6 +24,80 @@ def test_checkpoint_reanalysis_defaults_to_deterministic_actions() -> None:
     assert default_args.stochastic is False
     assert sampled_args.stochastic is True
     assert sampled_args.seed == 42
+
+
+def test_stop_schema_requires_checkpoint_manifest_and_config_agreement() -> None:
+    schema = {"menu": "recent_confirmed_unswept_mtf_swings_v1"}
+    assert (
+        eval_run._validate_stop_candidate_schema(
+            checkpoint_schema=schema,
+            manifest_schema=schema,
+            expected_schema=schema,
+            allow_legacy=False,
+        )
+        == "versioned"
+    )
+    with pytest.raises(ValueError, match="disagree"):
+        eval_run._validate_stop_candidate_schema(
+            checkpoint_schema=schema,
+            manifest_schema={"menu": "legacy_last_accepted_swing_v1"},
+            expected_schema=schema,
+            allow_legacy=False,
+        )
+    with pytest.raises(ValueError, match="differs from the run config"):
+        eval_run._validate_stop_candidate_schema(
+            checkpoint_schema=schema,
+            manifest_schema=schema,
+            expected_schema={"menu": "legacy_last_accepted_swing_v1"},
+            allow_legacy=False,
+        )
+
+
+def test_legacy_stop_schema_requires_opt_in_and_cannot_claim_expanded_menu() -> None:
+    legacy = {"menu": "legacy_last_accepted_swing_v1"}
+    with pytest.raises(ValueError, match="no stop-candidate schema"):
+        eval_run._validate_stop_candidate_schema(
+            checkpoint_schema=None,
+            manifest_schema=None,
+            expected_schema=legacy,
+            allow_legacy=False,
+        )
+    assert (
+        eval_run._validate_stop_candidate_schema(
+            checkpoint_schema=None,
+            manifest_schema=None,
+            expected_schema=legacy,
+            allow_legacy=True,
+        )
+        == "legacy_opt_in"
+    )
+    with pytest.raises(ValueError, match="cannot assert that menu was trained"):
+        eval_run._validate_stop_candidate_schema(
+            checkpoint_schema=None,
+            manifest_schema=None,
+            expected_schema={"menu": "recent_confirmed_unswept_mtf_swings_v1"},
+            allow_legacy=True,
+        )
+
+
+def test_checkpoint_reanalysis_checks_manifest_artifact_hash(tmp_path: Path) -> None:
+    checkpoint = tmp_path / "checkpoint.zip"
+    checkpoint.write_bytes(b"saved checkpoint")
+    expected = file_sha256(checkpoint)
+
+    assert (
+        eval_run._validate_checkpoint_manifest_hash(
+            checkpoint, {"checkpoint": {"sha256": expected}}
+        )
+        == "verified"
+    )
+    with pytest.raises(ValueError, match="does not match"):
+        eval_run._validate_checkpoint_manifest_hash(
+            checkpoint, {"checkpoint": {"sha256": "0" * 64}}
+        )
+    assert eval_run._validate_checkpoint_manifest_hash(checkpoint, {}) == (
+        "unavailable_legacy_manifest"
+    )
 
 
 @pytest.mark.parametrize(("stochastic", "expected_deterministic"), [(False, True), (True, False)])

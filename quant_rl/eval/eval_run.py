@@ -37,6 +37,7 @@ from quant_rl.eval.reanalysis_provenance import (
     _validate_reanalysis_request,
 )
 from quant_rl.eval.rollout import evaluate_model
+from quant_rl.eval.run_manifest import build_stop_candidate_schema, file_sha256
 from quant_rl.evaluation import calculate_metrics
 from quant_rl.features.build import build_features
 from quant_rl.models.agent import (
@@ -145,6 +146,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Explicitly opt in to an unversioned account-state-v1 checkpoint",
     )
     parser.add_argument(
+        "--allow-legacy-stop-schema",
+        action="store_true",
+        help=(
+            "Explicitly opt in when an older checkpoint or run manifest has no stop-candidate "
+            "schema; this does not assert that it used the expanded multi-HTF menu"
+        ),
+    )
+    parser.add_argument(
         "--legacy-action-layout",
         default=None,
         help=(
@@ -197,6 +206,58 @@ def _evaluate_checkpoint_split(model: Any, *, stochastic: bool, **kwargs: Any) -
     return evaluate_model(model, deterministic=not stochastic, **kwargs)
 
 
+def _validate_stop_candidate_schema(
+    *,
+    checkpoint_schema: dict[str, Any] | None,
+    manifest_schema: dict[str, Any] | None,
+    expected_schema: dict[str, Any],
+    allow_legacy: bool,
+) -> str:
+    """Reject checkpoint/config drift and label explicit latest-swing legacy use."""
+    if checkpoint_schema is None or manifest_schema is None:
+        if not allow_legacy:
+            raise ValueError(
+                "checkpoint or run manifest has no stop-candidate schema; pass "
+                "--allow-legacy-stop-schema only when intentionally reanalysing a legacy run"
+            )
+        available_schema = checkpoint_schema if checkpoint_schema is not None else manifest_schema
+        if available_schema is None:
+            if expected_schema.get("menu") != "legacy_last_accepted_swing_v1":
+                raise ValueError(
+                    "legacy checkpoint has no stop schema and the run config requests the "
+                    "expanded multi-timeframe menu; legacy opt-in cannot assert that menu "
+                    "was trained"
+                )
+        elif available_schema != expected_schema:
+            raise ValueError(
+                "available stop-candidate schema differs from the run config; legacy opt-in "
+                "does not authorize evaluating under a changed stop menu"
+            )
+        return "legacy_opt_in"
+    if checkpoint_schema != manifest_schema:
+        raise ValueError("checkpoint and run manifest stop-candidate schemas disagree")
+    if checkpoint_schema != expected_schema:
+        raise ValueError(
+            "checkpoint stop-candidate schema differs from the run config; refusing to evaluate "
+            "under a changed stop menu"
+        )
+    return "versioned"
+
+
+def _validate_checkpoint_manifest_hash(path: Path, manifest: dict[str, Any]) -> str:
+    """Verify the checkpoint is the exact artifact recorded by its run manifest."""
+    checkpoint_record = manifest.get("checkpoint")
+    expected_hash = checkpoint_record.get("sha256") if isinstance(checkpoint_record, dict) else None
+    if expected_hash is None:
+        return "unavailable_legacy_manifest"
+    actual_hash = file_sha256(path)
+    if actual_hash != expected_hash:
+        raise ValueError(
+            "checkpoint SHA-256 does not match the source run manifest; refusing reanalysis"
+        )
+    return "verified"
+
+
 def main() -> None:
     args = _build_parser().parse_args()
 
@@ -236,8 +297,25 @@ def main() -> None:
     )
     ckpt_path = _resolve_checkpoint(run_dir, args.checkpoint)
     log.info("Loading model: %s", ckpt_path)
+    source_manifest_path = run_dir / "run_manifest.json"
+    source_manifest: dict[str, Any] = {}
+    if source_manifest_path.is_file():
+        manifest_value = json.loads(source_manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(manifest_value, dict):
+            raise ValueError("source run manifest must be a JSON object")
+        source_manifest = manifest_value
+    checkpoint_hash_disposition = _validate_checkpoint_manifest_hash(ckpt_path, source_manifest)
     _ = ClampedStdMultiInputPolicy
     model: Any = _load_checkpoint(ckpt_path, legacy_layout_key=args.legacy_action_layout)
+    expected_stop_schema = build_stop_candidate_schema(cfg)
+    checkpoint_stop_schema = getattr(model, "stop_candidate_schema", None)
+    manifest_stop_schema = source_manifest.get("stop_candidate_schema")
+    stop_schema_disposition = _validate_stop_candidate_schema(
+        checkpoint_schema=checkpoint_stop_schema,
+        manifest_schema=manifest_stop_schema,
+        expected_schema=expected_stop_schema,
+        allow_legacy=bool(args.allow_legacy_stop_schema),
+    )
     from quant_rl.models.agent import validate_model_observation_schema
     from quant_rl.observation_schema import build_observation_schema
 
@@ -437,11 +515,15 @@ def main() -> None:
         ),
         "checkpoint": str(ckpt_path.resolve()),
         "checkpoint_sha256": _sha256(ckpt_path),
+        "checkpoint_manifest_hash_disposition": checkpoint_hash_disposition,
         "action_schema_version": getattr(model, "_action_schema_version", None),
         "action_layout_key": getattr(model, "_action_layout_key", None),
         "action_schema": getattr(model, "_action_schema", None),
         "legacy_action_schema_opt_in": bool(args.allow_legacy_action_schema),
         "legacy_observation_schema_opt_in": bool(args.allow_legacy_observation_schema),
+        "legacy_stop_schema_opt_in": bool(args.allow_legacy_stop_schema),
+        "stop_schema_disposition": stop_schema_disposition,
+        "stop_candidate_schema": checkpoint_stop_schema or manifest_stop_schema,
         "legacy_action_layout_selected": args.legacy_action_layout,
         "feature_cache_identity": feat_cache.name,
         "train_end": train_end,

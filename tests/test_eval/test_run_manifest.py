@@ -4,14 +4,20 @@ from __future__ import annotations
 
 import json
 import subprocess
+from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import pytest
+from gymnasium import Env, spaces
+from omegaconf import OmegaConf
+from stable_baselines3 import PPO
 
 from quant_rl.eval.run_manifest import (
     _source_state,
     array_sha256,
+    build_stop_candidate_schema,
     build_training_run_manifest,
     dataframe_sha256,
     file_sha256,
@@ -55,6 +61,10 @@ def test_manifest_records_config_dataset_checkpoint_and_split_hashes(tmp_path) -
             "observation_coordinates": [f"coordinate_{i}" for i in range(28)],
             "entry_state_visibility": False,
         },
+        stop_candidate_schema={
+            "schema_version": "rq1-stop-menu-v1",
+            "menu": "recent_confirmed_unswept_mtf_swings_v1",
+        },
         training_protocol={"seed": 7, "requested_steps": 100, "completed_steps": 100},
         feature_cache_path=cache,
         feature_cache_hash="cache-identity",
@@ -88,7 +98,8 @@ def test_manifest_records_config_dataset_checkpoint_and_split_hashes(tmp_path) -
     assert manifest["observation_schema"]["version"] == "account-state-v2"
     assert manifest["training_protocol"]["requested_steps"] == 100
     assert manifest["feature_cache"]["sha256"] == "cache-identity"
-    assert manifest["manifest_version"] == 3
+    assert manifest["manifest_version"] == 4
+    assert manifest["stop_candidate_schema"]["menu"] == "recent_confirmed_unswept_mtf_swings_v1"
     assert manifest["training_architecture"]["physical_worker_count"] == 1
     assert manifest["training_architecture"]["encoder_channels"] == 96
 
@@ -96,6 +107,69 @@ def test_manifest_records_config_dataset_checkpoint_and_split_hashes(tmp_path) -
     write_run_manifest(output, manifest)
     assert json.loads(output.read_text()) == manifest
     assert not output.with_suffix(".json.tmp").exists()
+
+
+def _expanded_stop_schema_config():
+    return OmegaConf.create(
+        {
+            "features": {
+                "include_pd_context": True,
+                "structure": {
+                    "enabled": True,
+                    "timeframes": ["M5", "M15", "H1"],
+                    "swing_candidate_count": 3,
+                    "candidate_price_increment": None,
+                },
+            },
+            "encoder": {"windows": {"m30": 8}},
+            "costs": {"point_size": 0.1},
+            "env": {"sl_buffer_pts": 1.0},
+            "risk": {"min_sl_points": 10.0, "min_sl_atr_mult": 0.5},
+            "strategy": {"manipulation_filter": "against"},
+        }
+    )
+
+
+def test_stop_candidate_schema_records_expanded_multitimeframe_contract() -> None:
+    cfg = _expanded_stop_schema_config()
+    schema = build_stop_candidate_schema(cfg)
+    assert schema["menu"] == "recent_confirmed_unswept_mtf_swings_v1"
+    assert schema["candidate_count_per_side_per_timeframe"] == 3
+    assert schema["timeframes"] == ["M5", "M15", "H1"]
+    assert schema["stop_menu_timeframes"] == ["M5", "M15", "H1", "M30"]
+    assert schema["deduplication"]["price_increment"] == 0.1
+    assert schema["feature_stop_sources"]["structure"]["swing_candidate_count"] == 3
+    assert schema["strategy_config"]["manipulation_filter"] == "against"
+
+
+class _SchemaRoundTripEnv(Env[npt.NDArray[np.float32], np.int64]):
+    observation_space = spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
+    action_space: spaces.Discrete[np.int64] = spaces.Discrete(2)
+
+    def reset(
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> tuple[npt.NDArray[np.float32], dict[str, Any]]:
+        del options
+        super().reset(seed=seed)
+        return np.zeros(2, dtype=np.float32), {}
+
+    def step(
+        self, action: np.int64
+    ) -> tuple[npt.NDArray[np.float32], float, bool, bool, dict[str, Any]]:
+        del action
+        return np.zeros(2, dtype=np.float32), 0.0, False, False, {}
+
+
+def test_stop_candidate_schema_survives_sb3_checkpoint_roundtrip(tmp_path) -> None:
+    schema = build_stop_candidate_schema(_expanded_stop_schema_config())
+    model = PPO(
+        "MlpPolicy", _SchemaRoundTripEnv(), n_steps=8, batch_size=4, n_epochs=1, device="cpu"
+    )
+    setattr(model, "stop_candidate_schema", schema)
+    path = tmp_path / "checkpoint"
+    model.save(path)
+    restored = PPO.load(path, device="cpu")
+    assert getattr(restored, "stop_candidate_schema") == schema
 
 
 def test_manifest_fails_closed_without_split_boundaries(tmp_path) -> None:

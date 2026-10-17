@@ -551,3 +551,25 @@ The immutable [`live resource sample`](live_resource_snapshot_2026-10-14_1755.js
 ### Corrected A0 backend parity evidence — 2026-10-14 21:03 Helsinki time
 
 The 2026-10-14 note reported an A0-only frames/shared-bundle audit with zero scalar delta over a 49,925-step test-calendar trace and 10,000 active-action steps, opening 46 trades in the active trace. Its cited report path `outputs/gpu_campaigns/readiness_reaudit_20261014/a0_current_parity/a0_frames_bundle_parity.json` is now absent from this checkout, so the recorded SHA-256 `6d40de0e4429ed2db0ce7016b0583d8362374f40a373834cea5df793c0921f86` cannot be rechecked here. Treat this old result as unverified until restored. The current recovery campaign retains narrower baseline and distribution checkpoint parity reports under `outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/`; they do not establish all-18-variant parity or final-checkpoint parity. No parity result establishes strategy performance or independent review.
+
+### Post-repair G1 evidence update — 2026-10-17
+
+The repair and bounded validation are now complete, superseding the older
+checklist statements that described them as pending. The configured NY-session
+feature fix uses cache identity `v22-causal-configured-ny-session`. The
+real-market fold-poison audit passed for four representative profiles on one
+early purged fold (41,920 training rows and 6,000 validation rows per profile):
+validation poisoning left training features unchanged and changed validation
+features. The separate feature-prefix audit passed all 12 sampled comparisons
+across those four profiles. The three named baseline/Idea 1/Idea 2 caches were
+rebuilt and recorded with parquet/sidecar hashes; prior cache files remain in
+the dated backup directory. Evidence: [fold-poison audit](g1_real_market_fold_fit_scope_post_repair_2026-10-17.json),
+[feature-prefix audit](g1_feature_prefix_post_repair_2026-10-17.json), and
+[cache-rebuild record](prebuilt_cache_rebuild_2026-10-17_mi210.json).
+
+These bounded checks do not establish exhaustive causality, broker calendar or
+DST validity, provider identity, or data-use/publication rights. The raw data
+audit still records those provenance limits, and the 18-variant campaign
+remains inadmissible for selection because it used the pre-repair feature
+lineage. A fresh admissible screen and independent reviewer disposition remain
+open; this update is evidence preparation, not independent sign-off.

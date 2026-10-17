@@ -5,8 +5,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 from scripts.matrix.summarize_campaign_results import (
     _pnl_reconciliation,
+    _write_summary_outputs,
     build_summary,
     render_markdown,
 )
@@ -205,3 +207,68 @@ def test_episode_coverage_exposes_unknown_and_invalid_rows(tmp_path: Path) -> No
     assert result["full_split_episode_count"] == 1
     assert result["completion_unknown_count"] == 1
     assert result["invalid_episode_rows"] == 2
+
+
+def _minimal_campaign(tmp_path: Path, seeds: list[int | None]) -> Path:
+    campaign_dir = tmp_path / "seed-summary"
+    _write_json(
+        campaign_dir / "campaign.json",
+        {
+            "jobs": [
+                {
+                    "key": f"variant_{index}",
+                    "seed": seed,
+                    "attempts": 1,
+                }
+                for index, seed in enumerate(seeds)
+            ]
+        },
+    )
+    _write_json(campaign_dir / "reports" / "campaign_status.json", {})
+    return campaign_dir
+
+
+def test_campaign_summary_reports_homogeneous_seed_50(tmp_path: Path) -> None:
+    summary = build_summary(_minimal_campaign(tmp_path, [50, 50]))
+    report = render_markdown(summary)
+
+    assert summary["schema_version"] == 2
+    assert summary["seed"] == 50
+    assert summary["seeds"] == [50]
+    assert summary["seed_metadata_complete"] is True
+    assert "seeds 50;" in report
+
+
+def test_campaign_summary_reports_mixed_seed_set_without_scalar_seed(tmp_path: Path) -> None:
+    summary = build_summary(_minimal_campaign(tmp_path, [42, 50, 42]))
+    report = render_markdown(summary)
+
+    assert summary["seed"] is None
+    assert summary["seeds"] == [42, 50]
+    assert summary["seed_metadata_complete"] is True
+    assert "seeds 42, 50;" in report
+
+
+def test_campaign_summary_marks_missing_seed_metadata_incomplete(tmp_path: Path) -> None:
+    summary = build_summary(_minimal_campaign(tmp_path, [50, None]))
+    report = render_markdown(summary)
+
+    assert summary["seed"] is None
+    assert summary["seeds"] == [50]
+    assert summary["seed_metadata_complete"] is False
+    assert "seeds 50 (incomplete metadata);" in report
+
+
+def test_campaign_summary_writer_preserves_existing_artifacts(tmp_path: Path) -> None:
+    stem = tmp_path / "reports" / "summary"
+    stem.parent.mkdir()
+    json_path = stem.with_suffix(".json")
+    markdown_path = stem.with_suffix(".md")
+    json_path.write_text("original-json", encoding="utf-8")
+    markdown_path.write_text("original-markdown", encoding="utf-8")
+
+    with pytest.raises(FileExistsError, match="refusing to overwrite"):
+        _write_summary_outputs({"schema_version": 2}, stem)
+
+    assert json_path.read_text(encoding="utf-8") == "original-json"
+    assert markdown_path.read_text(encoding="utf-8") == "original-markdown"

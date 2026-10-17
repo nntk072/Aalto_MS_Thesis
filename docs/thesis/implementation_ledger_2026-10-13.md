@@ -2908,3 +2908,27 @@ implementation and fixture-level evidence only. The active screen still uses
 latest-only stops; final P7 acceptance requires the selected matched pair to
 train and evaluate under the explicit three-candidate profile with independent
 review. It is not strategy-performance or readiness evidence.
+
+### RQ1 stop-menu schema provenance — 2026-10-17
+
+Source audit found that the multi-timeframe swing candidates and their config
+were covered by the feature-cache identity, but run manifests and SB3
+checkpoints did not explicitly record the stop-menu contract. Added the
+`rq1-stop-menu-v1` contract to training manifests and model checkpoints,
+including candidate count/timeframes, the feature blocks that create stop
+levels, complete strategy configuration, confirmation and expiry semantics,
+deduplication increment, stop buffer, minimum-distance rule, manipulation
+filter, and menu ordering. Resume now fails when the checkpoint contract is
+missing or differs from the current config. Historical reanalysis requires the
+explicit `--allow-legacy-stop-schema` flag when either checkpoint or source
+manifest predates this record; that opt-in does not claim use of the expanded
+menu. Reanalysis now also compares a selected checkpoint's SHA-256 with the
+source run manifest when one is recorded, and reports when legacy provenance
+does not provide that link. The schema records all effective stop-menu
+timeframes after configured encoder windows are merged; a custom-M30
+compatibility regression covers that path. The current dirty tree passed
+full-tree Ruff format/lint, full-tree Mypy (458 files), a MI210 ROCm matrix
+operation, and all 1,603 tests. The exact log is
+`outputs/gpu_ci_gates/q0_q7_current_tree_20261017_job21012389/current_tree_validation.log`.
+This closes bounded software verification only; no campaign checkpoint was
+replayed and no empirical result was produced.

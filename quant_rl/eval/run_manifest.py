@@ -14,6 +14,113 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from omegaconf import DictConfig, OmegaConf
+
+STOP_CANDIDATE_SCHEMA_VERSION = "rq1-stop-menu-v1"
+
+
+def build_stop_candidate_schema(cfg: DictConfig) -> dict[str, Any]:
+    """Describe the effective structural stop-candidate contract in a run.
+
+    This is stored both in the run manifest and the SB3 checkpoint. The feature
+    cache identity still carries the full feature configuration and data hash;
+    this compact record makes the stop-menu compatibility boundary explicit.
+    """
+    structure = OmegaConf.select(cfg, "features.structure", default={})
+    if not isinstance(structure, (DictConfig, dict)):
+        structure = {}
+    enabled = bool(structure.get("enabled", False))
+    count = int(structure.get("swing_candidate_count", 1)) if enabled else 1
+    if not 1 <= count <= 3:
+        raise ValueError("features.structure.swing_candidate_count must be between 1 and 3")
+    timeframes = structure.get(
+        "timeframes",
+        OmegaConf.select(cfg, "features.structure_timeframes", default=("M5", "M15", "H1")),
+    )
+    if isinstance(timeframes, str):
+        timeframes = (timeframes,)
+    if not timeframes:
+        timeframes = ("M5", "M15", "H1")
+    point_size = OmegaConf.select(cfg, "costs.point_size", default=None)
+    price_increment = structure.get("candidate_price_increment")
+    if price_increment is None:
+        price_increment = point_size
+    resolved_features_raw = OmegaConf.to_container(cfg.features, resolve=True)
+    resolved_features: dict[str, Any] = {}
+    if isinstance(resolved_features_raw, dict):
+        resolved_features = {str(key): value for key, value in resolved_features_raw.items()}
+    resolved_strategy = OmegaConf.to_container(cfg.strategy, resolve=True)
+    feature_source_keys = (
+        "structure",
+        "htf_timeframes",
+        "include_pd_context",
+        "include_po3",
+        "include_fvg_ifvg",
+        "fvg_timeframes",
+        "ifvg_mtf",
+        "include_po3_full",
+        "include_strategy_state",
+        "include_session_ohlc",
+        "po3_htf",
+        "po3_ltf",
+        "po3_reference_timeframes",
+    )
+    feature_stop_sources = {
+        key: resolved_features.get(key) for key in feature_source_keys if key in resolved_features
+    }
+    # Entry-level stop/target construction receives every configured HTF key
+    # (the environment starts with these defaults and then merges encoder
+    # windows). Record that effective menu so a custom timeframe cannot change
+    # stop candidates while appearing schema-compatible.
+    from quant_rl.envs.observation import DEFAULT_HTF_WINDOWS
+
+    stop_menu_timeframes = dict(DEFAULT_HTF_WINDOWS)
+    encoder_windows = OmegaConf.select(cfg, "encoder.windows", default={})
+    if encoder_windows:
+        for timeframe, window in dict(encoder_windows).items():
+            stop_menu_timeframes[str(timeframe)] = int(window)
+
+    return {
+        "schema_version": STOP_CANDIDATE_SCHEMA_VERSION,
+        "strategy_name": str(OmegaConf.select(cfg, "strategy.name", default="baseline")),
+        "menu": (
+            "recent_confirmed_unswept_mtf_swings_v1"
+            if count > 1
+            else "legacy_last_accepted_swing_v1"
+        ),
+        "enabled": enabled,
+        "candidate_count_per_side_per_timeframe": count,
+        "timeframes": [str(tf).upper() for tf in timeframes],
+        "stop_menu_timeframes": [str(tf).upper() for tf in stop_menu_timeframes],
+        "confirmation": "completed_source_bar_close",
+        "staleness": "drop_swept_or_after_count_newer_distinct_confirmations",
+        "candidate_families": [
+            "strategy_specific_ifvg_fvg",
+            "multi_htf_confirmed_swings",
+            "prior_day_week_levels",
+            "deviation_levels",
+        ],
+        "ifvg_candidate_sources": [
+            "ifvg_far_edge",
+            "ifvg_through_zone_extreme_when_observed",
+        ],
+        "feature_stop_sources": feature_stop_sources,
+        "strategy_config": resolved_strategy,
+        "deduplication": {
+            "rule": "newest_confirmed_price_level_per_side",
+            "price_increment": None if price_increment is None else float(price_increment),
+        },
+        "stop_buffer_points": float(OmegaConf.select(cfg, "env.sl_buffer_pts", default=0.0)),
+        "minimum_distance": {
+            "absolute_points": float(OmegaConf.select(cfg, "risk.min_sl_points", default=0.0)),
+            "atr_multiple": float(OmegaConf.select(cfg, "risk.min_sl_atr_mult", default=0.0)),
+        },
+        "manipulation_filter": str(
+            OmegaConf.select(cfg, "strategy.manipulation_filter", default="against")
+        ),
+        "menu_order": "ascending_distance_stable_source_insertion_ties",
+        "selection_rule": "policy_fraction_selects_candidate_by_distance_with_stable_ties",
+    }
 
 
 def file_sha256(path: Path) -> str:
@@ -146,6 +253,7 @@ def build_training_run_manifest(
     completed_steps: int,
     action_schema: dict[str, Any] | None,
     observation_schema: dict[str, Any] | None = None,
+    stop_candidate_schema: dict[str, Any] | None = None,
     feature_cache_path: Path | None,
     feature_cache_hash: str | None,
     checkpoint_path: Path | None,
@@ -196,8 +304,10 @@ def build_training_run_manifest(
             "run manifest requires checkpoint, training-log, and trade-log paths; "
             f"missing {sorted(missing_artifacts)}"
         )
+    if not stop_candidate_schema:
+        raise ValueError("run manifest requires an explicit stop-candidate schema")
     return {
-        "manifest_version": 3,
+        "manifest_version": 4,
         "repository": str(repository.resolve()),
         "source": _source_state(repository),
         "config": {
@@ -210,6 +320,7 @@ def build_training_run_manifest(
         "completed_steps": int(completed_steps),
         "action_schema": action_schema,
         "observation_schema": observation_schema,
+        "stop_candidate_schema": stop_candidate_schema,
         "training_architecture": dict(training_architecture or {}),
         "training_protocol": dict(training_protocol or {}),
         "feature_fit_scope": "train_mask_only",
