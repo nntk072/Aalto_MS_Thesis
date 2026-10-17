@@ -151,6 +151,7 @@ def feature_config_key(cfg: Any) -> str:
         "features": OmegaConf.to_container(cfg.features, resolve=True),
         "timezones": {
             "data.tz": str(cfg.data.tz),
+            "data.timestamp_clock": str(cfg.data.timestamp_clock),
             "session.tz": str(cfg.session.tz),
             "strategy.session.timezone": str(cfg.strategy.session.timezone),
         },
