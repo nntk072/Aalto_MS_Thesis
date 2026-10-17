@@ -7,7 +7,7 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-17 21:34 Helsinki):** the replacement source exports
+**Live checkpoint (2026-10-17 21:39 Helsinki):** the replacement source exports
 cover 2024-12-30 through 2026-10-16. The configured training split is
 2024-12-30–2025-12-31 inclusive; the test split begins 2026-01-01 and runs
 through the last available bar. Full-day bar caches were rebuilt for US100 and
@@ -57,8 +57,8 @@ was previously inspected; Jul 4–Oct 16 remains only a candidate fresh segment
 if exposure logging confirms it was not used for model or human selection and
 the protocol is frozen before evaluation.
 
-The current-tree GH200 gate passed: Ruff format (460 files), Ruff lint,
-full-tree Mypy (471 source files), and **1,731 tests** (82 warnings, 200.30s;
+The current-tree GH200 gate passed: Ruff format (463 files), Ruff lint,
+full-tree Mypy (473 source files), and **1,731 tests** (82 warnings, 200.30s;
 see [`full_ci_gate_final.log`](../outputs/data_refresh_20261017/full_ci_gate_final.log)).
 No new-data campaign or supervisor has launched; no new-data checkpoint exists.
 The historical 18-way campaign remains unusable for selection. P1 remains
@@ -66,13 +66,13 @@ blocked on the remaining provenance/terms, schedule-freeze, and admissibility
 gates; P2–P11 result, review, and manuscript work remains open. Readiness is
 **NOT READY**.
 
-Job `21020179` is still RUNNING on `gpuarm1` and `gpuarm2`, with one GH200,
-48 CPUs, and 512 GiB per node, six-hour limit (observed runtime 2:20:48 at this
-checkpoint). The full CI step completed in login tmux `thesis-gate-21020179`;
-the cache build and long fold audit are complete, and there is no campaign
-controller/trainer running. The allocation itself was started earlier outside
-the persistent login tmux; any future `srun` must originate in named login
-tmux per the updated rule. Do not cancel the current allocation.
+Job `21020179` is RUNNING on `gpuarm1` and `gpuarm2`, with one GH200, 48 CPUs,
+and 512 GiB per node, six-hour limit (runtime 2:24:58 at this checkpoint).
+The full CI step completed in login tmux `thesis-gate-21020179`, attached to the
+existing allocation shell; the cache build and long fold audit are complete.
+No campaign controller or trainer is running, and both GPUs report 0% use and
+0 MiB allocated VRAM. The shared checkout is clean at pushed HEAD
+`11aa4b8318309501249bea309525e9996cf5e149`. Do not cancel the allocation.
 
 **Historical checkpoint (2026-10-17 18:26 Helsinki; superseded by the live checkpoint above):**
 
@@ -3593,7 +3593,7 @@ history.
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | ACTIVE — canonical `main` remains the shared checkout and is dirty. GH200 audit allocation `21020179` is RUNNING on gpuarm1/gpuarm2, one GH200/48 CPUs/512 GiB per node. Current-tree full gate passed: Ruff format, Ruff lint, full-tree Mypy, and 1,731 tests (82 warnings). Three replacement feature caches and 100% tick coverage for the current resolver schedule are verified; the 12-step US100 schedule difference is under calendar review, not classified as missing data. No new-data campaign/supervisor is running. Do not cancel the allocation. | — | P1, P2, E0 |
+| P0 | Safe boundary/current snapshot | ACTIVE — canonical `main` is clean and pushed at `11aa4b8`. GH200 audit allocation `21020179` is RUNNING on gpuarm1/gpuarm2, one GH200/48 CPUs/512 GiB per node. Current-tree full gate passed: Ruff format (463 files), Ruff lint, full-tree Mypy (473 files), and 1,731 tests (82 warnings). Three replacement feature caches and 100% tick coverage for the current resolver schedule are verified; the 12-step US100 schedule difference remains unclassified pending broker calendar/export evidence. Both GPUs were idle at the latest sample. No new-data campaign/supervisor is running. Do not cancel the allocation. | — | P1, P2, E0 |
 | P1 | 18-way/full-split one-seed screen reconciliation | HISTORICAL SCREEN ACCOUNTING RECONCILED; BOUNDED REPLACEMENT INPUT/CAUSAL AUDITS PASS; NEW SCREEN NOT ADMITTED — the old 18-way run remains invalid for selection (lookahead in 17/18 configs; baseline failed its training survival gate). The `prev_ny_high_low` same-session future-poison regression now passes; 16/16 sampled prefix checks and 20/20 fold-local poison checks pass on replacement data, but do not constitute exhaustive causality certification. Replacement data spans 2024-12-30–2026-10-16; current resolver tick coverage is complete for its 99,492 US100 / 99,482 US500 train decisions and test schedules. The 12-step US100 difference from the old 99,504 contract is under calendar/schedule interpretation; Dec 2/4 are not standard NYSE Group cash-equity holiday or early-close dates, while the CFD provider and export semantics remain unknown. Before a new screen, freeze and verify its exact schedule, source/feed-use terms, broker calendar/timezone/DST, and test-exposure protocol. Keep the old contaminated screen unusable for selection. See [`replacement_data_20261017.md`](evidence/replacement_data_20261017.md) and [`p1_18_variant_screen_disposition_2026-10-16.md`](evidence/p1_18_variant_screen_disposition_2026-10-16.md). | P0 | P2, E0 |
 | P2 | Deterministic evaluator/schema repair | ACTIVE, PARTIALLY VERIFIED — evaluator schema forwarding, deterministic randomized-fill seeding, legacy observation recovery, cache/data provenance guards, and mixed-timezone equity timestamps are implemented and covered by the current full gate (1,731 tests). Historical engineering-only checks passed exact repeated train/test replay and frame/shared-bundle parity on one contaminated legacy checkpoint; the holdout was previously inspected and required explicit legacy-schema opt-ins. This verifies bounded mechanics only. Acceptance on an admissible, provenance-complete selected checkpoint remains open until P1 clears and a new screen produces one. See [`p2_engineering_reanalysis_a4b_seed50_2026-10-17.md`](evidence/p2_engineering_reanalysis_a4b_seed50_2026-10-17.md). | P0 | P1, E0 |
 | E0 | Evidence/result pipeline + indexes | ACTIVE — prior provenance/index/reconciliation tools remain available. Replacement M1/tick/cache, prefix-invariance, and fold-poison evidence is now machine-indexed under `evidence/replacement_data_20261017/`. There is no new-data checkpoint or canonical numerical strategy report; the old checkpoint remains inadmissible. Exact new campaign schedule, tick-tie precision policy, provider/use provenance, broker calendar/DST, deterministic full-split repeats, and final report package remain open. | P0 | P1, P2 |
