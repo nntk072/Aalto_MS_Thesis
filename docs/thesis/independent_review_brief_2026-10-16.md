@@ -20,7 +20,13 @@ MT5-style export format. The user identifies FTMO as the prop firm; FTMO's
 current [public terms](https://ftmo.com/en/terms-and-conditions/) state its
 platform/data feed is powered by liquidity providers, but do not identify the
 underlying feed for this account or establish data-use/publication rights for
-these files. See the
+these files. The user has explicitly authorized these FTMO Demo exports for
+internal model training and considers them adequate for that purpose; the
+underlying liquidity providers are unknown, and no account-specific export or
+publication record is available. Record this as user-attested training use,
+not as independently verified source or publication permission. These gaps are
+disclosure and public-artifact questions, not a withdrawal of training
+authorization. See the
 [replacement-data report](evidence/replacement_data_20261017.md), including the
 successful full-period data and 18-variant feature-cache rerun; the user report
 and remaining provenance gaps are machine-recorded in
@@ -64,11 +70,14 @@ The P4 validity gate remains open.
    legacy-schema opt-ins were used. Review the checkpoint, split, and backend
    scope in each report; this evidence does not close acceptance on a clean,
    admissible completed checkpoint or all schema/compatibility requirements.
-3. **Data provenance limitation.** The feed/export provider and data-use terms
-   are not documented in the available project records. The data hashes and
-   integrity checks establish file identity and observed properties, not
-   source or publication rights. This limitation needs an explicit disposition
-   before the data are used in a public thesis artifact.
+3. **Data provenance limitation.** The user identifies the source as FTMO Demo,
+   authorizes internal model training, and reports the underlying liquidity
+   providers are unknown. No account-specific export or publication terms are
+   documented in the available project records. The data hashes and integrity
+   checks establish file identity and observed properties, not independent
+   source identity or publication rights. Assess what can be reported publicly
+   and whether raw-data redistribution must be excluded; do not treat the
+   missing provider record as absence of the user's training authorization.
 4. **RQ1 design boundary.** The current 18-variant configs do not provide a
    ready-made matched control/treatment pair. P5 must freeze one after valid
    single-seed findings, aligning reward, observation/action semantics, risk,
@@ -85,8 +94,10 @@ The P4 validity gate remains open.
   limited to the checkpoints, data splits, and fields actually compared?
 - Is the proposed matched RQ1 contrast sufficient for the central thesis
   claim, given the current config differences and exposed 2026 interval?
-- What data-provenance evidence is required for public reporting, and what
-  should be excluded if the provider or terms cannot be recovered?
+- Given user-attested training authorization but unknown liquidity providers
+  and no account-specific export/publication terms, what data-provenance
+  disclosure is required for public reporting, and should raw source data be
+  excluded from the submission package?
 - Which result claims should be rejected, narrowed, or labelled exploratory,
   incomplete, negative, or inconclusive?
 
@@ -94,10 +105,12 @@ The P4 validity gate remains open.
 
 Do not sign off the final selected pair, final RQ1 effect, G1/P1 closure, or
 P7 robustness results from the current campaign. Remaining gates include
-independent review of the bounded post-repair evidence, market-feed/provider
-and data-use provenance, broker timezone/DST and authoritative session-calendar
-validation, quote-aging/impact validity, broader causal/cache checks, a valid
-fresh screen, frozen matched design/runtime, and final paired-seed evidence.
+independent review of the bounded post-repair evidence, broker timezone/DST and
+authoritative session-calendar validation, quote-aging/impact validity,
+broader causal/cache checks, a valid fresh screen, frozen matched design/runtime,
+and final paired-seed evidence. The user-authorized training-use statement is
+recorded; unknown provider identity and unverified publication terms remain
+limitations for disclosure and packaging.
 The versioned cache rebuild is recorded in
 [`prebuilt_cache_rebuild_2026-10-17_mi210.json`](prebuilt_cache_rebuild_2026-10-17_mi210.json).
 The old 100k campaign's underlying reports and per-run artifacts are absent
