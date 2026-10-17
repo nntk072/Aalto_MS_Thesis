@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -56,6 +57,17 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def resolve_report_path(report_path: Path, root: Path = ROOT) -> tuple[Path, Path]:
+    """Resolve a report path and require it to stay inside the repository."""
+    root = root.resolve()
+    resolved = (report_path if report_path.is_absolute() else root / report_path).resolve()
+    try:
+        relative = resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"report must be under repository root: {resolved}") from exc
+    return resolved, relative
+
+
 def config_for_variant(name: str) -> tuple[DictConfig, dict[str, Any]]:
     resolved = resolve_variant(name)
     cfg: DictConfig = load_config(config_path=ROOT / str(resolved["base_config"]))
@@ -73,7 +85,12 @@ def profile_key(cfg: DictConfig) -> str:
         "features": OmegaConf.to_container(cfg.features, resolve=True),
         "timezones": {
             key: str(OmegaConf.select(cfg, key))
-            for key in ("data.tz", "session.tz", "strategy.session.timezone")
+            for key in (
+                "data.tz",
+                "data.timestamp_clock",
+                "session.tz",
+                "strategy.session.timezone",
+            )
         },
     }
     return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()
@@ -86,9 +103,10 @@ def digest_frame(frame: pd.DataFrame) -> str:
     return digest.hexdigest()
 
 
-def main() -> None:
-    if OUT.exists():
-        raise FileExistsError(f"refusing to overwrite {OUT}")
+def main(report_path: Path = OUT) -> None:
+    report_path, report_relative_path = resolve_report_path(report_path)
+    if report_path.exists():
+        raise FileExistsError(f"refusing to overwrite {report_path}")
     variants = [
         line.strip()
         for line in VARIANT_FILE.read_text(encoding="utf-8").splitlines()
@@ -253,6 +271,7 @@ def main() -> None:
             },
         },
         "feature_cache_version": FEATURE_CACHE_VERSION,
+        "report_path": str(report_relative_path),
         "variants": variants,
         "profile_count": len(groups),
         "profiles": [
@@ -282,14 +301,22 @@ def main() -> None:
             "Does not prove every feature or execution path causal, validate calendar/DST, establish data rights, or provide strategy-performance evidence.",
         ],
     }
-    OUT.write_text(
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(
         json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8"
     )
     print(
-        f"AUDIT COMPLETE: {sum(bool(row['passed']) for row in results)}/{len(results)}; report={OUT}",
+        f"AUDIT COMPLETE: {sum(bool(row['passed']) for row in results)}/{len(results)}; report={report_path}",
         flush=True,
     )
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--report",
+        type=Path,
+        default=OUT,
+        help="new JSON report path (defaults to the historical report path; never overwritten)",
+    )
+    main(parser.parse_args().report)

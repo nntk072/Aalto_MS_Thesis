@@ -7,7 +7,7 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-18 01:15 Helsinki):** work is on the sole checkout,
+**Live checkpoint (2026-10-18 01:19 Helsinki):** work is on the sole checkout,
 `/scratch/work/nguyenl37/Aalto_MS_Thesis`, branch `main`; local `main` is ahead
 of `origin/main` (no push performed). Preserve the two untracked data
 rebuild scripts; the comparator report is committed. No alternate checkout or
@@ -94,7 +94,12 @@ transactionally preserved prior files are recorded in
 The baseline profile's Parquet bytes were unchanged because it does not consume
 the corrected CT session features; the other three profile files changed. This
 closes the cache-rebuild/rebinding task, not the remaining P1 validity/audit
-gates. Tick caches contain 135,043,551 US100 and 37,246,832
+gates. The available replacement fold-fit report is still v22 and cannot
+validate v23. A v23 fold-fit audit rerun failed before audit start because of
+a malformed shell invocation; no retry was submitted in the same allocation.
+The launcher now accepts an explicit `--report` path and has focused path and
+clock-profile regression tests. The incident details are recorded in
+[`live_status_2026-10-18_0119.md`](live_status_2026-10-18_0119.md). Tick caches contain 135,043,551 US100 and 37,246,832
 US500 rows; differing-quote millisecond ties remain, with sub-millisecond
 chronology unknowable.
 

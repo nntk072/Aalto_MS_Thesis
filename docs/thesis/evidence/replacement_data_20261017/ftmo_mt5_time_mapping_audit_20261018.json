@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "source_clock_correction_implemented_cache_rebuild_pending",
+  "status": "source_clock_correction_and_v23_cache_rebuild_passed_fold_audit_stale",
   "reviewed_at": "2026-10-18",
   "subject": {
     "symbols": ["US100.cash", "US500.cash"],
@@ -65,13 +65,33 @@
     "ruff_format_check": "passed",
     "ruff_check": "passed",
     "mypy": "passed; 482 source files",
-    "pytest": "passed; 58 tests across session, build pipeline, variants, and causal features"
+    "pytest": "passed; 58 tests across session, build pipeline, variants, and causal features",
+    "named_feature_cache_rebuild": {
+      "status": "passed",
+      "slurm_job_id": "21020179",
+      "slurm_step_id": "21020179.21",
+      "step_exit_code": "0:0",
+      "report": "named_feature_cache_rebuild_18variant_20261018_job21020179_clockfix.json",
+      "profiles": 4,
+      "variant_bindings": 18,
+      "rows_per_profile": 630787
+    }
   },
   "remaining": [
-    "Rebuild all four named feature profiles under cache version v23 and verify all 18 variant bindings before any screen or training run.",
+    "Rerun the fold-fit and real-market prefix-causality audits against v23; the currently committed fold-fit report is from v22 and does not clear this gate.",
     "Reconcile raw report timestamps and any other code paths that interpret the fixed-offset carrier as absolute time.",
     "Retain the exploratory/report-only status of the continuous 2026 test interval.",
     "Keep feed-provider identity, account-specific export rights, and publication permissions as separate unresolved provenance items."
   ],
-  "training_disposition": "The user authorizes training use. No training was launched; this code correction does not itself admit a campaign because the versioned feature caches and remaining P1/P2 gates are not yet validated."
+  "audit_attempt": {
+    "report": "replacement_fold_fit_v23_ftmo_clockfix_job21020179.json",
+    "slurm_step_id": "21020179.22",
+    "state": "failed_before_audit_start",
+    "exit_code": "1:0",
+    "elapsed": "00:00:00",
+    "cause": "Malformed nested Python command quoting passed literal backslashes; Python raised SyntaxError before reading inputs.",
+    "log": "../../../../outputs/data_refresh_20261018/replacement_fold_fit_v23_ftmo_clockfix_job21020179.log",
+    "disposition": "Preserve the failed step and log; do not retry in the same allocation."
+  },
+  "training_disposition": "The user authorizes training use. The v23 cache rebuild passed, but the current fold-fit report is from v22 and the real-market prefix report has not been refreshed against v23. No training was launched; these and other P1/P2 gates remain open."
 }
