@@ -28,6 +28,10 @@ record:
 `docs/thesis/evidence/p1_train_replay_tick_gap_20261017_job21019651.json`;
 logs:
 `outputs/thesis_engineering_reanalysis/job21019651/retry1/worker{0,1}.log`.
+The nested worker step's nonzero exit also terminated its interactive parent
+shell because the sourced venv activation enables Bash `errexit`. The Triton
+rule now requires capturing child-step status and preserving the parent shell
+when the allocation should remain available for diagnosis/follow-up.
 
 Job `21019757` then passed current-tree frame/shared-bundle parity for the
 177,210-bar historical test split, with every compared output field and both

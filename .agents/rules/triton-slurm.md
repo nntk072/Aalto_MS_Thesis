@@ -93,6 +93,15 @@ explicitly authorizes cancellation. Never attempt to evade the monitor by
 keeping a short command alive artificially; use a genuine persistent task or
 run the command inside an existing shell.
 
+When an interactive GPU shell sources `scripts/triton/activate_venv.sh`, note
+that the helper enables Bash `errexit`. A nonzero nested `srun --overlap` can
+therefore terminate the interactive shell and release its parent allocation.
+For a long worker step whose failure should leave the allocation available for
+diagnosis or follow-up, capture the step status with an `if ...; then ...;
+else status=$?; ...; fi` branch, preserve the exact failure in its log, and
+return to the allocation shell. Do not hide the worker error or retry it
+automatically; inspect the trace and step topology first.
+
 ### Default workflow (no new job)
 
 1. `bash scripts/triton/status.sh` (or `find_gpu_session.sh`) on login and
