@@ -9,7 +9,7 @@
 
 **Live checkpoint (2026-10-18 00:52 Helsinki):** work is on the sole checkout,
 `/scratch/work/nguyenl37/Aalto_MS_Thesis`, branch `main`; local `main` is ahead
-of `origin/main` by four commits (no push performed). Preserve the two untracked data
+of `origin/main` (no push performed). Preserve the two untracked data
 rebuild scripts; the comparator report is committed. No alternate checkout or
 worktree was used. The model-provenance guard now requires complete named action/observation
 schemas in every new training manifest; its focused manifest and comparator
