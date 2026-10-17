@@ -1,5 +1,33 @@
 # Implementation continuation ledger — 2026-10-13
 
+## Replacement cache mapping and calendar clarification — 2026-10-17 23:40 Helsinki
+
+The full replacement inputs span 2024-12-30 through 2026-10-16. The configured
+split trains through 2025-12-31 and uses 2026-01-01 through 2026-10-16 for
+report-only testing, including July–October. Rebuilt four full-period feature
+profiles and mapped every one of the 18 campaign variants: baseline (1),
+baseline with strategy actions (5), PO3/IFVG (6), and distribution (6). The
+three user-requested named caches remain available; the supplemental baseline
+strategy-action cache prevents five variants from rebuilding features at
+runtime. Full-tree Ruff format/lint, Mypy, cache-plan validation, and **1,738
+tests** passed on the existing GH200 allocation. The transaction completed in
+7:31 and preserved prior caches. See
+[`18-variant cache rebuild report`](evidence/replacement_data_20261017/named_feature_cache_rebuild_18variant_20261017_job21020179.json),
+[`replacement-data evidence note`](evidence/replacement_data_20261017.md), and
+the [master plan](master_project_execution_plan.md).
+
+The 2025-12-02 and 2025-12-04 NY-labeled sessions have 382/388 US100 rows
+(versus the common 391); the observed unrepresented minute labels are listed
+in the replacement schedule-shape report. Nasdaq's official 2025 calendar does
+not schedule either date as an early close. This rules out a scheduled Nasdaq
+cash-market early close as the explanation ([Nasdaq 2025 calendar](https://www.nasdaq.com/docs/2025/01/06/2025holidayandtradinghours.pdf)),
+but does not identify the CFD provider's hours or export behavior. Keep these observations unclassified;
+do not label them as expected missing bars, a provider outage, or a holiday,
+and do not impute prices. The source/provider and applicable use terms remain
+undocumented. The July–October tail remains a candidate segment, not proven
+untouched or confirmatory. P1 remains **NOT READY**; no new-data campaign or
+checkpoint has launched.
+
 ## P1 repository-level candidate-tail exposure inventory — 2026-10-17 21:55 Helsinki
 
 The pre-intake US100 and US500 M1 parquet caches both end at 2026-07-03
