@@ -7,9 +7,9 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-17 23:36 Helsinki):** work is on the sole checkout,
-`/scratch/work/nguyenl37/Aalto_MS_Thesis`, branch `main`, at pushed commit
-`3a6ca47`; the working tree is clean. The schedule-freeze gate passed Ruff
+**Live checkpoint (2026-10-17 23:50 Helsinki):** work is on the sole checkout,
+`/scratch/work/nguyenl37/Aalto_MS_Thesis`, branch `main`; all prior changes are
+pushed. The schedule-freeze gate passed Ruff
 format (465 files), Ruff lint, full-tree Mypy (478 source files), and
 **1,736 tests** (82 warnings; 160.59 seconds). The
 durable gate summary is
@@ -2643,24 +2643,29 @@ risk/management settings constant, then compare `enforce_gate=false` (control)
 with `true` (treatment). The policy can propose either side in both arms; the
 treatment's `validate_entry` requires that side to match the current confirmed
 PO3/IFVG context, while the control leaves that final check open. The existing
-manipulation-side lock remains common to both arms. This appears to create a
-behavioral contrast while changing only the eligibility gate, but it is still a
-P5 candidate: a resolved-config diff and end-to-end action trace must confirm
-the contrast, and both arms must retain `entry_state_machine=false`.
+manipulation-side lock remains common to both arms. The fixture test provides
+an end-to-end `TradingEnv.step` trace: the shared six-coordinate control
+accepts an opposite-side proposal, while treatment rejects it with
+`entry_gate`. A production-merge config preflight confirms that the effective
+arm configs differ only at `strategy.entry.enforce_gate`, with the same `6_dir`
+schema, Idea 1 cache, 2024-12-30–2026-10-16 raw M1/tick files,
+2025-12-31/2026-01-01 split, and seeded `[0,30 ms)` tick execution. The report
+is [`rq1_gate_candidate_config_preflight_20261017.json`](evidence/rq1_gate_candidate_config_preflight_20261017.json).
+This still leaves the pair provisional: P4 must pass; a real-data action
+trace, seed/budget freeze, and RQ1 run identity do not exist.
 
-Regression tests for the no-op five-coordinate case and the six-coordinate
-control/treatment contrast passed on the GH200 node as part of the full-tree
-gate (1,738 tests passed). The fixture-level action trace confirms that the
-six-coordinate control accepts an opposite-side proposal while the gated
-treatment rejects it as `entry_gate`; it does not yet establish a resolved
-campaign-config diff or a representative real-data action trace. Before
-freezing the pair, P4 must pass and the resolved configs/source must confirm
-that `validate_entry` is the only path changed by the gate and that reward,
-observations, action schema, strategy mode, stop/target menus, costs,
+Regression tests for the no-op five-coordinate case and six-coordinate
+control/treatment contrast passed on the GH200 node; the full tree passed
+1,738 tests. The preflight proves the resolved-config difference and the
+fixture trace proves the action-space effect, but neither is a real-data policy
+result. Before freezing the pair, P4 must pass and the configs/source must also
+confirm that `validate_entry` is the only path changed by the gate and that
+reward, observations, action schema, strategy mode, stop/target menus, costs,
 data/splits, seed, update budget, checkpoint rule, and evaluation are matched.
-If the action trace does not show the intended eligibility difference,
-discard this candidate. No RQ1 run identity or treatment is frozen by this
-note.
+If a representative action trace does not show the intended eligibility
+difference, discard this candidate. No RQ1 run identity or treatment is
+frozen by this note. The passing GH200 gate log is
+[`rq1_candidate_preflight_gate_20261017_job21020179_retry1.log`](../../outputs/data_refresh_20261017/rq1_candidate_preflight_gate_20261017_job21020179_retry1.log).
 
 ### 13.2 RQ3 mechanism evidence
 
@@ -3663,7 +3668,7 @@ history.
 | E0 | Evidence/result pipeline + indexes | ACTIVE — prior provenance/index/reconciliation tools remain available. Replacement M1/tick/cache, prefix-invariance, fold-poison, fresh raw-tick coverage, exact observed decision-schedule fingerprint, cache-wide tie-policy, and 18-variant cache mapping evidence are machine-readable under `evidence/replacement_data_20261017/`. There is no new-data checkpoint or canonical numerical strategy report; the old checkpoint remains inadmissible. Provider/use provenance, broker calendar/DST, true sub-millisecond ordering, external holdout exposure, deterministic full-split repeats, and final report package remain open. | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED — report contract covers annualization, equity endpoints, exposure, raw fills/positions/breaches, split completion, and source/runtime provenance. Current verifier/software tests pass, but no admissible completed-checkpoint report has been generated. | P1 + P2 | per-checkpoint eval/package |
 | P4 | G0–G3 validity/reproducibility | BLOCKED | P3 | Expanded M5/M15/H1 swing and mirrored long/short IFVG stop regressions passed in GH200 job `21019594` and the 1,729-test suite; this closes that source/test slice only. Reviewer preparation includes bounded related-work/threat notes and the refreshed independent-review brief/checklist. No independent reviewer has signed off; market-data/use provenance, broker calendar/DST, tick validity, broader causal coverage, final run identity, and the P3 evidence package remain open |
-| P5 | Freeze matched design/baselines | BLOCKED on P4; the default five-coordinate enforce-gate contrast was found behaviorally redundant and rejected; a shared six-coordinate direction-control pair is documented as an unverified candidate in §13.1 | P4 | P6 prep, review |
+| P5 | Freeze matched design/baselines | BLOCKED on P4; the default five-coordinate enforce-gate contrast is behaviorally redundant and rejected. A provisional shared six-coordinate direction-control candidate has a production-merge config diff showing only `strategy.entry.enforce_gate` changes and a passing fixture action trace; a real-data trace, P4 acceptance, and final seed/budget/runtime freeze remain open. See §13.1 and [`rq1_gate_candidate_config_preflight_20261017.json`](evidence/rq1_gate_candidate_config_preflight_20261017.json). | P4 | P6 prep, review |
 | P6 | Production runtime/resource freeze | PREP-ONLY | P4/screen-safe | paired-launch prep |
 | P7 | Final selected-pair >=5-seed robustness + cost stress | BLOCKED | all single-seed findings + P5 + P6 | eval/package terminal seeds |
 | S0 | Statistics + final figures | PREP-ONLY | schema can be built early; final values need P7 | finished-seed analysis |

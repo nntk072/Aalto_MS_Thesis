@@ -1,5 +1,27 @@
 # Implementation continuation ledger — 2026-10-13
 
+## Provisional RQ1 config preflight — 2026-10-17 23:50 Helsinki
+
+Added a preflight that resolves the proposed Idea 1 control/treatment through
+the production `train_rl` config-merging path. The effective config diff is
+exactly `strategy.entry.enforce_gate`; both arms share the six-coordinate
+`6_dir` action schema, Idea 1 prebuilt cache, full 2024-12-30–2026-10-16 M1
+and tick inputs, training through 2025-12-31, report-only testing from
+2026-01-01, and randomized tick latency `[0,30 ms)`. The fixture-level
+`TradingEnv.step` contrast test passed in the full suite: control accepts an
+opposite-side proposal; treatment rejects it as `entry_gate`.
+
+On existing GH200 job `21020179`, step `.17` passed the config audit,
+full-tree Ruff format/lint, full-tree Mypy, and **1,738 tests**. The durable
+config result is
+[`rq1_gate_candidate_config_preflight_20261017.json`](evidence/rq1_gate_candidate_config_preflight_20261017.json);
+the gate log is
+[`rq1_candidate_preflight_gate_20261017_job21020179_retry1.log`](../../outputs/data_refresh_20261017/rq1_candidate_preflight_gate_20261017_job21020179_retry1.log).
+The first attempt `.16` is preserved; formatting and Mypy issues in the new
+audit script were fixed before `.17`. This is preflight evidence only: P4,
+real-data action trace, independent review, and final seed/budget/runtime are
+open. No pair is frozen and no training or evaluation was launched.
+
 ## Replacement cache mapping and calendar clarification — 2026-10-17 23:40 Helsinki
 
 The full replacement inputs span 2024-12-30 through 2026-10-16. The configured
