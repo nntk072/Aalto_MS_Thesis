@@ -2478,6 +2478,24 @@ separate existing artifact. The P10 source/draft prerequisite remains
 unresolved until the author supplies or identifies the manuscript, or the P9
 evidence package is ready for new authoring.
 
+**Submission-format and AI-use checks — 2026-10-17:** Aalto's current general
+instructions require the final thesis to be one PDF/A submitted through
+MyStudies, with the required thesis/template structure, cover page, abstract,
+and table of contents; the PDF/A must be validated and under 100 MB. The student must
+also verify the programme-specific thesis presentation, metadata, enrolment,
+and submission schedule. See the official [PDF/A submission instructions](https://www.aalto.fi/en/news/submitting-theses-for-grading-as-pdfa-files)
+and [master's thesis instructions](https://www.aalto.fi/en/programmes/thesis-39).
+
+Aalto's 10 October 2026 AI-in-thesis guidance is phased: it applies from
+19 October 2026 to master's theses whose topic approval is applied for on or
+after that date, and its universal disclosure requirement applies to theses
+submitted on or after 1 August 2027. This thesis's topic-approval date and any
+earlier supervisor agreement are not in the repository. Before P10, the author
+must confirm the applicable rule and agreed AI-use documentation/disclosure
+with the supervisor, then prepare an accurate statement and record. Do not
+assume either that the new rule applies to this November 2026 submission or
+that it does not; see Aalto's [AI guidance for thesis work](https://www.aalto.fi/en/services/guidance-for-the-use-of-ai-in-thesis-work-at-the-bachelors-and-masters-level).
+
 If a non-core experiment is still running, do not hold the PDF for it. Record it
 as future/ongoing work unless the supervisor explicitly requests inclusion.
 
