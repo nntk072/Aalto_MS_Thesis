@@ -28,6 +28,78 @@ from quant_rl.eval.run_manifest import (
     write_run_manifest,
 )
 
+_ACTION_SCHEMA = {
+    "version": "action-v1",
+    "key": "test",
+    "width": 2,
+    "coordinates": ["entry", "exit"],
+    "has_direction": False,
+    "has_sl_mode": False,
+    "has_tp_mode": False,
+    "has_multi_tp": False,
+    "has_simplex": False,
+}
+_OBSERVATION_SCHEMA = {
+    "version": "observation-v1",
+    "observation_width": 2,
+    "observation_coordinates": ["equity", "position"],
+    "entry_state_visibility": False,
+}
+
+
+@pytest.mark.parametrize(
+    ("action_schema", "observation_schema", "message"),
+    [
+        (None, _OBSERVATION_SCHEMA, "explicit action schema"),
+        ({**_ACTION_SCHEMA, "width": 3}, _OBSERVATION_SCHEMA, "action schema requires unique"),
+        (
+            {key: value for key, value in _ACTION_SCHEMA.items() if key != "has_direction"},
+            _OBSERVATION_SCHEMA,
+            "requires explicit action flags",
+        ),
+        (_ACTION_SCHEMA, None, "explicit observation schema"),
+        (
+            _ACTION_SCHEMA,
+            {**_OBSERVATION_SCHEMA, "observation_width": 3},
+            "observation schema requires unique",
+        ),
+        (
+            _ACTION_SCHEMA,
+            {
+                key: value
+                for key, value in _OBSERVATION_SCHEMA.items()
+                if key != "entry_state_visibility"
+            },
+            "requires entry_state_visibility",
+        ),
+    ],
+)
+def test_manifest_requires_complete_action_and_observation_schemas(
+    tmp_path: Path,
+    action_schema: dict[str, Any] | None,
+    observation_schema: dict[str, Any] | None,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        build_training_run_manifest(
+            repository=tmp_path,
+            config_path=tmp_path / "config.yaml",
+            datasets={},
+            split={},
+            seed=1,
+            completed_steps=1,
+            action_schema=action_schema,
+            observation_schema=observation_schema,
+            sequence_feature_schema=None,
+            stop_candidate_schema=None,
+            feature_cache_path=None,
+            feature_cache_hash=None,
+            checkpoint_path=None,
+            execution_protocol={},
+            metrics_protocol={},
+            artifact_paths={},
+        )
+
 
 def test_evaluation_provenance_records_source_and_runtime(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -82,7 +154,17 @@ def test_manifest_records_config_dataset_checkpoint_and_split_hashes(tmp_path) -
         split={"train_end": "2024-01-01", "test_start": "2024-01-02"},
         seed=7,
         completed_steps=100,
-        action_schema={"version": 1, "key": "6_dir"},
+        action_schema={
+            "version": "overlay-action-v2",
+            "key": "6_dir",
+            "width": 6,
+            "coordinates": ["direction", "intensity", "stop", "risk", "target", "exit"],
+            "has_direction": True,
+            "has_sl_mode": False,
+            "has_tp_mode": False,
+            "has_multi_tp": False,
+            "has_simplex": False,
+        },
         observation_schema={
             "version": "account-state-v2",
             "observation_width": 28,
@@ -240,7 +322,8 @@ def test_manifest_fails_closed_without_split_boundaries(tmp_path) -> None:
             split={"train_end": "2024-01-01"},
             seed=1,
             completed_steps=1,
-            action_schema=None,
+            action_schema=_ACTION_SCHEMA,
+            observation_schema=_OBSERVATION_SCHEMA,
             feature_cache_path=None,
             feature_cache_hash=None,
             checkpoint_path=None,
@@ -261,7 +344,8 @@ def test_manifest_requires_exact_train_test_data_and_saved_artifacts(tmp_path) -
             split={"train_end": "2024-01-01", "test_start": "2024-01-02"},
             seed=1,
             completed_steps=1,
-            action_schema=None,
+            action_schema=_ACTION_SCHEMA,
+            observation_schema=_OBSERVATION_SCHEMA,
             feature_cache_path=None,
             feature_cache_hash=None,
             checkpoint_path=None,
@@ -288,7 +372,8 @@ def test_manifest_requires_an_existing_checkpoint(tmp_path) -> None:
             split={"train_end": "2024-01-01", "test_start": "2024-01-02"},
             seed=1,
             completed_steps=1,
-            action_schema=None,
+            action_schema=_ACTION_SCHEMA,
+            observation_schema=_OBSERVATION_SCHEMA,
             feature_cache_path=cache,
             feature_cache_hash="hash",
             checkpoint_path=None,

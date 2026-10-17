@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "incomplete",
+  "status": "training_use_user_attested_only_provenance_and_publication_unverified",
   "recorded_at": "2026-10-18T00:11:13+03:00",
   "subject": {
     "symbols": ["US100.cash", "US500.cash"],
@@ -11,9 +11,14 @@
     "csv_export_format_observation": "MT5-style date/time and OHLC or bid/ask headers; this format observation does not identify the data vendor or liquidity provider."
   },
   "user_reported_context": {
-    "reported_value": "FTMO prop firm",
+    "reported_value": "FTMO Demo server; the account's underlying liquidity providers are unknown.",
     "reported_at": "2026-10-18",
-    "scope": "Firm context for the supplied data; not an account-specific export record or license document."
+    "scope": "User-reported platform/server context, not an independently verified feed or license record."
+  },
+  "user_training_use_statement": {
+    "reported_value": "The user considers the data good enough for training purposes and says there is no problem using it; the model is the focus.",
+    "reported_at": "2026-10-18",
+    "scope": "User authorization and adequacy judgment for model-training use. This does not independently verify feed identity, historical export terms, data quality, or thesis/publication rights."
   },
   "user_followup": {
     "question": "Whether the FTMO account/platform server or broker/feed identity and export/data-use/publication record are available.",
@@ -34,8 +39,8 @@
     "The specific liquidity provider or providers for these historical US100.cash and US500.cash exports; the user reports no account-specific identity is available.",
     "The account-specific platform and export path for these exact files.",
     "The applicable version of the FTMO account agreement or data terms during the source period.",
-    "Permission to retain, analyze, reproduce, or publish the source market data in a thesis or its appendices; no export/data-use/publication record was provided.",
+    "Account-specific rights to publish the raw source data, reproduce it in appendices, or publish thesis results derived from it; no applicable export/data-use/publication terms were provided.",
     "The authoritative server timezone, DST behavior, market-hours calendar, and CFD schedule."
   ],
-  "disposition": "The user's FTMO identification is retained as a self-reported firm context. It is not treated as proof of the underlying market-data feed or publication rights. P1 remains NOT READY; do not launch a replacement-data training campaign on this record alone."
+  "disposition": "The user identifies the source as the FTMO Demo server and authorizes model-training use, considering the data adequate for that purpose. The underlying liquidity provider, exact historical export terms, broker calendar/timezone/DST, and rights to publish raw data or thesis results remain unverified. Treat training use as user-authorized, retain these as methodological/disclosure limitations, and do not describe feed identity or publication rights as independently established."
 }

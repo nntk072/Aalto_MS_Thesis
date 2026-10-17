@@ -308,6 +308,31 @@ def build_training_run_manifest(
     training_protocol: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a source/data/config/checkpoint/runtime manifest for one trial."""
+    action_schema = _validate_named_schema(
+        action_schema,
+        label="action",
+        coordinate_key="coordinates",
+        width_key="width",
+        identity_key="key",
+    )
+    action_flags = (
+        "has_direction",
+        "has_sl_mode",
+        "has_tp_mode",
+        "has_multi_tp",
+        "has_simplex",
+    )
+    if any(type(action_schema.get(flag)) is not bool for flag in action_flags):
+        raise ValueError("run manifest action schema requires explicit action flags")
+    observation_schema = _validate_named_schema(
+        observation_schema,
+        label="observation",
+        coordinate_key="observation_coordinates",
+        width_key="observation_width",
+    )
+    if type(observation_schema.get("entry_state_visibility")) is not bool:
+        raise ValueError("run manifest observation schema requires entry_state_visibility")
+
     resolved_dataset_records = dict(dataset_records or {})
     for name, frame in sorted(datasets.items()):
         resolved_dataset_records[name] = dataset_record(frame)
@@ -394,6 +419,39 @@ def build_training_run_manifest(
         },
         "artifact_paths": dict(artifact_paths),
     }
+
+
+def _validate_named_schema(
+    schema: dict[str, Any] | None,
+    *,
+    label: str,
+    coordinate_key: str,
+    width_key: str,
+    identity_key: str | None = None,
+) -> dict[str, Any]:
+    """Require a complete named coordinate contract in each training manifest."""
+    if not isinstance(schema, dict):
+        raise ValueError(f"run manifest requires an explicit {label} schema")
+    if not isinstance(schema.get("version"), str) or not schema["version"]:
+        raise ValueError(f"run manifest {label} schema requires a version")
+    if identity_key is not None and (
+        not isinstance(schema.get(identity_key), str) or not schema[identity_key]
+    ):
+        raise ValueError(f"run manifest {label} schema requires {identity_key}")
+    coordinates = schema.get(coordinate_key)
+    width = schema.get(width_key)
+    if (
+        not isinstance(coordinates, list)
+        or not coordinates
+        or any(not isinstance(coordinate, str) or not coordinate for coordinate in coordinates)
+        or len(coordinates) != len(set(coordinates))
+        or type(width) is not int
+        or width != len(coordinates)
+    ):
+        raise ValueError(
+            f"run manifest {label} schema requires unique named coordinates matching {width_key}"
+        )
+    return schema
 
 
 def write_run_manifest(path: Path, manifest: dict[str, Any]) -> None:
