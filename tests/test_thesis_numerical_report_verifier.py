@@ -48,6 +48,7 @@ def _write_split(tmp_path: Path) -> Path:
         [
             {
                 "type": "open",
+                "fill_quote_source": "bar_open",
                 "position_id": "p1",
                 "direction": 1,
                 "time": "2025-01-01T00:00:00",
@@ -55,6 +56,7 @@ def _write_split(tmp_path: Path) -> Path:
             },
             {
                 "type": "close",
+                "fill_quote_source": "bar_close",
                 "position_id": "p1",
                 "direction": 1,
                 "time": "2025-01-01T00:02:00",
@@ -173,6 +175,17 @@ def test_verify_split_reconciles_q5_discounted_constraint_costs(tmp_path: Path) 
     costs.to_csv(split_dir / "constraint_costs.csv", index=False)
     errors = verify_split(split_dir, initial_balance=100.0, periods_per_year=10)
     assert any("discount factors do not reconcile" in error for error in errors)
+
+
+def test_verify_split_reconciles_fill_quote_source_counts(tmp_path: Path) -> None:
+    split_dir = _write_split(tmp_path)
+    assert verify_split(split_dir, initial_balance=100.0, periods_per_year=10) == []
+
+    fills = pd.read_csv(split_dir / "fills.csv")
+    fills.loc[0, "fill_quote_source"] = "tick"
+    fills.to_csv(split_dir / "fills.csv", index=False)
+    errors = verify_split(split_dir, initial_balance=100.0, periods_per_year=10)
+    assert any("fill quote source counts differ from fills.csv" in error for error in errors)
 
 
 def test_reanalysis_config_comparison_checks_resolved_values():

@@ -373,3 +373,57 @@ fallback are already present in `.agents/rules/triton-slurm.md`; the rules
 index now summarizes these requirements so agents see them at entry. The rule
 was clarified to require the allocation attempt itself to return within 60
 seconds, with no repeated polling/resubmission after an unavailable result.
+
+## Current verification refresh — 2026-10-17 12:21 Helsinki
+
+The Q-stage source review found no missing Lagrangian implementation: Q5 is
+registered as `implemented_unit_tested` and uses an opt-in primal-dual
+scalarized-return PPO callback. On job `21015880`, the current pre-selector
+source snapshot passed full-tree Ruff format/lint, Mypy (464 files), a real
+ROCm 6.3.1 / PyTorch 2.7.1 MI210 matrix operation, and all **1,683 tests** in
+3:39 (82 warnings). The suite exercised the Q5 callback/checkpoint tests,
+Q2 exact resource-shape contracts, Q4 actor tests, Q6 frame/bundle FSM parity,
+and the Q7 encoder tests. After that run, the MI210 activation selector and
+its three regression tests were added; the selector tests plus three affected
+test files passed separately (**65 passed**), and the real allocation selected
+`/scratch/work/nguyenl37/.venv-mi210` correctly. The final full-tree rerun then
+stopped at Ruff format-check before pytest because the new test file needed
+formatting. It was manually reformatted afterward, but the complete gate has
+not been rerun on that final working tree. The precise current validation
+boundary is recorded in the master plan.
+
+The live source audit reconfirmed the following boundary: Q0/Q1, Q2, Q3,
+Q4A/B, Q5, Q6, and Q7 each have registered source arms and bounded tests, but
+no Q-stage campaign, result, or winner exists. Q2/Q3/Q4/Q6 remain
+fail-closed; Q5 remains blocked on a frozen Q4 parent; Q7 remains downstream of
+a frozen Q6 parent. The framework's stage gates and post-submission default
+order remain in force. In particular, passing implementation tests does not
+authorize selecting unresolved winner parents or make empirical comparison
+complete.
+
+One concrete Triton integration defect was fixed during this review:
+`scripts/triton/activate_venv.sh` previously selected `.venv-x86` for every
+x86_64 node, including `gpu-amd`, which caused MI210 to start against CUDA
+Torch. It now selects the ROCm venv for the `gpu-amd` partition and retains
+`.venv-x86` for NVIDIA x86 nodes. The three new selector regressions passed in
+the focused run; a live `gpu-amd` shell reported the MI210 environment prefix.
+The Slurm one-minute availability/fallback rule was already present and was
+verified; no duplicate rule was needed.
+
+## Final current-tree verification — 2026-10-17 12:31 Helsinki
+
+After correcting the selector-test import order, MI210 allocation `21015952`
+passed full-tree Ruff format/lint, full-tree Mypy (465 source files), a real
+MI210 matrix operation, and the full suite (**1,686 passed, 82 warnings, 3:41**).
+The wrapper then completed the P1 tick audit and wrote
+[`g1_tick_quality_current_recovery_2026-10-17_job21015952.json`](g1_tick_quality_current_recovery_2026-10-17_job21015952.json).
+This updates the earlier statement above that the final full-tree rerun had not
+yet occurred. The source validation remains bounded implementation evidence;
+it does not establish a Q-stage experiment, winner, strategy performance, or
+thesis readiness. Q2/Q3/Q4/Q6 fail-closed gates and all parent freezes and
+empirical comparisons remain open.
+
+An initial retry, `21015950`, exited after eight seconds because Ruff found an
+unsorted import in the new selector test. The lint issue was fixed and the
+single corrected full-gate rerun passed; both logs are retained. `21015950` is
+recorded as a short-step incident under the Slurm monitoring rule.

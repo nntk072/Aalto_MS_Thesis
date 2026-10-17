@@ -89,6 +89,7 @@ def test_tick_tp_partial_then_stop_reconciles_commissions_and_reward(direction: 
     assert position.position_net_pnl == pytest.approx(account.balance - 100_000.0)
     assert env._last_realized_close_pnl == pytest.approx(position.position_net_pnl)
     assert env._last_realized_close_r == pytest.approx(position.position_net_pnl / 5.0)
+    assert {row["fill_quote_source"] for row in fills} == {"tick"}
 
 
 def test_tick_crosses_three_tp_slots_once_with_exact_remaining_quantity() -> None:
@@ -132,6 +133,7 @@ def test_tick_crosses_three_tp_slots_once_with_exact_remaining_quantity() -> Non
     assert len({f["fill_id"] for f in fills}) == 3
     assert sum(f["pnl"] for f in fills) == pytest.approx(account.balance - 100_000)
     assert env._last_realized_close_pnl == pytest.approx(account.balance - 100_000)
+    assert {row["fill_quote_source"] for row in fills} == {"tick"}
 
 
 def test_tick_and_bar_match_for_identical_unambiguous_target_crossings() -> None:
@@ -185,6 +187,8 @@ def test_tick_and_bar_match_for_identical_unambiguous_target_crossings() -> None
     TradingEnv._check_sl_tp(tick_env, bar, 110.0, 110.5, bar_idx=0)
     TradingEnv._check_sl_tp(bar_env, bar, 110.0, 110.5, bar_idx=0)
     assert tick_env.position is None and bar_env.position is None
+    assert {row["fill_quote_source"] for row in tick_env.trade_log[1:]} == {"tick"}
+    assert {row["fill_quote_source"] for row in bar_env.trade_log[1:]} == {"bar_range_level"}
     for key in ("tp_slot", "size", "net_pnl", "position_complete"):
         assert [row[key] for row in tick_env.trade_log[1:]] == pytest.approx(
             [row[key] for row in bar_env.trade_log[1:]]
@@ -260,6 +264,7 @@ def test_trading_env_step_reconciles_partial_target_then_stop_reward() -> None:
     assert env.position is position
     assert position.size == pytest.approx(0.6)
     assert partial_fill["size"] == pytest.approx(0.4)
+    assert partial_fill["fill_quote_source"] == "bar_range_level"
     assert partial_fill["position_complete"] is False
     assert partial_reward == pytest.approx(partial_fill["net_pnl"] / initial_balance)
     assert partial_info["reward_parts"]["pnl"] == pytest.approx(partial_reward)
@@ -273,6 +278,7 @@ def test_trading_env_step_reconciles_partial_target_then_stop_reward() -> None:
     fills = [row for row in env.trade_log if row.get("fill_id")]
     assert [row["size"] for row in fills] == pytest.approx([0.4, 0.6])
     assert [row["position_complete"] for row in fills] == [False, True]
+    assert {row["fill_quote_source"] for row in fills} == {"bar_range_level"}
     assert len({row["fill_id"] for row in fills}) == 2
     assert env.position is None
     assert position.position_net_pnl == pytest.approx(env.account.balance - initial_balance)

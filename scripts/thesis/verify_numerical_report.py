@@ -222,6 +222,8 @@ def verify_split(
         "fail_time",
         "action_counts",
         "execution_event_count",
+        "fill_quote_source_event_count",
+        "fill_quote_source_counts",
         "position_record_count",
         "identified_position_count",
         "unidentified_position_event_count",
@@ -236,6 +238,7 @@ def verify_split(
         "n_sessions",
         "n_breach_sessions",
         "execution_event_count",
+        "fill_quote_source_event_count",
         "position_record_count",
         "identified_position_count",
         "unidentified_position_event_count",
@@ -411,6 +414,47 @@ def verify_split(
                 f"(diagnostics={diagnostics.get(key)}, artifacts={actual_counts[key]}, "
                 f"reconstructed={expected})"
             )
+
+    source_counts = diagnostics.get("fill_quote_source_counts")
+    allowed_fill_sources = {
+        "tick",
+        "bar_open",
+        "bar_close",
+        "bar_range_level",
+        "permitted_session_bar_close",
+        "terminal_bar_close",
+    }
+    if not isinstance(source_counts, dict) or any(
+        not isinstance(source, str)
+        or source not in allowed_fill_sources
+        or not _is_nonnegative_int(count)
+        for source, count in (source_counts.items() if isinstance(source_counts, dict) else [])
+    ):
+        errors.append(
+            f"{split_dir.name}: fill_quote_source_counts must map recognized sources to counts"
+        )
+    elif (
+        not _is_nonnegative_int(diagnostics.get("fill_quote_source_event_count"))
+        or sum(source_counts.values()) != diagnostics["fill_quote_source_event_count"]
+    ):
+        errors.append(f"{split_dir.name}: fill quote source counts do not sum to their event count")
+    if "fill_quote_source" not in fills.columns:
+        errors.append(f"{split_dir.name}: fills.csv is missing fill_quote_source")
+    else:
+        actual_source_counts = {
+            str(source): int(count)
+            for source, count in fills["fill_quote_source"]
+            .fillna("unknown")
+            .astype(str)
+            .value_counts()
+            .items()
+        }
+        if actual_source_counts != source_counts:
+            errors.append(f"{split_dir.name}: fill quote source counts differ from fills.csv")
+    if diagnostics.get("fill_quote_source_event_count") != diagnostics.get("execution_event_count"):
+        errors.append(
+            f"{split_dir.name}: fill quote source event count differs from execution event count"
+        )
 
     n_steps_value = diagnostics.get("n_steps")
     n_steps = cast(int, n_steps_value) if _is_nonnegative_int(n_steps_value) else 0

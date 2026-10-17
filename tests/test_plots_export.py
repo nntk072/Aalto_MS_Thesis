@@ -66,6 +66,7 @@ def synthetic_trades(synthetic_equity) -> pd.DataFrame:
         rows.append(
             {
                 "type": "open",
+                "fill_quote_source": "bar_open",
                 "direction": 1 if i % 2 == 0 else -1,
                 "price": 100.0 + i * 0.1,
                 "bar": i,
@@ -76,6 +77,7 @@ def synthetic_trades(synthetic_equity) -> pd.DataFrame:
         rows.append(
             {
                 "type": "close",
+                "fill_quote_source": "bar_close",
                 "pnl": float(np.random.default_rng(i).normal(10, 50)),
                 "bar": i + 25,
                 "time": idx[min(i + 25, 499)],
@@ -778,6 +780,8 @@ def test_evaluation_diagnostics_are_exported_from_result(tmp_path, synthetic_res
     assert report["position_record_count"] == len(_position_summaries(result["trades"]))
     assert report["identified_position_count"] == 0
     assert report["unidentified_position_event_count"] == len(_fill_events(result["trades"]))
+    assert report["fill_quote_source_counts"] == {"bar_close": 10, "bar_open": 10}
+    assert report["fill_quote_source_event_count"] == report["execution_event_count"] == 20
     assert metrics_report["initial_balance"] == pytest.approx(100_000.0)
     assert metrics_report["final_equity"] == pytest.approx(float(result["equity"].iloc[-1]))
     assert metrics_report["final_equity"] - metrics_report["initial_balance"] == pytest.approx(

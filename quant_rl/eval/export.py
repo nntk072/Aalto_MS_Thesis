@@ -71,6 +71,7 @@ _EMPTY_TRADE_COLUMNS = (
     "position_net_pnl",
     "position_complete",
     "reason",
+    "fill_quote_source",
 )
 _POSITION_COLUMNS = (
     "position_id",
@@ -333,6 +334,17 @@ def _write_split(
 
     phase_start = time.perf_counter()
     fill_events = _fill_events(trades)
+    fill_source_values = (
+        fill_events.get(
+            "fill_quote_source", pd.Series("unknown", index=fill_events.index, dtype=object)
+        )
+        .fillna("unknown")
+        .astype(str)
+    )
+    fill_quote_source_counts = {
+        str(source): int(count)
+        for source, count in sorted(fill_source_values.value_counts().items())
+    }
     position_records = _position_summaries(trades)
     # ------------------------------------------------------------------
     # CSVs + diagnostics
@@ -403,6 +415,8 @@ def _write_split(
         "n_sessions_skipped": n_sessions_skipped,
         "action_counts": result.get("action_counts", {}),
         "execution_event_count": int(len(fill_events)),
+        "fill_quote_source_event_count": int(sum(fill_quote_source_counts.values())),
+        "fill_quote_source_counts": fill_quote_source_counts,
         "position_record_count": int(len(position_records)),
         "identified_position_count": int(
             position_records["reconstruction_status"].eq("identified_by_position_id").sum()

@@ -19,9 +19,12 @@ Do not infer node architecture from the SSH gateway.
 | AMD64 / `x86_64` | V100 (CC 7.0) | `.venv-v100` | Separate environment; torch 2.14.0+cu126, Python 3.12, project lock dependencies excluding its cu130 CUDA packages. Verify `sm_70`, CC `(7, 0)`, and a real CUDA op before use. |
 | AMD64 / `x86_64` | MI210 (`gfx90a`) | `/scratch/work/nguyenl37/.venv-mi210` | `scripts/setup/setup_venv_mi210.sh`; observed Triton ROCm 6.3.1, Python 3.12.14, torch 2.7.1+rocm6.3. Keep separate from the CUDA 13.0 project lock; validate the runtime and a real device operation before use. |
 
-Activate with `source scripts/triton/activate_venv.sh` from the correct
-compute node. Inspect `command -v python`, `readlink -f "$(command -v python)"`,
-`python --version`, and `file` to verify interpreter architecture.
+Activate with `source scripts/triton/activate_venv.sh` inside the allocation.
+The selector uses `.venv-mi210` on x86_64 `gpu-amd` allocations and `.venv-x86`
+on other x86_64 nodes; GH200 uses `.venv`. Inspect `SLURM_JOB_PARTITION`,
+`command -v python`, `python -c 'import sys; print(sys.prefix)'`, and
+`python --version` to verify the selected environment. A ROCm device smoke is
+still required before claiming the MI210 runtime works.
 Never execute ARM64 venv entrypoints from an x86_64 login shell or reuse
 compiled packages across architectures. GPU types, RAM, partitions, and
 availability change; inspect current Slurm state rather than hardcoding

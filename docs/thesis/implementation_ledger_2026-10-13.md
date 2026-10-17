@@ -1,6 +1,34 @@
 # Implementation continuation ledger — 2026-10-13
 
-## Current-tree GPU validation and Q-stage audit — 2026-10-17
+## Current-tree verification refresh — 2026-10-17 12:31 Helsinki
+
+MI210 allocation `21015952` completed naturally in 6:06 on `gpuamd1` with one
+MI210, 8 CPUs, and 128 GiB. The MI210 ROCm 6.3.1 / PyTorch 2.7.1 matrix smoke
+passed. Full-tree Ruff format, Ruff lint, and Mypy (465 files) passed; the full
+suite passed **1,686 tests with 82 warnings in 3:41**. The complete validation
+log is `outputs/gpu_ci_gates/p1_tick_quality_job21015952/validation.log`.
+The wrapper then verified campaign input hashes and produced
+`docs/thesis/g1_tick_quality_current_recovery_2026-10-17_job21015952.json`
+(SHA-256 `5f0d7fe63a052940abad3957d20d4a4ea749b6f22e4cb0acb15b4182951398ff`).
+Training-minute valid-quote coverage remains 4,095/351,550 (1.1648%) for
+US100.cash and 349,484/350,098 (99.8246%) for US500.cash. Quality is descriptive
+only; provider/use terms, broker clock/DST, quality thresholds, and split-level
+execution-source acceptance remain unresolved, so P1 remains open.
+
+The new activation selector routes x86_64 `gpu-amd` to
+`/scratch/work/nguyenl37/.venv-mi210`; focused selector tests passed and the
+live allocation confirmed the selected environment and a real GPU operation.
+An initial full-gate attempt `21015950` stopped after eight seconds on a Ruff
+import-order issue; the issue was corrected, the log preserved, and the single
+complete rerun passed. This is recorded as a short-step incident. No campaign
+training was launched and no cancellation was issued.
+
+Both GH200 nodes were idle at 12:31, but Slurm `--test-only --immediate=60`
+forecast October 20 for a two-node one-GH200-per-node request, and also for a
+single-GH200 request at 16 CPUs/128 GiB. No GH200 job was submitted or left
+pending. Idle-node inventory did not mean immediate schedulability.
+
+## Earlier current-tree GPU validation and Q-stage audit — 2026-10-17
 
 Authorized allocation `21014127` on `gpuamd1` (MI210 x1, 8 CPUs, 128 GiB;
 scheduled end 17:05 Helsinki) validated the finalized dirty source tree.
