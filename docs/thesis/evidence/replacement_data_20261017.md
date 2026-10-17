@@ -127,12 +127,16 @@ raw match inventory is preserved in
 [`candidate_holdout_exposure.json`](replacement_data_20261017/candidate_holdout_exposure.json).
 An additional pre-intake archive screen covered 612 ZIP and 3 GZIP archives
 with zero read errors. It found 397 July–October date references across 15
-archives; the machine report includes the member paths and samples. A date
-reference alone is not proof of market-data or policy-result exposure, and the
-full set still requires contextual review. See
-[`candidate_holdout_archive_exposure_20261017_final.json`](replacement_data_20261017/candidate_holdout_archive_exposure_20261017_final.json)
+archives. Path triage classified the recorded samples as source/configuration,
+source manifests/checkpoint-migration maps, or two resource-telemetry snapshots;
+no matched member path was a direct market-data, evaluation-report, or strategy-
+metric artifact. This narrows what the archive text scan found, but does not
+prove the tail was not used: dates inside source/config files do not establish
+how their outputs were used, and binary/oversized members, external systems,
+and human exposure remain outside the audit. See the machine report
+[`candidate_holdout_archive_exposure_20261017_triaged.json`](replacement_data_20261017/candidate_holdout_archive_exposure_20261017_triaged.json)
 and the full gate log
-[`candidate_holdout_archive_audit_gate_final.log`](../../../outputs/data_refresh_20261017/candidate_holdout_archive_audit_gate_final.log).
+[`candidate_holdout_archive_audit_gate_triaged.log`](../../../outputs/data_refresh_20261017/candidate_holdout_archive_audit_gate_triaged.log).
 This supports treating Jul 4–Oct 16 as a **repository-level candidate** only;
 filesystem times and repository searches cannot establish external or
 undocumented human exposure. No replacement-data training or policy evaluation

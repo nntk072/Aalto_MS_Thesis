@@ -9,7 +9,7 @@ audit_rc=0
 ruff format scripts/research/audit_candidate_holdout_archive_exposure.py
 format_apply_rc=$?
 python scripts/research/audit_candidate_holdout_archive_exposure.py \
-    --out docs/thesis/evidence/replacement_data_20261017/candidate_holdout_archive_exposure_20261017_final.json \
+    --out docs/thesis/evidence/replacement_data_20261017/candidate_holdout_archive_exposure_20261017_triaged.json \
     || audit_rc=$?
 
 ruff format --check .

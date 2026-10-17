@@ -384,9 +384,13 @@ source checkpoint lacks sequence-feature and stop-candidate schema records, so
 the run explicitly opted into legacy replay; it also belongs to the known
 lookahead-contaminated campaign and its historical test split was already
 inspected. The report is engineering-only: 6 training trades and 2 historical
-test trades, with near-zero returns. The independent repeated replay, exact
-frame/shared-bundle parity, and deterministic comparator are still outstanding.
-Evidence and artifact hashes:
+test trades, with near-zero returns. The exact repeated report package passed
+its comparator, and train and historical-test frame/shared-bundle parity each
+passed all 25 recorded fields; the machine reports are linked in the reanalysis
+note below. These close the bounded repeatability/backend-parity checks for
+this legacy checkpoint only. They do not establish current replacement-cache
+parity, strategy performance, pristine OOS validity, or the selected-checkpoint
+P2 acceptance criterion. Evidence and artifact hashes:
 [`p2_engineering_reanalysis_a4b_seed50_2026-10-17.md`](evidence/p2_engineering_reanalysis_a4b_seed50_2026-10-17.md).
 
 **Historical live checkpoint (2026-10-17 08:35 Helsinki):** the 08:35
@@ -2215,7 +2219,12 @@ Verify:
   lookahead affecting 17/18 variants. Any replay may test deterministic
   recovery and evaluator/backend parity only; it cannot satisfy admissible
   P1/P3 strategy evidence, select a variant, or support a confirmatory claim.
-  No replay was launched in this audit because no Slurm allocation is active.
+  The legacy engineering replay, exact repeated report comparison, and frame/
+  shared-bundle parity runs were subsequently completed on approved GPU
+  allocations; see
+  [`p2_engineering_reanalysis_a4b_seed50_2026-10-17.md`](evidence/p2_engineering_reanalysis_a4b_seed50_2026-10-17.md).
+  They used the historical source cache and do not validate the replacement
+  full-period data or an admissible campaign.
 - **P2 legacy-observation replay defect found and repaired in source —
   2026-10-17:** `eval_run` previously let an explicit missing-sequence-schema
   opt-in select legacy feature columns for a width check, but constructed
@@ -2230,11 +2239,13 @@ Verify:
   frame/bundle tensor equality, and evaluator flag forwarding. Added
   `scripts/thesis/compare_deterministic_reanalysis.py` to compare immutable
   repeated train/test numerical packages and verify common source/checkpoint/
-  cache identities; focused pass/mismatch tests are also added. These source
-  changes and tests are not yet validated; P2 remains open until focused tests,
-  the full GPU-node gate, repeated deterministic report, and real checkpoint
-  parity run pass. This repairs replay mechanics only and does not
-  change the contaminated checkpoint's evidence role.
+  cache identities; focused pass/mismatch tests are also added. The full
+  current-tree GPU-node gate now passes (Ruff format/lint, Mypy, and 1,736
+  tests), and the legacy replay comparator plus frame/bundle audits pass for
+  this exact checkpoint. P2 remains open for acceptance on an admissible
+  completed checkpoint after P1 clears. This repairs and validates bounded
+  replay mechanics only; it does not change the contaminated checkpoint's
+  evidence role.
 - All 18 exact attempt-3 resume checkpoints selected for attempt 4 were
   checksum-checked and sequentially deserialized with `PPO.load(...,
   device="cpu")` on `gpuarm1`. Each loaded timestep matched the recovery record
@@ -3626,8 +3637,8 @@ history.
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | COMPLETE — work remains on the sole canonical `main` checkout. The fresh full GH200 gate passed Ruff format (467 files), Ruff lint, Mypy (480 source files), and 1,736 tests. The full result, including the pre-intake archive screen, is logged at [`candidate_holdout_archive_audit_gate_final.log`](../../outputs/data_refresh_20261017/candidate_holdout_archive_audit_gate_final.log). Job `21020179` remains RUNNING with both GPUs idle and no campaign/supervisor; preserve it. Five prior worktrees plus the compatibility checkout are consolidated; source and required evidence are on `main`. | — | P1, P2, E0 |
-| P1 | 18-way/full-split one-seed screen reconciliation | HISTORICAL SCREEN ACCOUNTING RECONCILED; REPLACEMENT SCHEDULE AND RAW-TICK INPUT AUDIT PASS; NEW SCREEN NOT ADMITTED — the old 18-way run remains invalid for selection (lookahead in 17/18 configs; baseline failed its training survival gate). The `prev_ny_high_low` same-session future-poison regression passes; 16/16 sampled prefix checks and 20/20 fold-local poison checks pass on replacement data, but do not constitute exhaustive causality certification. A fresh raw-tick rebuild matched both tick caches and the current resolver's exact observed schedule: 99,492 / 79,069 US100 and 99,482 / 79,068 US500 train/test decisions, each at 100% coverage. Decision and next-market quote-anchor timestamp fingerprints are recorded in [`decision_schedule_fingerprint_final.json`](evidence/replacement_data_20261017/decision_schedule_fingerprint_final.json), linked to [`tick_execution_coverage_schedule_freeze_final.json`](evidence/replacement_data_20261017/tick_execution_coverage_schedule_freeze_final.json). The shorter 2025-12-02/04 shapes are not scheduled Nasdaq holiday/early-close sessions (the official December early close is Dec 24); they remain unclassified for the unidentified CFD provider/export, with no missing-bar claim or imputation. Replacement data spans 2024-12-30–2026-10-16; Jul 4–Oct 16 is included in the test schedule and remains only a candidate fresh segment: the pre-intake archive screen found 397 July–October date references across 15 of 615 archives, requiring contextual review and not proving external/human non-exposure; see [`candidate_holdout_archive_exposure_20261017_final.json`](evidence/replacement_data_20261017/candidate_holdout_archive_exposure_20261017_final.json). Provider/feed identity and use terms, broker calendar/timezone/DST, true sub-millisecond tick chronology, broader causal certification, and holdout exposure protocol remain open. Keep the old contaminated screen unusable for selection and do not launch the new screen before the remaining P1/P2 gates clear. See [`replacement_data_20261017.md`](evidence/replacement_data_20261017.md), [`candidate_holdout_exposure.json`](evidence/replacement_data_20261017/candidate_holdout_exposure.json), and [`p1_18_variant_screen_disposition_2026-10-16.md`](evidence/p1_18_variant_screen_disposition_2026-10-16.md). | P0 | P2, E0 |
+| P0 | Safe boundary/current snapshot | COMPLETE — work remains on the sole canonical `main` checkout. The fresh full GH200 gate passed Ruff format (467 files), Ruff lint, Mypy (480 source files), and 1,736 tests. The full result, including the pre-intake archive screen, is logged at [`candidate_holdout_archive_audit_gate_triaged.log`](../../outputs/data_refresh_20261017/candidate_holdout_archive_audit_gate_triaged.log). Job `21020179` remains RUNNING with both GPUs idle and no campaign/supervisor; preserve it. Five prior worktrees plus the compatibility checkout are consolidated; source and required evidence are on `main`. | — | P1, P2, E0 |
+| P1 | 18-way/full-split one-seed screen reconciliation | HISTORICAL SCREEN ACCOUNTING RECONCILED; REPLACEMENT SCHEDULE AND RAW-TICK INPUT AUDIT PASS; NEW SCREEN NOT ADMITTED — the old 18-way run remains invalid for selection (lookahead in 17/18 configs; baseline failed its training survival gate). The `prev_ny_high_low` same-session future-poison regression passes; 16/16 sampled prefix checks and 20/20 fold-local poison checks pass on replacement data, but do not constitute exhaustive causality certification. A fresh raw-tick rebuild matched both tick caches and the current resolver's exact observed schedule: 99,492 / 79,069 US100 and 99,482 / 79,068 US500 train/test decisions, each at 100% coverage. Decision and next-market quote-anchor timestamp fingerprints are recorded in [`decision_schedule_fingerprint_final.json`](evidence/replacement_data_20261017/decision_schedule_fingerprint_final.json), linked to [`tick_execution_coverage_schedule_freeze_final.json`](evidence/replacement_data_20261017/tick_execution_coverage_schedule_freeze_final.json). The shorter 2025-12-02/04 shapes are not scheduled Nasdaq holiday/early-close sessions (the official December early close is Dec 24); they remain unclassified for the unidentified CFD provider/export, with no missing-bar claim or imputation. Replacement data spans 2024-12-30–2026-10-16; Jul 4–Oct 16 is included in the test schedule and remains only a candidate fresh segment: the pre-intake archive screen found 397 July–October date references across 15 of 615 archives, requiring contextual review and not proving external/human non-exposure; see [`candidate_holdout_archive_exposure_20261017_triaged.json`](evidence/replacement_data_20261017/candidate_holdout_archive_exposure_20261017_triaged.json). Provider/feed identity and use terms, broker calendar/timezone/DST, true sub-millisecond tick chronology, broader causal certification, and holdout exposure protocol remain open. Keep the old contaminated screen unusable for selection and do not launch the new screen before the remaining P1/P2 gates clear. See [`replacement_data_20261017.md`](evidence/replacement_data_20261017.md), [`candidate_holdout_exposure.json`](evidence/replacement_data_20261017/candidate_holdout_exposure.json), and [`p1_18_variant_screen_disposition_2026-10-16.md`](evidence/p1_18_variant_screen_disposition_2026-10-16.md). | P0 | P2, E0 |
 | P2 | Deterministic evaluator/schema repair | ACTIVE, PARTIALLY VERIFIED — evaluator schema forwarding, deterministic randomized-fill seeding, legacy observation recovery, cache/data provenance guards, mixed-timezone equity timestamps, and the new exact observed-schedule helper are covered by the current full gate (1,736 tests). Historical engineering-only checks passed exact repeated train/test replay and frame/shared-bundle parity on one contaminated legacy checkpoint; the holdout was previously inspected and required explicit legacy-schema opt-ins. This verifies bounded mechanics only. Acceptance on an admissible, provenance-complete selected checkpoint remains open until P1 clears and a new screen produces one. See [`p2_engineering_reanalysis_a4b_seed50_2026-10-17.md`](evidence/p2_engineering_reanalysis_a4b_seed50_2026-10-17.md). | P0 | P1, E0 |
 | E0 | Evidence/result pipeline + indexes | ACTIVE — prior provenance/index/reconciliation tools remain available. Replacement M1/tick/cache, prefix-invariance, fold-poison, fresh raw-tick coverage, and exact observed decision-schedule fingerprint and cache-wide tie-policy evidence are machine-readable under `evidence/replacement_data_20261017/`. There is no new-data checkpoint or canonical numerical strategy report; the old checkpoint remains inadmissible. Provider/use provenance, broker calendar/DST, true sub-millisecond ordering, external holdout exposure, deterministic full-split repeats, and final report package remain open. | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED — report contract covers annualization, equity endpoints, exposure, raw fills/positions/breaches, split completion, and source/runtime provenance. Current verifier/software tests pass, but no admissible completed-checkpoint report has been generated. | P1 + P2 | per-checkpoint eval/package |

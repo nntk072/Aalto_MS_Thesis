@@ -178,6 +178,27 @@ def main() -> int:
         for path in archives
     ]
     errors = [item for item in archive_results if item["status"] != "scanned"]
+    suffix_counts: dict[str, int] = {}
+    for item in member_matches:
+        member_name = item["member"].split("::", maxsplit=1)[-1]
+        suffix = Path(member_name).suffix.lower() or "<none>"
+        suffix_counts[suffix] = suffix_counts.get(suffix, 0) + 1
+    direct_result_or_market_data_paths = [
+        item["member"]
+        for item in member_matches
+        if Path(item["member"].split("::", maxsplit=1)[-1]).suffix.lower()
+        in {".csv", ".log", ".md", ".txt", ".parquet", ".html"}
+    ]
+    json_member_paths = [
+        item["member"]
+        for item in member_matches
+        if Path(item["member"].split("::", maxsplit=1)[-1]).suffix.lower() == ".json"
+    ]
+    resource_snapshot_gzip_paths = [
+        item["member"]
+        for item in member_matches
+        if "resource_snapshot" in item["member"] and item["member"].endswith("::gzip-payload")
+    ]
     report = {
         "schema_version": "candidate-holdout-archive-exposure-v1",
         "created_at_local": datetime.now().astimezone().isoformat(),
@@ -198,6 +219,13 @@ def main() -> int:
         "archives": archive_results,
         "candidate_tail_member_content_match_count_capped": len(member_matches),
         "candidate_tail_member_content_matches": member_matches,
+        "contextual_path_review": {
+            "recorded_match_samples_by_member_suffix": dict(sorted(suffix_counts.items())),
+            "direct_result_or_market_data_member_path_matches": direct_result_or_market_data_paths,
+            "json_member_matches": json_member_paths,
+            "resource_snapshot_gzip_member_matches": resource_snapshot_gzip_paths,
+            "interpretation": "Recorded paths are source/configuration/manifests or resource telemetry; path-based classification cannot prove archive contents were never used for model or human selection. It does not cover skipped binary/large members, external systems, or human exposure.",
+        },
         "scope": {
             "searched": "Pre-intake ZIP and GZIP archive member names and text-like members; SB3 metadata member named data is included.",
             "not_searched": "Binary checkpoint tensors, pickle payloads, members over 128 MiB, nested archive payloads, archive formats other than ZIP/GZIP, files outside configured repository roots, and external systems or human memory.",
