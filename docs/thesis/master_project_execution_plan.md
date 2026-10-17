@@ -7,7 +7,7 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-18 00:52 Helsinki):** work is on the sole checkout,
+**Live checkpoint (2026-10-18 01:13 Helsinki):** work is on the sole checkout,
 `/scratch/work/nguyenl37/Aalto_MS_Thesis`, branch `main`; local `main` is ahead
 of `origin/main` (no push performed). Preserve the two untracked data
 rebuild scripts; the comparator report is committed. No alternate checkout or
@@ -85,8 +85,16 @@ frozen; its market-hours interpretation, source terms, account-specific export
 path, and exact feed identity remain open. FTMO's generic MetaTrader clock is
 documented as GMT+2 plus US daylight time; the former fixed-GMT+3 carrier
 mislocalized winter CT feature windows by one hour. The FTMO-aware CT feature
-correction passed focused tests, but v23 feature caches still require rebuild
-and 18-variant rebinding. Tick caches contain 135,043,551 US100 and 37,246,832
+correction passed 58 focused tests. A fresh v23 named-feature rebuild completed
+on existing Slurm allocation `21020179`, step `.21`, with step exit `0:0`,
+wrapper exit `0`, and report status `passed`. The report records 630,787 rows
+for each of four profiles and all 18 variant bindings; profile hashes and the
+transactionally preserved prior files are recorded in
+[`named_feature_cache_rebuild_18variant_20261018_job21020179_clockfix.json`](evidence/replacement_data_20261017/named_feature_cache_rebuild_18variant_20261018_job21020179_clockfix.json).
+The baseline profile's Parquet bytes were unchanged because it does not consume
+the corrected CT session features; the other three profile files changed. This
+closes the cache-rebuild/rebinding task, not the remaining P1 validity/audit
+gates. Tick caches contain 135,043,551 US100 and 37,246,832
 US500 rows; differing-quote millisecond ties remain, with sub-millisecond
 chronology unknowable.
 
