@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "status": "PASS_BOUNDED_SCHEDULE_AND_CODE_GATE",
+  "created_at": "2026-10-17T22:38:54+03:00",
+  "repository_base_head": "13196f836a3d513ea1d541df8364b735e646178a",
+  "slurm_job_id": "21020179",
+  "slurm_step_id": "21020179.7",
+  "host": "gpuarm1.int.triton.aalto.fi",
+  "architecture": "aarch64",
+  "validation_log": {
+    "path": "outputs/data_refresh_20261017/schedule_freeze_final_validation.log",
+    "bytes": 22866,
+    "sha256": "97882b6f22f3b14a5dfe3b3949a98216833a4c4bcaf1ba4360c7121b57b1dd2b"
+  },
+  "source_sha256": {
+    "quant_rl/train/train_rl.py": "20be11dcc804da123eff1c2251184c1036291c9f3712a887be3b0320f779083a",
+    "tests/test_envs/test_eligibility_wiring.py": "eb3a7e5eeed17b43c1ae35cb55e42f27d10ed680d925f3978c8c45e2e7583e68",
+    "scripts/research/fingerprint_tick_decision_schedule.py": "62bc9c397f9423468e836de3a2b3a1c48e63141a7bb94b65c8914e6ef3de6352",
+    "scripts/research/run_p1_schedule_freeze_gate.sh": "f049e0ba0ea8b3ae3d8a66e9982bcf33c47b4573283c2fdc07e840e11fe36f3f"
+  },
+  "checks": {
+    "focused_eligibility_tests": {
+      "command": "python -m pytest tests/test_envs/test_eligibility_wiring.py -q",
+      "passed": 8,
+      "failed": 0,
+      "status": "PASS"
+    },
+    "raw_tick_rebuild_and_cache_parity": {
+      "command": "python scripts/research/audit_tick_execution_coverage.py --out docs/thesis/evidence/replacement_data_20261017/tick_execution_coverage_schedule_freeze_final.json",
+      "status": "PASS",
+      "disposition": "PRIMARY_COVERAGE_COMPLETE_INPUTS_MATCH",
+      "symbols": {
+        "US100.cash": {
+          "m1_source_cache_exact_match": true,
+          "tick_source_cache_exact_match": true,
+          "train_decisions": 99492,
+          "test_decisions": 79069,
+          "train_coverage_fraction": 1.0,
+          "test_coverage_fraction": 1.0,
+          "unavailable_quotes": 0
+        },
+        "US500.cash": {
+          "m1_source_cache_exact_match": true,
+          "tick_source_cache_exact_match": true,
+          "train_decisions": 99482,
+          "test_decisions": 79068,
+          "train_coverage_fraction": 1.0,
+          "test_coverage_fraction": 1.0,
+          "unavailable_quotes": 0
+        }
+      }
+    },
+    "observed_decision_schedule_fingerprint": {
+      "status": "PASS",
+      "path": "docs/thesis/evidence/replacement_data_20261017/decision_schedule_fingerprint_final.json",
+      "sha256": "069f8871eef9115ce7c8fe30c3d4c689106322e6752927027f00660c8be5c2e5",
+      "coverage_count_parity": true
+    },
+    "ruff_format": {
+      "command": "ruff format --check .",
+      "formatted_files": 465,
+      "status": "PASS"
+    },
+    "ruff_lint": {
+      "command": "ruff check .",
+      "status": "PASS"
+    },
+    "mypy": {
+      "command": "mypy .",
+      "checked_source_files": 478,
+      "errors": 0,
+      "status": "PASS"
+    },
+    "full_test_suite": {
+      "command": "python -m pytest tests/ -q",
+      "passed": 1735,
+      "failed": 0,
+      "warnings": 82,
+      "duration_seconds": 161.34,
+      "status": "PASS"
+    }
+  },
+  "interpretation": [
+    "This verifies the current observed-bar schedule implementation, its exact timestamp fingerprint, source/cache parity, tick coverage, and bounded software behavior.",
+    "The shorter December 2 and December 4 session shapes may reflect a holiday or provider-specific reduced-hours schedule. Available evidence does not establish the CFD provider calendar; these are not classified as missing bars and no rows were imputed.",
+    "This is not a training run, policy evaluation, strategy result, confirmation of feed-use/publication rights, or proof that the candidate holdout was never externally inspected.",
+    "The historical 18-variant campaign remains inadmissible for selection and thesis readiness remains NOT READY."
+  ],
+  "evidence_artifacts": {
+    "tick_coverage": "docs/thesis/evidence/replacement_data_20261017/tick_execution_coverage_schedule_freeze_final.json",
+    "schedule_fingerprint": "docs/thesis/evidence/replacement_data_20261017/decision_schedule_fingerprint_final.json",
+    "raw_validation_log_local": "outputs/data_refresh_20261017/schedule_freeze_final_validation.log"
+  }
+}

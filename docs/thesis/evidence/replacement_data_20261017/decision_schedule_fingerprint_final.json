@@ -1,0 +1,176 @@
+{
+  "architecture": "aarch64",
+  "config": {
+    "path": "quant_rl/config/default.yaml",
+    "session_window_end": "23:00",
+    "session_window_start": "16:30",
+    "sha256": "7bd7acd8b9aa8bf7f3894fcc8781a7cbe89761ad8b2335fa91af630f5307b50d",
+    "test_start_inclusive": "2026-01-01",
+    "timezone": "Etc/GMT-3",
+    "train_end_inclusive": "2025-12-31"
+  },
+  "created_at": "2026-10-17T22:36:07.089337+03:00",
+  "cross_references": {
+    "observed_schedule_shape_report": {
+      "gap_semantics": {
+        "US100.cash": "Counts elapsed minute labels between observed NY-session rows; does not establish expected trading hours or data loss.",
+        "US500.cash": "Counts elapsed minute labels between observed NY-session rows; does not establish expected trading hours or data loss."
+      },
+      "path": "docs/thesis/evidence/replacement_data_20261017/replacement_schedule_shape.json",
+      "sha256": "163ecbdb9e99ad28329652c642b537e458cc3cf8c0f585334624888575ed084e"
+    },
+    "tick_coverage_report": {
+      "coverage_recomputed_by_this_script": false,
+      "path": "docs/thesis/evidence/replacement_data_20261017/tick_execution_coverage_schedule_freeze_final.json",
+      "purpose": "Existing exact cache parity and randomized tick-coverage evidence; schedule counts are cross-checked here.",
+      "sha256": "0354cab7951a1b8f8d626e8b6381c0332a1fc0990379b652f530bb5b908762c4"
+    }
+  },
+  "host": "gpuarm1.int.triton.aalto.fi",
+  "inputs": {
+    "US100.cash": {
+      "m1_cache": {
+        "bytes": 14620416,
+        "first_observed_bar": "2024-12-30 01:05:00+03:00",
+        "last_observed_bar": "2026-10-16 23:49:00+03:00",
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/us100_us500_20241230_20261016/US100.cash_M1_v2-full-day.parquet",
+        "rows": 630787,
+        "sha256": "736c089420cde00166bdf0920003c6ad101ee74beffcd1ad18dc1e526711509d",
+        "source_cache_exact_match_in_coverage_report": true
+      },
+      "m1_source": {
+        "bytes": 42077931,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/data/US100.cash_M1_202412300105_202610162349.csv",
+        "sha256": "4c46c6c9820cba15cea38487228d9c334467087b8bb109e3ffad7ca234d83f8c"
+      }
+    },
+    "US500.cash": {
+      "m1_cache": {
+        "bytes": 11526331,
+        "first_observed_bar": "2024-12-30 01:05:00+03:00",
+        "last_observed_bar": "2026-10-16 23:49:00+03:00",
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/us100_us500_20241230_20261016/US500.cash_M1_v2-full-day.parquet",
+        "rows": 628929,
+        "sha256": "920d7d0a8bd5b9bdd653c171c4852e06b0a63598c83244c99515010d647af6b0",
+        "source_cache_exact_match_in_coverage_report": true
+      },
+      "m1_source": {
+        "bytes": 38404762,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/data/US500.cash_M1_202412300105_202610162349.csv",
+        "sha256": "e5929a798083b77ce631407132d4d2efeb658512d49bea296c578b3724a57b51"
+      }
+    }
+  },
+  "limitations": [
+    "This fingerprints an input schedule; it is not a model, backtest, campaign, or strategy result.",
+    "A timestamp fingerprint proves exact reproducibility of the observed schedule but does not prove market-data source identity, feed-use/publication rights, provider trading hours, or an untouched holdout.",
+    "Tick quote coverage remains the separately cited report's result; it is not recomputed here.",
+    "The old 18-variant campaign remains inadmissible and no readiness gate is changed by this artifact."
+  ],
+  "repository_head": "13196f836a3d513ea1d541df8364b735e646178a",
+  "schedule_semantics": {
+    "eligibility": "Observed M1 rows labeled NY in the versioned cache; no regular time grid is synthesized.",
+    "interval_interpretation": "Counts and gaps describe observed bars only. The shorter Dec 2/4 schedules may reflect holidays or provider-specific reduced hours; the available evidence cannot identify the CFD provider calendar or distinguish scheduled closure from export omission. No expected-minute grid or missing-bar claim is made, and no bars are imputed.",
+    "quote_anchor": "The next row in the complete observed M1 index, including a non-NY row when it follows the final eligible NY row; final index row clamps to itself, matching the trainer preflight.",
+    "testing_selection": "Observed M1 timestamps at or after configured test_start, AND NY session label.",
+    "training_selection": "make_train_mask through the configured inclusive train_end, AND NY session label."
+  },
+  "schema_version": 1,
+  "slurm_job_id": "21020179",
+  "source_sha256": {
+    "docs/thesis/evidence/replacement_data_20261017/replacement_schedule_shape.json": "163ecbdb9e99ad28329652c642b537e458cc3cf8c0f585334624888575ed084e",
+    "docs/thesis/evidence/replacement_data_20261017/tick_execution_coverage_schedule_freeze_final.json": "0354cab7951a1b8f8d626e8b6381c0332a1fc0990379b652f530bb5b908762c4",
+    "quant_rl/config/default.yaml": "7bd7acd8b9aa8bf7f3894fcc8781a7cbe89761ad8b2335fa91af630f5307b50d",
+    "quant_rl/data/session.py": "b9cfb04b2b98ee3c8b4faf282040f04861a095e6f9ba04f8a14fd0e54e072129",
+    "quant_rl/data/split.py": "88cce652a8348f106e9203d82700ebe85f2208ca28e68a086a579e86808ca654",
+    "quant_rl/train/train_rl.py": "20be11dcc804da123eff1c2251184c1036291c9f3712a887be3b0320f779083a",
+    "scripts/research/fingerprint_tick_decision_schedule.py": "62bc9c397f9423468e836de3a2b3a1c48e63141a7bb94b65c8914e6ef3de6352"
+  },
+  "symbols": {
+    "US100.cash": {
+      "test": {
+        "decision_positions_sha256_int64_le": "6ed3e24ac680ad8836704bb1af35ff5c65f7b37179dd2a31bbc10747e6a86bfa",
+        "decision_timestamps": {
+          "count": 79069,
+          "first": "2026-01-02 16:30:00+03:00",
+          "last": "2026-10-16 23:00:00+03:00",
+          "sha256_utc_ns_little_endian": "cd38e3e67b5896438ea7a085a6eeac98de1d705296f543a101509fce1bc7d7c8"
+        },
+        "next_market_quote_anchor_timestamps": {
+          "count": 79069,
+          "first": "2026-01-02 16:31:00+03:00",
+          "last": "2026-10-16 23:01:00+03:00",
+          "sha256_utc_ns_little_endian": "2178d25814fcef0da82ab36bd3160255323e9365ded57869a3a88a1a4d0a3339"
+        },
+        "quote_anchor_positions_sha256_int64_le": "166c86d14993cebe07e1fd3b97e417e96711a516ebe7b70dcf8aeeb4dfa6d91d",
+        "tick_coverage_count_parity": true,
+        "tick_coverage_report_order_count": 79069
+      },
+      "train": {
+        "decision_positions_sha256_int64_le": "e836c02dc5cb15067ceb4660d3e5b1950c9407da8198ed2c32ecca57665a3df2",
+        "decision_timestamps": {
+          "count": 99492,
+          "first": "2024-12-30 16:30:00+03:00",
+          "last": "2025-12-31 23:00:00+03:00",
+          "sha256_utc_ns_little_endian": "7b48715ddc375d6028d4db153381df35ce1ddf6a2aee211576b94e4ca4a23da5"
+        },
+        "next_market_quote_anchor_timestamps": {
+          "count": 99492,
+          "first": "2024-12-30 16:31:00+03:00",
+          "last": "2025-12-31 23:01:00+03:00",
+          "sha256_utc_ns_little_endian": "b8cce2d42027a4d2ac3cc375765f624496d128709c98abfed238715177057905"
+        },
+        "quote_anchor_positions_sha256_int64_le": "92c1c795dec66207ccb55727251ad5c4d89073db1f175f691ba7d6aed81c1a37",
+        "tick_coverage_count_parity": true,
+        "tick_coverage_report_order_count": 99492
+      }
+    },
+    "US500.cash": {
+      "test": {
+        "decision_positions_sha256_int64_le": "0af7b75b3e2d86dc9fdaa7a291142d350f0f2600bc48d988c25214cfc7b4cde3",
+        "decision_timestamps": {
+          "count": 79068,
+          "first": "2026-01-02 16:30:00+03:00",
+          "last": "2026-10-16 23:00:00+03:00",
+          "sha256_utc_ns_little_endian": "cb651458f102f22a45bc5ce55b7a1a5aafd11dc3d20ff1d9a89aa4fe75e77ab3"
+        },
+        "next_market_quote_anchor_timestamps": {
+          "count": 79068,
+          "first": "2026-01-02 16:31:00+03:00",
+          "last": "2026-10-16 23:01:00+03:00",
+          "sha256_utc_ns_little_endian": "1d9d5e97e7102d5b8d3dbd1389e29debc00cf9865e6bb6c14a9a959aa55ae63c"
+        },
+        "quote_anchor_positions_sha256_int64_le": "9a7ce46db0afe572c51154b187d2717a699a22f9e1bfe4b3a74c62eaefabfd50",
+        "tick_coverage_count_parity": true,
+        "tick_coverage_report_order_count": 79068
+      },
+      "train": {
+        "decision_positions_sha256_int64_le": "e2b221ad699878b9b1eff457b42f54bbe5c4422116ddd62c22b5bb1a1c8c68c7",
+        "decision_timestamps": {
+          "count": 99482,
+          "first": "2024-12-30 16:30:00+03:00",
+          "last": "2025-12-31 23:00:00+03:00",
+          "sha256_utc_ns_little_endian": "db5d49473f2e3692282140f2aadee5f85cdbc310f4c91facce2449da9303ad4e"
+        },
+        "next_market_quote_anchor_timestamps": {
+          "count": 99482,
+          "first": "2024-12-30 16:31:00+03:00",
+          "last": "2025-12-31 23:01:00+03:00",
+          "sha256_utc_ns_little_endian": "927fe5428b4d778ac66e6ff828efec842ef0192036ff6f1138c951e37210ee3f"
+        },
+        "quote_anchor_positions_sha256_int64_le": "21920fec9a0dd99b591f6268b4c51c74cff57deae6b696931126c830f0f0f50b",
+        "tick_coverage_count_parity": true,
+        "tick_coverage_report_order_count": 99482
+      }
+    }
+  },
+  "working_tree_status": [
+    " M quant_rl/train/train_rl.py",
+    " M tests/test_envs/test_eligibility_wiring.py",
+    "?? docs/thesis/evidence/replacement_data_20261017/decision_schedule_fingerprint.json",
+    "?? docs/thesis/evidence/replacement_data_20261017/tick_execution_coverage_schedule_freeze.json",
+    "?? docs/thesis/evidence/replacement_data_20261017/tick_execution_coverage_schedule_freeze_final.json",
+    "?? scripts/research/fingerprint_tick_decision_schedule.py",
+    "?? scripts/research/run_p1_schedule_freeze_gate.sh"
+  ]
+}

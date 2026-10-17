@@ -94,6 +94,44 @@ def test_tick_execution_preflight_reports_train_and_test_gaps() -> None:
     assert reports["test"]["unavailable_count"] == 0
 
 
+def test_tick_execution_schedule_freezes_observed_decisions_and_next_bar_quotes() -> None:
+    index = pd.DatetimeIndex(
+        [
+            pd.Timestamp("2025-12-31T14:29:00Z"),
+            pd.Timestamp("2025-12-31T14:30:00Z"),
+            pd.Timestamp("2025-12-31T14:31:00Z"),
+            pd.Timestamp("2025-12-31T14:32:00Z"),
+            pd.Timestamp("2025-12-31T14:33:00Z"),
+            pd.Timestamp("2025-12-31T14:34:00Z"),
+            pd.Timestamp("2026-01-02T14:29:00Z"),
+            pd.Timestamp("2026-01-02T14:30:00Z"),
+            pd.Timestamp("2026-01-02T14:31:00Z"),
+            pd.Timestamp("2026-01-02T14:32:00Z"),
+            pd.Timestamp("2026-01-02T14:33:00Z"),
+            pd.Timestamp("2026-01-02T14:34:00Z"),
+        ]
+    )
+    train_mask = pd.Series(index.date <= pd.Timestamp("2025-12-31").date(), index=index)
+    session_labels = pd.Series(
+        ["closed", "ny", "ny", "ny", "closed", "london"]
+        + ["closed", "ny", "ny", "ny", "closed", "london"],
+        index=index,
+    )
+
+    schedule = train_rl._tick_execution_split_schedule(
+        index, train_mask, "2026-01-02", session_labels=session_labels
+    )
+
+    assert schedule["train"]["decision_positions"].tolist() == [1, 2, 3]
+    assert schedule["train"]["quote_anchor_positions"].tolist() == [2, 3, 4]
+    assert schedule["train"]["decision_times"].equals(index[[1, 2, 3]])
+    assert schedule["train"]["quote_anchor_times"].equals(index[[2, 3, 4]])
+    assert schedule["test"]["decision_positions"].tolist() == [7, 8, 9]
+    assert schedule["test"]["quote_anchor_positions"].tolist() == [8, 9, 10]
+    assert schedule["test"]["decision_times"].equals(index[[7, 8, 9]])
+    assert schedule["test"]["quote_anchor_times"].equals(index[[8, 9, 10]])
+
+
 def test_zero_latency_tick_preflight_checks_the_immediate_order_time() -> None:
     order_time = pd.Timestamp("2025-12-31T14:30:00Z")
     tickbook = TickBook(

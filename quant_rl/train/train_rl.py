@@ -623,22 +623,21 @@ def _max_tick_quote_wait_ms(cfg: Any) -> int:
         return 60_000
 
 
-def _tick_execution_split_coverage(
-    tickbook: TickBook | None,
+def _tick_execution_split_schedule(
     index: pd.DatetimeIndex,
     train_mask: pd.Series,
     test_start: str,
     *,
     session_labels: pd.Series | None = None,
-    max_latency_ns_exclusive: int,
-    max_quote_wait_ms: int,
 ) -> dict[str, dict[str, Any]]:
-    """Preflight tick quotes at the timestamps actually used by NY env steps.
+    """Return the observed NY decisions and next-bar quote anchors by split.
 
     ``TradingEnv`` advances through NY-eligible bars and resolves each step's
     execution/valuation quote at the following market bar. Requiring coverage
     for every overnight M1 row is unrelated to this environment's execution
-    schedule and can reject otherwise complete NY-session tick data.
+    schedule and can reject otherwise complete NY-session tick data. The
+    returned timestamps describe the observed-bar schedule only; they do not
+    define which intervals the CFD provider was expected to publish.
     """
     if session_labels is None:
         ny_mask = ny_session_mask(index).to_numpy(dtype=bool)
@@ -660,15 +659,45 @@ def _tick_execution_split_coverage(
     # Match TradingEnv._step_untraced: every eligible NY step consumes the
     # following M1 market quote (clamped to the final available row).
     next_market = np.minimum(np.arange(len(index), dtype=np.int64) + 1, len(index) - 1)
-    train_times = index[next_market[train_mask_values & ny_mask]]
-    test_times = index[next_market[(index >= test_start_ts) & ny_mask]]
+    train_positions = np.flatnonzero(train_mask_values & ny_mask)
+    test_positions = np.flatnonzero((index >= test_start_ts) & ny_mask)
+    return {
+        "train": {
+            "decision_positions": train_positions,
+            "decision_times": index[train_positions],
+            "quote_anchor_positions": next_market[train_positions],
+            "quote_anchor_times": index[next_market[train_positions]],
+        },
+        "test": {
+            "decision_positions": test_positions,
+            "decision_times": index[test_positions],
+            "quote_anchor_positions": next_market[test_positions],
+            "quote_anchor_times": index[next_market[test_positions]],
+        },
+    }
+
+
+def _tick_execution_split_coverage(
+    tickbook: TickBook | None,
+    index: pd.DatetimeIndex,
+    train_mask: pd.Series,
+    test_start: str,
+    *,
+    session_labels: pd.Series | None = None,
+    max_latency_ns_exclusive: int,
+    max_quote_wait_ms: int,
+) -> dict[str, dict[str, Any]]:
+    """Preflight tick quotes at the timestamps actually used by NY env steps."""
+    schedule = _tick_execution_split_schedule(
+        index, train_mask, test_start, session_labels=session_labels
+    )
     options = {
         "max_latency_ns_exclusive": max_latency_ns_exclusive,
         "max_quote_wait_ms": max_quote_wait_ms,
     }
     return {
-        "train": tick_execution_coverage(tickbook, train_times, **options),
-        "test": tick_execution_coverage(tickbook, test_times, **options),
+        split: tick_execution_coverage(tickbook, rows["quote_anchor_times"], **options)
+        for split, rows in schedule.items()
     }
 
 
