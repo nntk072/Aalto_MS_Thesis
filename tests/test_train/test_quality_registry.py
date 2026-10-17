@@ -115,14 +115,20 @@ def test_unverified_registry_arms_are_all_fail_closed() -> None:
             apply_quality_variant(OmegaConf.create({}), variant_id)
 
 
-def test_lagrangian_placeholder_cannot_launch_as_ordinary_ppo() -> None:
+def test_lagrangian_is_implemented_but_waits_for_q4_parent_freeze() -> None:
     base = OmegaConf.create({"ppo": {"n_steps": 8}})
     stage, overrides = get_quality_variant("q5_lagrangian")
     assert stage == "q5_constraints"
     assert overrides["constrained_rl.enabled"] is True
-    with pytest.raises(
-        ValueError, match="not implemented and selectable|select the prior-stage winner"
-    ):
+    registry = load_quality_registry()
+    q5 = next(
+        variant
+        for stage_config in registry.stages
+        for variant in stage_config.variants
+        if variant.id == "q5_lagrangian"
+    )
+    assert q5.status == "implemented_unit_tested"
+    with pytest.raises(ValueError, match="select the prior-stage winner"):
         apply_quality_variant(base, "q5_lagrangian")
     assert "constrained_rl" not in base
 

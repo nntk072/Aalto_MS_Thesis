@@ -79,7 +79,7 @@ stages:
     variants:
       - id: q5_lagrangian
         parent: q4_winner
-        status: planned
+        status: implemented_unit_tested
         overrides: {constrained_rl.enabled: true}
   - id: q6_entry_fsm
     control: q5_winner

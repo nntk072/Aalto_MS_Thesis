@@ -254,6 +254,15 @@ ppo:
   checkpoint_freq: 1000000
   total_timesteps: 20000000
 
+# Optional research-only primal-dual PPO objective. The environment's hard
+# account guardrails remain active independently of this learned penalty.
+constrained_rl:
+  enabled: false
+  episode_cost_budget: 1.0
+  dual_learning_rate: 0.1
+  lambda_initial: 0.0
+  lambda_max: 100.0
+
 sac:
   learning_rate: 3.0e-4
   buffer_size: 100000

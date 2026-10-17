@@ -218,6 +218,7 @@ def test_initial_checkpoint_map_falls_back_to_earlier_valid_attempt(tmp_path: Pa
 
 def test_explicit_checkpoint_map_keeps_selected_attempt_after_newer_attempt_exists(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     campaign_dir, _checkpoint, _record = _source_campaign(tmp_path)
     frozen_map = controller.build_initial_checkpoint_map(
@@ -251,6 +252,7 @@ def test_explicit_checkpoint_map_keeps_selected_attempt_after_newer_attempt_exis
     manifest["jobs"][0]["status"] = "failed"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
+    monkeypatch.setattr(audit_campaign_checkpoint_loads, "ROOT", tmp_path)
     records, provenance_record = audit_campaign_checkpoint_loads._load_explicit_checkpoint_map(
         frozen_map_path,
         [{"key": "variant__seed42", "variant": "variant", "seed": 42}],

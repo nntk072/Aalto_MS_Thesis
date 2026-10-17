@@ -292,7 +292,7 @@ class ClampedStdMultiInputPolicy(MultiInputActorCriticPolicy):
         if not isinstance(account, torch.Tensor):
             account = torch.as_tensor(account, dtype=torch.float32, device=self.device)
         extra = account.float() @ self.account_value_weight
-        return cast(torch.Tensor, extra.unsqueeze(-1))
+        return extra.unsqueeze(-1)
 
     def forward(
         self, obs: Any, deterministic: bool = False

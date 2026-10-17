@@ -67,6 +67,8 @@ class HybridActorHeads(nn.Module):
         nn.init.orthogonal_(self.continuous_mean.weight, gain=0.01)
         nn.init.zeros_(self.continuous_mean.bias)
         for layer in self.categorical_logits.values():
+            if not isinstance(layer, nn.Linear):
+                raise TypeError("categorical action head must be a linear layer")
             nn.init.orthogonal_(layer.weight, gain=0.01)
             nn.init.zeros_(layer.bias)
 
@@ -97,13 +99,8 @@ class HybridBoxDistribution(SB3Distribution):
         logits: dict[str, torch.Tensor],
     ) -> HybridBoxDistribution:
         self.mean = means
-        self.normal = Normal(  # type: ignore[no-untyped-call]
-            means, log_std.exp().expand_as(means)
-        )
-        self.categorical = {
-            name: Categorical(logits=value)  # type: ignore[no-untyped-call]
-            for name, value in logits.items()
-        }
+        self.normal = Normal(means, log_std.exp().expand_as(means))
+        self.categorical = {name: Categorical(logits=value) for name, value in logits.items()}
         return self
 
     def _pack(self, continuous: torch.Tensor, classes: dict[str, torch.Tensor]) -> torch.Tensor:

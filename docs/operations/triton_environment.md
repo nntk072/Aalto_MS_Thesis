@@ -43,8 +43,11 @@ PyTorch 2.7.1 ROCm 6.3 wheel. On `gpuamd1` (Slurm job `21007645`), a 256×256
 MI210 matrix multiply succeeded, and the semantic-head/hybrid PPO update and
 save/load checks passed with this environment. This establishes a bounded test
 runtime, not parity with the locked CUDA 13.0 training stack or qualification
-for a research campaign. An end-to-end trainer and resource/throughput benchmark
-remain required before MI210 training use.
+for a research campaign. On 2026-10-17, job `21012389` repeated a real MI210 GPU
+operation and passed the full `pytest tests/ -q` suite (1,594 tests, 40
+warnings). This adds cross-runtime test evidence but still does not establish
+full trainer parity or throughput. An end-to-end trainer and
+resource/throughput benchmark remain required before MI210 training use.
 
 ## Storage characteristics
 

@@ -137,6 +137,154 @@ if _SB3_AVAILABLE:
             if self._rows:
                 pd.DataFrame(self._rows).to_csv(self._log_path, index=False)
 
+    class LagrangianRiskCallback(_Base):
+        """Primal-dual PPO shaping for annual account-survival risk.
+
+        The environment's hard account guardrails remain unchanged. This
+        callback adds the largest per-step increase among the normalized daily,
+        max-loss, and trailing risk costs, then updates a nonnegative Lagrange
+        multiplier from completed full-split episodes. It is a learning
+        objective, not a risk guarantee.
+        """
+
+        _STATE_VERSION = 1
+
+        def __init__(
+            self,
+            *,
+            episode_cost_budget: float = 1.0,
+            dual_learning_rate: float = 0.1,
+            lambda_initial: float = 0.0,
+            lambda_max: float = 100.0,
+            verbose: int = 0,
+        ) -> None:
+            super().__init__(verbose=verbose)
+            if episode_cost_budget < 0.0:
+                raise ValueError("episode_cost_budget must be nonnegative")
+            if dual_learning_rate <= 0.0:
+                raise ValueError("dual_learning_rate must be positive")
+            if lambda_initial < 0.0 or lambda_max <= 0.0 or lambda_initial > lambda_max:
+                raise ValueError("Lagrange multiplier bounds are invalid")
+            self.episode_cost_budget = float(episode_cost_budget)
+            self.dual_learning_rate = float(dual_learning_rate)
+            self.lambda_initial = float(lambda_initial)
+            self.lambda_max = float(lambda_max)
+            self.lagrange_multiplier = self.lambda_initial
+            self._episode_costs: np.ndarray[Any, Any] = np.zeros(0, dtype=np.float64)
+            self._completed_costs: list[float] = []
+            self._rollout_environment_reward = 0.0
+            self._rollout_penalty = 0.0
+            self._rollout_transitions = 0
+            self._dual_updates = 0
+
+        def _config_state(self) -> dict[str, float | int]:
+            return {
+                "version": self._STATE_VERSION,
+                "episode_cost_budget": self.episode_cost_budget,
+                "dual_learning_rate": self.dual_learning_rate,
+                "lambda_initial": self.lambda_initial,
+                "lambda_max": self.lambda_max,
+            }
+
+        def _persist_state(self) -> None:
+            setattr(
+                self.model,
+                "_constrained_rl_state",
+                {
+                    **self._config_state(),
+                    "lagrange_multiplier": self.lagrange_multiplier,
+                    "dual_updates": self._dual_updates,
+                },
+            )
+
+        def _on_training_start(self) -> None:
+            state = getattr(self.model, "_constrained_rl_state", None)
+            if state is not None:
+                expected = self._config_state()
+                for key, value in expected.items():
+                    if state.get(key) != value:
+                        raise ValueError(
+                            f"checkpoint constrained-RL setting {key!r} differs from config"
+                        )
+                self.lagrange_multiplier = float(state["lagrange_multiplier"])
+                self._dual_updates = int(state.get("dual_updates", 0))
+                if not 0.0 <= self.lagrange_multiplier <= self.lambda_max:
+                    raise ValueError("checkpoint Lagrange multiplier is outside configured bounds")
+            self._episode_costs = np.zeros(int(self.model.n_envs), dtype=np.float64)
+            self._persist_state()
+
+        @staticmethod
+        def _episode_cost(info: Any) -> float:
+            if not isinstance(info, dict):
+                return 0.0
+            constraints = info.get("constraints", {})
+            if not isinstance(constraints, dict):
+                return 0.0
+            cost_fields = ("daily_cost", "max_loss_cost", "trailing_cost")
+            costs = [
+                max(0.0, float(constraints.get(key, 0.0)))
+                for key in cost_fields
+                if isinstance(constraints.get(key, 0.0), (int, float, np.integer, np.floating))
+            ]
+            breached = any(
+                bool(constraints.get(key, False))
+                for key in ("daily_breach", "max_loss_breach", "trailing_breach")
+            )
+            return max([*costs, float(breached)], default=0.0)
+
+        def _on_step(self) -> bool:
+            rewards = self.locals.get("rewards")
+            dones = self.locals.get("dones")
+            infos = self.locals.get("infos")
+            if not isinstance(rewards, np.ndarray) or dones is None or infos is None:
+                raise RuntimeError("Lagrangian PPO callback did not receive VecEnv step data")
+            if len(rewards) != len(self._episode_costs) or len(infos) != len(rewards):
+                raise RuntimeError("Lagrangian PPO callback environment batch size changed")
+
+            self._rollout_environment_reward += float(np.sum(rewards))
+            costs = np.asarray([self._episode_cost(info) for info in infos], dtype=np.float64)
+            penalties = self.lagrange_multiplier * costs
+            rewards -= penalties.astype(rewards.dtype, copy=False)
+            self._rollout_penalty += float(np.sum(penalties))
+            self._rollout_transitions += int(len(rewards))
+
+            done_values = np.asarray(dones, dtype=bool)
+            self._episode_costs += costs
+            for index, done in enumerate(done_values):
+                if done:
+                    self._completed_costs.append(float(self._episode_costs[index]))
+                    self._episode_costs[index] = 0.0
+            return True
+
+        def _on_rollout_end(self) -> None:
+            model: Any = self.model
+            steps = max(1, self._rollout_transitions)
+            model.logger.record(
+                "constrained_rl/environment_reward_mean",
+                self._rollout_environment_reward / steps,
+            )
+            model.logger.record("constrained_rl/penalty_sum", self._rollout_penalty)
+            model.logger.record("constrained_rl/lambda", self.lagrange_multiplier)
+            model.logger.record("constrained_rl/completed_episodes", len(self._completed_costs))
+            if self._completed_costs:
+                observed_cost = float(np.mean(self._completed_costs))
+                self.lagrange_multiplier = float(
+                    np.clip(
+                        self.lagrange_multiplier
+                        + self.dual_learning_rate * (observed_cost - self.episode_cost_budget),
+                        0.0,
+                        self.lambda_max,
+                    )
+                )
+                self._dual_updates += 1
+                model.logger.record("constrained_rl/mean_completed_episode_cost", observed_cost)
+                model.logger.record("constrained_rl/dual_updates", self._dual_updates)
+                self._completed_costs.clear()
+            self._persist_state()
+            self._rollout_environment_reward = 0.0
+            self._rollout_penalty = 0.0
+            self._rollout_transitions = 0
+
     class ProgressLoggerCallback(_Base):
         """Record per-rollout training metrics and save them to a CSV.
 
@@ -526,6 +674,12 @@ else:
                 "stable-baselines3 is required for PeriodicCheckpointCallback. "
                 "Install it with: pip install stable-baselines3"
             )
+
+    class LagrangianRiskCallback:  # type: ignore[no-redef]
+        """Stub — stable-baselines3 is not installed."""
+
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            raise ImportError("stable-baselines3 is required for LagrangianRiskCallback")
 
     class EarlyAbortCallback:  # type: ignore[no-redef]
         """Stub — stable-baselines3 is not installed."""

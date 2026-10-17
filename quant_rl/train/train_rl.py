@@ -73,6 +73,7 @@ from quant_rl.train.callbacks import (
     ClipLogStdCallback,
     EarlyAbortCallback,
     EpisodeEquityCallback,
+    LagrangianRiskCallback,
     LearningDiagnosticsCallback,
     PeriodicCheckpointCallback,
     ProgressLoggerCallback,
@@ -217,6 +218,28 @@ def _training_episodic(cfg: Any) -> bool:
         return True
     raise ValueError(
         f"training.episode_mode must be 'full_split' or 'risk_terminated', got {mode!r}"
+    )
+
+
+def _build_lagrangian_callback(cfg: Any, *, algo: str, mvp: bool) -> Any | None:
+    """Build the Q5 survival-objective callback only for annual PPO episodes."""
+    constrained = cfg.get("constrained_rl", {})
+    if not bool(constrained.get("enabled", False)):
+        return None
+    mode = str(cfg.get("training", {}).get("episode_mode", "full_split"))
+    if algo != "ppo":
+        raise ValueError("constrained_rl is implemented for PPO only")
+    if mode != "full_split" or _training_episodic(cfg):
+        raise ValueError("constrained_rl requires training.episode_mode='full_split'")
+    if mvp:
+        raise ValueError(
+            "constrained_rl requires the complete chronological train split; MVP is invalid"
+        )
+    return LagrangianRiskCallback(
+        episode_cost_budget=float(constrained.get("episode_cost_budget", 1.0)),
+        dual_learning_rate=float(constrained.get("dual_learning_rate", 0.1)),
+        lambda_initial=float(constrained.get("lambda_initial", 0.0)),
+        lambda_max=float(constrained.get("lambda_max", 100.0)),
     )
 
 
@@ -941,6 +964,19 @@ def _training_protocol_manifest(
     ftmo = OmegaConf.to_container(cfg.get("ftmo", {}), resolve=True)
     return {
         "quality_variant": quality_lineage,
+        "constrained_rl": {
+            "enabled": bool(cfg.get("constrained_rl", {}).get("enabled", False)),
+            "method": "primal_dual_scalarized_return_ppo",
+            "cost": "sum_of_max_daily_max_loss_trailing_normalized_risk_increments_per_episode",
+            "episode_cost_budget": float(
+                cfg.get("constrained_rl", {}).get("episode_cost_budget", 1.0)
+            ),
+            "dual_learning_rate": float(
+                cfg.get("constrained_rl", {}).get("dual_learning_rate", 0.1)
+            ),
+            "lambda_initial": float(cfg.get("constrained_rl", {}).get("lambda_initial", 0.0)),
+            "lambda_max": float(cfg.get("constrained_rl", {}).get("lambda_max", 100.0)),
+        },
         "seed": int(seed),
         "worker_seeds": [int(seed + index) for index in range(n_envs)],
         "requested_steps": int(requested_steps),
@@ -1314,6 +1350,14 @@ def main() -> None:
         log.info("MVP mode: using first 30 days of training data")
         cfg.training.use_m1_only = True
         cfg.training.max_days = 30
+    lagrangian_cb = _build_lagrangian_callback(cfg, algo=args.algo, mvp=args.mvp)
+    if lagrangian_cb is not None:
+        log.info(
+            "Q5 primal-dual PPO enabled: episode_cost_budget=%.4f dual_lr=%.4f lambda_max=%.3f",
+            lagrangian_cb.episode_cost_budget,
+            lagrangian_cb.dual_learning_rate,
+            lagrangian_cb.lambda_max,
+        )
 
     data = run_pipeline(cfg, force=args.force)
     primary_ticks = build_tick_books(cfg).get(str(cfg.data.primary))
@@ -1706,11 +1750,12 @@ def main() -> None:
             | BestCheckpointEvalCallback
             | ProgressLoggerCallback
             | LearningDiagnosticsCallback
+            | LagrangianRiskCallback
             | ClipLogStdCallback
             | EpisodeEquityCallback
             | EarlyAbortCallback
             | TrainingDashboardCallback
-        ] = [c for c in (checkpoint_callback, aux_cb) if c is not None]
+        ] = [c for c in (lagrangian_cb, checkpoint_callback, aux_cb) if c is not None]
 
         callbacks.append(EpisodeEquityCallback(log_path=seed_model_dir / "episode_equity.csv"))
         if bool(cfg.get("quality_diagnostics", {}).get("enabled", False)):
