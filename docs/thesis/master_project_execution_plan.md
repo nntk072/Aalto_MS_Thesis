@@ -7,12 +7,12 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-17 11:42 Helsinki):** checkout is on `main` at
-`e2c878e`; commit `e2c878e` contains the source tree validated in MI210 job
-`21014127`. Its audit manifest records the pre-commit HEAD and dirty-tree
-fingerprint used when the files were run. There is no training campaign,
-supervisor, or tmux session. Authorized MI210 allocation `21014127` is active
-on `gpuamd1` with one
+**Live checkpoint (2026-10-17 11:42 Helsinki):** work is on `main`; the
+validated implementation snapshot is commit `e2c878e`. A docs-only commit
+followed to refresh this checkpoint. The audit manifest records the
+pre-commit HEAD and dirty-tree fingerprint used when the files were run. There
+is no training campaign, supervisor, or tmux session. Authorized MI210
+allocation `21014127` is active on `gpuamd1` with one
 MI210, 8 CPUs, 128 GiB, and a scheduled end of 17:05 Helsinki. No job was
 cancelled or training launched.
 
