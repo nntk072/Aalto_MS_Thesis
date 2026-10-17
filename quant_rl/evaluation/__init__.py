@@ -15,6 +15,7 @@ from .metrics import (
     PerformanceMetrics,
     calculate_metrics,
     compute_metrics,
+    evaluation_periods_per_year,
     max_drawdown,
     sweep_delay_breakdown,
 )
@@ -52,6 +53,7 @@ __all__ = [
     "calculate_metrics",
     "compute_distribution_metrics",
     "compute_metrics",
+    "evaluation_periods_per_year",
     "conditional_pnl_distributions",
     "conditional_pnl_groups",
     "holding_time_distribution",

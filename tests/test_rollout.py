@@ -10,8 +10,11 @@ PPO training is required.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
+import pytest
 
 from quant_rl.eval.rollout import evaluate_model
 
@@ -99,6 +102,8 @@ def test_evaluate_model_produces_trades_and_valid_equity():
     assert isinstance(equity, pd.Series)
     assert len(equity) == n - obs_window + 1
     assert isinstance(equity.index, pd.DatetimeIndex)
+    assert result["completed_data_split"] is True
+    assert result["episode_end_reason"] == "data_end"
 
     close_rows = trades[trades["type"] == "close"]
     assert not close_rows.empty
@@ -106,6 +111,103 @@ def test_evaluate_model_produces_trades_and_valid_equity():
     assert close_rows["bar"].notna().all()
     # Equity must not stay flat at the initial balance the whole rollout.
     assert not np.isclose(equity.iloc[-1], 100_000.0)
+
+
+class _ExposureEnv:
+    def __init__(self) -> None:
+        self.exposure = iter((True, True, False))
+        self.constraint_steps = iter(
+            (
+                {"daily_cost": 0.1},
+                {"trailing_cost": 0.2},
+                {"max_loss_cost": 0.1},
+            )
+        )
+        self.equity_curve = [100_000.0]
+        self.equity_times = [pd.Timestamp("2025-01-06T16:40:00+03:00")]
+        self.trade_log: list[dict[str, Any]] = []
+        self.breach_events: list[dict[str, Any]] = []
+        self.breach_log: list[dict[str, Any]] = []
+        self.all_sessions = {"s0"}
+        self.sessions_with_trades: set[str] = set()
+        self.breached_sessions: set[str] = set()
+        self.account = object()
+        self._entry_diag: dict[str, int] = {}
+
+    def reset(self) -> tuple[dict[str, object], dict[str, object]]:
+        return {}, {}
+
+    def step(
+        self, action: object
+    ) -> tuple[dict[str, object], float, bool, bool, dict[str, object]]:
+        del action
+        is_open = next(self.exposure)
+        self.equity_curve.append(100_000.0)
+        self.equity_times.append(self.equity_times[-1] + pd.Timedelta(minutes=1))
+        completed = len(self.equity_curve) == 4
+        info: dict[str, object] = {
+            "position": is_open,
+            "constraints": next(self.constraint_steps),
+        }
+        if completed:
+            info["episode_equity"] = {
+                "completed_data_split": True,
+                "episode_end_reason": "data_end",
+            }
+        return {}, 0.0, completed, False, info
+
+
+def test_evaluate_model_reports_bar_close_exposure_fraction() -> None:
+    result = evaluate_model(
+        _ScriptedModel({}),
+        bars=pd.DataFrame(),
+        features=pd.DataFrame(),
+        env=_ExposureEnv(),  # type: ignore[arg-type]
+    )
+
+    assert result["n_steps"] == 3
+    assert result["completed_data_split"] is True
+    assert result["survived_full_year"] is True
+    assert result["exposure_bars"] == 2
+    assert result["exposure_fraction"] == 2 / 3
+    assert result["exposure_measure"] == "fraction_of_evaluation_steps_with_position_at_bar_close"
+
+
+def test_q5_evaluation_reports_discounted_constraint_costs() -> None:
+    model = _ScriptedModel({})
+    setattr(model, "_constrained_rl_state", {"version": 2, "gamma": 0.9})
+    result = evaluate_model(
+        model,
+        bars=pd.DataFrame(),
+        features=pd.DataFrame(),
+        env=_ExposureEnv(),  # type: ignore[arg-type]
+    )
+
+    summary = result["constraint_cost_summary"]
+    assert summary["schema"] == "q5_discounted_constraint_cost_v1"
+    assert summary["n_steps"] == 3
+    assert summary["undiscounted_total"] == pytest.approx(0.4)
+    assert summary["discounted_total"] == pytest.approx(0.361)
+    assert summary["components"]["trailing_cost"]["discounted_total"] == pytest.approx(0.18)
+    assert result["constraint_costs"]["discount_factor"].tolist() == pytest.approx([1.0, 0.9, 0.81])
+
+
+def test_evaluate_model_does_not_mark_step_capped_rollout_as_full_survival():
+    bars = _make_bars(120)
+    features = _make_features(bars)
+
+    result = evaluate_model(
+        _ScriptedModel({}, default=0),
+        bars=bars,
+        features=features,
+        obs_window=10,
+        max_episode_steps=10,
+    )
+
+    assert result["n_steps"] == 10
+    assert result["completed_data_split"] is False
+    assert result["episode_end_reason"] == "max_episode_steps"
+    assert result["survived_full_year"] is False
 
 
 def test_evaluate_model_uses_requested_observation_schema(monkeypatch):

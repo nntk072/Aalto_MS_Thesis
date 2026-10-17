@@ -182,8 +182,19 @@ def suggest_n_epochs(*, current: int, has_cuda: bool) -> int:
     return max(current, 15)
 
 
-def scale_training_cfg(cfg: Any, device: torch.device, arch: str) -> None:
-    """Mutate ``cfg`` in place with RAM/VRAM-aware PPO/SAC throughput settings."""
+def scale_training_cfg(
+    cfg: Any,
+    device: torch.device,
+    arch: str,
+    *,
+    preserve_ppo_geometry: bool = False,
+) -> None:
+    """Mutate ``cfg`` in place with RAM/VRAM-aware PPO/SAC throughput settings.
+
+    Research comparisons can preserve their declared PPO geometry. In that
+    mode, reject an environment count that exceeds the estimated host-memory
+    capacity rather than silently changing the comparison arm.
+    """
     configure_cuda()
     total_ram, avail_ram = _read_meminfo()
     cgroup_memory = _read_cgroup_memory_limit()
@@ -212,6 +223,21 @@ def scale_training_cfg(cfg: Any, device: torch.device, arch: str) -> None:
         vram_bytes=vram,
         worker_ram_bytes=worker_ram,
     )
+    if preserve_ppo_geometry:
+        max_envs_env = os.environ.get("QUANT_RL_MAX_N_ENVS")
+        configured_cap = (
+            _floor_power_of_two(max(1, int(max_envs_env)))
+            if max_envs_env is not None
+            else requested
+        )
+        if n_envs < requested or configured_cap < requested:
+            estimated_cap = min(n_envs, configured_cap)
+            raise ValueError(
+                f"requested n_envs={requested} exceeds the estimated host-memory "
+                f"capacity of {estimated_cap}; choose an allocation that fits the exact "
+                "quality-experiment PPO geometry"
+            )
+        return
     max_envs_env = os.environ.get("QUANT_RL_MAX_N_ENVS")
     if max_envs_env is not None:
         n_envs = min(n_envs, max(1, int(max_envs_env)))

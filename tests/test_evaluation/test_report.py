@@ -78,13 +78,20 @@ class TestReportTables:
         path = tmp_path / "metrics.json"
 
         # Act
-        save_metrics_json(_metrics(120.0, 2), path)
+        save_metrics_json(
+            _metrics(120.0, 2),
+            path,
+            initial_balance=100_000.0,
+            final_equity=100_120.0,
+        )
         data = json.loads(path.read_text())
 
         # Assert
         assert data["n_trades"] == 2
         assert "breach_rate" in data
         assert "turnover" in data
+        assert data["initial_balance"] == pytest.approx(100_000.0)
+        assert data["final_equity"] == pytest.approx(100_120.0)
 
     def test_zero_trade_metrics_are_labeled_inactive(self, tmp_path: Path) -> None:
         metrics = _metrics(0.0, 0)

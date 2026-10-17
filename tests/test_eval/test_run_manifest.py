@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -17,12 +18,37 @@ from stable_baselines3 import PPO
 from quant_rl.eval.run_manifest import (
     _source_state,
     array_sha256,
+    build_evaluation_provenance,
     build_stop_candidate_schema,
     build_training_run_manifest,
     dataframe_sha256,
     file_sha256,
     write_run_manifest,
 )
+
+
+def test_evaluation_provenance_records_source_and_runtime(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import quant_rl.eval.run_manifest as run_manifest
+
+    monkeypatch.setattr(
+        run_manifest,
+        "_source_state",
+        lambda repository: {"available": True, "head": "abc123", "dirty_files": []},
+    )
+    monkeypatch.setattr(
+        run_manifest,
+        "_runtime_versions",
+        lambda: {"python": "3.12.0", "platform": "test"},
+    )
+
+    provenance = build_evaluation_provenance(tmp_path)
+
+    assert provenance["source"]["available"] is True
+    assert provenance["source"]["head"] == "abc123"
+    assert provenance["runtime"]["python"] == "3.12.0"
+    assert provenance["python_executable"]
 
 
 def test_manifest_records_config_dataset_checkpoint_and_split_hashes(tmp_path) -> None:
@@ -98,6 +124,7 @@ def test_manifest_records_config_dataset_checkpoint_and_split_hashes(tmp_path) -
     assert manifest["observation_schema"]["version"] == "account-state-v2"
     assert manifest["training_protocol"]["requested_steps"] == 100
     assert manifest["feature_cache"]["sha256"] == "cache-identity"
+    assert manifest["feature_cache"]["file_sha256"] == file_sha256(cache)
     assert manifest["manifest_version"] == 4
     assert manifest["stop_candidate_schema"]["menu"] == "recent_confirmed_unswept_mtf_swings_v1"
     assert manifest["training_architecture"]["physical_worker_count"] == 1

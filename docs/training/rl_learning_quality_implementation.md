@@ -2,6 +2,17 @@
 
 > **Plan routing:** The [master project execution plan](../thesis/master_project_execution_plan.md) is the single operational plan for Q0–Q7. This file records implementation status only; it does not authorize or document a launched research campaign.
 
+> **Current-status pointer (2026-10-17 06:31 Helsinki):** This file retains
+> dated snapshots that predate later Q5 implementation work. Use the current
+> [Q0–Q7 implementation audit](../thesis/q0_q7_implementation_audit_2026-10-17.md)
+> for the reconciled source status. Q5 primal-dual PPO is implemented with
+> gamma-matched discounted cost updates, checkpointed gamma, fail-closed
+> policy-only resume, and deterministic evaluation cost exports. The current
+> dirty tree passed Ruff format/lint, Mypy, MI210 smoke, and 1,664 tests. Q5 has
+> no research result and still awaits a frozen Q4 parent. The gate wrapper's
+> final summary step refused to overwrite existing immutable artifacts; see
+> the audit for exact hashes and limits.
+
 This work is a separate research lineage. It does not change the historical
 experiment registry or the readiness state of the thesis campaign.
 

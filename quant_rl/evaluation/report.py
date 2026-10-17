@@ -130,10 +130,20 @@ def build_comparison_table(
     return "\n".join(lines)
 
 
-def save_metrics_json(m: PerformanceMetrics, path: Path | str) -> None:
-    """Persist a PerformanceMetrics instance to a JSON file."""
+def save_metrics_json(
+    m: PerformanceMetrics,
+    path: Path | str,
+    *,
+    initial_balance: float | None = None,
+    final_equity: float | None = None,
+) -> None:
+    """Persist metrics plus account endpoints when supplied by the evaluator."""
     payload = asdict(m)
     payload["activity_status"] = activity_status(m)
+    if initial_balance is not None:
+        payload["initial_balance"] = float(initial_balance)
+    if final_equity is not None:
+        payload["final_equity"] = float(final_equity)
     Path(path).write_text(json.dumps(payload, indent=2))
 
 

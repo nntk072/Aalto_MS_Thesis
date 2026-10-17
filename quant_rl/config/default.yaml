@@ -36,6 +36,12 @@ account:
   margin_pct: 0.02                     # 2 % margin requirement
   contract_size: 1.0
 
+# Annualized M1 statistics use 252 trading sessions/year and 390 NY-session
+# minute bars/session. This convention is recorded with every run's metrics.
+evaluation:
+  periods_per_year: 98280
+  annualization_convention: "252 sessions/year x 390 NY-session M1 bars/session"
+
 costs:
   # spread in price units (same unit as bar close prices)
   spread_us100: 0.6
@@ -262,6 +268,13 @@ constrained_rl:
   dual_learning_rate: 0.1
   lambda_initial: 0.0
   lambda_max: 100.0
+
+# Runtime provenance for staged quality experiments. The requested shape is
+# recorded before hardware-aware scaling and compared with the effective shape.
+quality_execution:
+  requested_n_envs: null
+  effective_n_envs: null
+  exact_n_envs: false
 
 sac:
   learning_rate: 3.0e-4

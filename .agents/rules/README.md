@@ -16,7 +16,7 @@ Single source of truth for all coding agents in this repo (Cursor, Cline, Windsu
 | [security-rules.md](security-rules.md) | Secret & input safety checklist | Always at commit; deep on sensitive code |
 | [development-workflow.md](development-workflow.md) | Research-first → plan → TDD → review → commit | On non-trivial features |
 | [ci-verification.md](ci-verification.md) | **Blocking** full-tree `ruff` + `mypy .` (not path-scoped); scoped pytest before commit/push | On commit/push |
-| [triton-slurm.md](triton-slurm.md) | Triton GPU: reuse first; `srun` and `scancel` only with an explicit in-chat yes (retrain is not cancel); H200 then GH200; 1 GPU; 12h/6h | On Triton / GPU training |
+| [triton-slurm.md](triton-slurm.md) | Triton GPU: reuse first; inspect each node's GPU/CPU/RAM; bound allocation waits to 60s with no repeated polling; compare eligible A100-or-better/MI210 alternatives; `srun` and `scancel` require explicit in-chat approval | On Triton / GPU training |
 
 ## Activation flow
 
@@ -51,9 +51,11 @@ Layered principle: **specific overrides general**.
 3. **Domain rules** (Python standards, testing, security, commit rules, review graph, workflow) apply by activity, layered on top of 1–2.
 4. **Triton:** reuse existing GPU tmux/`srun` first. Call `srun` /
    `attach_or_alloc` (including `--overlap` and `--jobid=`) only after the
-   user explicitly asks for a new allocation. Call `scancel` only after the
+   user explicitly asks for a new allocation. Bound allocation attempts to
+   60 seconds and do not repeatedly poll/resubmit unavailable requests. Call `scancel` only after the
    user explicitly asks to cancel that job. SSH, an existing job, retrain,
-   or deleting outputs is not either ask. Never spam short (&lt;~120s)
-   diagnostic jobs.
+   or deleting outputs is not either ask. Stop waiting/polling for a new
+   allocation after 60 seconds; inspect each alternative node's GPU, CPU, and
+   RAM first and compare eligible A100-or-better/MI210 options. Never spam
+   short (&lt;~120s) diagnostic jobs.
 5. When two rules conflict, the more specific one for the current activity wins; when still ambiguous, ask before proceeding.
-

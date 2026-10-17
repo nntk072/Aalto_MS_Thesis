@@ -13,6 +13,8 @@ from quant_rl.train.quality_registry import (
     apply_quality_variant,
     get_quality_variant,
     load_quality_registry,
+    quality_variant_resource_contract,
+    validate_quality_resource_shape,
 )
 from quant_rl.train.train_rl import _log_effective_ppo
 
@@ -20,14 +22,47 @@ from quant_rl.train.train_rl import _log_effective_ppo
 def test_quality_registry_is_separate_and_staged() -> None:
     registry = load_quality_registry()
     assert registry.development_control == "ladder_a3_multi_tp"
-    assert len(registry.stages) >= 5
+    assert [str(stage.id) for stage in registry.stages] == [
+        "q1_state",
+        "q2_rollout",
+        "q3_reward",
+        "q4_action",
+        "q5_constraints",
+        "q6_entry_fsm",
+        "q7_encoder",
+    ]
+    q0 = registry.stages[0].variants[0]
+    assert q0.id == "q0_control_a3"
+    assert q0.status == "control"
     stage, overrides = get_quality_variant("q1_state_v2")
     assert stage == "q1_state"
     assert overrides["env.observation_schema_version"] == "account-state-v2"
 
 
+def test_quality_registry_rejects_unknown_override_path(tmp_path) -> None:
+    registry_path = tmp_path / "quality.yaml"
+    registry_path.write_text(
+        """registry_version: 1
+development_control: control
+stages:
+  - id: q0
+    control: control
+    variants:
+      - id: control
+        parent: null
+        status: control
+        overrides: {env.typo_that_would_be_ignored: true}
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="does not exist in quant_rl/config/default.yaml"):
+        load_quality_registry(registry_path)
+
+
 def test_apply_quality_variant_clones_config_and_applies_only_declared_keys() -> None:
-    base = OmegaConf.create({"env": {"n_envs": 8, "observation_schema_version": "v1"}})
+    base = load_config()
+    base.env.n_envs = 8
+    base.env.observation_schema_version = "v1"
     resolved = apply_quality_variant(base, "q1_state_v2")
     assert base.env.observation_schema_version == "v1"
     assert resolved.env.observation_schema_version == "account-state-v2"
@@ -50,8 +85,68 @@ def test_q2_rollout_geometry_arms_are_registered_but_fail_closed() -> None:
         stage, overrides = get_quality_variant(variant_id)
         assert stage == "q2_rollout"
         assert overrides["env.n_envs"] == n_envs
+        assert overrides["ppo.n_steps"] == 8192 // n_envs
+        assert overrides["env.n_envs"] * overrides["ppo.n_steps"] == 8192
+        assert quality_variant_resource_contract(variant_id) == {
+            "exact_n_envs": True,
+            "expected_n_envs": n_envs,
+            "aggregate_rollout_steps": 8192,
+        }
         with pytest.raises(ValueError, match="not implemented and selectable"):
             apply_quality_variant(OmegaConf.create({}), variant_id)
+
+
+@pytest.mark.parametrize("n_envs", (16, 32, 64))
+def test_q2_exact_environment_resource_contract(n_envs: int) -> None:
+    variant_id = f"q2_state_v2_nenv{n_envs}"
+    validate_quality_resource_shape(
+        variant_id,
+        requested_n_envs=n_envs,
+        effective_n_envs=n_envs,
+        aggregate_rollout_steps=8192,
+    )
+    with pytest.raises(ValueError, match=f"requires exactly {n_envs} environments"):
+        validate_quality_resource_shape(
+            variant_id,
+            requested_n_envs=n_envs,
+            effective_n_envs=n_envs // 2,
+            aggregate_rollout_steps=8192,
+        )
+    with pytest.raises(ValueError, match="requires requested_n_envs"):
+        validate_quality_resource_shape(
+            variant_id,
+            requested_n_envs=n_envs // 2,
+            effective_n_envs=n_envs // 2,
+            aggregate_rollout_steps=8192,
+        )
+    with pytest.raises(ValueError, match="requires aggregate_rollout_steps=8192"):
+        validate_quality_resource_shape(
+            variant_id,
+            requested_n_envs=n_envs,
+            effective_n_envs=n_envs,
+            aggregate_rollout_steps=4096,
+        )
+
+
+def test_quality_registry_rejects_unknown_resource_contract_field(tmp_path) -> None:
+    registry_path = tmp_path / "quality.yaml"
+    registry_path.write_text(
+        """registry_version: 1
+development_control: control
+stages:
+  - id: q0
+    control: control
+    variants:
+      - id: control
+        parent: null
+        status: control
+        overrides: {}
+        resource_contract: {invented_limit: 1}
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="unknown resource contract keys"):
+        load_quality_registry(registry_path)
 
 
 def test_q2_training_log_records_effective_rollout_and_update_geometry(caplog) -> None:

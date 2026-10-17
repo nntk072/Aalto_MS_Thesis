@@ -12,6 +12,7 @@ from quant_rl.evaluation.metrics import (
     PerformanceMetrics,
     calculate_metrics,
     compute_metrics,
+    evaluation_periods_per_year,
     max_drawdown,
     sweep_delay_breakdown,
 )
@@ -102,6 +103,19 @@ class TestComputeMetrics:
         # capital is known separately and must be present for drawdown.
         metrics = compute_metrics([90_000.0, 95_000.0], initial_balance=100_000.0)
         assert metrics.max_drawdown == pytest.approx(0.10)
+
+    def test_calmar_uses_return_intervals_with_or_without_initial_equity_point(self) -> None:
+        with_initial = compute_metrics(
+            [100.0, 95.0, 110.0], initial_balance=100.0, periods_per_year=2
+        )
+        without_initial = compute_metrics([95.0, 110.0], initial_balance=100.0, periods_per_year=2)
+
+        assert with_initial.calmar == pytest.approx(2.0)
+        assert without_initial.calmar == pytest.approx(with_initial.calmar)
+
+    def test_nonpositive_periods_per_year_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="periods_per_year must be positive"):
+            compute_metrics([100.0, 101.0], initial_balance=100.0, periods_per_year=0)
 
     def test_non_finite_equity_is_rejected(self) -> None:
         with pytest.raises(ValueError, match="finite"):
@@ -232,6 +246,12 @@ class TestCalculateMetricsAdapter:
         from quant_rl.evaluation.metrics import LEGACY_M1_PERIODS_PER_YEAR
 
         assert LEGACY_M1_PERIODS_PER_YEAR == 252 * 390
+
+    def test_evaluation_periods_per_year_uses_config_and_legacy_fallback(self) -> None:
+        assert evaluation_periods_per_year({}) == 252 * 390
+        assert evaluation_periods_per_year({"evaluation": {"periods_per_year": 12}}) == 12
+        with pytest.raises(ValueError, match="positive integer"):
+            evaluation_periods_per_year({"evaluation": {"periods_per_year": 0}})
 
     def test_none_trades_gives_no_trade_stats(self) -> None:
         # Act

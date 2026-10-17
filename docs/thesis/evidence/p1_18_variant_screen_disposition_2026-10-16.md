@@ -36,6 +36,28 @@ both causally admissible and passes the declared train-survival gate. Retain
 all attempts as exploratory failure/inactivity evidence; do not select a
 variant or make a confirmatory claim from them.
 
+### Cross-source reconciliation — 2026-10-17
+
+The preserved campaign manifest contains 18 seed-50 job records
+(`campaign.json`, SHA-256
+`76a4ea35169386ebac57d07f46595b8aeaf5defe5392e50578b529aaf463b688`). The
+controller status file has 11 succeeded, 4 failed, 3 interrupted, 0 pending,
+and 0 running (SHA-256
+`ab606086aa944b00215f2a12ae1fd435a224b5ceefc1b78f69b344d04013b89c`), matching
+the 18 identities in the preserved summary. Its `telemetry_available_runs: 18`
+means all 18 telemetry artifacts were present; it does **not** mean all
+variants completed a train-split episode. The same report records 1,088
+full-split episodes across 1,088 environments, exactly 17 × 64, and records
+zero episodes for the failed `ladder_a0_flat` attempt. The original summary
+JSON SHA-256 is
+`6af7f6117b1f177f83c9bc5271df9dc9bd06d9352bfba99d56ff32c7ca948d7e`; its
+schema-v1 campaign-level `seed: null` is a reporting defect because the
+manifest and all 18 run records declare seed 50. Preserve that report. A
+schema-v2 correction was generated under a new stem and its source plus
+artifact provenance passed the current-tree software gate. Its SHA-256 is
+`aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7`; it
+reports seed 50. No original report was overwritten.
+
 ## Numerical and resource boundaries
 
 The machine summary reports 32 verified PnL reconciliations, zero mismatches,
@@ -49,11 +71,16 @@ it is not pristine confirmatory OOS evidence.
 The campaign manifest declares seed `50` for all 18 jobs, and every per-run
 summary row retains seed 50. The original schema-v1 report incorrectly has a
 null campaign-level `seed` because its generator hard-coded scalar reporting to
-seed 42. A schema-v2 source repair now reports the actual seed set and only
-emits a scalar seed for complete homogeneous metadata. Its regressions and a
-new descriptive report are still pending verification; retain the original
-report unchanged until that gate passes. This metadata defect does not alter
-the campaign results, run identities, or fingerprint.
+seed 42. The schema-v2 source repair reports the actual seed set and only emits
+a scalar seed for complete homogeneous metadata. Its source tests passed in
+the 1,664-test current-tree suite. The recovery schema-v2 JSON SHA-256 is
+`aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7`; the
+separate v3 schema-v2 JSON SHA-256 is
+`edbd0312b473d118982a68b6c38ebff2e1c5d0b254092e8a727e63b4751355c1`.
+Both embed the current summary-script SHA-256. This metadata repair does not
+alter the campaign results, run identities, or fingerprint. The final gate
+wrapper declined to regenerate either immutable report because they already
+exist; no report was overwritten.
 
 ## Evidence
 

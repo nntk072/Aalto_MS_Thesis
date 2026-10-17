@@ -14,7 +14,10 @@ from stable_baselines3 import PPO
 
 from quant_rl.config import load_config
 from quant_rl.train.callbacks import LagrangianRiskCallback
-from quant_rl.train.train_rl import _build_lagrangian_callback
+from quant_rl.train.train_rl import (
+    _build_lagrangian_callback,
+    _validate_q5_resume_state,
+)
 
 
 class _Logger:
@@ -40,6 +43,7 @@ def test_q5_callback_penalizes_breach_and_updates_bounded_dual_state() -> None:
         dual_learning_rate=0.5,
         lambda_initial=2.0,
         lambda_max=3.0,
+        gamma=1.0,
     )
     model = _model()
     callback.init_callback(model)  # type: ignore[arg-type]
@@ -118,6 +122,60 @@ def test_q5_only_accepts_full_split_ppo_not_mvp() -> None:
         _build_lagrangian_callback(risk_terminated, algo="ppo", mvp=False)
 
 
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"episode_cost_budget": float("nan")},
+        {"dual_learning_rate": float("inf")},
+        {"lambda_initial": float("nan")},
+        {"lambda_max": float("inf")},
+    ],
+)
+def test_q5_rejects_nonfinite_dual_settings(settings: dict[str, Any]) -> None:
+    with pytest.raises(ValueError, match="must all be finite"):
+        LagrangianRiskCallback(**settings)
+
+
+def test_q5_discounted_cost_matches_ppo_reward_discount() -> None:
+    callback = LagrangianRiskCallback(
+        episode_cost_budget=0.05,
+        dual_learning_rate=0.5,
+        lambda_initial=2.0,
+        lambda_max=3.0,
+        gamma=0.9,
+    )
+    model = _model()
+    callback.init_callback(model)  # type: ignore[arg-type]
+    callback._on_training_start()
+    callback.locals = {
+        "rewards": np.array([0.0, 0.0], dtype=np.float32),
+        "dones": np.array([False, False]),
+        "infos": [{}, {"constraints": {"daily_cost": 0.1}}],
+    }
+    assert callback._on_step()
+    callback.locals = {
+        "rewards": np.array([0.0, 0.0], dtype=np.float32),
+        "dones": np.array([False, True]),
+        "infos": [{}, {"constraints": {"daily_cost": 0.2}}],
+    }
+    assert callback._on_step()
+    callback._on_rollout_end()
+
+    assert model.logger.values["constrained_rl/mean_completed_episode_cost"] == pytest.approx(0.28)
+    assert callback.lagrange_multiplier == pytest.approx(2.115)
+
+
+def test_q5_resume_is_rejected_without_training_environment_state() -> None:
+    cfg = OmegaConf.create({"constrained_rl": {"enabled": True}})
+
+    _validate_q5_resume_state(cfg, resume_checkpoint=None)
+    with pytest.raises(ValueError, match="training environment/account state is not restored"):
+        _validate_q5_resume_state(cfg, resume_checkpoint="checkpoint.zip")
+
+    disabled = OmegaConf.create({"constrained_rl": {"enabled": False}})
+    _validate_q5_resume_state(disabled, resume_checkpoint="checkpoint.zip")
+
+
 class _TinyEnv(gym.Env[npt.NDArray[np.float32], np.int64]):
     observation_space = spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
     action_space: spaces.Discrete[np.int64] = spaces.Discrete(2)
@@ -141,11 +199,12 @@ def test_q5_multiplier_state_survives_sb3_checkpoint_roundtrip(tmp_path: Path) -
         model,
         "_constrained_rl_state",
         {
-            "version": 1,
+            "version": 2,
             "episode_cost_budget": 1.0,
             "dual_learning_rate": 0.1,
             "lambda_initial": 0.0,
             "lambda_max": 100.0,
+            "gamma": 0.99,
             "lagrange_multiplier": 2.5,
             "dual_updates": 7,
         },

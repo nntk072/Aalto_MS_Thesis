@@ -302,6 +302,8 @@ def compute_metrics(
         raise ValueError("equity_curve must contain at least one value")
     if not np.isfinite(initial_balance) or initial_balance <= 0:
         raise ValueError("initial_balance must be positive")
+    if periods_per_year <= 0:
+        raise ValueError("periods_per_year must be positive")
     if not np.all(np.isfinite(curve)):
         raise ValueError("equity_curve values must be finite")
     if np.any(curve <= 0):
@@ -314,7 +316,10 @@ def compute_metrics(
     returns = _bar_returns(path)
     mdd = max_drawdown(path)
     total_pnl = float(curve[-1] - initial_balance)
-    years = curve.size / periods_per_year
+    # ``curve`` may either include the initial balance or contain only
+    # end-of-bar valuations. ``returns`` always counts elapsed bar intervals,
+    # so use it as the annualisation duration in both representations.
+    years = returns.size / periods_per_year
     annualised = ((curve[-1] / initial_balance) ** (1.0 / years) - 1.0) if years > 0 else 0.0
 
     pnls = np.asarray(trade_pnls if trade_pnls is not None else [], dtype=float)
@@ -344,6 +349,25 @@ def compute_metrics(
 # M1 bars per year: kept as the default for the pandas adapter below so the
 # migrated ``quant_rl.train`` runners preserve their historical annualisation.
 LEGACY_M1_PERIODS_PER_YEAR = 252 * 390
+
+
+def evaluation_periods_per_year(config: Mapping[str, Any]) -> int:
+    """Resolve annualization basis, preserving legacy M1 values for old configs."""
+    evaluation = config.get("evaluation", {})
+    raw = (
+        evaluation.get("periods_per_year", LEGACY_M1_PERIODS_PER_YEAR)
+        if isinstance(evaluation, Mapping)
+        else LEGACY_M1_PERIODS_PER_YEAR
+    )
+    if isinstance(raw, bool):
+        raise ValueError("evaluation.periods_per_year must be a positive integer")
+    try:
+        periods = int(raw)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("evaluation.periods_per_year must be a positive integer") from exc
+    if periods <= 0 or (isinstance(raw, float) and raw != periods):
+        raise ValueError("evaluation.periods_per_year must be a positive integer")
+    return periods
 
 
 def calculate_metrics(

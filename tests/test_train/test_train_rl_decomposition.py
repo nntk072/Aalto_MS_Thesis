@@ -89,8 +89,19 @@ def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path
         run_dir=tmp_path,
         seed=42,
         completed_timesteps=106_496,
-        train_result={"n_sessions": 100, "days_traded": 80},
-        test_result={"n_sessions": 130, "days_traded": 32, "fail_time": "2026-02-16"},
+        train_result={
+            "n_sessions": 100,
+            "days_traded": 80,
+            "completed_data_split": True,
+            "episode_end_reason": "data_end",
+        },
+        test_result={
+            "n_sessions": 130,
+            "days_traded": 32,
+            "completed_data_split": False,
+            "episode_end_reason": "max_episode_steps",
+            "fail_time": "2026-02-16",
+        },
         train_metrics=train_metrics,
         test_metrics=test_metrics,
         train_gate={"ok": False, "reason": "peak_trailing_dd"},
@@ -110,6 +121,10 @@ def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path
     assert test["policy_action_mode"] == "deterministic"
     assert test["metrics"]["total_pnl"] == -6760.0
     assert test["oos_role"].startswith("previously_inspected_holdout")
+    assert train["completed_data_split"] is True
+    assert train["episode_end_reason"] == "data_end"
+    assert test["completed_data_split"] is False
+    assert test["episode_end_reason"] == "max_episode_steps"
     assert "| Test (report-only; previously inspected) | -6.76% | -6760.00 USD |" in summary
     assert "Both final replays use deterministic policy actions." in summary
 

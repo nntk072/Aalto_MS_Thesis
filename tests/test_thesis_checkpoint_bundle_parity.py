@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
+from omegaconf import OmegaConf
 from scripts.thesis import audit_checkpoint_frame_bundle_parity as parity
 from scripts.thesis.audit_checkpoint_frame_bundle_parity import compare_results, select_split
 
@@ -20,9 +22,14 @@ def _result() -> dict[str, object]:
         "n_sessions_skipped": 0,
         "days_traded": 1,
         "survived_full_year": True,
+        "completed_data_split": True,
+        "episode_end_reason": "data_end",
         "reward_sum": -0.1,
         "reward_attribution": {"dsr": -0.1},
         "n_steps": 1,
+        "exposure_bars": 1,
+        "exposure_fraction": 1.0,
+        "exposure_measure": "fraction_of_evaluation_steps_with_position_at_bar_close",
         "fail_time": None,
         "max_trailing_dd": 0.001,
         "action_counts": {"-1": 1},
@@ -53,6 +60,51 @@ def test_compare_results_detects_trade_metadata_divergence() -> None:
     assert comparisons["equity"] is True
     assert comparisons["trades"] is False
     assert all(value for key, value in comparisons.items() if key != "trades")
+
+
+def test_compare_results_detects_exposure_divergence() -> None:
+    frame_result = _result()
+    bundle_result = _result()
+    bundle_result["exposure_fraction"] = 0.0
+
+    comparisons = compare_results(frame_result, bundle_result)
+
+    assert comparisons["exposure_bars"] is True
+    assert comparisons["exposure_fraction"] is False
+
+
+def test_compare_results_detects_evaluation_horizon_divergence() -> None:
+    frame_result = _result()
+    bundle_result = _result()
+    bundle_result["completed_data_split"] = False
+    bundle_result["episode_end_reason"] = "max_episode_steps"
+
+    comparisons = compare_results(frame_result, bundle_result)
+
+    assert comparisons["completed_data_split"] is False
+    assert comparisons["episode_end_reason"] is False
+
+
+def test_parity_metrics_use_saved_m1_annualization_and_initial_balance() -> None:
+    cfg = OmegaConf.create(
+        {
+            "account": {"initial_balance": 100.0},
+            "evaluation": {
+                "periods_per_year": 2,
+                "annualization_convention": "2 periods/year test fixture",
+            },
+        }
+    )
+    result = {
+        "equity": pd.Series([100.0, 95.0, 110.0]),
+        "trades": pd.DataFrame(),
+        "n_sessions": 1,
+        "n_breach_sessions": 0,
+    }
+
+    metrics = parity._metrics(result, cfg)
+
+    assert metrics["calmar"] == pytest.approx(2.0)
 
 
 def test_select_split_keeps_in_sample_and_report_only_roles_distinct() -> None:

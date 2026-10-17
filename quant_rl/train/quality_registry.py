@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from omegaconf import DictConfig, OmegaConf
@@ -13,6 +14,80 @@ DEFAULT_QUALITY_REGISTRY = (
 _SELECTABLE_STATUSES = frozenset(
     {"control", "implemented_unit_tested", "existing_encoder_implementation"}
 )
+_MISSING = object()
+
+
+def _override_type_matches(expected: object, value: object) -> bool:
+    if expected is None or value is None:
+        return True
+    if type(expected) is bool:
+        return type(value) is bool
+    if type(expected) is int:
+        return type(value) is int
+    if type(expected) is float:
+        return type(value) in (int, float)
+    return isinstance(value, type(expected))
+
+
+def _validate_override_schema(registry: DictConfig) -> None:
+    """Reject registry typos and type drift against the canonical default config."""
+    from quant_rl.config import load_config
+
+    base = load_config()
+    for stage in registry.stages:
+        for variant in stage.variants:
+            overrides = variant.get("overrides", {})
+            if not isinstance(overrides, DictConfig):
+                raise ValueError(f"quality variant {variant.id!r} overrides must be a map")
+            for key, value in overrides.items():
+                path = str(key)
+                expected = OmegaConf.select(base, path, default=_MISSING)
+                if expected is _MISSING:
+                    raise ValueError(
+                        f"quality variant {variant.id!r} override {path!r} "
+                        "does not exist in quant_rl/config/default.yaml"
+                    )
+                if not _override_type_matches(expected, value):
+                    raise ValueError(
+                        f"quality variant {variant.id!r} override {path!r} has "
+                        f"type {type(value).__name__}; default config expects "
+                        f"{type(expected).__name__}"
+                    )
+            resource_contract = variant.get("resource_contract", {})
+            if not isinstance(resource_contract, Mapping):
+                raise ValueError(f"quality variant {variant.id!r} resource_contract must be a map")
+            unknown_contract_keys = set(resource_contract) - {
+                "exact_n_envs",
+                "expected_n_envs",
+                "aggregate_rollout_steps",
+            }
+            if unknown_contract_keys:
+                raise ValueError(
+                    f"quality variant {variant.id!r} has unknown resource contract "
+                    f"keys: {sorted(unknown_contract_keys)}"
+                )
+            if (
+                "exact_n_envs" in resource_contract
+                and type(resource_contract["exact_n_envs"]) is not bool
+            ):
+                raise ValueError(
+                    f"quality variant {variant.id!r} resource_contract.exact_n_envs must be boolean"
+                )
+            for field in ("expected_n_envs", "aggregate_rollout_steps"):
+                if field in resource_contract and (
+                    type(resource_contract[field]) is not int or int(resource_contract[field]) <= 0
+                ):
+                    raise ValueError(
+                        f"quality variant {variant.id!r} resource_contract.{field} "
+                        "must be a positive integer"
+                    )
+            if bool(resource_contract.get("exact_n_envs", False)) and (
+                "expected_n_envs" not in resource_contract
+            ):
+                raise ValueError(
+                    f"quality variant {variant.id!r} exact_n_envs requires "
+                    "resource_contract.expected_n_envs"
+                )
 
 
 def load_quality_registry(path: str | Path = DEFAULT_QUALITY_REGISTRY) -> DictConfig:
@@ -50,6 +125,7 @@ def load_quality_registry(path: str | Path = DEFAULT_QUALITY_REGISTRY) -> DictCo
         control = str(stage.get("control", ""))
         if control not in variant_ids and not control.endswith("_winner"):
             raise ValueError(f"quality stage {stage.id!r} has unknown control {control!r}")
+    _validate_override_schema(registry)
     return registry
 
 
@@ -83,6 +159,50 @@ def quality_variant_metadata(variant_id: str) -> dict[str, str | None]:
                     "status": str(variant.get("status", "unspecified")),
                 }
     raise KeyError(f"unknown quality variant: {variant_id}")
+
+
+def quality_variant_resource_contract(variant_id: str) -> dict[str, bool | int]:
+    """Return validated runtime resource constraints for a quality variant."""
+    registry = load_quality_registry()
+    for stage in registry.stages:
+        for variant in stage.variants:
+            if str(variant.id) == variant_id:
+                contract = variant.get("resource_contract", {})
+                return {
+                    str(key): value if type(value) is int else bool(value)
+                    for key, value in contract.items()
+                }
+    raise KeyError(f"unknown quality variant: {variant_id}")
+
+
+def validate_quality_resource_shape(
+    variant_id: str,
+    *,
+    requested_n_envs: int,
+    effective_n_envs: int,
+    aggregate_rollout_steps: int,
+) -> None:
+    """Fail closed when resource scaling or CLI overrides change a Q2 arm."""
+    contract = quality_variant_resource_contract(variant_id)
+    expected_n_envs = contract.get("expected_n_envs")
+    if contract.get("exact_n_envs", False):
+        if requested_n_envs != expected_n_envs:
+            raise ValueError(
+                f"quality variant {variant_id!r} requires requested_n_envs="
+                f"{expected_n_envs}, but config/CLI resolved {requested_n_envs}"
+            )
+        if effective_n_envs != expected_n_envs:
+            raise ValueError(
+                f"quality variant {variant_id!r} requires exactly {expected_n_envs} "
+                f"environments, but resource scaling selected {effective_n_envs}; "
+                "use an allocation that satisfies the registered resource contract"
+            )
+    expected_rollout = contract.get("aggregate_rollout_steps")
+    if expected_rollout is not None and aggregate_rollout_steps != expected_rollout:
+        raise ValueError(
+            f"quality variant {variant_id!r} requires aggregate_rollout_steps="
+            f"{expected_rollout}, but config/CLI resolved {aggregate_rollout_steps}"
+        )
 
 
 def apply_quality_variant(cfg: DictConfig, variant_id: str) -> DictConfig:
@@ -119,7 +239,20 @@ def apply_quality_variant(cfg: DictConfig, variant_id: str) -> DictConfig:
     result = cloned
     for variant in reversed(lineage):
         for key, value in variant.get("overrides", {}).items():
-            OmegaConf.update(result, str(key), value, merge=True, force_add=True)
+            path = str(key)
+            expected = OmegaConf.select(result, path, default=_MISSING)
+            if expected is _MISSING:
+                raise ValueError(
+                    f"quality variant {variant_id!r} override {path!r} "
+                    "does not exist in the supplied base config"
+                )
+            if not _override_type_matches(expected, value):
+                raise ValueError(
+                    f"quality variant {variant_id!r} override {path!r} has "
+                    f"type {type(value).__name__}; supplied config expects "
+                    f"{type(expected).__name__}"
+                )
+            OmegaConf.update(result, path, value, merge=True, force_add=False)
     result.quality_variant_id = variant_id
     return result
 
@@ -130,4 +263,6 @@ __all__ = [
     "get_quality_variant",
     "load_quality_registry",
     "quality_variant_metadata",
+    "quality_variant_resource_contract",
+    "validate_quality_resource_shape",
 ]

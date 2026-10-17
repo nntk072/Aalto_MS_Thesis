@@ -32,6 +32,19 @@ from ..envs.trading_env import TradingEnv
 from ..evaluation.metrics import max_drawdown
 from .reward_attribution import RewardAttribution
 
+BAR_CLOSE_EXPOSURE_MEASURE = "fraction_of_evaluation_steps_with_position_at_bar_close"
+CONSTRAINT_COST_SCHEMA = "q5_discounted_constraint_cost_v1"
+
+
+def _finite_constraint_cost(constraints: dict[str, Any], key: str) -> float:
+    value = constraints.get(key, 0.0)
+    if isinstance(value, bool) or not isinstance(value, (int, float, np.number)):
+        raise ValueError(f"evaluation constraint cost {key!r} must be numeric")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"evaluation constraint cost {key!r} must be finite")
+    return max(0.0, numeric)
+
 
 def make_action_fn(
     model: Any,
@@ -233,6 +246,24 @@ def evaluate_model(
     reward_sum = 0.0
     reward_attribution = RewardAttribution()
     n_steps = 0
+    exposure_bars = 0
+    final_info: dict[str, Any] = {}
+    constrained_state = getattr(model, "_constrained_rl_state", None)
+    constraint_rows: list[dict[str, Any]] = []
+    constraint_discount_gamma: float | None = None
+    if constrained_state is not None:
+        if not isinstance(constrained_state, dict) or constrained_state.get("version") != 2:
+            raise ValueError("Q5 evaluation requires a version-2 constrained-RL checkpoint state")
+        gamma_value = constrained_state.get("gamma")
+        if (
+            isinstance(gamma_value, bool)
+            or not isinstance(gamma_value, (int, float))
+            or not np.isfinite(float(gamma_value))
+            or not 0.0 < float(gamma_value) <= 1.0
+        ):
+            raise ValueError("Q5 checkpoint gamma must be finite and in (0, 1]")
+        constraint_discount_gamma = float(gamma_value)
+    discount_factor = 1.0
     while not (done or truncated):
         action = action_fn(obs)
         if strategy_actions:
@@ -241,9 +272,42 @@ def evaluate_model(
             action_key = str(action)
         action_counts[action_key] += 1
         obs, reward, done, truncated, info = env.step(action)
+        final_info = info
         reward_sum += float(reward)
         reward_attribution.add(float(reward), info.get("reward_parts"))
         n_steps += 1
+        if constraint_discount_gamma is not None:
+            raw_constraints = info.get("constraints", {})
+            if not isinstance(raw_constraints, dict):
+                raise ValueError("Q5 evaluation step is missing its constraint-cost record")
+            component_costs = {
+                "daily_cost": _finite_constraint_cost(raw_constraints, "daily_cost"),
+                "max_loss_cost": _finite_constraint_cost(raw_constraints, "max_loss_cost"),
+                "trailing_cost": _finite_constraint_cost(raw_constraints, "trailing_cost"),
+            }
+            breach_indicator = float(
+                any(
+                    bool(raw_constraints.get(key, False))
+                    for key in ("daily_breach", "max_loss_breach", "trailing_breach")
+                )
+            )
+            step_cost = max(*component_costs.values(), breach_indicator)
+            constraint_rows.append(
+                {
+                    "step": n_steps,
+                    "time": pd.Timestamp(env.equity_times[-1]).isoformat(),
+                    "discount_factor": discount_factor,
+                    **component_costs,
+                    "breach_indicator": breach_indicator,
+                    "step_cost": step_cost,
+                    "discounted_step_cost": discount_factor * step_cost,
+                }
+            )
+            discount_factor *= constraint_discount_gamma
+        # Measure exposure at the decision-bar close. This avoids treating
+        # overnight/weekend gaps as market exposure and is reproducible from
+        # the environment's per-step position state.
+        exposure_bars += int(bool(info.get("position", False)))
 
     equity_series = pd.Series(
         env.equity_curve,
@@ -254,7 +318,33 @@ def evaluate_model(
     n_sessions = len(env.all_sessions)
     days_traded = len(env.sessions_with_trades)
     fail_time = env.breach_events[0]["time"] if env.breach_events else None
-    survived_full_year = len(env.breach_events) == 0
+    episode_equity = final_info.get("episode_equity", {})
+    completed_data_split = bool(episode_equity.get("completed_data_split", False))
+    episode_end_reason = episode_equity.get("episode_end_reason")
+    survived_full_year = len(env.breach_events) == 0 and completed_data_split
+
+    constraint_cost_summary = None
+    constraint_cost_frame = None
+    if constraint_discount_gamma is not None:
+        constraint_cost_frame = pd.DataFrame.from_records(constraint_rows)
+        component_summary = {
+            key: {
+                "undiscounted_total": float(constraint_cost_frame[key].sum()),
+                "discounted_total": float(
+                    (constraint_cost_frame[key] * constraint_cost_frame["discount_factor"]).sum()
+                ),
+            }
+            for key in ("daily_cost", "max_loss_cost", "trailing_cost")
+        }
+        constraint_cost_summary = {
+            "schema": CONSTRAINT_COST_SCHEMA,
+            "definition": "per_step_max_of_normalized_daily_max_loss_trailing_costs_and_breach_indicator",
+            "discount_gamma": constraint_discount_gamma,
+            "n_steps": len(constraint_cost_frame),
+            "undiscounted_total": float(constraint_cost_frame["step_cost"].sum()),
+            "discounted_total": float(constraint_cost_frame["discounted_step_cost"].sum()),
+            "components": component_summary,
+        }
 
     return {
         "equity": equity_series,
@@ -268,9 +358,14 @@ def evaluate_model(
         "n_sessions_skipped": n_sessions - days_traded,
         "days_traded": days_traded,
         "survived_full_year": survived_full_year,
+        "completed_data_split": completed_data_split,
+        "episode_end_reason": episode_end_reason,
         "reward_sum": reward_sum,
         "reward_attribution": reward_attribution.as_dict(),
         "n_steps": n_steps,
+        "exposure_bars": exposure_bars,
+        "exposure_fraction": float(exposure_bars / n_steps) if n_steps else 0.0,
+        "exposure_measure": BAR_CLOSE_EXPOSURE_MEASURE,
         "fail_time": fail_time,
         "max_trailing_dd": float(max_drawdown(env.equity_curve)),
         "action_counts": dict(action_counts),
@@ -278,6 +373,14 @@ def evaluate_model(
         "entry_state_diagnostics": (
             env.entry_state_diagnostics()
             if callable(getattr(env, "entry_state_diagnostics", None))
+            else {}
+        ),
+        **(
+            {
+                "constraint_costs": constraint_cost_frame,
+                "constraint_cost_summary": constraint_cost_summary,
+            }
+            if constraint_cost_summary is not None
             else {}
         ),
     }

@@ -242,6 +242,15 @@ def _runtime_versions() -> dict[str, str | None]:
     return versions
 
 
+def build_evaluation_provenance(repository: Path) -> dict[str, Any]:
+    """Capture the code tree and runtime that produced a deterministic replay."""
+    return {
+        "source": _source_state(repository.resolve()),
+        "runtime": _runtime_versions(),
+        "python_executable": sys.executable,
+    }
+
+
 def build_training_run_manifest(
     *,
     repository: Path,
@@ -328,6 +337,9 @@ def build_training_run_manifest(
             "path": None if feature_cache_path is None else str(feature_cache_path.resolve()),
             "identity": None if feature_cache_path is None else feature_cache_path.name,
             "sha256": feature_cache_hash,
+            "file_sha256": (
+                file_sha256(feature_cache_path) if feature_cache_path is not None else None
+            ),
         },
         "checkpoint": {
             "path": None if checkpoint_path is None else str(checkpoint_path.resolve()),

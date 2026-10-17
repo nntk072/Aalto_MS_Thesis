@@ -36,15 +36,18 @@ stages:
       - id: q2_state_v2_nenv16
         parent: q1_state_v2
         status: implementation_unverified
-        overrides: {env.n_envs: 16}
+        overrides: {env.n_envs: 16, ppo.n_steps: 512}
+        resource_contract: {exact_n_envs: true, expected_n_envs: 16, aggregate_rollout_steps: 8192}
       - id: q2_state_v2_nenv32
         parent: q1_state_v2
         status: implementation_unverified
-        overrides: {env.n_envs: 32}
+        overrides: {env.n_envs: 32, ppo.n_steps: 256}
+        resource_contract: {exact_n_envs: true, expected_n_envs: 32, aggregate_rollout_steps: 8192}
       - id: q2_state_v2_nenv64
         parent: q1_state_v2
         status: implementation_unverified
-        overrides: {env.n_envs: 64}
+        overrides: {env.n_envs: 64, ppo.n_steps: 128}
+        resource_contract: {exact_n_envs: true, expected_n_envs: 64, aggregate_rollout_steps: 8192}
   - id: q3_reward
     control: q2_winner
     variants:

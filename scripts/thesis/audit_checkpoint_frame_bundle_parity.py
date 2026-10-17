@@ -24,8 +24,8 @@ from quant_rl.envs.env_spec import EnvSpec
 from quant_rl.envs.worker import make_bundle_env
 from quant_rl.eval import eval_run
 from quant_rl.eval.reanalysis_provenance import _feature_build_scope
-from quant_rl.eval.rollout import evaluate_model
-from quant_rl.evaluation import calculate_metrics
+from quant_rl.eval.rollout import BAR_CLOSE_EXPOSURE_MEASURE, evaluate_model
+from quant_rl.evaluation import calculate_metrics, evaluation_periods_per_year
 from quant_rl.features.build import build_features
 from quant_rl.models.agent import validate_model_action_schema, validate_model_observation_schema
 from quant_rl.observation_schema import build_observation_schema
@@ -49,12 +49,14 @@ def _checkpoint_provenance(run_dir: Path, checkpoint: Path) -> tuple[Path, dict[
     raise FileNotFoundError(f"attempt_provenance.json not found above {run_dir}")
 
 
-def _metrics(result: dict[str, Any]) -> dict[str, Any]:
+def _metrics(result: dict[str, Any], cfg: Any) -> dict[str, Any]:
     value = calculate_metrics(
         result["equity"],
         trades=result["trades"],
         n_sessions=int(result.get("n_sessions", 1)),
         n_breach_sessions=int(result.get("n_breach_sessions", 0)),
+        initial_balance=float(cfg.account.initial_balance),
+        periods_per_year=evaluation_periods_per_year(cfg),
     )
     raw = asdict(value) if is_dataclass(value) else vars(value)
     return {
@@ -103,9 +105,14 @@ def compare_results(frame_result: dict[str, Any], bundle_result: dict[str, Any])
         "n_sessions_skipped",
         "days_traded",
         "survived_full_year",
+        "completed_data_split",
+        "episode_end_reason",
         "reward_sum",
         "reward_attribution",
         "n_steps",
+        "exposure_bars",
+        "exposure_fraction",
+        "exposure_measure",
         "fail_time",
         "max_trailing_dd",
         "action_counts",
@@ -294,8 +301,8 @@ def main() -> int:
         strategy_actions=bool(eval_common["strategy_actions"]),
     )
     comparisons = compare_results(frame_result, bundle_result)
-    frame_metrics = _metrics(frame_result)
-    bundle_metrics = _metrics(bundle_result)
+    frame_metrics = _metrics(frame_result, cfg)
+    bundle_metrics = _metrics(bundle_result, cfg)
     metric_equal = _equal(frame_metrics, bundle_metrics)
     matches = all(comparisons.values()) and metric_equal
     current_head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
@@ -335,6 +342,15 @@ def main() -> int:
             "bars": int(len(eval_bars)),
         },
         "policy_action_mode": "deterministic_saved_checkpoint",
+        "metrics_protocol": {
+            "annualization": {
+                "periods_per_year": evaluation_periods_per_year(cfg),
+                "convention": str(cfg.evaluation.annualization_convention),
+            },
+            "initial_balance": float(cfg.account.initial_balance),
+            "frequency": "bar_close_equity",
+            "exposure_measure": BAR_CLOSE_EXPOSURE_MEASURE,
+        },
         "backends": ["frames", "shared_bundle"],
         "bundle_path": str(bundle_path),
         "comparisons": {**comparisons, "aggregate_metrics": metric_equal},

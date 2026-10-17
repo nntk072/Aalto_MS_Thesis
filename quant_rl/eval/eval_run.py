@@ -21,6 +21,7 @@ from typing import Any
 from zipfile import ZipFile
 
 import numpy as np
+import pandas as pd
 import torch
 from gymnasium import spaces
 from stable_baselines3 import PPO
@@ -28,17 +29,31 @@ from stable_baselines3.common.save_util import json_to_data
 
 from quant_rl.action_schema import build_action_schema
 from quant_rl.data.pipeline import build_tick_books, run_pipeline
-from quant_rl.data.split import get_split_config, split_bars, split_train_test
+from quant_rl.data.split import (
+    get_split_config,
+    make_train_mask,
+    split_bars,
+    split_train_test,
+)
 from quant_rl.data.ticks import ticks_covering
 from quant_rl.eval.export import save_run
 from quant_rl.eval.reanalysis_provenance import (
+    _evaluation_dataset_records,
     _feature_build_scope,
+    _load_exact_source_feature_cache,
     _load_run_config,
+    _reanalysis_backend_disposition,
+    _validate_reanalysis_datasets,
+    _validate_reanalysis_feature_cache,
     _validate_reanalysis_request,
 )
-from quant_rl.eval.rollout import evaluate_model
-from quant_rl.eval.run_manifest import build_stop_candidate_schema, file_sha256
-from quant_rl.evaluation import calculate_metrics
+from quant_rl.eval.rollout import BAR_CLOSE_EXPOSURE_MEASURE, evaluate_model
+from quant_rl.eval.run_manifest import (
+    build_evaluation_provenance,
+    build_stop_candidate_schema,
+    file_sha256,
+)
+from quant_rl.evaluation import calculate_metrics, evaluation_periods_per_year
 from quant_rl.features.build import build_features
 from quant_rl.models.agent import (
     LegacyFourToFiveActionAdapter,
@@ -151,6 +166,22 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Explicitly opt in when an older checkpoint or run manifest has no stop-candidate "
             "schema; this does not assert that it used the expanded multi-HTF menu"
+        ),
+    )
+    parser.add_argument(
+        "--allow-legacy-data-provenance",
+        action="store_true",
+        help=(
+            "Explicitly allow reanalysis when the source run lacks feature-cache or dataset "
+            "identities; the resulting report will label input parity unverified"
+        ),
+    )
+    parser.add_argument(
+        "--source-feature-cache",
+        default=None,
+        help=(
+            "Read-only replay of a preserved training cache; its filename, sidecar content hash, "
+            "file SHA-256, saved config, and train/test feature fingerprints must match the run"
         ),
     )
     parser.add_argument(
@@ -304,6 +335,16 @@ def main() -> None:
         if not isinstance(manifest_value, dict):
             raise ValueError("source run manifest must be a JSON object")
         source_manifest = manifest_value
+    source_feature_cache = source_manifest.get("feature_cache")
+    source_datasets = source_manifest.get("datasets")
+    source_execution_protocol = source_manifest.get("execution_protocol")
+    if (
+        source_feature_cache is None or source_datasets is None
+    ) and not args.allow_legacy_data_provenance:
+        raise ValueError(
+            "source run manifest lacks feature-cache or dataset identities; pass "
+            "--allow-legacy-data-provenance only for an explicitly unverified legacy replay"
+        )
     checkpoint_hash_disposition = _validate_checkpoint_manifest_hash(ckpt_path, source_manifest)
     _ = ClampedStdMultiInputPolicy
     model: Any = _load_checkpoint(ckpt_path, legacy_layout_key=args.legacy_action_layout)
@@ -370,16 +411,53 @@ def main() -> None:
 
     cache_dir = Path(cfg.data.cache_dir)
     train_end, test_start = get_split_config(cfg)
-    train_mask, feat_cache = _feature_build_scope(
-        primary_m1, cfg, cache_dir, str(cfg.data.primary), train_end, secondary_m1
-    )
-    features = build_features(
-        primary_m1,
-        secondary=secondary_m1,
-        cfg=cfg,
-        train_mask=train_mask,
-        cache_path=feat_cache,
-    )
+    source_cache_replay_path = None
+    if args.source_feature_cache:
+        config_record = source_manifest.get("config")
+        source_config_path = run_dir / "config.yaml"
+        expected_config_hash = (
+            config_record.get("sha256") if isinstance(config_record, dict) else None
+        )
+        if not isinstance(expected_config_hash, str) or not expected_config_hash:
+            raise ValueError("exact source-cache replay requires a saved config SHA-256")
+        if (
+            not source_config_path.is_file()
+            or file_sha256(source_config_path) != expected_config_hash
+        ):
+            raise ValueError("saved run config does not match its manifest SHA-256")
+        source_cache_replay_path = Path(args.source_feature_cache).expanduser()
+        if not source_cache_replay_path.is_absolute():
+            source_cache_replay_path = (
+                Path(__file__).resolve().parents[2] / source_cache_replay_path
+            )
+        train_mask = make_train_mask(pd.DatetimeIndex(primary_m1.index), train_end)
+        (
+            features,
+            feat_cache,
+            evaluated_feature_cache_hash,
+            evaluated_feature_cache_file_sha256,
+        ) = _load_exact_source_feature_cache(source_feature_cache, source_cache_replay_path)
+        feature_cache_disposition = "source_cache_replay_verified"
+    else:
+        train_mask, feat_cache = _feature_build_scope(
+            primary_m1, cfg, cache_dir, str(cfg.data.primary), train_end, secondary_m1
+        )
+        features = build_features(
+            primary_m1,
+            secondary=secondary_m1,
+            cfg=cfg,
+            train_mask=train_mask,
+            cache_path=feat_cache,
+        )
+        (
+            feature_cache_disposition,
+            evaluated_feature_cache_hash,
+            evaluated_feature_cache_file_sha256,
+        ) = _validate_reanalysis_feature_cache(
+            source_feature_cache,
+            feat_cache,
+            allow_legacy=bool(args.allow_legacy_data_provenance),
+        )
 
     train_bars, test_bars, train_feat, test_feat = split_train_test(
         primary_m1, features, train_end, test_start
@@ -387,6 +465,25 @@ def main() -> None:
     train_sec = test_sec = None
     if secondary_m1 is not None and not secondary_m1.empty:
         train_sec, test_sec = split_bars(secondary_m1, train_end, test_start)
+    primary_ticks = build_tick_books(cfg).get(str(cfg.data.primary))
+    evaluated_datasets = _evaluation_dataset_records(
+        train_bars=train_bars,
+        train_features=train_feat,
+        test_bars=test_bars,
+        test_features=test_feat,
+        train_secondary=train_sec,
+        test_secondary=test_sec,
+        primary_ticks=primary_ticks,
+    )
+    dataset_parity_disposition = _validate_reanalysis_datasets(
+        source_datasets,
+        evaluated_datasets,
+        allow_legacy=bool(args.allow_legacy_data_provenance),
+    )
+    training_data_source, backend_parity_disposition = _reanalysis_backend_disposition(
+        source_execution_protocol,
+        evaluation_backend="frame",
+    )
     log.info(
         "Evaluating train=%d bars (≤%s)  test=%d bars (≥%s) under FTMO eval guardrails",
         len(train_bars),
@@ -398,7 +495,6 @@ def main() -> None:
     # Eval CLI does not expose training --algo / --reward flags; PPO replay
     # uses the configuration's saved environment defaults.
     eval_common, _, _, _, _ = _build_eval_common(cfg, args=None, env_vae=None, pre_ny_by_date=None)
-    primary_ticks = build_tick_books(cfg).get(str(cfg.data.primary))
 
     test_result = _evaluate_checkpoint_split(
         model,
@@ -414,6 +510,8 @@ def main() -> None:
         trades=test_result["trades"],
         n_sessions=test_result.get("n_sessions", 1),
         n_breach_sessions=test_result.get("n_breach_sessions", 0),
+        initial_balance=float(cfg.account.initial_balance),
+        periods_per_year=evaluation_periods_per_year(cfg),
     )
     log.info(
         "[test] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%  fail_time=%s",
@@ -438,6 +536,8 @@ def main() -> None:
         trades=train_result["trades"],
         n_sessions=train_result.get("n_sessions", 1),
         n_breach_sessions=train_result.get("n_breach_sessions", 0),
+        initial_balance=float(cfg.account.initial_balance),
+        periods_per_year=evaluation_periods_per_year(cfg),
     )
     log.info(
         "[train] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%  fail_time=%s",
@@ -487,6 +587,8 @@ def main() -> None:
             "test_return": float(test_m.total_return_pct),
             "test_breaches": test_result.get("n_breach_sessions", 0),
             "test_survived_full_year": bool(test_result.get("survived_full_year", False)),
+            "test_completed_data_split": bool(test_result.get("completed_data_split", False)),
+            "test_episode_end_reason": test_result.get("episode_end_reason"),
             "test_fail_time": (
                 str(test_result["fail_time"]) if test_result.get("fail_time") is not None else None
             ),
@@ -509,26 +611,57 @@ def main() -> None:
     manifest = {
         "artifact_role": "historical_reanalysis",
         "historical_holdout_inspected": True,
+        "evaluation_provenance": build_evaluation_provenance(Path(__file__).resolve().parents[2]),
         "source_run": str(run_dir.resolve()),
         "source_config_sha256": (
             _sha256(run_dir / "config.yaml") if (run_dir / "config.yaml").exists() else None
         ),
+        "reanalysis_config_sha256": _sha256(output_dir / "config.yaml"),
         "checkpoint": str(ckpt_path.resolve()),
         "checkpoint_sha256": _sha256(ckpt_path),
         "checkpoint_manifest_hash_disposition": checkpoint_hash_disposition,
         "action_schema_version": getattr(model, "_action_schema_version", None),
         "action_layout_key": getattr(model, "_action_layout_key", None),
         "action_schema": getattr(model, "_action_schema", None),
+        "observation_schema": expected_observation_schema.to_dict(),
         "legacy_action_schema_opt_in": bool(args.allow_legacy_action_schema),
         "legacy_observation_schema_opt_in": bool(args.allow_legacy_observation_schema),
         "legacy_stop_schema_opt_in": bool(args.allow_legacy_stop_schema),
+        "legacy_data_provenance_opt_in": bool(args.allow_legacy_data_provenance),
         "stop_schema_disposition": stop_schema_disposition,
         "stop_candidate_schema": checkpoint_stop_schema or manifest_stop_schema,
         "legacy_action_layout_selected": args.legacy_action_layout,
         "feature_cache_identity": feat_cache.name,
+        "feature_cache_hash": evaluated_feature_cache_hash or None,
+        "feature_cache_file_sha256": evaluated_feature_cache_file_sha256,
+        "source_feature_cache_replay_path": (
+            str(feat_cache) if source_cache_replay_path is not None else None
+        ),
+        "source_feature_cache": source_feature_cache,
+        "feature_cache_disposition": feature_cache_disposition,
+        "source_datasets": source_datasets,
+        "evaluated_datasets": evaluated_datasets,
+        "dataset_parity_disposition": dataset_parity_disposition,
+        "training_data_source": training_data_source,
+        "evaluation_backend": "frame",
+        "backend_parity_disposition": backend_parity_disposition,
         "train_end": train_end,
         "test_start": test_start,
         "seed": args.seed,
+        "metrics_protocol": {
+            "annualization": {
+                "periods_per_year": evaluation_periods_per_year(cfg),
+                "convention": str(
+                    (cfg.get("evaluation") or {}).get(
+                        "annualization_convention",
+                        "legacy M1 convention: 252 sessions/year x 390 bars/session",
+                    )
+                ),
+            },
+            "initial_balance": float(cfg.account.initial_balance),
+            "frequency": "bar_close_equity",
+            "exposure_measure": BAR_CLOSE_EXPOSURE_MEASURE,
+        },
         "policy_action_mode": policy_action_mode,
         "reanalysis_timestamp": datetime.now().isoformat(),
         "validity_note": "Historical inspected holdout; not pristine OOS evidence.",

@@ -1,6 +1,9 @@
 # Independent thesis-evidence review brief — 2026-10-16
 
 **Status: preparation only. No independent review or sign-off has occurred.**
+**Evidence refresh (2026-10-17):** the original pre-repair defect remains
+documented as historical evidence. Bounded post-repair checks passed, but P1 is
+still open; see the scope limits below and the master plan.
 
 This brief is a short entry point for an independent reviewer of the thesis
 evidence. The full evidence inventory and review questions are in the
@@ -17,17 +20,20 @@ The P4 validity gate remains open.
 
 ## What can be reviewed now
 
-1. **Causal-feature failure and its scope.** The real-market fold-fit audit
+1. **Causal-feature failure and repair scope.** The immutable pre-repair
    [report](g1_real_market_fold_fit_scope_2026-10-16.json) and
-   [reproduction script](audit_real_market_fold_fit_scope_current_source_2026-10-16.py)
-   show that validation-window OHLC perturbations alter model-visible
-   `prev_ny_high`/`prev_ny_low` in three feature profiles mapped to 17/18
-   saved worker configurations. The
    [same-session future-poison regression](../../tests/test_features/test_session_ohlc.py)
-   was run on `gpuarm1` with CUDA disabled and failed on the current source as
-   expected (`1 failed, 17 deselected`). The active campaign source remains
-   frozen. Current screen outcomes are not valid for variant selection or
-   confirmation.
+   recorded model-visible `prev_ny_high`/`prev_ny_low` leakage in three feature
+   profiles mapped to 17/18 saved worker configurations; that regression
+   failed on the pre-repair source. The causal feature repair and regression
+   were subsequently applied. A bounded post-repair
+   [purged-fold poison report](g1_real_market_fold_fit_scope_post_array_opt_2026-10-17.json)
+   passed for four representative feature profiles on one early fold, and the
+   [prefix-invariance report](g1_feature_prefix_post_repair_2026-10-17.json)
+   passed 12 sampled comparisons across four profiles. These results support
+   only the tested source/config/data slices. They do not prove exhaustive
+   causality, establish a valid market calendar, or clear G1/P1. The old
+   campaign remains contaminated and cannot support selection or confirmation.
 2. **Bounded evaluator evidence.** The plan's P2 section and linked audit
    reports document deterministic replays and frame/shared-bundle parity for
    interrupted checkpoints. Review the exact checkpoint, split, and backend
@@ -61,13 +67,17 @@ The P4 validity gate remains open.
 
 ## Explicitly deferred from sign-off
 
-Do not sign off the final selected pair, final RQ1 effect, G1 repair, or P7
-robustness results from the current campaign. These require the post-boundary
-source repair, passing regression, versioned cache rebuild, repeated real-market
-causal audits, valid fresh screen, frozen matched design/runtime, and final
-paired-seed evidence. The old 100k campaign's underlying reports and per-run
-artifacts are absent from this checkout; its aggregate results cannot be
-independently recomputed here.
+Do not sign off the final selected pair, final RQ1 effect, G1/P1 closure, or
+P7 robustness results from the current campaign. Remaining gates include
+independent review of the bounded post-repair evidence, market-feed/provider
+and data-use provenance, broker timezone/DST and authoritative session-calendar
+validation, quote-aging/impact validity, broader causal/cache checks, a valid
+fresh screen, frozen matched design/runtime, and final paired-seed evidence.
+The versioned cache rebuild is recorded in
+[`prebuilt_cache_rebuild_2026-10-17_mi210.json`](prebuilt_cache_rebuild_2026-10-17_mi210.json).
+The old 100k campaign's underlying reports and per-run artifacts are absent
+from this checkout; its aggregate results cannot be independently recomputed
+here.
 
 ## Reviewer record
 

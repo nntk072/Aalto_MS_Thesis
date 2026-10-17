@@ -191,8 +191,12 @@ CPU, and host-RAM availability as described above, then compare realistic
 resource shapes with `srun --test-only`. The user requires the agent to spend
 no more than **60 seconds waiting or polling** for an eligible allocation.
 For `srun`/`salloc`, use Slurm's immediate timeout (`--immediate=60`) where
-supported; never leave a blocking allocation command waiting longer. For
-submitted jobs, stop polling for a start after 60 seconds. Once Slurm grants
+supported; the allocation attempt itself must return within 60 seconds. Never
+leave a blocking terminal/PTY waiting longer. If the selected invocation does
+not support an immediate limit, use an equivalent Slurm-native bounded request
+or do not issue it. Do not repeatedly poll or resubmit the same unavailable
+request after the minute expires. For submitted jobs, stop polling for a start
+after 60 seconds. Once Slurm grants
 the allocation, the training or other authorized work may run for its full
 requested walltime; the one-minute limit is not a runtime limit.
 

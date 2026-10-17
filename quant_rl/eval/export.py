@@ -9,7 +9,9 @@ New layout (v2)
         summary.txt          — Train vs Test comparison table
         training/            — in-sample  (≤ train_end)
             equity.csv, trades.csv, metrics.json
+            fills.csv, positions.csv
             breach_events.csv, session_activity.json
+            evaluation_diagnostics.json
             equity.png/html, drawdown.png/html, daily_pnl.png/html
             pnl_hist.png/html, returns_dist.png, monthly_heatmap.png/html
             hold_time_pnl, rolling_winrate, tod_heatmap, mae_mfe (.png/.html)
@@ -51,6 +53,148 @@ from ..evaluation import PerformanceMetrics
 from ..evaluation.report import build_comparison_table, build_summary_table, save_metrics_json
 
 log = logging.getLogger(__name__)
+
+_FILL_EVENT_TYPES = frozenset(
+    {"open", "close", "stop_close", "tp_close", "forced_close", "eod_close", "tp_partial_close"}
+)
+_CLOSE_EVENT_TYPES = _FILL_EVENT_TYPES - {"open"}
+_EMPTY_TRADE_COLUMNS = (
+    "type",
+    "position_id",
+    "fill_id",
+    "time",
+    "bar",
+    "direction",
+    "price",
+    "pnl",
+    "net_pnl",
+    "position_net_pnl",
+    "position_complete",
+    "reason",
+)
+_POSITION_COLUMNS = (
+    "position_id",
+    "direction",
+    "entry_time",
+    "exit_time",
+    "entry_price",
+    "exit_price",
+    "close_pnl",
+    "net_pnl",
+    "position_net_pnl",
+    "fill_count",
+    "completed",
+    "holding_seconds",
+    "exit_reason",
+    "reconstruction_status",
+)
+_BREACH_EVENT_COLUMNS = ("time", "session_id", "reason", "equity", "fill_time")
+
+
+def _fill_events(trades: pd.DataFrame) -> pd.DataFrame:
+    """Return actual execution events, excluding rejects and order-only records."""
+    if trades.empty or "type" not in trades.columns:
+        return pd.DataFrame(columns=_EMPTY_TRADE_COLUMNS)
+    return trades.loc[trades["type"].astype(str).isin(_FILL_EVENT_TYPES)].copy()
+
+
+def _position_summaries(trades: pd.DataFrame) -> pd.DataFrame:
+    """Reconstruct position-level rows from identified raw fill events."""
+    fills = _fill_events(trades)
+    if fills.empty:
+        return pd.DataFrame(columns=_POSITION_COLUMNS)
+
+    records: list[dict[str, Any]] = []
+    identified = (
+        fills["position_id"].notna()
+        if "position_id" in fills.columns
+        else pd.Series(False, index=fills.index)
+    )
+    unidentified_fills = fills.loc[~identified]
+    for event_index, (_, event) in enumerate(unidentified_fills.iterrows()):
+        is_open = str(event.get("type", "")) == "open"
+        is_close = str(event.get("type", "")) in _CLOSE_EVENT_TYPES
+        records.append(
+            {
+                "position_id": None,
+                "direction": event.get("direction"),
+                "entry_time": event.get("time") if is_open else None,
+                "exit_time": event.get("time") if is_close else None,
+                "entry_price": event.get("price") if is_open else None,
+                "exit_price": event.get("price") if is_close else None,
+                "close_pnl": event.get("pnl") if is_close else None,
+                "net_pnl": event.get("net_pnl") if is_close else None,
+                "position_net_pnl": event.get("position_net_pnl"),
+                "fill_count": 1,
+                "completed": bool(event.get("position_complete", False)),
+                "holding_seconds": None,
+                "exit_reason": event.get("reason"),
+                "reconstruction_status": f"unidentified_event_{event_index}",
+            }
+        )
+
+    if identified.any():
+        identified_fills = fills.loc[identified]
+        for position_id, events in identified_fills.groupby("position_id", sort=True, dropna=True):
+            opens = events.loc[events["type"].astype(str) == "open"]
+            closes = events.loc[events["type"].astype(str).isin(_CLOSE_EVENT_TYPES)]
+            entry = opens.iloc[0] if not opens.empty else None
+            last_close = closes.iloc[-1] if not closes.empty else None
+            pnl_values = pd.to_numeric(closes.get("pnl", pd.Series(dtype=float)), errors="coerce")
+            if "net_pnl" in closes.columns:
+                net_values = pd.to_numeric(closes["net_pnl"], errors="coerce")
+                if "pnl" in closes.columns:
+                    net_values = net_values.fillna(pnl_values)
+            else:
+                net_values = pnl_values
+            completed_values = (
+                closes.get("position_complete", pd.Series(False, index=closes.index))
+                .fillna(False)
+                .astype(bool)
+            )
+            position_pnl_values = (
+                pd.to_numeric(closes["position_net_pnl"], errors="coerce").dropna()
+                if "position_net_pnl" in closes.columns
+                else pd.Series(dtype=float)
+            )
+            final_net = (
+                float(position_pnl_values.iloc[-1])
+                if not position_pnl_values.empty
+                else (float(net_values.sum()) if not closes.empty else None)
+            )
+            entry_time = None if entry is None else entry.get("time")
+            exit_time = None if last_close is None else last_close.get("time")
+            holding_seconds = None
+            if entry_time is not None and exit_time is not None:
+                try:
+                    holding_seconds = float(
+                        (pd.Timestamp(exit_time) - pd.Timestamp(entry_time)).total_seconds()
+                    )
+                except (TypeError, ValueError):
+                    holding_seconds = None
+            records.append(
+                {
+                    "position_id": str(position_id),
+                    "direction": (
+                        entry.get("direction")
+                        if entry is not None
+                        else events.iloc[0].get("direction")
+                    ),
+                    "entry_time": entry_time,
+                    "exit_time": exit_time,
+                    "entry_price": None if entry is None else entry.get("price"),
+                    "exit_price": None if last_close is None else last_close.get("price"),
+                    "close_pnl": float(pnl_values.sum()) if not closes.empty else None,
+                    "net_pnl": float(net_values.sum()) if not closes.empty else None,
+                    "position_net_pnl": final_net,
+                    "fill_count": int(len(events)),
+                    "completed": bool(completed_values.any()),
+                    "holding_seconds": holding_seconds,
+                    "exit_reason": None if last_close is None else last_close.get("reason"),
+                    "reconstruction_status": "identified_by_position_id",
+                }
+            )
+    return pd.DataFrame.from_records(records, columns=_POSITION_COLUMNS)
 
 
 # ---------------------------------------------------------------------------
@@ -170,36 +314,61 @@ def _write_split(
     equity: pd.Series = result.get("equity", pd.Series(dtype=float))
     trades: pd.DataFrame = result.get("trades", pd.DataFrame())
     breach_events: list[dict[str, Any]] = result.get("breach_events", [])
-    initial_balance: float = result.get("initial_balance", 100_000.0)
+    n_sessions = int(result.get("n_sessions") or 0)
+    n_breach_sessions = int(result.get("n_breach_sessions") or 0)
+    n_sessions_with_trades = int(result.get("n_sessions_with_trades") or 0)
+    n_sessions_skipped_value = result.get("n_sessions_skipped")
+    n_sessions_skipped = (
+        n_sessions - n_sessions_with_trades
+        if n_sessions_skipped_value is None
+        else int(n_sessions_skipped_value)
+    )
+    configured_initial_balance = result.get("initial_balance")
+    if configured_initial_balance is None and not equity.empty:
+        initial_balance = float(equity.iloc[-1]) - float(metrics.total_pnl)
+    else:
+        initial_balance = float(
+            100_000.0 if configured_initial_balance is None else configured_initial_balance
+        )
 
     phase_start = time.perf_counter()
+    fill_events = _fill_events(trades)
+    position_records = _position_summaries(trades)
     # ------------------------------------------------------------------
     # CSVs + diagnostics
     # ------------------------------------------------------------------
     if save_csv:
         if not equity.empty:
             equity.to_csv(split_dir / "equity.csv", header=["equity"])
-        if not trades.empty:
-            trades.to_csv(split_dir / "trades.csv", index=False)
-            if "sl_ref" in trades.columns:
-                from quant_rl.backtest.entry_levels import geometry_summary
-                from quant_rl.eval.decision_diversity import write_decision_artifacts
+        trades_for_csv = trades if not trades.empty else pd.DataFrame(columns=_EMPTY_TRADE_COLUMNS)
+        trades_for_csv.to_csv(split_dir / "trades.csv", index=False)
+        fill_events.to_csv(split_dir / "fills.csv", index=False)
+        position_records.to_csv(split_dir / "positions.csv", index=False)
+        if not trades.empty and "sl_ref" in trades.columns:
+            from quant_rl.backtest.entry_levels import geometry_summary
+            from quant_rl.eval.decision_diversity import write_decision_artifacts
 
-                geometry_summary(trades).to_csv(split_dir / "geometry_summary.csv", index=False)
-                write_decision_artifacts(
-                    trades,
-                    split_dir,
-                    save_csv=True,
-                    save_plots=save_plots,
-                    dpi=dpi,
-                )
-        if breach_events:
-            pd.DataFrame(breach_events).to_csv(split_dir / "breach_events.csv", index=False)
+            geometry_summary(trades).to_csv(split_dir / "geometry_summary.csv", index=False)
+            write_decision_artifacts(
+                trades,
+                split_dir,
+                save_csv=True,
+                save_plots=save_plots,
+                dpi=dpi,
+            )
+        breach_frame = pd.DataFrame.from_records(breach_events, columns=_BREACH_EVENT_COLUMNS)
+        breach_frame.to_csv(split_dir / "breach_events.csv", index=False)
+        constraint_cost_summary = result.get("constraint_cost_summary")
+        if constraint_cost_summary is not None:
+            constraint_costs = result.get("constraint_costs")
+            if not isinstance(constraint_costs, pd.DataFrame):
+                raise ValueError("Q5 evaluation summary requires constraint_costs DataFrame")
+            constraint_costs.to_csv(split_dir / "constraint_costs.csv", index=False)
         session_diag = {
-            "n_sessions": result.get("n_sessions", 0),
-            "n_breach_sessions": result.get("n_breach_sessions", 0),
-            "n_sessions_with_trades": result.get("n_sessions_with_trades", 0),
-            "n_sessions_skipped": result.get("n_sessions_skipped", 0),
+            "n_sessions": n_sessions,
+            "n_breach_sessions": n_breach_sessions,
+            "n_sessions_with_trades": n_sessions_with_trades,
+            "n_sessions_skipped": n_sessions_skipped,
         }
         (split_dir / "session_activity.json").write_text(json.dumps(session_diag, indent=2))
         direction_diagnostics = result.get("direction_diagnostics")
@@ -211,7 +380,52 @@ def _write_split(
     # ------------------------------------------------------------------
     # Metrics
     # ------------------------------------------------------------------
-    save_metrics_json(metrics, split_dir / "metrics.json")
+    final_equity = float(equity.iloc[-1]) if not equity.empty else float(initial_balance)
+    save_metrics_json(
+        metrics,
+        split_dir / "metrics.json",
+        initial_balance=initial_balance,
+        final_equity=final_equity,
+    )
+    fail_time = result.get("fail_time")
+    evaluation_diagnostics = {
+        "n_steps": result.get("n_steps"),
+        "exposure_bars": result.get("exposure_bars"),
+        "exposure_fraction": result.get("exposure_fraction"),
+        "exposure_measure": result.get("exposure_measure"),
+        "survived_full_year": result.get("survived_full_year"),
+        "completed_data_split": result.get("completed_data_split"),
+        "episode_end_reason": result.get("episode_end_reason"),
+        "fail_time": None if fail_time is None else str(fail_time),
+        "n_sessions": n_sessions,
+        "n_breach_sessions": n_breach_sessions,
+        "n_sessions_with_trades": n_sessions_with_trades,
+        "n_sessions_skipped": n_sessions_skipped,
+        "action_counts": result.get("action_counts", {}),
+        "execution_event_count": int(len(fill_events)),
+        "position_record_count": int(len(position_records)),
+        "identified_position_count": int(
+            position_records["reconstruction_status"].eq("identified_by_position_id").sum()
+        )
+        if not position_records.empty
+        else 0,
+        "unidentified_position_event_count": int(
+            position_records["reconstruction_status"]
+            .astype(str)
+            .str.startswith("unidentified_event_")
+            .sum()
+        )
+        if not position_records.empty
+        else 0,
+        "reward_attribution": result.get("reward_attribution", {}),
+        "entry_funnel": result.get("entry_diag", {}),
+        "entry_state_diagnostics": result.get("entry_state_diagnostics", {}),
+    }
+    if result.get("constraint_cost_summary") is not None:
+        evaluation_diagnostics["constraint_cost_summary"] = result["constraint_cost_summary"]
+    (split_dir / "evaluation_diagnostics.json").write_text(
+        json.dumps(evaluation_diagnostics, indent=2)
+    )
     (split_dir / "summary.txt").write_text(build_summary_table(metrics))
     if not trades.empty:
         opens = trades[trades.get("type", pd.Series(dtype=str)) == "open"]

@@ -219,6 +219,46 @@ def test_scale_training_cfg_cpu_keeps_n_envs(monkeypatch: pytest.MonkeyPatch) ->
     assert int(cfg.ppo.n_epochs) == 10
 
 
+def test_scale_training_cfg_preserves_exact_quality_geometry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import torch
+
+    from quant_rl.utils import device as device_mod
+
+    monkeypatch.setattr(device_mod, "_read_meminfo", lambda: (256 * _GiB, 200 * _GiB))
+    cfg = OmegaConf.create(
+        {
+            "env": {"n_envs": 16, "data_source": "bundle"},
+            "ppo": {"n_steps": 512, "batch_size": 512, "n_epochs": 10},
+        }
+    )
+    scale_training_cfg(cfg, torch.device("cpu"), "tcn", preserve_ppo_geometry=True)
+    assert int(cfg.env.n_envs) == 16
+    assert int(cfg.ppo.n_steps) == 512
+    assert int(cfg.ppo.batch_size) == 512
+    assert int(cfg.ppo.n_epochs) == 10
+
+
+def test_scale_training_cfg_exact_geometry_rejects_explicit_env_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import torch
+
+    from quant_rl.utils import device as device_mod
+
+    monkeypatch.setattr(device_mod, "_read_meminfo", lambda: (256 * _GiB, 200 * _GiB))
+    monkeypatch.setenv("QUANT_RL_MAX_N_ENVS", "8")
+    cfg = OmegaConf.create(
+        {
+            "env": {"n_envs": 16, "data_source": "bundle"},
+            "ppo": {"n_steps": 512, "batch_size": 512, "n_epochs": 10},
+        }
+    )
+    with pytest.raises(ValueError, match="exact quality-experiment PPO geometry"):
+        scale_training_cfg(cfg, torch.device("cpu"), "tcn", preserve_ppo_geometry=True)
+
+
 def test_scale_training_cfg_uses_bundle_worker_budget(monkeypatch: pytest.MonkeyPatch) -> None:
     """Bundle mode passes the measured per-worker allowance into RAM scaling."""
     import torch

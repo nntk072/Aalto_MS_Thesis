@@ -49,7 +49,7 @@ from quant_rl.envs.strategies import (
 )
 from quant_rl.envs.trading_env import TradingEnv
 from quant_rl.eval.export import build_run_dir, save_run
-from quant_rl.eval.rollout import evaluate_model
+from quant_rl.eval.rollout import BAR_CLOSE_EXPOSURE_MEASURE, evaluate_model
 from quant_rl.eval.run_manifest import (
     array_sha256,
     build_stop_candidate_schema,
@@ -58,7 +58,7 @@ from quant_rl.eval.run_manifest import (
     file_sha256,
     write_run_manifest,
 )
-from quant_rl.evaluation import calculate_metrics
+from quant_rl.evaluation import calculate_metrics, evaluation_periods_per_year
 from quant_rl.features.build import (
     build_features,
     build_walkforward_fold_features,
@@ -241,7 +241,23 @@ def _build_lagrangian_callback(cfg: Any, *, algo: str, mvp: bool) -> Any | None:
         dual_learning_rate=float(constrained.get("dual_learning_rate", 0.1)),
         lambda_initial=float(constrained.get("lambda_initial", 0.0)),
         lambda_max=float(constrained.get("lambda_max", 100.0)),
+        gamma=float(cfg.ppo.gamma),
     )
+
+
+def _validate_q5_resume_state(cfg: Any, *, resume_checkpoint: str | Path | None) -> None:
+    """Reject Q5 resume until PPO checkpoints also restore full-split env state.
+
+    PPO checkpoints preserve the learned multiplier, but the training CLI builds
+    fresh environments when resuming. That would combine a partial episode's
+    saved risk cost with a new episode starting at the first training bar.
+    """
+    constrained = cfg.get("constrained_rl", {})
+    if resume_checkpoint and bool(constrained.get("enabled", False)):
+        raise ValueError(
+            "Q5 constrained_rl cannot resume from a PPO-only checkpoint: the "
+            "full-split training environment/account state is not restored"
+        )
 
 
 def _direction_summary(trades: Any) -> dict[str, int]:
@@ -892,6 +908,8 @@ def _build_training_log(
         "test_n_sessions": int(test_result.get("n_sessions", 0)),
         "test_days_traded": int(test_result.get("days_traded", 0)),
         "test_survived_full_year": bool(test_result.get("survived_full_year", False)),
+        "test_completed_data_split": bool(test_result.get("completed_data_split", False)),
+        "test_episode_end_reason": test_result.get("episode_end_reason"),
         "test_max_trailing_dd": float(test_result.get("max_trailing_dd", test_m.max_drawdown)),
         "test_fail_time": (
             str(test_result["fail_time"]) if test_result.get("fail_time") is not None else None
@@ -968,7 +986,7 @@ def _training_protocol_manifest(
         "constrained_rl": {
             "enabled": bool(cfg.get("constrained_rl", {}).get("enabled", False)),
             "method": "primal_dual_scalarized_return_ppo",
-            "cost": "sum_of_max_daily_max_loss_trailing_normalized_risk_increments_per_episode",
+            "cost": "gamma_discounted_sum_of_max_daily_max_loss_trailing_normalized_risk_increments_per_episode",
             "episode_cost_budget": float(
                 cfg.get("constrained_rl", {}).get("episode_cost_budget", 1.0)
             ),
@@ -977,6 +995,7 @@ def _training_protocol_manifest(
             ),
             "lambda_initial": float(cfg.get("constrained_rl", {}).get("lambda_initial", 0.0)),
             "lambda_max": float(cfg.get("constrained_rl", {}).get("lambda_max", 100.0)),
+            "cost_discount_gamma": float(cfg.ppo.gamma),
         },
         "seed": int(seed),
         "worker_seeds": [int(seed + index) for index in range(n_envs)],
@@ -1005,6 +1024,11 @@ def _training_protocol_manifest(
             "risk_per_trade_limit": float(cfg.get("ftmo", {}).get("risk_per_trade_limit", 1000.0)),
         },
         "ppo": {
+            "requested_n_envs": cfg.get("quality_execution", {}).get("requested_n_envs", n_envs),
+            "effective_n_envs": cfg.get("quality_execution", {}).get("effective_n_envs", n_envs),
+            "exact_n_envs_required": bool(
+                cfg.get("quality_execution", {}).get("exact_n_envs", False)
+            ),
             "logical_n_envs": n_envs,
             "n_steps_per_env": n_steps,
             "aggregate_rollout_steps": int(n_envs * n_steps),
@@ -1112,6 +1136,8 @@ def _write_evaluation_artifacts(
             "n_sessions": int(result.get("n_sessions", 0)),
             "days_traded": int(result.get("days_traded", 0)),
             "survived_full_year": bool(result.get("survived_full_year", False)),
+            "completed_data_split": bool(result.get("completed_data_split", False)),
+            "episode_end_reason": result.get("episode_end_reason"),
             "fail_time": (
                 str(result["fail_time"]) if result.get("fail_time") is not None else None
             ),
@@ -1327,6 +1353,10 @@ def main() -> None:
     _setup_rngs(args.seed)
 
     cfg = _load_merged_config(args)
+    try:
+        _validate_q5_resume_state(cfg, resume_checkpoint=args.resume_checkpoint)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     if args.arch is None:
         args.arch = str(cfg.agent.get("arch", "tcn"))
     elif getattr(args, "quality_variant", None) and args.arch != str(cfg.agent.get("arch", "tcn")):
@@ -1336,7 +1366,37 @@ def main() -> None:
         )
 
     device = get_device(cfg.get("device"))
-    scale_training_cfg(cfg, device, args.arch)
+    requested_n_envs = int(cfg.env.n_envs)
+    quality_variant = str(cfg.get("quality_variant_id", ""))
+    exact_n_envs = False
+    preserve_ppo_geometry = False
+    if quality_variant:
+        from quant_rl.train.quality_registry import quality_variant_resource_contract
+
+        resource_contract = quality_variant_resource_contract(quality_variant)
+        exact_n_envs = bool(resource_contract.get("exact_n_envs", False))
+        preserve_ppo_geometry = exact_n_envs and "aggregate_rollout_steps" in resource_contract
+    cfg.quality_execution.requested_n_envs = requested_n_envs
+    cfg.quality_execution.exact_n_envs = exact_n_envs
+    scale_training_cfg(
+        cfg,
+        device,
+        args.arch,
+        preserve_ppo_geometry=preserve_ppo_geometry,
+    )
+    cfg.quality_execution.effective_n_envs = int(cfg.env.n_envs)
+    if quality_variant and exact_n_envs:
+        from quant_rl.train.quality_registry import validate_quality_resource_shape
+
+        try:
+            validate_quality_resource_shape(
+                quality_variant,
+                requested_n_envs=requested_n_envs,
+                effective_n_envs=int(cfg.env.n_envs),
+                aggregate_rollout_steps=int(cfg.env.n_envs * cfg.ppo.n_steps),
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
     log.info(
         "Using device: %s  n_envs=%s  ppo.batch_size=%s  ppo.n_steps=%s  n_epochs=%s",
         device,
@@ -1867,6 +1927,7 @@ def main() -> None:
                     trades=result["trades"],
                     n_sessions=result.get("n_sessions", 1),
                     n_breach_sessions=result.get("n_breach_sessions", 0),
+                    periods_per_year=evaluation_periods_per_year(cfg),
                 )
                 n_steps = max(1, int(result.get("n_steps", 1)))
                 from quant_rl.eval.decision_diversity import (
@@ -2000,6 +2061,7 @@ def main() -> None:
             trades=test_result["trades"],
             n_sessions=test_result.get("n_sessions", 1),
             n_breach_sessions=test_result.get("n_breach_sessions", 0),
+            periods_per_year=evaluation_periods_per_year(cfg),
         )
         test_dir_sum = _direction_summary(test_result["trades"])
         log.info(
@@ -2059,6 +2121,7 @@ def main() -> None:
             trades=train_result["trades"],
             n_sessions=train_result.get("n_sessions", 1),
             n_breach_sessions=train_result.get("n_breach_sessions", 0),
+            periods_per_year=evaluation_periods_per_year(cfg),
         )
         train_dir_sum = _direction_summary(train_result["trades"])
         train_gate = assess_train_equity(
@@ -2182,12 +2245,14 @@ def main() -> None:
                 requested_steps=int(timesteps),
             ),
             metrics_protocol={
-                "annualization": cfg.evaluation.get("annualization", None)
-                if "evaluation" in cfg
-                else None,
+                "annualization": {
+                    "periods_per_year": evaluation_periods_per_year(cfg),
+                    "convention": str(cfg.evaluation.annualization_convention),
+                },
                 "initial_balance": float(cfg.account.initial_balance),
                 "historical_test_role": "previously_inspected_holdout",
                 "frequency": "bar_close_equity",
+                "exposure_measure": BAR_CLOSE_EXPOSURE_MEASURE,
             },
             artifact_paths={
                 "checkpoint": str(checkpoint_path.relative_to(seed_dir)),
@@ -2518,6 +2583,7 @@ def main() -> None:
                 trades=fold_result["trades"],
                 n_sessions=fold_result.get("n_sessions", 1),
                 n_breach_sessions=fold_result.get("n_breach_sessions", 0),
+                periods_per_year=evaluation_periods_per_year(cfg),
             )
             wf_results.append(
                 {

@@ -19,7 +19,7 @@ import pandas as pd
 import pytest
 from omegaconf import OmegaConf
 
-from quant_rl.eval.export import save_run
+from quant_rl.eval.export import _fill_events, _position_summaries, save_run
 from quant_rl.evaluation import PerformanceMetrics, calculate_metrics
 from quant_rl.evaluation.report import (
     build_comparison_table,
@@ -714,9 +714,12 @@ def test_report_profiles_preserve_numerical_exports(tmp_path, synthetic_result):
     for filename in (
         "equity.csv",
         "trades.csv",
+        "fills.csv",
+        "positions.csv",
         "metrics.json",
         "summary.txt",
         "session_activity.json",
+        "evaluation_diagnostics.json",
         "direction_summary.json",
     ):
         assert (full / "training" / filename).read_bytes() == (
@@ -728,6 +731,222 @@ def test_report_profiles_preserve_numerical_exports(tmp_path, synthetic_result):
     assert report["max_order_charts"] == 0
     assert report["save_html"] is False
     assert report["phase_seconds"]["total_export"] >= 0
+
+
+def test_evaluation_diagnostics_are_exported_from_result(tmp_path, synthetic_result):
+    result = {
+        **synthetic_result,
+        "n_steps": 3,
+        "exposure_bars": 2,
+        "exposure_fraction": 2 / 3,
+        "exposure_measure": "fraction_of_evaluation_steps_with_position_at_bar_close",
+        "survived_full_year": False,
+        "fail_time": pd.Timestamp("2025-06-01T12:00:00Z"),
+        "n_sessions": 2,
+        "n_breach_sessions": 1,
+        "n_sessions_with_trades": 1,
+        "n_sessions_skipped": 1,
+        "action_counts": {"hold": 2, "enter": 1},
+        "reward_attribution": {"pnl": 0.5, "risk": -0.1},
+        "entry_diag": {"opened": 1, "rejected_no_setup": 2},
+        "entry_state_diagnostics": {"state_armed": 1},
+    }
+    metrics = calculate_metrics(
+        result["equity"],
+        trades=result["trades"],
+        initial_balance=float(result["initial_balance"]),
+    )
+    run_dir = save_run(
+        run_dir=tmp_path / "diagnostics",
+        train_result=result,
+        train_metrics=metrics,
+        save_plots=False,
+        save_html=False,
+        save_csv=True,
+    )
+
+    report = json.loads((run_dir / "training" / "evaluation_diagnostics.json").read_text())
+    metrics_report = json.loads((run_dir / "training" / "metrics.json").read_text())
+    assert report["n_steps"] == 3
+    assert report["exposure_bars"] == 2
+    assert report["exposure_fraction"] == pytest.approx(2 / 3)
+    assert report["survived_full_year"] is False
+    assert report["fail_time"] == "2025-06-01 12:00:00+00:00"
+    assert report["action_counts"] == {"hold": 2, "enter": 1}
+    assert report["reward_attribution"] == {"pnl": 0.5, "risk": -0.1}
+    assert report["entry_funnel"]["opened"] == 1
+    assert report["position_record_count"] == len(_position_summaries(result["trades"]))
+    assert report["identified_position_count"] == 0
+    assert report["unidentified_position_event_count"] == len(_fill_events(result["trades"]))
+    assert metrics_report["initial_balance"] == pytest.approx(100_000.0)
+    assert metrics_report["final_equity"] == pytest.approx(float(result["equity"].iloc[-1]))
+    assert metrics_report["final_equity"] - metrics_report["initial_balance"] == pytest.approx(
+        metrics_report["total_pnl"]
+    )
+
+
+def test_q5_constraint_cost_evidence_is_exported_as_rows_and_summary(tmp_path):
+    equity = pd.Series(
+        [100_000.0, 100_010.0, 100_020.0],
+        index=pd.date_range("2025-01-01", periods=3, freq="min"),
+    )
+    costs = pd.DataFrame(
+        [
+            {
+                "step": 1,
+                "time": "2025-01-01T00:01:00",
+                "discount_factor": 1.0,
+                "daily_cost": 0.1,
+                "max_loss_cost": 0.0,
+                "trailing_cost": 0.0,
+                "breach_indicator": 0.0,
+                "step_cost": 0.1,
+                "discounted_step_cost": 0.1,
+            },
+            {
+                "step": 2,
+                "time": "2025-01-01T00:02:00",
+                "discount_factor": 0.9,
+                "daily_cost": 0.0,
+                "max_loss_cost": 0.0,
+                "trailing_cost": 0.2,
+                "breach_indicator": 0.0,
+                "step_cost": 0.2,
+                "discounted_step_cost": 0.18,
+            },
+        ]
+    )
+    summary = {
+        "schema": "q5_discounted_constraint_cost_v1",
+        "definition": "per_step_max_of_normalized_daily_max_loss_trailing_costs_and_breach_indicator",
+        "discount_gamma": 0.9,
+        "n_steps": 2,
+        "undiscounted_total": 0.3,
+        "discounted_total": 0.28,
+        "components": {
+            "daily_cost": {"undiscounted_total": 0.1, "discounted_total": 0.1},
+            "max_loss_cost": {"undiscounted_total": 0.0, "discounted_total": 0.0},
+            "trailing_cost": {"undiscounted_total": 0.2, "discounted_total": 0.18},
+        },
+    }
+    trades = pd.DataFrame()
+    result = {
+        "equity": equity,
+        "trades": trades,
+        "initial_balance": 100_000.0,
+        "constraint_costs": costs,
+        "constraint_cost_summary": summary,
+    }
+    metrics = calculate_metrics(equity, trades=trades, initial_balance=100_000.0)
+    run_dir = save_run(
+        run_dir=tmp_path / "q5-costs",
+        train_result=result,
+        train_metrics=metrics,
+        save_plots=False,
+        save_html=False,
+        save_csv=True,
+    )
+
+    split_dir = run_dir / "training"
+    pd.testing.assert_frame_equal(
+        pd.read_csv(split_dir / "constraint_costs.csv"), costs, check_dtype=False
+    )
+    diagnostics = json.loads((split_dir / "evaluation_diagnostics.json").read_text())
+    assert diagnostics["constraint_cost_summary"] == summary
+
+
+def test_fill_and_position_records_reconstruct_partial_closes() -> None:
+    trades = pd.DataFrame(
+        [
+            {
+                "type": "open",
+                "position_id": "p1",
+                "direction": 1,
+                "price": 100.0,
+                "time": pd.Timestamp("2025-01-01T10:00:00Z"),
+            },
+            {
+                "type": "tp_partial_close",
+                "position_id": "p1",
+                "fill_id": "p1:f1",
+                "direction": 1,
+                "price": 110.0,
+                "pnl": 30.0,
+                "net_pnl": 25.0,
+                "position_complete": False,
+                "time": pd.Timestamp("2025-01-01T10:01:00Z"),
+            },
+            {
+                "type": "tp_close",
+                "position_id": "p1",
+                "fill_id": "p1:f2",
+                "direction": 1,
+                "price": 120.0,
+                "pnl": 50.0,
+                "net_pnl": 45.0,
+                "position_net_pnl": 70.0,
+                "position_complete": True,
+                "reason": "take_profit",
+                "time": pd.Timestamp("2025-01-01T10:02:00Z"),
+            },
+        ]
+    )
+
+    fills = _fill_events(trades)
+    positions = _position_summaries(trades)
+
+    assert len(fills) == 3
+    assert len(positions) == 1
+    position = positions.iloc[0]
+    assert position["position_id"] == "p1"
+    assert position["close_pnl"] == pytest.approx(80.0)
+    assert position["net_pnl"] == pytest.approx(70.0)
+    assert position["position_net_pnl"] == pytest.approx(70.0)
+    assert position["fill_count"] == 3
+    assert position["completed"]
+    assert position["holding_seconds"] == pytest.approx(120.0)
+
+
+def test_zero_trade_report_writes_empty_raw_event_artifacts(tmp_path, synthetic_result):
+    result = {**synthetic_result, "trades": pd.DataFrame()}
+    metrics = calculate_metrics(
+        result["equity"],
+        trades=result["trades"],
+        initial_balance=100_000.0,
+    )
+
+    run_dir = save_run(
+        run_dir=tmp_path / "zero_trades",
+        train_result=result,
+        train_metrics=metrics,
+        save_plots=False,
+        save_html=False,
+        save_csv=True,
+    )
+    split_dir = run_dir / "training"
+
+    assert pd.read_csv(split_dir / "trades.csv").empty
+    assert pd.read_csv(split_dir / "fills.csv").empty
+    assert pd.read_csv(split_dir / "positions.csv").empty
+
+
+def test_position_export_does_not_merge_events_without_position_ids() -> None:
+    trades = pd.DataFrame(
+        [
+            {"type": "open", "direction": 1, "price": 100.0},
+            {"type": "close", "direction": 1, "price": 101.0, "pnl": 1.0},
+        ],
+        index=[10, 20],
+    )
+
+    positions = _position_summaries(trades)
+
+    assert len(positions) == 2
+    assert positions["position_id"].isna().all()
+    assert positions["reconstruction_status"].tolist() == [
+        "unidentified_event_0",
+        "unidentified_event_1",
+    ]
 
 
 def test_export_records_declared_action_coordinate_schema(tmp_path, synthetic_result) -> None:

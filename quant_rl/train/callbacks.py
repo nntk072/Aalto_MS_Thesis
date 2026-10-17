@@ -147,7 +147,7 @@ if _SB3_AVAILABLE:
         objective, not a risk guarantee.
         """
 
-        _STATE_VERSION = 1
+        _STATE_VERSION = 2
 
         def __init__(
             self,
@@ -156,21 +156,32 @@ if _SB3_AVAILABLE:
             dual_learning_rate: float = 0.1,
             lambda_initial: float = 0.0,
             lambda_max: float = 100.0,
+            gamma: float = 0.99,
             verbose: int = 0,
         ) -> None:
             super().__init__(verbose=verbose)
+            configured_values = np.asarray(
+                [episode_cost_budget, dual_learning_rate, lambda_initial, lambda_max, gamma],
+                dtype=np.float64,
+            )
+            if not np.isfinite(configured_values).all():
+                raise ValueError("Lagrangian PPO settings must all be finite")
             if episode_cost_budget < 0.0:
                 raise ValueError("episode_cost_budget must be nonnegative")
             if dual_learning_rate <= 0.0:
                 raise ValueError("dual_learning_rate must be positive")
+            if not 0.0 < gamma <= 1.0:
+                raise ValueError("gamma must be in (0, 1]")
             if lambda_initial < 0.0 or lambda_max <= 0.0 or lambda_initial > lambda_max:
                 raise ValueError("Lagrange multiplier bounds are invalid")
             self.episode_cost_budget = float(episode_cost_budget)
             self.dual_learning_rate = float(dual_learning_rate)
             self.lambda_initial = float(lambda_initial)
             self.lambda_max = float(lambda_max)
+            self.gamma = float(gamma)
             self.lagrange_multiplier = self.lambda_initial
             self._episode_costs: np.ndarray[Any, Any] = np.zeros(0, dtype=np.float64)
+            self._episode_cost_discounts: np.ndarray[Any, Any] = np.ones(0, dtype=np.float64)
             self._completed_costs: list[float] = []
             self._rollout_environment_reward = 0.0
             self._rollout_penalty = 0.0
@@ -184,6 +195,7 @@ if _SB3_AVAILABLE:
                 "dual_learning_rate": self.dual_learning_rate,
                 "lambda_initial": self.lambda_initial,
                 "lambda_max": self.lambda_max,
+                "gamma": self.gamma,
             }
 
         def _persist_state(self) -> None:
@@ -211,6 +223,7 @@ if _SB3_AVAILABLE:
                 if not 0.0 <= self.lagrange_multiplier <= self.lambda_max:
                     raise ValueError("checkpoint Lagrange multiplier is outside configured bounds")
             self._episode_costs = np.zeros(int(self.model.n_envs), dtype=np.float64)
+            self._episode_cost_discounts = np.ones(int(self.model.n_envs), dtype=np.float64)
             self._persist_state()
 
         @staticmethod
@@ -249,11 +262,13 @@ if _SB3_AVAILABLE:
             self._rollout_transitions += int(len(rewards))
 
             done_values = np.asarray(dones, dtype=bool)
-            self._episode_costs += costs
+            self._episode_costs += self._episode_cost_discounts * costs
+            self._episode_cost_discounts *= self.gamma
             for index, done in enumerate(done_values):
                 if done:
                     self._completed_costs.append(float(self._episode_costs[index]))
                     self._episode_costs[index] = 0.0
+                    self._episode_cost_discounts[index] = 1.0
             return True
 
         def _on_rollout_end(self) -> None:
