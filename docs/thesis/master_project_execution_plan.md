@@ -1905,8 +1905,8 @@ Complete a thesis-ready data audit:
 - full-split episode coverage;
 - explicit classification of the exposed 2026 period.
 
-The 2026-10-16 bounded M1 scan is recorded in
-`docs/thesis/data_quality_audit_2026-10-16.json`. It confirms campaign-manifest
+The latest normalized bounded M1 scan (2026-10-16 v4) is recorded in
+`docs/thesis/data_quality_audit_2026-10-16_v4.json`. It confirms campaign-manifest
 SHA-256 matches for both M1 inputs, 528,760 US100 rows and 527,139 US500 rows
 from 2024-12-30 through 2026-07-03, zero duplicate or out-of-order timestamps,
 zero rows with invalid numeric OHLCV/spread fields, and zero invalid OHLC
