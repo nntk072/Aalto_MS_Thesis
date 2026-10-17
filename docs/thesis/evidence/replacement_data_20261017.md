@@ -15,6 +15,13 @@ The requested chronological split is training through 2025-12-31 inclusive and
 testing from 2026-01-01 through the last available bar on 2026-10-16. Source M1
 files have 630,787 US100 rows and 628,929 US500 rows; both start at
 2024-12-30 01:05 and end at 2026-10-16 23:49 in the configured broker clock.
+The complete July–October portion is included in that test split: July 4
+through October 16, 2026 is present in the rebuilt M1, M5, M10, M15, M30, H1,
+H4, and D1 caches and in all three variant feature caches. The test schedule
+ends on October 16 for both symbols (79,069 US100 and 79,068 US500 NY-session
+decisions); no July–October rows enter the 2025 training mask. The exact
+observed test timestamps are frozen in
+[`decision_schedule_fingerprint_final.json`](replacement_data_20261017/decision_schedule_fingerprint_final.json).
 The inventory found no unparseable/duplicate/out-of-order timestamps, missing
 or nonfinite numeric values, invalid OHLC ordering, negative spreads, or
 negative tick-volume values. Every source row has zero real volume; tick volume
@@ -118,6 +125,14 @@ matched date strings, but reviewed examples are UTC artifact/log timestamps or
 unrelated date text, not evidence of policy results on those market bars. The
 raw match inventory is preserved in
 [`candidate_holdout_exposure.json`](replacement_data_20261017/candidate_holdout_exposure.json).
+An additional pre-intake archive screen covered 612 ZIP and 3 GZIP archives
+with zero read errors. It found 397 July–October date references across 15
+archives; the machine report includes the member paths and samples. A date
+reference alone is not proof of market-data or policy-result exposure, and the
+full set still requires contextual review. See
+[`candidate_holdout_archive_exposure_20261017_final.json`](replacement_data_20261017/candidate_holdout_archive_exposure_20261017_final.json)
+and the full gate log
+[`candidate_holdout_archive_audit_gate_final.log`](../../../outputs/data_refresh_20261017/candidate_holdout_archive_audit_gate_final.log).
 This supports treating Jul 4–Oct 16 as a **repository-level candidate** only;
 filesystem times and repository searches cannot establish external or
 undocumented human exposure. No replacement-data training or policy evaluation
