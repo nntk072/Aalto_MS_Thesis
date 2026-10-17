@@ -65,6 +65,25 @@ authoritative FTMO CFD schedule. The report is
 [`replacement_m1_quality_20261018.json`](evidence/replacement_data_20261017/replacement_m1_quality_20261018.json);
 this closes the replacement M1 integrity-inventory gap only.
 
+**Replacement raw tick quote-quality inventory (2026-10-18):** a fresh
+chunked scan of the 135,043,551 US100 and 37,246,832 US500 rows matched both
+tick-source hashes and the M1-source hashes recorded in the schedule-coverage
+evidence. Both streams have zero invalid timestamps, source-order breaks,
+nonpositive bid/ask rows, and crossed quotes; stored-millisecond duplicates
+remain (300,381 US100 rows and 29,090 US500 rows), and nonfinite bid/ask rows
+were observed (234,717 and 136,673). The M1-minute inventory has 23 US100 and
+614 US500 training minutes without a valid raw quote; the continuous report-only
+test has zero US100 and two US500 such minutes. These are observed quote
+properties, not missing-bar classifications or feed acceptance thresholds.
+The exact source identity remains user-attested FTMO Demo, with underlying
+liquidity provider unknown and publication/export terms not provided. The
+report labels integrity `verified` and quote quality
+`descriptive_only_not_acceptance_gated`; it does not assert execution parity
+or thesis-publication rights. See
+[`replacement_tick_quality_20261018.json`](evidence/replacement_data_20261017/replacement_tick_quality_20261018.json)
+and its reproducible scanner
+[`audit_replacement_tick_quality.py`](../../scripts/research/audit_replacement_tick_quality.py).
+
 The report-only test period is one continuous interval, 2026-01-01 through
 2026-10-16, in the split and each full-range timeframe and resolved variant
 feature cache. January–July outcomes were previously inspected, so classify the
