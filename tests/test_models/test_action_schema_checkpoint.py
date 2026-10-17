@@ -133,7 +133,7 @@ def test_discrete_checkpoint_legacy_schema_requires_exact_opt_in() -> None:
     assert model._action_schema["checkpoint_metadata"] == "legacy_unverified"
 
 
-def test_discrete_checkpoint_rejects_reordered_category_menu() -> None:
+def test_discrete_schema_validation_rejects_reordered_category_menu() -> None:
     schema = build_discrete_trading_action_schema()
     model = SimpleNamespace(action_space=spaces.Discrete(schema.width), policy=SimpleNamespace())
     bind_discrete_action_schema(model, schema)
@@ -142,6 +142,10 @@ def test_discrete_checkpoint_rejects_reordered_category_menu() -> None:
 
     with pytest.raises(ValueError, match="source run manifest discrete action schema"):
         validate_model_discrete_action_schema(model, schema, reordered)
+
+    model._action_schema = reordered
+    with pytest.raises(ValueError, match="checkpoint discrete action schema"):
+        validate_model_discrete_action_schema(model, schema, schema.to_dict())
 
 
 def test_checkpoint_rejects_mismatched_width_even_with_legacy_opt_in() -> None:
