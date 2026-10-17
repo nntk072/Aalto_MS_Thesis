@@ -440,13 +440,15 @@ interpolation, or US500 quote may fill US100 orders. All scanned quotes are
 finite, positive, and uncrossed; timestamp ties and their source-order policy
 are documented in the replacement-data evidence note.
 
-The provider/feed identity, export method, data-use/publication terms, and
-authoritative broker calendar/timezone/DST interpretation remain undocumented.
-Therefore the raw-coverage and bounded causal/fold audits pass, but the feed
-has not received independent source/use acceptance and the new-data screen is
-not admitted for thesis selection or publication. Preserve this distinction;
-do not use coverage or feature audits as a proxy for authorization or strategy
-performance. See
+The user identifies the source as FTMO Demo and authorizes internal model
+training. The underlying feed provider, account-specific export path, and
+publication terms remain undocumented, and the account-specific clock and CFD
+schedule have not been independently established. These limitations do not
+withdraw the user's training authorization. The bounded raw-coverage and
+feature audits do not establish schedule validity or strategy performance; the
+new-data screen remains unadmitted for selection while the current P1 technical
+audits and P2 checkpoint acceptance are open. Keep provider/publication limits
+explicit in any public thesis artifact. See
 [`replacement_data_20261017.md`](evidence/replacement_data_20261017.md).
 
 GPU throughput probe `21017302` completed on an H200 3g.71GB slice (`gpu49`)
@@ -2647,9 +2649,11 @@ were read-only. Its 32 source/config hashes, two M1 hashes, four cache-file
 hashes, and the audit-script hash were verified; this does not replace checking
 the resolved cache mapping for every variant at final freeze. Fold-local fit
 validation, other causal paths, and all other listed validity items remain open;
-rerun both audits after relevant source or input changes. The user reported
-that no broker/feed identity or data-use/publication terms record is available,
-so that provenance gate also remains open.
+rerun both audits after relevant source or input changes. This 2026-10-16 audit
+snapshot predates the user's 2026-10-18 statement authorizing FTMO Demo data for
+internal training. The underlying provider and account-specific publication
+terms remain unverified as disclosure limits; see the current provenance record
+and live checkpoint above.
 
 ### G2 — experiment-design readiness
 

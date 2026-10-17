@@ -2,17 +2,19 @@
 
 ## Disposition
 
-The supplied replacement data, rebuilt caches, tick execution schedule, and
-the two bounded feature-causality audits passed their stated technical checks.
-This does **not** admit the new data for thesis selection or publication. The
-user identifies FTMO as the prop firm, but the underlying liquidity provider,
-account-specific export provenance, data-use/publication terms, and
-authoritative broker calendar/timezone/DST interpretation remain unverified.
-FTMO's current [public Terms and Conditions](https://ftmo.com/en/terms-and-conditions/)
-say it does not act as a broker and its platform/data feed is powered by
-liquidity providers; they do not identify the feed for this account or
-establish publication rights for these files. No training campaign or new-data
-checkpoint exists. Overall readiness remains **NOT READY**.
+The supplied replacement data, rebuilt caches, and observed tick schedule have
+passed their recorded bounded checks. The user identifies the source as the
+FTMO Demo server and explicitly authorizes internal model training, considering
+the data adequate for that purpose. The underlying liquidity provider and
+account-specific export/publication terms are unknown; FTMO's current
+[public Terms and Conditions](https://ftmo.com/en/terms-and-conditions/)
+describe a liquidity-provider-powered feed but do not identify this account's
+provider or establish thesis-publication rights. Treat this as user-attested
+training use with unresolved source/publication disclosure, not independent
+verification of those terms. The v23 cache rebuild passed for all 18 variant
+bindings; fresh v23 fold-fit and real-market prefix audits are running. No
+replacement-data training campaign or checkpoint exists, and P1/P2 are not
+closed. Overall readiness remains **NOT READY**.
 The provenance disposition is recorded in
 [`provider_provenance_status_20261018.json`](replacement_data_20261017/provider_provenance_status_20261018.json).
 
@@ -147,12 +149,13 @@ does not turn these bounded data checks into strategy evidence.
 January–July 2026 outcomes were previously inspected. Treat the single
 2026-01-01–2026-10-16 test/report interval as exposed exploratory/report-only
 evidence; do not designate any later subperiod as fresh holdout or use it for
-confirmatory claims. No new-data campaign should be used for thesis selection
-or publication until the data-use source is accepted, the broker
-calendar/timezone interpretation is reviewed, and the exact campaign execution
-schedule and evaluation protocol are reconciled. Any later training result
-remains exploratory until its training and evaluation gates pass; this report
-contains no return, survival, or profitability result.
+confirmatory claims. Internal training use is user-authorized. Before a screen
+result can support selection, the current FTMO clock/session assumptions, exact
+execution schedule, and evaluation protocol must pass their technical gates.
+Unknown provider and publication terms must remain explicit in public reporting
+and raw-data packaging. Any later training result remains exploratory until its
+training and evaluation gates pass; this report contains no return, survival,
+or profitability result.
 
 The repository exposure inventory found that the pre-intake US100 and US500 M1
 caches both ended at 2026-07-03 19:59 broker time; the full-range replacement
