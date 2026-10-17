@@ -1,0 +1,79 @@
+{
+  "architecture": "aarch64",
+  "coverage_report": {
+    "path": "docs/thesis/evidence/replacement_data_20261017/tick_execution_coverage_schedule_freeze_final.json",
+    "sha256": "0354cab7951a1b8f8d626e8b6381c0332a1fc0990379b652f530bb5b908762c4"
+  },
+  "created_at": "2026-10-17T22:48:42.049819+03:00",
+  "host": "gpuarm1.int.triton.aalto.fi",
+  "limitations": [
+    "This verifies the deterministic tie-break against every duplicate timestamp group in the exact validated caches; it does not reconstruct true sub-millisecond ordering.",
+    "This is tick-input semantics evidence, not a policy evaluation, PnL result, campaign result, or thesis-readiness finding."
+  ],
+  "prior_tie_report": {
+    "counts_match": true,
+    "path": "docs/thesis/evidence/replacement_data_20261017/tick_timestamp_ties.json",
+    "sha256": "462cd3e25b90b7c5f6203c1553681148a0d11ff0ee4523846ec227e172c9e81c"
+  },
+  "repository_head": "a2eac1bafef14889d4005cf49b7b5003e85e1a0b",
+  "schema_version": 1,
+  "slurm_job_id": "21020179",
+  "source_sha256": {
+    "docs/thesis/evidence/replacement_data_20261017/tick_execution_coverage_schedule_freeze_final.json": "0354cab7951a1b8f8d626e8b6381c0332a1fc0990379b652f530bb5b908762c4",
+    "docs/thesis/evidence/replacement_data_20261017/tick_timestamp_ties.json": "462cd3e25b90b7c5f6203c1553681148a0d11ff0ee4523846ec227e172c9e81c",
+    "quant_rl/data/ticks.py": "22497662a3aebf14be747fb1b2907a4892e9a7b3e7b153f5f5547390f5f865fe",
+    "scripts/research/audit_tick_tie_policy.py": "77baa567121e5c1291b4202473bd65eaf3805e52e7a8425b2d14ae3c919bf060"
+  },
+  "symbols": {
+    "US100.cash": {
+      "tick_cache": {
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/us100_us500_20241230_20261016/US100.cash_ticks_v3-validated-full-day.parquet",
+        "rows": 135043551,
+        "sha256": "08a5fc05b6527327f7a12a8a61146faa17e0fa29db015a5256d79b9d56aece95",
+        "source_cache_exact_match_in_raw_coverage_report": true
+      },
+      "timestamp_groups": {
+        "duplicate_groups_with_different_first_and_last_quote": 300328,
+        "duplicate_rows_beyond_first": 300381,
+        "duplicate_timestamp_group_count": 300336,
+        "first_source_order_duplicate_quote_sha256": "707ff05a52530a3e591feac07f635eabf1b808d4efb387dca662eac92289193b",
+        "last_source_order_duplicate_quote_sha256": "ed8d9065740e29d63f005ac5fb5282ad3cc36364a4f754c3a4684f8b3c3f6222",
+        "stable_first_row_selection_verified_for_every_duplicate_group": true,
+        "unique_timestamp_count": 134743170
+      }
+    },
+    "US500.cash": {
+      "tick_cache": {
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/us100_us500_20241230_20261016/US500.cash_ticks_v3-validated-full-day.parquet",
+        "rows": 37246832,
+        "sha256": "e6b12e30b334e87f0429402bb44dfebac3951ce10ed87a68e608823d3767ff3e",
+        "source_cache_exact_match_in_raw_coverage_report": true
+      },
+      "timestamp_groups": {
+        "duplicate_groups_with_different_first_and_last_quote": 29090,
+        "duplicate_rows_beyond_first": 29090,
+        "duplicate_timestamp_group_count": 29090,
+        "first_source_order_duplicate_quote_sha256": "8b7c61c95147e48e397cf2812521c53dfeed6bb5087ee86e8041bc7baa3f964e",
+        "last_source_order_duplicate_quote_sha256": "27e50fd692884536a0700722eacec407e0d2ae5239a38a088cb8de04d42c6c61",
+        "stable_first_row_selection_verified_for_every_duplicate_group": true,
+        "unique_timestamp_count": 37217742
+      }
+    }
+  },
+  "tie_policy": {
+    "does_not_claim": "True sub-millisecond event chronology or original exchange sequencing inside a timestamp tie.",
+    "lookup": "np.searchsorted(timestamp_ns, arrival_ns, side='left') selects the first source-ordered quote at/after arrival.",
+    "scope": "Deterministic resolution of equal stored millisecond timestamps.",
+    "sort": "np.argsort(timestamp_ns, kind='stable') preserves source-row order within equal timestamps."
+  },
+  "working_tree_status": [
+    " M docs/thesis/evidence/replacement_data_20261017.md",
+    " M docs/thesis/evidence/replacement_data_20261017/decision_schedule_fingerprint_final.json",
+    " M docs/thesis/evidence/replacement_data_20261017/schedule_freeze_validation_20261017.json",
+    " M docs/thesis/master_project_execution_plan.md",
+    " M quant_rl/data/ticks.py",
+    " M tests/test_ticks.py",
+    "?? scripts/research/audit_tick_tie_policy.py",
+    "?? scripts/research/run_tick_tie_policy_gate.sh"
+  ]
+}

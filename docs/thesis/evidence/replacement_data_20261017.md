@@ -38,11 +38,13 @@ the common 391-bar count. These are schedule exceptions, not established data
 holes: holiday or broker-specific reduced-hours treatment could explain them.
 The tick cache has no quotes in the corresponding minute bins, so ticks cannot
 reconstruct bars there, but that fact does not distinguish a scheduled closure
-from a feed/export omission. The official NYSE Group 2025 cash-equity calendar
-lists its holidays and early closes; Dec 2 and Dec 4 are not listed among them
-([NYSE Group calendar](https://www.nasdaq.com/press-release/nyse-group-announces-2025-2026-and-2027-holiday-and-early-closings-calendar-2024-11)).
-That rules out those dates as standard NYSE Group cash-equity holiday/early-close
-dates, but it does not establish the schedule of the unidentified US100.cash
+from a feed/export omission. Nasdaq's official 2025 calendar lists early closes
+on July 3, November 28, and December 24; December 2 and 4 are not scheduled
+Nasdaq early-close days. Its official 2026 calendar likewise lists December 24,
+not December 2 or 4, as the December early close ([Nasdaq 2025 calendar](https://www.nasdaq.com/docs/2025/01/06/2025holidayandtradinghours.pdf),
+[Nasdaq market holiday schedule](https://www.nasdaq.com/market-activity/stock-market-holiday-schedule)).
+This rules out a scheduled Nasdaq holiday/early close as the explanation for
+these dates. It does not establish the schedule of the unidentified US100.cash
 CFD provider or the export semantics. US500 also has 22 minute-level
 differences across observed NY intervals that require schedule-aware interpretation. Adjacent
 source bars match bid-tick OHLC at cent precision (9/9 US100 and 29/29 US500

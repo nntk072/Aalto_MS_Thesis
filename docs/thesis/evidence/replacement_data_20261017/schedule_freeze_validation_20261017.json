@@ -82,7 +82,7 @@
   },
   "interpretation": [
     "This verifies the current observed-bar schedule implementation, its exact timestamp fingerprint, source/cache parity, tick coverage, and bounded software behavior.",
-    "The shorter December 2 and December 4 session shapes may reflect a holiday or provider-specific reduced-hours schedule. Available evidence does not establish the CFD provider calendar; these are not classified as missing bars and no rows were imputed.",
+    "Nasdaq's official 2025 and 2026 calendars do not schedule December 2 or December 4 as holidays or early closes; the listed December early close is December 24. The unidentified CFD provider may have separate hours or export rules. The shorter observed session shapes remain unclassified for that provider and are not called missing bars; no rows were imputed.",
     "This is not a training run, policy evaluation, strategy result, confirmation of feed-use/publication rights, or proof that the candidate holdout was never externally inspected.",
     "The historical 18-variant campaign remains inadmissible for selection and thesis readiness remains NOT READY."
   ],

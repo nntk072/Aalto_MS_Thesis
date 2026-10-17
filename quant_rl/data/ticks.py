@@ -177,7 +177,13 @@ def _ffill_inplace(arr: np.ndarray[Any, Any]) -> None:
 
 
 class TickBook:
-    """Sorted bid/ask lookup table backed by numpy arrays."""
+    """Sorted bid/ask lookup table backed by NumPy arrays.
+
+    For equal stored timestamps, stable source-row order is retained and
+    lookups select the first source-ordered quote. This is a deterministic
+    tie-break for millisecond timestamps, not a claim about sub-millisecond
+    chronology.
+    """
 
     __slots__ = ("_ts", "_bid", "_ask")
 
@@ -205,7 +211,11 @@ class TickBook:
         return bid, ask
 
     def quote_event_at(self, ts: pd.Timestamp) -> tuple[pd.Timestamp, float, float] | None:
-        """Return the selected quote and its recorded tick timestamp."""
+        """Return the first source-ordered quote at/after *ts* and its timestamp.
+
+        If several source rows share the selected millisecond timestamp, the
+        first row in the stable TickBook order is returned.
+        """
         n = len(self._ts)
         if n == 0:
             return None
@@ -554,7 +564,8 @@ def build_tick_book(
         ts_ns = np.concatenate(ts_chunks)
         bid = np.concatenate(bid_chunks).astype(np.float64)
         ask = np.concatenate(ask_chunks).astype(np.float64)
-        # MT5 tick exports are already chronological, but sort defensively.
+        # MT5 exports are chronological; stable sorting also preserves their
+        # source-row order when several ticks share a millisecond timestamp.
         order = np.argsort(ts_ns, kind="stable")
         ts_ns, bid, ask = ts_ns[order], bid[order], ask[order]
 

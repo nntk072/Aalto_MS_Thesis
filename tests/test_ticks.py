@@ -47,6 +47,34 @@ def test_quote_at_exact_tick():
     assert ask == pytest.approx(101.1)
 
 
+def test_equal_timestamp_quote_uses_first_source_row_across_chunks(tmp_path: Path):
+    csv_path = tmp_path / "equal_timestamp_ticks.csv"
+    _write_tick_csv(
+        csv_path,
+        [
+            ("2025.01.06", "16:30:00.000", 100.0, 100.6),
+            ("2025.01.06", "16:30:00.000", 100.2, 100.8),
+            ("2025.01.06", "16:30:01.000", 101.0, 101.6),
+        ],
+    )
+    book = build_tick_book(csv_path, session_start=None, session_end=None, chunksize=1)
+    tick_time = pd.Timestamp("2025-01-06 16:30:00", tz="Etc/GMT-3")
+
+    event = book.quote_event_at(tick_time)
+    fill = resolve_tick_execution(
+        book,
+        tick_time,
+        np.random.default_rng(1729),
+        max_latency_ns_exclusive=0,
+    )
+
+    assert event is not None
+    assert event[1:] == pytest.approx((100.0, 100.6))
+    assert fill is not None
+    assert fill.tick_time == pd.Timestamp("2025-01-06 13:30:00", tz="UTC")
+    assert (fill.bid, fill.ask) == pytest.approx((100.0, 100.6))
+
+
 def test_quote_at_before_first_tick_returns_none():
     book = _make_book()
     ts = pd.Timestamp("2025-01-06 16:29:00", tz="UTC")

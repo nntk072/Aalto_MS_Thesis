@@ -70,7 +70,7 @@
   "repository_head": "13196f836a3d513ea1d541df8364b735e646178a",
   "schedule_semantics": {
     "eligibility": "Observed M1 rows labeled NY in the versioned cache; no regular time grid is synthesized.",
-    "interval_interpretation": "Counts and gaps describe observed bars only. The shorter Dec 2/4 schedules may reflect holidays or provider-specific reduced hours; the available evidence cannot identify the CFD provider calendar or distinguish scheduled closure from export omission. No expected-minute grid or missing-bar claim is made, and no bars are imputed.",
+    "interval_interpretation": "Counts and gaps describe observed bars only. Nasdaq's official 2025 and 2026 calendars do not schedule Dec 2 or Dec 4 as holidays or early closes; the listed December early close is Dec 24. The unidentified CFD provider may have separate hours or export rules, so available evidence cannot distinguish a provider-scheduled reduction from export omission. No expected-minute grid or missing-bar claim is made, and no bars are imputed.",
     "quote_anchor": "The next row in the complete observed M1 index, including a non-NY row when it follows the final eligible NY row; final index row clamps to itself, matching the trainer preflight.",
     "testing_selection": "Observed M1 timestamps at or after configured test_start, AND NY session label.",
     "training_selection": "make_train_mask through the configured inclusive train_end, AND NY session label."
