@@ -2649,14 +2649,18 @@ P5 candidate: a resolved-config diff and end-to-end action trace must confirm
 the contrast, and both arms must retain `entry_state_machine=false`.
 
 Regression tests for the no-op five-coordinate case and the six-coordinate
-control/treatment contrast have been added but have not yet run on the required
-GPU validation node. Before freezing the pair, P4 must pass and the resolved
-configs/source must confirm that `validate_entry` is the only path changed by
-the gate and that reward, observations, action schema, strategy mode,
-stop/target menus, costs, data/splits, seed, update budget, checkpoint rule,
-and evaluation are matched. If the action trace does not show the intended
-eligibility difference, discard this candidate. No RQ1 run identity or
-treatment is frozen by this note.
+control/treatment contrast passed on the GH200 node as part of the full-tree
+gate (1,738 tests passed). The fixture-level action trace confirms that the
+six-coordinate control accepts an opposite-side proposal while the gated
+treatment rejects it as `entry_gate`; it does not yet establish a resolved
+campaign-config diff or a representative real-data action trace. Before
+freezing the pair, P4 must pass and the resolved configs/source must confirm
+that `validate_entry` is the only path changed by the gate and that reward,
+observations, action schema, strategy mode, stop/target menus, costs,
+data/splits, seed, update budget, checkpoint rule, and evaluation are matched.
+If the action trace does not show the intended eligibility difference,
+discard this candidate. No RQ1 run identity or treatment is frozen by this
+note.
 
 ### 13.2 RQ3 mechanism evidence
 
