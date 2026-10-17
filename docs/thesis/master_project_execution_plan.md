@@ -7,9 +7,9 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-18 00:47 Helsinki):** work is on the sole checkout,
+**Live checkpoint (2026-10-18 00:52 Helsinki):** work is on the sole checkout,
 `/scratch/work/nguyenl37/Aalto_MS_Thesis`, branch `main`; local `main` is ahead
-of `origin/main` (no push performed). Preserve the two untracked data
+of `origin/main` by four commits (no push performed). Preserve the two untracked data
 rebuild scripts; the comparator report is committed. No alternate checkout or
 worktree was used. The model-provenance guard now requires complete named action/observation
 schemas in every new training manifest; its focused manifest and comparator
@@ -117,6 +117,13 @@ malformed action/observation schemas, with 27 focused manifest/comparator tests
 passing; this protects future run provenance but does not rehabilitate the
 historical legacy checkpoint.
 P3–P11 remain downstream/open. Overall readiness remains **NOT READY**.
+
+The provisional RQ1 entry-gate candidate now has a bounded source-path review
+and a passing six-coordinate fixture contrast; it still has no real-data policy
+trace and is not a frozen pair. The review is recorded in
+[`rq1_gate_candidate_source_review_20261018.json`](evidence/rq1_gate_candidate_source_review_20261018.json).
+The plan/evidence update is commit `4aece9b`; final-tree format, lint, full-tree
+Mypy (482 source files), the focused fixture test, and JSON parsing passed.
 
 The four-profile mapping code passed the latest full GH200-node gate on job
 `21020179`, step `.14`: Ruff format (467 files), Ruff lint, full-tree Mypy
