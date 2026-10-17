@@ -1,11 +1,12 @@
 {
   "schema_version": 1,
   "artifact_role": "p2_postfix_determinism_replay_attempt",
-  "status": "failed_before_evaluation",
+  "status": "initial_step_failed_corrected_replay_completed_acceptance_failed",
   "recorded_at": "2026-10-18T00:16:12+03:00",
   "source": {
     "repository": "/scratch/work/nguyenl37/Aalto_MS_Thesis",
-    "head": "132da3ab51e85a7840ddba611bef9a78e01e7e59",
+    "head_at_initial_step": "132da3ab51e85a7840ddba611bef9a78e01e7e59",
+    "head_at_corrected_replay": "1906d16",
     "worktree_state": "dirty documentation and evidence only; no evaluator or training source changed"
   },
   "attempt": {
@@ -16,8 +17,25 @@
     "exit_code": "1:0",
     "hash_seed_started": 1,
     "hash_seed_not_started": 12,
-    "retry_submitted": false,
-    "reason_no_retry": "An unexpected child step exited before 120 seconds; repository Triton rules require stopping submissions and retries, preserving logs, and diagnosing first."
+    "retry_submitted_after_diagnosis": true,
+    "retry_step_id": "21020179.20",
+    "retry_state": "COMPLETED",
+    "retry_elapsed": "00:20:02",
+    "retry_exit_code": "0:0",
+    "retry_detail": "After diagnosing the original alias failure, one sequential step in the existing allocation used an isolated physical baseline.parquet copy with matching cache content hash and file SHA. It completed PYTHONHASHSEED=1 and PYTHONHASHSEED=12 replays without nested srun or fan-out.",
+    "retry_outputs": [
+      "outputs/thesis_engineering_reanalysis/p2_seed42_a0_postfix_hashseed_20261018/run_hashseed1",
+      "outputs/thesis_engineering_reanalysis/p2_seed42_a0_postfix_hashseed_20261018/run_hashseed12"
+    ],
+    "comparator_report": "docs/thesis/evidence/p2_postfix_hashseed_seed42_a0_20261018.json",
+    "comparator_status": "failed",
+    "comparator_reason": "All 12 training/testing numerical artifact pairs are byte-identical, but both source manifests lack required action_schema and observation_schema declarations and the comparator rejects legacy_observation_schema_opt_in. The output data belongs to the historical seed-42 report-only reanalysis, not the rebuilt replacement-data run.",
+    "logs": [
+      "outputs/thesis_engineering_reanalysis/p2_seed42_a0_postfix_hashseed_20261018/logs/slurm_step.log",
+      "outputs/thesis_engineering_reanalysis/p2_seed42_a0_postfix_hashseed_20261018/logs/slurm_step_corrected.log",
+      "outputs/thesis_engineering_reanalysis/p2_seed42_a0_postfix_hashseed_20261018/logs/run_hashseed1.log",
+      "outputs/thesis_engineering_reanalysis/p2_seed42_a0_postfix_hashseed_20261018/logs/run_hashseed12.log"
+    ]
   },
   "evaluation_target": {
     "source_run": "outputs/gpu_campaigns/ladder18_seed42_20m_finalization_20261015/runs/attempts/ladder_a0_flat__seed42/attempt1/ladder_a0_flat__seed42/20261015_122332_850036_rl_train_seed42_tcn",
@@ -50,5 +68,5 @@
     "hash_seed_limit": "The saved worker command does not set PYTHONHASHSEED, and the run manifests do not record its value. Treat this as independent-process repeatability, not explicit PYTHONHASHSEED-crossed acceptance.",
     "checkpoint_limit": "The source checkpoint path recorded in the manifests is absent from the current checkout; the archived outputs and hashes remain, but that run cannot currently be repeated from its original checkpoint."
   },
-  "disposition": "P2 remains open for the explicit post-fix cross-PYTHONHASHSEED replay and admissible completed-checkpoint acceptance. No strategy, selection, OOS, or confirmatory conclusion follows from this failed attempt or the archived legacy repeats."
+  "disposition": "The explicit cross-PYTHONHASHSEED engineering replay completed and all 12 train/test numerical artifact pairs were byte-identical. Comparator acceptance failed because required action/observation schema provenance is absent and legacy opt-ins are rejected. Both runs are inactive (zero trades), use a historical contaminated checkpoint and data, and cannot support strategy, selection, validity, OOS, or confirmatory claims. P2 remains open for schema-complete admissible checkpoint acceptance after P1 clears."
 }
