@@ -4,23 +4,31 @@
 
 The supplied replacement data, rebuilt caches, tick execution schedule, and
 the two bounded feature-causality audits passed their stated technical checks.
-This does **not** admit the new data for thesis selection or publication:
-provider/feed identity, data-use/publication terms, and authoritative broker
-calendar/timezone/DST interpretation remain undocumented. No training campaign
-or new-data checkpoint exists. Overall readiness remains **NOT READY**.
+This does **not** admit the new data for thesis selection or publication. The
+user identifies FTMO as the prop firm, but the underlying liquidity provider,
+account-specific export provenance, data-use/publication terms, and
+authoritative broker calendar/timezone/DST interpretation remain unverified.
+FTMO's current [public Terms and Conditions](https://ftmo.com/en/terms-and-conditions/)
+say it does not act as a broker and its platform/data feed is powered by
+liquidity providers; they do not identify the feed for this account or
+establish publication rights for these files. No training campaign or new-data
+checkpoint exists. Overall readiness remains **NOT READY**.
+The provenance disposition is recorded in
+[`provider_provenance_status_20261018.json`](replacement_data_20261017/provider_provenance_status_20261018.json).
 
 ## Dataset and cache identity
 
 The requested chronological split is training through 2025-12-31 inclusive and
-testing from 2026-01-01 through the last available bar on 2026-10-16. Source M1
-files have 630,787 US100 rows and 628,929 US500 rows; both start at
-2024-12-30 01:05 and end at 2026-10-16 23:49 in the configured broker clock.
-The complete July–October portion is included in that test split: July 4
-through October 16, 2026 is present in the rebuilt M1, M5, M10, M15, M30, H1,
-H4, and D1 caches and in all four resolved variant feature caches. The test schedule
-ends on October 16 for both symbols (79,069 US100 and 79,068 US500 NY-session
-decisions); no July–October rows enter the 2025 training mask. The exact
-observed test timestamps are frozen in
+one continuous test/report interval from 2026-01-01 through the last available
+bar on 2026-10-16. The full interval is exposed exploratory/report-only evidence:
+January–July outcomes were previously inspected, so no later subperiod is
+classified as fresh or confirmatory. Source M1 files have 630,787 US100 rows and
+628,929 US500 rows; both start at 2024-12-30 01:05 and end at 2026-10-16 23:49
+in the configured broker clock. The full interval is present in the rebuilt M1,
+M5, M10, M15, M30, H1, H4, and D1 caches and in all four resolved variant
+feature caches. The test schedule ends on October 16 for both symbols (79,069
+US100 and 79,068 US500 NY-session decisions); no 2026 test rows enter the 2025
+training mask. The exact observed test timestamps are frozen in
 [`decision_schedule_fingerprint_final.json`](replacement_data_20261017/decision_schedule_fingerprint_final.json).
 The inventory found no unparseable/duplicate/out-of-order timestamps, missing
 or nonfinite numeric values, invalid OHLC ordering, negative spreads, or
@@ -79,9 +87,14 @@ Idea 2 distribution (6 variants; 630,787 rows, 538 columns). The durable
 records cache hashes, source M1 fingerprints, and each variant-to-cache
 binding. The three requested named caches remain present; the supplemental
 profile prevents five baseline strategy-action variants from falling back to
-an untracked runtime build. The presence of an M10 bar cache does not mean M10
-is visible to each profile; each profile follows its resolved
-feature-timeframe config.
+an untracked runtime build. The fresh rerun report
+[`named_feature_cache_rebuild_18variant_20261017_job21020179_rerun1.json`](replacement_data_20261017/named_feature_cache_rebuild_18variant_20261017_job21020179_rerun1.json)
+records all 18 variant bindings, the four rebuilt profiles, source hashes, and
+cache identities at HEAD `132da3a`. The corresponding full-period bar/tick
+rebuild report is
+[`full_period_data_cache_rebuild_20261017_job21020179_rerun1.json`](replacement_data_20261017/full_period_data_cache_rebuild_20261017_job21020179_rerun1.json).
+The presence of an M10 bar cache does not mean M10 is visible to each profile;
+each profile follows its resolved feature-timeframe config.
 
 ## Causal checks
 
@@ -114,28 +127,29 @@ does not turn these bounded data checks into strategy evidence.
 
 ## Validity boundary and next action
 
-The Jan 1–Jul 3, 2026 test interval was previously inspected. Jul 4–Oct 16 is
-only a candidate fresh segment if the exposure record confirms it was not used
-for model or human selection and the evaluation protocol is frozen in advance.
-No new-data campaign should be used for thesis selection/publication until the
-data-use source is accepted, the broker calendar/timezone interpretation is
-reviewed, the exact campaign execution schedule is reconciled, and the test
-exposure plan is frozen. Any later training result remains exploratory until
-its training and evaluation gates pass; this report contains no return,
-survival, or profitability result.
+January–July 2026 outcomes were previously inspected. Treat the single
+2026-01-01–2026-10-16 test/report interval as exposed exploratory/report-only
+evidence; do not designate any later subperiod as fresh holdout or use it for
+confirmatory claims. No new-data campaign should be used for thesis selection
+or publication until the data-use source is accepted, the broker
+calendar/timezone interpretation is reviewed, and the exact campaign execution
+schedule and evaluation protocol are reconciled. Any later training result
+remains exploratory until its training and evaluation gates pass; this report
+contains no return, survival, or profitability result.
 
 The repository exposure inventory found that the pre-intake US100 and US500 M1
 caches both ended at 2026-07-03 19:59 broker time; the full-range replacement
 source files have filesystem modification times on 2026-10-17. It searched
 pre-intake text artifacts in `outputs/`, `cache/`, and
-`data/prebuilt_feature_cache/` for dates in the candidate tail. Some files
-matched date strings, but reviewed examples are UTC artifact/log timestamps or
-unrelated date text, not evidence of policy results on those market bars. The
+`data/prebuilt_feature_cache/` for references to dates in the later portion of
+the report interval. Some files matched date strings, but reviewed examples
+are UTC artifact/log timestamps or unrelated date text, not evidence of policy
+results on those market bars. The
 raw match inventory is preserved in
 [`candidate_holdout_exposure.json`](replacement_data_20261017/candidate_holdout_exposure.json).
 An additional pre-intake archive screen covered 612 ZIP and 3 GZIP archives
-with zero read errors. It found 397 July–October date references across 15
-archives. Path triage classified the recorded samples as source/configuration,
+with zero read errors. It found 397 date references from the later part of the
+report interval across 15 archives. Path triage classified the recorded samples as source/configuration,
 source manifests/checkpoint-migration maps, or two resource-telemetry snapshots;
 no matched member path was a direct market-data, evaluation-report, or strategy-
 metric artifact. This narrows what the archive text scan found, but does not
@@ -145,8 +159,7 @@ and human exposure remain outside the audit. See the machine report
 [`candidate_holdout_archive_exposure_20261017_triaged.json`](replacement_data_20261017/candidate_holdout_archive_exposure_20261017_triaged.json)
 and the full gate log
 [`candidate_holdout_archive_audit_gate_triaged.log`](../../../outputs/data_refresh_20261017/candidate_holdout_archive_audit_gate_triaged.log).
-This supports treating Jul 4–Oct 16 as a **repository-level candidate** only;
-filesystem times and repository searches cannot establish external or
-undocumented human exposure. No replacement-data training or policy evaluation
-has run. Keep the segment non-confirmatory pending an exposure review and a
-frozen model/protocol.
+These bounded repository scans cannot establish external or undocumented
+human exposure. They do not change the assigned role of the full 2026 interval:
+exposed exploratory/report-only evidence. No replacement-data training or
+policy evaluation has run.

@@ -1,13 +1,13 @@
 # Aalto Thesis Trading System — Master Project Execution Plan
 
 **Status:** ACTIVE — empirical results package is not yet frozen
-**Revision:** 2026-10-17 — single-agent horizontal-execution profile
+**Revision:** 2026-10-18 — single-agent horizontal-execution profile
 **Authority:** This file is the single operational roadmap for thesis-critical experiment, correctness, infrastructure, evaluation, evidence, review, archival, manuscript, and submission work.
 **Primary objective:** Complete the P0–P9 evidence package, then use its frozen artifacts to finish and submit a defensible thesis. The active user goal includes P10/P11 manuscript and submission work; those stages remain downstream of the evidence gates.
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-17 23:50 Helsinki):** work is on the sole checkout,
+**Live checkpoint (2026-10-18 00:03 Helsinki):** work is on the sole checkout,
 `/scratch/work/nguyenl37/Aalto_MS_Thesis`, branch `main`; all prior changes are
 pushed. The schedule-freeze gate passed Ruff
 format (465 files), Ruff lint, full-tree Mypy (478 source files), and
@@ -47,12 +47,14 @@ These are bounded input and feature checks, not proof of every path, policy
 performance, or confirmatory evidence. Reports are under
 [`replacement_data_20261017`](evidence/replacement_data_20261017/).
 
-The July 4–October 16, 2026 segment is included in the report-only test split
-and in each full-range timeframe and resolved variant feature cache; it is not
-omitted at the former July 3 cache boundary. The frozen test schedule has 79,069 US100
-and 79,068 US500 decisions through October 16, while training remains capped
-at December 31, 2025. This confirms dataset/cache setup, not that the test tail
-is untouched or valid for confirmatory claims.
+The report-only test period is one continuous interval, 2026-01-01 through
+2026-10-16, in the split and each full-range timeframe and resolved variant
+feature cache. January–July outcomes were previously inspected, so classify the
+entire interval as exposed exploratory/report-only evidence; do not label any
+later subperiod as fresh holdout evidence. The frozen test schedule has 79,069
+US100 and 79,068 US500 decisions through October 16, while training remains
+capped at December 31, 2025. This confirms dataset/cache setup, not untouched or
+confirmatory test evidence.
 
 The current resolver schedule has 99,492 US100 and 99,482 US500 training
 decisions, with 100% tick coverage for the configured seeded `[0,30 ms)` delay
@@ -82,13 +84,20 @@ chronology unknowable.
 
 The historical 18-way campaign remains unusable for selection (same-session
 lookahead in 17/18 and the baseline failed its training-survival gate). No
-replacement-data campaign, supervisor, or checkpoint has launched. The prior
-Jan 1–Jul 3, 2026 segment was inspected; Jul 4–Oct 16 remains only a candidate
-fresh segment based on a repository-level exposure scan, not a proven
-untouched holdout. No record of provider identity or data-use/publication terms
-is available. P1 therefore remains **NOT READY**; P2's current-code gate passes,
-but admissible-checkpoint replay and numerical report acceptance await P1. P3–P11
-remain downstream/open. Overall readiness remains **NOT READY**.
+replacement-data campaign, supervisor, or checkpoint has launched. January–July
+2026 outcomes were previously inspected; the entire continuous January 1–October
+16 report interval is therefore exposed exploratory/report-only evidence. No
+later subperiod is designated fresh or confirmatory. The user identifies FTMO
+as the prop firm. This does not identify the underlying liquidity provider for
+the MT5-format files or establish data-use/publication rights: FTMO's current
+[Terms and Conditions](https://ftmo.com/en/terms-and-conditions/) say FTMO does
+not act as a broker and that its platform/data feed is powered by liquidity
+providers. The account-specific feed and applicable historical terms remain
+unverified. The user report and public-terms boundary are recorded in
+[`provider_provenance_status_20261018.json`](evidence/replacement_data_20261017/provider_provenance_status_20261018.json).
+P1 therefore remains **NOT READY**; P2's current-code gate passes,
+but admissible-checkpoint replay and numerical report acceptance await P1.
+P3–P11 remain downstream/open. Overall readiness remains **NOT READY**.
 
 The four-profile mapping code passed the latest full GH200-node gate on job
 `21020179`, step `.14`: Ruff format (467 files), Ruff lint, full-tree Mypy
@@ -102,6 +111,20 @@ No training campaign or supervisor was started. The Dec 2/4 shorter observed
 session shapes remain unclassified: neither is a scheduled Nasdaq holiday or
 early close, and the unidentified CFD provider's hours/export rules are still
 unknown.
+
+A fresh full-period rerun completed on the same allocation, Slurm step
+`21020179.18`, with step exit `0:0` and wrapper exit `0`. Its data-cache report
+is [`full_period_data_cache_rebuild_20261017_job21020179_rerun1.json`](evidence/replacement_data_20261017/full_period_data_cache_rebuild_20261017_job21020179_rerun1.json).
+The fresh named-feature report
+[`named_feature_cache_rebuild_18variant_20261017_job21020179_rerun1.json`](evidence/replacement_data_20261017/named_feature_cache_rebuild_18variant_20261017_job21020179_rerun1.json)
+has status `passed`, records all 18 campaign variants, and binds them to four
+rebuilt profiles: baseline, baseline with strategy actions, Idea 1 PO3/IFVG,
+and Idea 2 distribution. Both reports record source hashes and cache identities;
+the feature report records HEAD `132da3a` and a dirty tree. This is data/cache
+setup evidence only and does not clear the P1 gates or admit a new campaign.
+The parent allocation remains RUNNING on `gpuarm1` and `gpuarm2` under the
+existing persistent tmux session; preserve it. No training supervisor or
+replacement campaign is active.
 
 Slurm job `21020179` is RUNNING on `gpuarm1` and `gpuarm2` with one GH200,
 48 CPUs, and 512 GiB per node, six-hour limit; it is scheduled to end at
@@ -1242,13 +1265,10 @@ are not guessed.
 ### 4.9 Validation-calendar contract
 
 - `<= 2025-12-31`: train/in-sample and walk-forward selection domain.
-- `2026-01-01` through `2026-07-03`: **exposed development / exploratory
-  report-only evidence** because outcomes have already been inspected.
-- `2026-07-04` through the available `2026-10-16` data is a **candidate fresh
-  segment**, not yet confirmatory evidence. Verify that its outcomes were not
-  previously inspected or used for selection; freeze the model and evaluation
-  protocol before running the final evaluation. If that exposure check cannot
-  be established, report it as development data.
+- `2026-01-01` through `2026-10-16`: one continuous **exposed exploratory /
+  report-only interval**. January–July outcomes were previously inspected, so
+  treat the full interval as exposed; do not label a later subperiod as fresh
+  holdout or confirmatory evidence.
 - A later rerun on exposed dates does not restore pristine holdout status.
 - A truly fresh final OOS period must remain untouched until the model and
   protocol are frozen, and must never be used to select the model.
@@ -1469,12 +1489,10 @@ live checkpoint above as authoritative, not as persistent cluster telemetry.
    test-split frame/bundle parity passed on a historical checkpoint, but that
    checkpoint used old data and is not eligible for new-data claims. Full train
    and test numerical reports on an admissible checkpoint remain open.
-4. The 2026-01-01–2026-07-03 report interval has been inspected and is
-   permanently exposed. The new export continues through 2026-10-16; Jul 4–Oct
-   16 is only a candidate fresh segment. Verify it was not previously inspected
-   or used for selection, then freeze the model and evaluation protocol before
-   final evaluation. Otherwise report it as development data. Historical
-   test-split replay is engineering evidence only.
+4. January–July 2026 outcomes have been inspected. Treat the continuous
+   2026-01-01–2026-10-16 report interval as exposed exploratory/report-only
+   evidence; no later subperiod is a fresh segment. Historical test-split replay
+   is engineering evidence only.
 5. Independent research sign-off remains open.
 6. A previous planning snapshot described a coherent full manuscript draft, but
    its source was not found in the canonical checkout during the 2026-10-16
@@ -2324,6 +2342,29 @@ Verify:
   deterministic replay remains historical evidence and cannot satisfy a
   current-pipeline exact-input replay.
 
+- **Post-fix repeatability evidence and explicit hash-seed attempt — 2026-10-18:**
+  the archived A4b legacy replays on the current post-tie-break source snapshot
+  (`b7a32542`; `trading_env.py` SHA-256
+  `a287be579cd934c04cd71b99a08701a6e4b7abe12b4c7460b42327891bb0f9a9`)
+  compare byte-identically for equity, trades, fills, positions, metrics, and
+  evaluation diagnostics in both splits. The worker command does not set
+  `PYTHONHASHSEED`, and the manifests do not record its value; count these as
+  independent-process repeatability only, not explicit hash-seed-crossed
+  acceptance. The recorded source checkpoint is absent from this checkout, so
+  those saved reports cannot be repeated from that checkpoint here.
+  An explicit seed-1 replay was then attempted against a complete seed-42 A0
+  legacy checkpoint on existing allocation `21020179`, using an isolated data
+  and cache directory. Step `21020179.19` exited in 9 seconds before policy
+  evaluation: the staged `baseline.parquet` was a symlink, and path resolution
+  exposed its v19 target filename, which correctly failed the source-manifest
+  cache-identity check. Seed 12 was not started. The logs and isolated staging
+  artifacts are retained in
+  [`p2_postfix_hashseed_replay_attempt_20261018.json`](evidence/p2_postfix_hashseed_replay_attempt_20261018.json).
+  No retry or further step was submitted after this unexpected sub-120-second
+  exit, per the scheduler hard gate. P2 remains open; any future attempt must
+  stage a physical, hash-verified `baseline.parquet` copy and first recheck the
+  allocation and scheduler launch constraints.
+
 Do not edit fingerprinted training/evaluation source while the active campaign
 is live. Complete any required source correction after the campaign boundary,
 or prove that the selected evaluation lineage uses only the audited default
@@ -3153,6 +3194,14 @@ evidence package is ready for new authoring.
 `.odt`, or `.pdf` source. This search is bounded to that tree/depth and does not
 rule out a draft elsewhere; no manuscript was edited or created.
 
+**Extended read-only inventory (2026-10-18):** a filename search under
+`/scratch/work/nguyenl37` and `/home/nguyenl37` to depth six found no identifiable
+thesis manuscript source. The only thesis-named PDF was the defense slide deck
+above; the `.docx` files in the searched trees were editor-extension assets, not
+thesis drafts. This remains a bounded search and does not rule out a draft in
+another location. P10 source/draft discovery remains open; no manuscript was
+edited or created.
+
 **Submission-format and AI-use checks — 2026-10-17:** Aalto's current general
 instructions require the final thesis to be one PDF/A submitted through
 MyStudies, with the required thesis/template structure, cover page, abstract,
@@ -3662,8 +3711,8 @@ history.
 
 | ID | Package | Current state | Depends on | Horizontal-safe work |
 |---|---|---|---|---|
-| P0 | Safe boundary/current snapshot | COMPLETE — work remains on the sole canonical `main` checkout; changes are pushed and clean at the last status refresh. The latest full GH200 gate passed Ruff format (467 files), Ruff lint, Mypy (480 source files), and 1,738 tests. Job `21020179` remains RUNNING with both GPUs idle and no campaign/supervisor; preserve it. Five prior worktrees plus the compatibility checkout are consolidated; source and required evidence are on `main`. | — | P1, P2, E0 |
-| P1 | 18-way/full-split one-seed screen reconciliation | HISTORICAL SCREEN ACCOUNTING RECONCILED; REPLACEMENT SCHEDULE, RAW-TICK INPUT, AND CACHE BINDING AUDITS PASS; NEW SCREEN NOT ADMITTED — the old 18-way run remains invalid for selection (lookahead in 17/18 configs; baseline failed its training survival gate). The `prev_ny_high_low` same-session future-poison regression passes; 16/16 sampled prefix checks and 20/20 fold-local poison checks pass on replacement data, but do not constitute exhaustive causality certification. A fresh raw-tick rebuild matched both tick caches and the current resolver's exact observed schedule: 99,492 / 79,069 US100 and 99,482 / 79,068 US500 train/test decisions, each at 100% coverage. All 18 campaign variants now map to four full-range feature profiles; see [`named_feature_cache_rebuild_18variant_20261017_job21020179.json`](evidence/replacement_data_20261017/named_feature_cache_rebuild_18variant_20261017_job21020179.json). Decision and next-market quote-anchor timestamp fingerprints are recorded in [`decision_schedule_fingerprint_final.json`](evidence/replacement_data_20261017/decision_schedule_fingerprint_final.json), linked to [`tick_execution_coverage_schedule_freeze_final.json`](evidence/replacement_data_20261017/tick_execution_coverage_schedule_freeze_final.json). The shorter 2025-12-02/04 shapes are not scheduled Nasdaq holiday/early-close sessions (the official December early close is Dec 24); they remain unclassified for the unidentified CFD provider/export, with no missing-bar claim or imputation. Replacement data spans 2024-12-30–2026-10-16; Jul 4–Oct 16 is included in the test schedule and remains only a candidate fresh segment: the pre-intake archive scan found 397 July–October date-reference samples in 15 of 615 archives. Contextual triage classified inspected paths as source/config/manifests and two resource-telemetry snapshots, with no direct market-data or strategy-result member paths; it cannot establish exposure outside these repository archives or by humans. See [`candidate_holdout_archive_exposure_20261017_triaged.json`](evidence/replacement_data_20261017/candidate_holdout_archive_exposure_20261017_triaged.json). Provider/feed identity and use terms, broker calendar/timezone/DST, true sub-millisecond tick chronology, broader causal certification, and holdout exposure protocol remain open. Keep the old contaminated screen unusable for selection and do not launch the new screen before the remaining P1/P2 gates clear. See [`replacement_data_20261017.md`](evidence/replacement_data_20261017.md), [`candidate_holdout_exposure.json`](evidence/replacement_data_20261017/candidate_holdout_exposure.json), and [`p1_18_variant_screen_disposition_2026-10-16.md`](evidence/p1_18_variant_screen_disposition_2026-10-16.md). | P0 | P2, E0 |
+| P0 | Safe boundary/current snapshot | COMPLETE — work remains on the sole canonical `main` checkout at HEAD `132da3a`. The working tree contains this roadmap update plus untracked rebuild scripts and reports; preserve them. The latest full GH200 gate passed Ruff format (467 files), Ruff lint, Mypy (480 source files), and 1,738 tests. Job `21020179` remains RUNNING with no campaign/supervisor; preserve it. Five prior worktrees plus the compatibility checkout are consolidated; source and required evidence are on `main`. | — | P1, P2, E0 |
+| P1 | 18-way/full-split one-seed screen reconciliation | HISTORICAL SCREEN ACCOUNTING RECONCILED; REPLACEMENT SCHEDULE, RAW-TICK INPUT, AND CACHE BINDING AUDITS PASS; NEW SCREEN NOT ADMITTED — the old 18-way run remains invalid for selection (lookahead in 17/18 configs; baseline failed its training survival gate). The `prev_ny_high_low` same-session future-poison regression passes; 16/16 sampled prefix checks and 20/20 fold-local poison checks pass on replacement data, but do not constitute exhaustive causality certification. A fresh raw-tick rebuild matched both tick caches and the current resolver's exact observed schedule: 99,492 / 79,069 US100 and 99,482 / 79,068 US500 train/test decisions, each at 100% coverage. All 18 campaign variants map to four full-range feature profiles; the fresh rerun binding report is [`named_feature_cache_rebuild_18variant_20261017_job21020179_rerun1.json`](evidence/replacement_data_20261017/named_feature_cache_rebuild_18variant_20261017_job21020179_rerun1.json). Decision and next-market quote-anchor timestamp fingerprints are recorded in [`decision_schedule_fingerprint_final.json`](evidence/replacement_data_20261017/decision_schedule_fingerprint_final.json), linked to [`tick_execution_coverage_schedule_freeze_final.json`](evidence/replacement_data_20261017/tick_execution_coverage_schedule_freeze_final.json). The shorter 2025-12-02/04 shapes are not scheduled Nasdaq holiday/early-close sessions (the official December early close is Dec 24); they remain unclassified for the unidentified CFD provider/export, with no missing-bar claim or imputation. Replacement data spans 2024-12-30–2026-10-16. The continuous 2026-01-01–2026-10-16 test interval is exposed exploratory/report-only evidence because January–July outcomes were previously inspected; do not characterize a later subperiod as fresh or confirmatory. Contextual triage classified inspected paths as source/config/manifests and two resource-telemetry snapshots, with no direct market-data or strategy-result member paths; it cannot establish exposure outside these repository archives or by humans. See [`candidate_holdout_archive_exposure_20261017_triaged.json`](evidence/replacement_data_20261017/candidate_holdout_archive_exposure_20261017_triaged.json). The exact feed provider (FTMO is user-reported as the prop firm), account-specific use/publication rights, broker calendar/timezone/DST, true sub-millisecond tick chronology, and broader causal certification remain open; exposure beyond the repository scan is unknown, while the full 2026 interval is classified exploratory/report-only. Keep the old contaminated screen unusable for selection and do not launch the new screen before the remaining P1/P2 gates clear. See [`replacement_data_20261017.md`](evidence/replacement_data_20261017.md), [`candidate_holdout_exposure.json`](evidence/replacement_data_20261017/candidate_holdout_exposure.json), and [`p1_18_variant_screen_disposition_2026-10-16.md`](evidence/p1_18_variant_screen_disposition_2026-10-16.md). | P0 | P2, E0 |
 | P2 | Deterministic evaluator/schema repair | ACTIVE, PARTIALLY VERIFIED — evaluator schema forwarding, deterministic randomized-fill seeding, legacy observation recovery, cache/data provenance guards, mixed-timezone equity timestamps, and the new exact observed-schedule helper are covered by the current full gate (1,738 tests). Historical engineering-only checks passed exact repeated train/test replay and frame/shared-bundle parity on one contaminated legacy checkpoint; the holdout was previously inspected and required explicit legacy-schema opt-ins. This verifies bounded mechanics only. Acceptance on an admissible, provenance-complete selected checkpoint remains open until P1 clears and a new screen produces one. See [`p2_engineering_reanalysis_a4b_seed50_2026-10-17.md`](evidence/p2_engineering_reanalysis_a4b_seed50_2026-10-17.md). | P0 | P1, E0 |
 | E0 | Evidence/result pipeline + indexes | ACTIVE — prior provenance/index/reconciliation tools remain available. Replacement M1/tick/cache, prefix-invariance, fold-poison, fresh raw-tick coverage, exact observed decision-schedule fingerprint, cache-wide tie-policy, and 18-variant cache mapping evidence are machine-readable under `evidence/replacement_data_20261017/`. There is no new-data checkpoint or canonical numerical strategy report; the old checkpoint remains inadmissible. Provider/use provenance, broker calendar/DST, true sub-millisecond ordering, external holdout exposure, deterministic full-split repeats, and final report package remain open. | P0 | P1, P2 |
 | P3 | Canonical numerical screen reports | BLOCKED — report contract covers annualization, equity endpoints, exposure, raw fills/positions/breaches, split completion, and source/runtime provenance. Current verifier/software tests pass, but no admissible completed-checkpoint report has been generated. | P1 + P2 | per-checkpoint eval/package |

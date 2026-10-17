@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "status": "incomplete",
+  "recorded_at": "2026-10-18T00:11:13+03:00",
+  "subject": {
+    "symbols": ["US100.cash", "US500.cash"],
+    "source_period": {
+      "start": "2024-12-30",
+      "end": "2026-10-16"
+    },
+    "csv_export_format_observation": "MT5-style date/time and OHLC or bid/ask headers; this format observation does not identify the data vendor or liquidity provider."
+  },
+  "user_reported_context": {
+    "reported_value": "FTMO prop firm",
+    "reported_at": "2026-10-18",
+    "scope": "Firm context for the supplied data; not an account-specific export record or license document."
+  },
+  "user_followup": {
+    "question": "Whether the FTMO account/platform server or broker/feed identity and export/data-use/publication record are available.",
+    "response": "No",
+    "recorded_at": "2026-10-18T00:11:13+03:00",
+    "disposition": "No account-specific feed identity or export/data-use/publication record was provided."
+  },
+  "official_public_reference": {
+    "url": "https://ftmo.com/en/terms-and-conditions/",
+    "retrieved_at": "2026-10-18",
+    "claims_used": [
+      "FTMO states it does not act as a broker.",
+      "FTMO states that its platform and data feed are powered by liquidity providers."
+    ],
+    "scope_limit": "Current public terms do not identify the liquidity provider for this account or establish historical export or thesis-publication rights for these CSVs."
+  },
+  "not_established": [
+    "The specific liquidity provider or providers for these historical US100.cash and US500.cash exports; the user reports no account-specific identity is available.",
+    "The account-specific platform and export path for these exact files.",
+    "The applicable version of the FTMO account agreement or data terms during the source period.",
+    "Permission to retain, analyze, reproduce, or publish the source market data in a thesis or its appendices; no export/data-use/publication record was provided.",
+    "The authoritative server timezone, DST behavior, market-hours calendar, and CFD schedule."
+  ],
+  "disposition": "The user's FTMO identification is retained as a self-reported firm context. It is not treated as proof of the underlying market-data feed or publication rights. P1 remains NOT READY; do not launch a replacement-data training campaign on this record alone."
+}

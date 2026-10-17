@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "artifact_role": "p2_postfix_determinism_replay_attempt",
+  "status": "failed_before_evaluation",
+  "recorded_at": "2026-10-18T00:16:12+03:00",
+  "source": {
+    "repository": "/scratch/work/nguyenl37/Aalto_MS_Thesis",
+    "head": "132da3ab51e85a7840ddba611bef9a78e01e7e59",
+    "worktree_state": "dirty documentation and evidence only; no evaluator or training source changed"
+  },
+  "attempt": {
+    "slurm_job_id": "21020179",
+    "slurm_step_id": "21020179.19",
+    "state": "FAILED",
+    "elapsed": "00:00:09",
+    "exit_code": "1:0",
+    "hash_seed_started": 1,
+    "hash_seed_not_started": 12,
+    "retry_submitted": false,
+    "reason_no_retry": "An unexpected child step exited before 120 seconds; repository Triton rules require stopping submissions and retries, preserving logs, and diagnosing first."
+  },
+  "evaluation_target": {
+    "source_run": "outputs/gpu_campaigns/ladder18_seed42_20m_finalization_20261015/runs/attempts/ladder_a0_flat__seed42/attempt1/ladder_a0_flat__seed42/20261015_122332_850036_rl_train_seed42_tcn",
+    "checkpoint": "outputs/gpu_campaigns/ladder18_seed42_20m_finalization_20261015/runs/attempts/ladder_a0_flat__seed42/attempt1/ladder_a0_flat__seed42/20261015_122332_850036_rl_train_seed42_tcn/model/ppo_final.zip",
+    "checkpoint_sha256": "0a84fa254c45335715ce5a1607679b32f37d809b58b804c885ba7908aead655e",
+    "feature_cache_source": "cache/US100.cash_features_v19-causal-mtf-ifvg_656b50e064710408.parquet",
+    "feature_cache_file_sha256": "d6c450790b1799aa24f6688c32b91e1e5d7b4777cdc99a2914c4c80808e327c5",
+    "feature_cache_content_hash": "656b50e064710408",
+    "validity_limit": "Historical engineering replay only. The seed-42 screen was lookahead-contaminated and its 2026 test period was previously inspected."
+  },
+  "failure": {
+    "message": "reanalysis feature-cache identity differs from training: expected baseline.parquet, got US100.cash_features_v19-causal-mtf-ifvg_656b50e064710408.parquet",
+    "cause": "The staged source-cache alias was a symlink. Path resolution followed it to the canonical v19 filename before comparing identity, so the required baseline.parquet identity was not preserved.",
+    "pipeline_started": true,
+    "policy_replay_started": false,
+    "canonical_data_or_cache_modified": false,
+    "logs": [
+      "outputs/thesis_engineering_reanalysis/p2_seed42_a0_postfix_hashseed_20261018/logs/slurm_step.log",
+      "outputs/thesis_engineering_reanalysis/p2_seed42_a0_postfix_hashseed_20261018/logs/run_hashseed1.log"
+    ],
+    "isolated_preflight_artifacts": "outputs/thesis_engineering_reanalysis/p2_seed42_a0_postfix_hashseed_20261018/"
+  },
+  "related_post_fix_archived_repeatability": {
+    "comparison_report": "docs/thesis/evidence/p2_repeatability_a4b_seed50_20261017_gh200_stop_legacy_fix.json",
+    "comparison_status": "passed",
+    "compared_outputs": "The recorded comparator covers equity.csv, trades.csv, fills.csv, positions.csv, metrics.json, and evaluation_diagnostics.json for training and testing; all required artifacts were byte-identical.",
+    "source_commit": "b7a32542aa5cb53c53fd01a36b16d92558610aea",
+    "source_trading_env_sha256": "a287be579cd934c04cd71b99a08701a6e4b7abe12b4c7460b42327891bb0f9a9",
+    "tie_break_status": "The archived source contains the stable lexical tie-break.",
+    "hash_seed_limit": "The saved worker command does not set PYTHONHASHSEED, and the run manifests do not record its value. Treat this as independent-process repeatability, not explicit PYTHONHASHSEED-crossed acceptance.",
+    "checkpoint_limit": "The source checkpoint path recorded in the manifests is absent from the current checkout; the archived outputs and hashes remain, but that run cannot currently be repeated from its original checkpoint."
+  },
+  "disposition": "P2 remains open for the explicit post-fix cross-PYTHONHASHSEED replay and admissible completed-checkpoint acceptance. No strategy, selection, OOS, or confirmatory conclusion follows from this failed attempt or the archived legacy repeats."
+}

@@ -5,18 +5,27 @@
 documented as historical evidence. Bounded post-repair checks passed, but P1 is
 still open; see the scope limits below and the master plan.
 
-**Replacement-data refresh (2026-10-17):** the source/cache schedule now covers
-training through 2025-12-31 and report-only testing from 2026-01-01 through
-2026-10-16, including July–October. The full-range M1/MTF/tick caches, four
+**Replacement-data refresh (2026-10-18):** the source/cache schedule now covers
+training through 2025-12-31 and one continuous report-only test interval from
+2026-01-01 through 2026-10-16. January–July outcomes were previously inspected,
+so the whole interval is exposed exploratory evidence; no later subperiod is
+fresh or confirmatory. The full-range M1/MTF/tick caches, four
 resolved feature profiles (the three requested caches plus a baseline
 strategy-action profile), and exact resolver schedule passed the stated bounded
 parity/coverage checks. A 615-archive text screen found date references in 15
 archives; triage found source/config/manifests and two resource-telemetry
 snapshots, but no direct market-data or strategy-result member paths. This
 does not prove external or human non-exposure. Raw tick headers identify an
-MT5-style export format, but neither headers nor repository records identify
-the provider or applicable data-use/publication terms. See the
-[replacement-data report](evidence/replacement_data_20261017.md) and
+MT5-style export format. The user identifies FTMO as the prop firm; FTMO's
+current [public terms](https://ftmo.com/en/terms-and-conditions/) state its
+platform/data feed is powered by liquidity providers, but do not identify the
+underlying feed for this account or establish data-use/publication rights for
+these files. See the
+[replacement-data report](evidence/replacement_data_20261017.md), including the
+successful full-period data and 18-variant feature-cache rerun; the user report
+and remaining provenance gaps are machine-recorded in
+[`provider_provenance_status_20261018.json`](evidence/replacement_data_20261017/provider_provenance_status_20261018.json).
+See also the
 [archive triage report](evidence/replacement_data_20261017/candidate_holdout_archive_exposure_20261017_triaged.json).
 
 This brief is a short entry point for an independent reviewer of the thesis

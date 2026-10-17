@@ -1,0 +1,194 @@
+{
+  "status": "passed",
+  "created_at_utc": "2026-10-17T20:55:38.318424+00:00",
+  "slurm_job_id": "21020179",
+  "hostname": "gpuarm1.int.triton.aalto.fi",
+  "train_end_inclusive": "2025-12-31",
+  "report_only_test_start": "2026-01-01",
+  "full_source_end": "2026-10-16",
+  "july_october_included_in_full_cache": true,
+  "bar_cache_version": "v2-full-day",
+  "tick_cache_version": "v3-validated-full-day",
+  "cache_dir": "cache/us100_us500_20241230_20261016",
+  "backup_dir": "cache/backups/full-period-rebuild-20261017_job21020179_rerun1",
+  "raw_files": {
+    "US100.cash": {
+      "m1": "data/US100.cash_M1_202412300105_202610162349.csv",
+      "ticks": "data/US100.cash_202412300105_202610162349.csv"
+    },
+    "US500.cash": {
+      "m1": "data/US500.cash_M1_202412300105_202610162349.csv",
+      "ticks": "data/US500.cash_202412300105_202610162349.csv"
+    }
+  },
+  "coverage": {
+    "US100.cash": {
+      "M1": {
+        "rows": 630787,
+        "first_timestamp": "2024-12-30T01:05:00+03:00",
+        "last_timestamp": "2026-10-16T23:49:00+03:00"
+      },
+      "M5": {
+        "rows": 126179,
+        "first_timestamp": "2024-12-30T01:05:00+03:00",
+        "last_timestamp": "2026-10-16T23:45:00+03:00"
+      },
+      "M10": {
+        "rows": 63331,
+        "first_timestamp": "2024-12-30T01:00:00+03:00",
+        "last_timestamp": "2026-10-16T23:40:00+03:00"
+      },
+      "M15": {
+        "rows": 42519,
+        "first_timestamp": "2024-12-30T01:00:00+03:00",
+        "last_timestamp": "2026-10-16T23:45:00+03:00"
+      },
+      "M30": {
+        "rows": 21265,
+        "first_timestamp": "2024-12-30T01:00:00+03:00",
+        "last_timestamp": "2026-10-16T23:30:00+03:00"
+      },
+      "H1": {
+        "rows": 10636,
+        "first_timestamp": "2024-12-30T01:00:00+03:00",
+        "last_timestamp": "2026-10-16T23:00:00+03:00"
+      },
+      "H4": {
+        "rows": 2781,
+        "first_timestamp": "2024-12-30T00:00:00+03:00",
+        "last_timestamp": "2026-10-16T20:00:00+03:00"
+      },
+      "D1": {
+        "rows": 466,
+        "first_timestamp": "2024-12-30T00:00:00+03:00",
+        "last_timestamp": "2026-10-16T00:00:00+03:00"
+      },
+      "ticks": {
+        "rows": 135043551,
+        "first_timestamp": "2024-12-30T01:05:00.196000+03:00",
+        "last_timestamp": "2026-10-16T23:49:58.664000+03:00"
+      }
+    },
+    "US500.cash": {
+      "M1": {
+        "rows": 628929,
+        "first_timestamp": "2024-12-30T01:05:00+03:00",
+        "last_timestamp": "2026-10-16T23:49:00+03:00"
+      },
+      "M5": {
+        "rows": 126177,
+        "first_timestamp": "2024-12-30T01:05:00+03:00",
+        "last_timestamp": "2026-10-16T23:45:00+03:00"
+      },
+      "M10": {
+        "rows": 63328,
+        "first_timestamp": "2024-12-30T01:00:00+03:00",
+        "last_timestamp": "2026-10-16T23:40:00+03:00"
+      },
+      "M15": {
+        "rows": 42518,
+        "first_timestamp": "2024-12-30T01:00:00+03:00",
+        "last_timestamp": "2026-10-16T23:45:00+03:00"
+      },
+      "M30": {
+        "rows": 21264,
+        "first_timestamp": "2024-12-30T01:00:00+03:00",
+        "last_timestamp": "2026-10-16T23:30:00+03:00"
+      },
+      "H1": {
+        "rows": 10636,
+        "first_timestamp": "2024-12-30T01:00:00+03:00",
+        "last_timestamp": "2026-10-16T23:00:00+03:00"
+      },
+      "H4": {
+        "rows": 2781,
+        "first_timestamp": "2024-12-30T00:00:00+03:00",
+        "last_timestamp": "2026-10-16T20:00:00+03:00"
+      },
+      "D1": {
+        "rows": 466,
+        "first_timestamp": "2024-12-30T00:00:00+03:00",
+        "last_timestamp": "2026-10-16T00:00:00+03:00"
+      },
+      "ticks": {
+        "rows": 37246832,
+        "first_timestamp": "2024-12-30T01:05:00.497000+03:00",
+        "last_timestamp": "2026-10-16T23:49:56.701000+03:00"
+      }
+    }
+  },
+  "artifacts": {
+    "cache/us100_us500_20241230_20261016/US100.cash_M1_v2-full-day.parquet": {
+      "bytes": 14620416,
+      "sha256": "736c089420cde00166bdf0920003c6ad101ee74beffcd1ad18dc1e526711509d"
+    },
+    "cache/us100_us500_20241230_20261016/US100.cash_M5_v2-full-day.parquet": {
+      "bytes": 3949006,
+      "sha256": "e89eb9d20f3bfc239783a15b843e10c899230cfbc8fff58c995c5d53a81df888"
+    },
+    "cache/us100_us500_20241230_20261016/US100.cash_M10_v2-full-day.parquet": {
+      "bytes": 2163697,
+      "sha256": "a6e9af7ad1c424b4a6f89f18c0f705809209914556e966d9f01830b6c6c4c631"
+    },
+    "cache/us100_us500_20241230_20261016/US100.cash_M15_v2-full-day.parquet": {
+      "bytes": 1571707,
+      "sha256": "8da3ffa161c1c6ab97aeed300a187c831ce3e2661af345be4a61132906b51451"
+    },
+    "cache/us100_us500_20241230_20261016/US100.cash_M30_v2-full-day.parquet": {
+      "bytes": 847763,
+      "sha256": "f8fdc0578fbfa2d93bd17d88c66113ea7c311be0d82d6d99c89f890e803b1cd8"
+    },
+    "cache/us100_us500_20241230_20261016/US100.cash_H1_v2-full-day.parquet": {
+      "bytes": 452998,
+      "sha256": "3420f36b4bed25f78b026117eb8672535e974bb2199371d68cf4b26c2290da6e"
+    },
+    "cache/us100_us500_20241230_20261016/US100.cash_H4_v2-full-day.parquet": {
+      "bytes": 136256,
+      "sha256": "d52c2fe2fad42f7e3178b13a8719370aabf32d877273e6a55f8b1e2e86dfa75a"
+    },
+    "cache/us100_us500_20241230_20261016/US100.cash_D1_v2-full-day.parquet": {
+      "bytes": 32389,
+      "sha256": "b0e725bf3379690442cd97743232cd3482819d9df00267d0b8d33e8ab3edae6f"
+    },
+    "cache/us100_us500_20241230_20261016/US100.cash_ticks_v3-validated-full-day.parquet": {
+      "bytes": 1403552982,
+      "sha256": "08a5fc05b6527327f7a12a8a61146faa17e0fa29db015a5256d79b9d56aece95"
+    },
+    "cache/us100_us500_20241230_20261016/US500.cash_M1_v2-full-day.parquet": {
+      "bytes": 11526331,
+      "sha256": "920d7d0a8bd5b9bdd653c171c4852e06b0a63598c83244c99515010d647af6b0"
+    },
+    "cache/us100_us500_20241230_20261016/US500.cash_M5_v2-full-day.parquet": {
+      "bytes": 3082198,
+      "sha256": "5518f1d4e2c0919a22dab0278f7012655b753158593bd0cc455424a741567242"
+    },
+    "cache/us100_us500_20241230_20261016/US500.cash_M10_v2-full-day.parquet": {
+      "bytes": 1736120,
+      "sha256": "f50e32849b5eea8052f0ffc2aa9f7b2a71519dece5e22824a4dfb2ce0edfea60"
+    },
+    "cache/us100_us500_20241230_20261016/US500.cash_M15_v2-full-day.parquet": {
+      "bytes": 1284706,
+      "sha256": "be3199adea3e4aa9271a557f904d131e5cf1fa013c64852aa514638a81ae5bc3"
+    },
+    "cache/us100_us500_20241230_20261016/US500.cash_M30_v2-full-day.parquet": {
+      "bytes": 714185,
+      "sha256": "5cbd343c058c60be52427ef9993eff9aa014905b003b23e8ba50fcf386ff2fb9"
+    },
+    "cache/us100_us500_20241230_20261016/US500.cash_H1_v2-full-day.parquet": {
+      "bytes": 402689,
+      "sha256": "f99e26c05d387b51c4335ce37b3b7eb87a8325b16b50c87c4872cb9ff4260aa3"
+    },
+    "cache/us100_us500_20241230_20261016/US500.cash_H4_v2-full-day.parquet": {
+      "bytes": 129931,
+      "sha256": "fa9e89590299566fc57a275e1f96d02fc19114b16bf7425421038022dfd2e84d"
+    },
+    "cache/us100_us500_20241230_20261016/US500.cash_D1_v2-full-day.parquet": {
+      "bytes": 31535,
+      "sha256": "217396ce17e67ed3fefade4b21d1827f885eed84740dcd9fb36629b93729e951"
+    },
+    "cache/us100_us500_20241230_20261016/US500.cash_ticks_v3-validated-full-day.parquet": {
+      "bytes": 354609545,
+      "sha256": "e6b12e30b334e87f0429402bb44dfebac3951ce10ed87a68e608823d3767ff3e"
+    }
+  }
+}
