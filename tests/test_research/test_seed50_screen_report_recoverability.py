@@ -119,6 +119,7 @@ def test_build_report_accounts_for_missing_runs_and_matching_hashes(
     report = audit.build_report()
 
     assert report["scope"]["archive_count"] == 19
+    assert report["inputs"]["audit_script_sha256"] == audit.sha256(Path(audit.__file__).resolve())
     assert report["screen"]["present_1m_mainplan_checkpoints"] == 18
     assert report["screen"]["present_run_artifact_directories"] == 0
     assert report["screen"]["available_replay_manifest_count"] == 2

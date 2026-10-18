@@ -2583,9 +2583,11 @@ remain as partial evidence; they do not contain the missing full report packs.
 This establishes exact report-pack recovery is unavailable from the current
 `outputs/` tree, not that no external backup exists. The seed-50 screen remains
 invalid for selection and its summary metrics are not canonical numerical
-reports. The initial inventory's fixed-depth glob missed the mainplan
-checkpoints; it is retained as superseded evidence, and the corrected recursive
-inventory is authoritative. P3 remains open. See
+reports. The initial fixed-depth inventory missed the mainplan checkpoints; the
+interim recursive inventory had the right counts but its scanner hash was
+appended after scanning. Both are retained as superseded evidence. The current
+recursive scan captures its scanner hash during report creation and is
+authoritative. P3 remains open. See
 [`p3_seed50_report_pack_recoverability_20261018.json`](evidence/p3_seed50_report_pack_recoverability_20261018.json)
 and [`audit_seed50_screen_report_recoverability.py`](../../scripts/research/audit_seed50_screen_report_recoverability.py).
 The audit's four focused tests cover recursive inventory, report/hash matching,

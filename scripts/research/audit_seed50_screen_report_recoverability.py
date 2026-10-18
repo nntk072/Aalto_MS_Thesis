@@ -151,6 +151,8 @@ def build_report() -> dict[str, Any]:
             "campaign_sha256": sha256(campaign_path),
             "summary_path": str(SUMMARY_PATH.relative_to(ROOT)),
             "summary_sha256": sha256(SUMMARY_PATH),
+            "audit_script_path": "scripts/research/audit_seed50_screen_report_recoverability.py",
+            "audit_script_sha256": sha256(Path(__file__).resolve()),
             "source_campaign_path": str(SOURCE_DIR.relative_to(ROOT)),
             "source_campaign_fingerprint": campaign.get("initial_checkpoint_lineage", {})
             .get("ladder_a0_flat__seed50", {})

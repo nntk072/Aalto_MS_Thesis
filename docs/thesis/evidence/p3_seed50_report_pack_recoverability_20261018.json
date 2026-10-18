@@ -46,11 +46,11 @@
     },
     "source_attempt3_hash_matches_in_outputs": 0
   },
-  "created_at_utc": "2026-10-18T00:16:39.402227+00:00",
-  "elapsed_seconds": 127.79009738599416,
+  "created_at_utc": "2026-10-18T00:24:44.618614+00:00",
+  "elapsed_seconds": 116.74297624698374,
   "inputs": {
     "audit_script_path": "scripts/research/audit_seed50_screen_report_recoverability.py",
-    "audit_script_sha256": "255e3f3d7889a6b2cfb664f11dd7e4949d1bb68059e04c6e12261f33fd619a5a",
+    "audit_script_sha256": "df8538f77114290c7754a5352425784f8a064d4902470fbd81d0f2fbf021adaf",
     "campaign_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/campaign.json",
     "campaign_sha256": "76a4ea35169386ebac57d07f46595b8aeaf5defe5392e50578b529aaf463b688",
     "source_campaign_fingerprint": "3474621efd6a1481bd2a20bce0cfd2c0b69969df1849c6cd738d19dc5bb4ba34",
@@ -66,12 +66,12 @@
   ],
   "repository": {
     "dirty_paths": [
-      "?? docs/thesis/evidence/p3_seed50_report_pack_recoverability_20261018.json",
-      "?? scripts/research/audit_seed50_screen_report_recoverability.py",
+      " M scripts/research/audit_seed50_screen_report_recoverability.py",
+      " M tests/test_research/test_seed50_screen_report_recoverability.py",
       "?? scripts/research/rebuild_full_period_data_cache.py",
       "?? scripts/research/run_full_period_data_and_feature_cache_rebuild.sh"
     ],
-    "head": "645aa9a09099c83cf8ac013773aed20cd9939008"
+    "head": "e0f43f7e6e41b8df05ced856c4d4bf6e95730a2e"
   },
   "schema": "aalto.seed50_screen_report_recoverability.v1",
   "scope": {
