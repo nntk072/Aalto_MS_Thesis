@@ -2588,10 +2588,11 @@ checkpoints; it is retained as superseded evidence, and the corrected recursive
 inventory is authoritative. P3 remains open. See
 [`p3_seed50_report_pack_recoverability_20261018.json`](evidence/p3_seed50_report_pack_recoverability_20261018.json)
 and [`audit_seed50_screen_report_recoverability.py`](../../scripts/research/audit_seed50_screen_report_recoverability.py).
-The recursive-inventory regression passes; final-tree Ruff format (476 files),
-Ruff lint, full-tree Mypy (489 source files), and the focused audit test (1)
-also pass. The two long-running v23 fold-fit and feature-prefix audits remain
-active and have not yet emitted final reports.
+The audit's four focused tests cover recursive inventory, report/hash matching,
+repository state, and non-overwriting output. Final-tree Ruff format (476
+files), Ruff lint, full-tree Mypy (489 source files), and all four focused tests
+pass. The two long-running v23 fold-fit and feature-prefix audits remain active
+and have not yet emitted final reports.
 
 ### Exit criterion
 
