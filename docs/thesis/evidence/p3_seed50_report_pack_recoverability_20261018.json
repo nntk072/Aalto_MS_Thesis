@@ -1,0 +1,286 @@
+{
+  "checkpoint_recoverability": {
+    "disposition": "exact recovery of the 18-variant raw report packs is unavailable from the recorded run directories and matching checkpoints currently present under outputs",
+    "recovery_final_expected_count": 18,
+    "recovery_final_hash_matches": {
+      "ladder_a0_flat__seed50": [],
+      "ladder_a0_flat_dist__seed50": [],
+      "ladder_a0_flat_po3__seed50": [],
+      "ladder_a1_sl__seed50": [],
+      "ladder_a1_sl_dist__seed50": [],
+      "ladder_a1_sl_po3__seed50": [],
+      "ladder_a2_tp__seed50": [],
+      "ladder_a2_tp_dist__seed50": [],
+      "ladder_a2_tp_po3__seed50": [],
+      "ladder_a3_multi_tp__seed50": [],
+      "ladder_a3_multi_tp_dist__seed50": [],
+      "ladder_a3_multi_tp_po3__seed50": [],
+      "ladder_a4a_entry_fsm_hidden__seed50": [],
+      "ladder_a4a_entry_fsm_hidden_dist__seed50": [],
+      "ladder_a4a_entry_fsm_hidden_po3__seed50": [],
+      "ladder_a4b_distribution__seed50": [],
+      "ladder_a4b_entry_fsm__seed50": [],
+      "ladder_a4b_po3_ifvg__seed50": []
+    },
+    "recovery_final_hash_matches_in_outputs": 0,
+    "source_attempt3_expected_count": 18,
+    "source_attempt3_hash_matches": {
+      "ladder_a0_flat__seed50": [],
+      "ladder_a0_flat_dist__seed50": [],
+      "ladder_a0_flat_po3__seed50": [],
+      "ladder_a1_sl__seed50": [],
+      "ladder_a1_sl_dist__seed50": [],
+      "ladder_a1_sl_po3__seed50": [],
+      "ladder_a2_tp__seed50": [],
+      "ladder_a2_tp_dist__seed50": [],
+      "ladder_a2_tp_po3__seed50": [],
+      "ladder_a3_multi_tp__seed50": [],
+      "ladder_a3_multi_tp_dist__seed50": [],
+      "ladder_a3_multi_tp_po3__seed50": [],
+      "ladder_a4a_entry_fsm_hidden__seed50": [],
+      "ladder_a4a_entry_fsm_hidden_dist__seed50": [],
+      "ladder_a4a_entry_fsm_hidden_po3__seed50": [],
+      "ladder_a4b_distribution__seed50": [],
+      "ladder_a4b_entry_fsm__seed50": [],
+      "ladder_a4b_po3_ifvg__seed50": []
+    },
+    "source_attempt3_hash_matches_in_outputs": 0
+  },
+  "created_at_utc": "2026-10-18T00:16:39.402227+00:00",
+  "elapsed_seconds": 127.79009738599416,
+  "inputs": {
+    "audit_script_path": "scripts/research/audit_seed50_screen_report_recoverability.py",
+    "audit_script_sha256": "255e3f3d7889a6b2cfb664f11dd7e4949d1bb68059e04c6e12261f33fd619a5a",
+    "campaign_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/campaign.json",
+    "campaign_sha256": "76a4ea35169386ebac57d07f46595b8aeaf5defe5392e50578b529aaf463b688",
+    "source_campaign_fingerprint": "3474621efd6a1481bd2a20bce0cfd2c0b69969df1849c6cd738d19dc5bb4ba34",
+    "source_campaign_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016",
+    "summary_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+    "summary_sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+  },
+  "limitations": [
+    "The seed-50 screen remains exploratory and invalid for variant selection due to its recorded lookahead and survival-gate findings.",
+    "Campaign summary metrics and their hashes are not substitutes for raw fills, positions, equity, diagnostics, manifests, and checkpoint-backed deterministic report packs.",
+    "The 1M-step mainplan checkpoints do not match the recorded attempt-3 checkpoint hashes and cannot reproduce the 12M-14M-step recovery outputs.",
+    "This audit performs no policy evaluation, training, deletion, overwrite, or modification of campaign files."
+  ],
+  "repository": {
+    "dirty_paths": [
+      "?? docs/thesis/evidence/p3_seed50_report_pack_recoverability_20261018.json",
+      "?? scripts/research/audit_seed50_screen_report_recoverability.py",
+      "?? scripts/research/rebuild_full_period_data_cache.py",
+      "?? scripts/research/run_full_period_data_and_feature_cache_rebuild.sh"
+    ],
+    "head": "645aa9a09099c83cf8ac013773aed20cd9939008"
+  },
+  "schema": "aalto.seed50_screen_report_recoverability.v1",
+  "scope": {
+    "archive_bytes_scanned": 14282489847,
+    "archive_count": 612,
+    "archive_glob": "outputs/**/*.zip",
+    "archive_inventory_root": "outputs",
+    "external_paths_searched": false,
+    "interpretation": "This inventory tests recovery inside this checkout's outputs tree only; it does not establish that no external backup exists."
+  },
+  "screen": {
+    "available_replay_manifest_count": 4,
+    "available_replay_manifest_paths": [
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/p2_replay_ladder_a0_flat_14m_attempt3_pass1/reanalysis_manifest.json",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/p2_replay_ladder_a0_flat_14m_attempt3_pass2/reanalysis_manifest.json",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/p2_replay_ladder_a0_flat_14m_attempt3_pass1/reanalysis_manifest.json",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/reports/p2_replay_ladder_a0_flat_14m_attempt3_pass2/reanalysis_manifest.json"
+    ],
+    "expected_run_artifact_directories": 18,
+    "mainplan_checkpoint_paths": [
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a0_flat__seed50/attempt1/ladder_a0_flat__seed50/20261016_012332_372548_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a0_flat_dist__seed50/attempt1/ladder_a0_flat_dist__seed50/20261016_012336_339764_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a0_flat_po3__seed50/attempt1/ladder_a0_flat_po3__seed50/20261016_012335_140692_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a1_sl__seed50/attempt1/ladder_a1_sl__seed50/20261016_012334_342601_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a1_sl_dist__seed50/attempt1/ladder_a1_sl_dist__seed50/20261016_012336_523328_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a1_sl_po3__seed50/attempt1/ladder_a1_sl_po3__seed50/20261016_012333_807781_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a2_tp__seed50/attempt1/ladder_a2_tp__seed50/20261016_012334_740606_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a2_tp_dist__seed50/attempt1/ladder_a2_tp_dist__seed50/20261016_012335_844575_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a2_tp_po3__seed50/attempt1/ladder_a2_tp_po3__seed50/20261016_012334_171131_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a3_multi_tp__seed50/attempt1/ladder_a3_multi_tp__seed50/20261016_012334_770548_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a3_multi_tp_dist__seed50/attempt1/ladder_a3_multi_tp_dist__seed50/20261016_012340_138152_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a3_multi_tp_po3__seed50/attempt1/ladder_a3_multi_tp_po3__seed50/20261016_012334_605472_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/20261016_012329_726818_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a4a_entry_fsm_hidden_dist__seed50/attempt1/ladder_a4a_entry_fsm_hidden_dist__seed50/20261016_012345_399260_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a4a_entry_fsm_hidden_po3__seed50/attempt1/ladder_a4a_entry_fsm_hidden_po3__seed50/20261016_012334_617405_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a4b_distribution__seed50/attempt1/ladder_a4b_distribution__seed50/20261016_012341_169425_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/20261016_012336_210398_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+      "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_mainplan_20261016/runs/attempts/ladder_a4b_po3_ifvg__seed50/attempt1/ladder_a4b_po3_ifvg__seed50/20261016_012331_582361_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip"
+    ],
+    "present_1m_mainplan_checkpoints": 18,
+    "present_run_artifact_directories": 0,
+    "recovery_campaign_runs_directory_exists": false,
+    "run_artifact_directory_inventory": [
+      {
+        "controller_status": "failed",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat__seed50/attempt1/ladder_a0_flat__seed50/20261016_173541_834754_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a0_flat"
+      },
+      {
+        "controller_status": "succeeded",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a1_sl__seed50/attempt1/ladder_a1_sl__seed50/20261016_173854_725508_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a1_sl"
+      },
+      {
+        "controller_status": "failed",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a2_tp__seed50/attempt1/ladder_a2_tp__seed50/20261016_173830_311118_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a2_tp"
+      },
+      {
+        "controller_status": "failed",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a3_multi_tp__seed50/attempt1/ladder_a3_multi_tp__seed50/20261016_173851_879718_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a3_multi_tp"
+      },
+      {
+        "controller_status": "succeeded",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/20261016_173831_499350_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a4b_entry_fsm"
+      },
+      {
+        "controller_status": "succeeded",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/20261016_173853_520178_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a4a_entry_fsm_hidden"
+      },
+      {
+        "controller_status": "succeeded",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat_po3__seed50/attempt1/ladder_a0_flat_po3__seed50/20261016_173544_291860_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a0_flat_po3"
+      },
+      {
+        "controller_status": "interrupted",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a1_sl_po3__seed50/attempt1/ladder_a1_sl_po3__seed50/20261016_173939_951451_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": false,
+        "summary_has_train_metrics": false,
+        "variant": "ladder_a1_sl_po3"
+      },
+      {
+        "controller_status": "succeeded",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a2_tp_po3__seed50/attempt1/ladder_a2_tp_po3__seed50/20261016_173916_530968_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a2_tp_po3"
+      },
+      {
+        "controller_status": "succeeded",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a3_multi_tp_po3__seed50/attempt1/ladder_a3_multi_tp_po3__seed50/20261016_173939_930111_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a3_multi_tp_po3"
+      },
+      {
+        "controller_status": "succeeded",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a4b_po3_ifvg__seed50/attempt1/ladder_a4b_po3_ifvg__seed50/20261016_173914_874503_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a4b_po3_ifvg"
+      },
+      {
+        "controller_status": "succeeded",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a4a_entry_fsm_hidden_po3__seed50/attempt1/ladder_a4a_entry_fsm_hidden_po3__seed50/20261016_173940_440491_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a4a_entry_fsm_hidden_po3"
+      },
+      {
+        "controller_status": "failed",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a0_flat_dist__seed50/attempt1/ladder_a0_flat_dist__seed50/20261016_173544_299952_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a0_flat_dist"
+      },
+      {
+        "controller_status": "succeeded",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a1_sl_dist__seed50/attempt1/ladder_a1_sl_dist__seed50/20261016_173942_904767_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a1_sl_dist"
+      },
+      {
+        "controller_status": "interrupted",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a2_tp_dist__seed50/attempt1/ladder_a2_tp_dist__seed50/20261016_173919_283003_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a2_tp_dist"
+      },
+      {
+        "controller_status": "interrupted",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a3_multi_tp_dist__seed50/attempt1/ladder_a3_multi_tp_dist__seed50/20261016_173942_143101_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": false,
+        "summary_has_train_metrics": false,
+        "variant": "ladder_a3_multi_tp_dist"
+      },
+      {
+        "controller_status": "succeeded",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a4b_distribution__seed50/attempt1/ladder_a4b_distribution__seed50/20261016_173920_057388_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a4b_distribution"
+      },
+      {
+        "controller_status": "succeeded",
+        "exists": false,
+        "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/runs/attempts/ladder_a4a_entry_fsm_hidden_dist__seed50/attempt1/ladder_a4a_entry_fsm_hidden_dist__seed50/20261016_173943_175177_rl_train_seed50_tcn",
+        "summary_evidence_hash_count": 8,
+        "summary_has_report_only_test_metrics": true,
+        "summary_has_train_metrics": true,
+        "variant": "ladder_a4a_entry_fsm_hidden_dist"
+      }
+    ],
+    "source_campaign_runs_directory_exists": false,
+    "summary_report_only_test_metric_rows": 16,
+    "summary_train_metric_rows": 16,
+    "variant_count": 18
+  }
+}

@@ -2572,6 +2572,27 @@ reports require the upstream P1/P2 evidence gates and the old screen remains
 contaminated. If a descriptive summary is regenerated, use a new output stem and
 preserve the campaign manifest and training evidence.
 
+**Seed-50 report-pack recovery inventory (2026-10-18):** a read-only scan of
+all 612 ZIP archives under this checkout's `outputs/` (14,282,489,847 bytes)
+found none of the 18 recorded attempt-3 source checkpoint hashes or 18
+recovery-final checkpoint hashes. All 18 run-artifact directories recorded in
+the recovery summary are absent. The separate mainplan campaign does retain 18
+1M-step checkpoints, but their hashes do not match the attempt-3 lineage and
+they cannot reproduce its 12M–14M-step outputs. Four prior replay manifests
+remain as partial evidence; they do not contain the missing full report packs.
+This establishes exact report-pack recovery is unavailable from the current
+`outputs/` tree, not that no external backup exists. The seed-50 screen remains
+invalid for selection and its summary metrics are not canonical numerical
+reports. The initial inventory's fixed-depth glob missed the mainplan
+checkpoints; it is retained as superseded evidence, and the corrected recursive
+inventory is authoritative. P3 remains open. See
+[`p3_seed50_report_pack_recoverability_20261018.json`](evidence/p3_seed50_report_pack_recoverability_20261018.json)
+and [`audit_seed50_screen_report_recoverability.py`](../../scripts/research/audit_seed50_screen_report_recoverability.py).
+The recursive-inventory regression passes; final-tree Ruff format (476 files),
+Ruff lint, full-tree Mypy (489 source files), and the focused audit test (1)
+also pass. The two long-running v23 fold-fit and feature-prefix audits remain
+active and have not yet emitted final reports.
+
 ### Exit criterion
 
 Every successfully trained screen run has a canonical numerical report pack, or
