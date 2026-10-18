@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 import torch
 
+from quant_rl.action_schema import build_discrete_trading_action_schema
 from quant_rl.envs.trading_env import TradingEnv
 from quant_rl.models.agent import build_agent
 from quant_rl.models.ppo_policy import (
@@ -277,10 +278,16 @@ def test_build_agent_box_uses_clamped_policy() -> None:
 
 
 def test_build_agent_discrete_keeps_categorical_ent_coef() -> None:
+    from quant_rl.train.train_rl import _action_schema_manifest
+
     env = make_env(continuous=False)
     model = build_agent(env, _ppo_cfg(), arch="tcn", algo="ppo")
+    schema = build_discrete_trading_action_schema()
     assert model.ent_coef == pytest.approx(0.01)
     assert getattr(model.policy, "log_std", None) is None
+    assert env.action_schema.to_dict() == schema.to_dict()
+    assert getattr(model, "_action_schema") == schema.to_dict()
+    assert _action_schema_manifest(env) == schema.to_dict()
 
 
 def test_build_agent_width_11_multi_tp_sl_tp_simplex() -> None:
