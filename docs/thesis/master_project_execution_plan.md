@@ -7,7 +7,7 @@
 **Deadline context:** Freeze results early enough to support the supervisor-PDF target of **2026-11-09** and faculty submission deadline of **2026-11-23**. Dates remain targets; evidence validity takes precedence.
 **Execution principle:** Keep one long-running Codex agent productive horizontally across independent lanes; parallelize independent work aggressively and serialize only unresolved scientific dependencies, shared-control mutations, or resource contention that would invalidate a measurement.
 
-**Live checkpoint (2026-10-18 01:59 Helsinki):** work is on the sole checkout,
+**Live checkpoint (2026-10-18 03:34 Helsinki):** work is on the sole checkout,
 `/scratch/work/nguyenl37/Aalto_MS_Thesis`, branch `main`; local `main` is ahead
 of `origin/main` (no push performed). Preserve the two untracked data
 rebuild scripts; the comparator report is committed. No alternate checkout or
@@ -47,8 +47,16 @@ fingerprints are in
 [`named_feature_cache_rebuild_18variant_20261018_job21020179_clockfix.json`](evidence/replacement_data_20261017/named_feature_cache_rebuild_18variant_20261018_job21020179_clockfix.json).
 Replacement-data M1 integrity, tick quality, raw/cache parity, and v22
 16/16 sampled prefix-invariance and 20/20 fold-local poison checks passed.
-The v23 fold-fit and four-cutoff prefix audits are now running; until they
-finish, the v22 results do not validate the corrected FTMO clock profile.
+The v23 fold-fit and four-cutoff prefix audits are running as login-CPU
+processes, not Slurm steps. Fold-fit has passed all five folds for
+`ladder_a0_flat` and fold 0 for `ladder_a1_sl`; the prefix audit has completed
+the four cutoff rebuilds for `ladder_a0_flat` and is building the next profile
+group. Neither final report has been written, so v22 still does not validate
+the corrected FTMO clock profile. Current handles are fold-fit PID `1242188`
+and prefix PID `1477838`; both were CPU-active at the latest check. Slurm has
+no pending or running job: allocation `21020179` is `TIMEOUT`, and its
+preserved `thesis-gate-21020179` tmux session remains available at the login
+shell prompt. No campaign supervisor or replacement-data training is active.
 These are bounded input and feature checks, not proof of every path, policy
 performance, or confirmatory evidence. Reports are under
 [`replacement_data_20261017`](evidence/replacement_data_20261017/).
