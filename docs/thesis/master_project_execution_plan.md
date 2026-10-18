@@ -126,7 +126,21 @@ frozen; its market-hours interpretation, source terms, account-specific export
 path, and exact feed identity remain open. FTMO's generic MetaTrader clock is
 documented as GMT+2 plus US daylight time; the former fixed-GMT+3 carrier
 mislocalized winter CT feature windows by one hour. The FTMO-aware CT feature
-correction passed 58 focused tests. A fresh v23 named-feature rebuild completed
+correction passed 58 focused tests.
+
+**FTMO public schedule-notice review (2026-10-18):** the official FTMO 4 Dec
+2025 notice uses MetaTrader GMT+2 and records scheduled 6–7 Dec platform
+maintenance, but does not state a US100.cash/US500.cash hours exception for
+Dec 2 or Dec 4. FTMO's public Symbols page says to verify hours in the platform
+and warns that its standard closure countdown omits amended hours and
+maintenance. These sources do not establish the historical account-specific
+MT5 Demo schedule or prove that no server-side/export interruption occurred.
+The Dec 2 and Dec 4 row counts and intra-session gaps therefore remain
+unclassified; do not treat them as scheduled closures or missing expected bars.
+The source comparison and source-report hashes are recorded in
+[`ftmo_public_schedule_notice_review_20261018.json`](evidence/replacement_data_20261017/ftmo_public_schedule_notice_review_20261018.json).
+
+A fresh v23 named-feature rebuild completed
 on existing Slurm allocation `21020179`, step `.21`, with step exit `0:0`,
 wrapper exit `0`, and report status `passed`. The report records 630,787 rows
 for each of four profiles and all 18 variant bindings; profile hashes and the
