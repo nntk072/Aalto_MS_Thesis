@@ -25,6 +25,7 @@ def _campaign(tmp_path: Path, *, attempts: int = 2) -> Path:
                 "attempts": attempts,
                 "status": "running",
                 "started": "2026-10-16T00:00:00+00:00",
+                "artifact_hashes": {"variant__seed50/resolved_config.json": "d" * 64},
             }
         ],
     }
@@ -103,3 +104,85 @@ def test_trial_ledger_uses_failure_reconciliation_report_for_attempt_status(
 
     assert attempt["status"] == "failed"
     assert attempt["disposition"] == "infrastructure_failed_before_training"
+
+
+def test_trial_ledger_retains_campaign_recorded_config_hash_when_file_is_missing(
+    tmp_path: Path,
+) -> None:
+    campaign = _campaign(tmp_path, attempts=1)
+    config = (
+        campaign / "runs/attempts/variant__seed50/attempt1/variant__seed50/resolved_config.json"
+    )
+    config.unlink()
+
+    ledger = build_trial_ledger([campaign], scheduler_states={1234: "FAILED"})
+
+    run = next(record for record in ledger["records"] if record["record_type"] == "run")
+    assert run["config_sha256"] == "d" * 64
+    assert run["identity_completeness"] == "partial"
+
+
+def test_trial_ledger_reconciles_execution_seed_and_preserves_stale_seed_list(
+    tmp_path: Path,
+) -> None:
+    campaign = _campaign(tmp_path, attempts=1)
+    attempt = campaign / "runs/attempts/variant__seed50/attempt1"
+    provenance_path = attempt / "attempt_provenance.json"
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    provenance["seed"] = 50
+    provenance_path.write_text(json.dumps(provenance), encoding="utf-8")
+    config_path = attempt / "variant__seed50/resolved_config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "seed": 50,
+                "seeds": [42, 43, 44, 45, 46],
+                "train_args": ["--seed", "50"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    log_path = campaign / "logs/workers/variant__seed50__attempt1.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("=== variant=variant seeds=50 ===\n", encoding="utf-8")
+
+    ledger = build_trial_ledger([campaign], scheduler_states={7777: "RUNNING"})
+    attempt_record = next(
+        record for record in ledger["records"] if record["record_type"] == "attempt"
+    )
+
+    assert attempt_record["seed_evidence"]["identity_status"] == "verified"
+    assert attempt_record["seed_evidence"]["plural_seed_metadata_contains_campaign_seed"] is False
+    assert attempt_record["seed_evidence"]["resolved_config_seeds"] == [42, 43, 44, 45, 46]
+
+    provenance["seed"] = 49
+    provenance_path.write_text(json.dumps(provenance), encoding="utf-8")
+    ledger = build_trial_ledger([campaign], scheduler_states={7777: "RUNNING"})
+    attempt_record = next(
+        record for record in ledger["records"] if record["record_type"] == "attempt"
+    )
+    assert attempt_record["seed_evidence"]["identity_status"] == "mismatch"
+
+
+def test_trial_ledger_captures_feature_cache_identity_from_final_run_manifest(
+    tmp_path: Path,
+) -> None:
+    campaign = _campaign(tmp_path, attempts=1)
+    run_dir = campaign / "runs/attempts/variant__seed50/attempt1/variant__seed50/run1"
+    cache = {
+        "identity": "feature-cache-v1",
+        "sha256": "a" * 16,
+        "file_sha256": "b" * 64,
+        "path": "/scratch/cache/features.parquet",
+    }
+    (run_dir / "run_manifest.json").write_text(
+        json.dumps({"feature_cache": cache}), encoding="utf-8"
+    )
+
+    ledger = build_trial_ledger([campaign], scheduler_states={7777: "RUNNING"})
+    attempt_record = next(
+        record for record in ledger["records"] if record["record_type"] == "attempt"
+    )
+
+    assert attempt_record["feature_cache_identity"] == cache
+    assert attempt_record["cache_sha256"] == ["b" * 64]

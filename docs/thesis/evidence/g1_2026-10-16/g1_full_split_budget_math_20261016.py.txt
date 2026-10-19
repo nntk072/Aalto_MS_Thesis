@@ -19,7 +19,7 @@ from quant_rl.data.session import add_session_labels
 from quant_rl.data.split import get_split_config, make_train_mask
 
 
-ROOT = Path("/scratch/work/nguyenl37/Aalto_MS_Thesis-main")
+ROOT = Path("/scratch/work/nguyenl37/Aalto_MS_Thesis")
 CAMPAIGN = ROOT / "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016"
 campaign_path = CAMPAIGN / "campaign.json"
 campaign: dict[str, Any] = json.loads(campaign_path.read_text())

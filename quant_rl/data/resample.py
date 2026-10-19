@@ -10,10 +10,11 @@ from typing import Any, Literal, cast
 
 import pandas as pd
 
-TF = Literal["M1", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]
+TF = Literal["M1", "M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]
 
 _TF_TO_RULE: dict[TF, str] = {
     "M1": "1min",
+    "M3": "3min",
     "M5": "5min",
     "M10": "10min",
     "M15": "15min",

@@ -40,6 +40,7 @@ from quant_rl.data.pipeline import build_tick_books, run_pipeline
 from quant_rl.data.session import ny_session_mask
 from quant_rl.data.split import (
     get_split_config,
+    get_train_start_config,
     make_train_mask,
     split_bars,
     split_train_test,
@@ -72,8 +73,13 @@ from quant_rl.features.build import (
     feature_cache_content_hash,
     feature_cache_path,
 )
+from quant_rl.features.policy_market_context import (
+    POLICY_MARKET_CONTEXT_VERSION,
+    attach_policy_market_context,
+)
 from quant_rl.models.agent import build_agent
 from quant_rl.models.ppo_policy import install_post_update_std_clip
+from quant_rl.trading_policy import resolve_trading_policy
 from quant_rl.train.ablation_utils import load_variant_config, merge_variant_cfg  # noqa: E402
 from quant_rl.train.auxiliary_training import AuxiliaryTrainerCallback
 from quant_rl.train.callbacks import (
@@ -141,7 +147,16 @@ def _initialize_value_head(model: Any, *, resumed: bool) -> None:
 
 
 def _strategy_risk_ranges(cfg: Any) -> tuple[tuple[float, float], tuple[float, float]]:
-    """Risk/RR ranges for TradingEnv; strategy_actions uses strategy.risk YAML."""
+    """Risk/RR ranges for TradingEnv; repeated-payout owns the risk range."""
+    policy = resolve_trading_policy(cfg)
+    if policy.repeated_payout:
+        rr_block = (
+            getattr(cfg, "strategy", {}).get("risk", {})
+            if hasattr(getattr(cfg, "strategy", {}), "get")
+            else {}
+        )
+        rr = list(rr_block.get("rr_range", [1.5, 5.0]))
+        return (0.0, policy.max_agent_risk_frac), (float(rr[0]), float(rr[1]))
     if bool(cfg.env.get("strategy_actions", False)):
         risk_cfg = getattr(cfg, "strategy", None)
         risk_block = risk_cfg.get("risk", {}) if risk_cfg is not None else {}
@@ -155,14 +170,28 @@ def _strategy_risk_ranges(cfg: Any) -> tuple[tuple[float, float], tuple[float, f
 
 
 def _max_loss_per_trade(cfg: Any) -> float:
-    """Per-trade USD cap: FTMO risk_per_trade when strategy_actions, else backtest."""
+    """Per-trade USD cap used by legacy sizing; repeated-payout caps dynamically."""
+    policy = resolve_trading_policy(cfg)
+    if policy.repeated_payout:
+        return policy.operating_balance * policy.max_agent_risk_frac
     if bool(cfg.env.get("strategy_actions", False)):
         return float(cfg.ftmo.risk_per_trade_limit)
     return float(cfg.backtest.validation.max_loss_per_trade_usd)
 
 
 def _guardrail_kwargs(cfg: Any) -> dict[str, float]:
-    """PPO training kill-switches, including the $7k-from-peak training cap."""
+    """Resolve policy-specific hard/soft guardrails."""
+    policy = resolve_trading_policy(cfg)
+    if policy.repeated_payout:
+        return {
+            "daily_loss_limit": policy.daily_loss_limit,
+            "max_loss_limit": policy.operating_balance - policy.account_floor,
+            "risk_per_trade_limit": policy.operating_balance * policy.max_agent_risk_frac,
+            "soft_daily_loss_limit": 0.0,
+            "soft_max_loss_limit": 0.0,
+            "trailing_dd_limit": 0.0,
+            "soft_trailing_dd_limit": 0.0,
+        }
     return {
         "daily_loss_limit": float(cfg.ftmo.daily_loss_limit),
         "max_loss_limit": float(cfg.ftmo.max_loss_limit),
@@ -214,6 +243,8 @@ def _training_episodic(cfg: Any) -> bool:
     on repeated early-year prefixes. ``risk_terminated`` preserves the prior
     episodic behavior for explicitly requested legacy runs.
     """
+    if resolve_trading_policy(cfg).repeated_payout:
+        return True
     training = cfg.get("training", {}) if hasattr(cfg, "get") else getattr(cfg, "training", {})
     mode = str(training.get("episode_mode", "full_split")).strip().lower()
     if mode == "full_split":
@@ -411,7 +442,13 @@ def _build_eval_common(
     strategy_actions = bool(cfg.env.get("strategy_actions", False))
     sl_buffer_pts = float(cfg.env.get("sl_buffer_pts", 0.0))
     risk_frac_range, rr_ratio_range = _strategy_risk_ranges(cfg)
+    policy = resolve_trading_policy(cfg)
     use_mtf, mtf_windows = _mtf_settings(cfg, arch)
+    observation_schema_version = (
+        "account-state-v3-repeated-payout"
+        if policy.repeated_payout
+        else str(cfg.env.get("observation_schema_version", "account-state-v1"))
+    )
     eval_common = {
         "obs_window": cfg.env.obs_window,
         "initial_balance": cfg.account.initial_balance,
@@ -451,9 +488,7 @@ def _build_eval_common(
         "reward_mode": str(cfg.env.get("reward_mode", "dsr")),
         "fixed_risk_usd": float(cfg.env.get("fixed_risk_usd", 0.0)),
         "risk_mode": str(cfg.env.get("risk_mode", "dynamic")),
-        "observation_schema_version": str(
-            cfg.env.get("observation_schema_version", "account-state-v1")
-        ),
+        "observation_schema_version": observation_schema_version,
         "observation_age_scale_bars": float(cfg.env.get("observation_age_scale_bars", 60.0)),
         "entry_intensity_threshold": float(cfg.env.get("entry_intensity_threshold", 0.0)),
         "peak_trailing_dd_limit": float(cfg.env.get("peak_trailing_dd_limit", 0.0)),
@@ -479,6 +514,7 @@ def _build_eval_common(
         "risk_floor": float(cfg.env.get("risk_floor", 0.0005)),
         "mtf": use_mtf,
         "mtf_windows": mtf_windows,
+        "trading_policy": policy.to_dict(),
     }
     return eval_common, strategy, strategy_reward, strategy_weight, strategy_actions
 
@@ -759,6 +795,12 @@ def make_env(
     use_mtf, mtf_windows = _mtf_settings(cfg, arch)
     strategy, strategy_reward, strategy_weight = _strategy_from_cfg(cfg)
     risk_frac_range, rr_ratio_range = _strategy_risk_ranges(cfg)
+    policy = resolve_trading_policy(cfg)
+    observation_schema_version = (
+        "account-state-v3-repeated-payout"
+        if policy.repeated_payout
+        else str(cfg.env.get("observation_schema_version", "account-state-v1"))
+    )
     return TradingEnv(
         bars=bars,
         features=features,
@@ -785,9 +827,7 @@ def make_env(
         candidate_max_age_bars=int(cfg.env.get("candidate_max_age_bars", 5)),
         arm_requires_retest=bool(cfg.env.get("arm_requires_retest", False)),
         entry_state_observation=bool(cfg.env.get("entry_state_observation", True)),
-        observation_schema_version=str(
-            cfg.env.get("observation_schema_version", "account-state-v1")
-        ),
+        observation_schema_version=observation_schema_version,
         observation_age_scale_bars=float(cfg.env.get("observation_age_scale_bars", 60.0)),
         strict_research_eligibility=bool(cfg.env.get("strict_research_eligibility", False)),
         sl_buffer_pts=float(cfg.env.get("sl_buffer_pts", 0.0)),
@@ -827,6 +867,7 @@ def make_env(
         obs_features_mmap=obs_features_mmap,
         mtf=use_mtf,
         mtf_windows=mtf_windows,
+        trading_policy=policy.to_dict(),
     )
 
 
@@ -1559,14 +1600,18 @@ def main() -> None:
     secondary_sym = cfg.data.secondary
     primary_m1 = data[primary_sym]["M1"]
     secondary_m1 = data.get(secondary_sym, {}).get("M1")
+    primary_timeframe_bars = data[primary_sym]
+    secondary_timeframe_bars = data.get(secondary_sym, {})
 
     cache_dir = Path(cfg.data.cache_dir)
     # Split dates first so z-score fit can be train-scoped (TI-4) and the
     # content-hash cache key includes that mask (TI-3).
     train_end, test_start = get_split_config(cfg)
+    train_start = get_train_start_config(cfg)
     train_mask = make_train_mask(
         cast(pd.DatetimeIndex, primary_m1.index),
         train_end,
+        train_start,
     )
     randomized_fill_latency_ms = _randomized_fill_latency_ms(cfg)
     tick_execution_required = _tick_execution_required(cfg)
@@ -1610,6 +1655,8 @@ def main() -> None:
             primary_m1,
             train_mask=train_mask,
             secondary=secondary_m1,
+            timeframe_bars=primary_timeframe_bars,
+            secondary_timeframe_bars=secondary_timeframe_bars,
         )
         if not feat_cache.is_file() or not hash_path.is_file():
             raise FileNotFoundError(
@@ -1638,6 +1685,8 @@ def main() -> None:
             primary_m1,
             train_mask=train_mask,
             secondary=secondary_m1,
+            timeframe_bars=primary_timeframe_bars,
+            secondary_timeframe_bars=secondary_timeframe_bars,
         )
     features = build_features(
         primary_m1,
@@ -1645,16 +1694,29 @@ def main() -> None:
         cfg=cfg,
         train_mask=train_mask,
         cache_path=feat_cache,
+        timeframe_bars=primary_timeframe_bars,
+        secondary_timeframe_bars=secondary_timeframe_bars,
+    )
+    schedule_path = Path(str(cfg.data.session_schedule_file))
+    if not schedule_path.is_absolute():
+        schedule_path = Path(__file__).resolve().parents[2] / schedule_path
+    features = attach_policy_market_context(
+        primary_m1,
+        features,
+        primary_ticks,
+        schedule_path=schedule_path,
+        session_start=str(cfg.session.start),
+        session_end=str(cfg.session.end),
     )
     feature_columns = [str(column) for column in features.columns]
 
     # Split
     train_bars, test_bars, train_feat, test_feat = split_train_test(
-        primary_m1, features, train_end, test_start
+        primary_m1, features, train_end, test_start, train_start
     )
     train_sec = test_sec = None
     if secondary_m1 is not None and not secondary_m1.empty:
-        train_sec, test_sec = split_bars(secondary_m1, train_end, test_start)
+        train_sec, test_sec = split_bars(secondary_m1, train_end, test_start, train_start)
     log.info(
         "Split: train=%d bars (<=%s)  test=%d bars (>=%s)",
         len(train_bars),
@@ -2115,6 +2177,12 @@ def main() -> None:
                     "n_trades": float(metrics.n_trades),
                     "turnover": float(metrics.turnover),
                     "reward_mean": float(result.get("reward_sum", 0.0)) / n_steps,
+                    "trading_policy_mode": result.get("trading_policy_mode", "legacy"),
+                    "cumulative_payouts": float(result.get("cumulative_payouts", 0.0)),
+                    "cycle_count": int(result.get("cycle_count", 0)),
+                    "cycle_successes": int(result.get("cycle_successes", 0)),
+                    "cycle_failures": int(result.get("cycle_failures", 0)),
+                    "total_economic_value": float(result.get("total_economic_value", 0.0)),
                     "diversity_text": diversity,
                 }
 
@@ -2378,7 +2446,11 @@ def main() -> None:
             config_path=seed_dir / "config.yaml",
             datasets={},
             dataset_records=dataset_records,
-            split={"train_end": str(train_end), "test_start": str(test_start)},
+            split={
+                "train_start": str(train_start or ""),
+                "train_end": str(train_end),
+                "test_start": str(test_start),
+            },
             seed=int(seed),
             completed_steps=int(model.num_timesteps),
             action_schema=_action_schema_manifest(train_env),
@@ -2390,6 +2462,7 @@ def main() -> None:
             checkpoint_path=checkpoint_path,
             execution_protocol={
                 "data_source": data_source,
+                "trading_policy": resolve_trading_policy(cfg).to_dict(),
                 "costs": OmegaConf.to_container(cfg.costs, resolve=True) if "costs" in cfg else {},
                 "execution": OmegaConf.to_container(cfg.execution, resolve=True)
                 if "execution" in cfg
@@ -2398,6 +2471,24 @@ def main() -> None:
                 "block_overnight": bool(cfg.env.get("block_overnight", True)),
                 "tick_data_configured": bool(primary_ticks is not None),
                 "primary_symbol": str(primary_sym),
+                "policy_market_context": {
+                    "version": POLICY_MARKET_CONTEXT_VERSION,
+                    "schedule_file": str(schedule_path.resolve()),
+                    "schedule_sha256": file_sha256(schedule_path),
+                    "features": [
+                        "ny_scheduled_short",
+                        "ny_scheduled_close_fraction",
+                        "ny_minutes_to_scheduled_close",
+                        "tick_bid_offset_atr",
+                        "tick_ask_offset_atr",
+                        "tick_spread_atr",
+                        "tick_quote_age_fraction",
+                        "tick_quote_activity",
+                        "tick_quote_available",
+                    ],
+                    "quote_interval": "completed M1 bar [open, next open)",
+                    "observation_visibility": "feature row is available after its bar closes",
+                },
             },
             training_architecture=_training_architecture_provenance(model, cfg, args.arch),
             training_protocol=_training_protocol_manifest(
@@ -2646,6 +2737,22 @@ def main() -> None:
                 fold_test_bars,
                 cache_dir,
                 str(primary_sym),
+            )
+            fold_train_feat = attach_policy_market_context(
+                fold_train_bars,
+                fold_train_feat,
+                primary_ticks,
+                schedule_path=schedule_path,
+                session_start=str(cfg.session.start),
+                session_end=str(cfg.session.end),
+            )
+            fold_test_feat = attach_policy_market_context(
+                fold_test_bars,
+                fold_test_feat,
+                primary_ticks,
+                schedule_path=schedule_path,
+                session_start=str(cfg.session.start),
+                session_end=str(cfg.session.end),
             )
             if list(fold_train_feat.columns) != feature_columns:
                 raise RuntimeError(f"Walk-forward fold {split.fold} changed feature schema")

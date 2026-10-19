@@ -91,26 +91,53 @@ def _tick_arrays(tickbook: TickBook | None) -> dict[str, NDArray[Any]]:
 
 
 def _bundle_source_fingerprints(cfg: DictConfig) -> dict[str, dict[str, Any]]:
-    """Fingerprint configured raw bar and tick files by size and mtime."""
-    raw_dir = Path(str(cfg.data.raw_dir))
+    """Content-hash every configured split bar and tick source."""
+    import hashlib
+
     fingerprints: dict[str, dict[str, Any]] = {}
-    for field in ("m1_files", "tick_files"):
-        files = cfg.data.get(field, {})
-        if files is None:
-            continue
-        for symbol, filename in files.items():
-            relative = str(filename)
-            path = raw_dir / relative
-            try:
-                stat = path.stat()
-            except FileNotFoundError:
-                fingerprints[f"{field}/{symbol}"] = {"file": relative, "missing": True}
-            else:
-                fingerprints[f"{field}/{symbol}"] = {
-                    "file": relative,
-                    "size": stat.st_size,
-                    "mtime_ns": stat.st_mtime_ns,
-                }
+
+    def record(field: str, symbol: str, filename: Any, raw_dir: Path) -> None:
+        relative = str(filename)
+        path = raw_dir / relative
+        key = f"{field}/{symbol}"
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            fingerprints[key] = {"file": relative, "missing": True}
+        else:
+            digest = hashlib.sha256()
+            with path.open("rb") as source:
+                for chunk in iter(lambda: source.read(8 * 1024 * 1024), b""):
+                    digest.update(chunk)
+            fingerprints[key] = {
+                "file": relative,
+                "size": stat.st_size,
+                "sha256": digest.hexdigest(),
+            }
+
+    datasets = cfg.data.get("datasets")
+    if datasets:
+        for dataset_name, dataset in datasets.items():
+            raw_dir = Path(str(dataset.raw_dir)).expanduser()
+            for field in ("m1_files", "tick_files"):
+                for symbol, filename in dataset.get(field, {}).items():
+                    record(f"{dataset_name}/{field}", str(symbol), filename, raw_dir)
+            for timeframe, files in dataset.get("timeframe_files", {}).items():
+                for symbol, filename in files.items():
+                    record(
+                        f"{dataset_name}/timeframe_files/{timeframe}",
+                        str(symbol),
+                        filename,
+                        raw_dir,
+                    )
+    else:
+        raw_dir = Path(str(cfg.data.raw_dir)).expanduser()
+        for field in ("m1_files", "tick_files"):
+            for symbol, filename in cfg.data.get(field, {}).items():
+                record(field, str(symbol), filename, raw_dir)
+        for timeframe, files in cfg.data.get("timeframe_files", {}).items():
+            for symbol, filename in files.items():
+                record(f"timeframe_files/{timeframe}", str(symbol), filename, raw_dir)
     return fingerprints
 
 

@@ -9,7 +9,7 @@
 
 ## Provenance
 
-- Repository source: `/scratch/work/nguyenl37/Aalto_MS_Thesis-main`, `main`, HEAD `8a98f7792f83ce4bbe5cb84f4a2137657d791c02`.
+- Repository source: the `Aalto_MS_Thesis` main checkout, HEAD `8a98f7792f83ce4bbe5cb84f4a2137657d791c02`.
 - Campaign: `ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016`, fingerprint `3474621efd6a1481bd2a20bce0cfd2c0b69969df1849c6cd738d19dc5bb4ba34`.
 - Source files used by the audit: 32; all hashes match the current checkout. Both raw M1 input hashes match the campaign manifest.
 - The repository audit script's default serializer failed because the M1 inputs resolve through a symlink outside the checkout. The rerun used an ignored copy with only explicit-root and external-path serialization changes; original and executed script hashes are recorded in the JSON. The feature-building implementation and resolved variant configs were not changed.

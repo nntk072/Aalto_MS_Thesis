@@ -62,6 +62,20 @@ STRATEGY_CONFIGS = {
 }
 
 
+def _historical_named_cache_path(name: str, resolved: dict[str, Any]) -> str:
+    """Map a historical thesis variant to the legacy named feature cache."""
+    strategy = str(resolved["strategy"])
+    if strategy == "po3_ifvg":
+        filename = "idea1_po3_ifvg.parquet"
+    elif strategy == "distribution":
+        filename = "idea2_distribution.parquet"
+    elif bool(resolved.get("strategy_actions", False)):
+        filename = "baseline_strategy_actions.parquet"
+    else:
+        filename = "baseline.parquet"
+    return f"data/prebuilt_feature_cache/{filename}"
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -129,6 +143,13 @@ def load_variant(name: str) -> tuple[dict[str, Any], DictConfig]:
     from quant_rl.train.train_rl import _load_merged_config
 
     resolved = resolve_variant(name, steps=100_000, seeds=[42])
+    resolved = {
+        **resolved,
+        "overrides": [
+            *resolved["overrides"],
+            f"data.prebuilt_feature_cache={_historical_named_cache_path(name, resolved)}",
+        ],
+    }
     cfg = _load_merged_config(
         argparse.Namespace(
             config=resolved["base_config"],
@@ -236,20 +257,7 @@ def plan() -> list[dict[str, Any]]:
     bindings: dict[str, str] = {}
     for name in names:
         resolved = resolve_variant(name, steps=100_000, seeds=[42])
-        cache_override = next(
-            (
-                value.split("=", maxsplit=1)[1]
-                for value in resolved["overrides"]
-                if value.startswith("data.prebuilt_feature_cache=")
-            ),
-            None,
-        )
-        if cache_override is None:
-            raise RuntimeError(f"{name} does not resolve to an explicit prebuilt feature cache")
-        cache_path = Path(cache_override)
-        if not cache_path.is_absolute():
-            cache_path = ROOT / cache_path
-        relative_cache_path = cache_path.resolve().relative_to(ROOT.resolve()).as_posix()
+        relative_cache_path = _historical_named_cache_path(name, resolved)
         if relative_cache_path not in relative_cache_paths:
             raise RuntimeError(f"{name} maps outside the four verified feature profiles")
         bindings[name] = relative_cache_path
@@ -348,6 +356,8 @@ def rebuild(backup_dir: Path, report_path: Path) -> dict[str, Any]:
     market = _load_fresh_market(base_cfg)
     primary = market[str(base_cfg.data.primary)]["M1"]
     secondary = market.get(str(base_cfg.data.secondary), {}).get("M1")
+    primary_timeframe_bars = market[str(base_cfg.data.primary)]
+    secondary_timeframe_bars = market.get(str(base_cfg.data.secondary), {})
     train_end, _ = get_split_config(base_cfg)
     train_mask = make_train_mask(cast(pd.DatetimeIndex, primary.index), train_end)
 
@@ -367,6 +377,8 @@ def rebuild(backup_dir: Path, report_path: Path) -> dict[str, Any]:
                 primary,
                 train_mask=train_mask,
                 secondary=secondary,
+                timeframe_bars=primary_timeframe_bars,
+                secondary_timeframe_bars=secondary_timeframe_bars,
             )
             features = build_features(
                 primary,
@@ -375,6 +387,8 @@ def rebuild(backup_dir: Path, report_path: Path) -> dict[str, Any]:
                 train_mask=train_mask,
                 cache_path=staged_cache,
                 force=True,
+                timeframe_bars=primary_timeframe_bars,
+                secondary_timeframe_bars=secondary_timeframe_bars,
             )
             staged_hash = Path(f"{staged_cache}.hash")
             if not staged_cache.is_file() or not staged_hash.is_file():

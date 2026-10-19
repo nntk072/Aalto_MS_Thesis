@@ -396,6 +396,7 @@ def test_bundle_worker_preserves_strict_eligibility_and_simplex_flags(tmp_path: 
     cfg.data.tick_files = {}
     # This test isolates worker flag reconstruction and has no tick payload.
     cfg.costs.use_tick_execution = False
+    cfg.execution.randomized_fill_latency_ms = 0.0
     cfg.env.obs_window = 10
     cfg.env.strategy_actions = True
     cfg.env.strict_research_eligibility = True

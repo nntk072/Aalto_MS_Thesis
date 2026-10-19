@@ -73,7 +73,7 @@ def test_confirmation_after_sweep_cannot_change_prefix(monkeypatch: pytest.Monke
     assert full["sweep_low"].sum() == 0
 
 
-@pytest.mark.parametrize("timeframe", ["M5", "M10", "M15", "M30", "H1", "H4", "D1"])
+@pytest.mark.parametrize("timeframe", ["M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"])
 @pytest.mark.parametrize("side", ["high", "low"])
 def test_each_confirmed_timeframe_can_initiate_a_sweep(
     monkeypatch: pytest.MonkeyPatch, timeframe: str, side: str
@@ -89,7 +89,16 @@ def test_each_confirmed_timeframe_can_initiate_a_sweep(
     assert features[f"sweep_{side}"].iloc[2] == 1
     assert (
         features[f"sweep_{side}_ref_tf_code"].iloc[2]
-        == {"M5": 5, "M10": 10, "M15": 15, "M30": 30, "H1": 60, "H4": 240, "D1": 1440}[timeframe]
+        == {
+            "M3": 3,
+            "M5": 5,
+            "M10": 10,
+            "M15": 15,
+            "M30": 30,
+            "H1": 60,
+            "H4": 240,
+            "D1": 1440,
+        }[timeframe]
     )
 
 

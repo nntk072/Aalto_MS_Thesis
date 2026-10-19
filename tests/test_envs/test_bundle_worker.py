@@ -27,6 +27,7 @@ def test_worker_factory_matches_default_make_env(tmp_path: Path) -> None:
     features = _make_features(bars)
     cfg = load_config()
     cfg.costs.use_tick_execution = False
+    cfg.execution.randomized_fill_latency_ms = 0.0
     bundle_path = build_env_bundle(
         tmp_path,
         bars,
@@ -56,7 +57,13 @@ def test_worker_factory_matches_default_make_env(tmp_path: Path) -> None:
         for key in left_step[0]:
             np.testing.assert_array_equal(left_step[0][key], right_step[0][key])
         assert left_step[1:4] == right_step[1:4]
-        assert left_step[4] == right_step[4]
+        assert left_step[4].keys() == right_step[4].keys()
+        for key, left_value in left_step[4].items():
+            right_value = right_step[4][key]
+            if isinstance(left_value, (float, np.floating)) and np.isnan(left_value):
+                assert isinstance(right_value, (float, np.floating)) and np.isnan(right_value)
+            else:
+                assert left_value == right_value
 
 
 def test_bundle_worker_forwards_tick_execution_contract(monkeypatch, tmp_path: Path) -> None:
@@ -178,6 +185,7 @@ def test_worker_factory_matches_strategy_actions(tmp_path: Path) -> None:
     features["atr_5"] = np.linspace(1.0, 3.0, len(bars))
     cfg = load_config()
     cfg.costs.use_tick_execution = False
+    cfg.execution.randomized_fill_latency_ms = 0.0
     cfg.env.strategy_actions = True
     cfg.strategy.name = "baseline"
     bundle_path = build_env_bundle(

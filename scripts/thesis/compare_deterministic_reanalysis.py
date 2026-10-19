@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -100,6 +101,11 @@ def _read_manifest(run_dir: Path) -> dict[str, Any]:
         or not isinstance(runtime.get("platform"), str)
     ):
         raise ValueError(f"evaluation source/runtime identity is incomplete: {path}")
+    if "python_hash_seed_env" not in runtime or (
+        runtime["python_hash_seed_env"] is not None
+        and not isinstance(runtime["python_hash_seed_env"], str)
+    ):
+        raise ValueError(f"evaluation PYTHONHASHSEED provenance is missing or invalid: {path}")
     for field in (
         "legacy_sequence_columns_used",
         "legacy_action_schema_opt_in",
@@ -266,7 +272,18 @@ def compare_reanalyses(first_dir: Path, second_dir: Path) -> dict[str, Any]:
         left = first_manifest.get(field)
         right = second_manifest.get(field)
         identity[field] = left
-        if left != right:
+        # PYTHONHASHSEED is an intentional independent variable in a crossed
+        # hash-seed replay. Require both records, but compare the remaining
+        # evaluator/runtime provenance exactly.
+        left_identity = left
+        right_identity = right
+        if field == "evaluation_provenance":
+            left_identity = copy.deepcopy(left)
+            right_identity = copy.deepcopy(right)
+            for provenance in (left_identity, right_identity):
+                if isinstance(provenance, dict) and isinstance(provenance.get("runtime"), dict):
+                    provenance["runtime"].pop("python_hash_seed_env", None)
+        if left_identity != right_identity:
             errors.append(f"reanalysis identity differs: {field}")
     if first_manifest.get("dataset_parity_disposition") != "verified":
         errors.append("first reanalysis does not have verified dataset parity")
@@ -364,6 +381,10 @@ def compare_reanalyses(first_dir: Path, second_dir: Path) -> dict[str, Any]:
         "first_reanalysis": str(first),
         "second_reanalysis": str(second),
         "identity": identity,
+        "python_hash_seed_env": {
+            "first": first_manifest["evaluation_provenance"]["runtime"]["python_hash_seed_env"],
+            "second": second_manifest["evaluation_provenance"]["runtime"]["python_hash_seed_env"],
+        },
         "evaluated_feature_caches": {
             "first": {
                 "path": first_manifest.get("evaluated_feature_cache_path"),

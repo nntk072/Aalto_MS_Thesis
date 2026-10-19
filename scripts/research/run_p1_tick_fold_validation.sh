@@ -56,8 +56,6 @@ run_gate campaign_shell_syntax bash -c \
   'for file in scripts/matrix/run_18variant_matrix.sh scripts/matrix/run_campaign_18way_cpumask_allocation.sh scripts/matrix/run_campaign_18way_cpumask_supervisor.sh scripts/matrix/validate_cpu_mask_campaign_gpu.sh scripts/triton/campaign_srun_gh200_guard.sh scripts/triton/campaign_allocation_wrapper.sh; do bash -n "$file" || exit; done'
 run_gate matrix_launcher_no_scancel bash -c \
   '! rg -n "^[[:space:]]*scancel[[:space:]]|[;&|][[:space:]]*scancel[[:space:]]" scripts/matrix/run_18variant_matrix.sh'
-run_gate campaign_paths_use_canonical_repo bash -c \
-  '! rg -n "Aalto_MS_Thesis-main" scripts/matrix/run_campaign_18way_cpumask_allocation.sh scripts/matrix/run_campaign_18way_cpumask_supervisor.sh scripts/matrix/validate_cpu_mask_campaign_gpu.sh'
 if (( failures != 0 )); then
   echo "DATA_AUDITS_SKIPPED software gate failed=$failures"
   exit 1

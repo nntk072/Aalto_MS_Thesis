@@ -11,6 +11,7 @@ import torch
 from gymnasium import spaces
 from stable_baselines3 import PPO
 
+from quant_rl.action_schema import build_discrete_trading_action_schema
 from quant_rl.config import load_config
 from quant_rl.models.agent import build_agent, validate_model_architecture
 from quant_rl.models.encoder import LiteTCNEncoder
@@ -26,7 +27,8 @@ class _TinySequenceEnv(gym.Env[dict[str, FloatArray], np.int64]):
             "account": spaces.Box(-1.0, 1.0, shape=(6,), dtype=np.float32),
         }
     )
-    action_space: spaces.Discrete[np.int64] = spaces.Discrete(2)
+    action_space: spaces.Discrete[np.int64] = spaces.Discrete(20)
+    action_schema = build_discrete_trading_action_schema()
 
     def _observation(self) -> dict[str, FloatArray]:
         return {

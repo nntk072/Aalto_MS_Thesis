@@ -7,8 +7,10 @@ import argparse
 import hashlib
 import json
 import math
+import re
+import subprocess
 from dataclasses import asdict
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
 import numpy as np
@@ -19,6 +21,34 @@ from quant_rl.eval.export import _fill_events, _position_summaries
 from quant_rl.evaluation import calculate_metrics, evaluation_periods_per_year
 
 _SPLITS = ("training", "testing")
+_ROOT = Path(__file__).resolve().parents[2]
+_PARITY_COMPARISONS = {
+    "equity",
+    "trades",
+    "account",
+    "breaches",
+    "breach_events",
+    "n_sessions",
+    "n_breach_sessions",
+    "n_sessions_with_trades",
+    "n_sessions_skipped",
+    "days_traded",
+    "survived_full_year",
+    "completed_data_split",
+    "episode_end_reason",
+    "reward_sum",
+    "reward_attribution",
+    "n_steps",
+    "exposure_bars",
+    "exposure_fraction",
+    "exposure_measure",
+    "fail_time",
+    "max_trailing_dd",
+    "action_counts",
+    "entry_diag",
+    "entry_state_diagnostics",
+    "aggregate_metrics",
+}
 
 
 def _sha256(path: Path) -> str:
@@ -34,6 +64,41 @@ def _read_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"expected a JSON object: {path}")
     return value
+
+
+def _deleted_dirty_source_record(
+    item: dict[str, Any], head: str, *, repo_root: Path = _ROOT
+) -> dict[str, str] | None:
+    """Identify a deleted dirty path by its immutable Git blob at recorded HEAD."""
+    relative = item.get("path")
+    if not isinstance(relative, str) or not relative:
+        return None
+    repo_path = PurePosixPath(relative)
+    if repo_path.is_absolute() or ".." in repo_path.parts:
+        return None
+    current_path = repo_root.joinpath(*repo_path.parts)
+    if current_path.exists():
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", f"{head}:{repo_path.as_posix()}"],
+            cwd=repo_root,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    blob_oid = result.stdout.strip()
+    if result.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40,64}", blob_oid):
+        return None
+    return {
+        "path": repo_path.as_posix(),
+        "base_commit": head,
+        "base_blob_oid": blob_oid,
+        "disposition": "deleted_from_recorded_head",
+    }
 
 
 def _same_resolved_config(left: DictConfig, right: DictConfig) -> bool:
@@ -632,6 +697,11 @@ def _source_manifest_errors(
         "data_source"
     ) != reanalysis_manifest.get("training_data_source"):
         errors.append("training backend differs from original run manifest")
+    original_metrics_protocol = source_manifest.get("metrics_protocol")
+    if not isinstance(original_metrics_protocol, dict) or original_metrics_protocol.get(
+        "execution_seed"
+    ) != reanalysis_manifest.get("execution_seed"):
+        errors.append("execution seed differs from original run manifest")
     return errors
 
 
@@ -651,16 +721,27 @@ def _evaluation_provenance_errors(value: Any) -> list[str]:
         or not isinstance(source_record.get("dirty_files"), list)
     ):
         errors.append("reanalysis source provenance is incomplete")
-    elif any(
-        not isinstance(item, dict)
-        or not isinstance(item.get("path"), str)
-        or not item.get("path")
-        or not isinstance(item.get("sha256"), str)
-        or len(item["sha256"]) != 64
-        or any(character not in "0123456789abcdef" for character in item["sha256"].lower())
-        for item in source_record["dirty_files"]
-    ):
-        errors.append("reanalysis dirty-source records are malformed")
+    else:
+        for item in source_record["dirty_files"]:
+            if (
+                not isinstance(item, dict)
+                or not isinstance(item.get("path"), str)
+                or not item.get("path")
+            ):
+                errors.append("reanalysis dirty-source records are malformed")
+                break
+            if "sha256" in item:
+                digest = item["sha256"]
+                if (
+                    not isinstance(digest, str)
+                    or len(digest) != 64
+                    or any(character not in "0123456789abcdef" for character in digest.lower())
+                ):
+                    errors.append("reanalysis dirty-source records are malformed")
+                    break
+            elif _deleted_dirty_source_record(item, source_record["head"]) is None:
+                errors.append("reanalysis dirty-source records are malformed")
+                break
     required_versions = (
         "python",
         "platform",
@@ -680,10 +761,269 @@ def _evaluation_provenance_errors(value: Any) -> list[str]:
         or not value.get("python_executable")
     ):
         errors.append("reanalysis runtime provenance is incomplete")
+    elif "python_hash_seed_env" not in runtime_record or (
+        runtime_record["python_hash_seed_env"] is not None
+        and not isinstance(runtime_record["python_hash_seed_env"], str)
+    ):
+        errors.append("reanalysis runtime provenance lacks a valid PYTHONHASHSEED record")
     return errors
 
 
-def verify_report_directory(run_dir: Path) -> dict[str, Any]:
+def _deleted_source_records(value: Any) -> list[dict[str, str]]:
+    """Return verified deletion records for dirty paths omitted from the replay tree."""
+    if not isinstance(value, dict):
+        return []
+    source_record = value.get("source")
+    if not isinstance(source_record, dict):
+        return []
+    head = source_record.get("head")
+    files = source_record.get("dirty_files")
+    if not isinstance(head, str) or not isinstance(files, list):
+        return []
+    records = []
+    for item in files:
+        if isinstance(item, dict) and "sha256" not in item:
+            record = _deleted_dirty_source_record(item, head)
+            if record is not None:
+                records.append(record)
+    return records
+
+
+def _backend_parity_audit_errors(
+    manifest: dict[str, Any], parity_report_paths: list[Path] | None
+) -> tuple[list[str], list[dict[str, str]]]:
+    """Bind cross-backend reports to passed frame/bundle parity audits per split."""
+    disposition = manifest.get("backend_parity_disposition")
+    if disposition == "same_backend":
+        if (
+            manifest.get("training_data_source") not in {"frames", "frame"}
+            or manifest.get("evaluation_backend") != "frame"
+        ):
+            return ["same-backend disposition does not identify the frame backend"], []
+        return [], []
+    if disposition != "cross_backend_requires_checkpoint_parity":
+        return ["training/evaluation backend disposition is unsupported"], []
+
+    paths = parity_report_paths or []
+    if len(paths) != 2:
+        return ["cross-backend report requires train and test checkpoint parity audits"], []
+
+    source_run = manifest.get("source_run")
+    checkpoint_hash = manifest.get("checkpoint_sha256")
+    source_config_hash = manifest.get("source_config_sha256")
+    cache = manifest.get("source_feature_cache")
+    cache_hash = cache.get("file_sha256") if isinstance(cache, dict) else None
+    source_attempt_path = None
+    source_attempt = None
+    if isinstance(source_run, str):
+        for parent in Path(source_run).resolve().parents:
+            candidate = parent / "attempt_provenance.json"
+            if candidate.is_file():
+                source_attempt_path = candidate
+                try:
+                    source_attempt = _read_json(candidate)
+                except (OSError, json.JSONDecodeError, ValueError):
+                    source_attempt = None
+                break
+    errors: list[str] = []
+    if source_attempt_path is None or source_attempt is None:
+        errors.append("cross-backend report source attempt provenance is missing or invalid")
+    source_manifest = None
+    if isinstance(source_run, str):
+        source_manifest_path = Path(source_run).resolve() / "run_manifest.json"
+        try:
+            source_manifest = _read_json(source_manifest_path)
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            errors.append(f"cannot read source run manifest {source_manifest_path}: {exc}")
+
+    def dataset_hashes_match(left: Any, right: Any) -> bool:
+        return (
+            isinstance(left, dict)
+            and isinstance(right, dict)
+            and set(left) == set(right)
+            and all(
+                isinstance(left.get(name), dict)
+                and isinstance(right.get(name), dict)
+                and isinstance(left[name].get("sha256"), str)
+                and left[name].get("sha256") == right[name].get("sha256")
+                for name in left
+            )
+        )
+
+    records: list[dict[str, str]] = []
+    seen_splits: set[str] = set()
+    for report_path in paths:
+        try:
+            report = _read_json(report_path)
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            errors.append(f"cannot read backend parity report {report_path}: {exc}")
+            continue
+        split_record = report.get("split")
+        split_name = split_record.get("name") if isinstance(split_record, dict) else None
+        label = str(split_name or report_path)
+        if report.get("status") != "passed":
+            errors.append(f"{label} backend parity audit did not pass")
+        if report.get("artifact_role") != "historical_reanalysis_backend_parity":
+            errors.append(f"{label} backend parity report has the wrong artifact role")
+        if report.get("checkpoint_sha256") != checkpoint_hash:
+            errors.append(f"{label} backend parity checkpoint differs from the numerical report")
+        checkpoint_path = manifest.get("checkpoint")
+        report_checkpoint_path = report.get("checkpoint")
+        if not (
+            isinstance(checkpoint_path, str)
+            and isinstance(report_checkpoint_path, str)
+            and Path(checkpoint_path).resolve() == Path(report_checkpoint_path).resolve()
+        ):
+            errors.append(
+                f"{label} backend parity checkpoint path differs from the numerical report"
+            )
+        report_source_run = report.get("source_run")
+        same_source_run = False
+        if isinstance(source_run, str) and isinstance(report_source_run, str):
+            same_source_run = Path(source_run).resolve() == Path(report_source_run).resolve()
+        if not same_source_run:
+            errors.append(f"{label} backend parity source run differs from the numerical report")
+        if source_attempt_path is not None and (
+            report.get("attempt_provenance") != str(source_attempt_path.resolve())
+            or report.get("attempt_provenance_sha256") != _sha256(source_attempt_path)
+        ):
+            errors.append(f"{label} backend parity attempt provenance differs from the source run")
+        if source_attempt is not None and (
+            report.get("campaign_id") != source_attempt.get("campaign_id")
+            or report.get("campaign_fingerprint") != source_attempt.get("campaign_fingerprint")
+            or report.get("source_attempt") != source_attempt.get("attempt")
+        ):
+            errors.append(
+                f"{label} backend parity campaign identity differs from the source attempt"
+            )
+        if report.get("config_sha256") != source_config_hash:
+            errors.append(f"{label} backend parity config differs from the numerical report")
+        if report.get("feature_cache_sha256") != cache_hash:
+            errors.append(f"{label} backend parity feature cache differs from the numerical report")
+        if source_manifest is not None:
+            training_protocol = source_manifest.get("training_protocol")
+            source_cache = source_manifest.get("feature_cache")
+            source_config = source_manifest.get("config")
+            source_checkpoint = source_manifest.get("checkpoint")
+            if not isinstance(training_protocol, dict) or report.get(
+                "checkpoint_timesteps"
+            ) != training_protocol.get("completed_steps"):
+                errors.append(f"{label} backend parity step count differs from its source run")
+            if not isinstance(training_protocol, dict) or report.get(
+                "training_data_source"
+            ) != training_protocol.get("data_source"):
+                errors.append(
+                    f"{label} backend parity training backend differs from its source run"
+                )
+            if not isinstance(source_cache, dict) or report.get(
+                "feature_cache_sha256"
+            ) != source_cache.get("file_sha256"):
+                errors.append(f"{label} backend parity feature cache differs from its source run")
+            if not isinstance(source_config, dict) or report.get(
+                "config_sha256"
+            ) != source_config.get("sha256"):
+                errors.append(f"{label} backend parity config differs from its source run")
+            if not isinstance(source_checkpoint, dict) or report.get(
+                "checkpoint_sha256"
+            ) != source_checkpoint.get("sha256"):
+                errors.append(f"{label} backend parity checkpoint differs from its source run")
+            source_datasets = source_manifest.get("datasets")
+            if not dataset_hashes_match(source_datasets, manifest.get("source_datasets")):
+                errors.append(f"{label} backend parity source datasets differ from source run")
+            source_protocol = source_manifest.get("metrics_protocol")
+            source_split = source_manifest.get("split")
+            report_protocol = report.get("metrics_protocol")
+            numerical_protocol = manifest.get("metrics_protocol")
+            protocol_keys = (
+                "annualization",
+                "initial_balance",
+                "frequency",
+                "exposure_measure",
+            )
+            if (
+                not isinstance(source_protocol, dict)
+                or not isinstance(report_protocol, dict)
+                or not isinstance(numerical_protocol, dict)
+                or any(
+                    report_protocol.get(key) != numerical_protocol.get(key)
+                    or report_protocol.get(key) != source_protocol.get(key)
+                    for key in protocol_keys
+                )
+            ):
+                errors.append(f"{label} backend parity metrics protocol differs")
+            if not isinstance(source_protocol, dict) or report.get(
+                "execution_seed"
+            ) != source_protocol.get("execution_seed"):
+                errors.append(f"{label} backend parity execution seed differs from source run")
+            if (
+                not isinstance(source_split, dict)
+                or not isinstance(split_record, dict)
+                or any(
+                    source_split.get(key) != manifest.get(key)
+                    or split_record.get(key) != manifest.get(key)
+                    for key in ("train_end", "test_start")
+                )
+            ):
+                errors.append(f"{label} backend parity split dates differ from source run")
+            expected_role = (
+                {
+                    "train": "in_sample_training",
+                    "test": "previously_inspected_selection_acknowledged_test",
+                }.get(split_name)
+                if isinstance(split_name, str)
+                else None
+            )
+            if (
+                expected_role is None
+                or not isinstance(split_record, dict)
+                or split_record.get("role") != expected_role
+            ):
+                errors.append(f"{label} backend parity split role is incorrect")
+        if not dataset_hashes_match(report.get("source_datasets"), manifest.get("source_datasets")):
+            errors.append(f"{label} backend parity source datasets differ from numerical report")
+        if not dataset_hashes_match(
+            report.get("evaluated_datasets"), manifest.get("evaluated_datasets")
+        ):
+            errors.append(f"{label} backend parity evaluated datasets differ from numerical report")
+        if report.get("execution_seed") != manifest.get("execution_seed"):
+            errors.append(f"{label} backend parity execution seed differs from numerical report")
+        if report.get("dataset_parity_disposition") != "verified":
+            errors.append(f"{label} backend parity dataset identity is not verified")
+        if report.get("checkpoint_manifest_hash_disposition") != "verified":
+            errors.append(f"{label} backend parity checkpoint manifest hash is not verified")
+        backends = report.get("backends")
+        if backends != ["frames", "shared_bundle"]:
+            errors.append(f"{label} backend parity report did not compare frames and shared bundle")
+        comparisons = report.get("comparisons")
+        if (
+            not isinstance(comparisons, dict)
+            or set(comparisons) != _PARITY_COMPARISONS
+            or any(value is not True for value in comparisons.values())
+        ):
+            errors.append(f"{label} backend parity comparisons are not all equal")
+        if not isinstance(split_name, str) or split_name not in {"train", "test"}:
+            errors.append(f"{label} backend parity split must be train or test")
+        elif split_name in seen_splits:
+            errors.append(f"duplicate {split_name} backend parity audit")
+        else:
+            seen_splits.add(split_name)
+        records.append({"path": str(report_path.resolve()), "sha256": _sha256(report_path)})
+
+    if seen_splits != {"train", "test"}:
+        errors.append(
+            "cross-backend report requires exactly one passed train and one test parity audit"
+        )
+    if (
+        manifest.get("training_data_source") != "bundle"
+        or manifest.get("evaluation_backend") != "frame"
+    ):
+        errors.append("cross-backend parity disposition does not match bundle-to-frame evaluation")
+    return errors, records
+
+
+def verify_report_directory(
+    run_dir: Path, *, backend_parity_reports: list[Path] | None = None
+) -> dict[str, Any]:
     """Validate provenance gates and numerical artifacts for both evaluation splits."""
     errors: list[str] = []
     manifest_path = run_dir / "reanalysis_manifest.json"
@@ -698,6 +1038,7 @@ def verify_report_directory(run_dir: Path) -> dict[str, Any]:
     manifest = _read_json(manifest_path)
     export_record = _read_json(timing_path)
     cfg = OmegaConf.load(config_path)
+    verified_deleted_source_records = _deleted_source_records(manifest.get("evaluation_provenance"))
     if not isinstance(cfg, DictConfig):
         errors.append("config.yaml is not a valid mapping")
     report_config_hash = manifest.get("reanalysis_config_sha256")
@@ -754,12 +1095,10 @@ def verify_report_directory(run_dir: Path) -> dict[str, Any]:
                 or source_record.get("sha256") != evaluated_record.get("sha256")
             ):
                 errors.append(f"source/evaluated dataset SHA-256 does not match: {dataset_name}")
-    if manifest.get("backend_parity_disposition") != "same_backend":
-        errors.append("training/evaluation backend parity requires a separate audit")
-    if manifest.get("training_data_source") not in {"frames", "frame"}:
-        errors.append("training backend is not a verified frame backend")
     if manifest.get("evaluation_backend") != "frame":
         errors.append("evaluation backend is not the frame backend")
+    parity_errors, parity_records = _backend_parity_audit_errors(manifest, backend_parity_reports)
+    errors.extend(parity_errors)
     if export_record.get("save_csv") is not True:
         errors.append("report export did not retain mandatory CSV artifacts")
 
@@ -863,6 +1202,9 @@ def verify_report_directory(run_dir: Path) -> dict[str, Any]:
         "evidence_class": "historical_exploratory_not_confirmatory",
         "run_dir": str(run_dir.resolve()),
         "checkpoint_sha256": checkpoint_hash,
+        "verified_deleted_dirty_source_count": len(verified_deleted_source_records),
+        "verified_deleted_dirty_sources": verified_deleted_source_records,
+        "backend_parity_reports": parity_records,
         "errors": errors,
     }
 
@@ -870,10 +1212,17 @@ def verify_report_directory(run_dir: Path) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_dir", type=Path, help="Historical deterministic reanalysis directory")
+    parser.add_argument(
+        "--backend-parity-report",
+        action="append",
+        type=Path,
+        default=None,
+        help="Passed checkpoint frame/bundle parity report; provide train and test reports for bundle-trained runs",
+    )
     args = parser.parse_args()
     run_dir = args.run_dir.resolve()
     try:
-        report = verify_report_directory(run_dir)
+        report = verify_report_directory(run_dir, backend_parity_reports=args.backend_parity_report)
     except (OSError, ValueError, TypeError, KeyError, pd.errors.ParserError) as exc:
         report = {
             "schema_version": 1,

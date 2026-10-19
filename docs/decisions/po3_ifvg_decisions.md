@@ -67,9 +67,10 @@ are never relabeled or reused as evidence for these variants.
 | `config/campaigns/18_variant_seed42_20m.yaml` | `d5f11af1b2ab604dbac0c1020bf2c544ddb16ed9632ffad3bb704aa410101a83` | absent at HEAD |
 
 Current configured data is M1 US100.cash/US500.cash in `Etc/GMT-3`, split at
-train end 2025-12-31 / test start 2026-01-01; available market files end
-2026-07-03. The 2026 test window is previously inspected, exposed development
-data and is not a fresh final holdout.
+train end 2025-12-31 / test start 2026-01-01; the active replacement market
+files end 2026-10-16. The full 2026 report interval is exposed development
+data and is not a fresh final holdout. Historical decisions below remain tied
+to the exact source/cache fingerprints recorded when they were made.
 
 Current effective/pre-change settings and known contradictions to resolve:
 

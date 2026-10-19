@@ -35,8 +35,7 @@ STRAT_YAML = {
     "po3_ifvg": "config/2_po3_ifvg.yaml",
     "distribution": "config/3_distribution.yaml",
 }
-# Intentional config drift: the resolver adds an explicit prebuilt feature
-# cache to the three cache-backed baseline rungs.
+# Active variants use fresh content-hashed caches built from the selected split.
 EXPECTED_DIFF_KEYS: set[str] = set()
 
 
@@ -101,6 +100,6 @@ def test_resolver_matches_legacy_config(name: str) -> None:
         f"{k} legacy={legacy.get(k)!r} new={new.get(k)!r}" for k in sorted(unexpected)
     )
     if diff:
-        # Baseline semantics and the explicit feature cache are intentional.
+        # The baseline strategy-name override is intentional.
         assert diff == expected_diff
     assert resolved["strategy"] == new["strategy.name"]

@@ -14,10 +14,12 @@ class AccountState:
     """Mutable account state for the backtester / environment."""
 
     initial_balance: float = 100_000.0
+    policy_mode: str = "legacy"
     balance: float = field(init=False)
     equity: float = field(init=False)
     peak_equity: float = field(init=False)  # informational HWM only
     session_start_balance: float = field(init=False)
+    session_start_equity: float = field(init=False)
     daily_loss: float = field(init=False)  # positive = loss so far today
     max_drawdown: float = field(init=False)  # peak loss from initial (positive $)
     open_pnl: float = field(init=False)
@@ -27,6 +29,7 @@ class AccountState:
         self.equity = self.initial_balance
         self.peak_equity = self.initial_balance
         self.session_start_balance = self.initial_balance
+        self.session_start_equity = self.initial_balance
         self.daily_loss = 0.0
         self.max_drawdown = 0.0
         self.open_pnl = 0.0
@@ -58,8 +61,35 @@ class AccountState:
             self.daily_loss += abs(pnl)
 
     def reset_daily(self) -> None:
-        """Call at the start of each trading session / calendar day."""
+        """Anchor a new session without changing legacy accounting semantics."""
         self.session_start_balance = self.balance
+        self.session_start_equity = self.equity
+        self.daily_loss = 0.0
+
+    def canonical_daily_loss(self) -> float:
+        """Daily loss used by the selected policy."""
+        if self.policy_mode == "repeated_payout":
+            return max(0.0, self.session_start_equity - self.equity)
+        return float(self.daily_loss)
+
+    def daily_floor(self, daily_loss_limit: float) -> float:
+        """Fixed session floor for repeated-payout mode."""
+        return float(self.session_start_equity) - float(daily_loss_limit)
+
+    def remaining_daily_capacity(self, daily_loss_limit: float) -> float:
+        return max(0.0, float(self.equity) - self.daily_floor(daily_loss_limit))
+
+    def remaining_account_capacity(self, account_floor: float) -> float:
+        return max(0.0, float(self.equity) - float(account_floor))
+
+    def reset_operating_balance(self, operating_balance: float) -> None:
+        """Reset deployable capital after a payout while preserving global counters elsewhere."""
+        self.balance = float(operating_balance)
+        self.equity = float(operating_balance)
+        self.open_pnl = 0.0
+        self.peak_equity = max(self.peak_equity, self.equity)
+        self.session_start_balance = self.balance
+        self.session_start_equity = self.equity
         self.daily_loss = 0.0
 
     def loss_from_initial(self) -> float:

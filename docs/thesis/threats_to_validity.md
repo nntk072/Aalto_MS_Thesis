@@ -1,35 +1,27 @@
-# Threats to Validity
+# Thesis validity limits
 
-Examiner-facing note for the MSc. This records current limitations against the
-single operational queue in
-[`master_project_execution_plan.md`](master_project_execution_plan.md). Do not
-describe a mitigation as closed until its current evidence gate passes.
+The active data split uses all available observations through 2026-10-16:
+training from 2024-12-30 through 2025-12-31 and testing from 2026-01-01.
+The 2026 test period
+has previously been inspected, so it is exposed development evidence and must
+not be described as a pristine holdout.
 
-| Threat | Finding | Mitigation | Residual risk |
-|--------|---------|------------|---------------|
-| Short sample / few regimes | F1 | Accepted limitation; do not claim decade-scale robustness | High for regime generalisation |
-| Feed identity, data-use rights, and broker clock/DST | The user identifies the source as the FTMO Demo server, authorizes internal model training, and considers the files adequate for that purpose. The underlying liquidity providers and account-specific export/publication terms remain unknown. FTMO's current [public terms](https://ftmo.com/en/terms-and-conditions/) describe a liquidity-provider-powered feed but do not identify this account's provider or establish thesis-publication rights. The code uses an `Etc/GMT-3` wall-clock carrier with `data.timestamp_clock=ftmo_mt5_us_dst` for CT feature conversion; the exact account host/export path remains unverified | Retain the user-attested training authorization and document the source-clock assumption. Make no independent provider or publication-rights claim; decide separately what raw data may be included in public artifacts | High for source identification, schedule interpretation, and public data release; not a withdrawal of training authorization |
-| Exposed 2026 report interval | F4 | The researcher authorized exploratory use of 2026-01-01 through 2026-07-03 on 2026-10-13; those outcomes were inspected. The replacement export continues through 2026-10-16. Treat the full continuous 2026-01-01–2026-10-16 interval as exposed exploratory/report-only evidence. The repository exposure scan of later dates cannot establish external or undocumented human exposure ([exposure inventory](evidence/replacement_data_20261017/candidate_holdout_exposure.json)) | High for any claim treating any part of the interval as pristine. No fresh or confirmatory holdout has been accepted |
-| Chronological training exposure versus active trading | The old, contaminated 18-variant campaign used 99,504 eligible US100 train decisions. It completed train-split episodes in 64/64 environments per lineage in attempt 2; across 1,152 episodes, 621 recorded `trailing_dd`, two variants had zero trades in all 64 episodes, and all 16 variants with trades had negative mean episode-equity deltas ([budget audit](p1_checkpoint_full_split_budget_2026-10-16.json)). The replacement export has 99,492 US100 and 99,482 US500 train decisions under the current resolver schedule. No new-data model has been trained or evaluated | Preserve the old lineage results as contaminated historical diagnostics. For a new thesis candidate, require per-environment full-split exposure telemetry, trade/activity and risk records, and deterministic full-split train and report-period evaluation | High: old-policy behavior is invalid for selection due to feature leakage; there is no replacement-data checkpoint or final evaluation |
-| Overlapping WF test folds | F5 | T-03.1 non-overlapping expanding WF + `label_horizon` purge | Low after fix; legacy API deprecated |
-| Stale or causally invalid feature cache | The old contaminated campaign's caches predated the identified session-extrema and FTMO clock repairs. The v23 named-cache rebuild passed for four profiles and all 18 variant bindings over 2024-12-30–2026-10-16, with preserved prior cache files ([v23 cache report](evidence/replacement_data_20261017/named_feature_cache_rebuild_18variant_20261018_job21020179_clockfix.json)) | Keep old campaign outputs inadmissible. Before any new campaign, capture and validate every resolved variant's cache/data fingerprints | High until a new campaign records its resolved cache mapping; no replacement-data campaign has run |
-| Fold-local fitting and feature causality | The immutable 2026-10-16 pre-repair audit found validation perturbations changing model-visible `prev_ny_high`/`prev_ny_low` in three profiles mapped to 17/18 configs ([historical failure](g1_real_market_fold_fit_scope_2026-10-16.json)). The source now uses clock-completed configured NY-session extrema; the targeted same-session future-poison regression passed. Prior v22 replacement-data checks passed 20/20 fold-local poison cases and 16/16 sampled prefix comparisons. Fresh v23 checks against the corrected FTMO clock are running; reports are not yet available ([current status](master_project_execution_plan.md)) | Finish the fresh five-fold/four-profile poison audit and four-cutoff prefix audit, then obtain independent review. Preserve the old campaign as inadmissible for selection | High until v23 reports and independent review pass; finite checks do not prove every feature/execution path |
-| Session schedule and minute-bin gaps | The replacement resolver schedules 99,492 US100 and 99,482 US500 training decisions with complete tick coverage for that observed schedule. US100 has 382 and 388 NY-labeled rows on 2025-12-02 and 2025-12-04 versus the common 391. Neither date is a Nasdaq holiday or early close, but the CFD provider's own hours/export behavior are unknown ([replacement-data evidence](evidence/replacement_data_20261017.md)) | Preserve the exact observed schedule; do not infer provider-scheduled closures or export omissions and do not impute prices without source evidence. Treat the schedule as a stated training assumption and disclose the unresolved CFD calendar interpretation | Moderate-high methodological risk; user-authorized training proceeds, but calendar semantics remain unresolved |
-| Incomplete causality coverage | The historical prefix checks missed the NY-session opening interval that exposed the old defect; the corrected targeted regression now passes and current replacement-data prefix/fold checks cover more profiles and cutoffs | Preserve the historical failure, targeted regression, full-training fold report, prefix report, cache hashes, and exact tested profiles together | Medium-high; no finite test set proves exhaustive causality, and independent review remains open |
-| Optimistic costs | F10 | T-03.3 cost grid; TI-7 — no superiority on default costs alone | Medium for live expectancy |
-| Multi-simulator divergence | F9 | Eval pack names engine per table | Medium for live parity claims |
+The source is user-attested FTMO Demo MT5 data. The exact demo server and
+liquidity provider are unknown, and no export or license record was supplied.
+Internal model training is user-authorized; permission to redistribute the raw
+CSV data has not been established. Report these provenance limits and do not
+claim the raw data can be redistributed.
 
-## Declared assumptions
+Short-session dates and all their bars remain in both partitions. The scheduled
+close is supplied as a date-level input before the first observation for that
+date. The schedule is an experimental input and should be named in the methods;
+the model is not expected to infer it from the day's price path.
 
-1. Source timestamps are stored with an **`Etc/GMT-3`** wall-clock carrier. CT feature conversion uses the configured `ftmo_mt5_us_dst` model (FTMO MT4/5 GMT+2 standard / GMT+3 during US DST); the exact account server/export path is not independently verified.
-2. Primary thesis tables use **`TradingEnv`** episode evaluation unless a table caption says `run_backtest`.
-3. Dates in `config/default.yaml` / `experiments.yaml` were originally intended as a **final holdout**. January–July outcomes have been inspected. Treat the full 2026-01-01 through 2026-10-16 report interval as exposed exploratory/report-only evidence, with no later subperiod designated fresh or confirmatory; see [validation_protocol.md](validation_protocol.md).
-4. Cost-stressed results (see `scripts/eval/test_oos.py` and eval pack) bound default-cost claims.
-5. The user identifies FTMO Demo and authorizes internal training. The underlying liquidity provider and account-specific export/publication terms are not recorded. Data quality scans and matching file hashes do not independently establish provider identity or publication rights.
+Tick-based fills use a seeded random arrival latency in the configured
+0–30 millisecond interval and the first eligible bid/ask tick after arrival.
+These fills model the declared execution assumption; they do not establish
+real-world broker latency, queue position, market impact, or profitability.
 
-## Related docs
-
-- [thesis_audit_2026.md](../architecture/thesis_audit_2026.md)
-- [validation_protocol.md](validation_protocol.md)
-- [eval_pack.md](eval_pack.md)
-- [distributional_methodology.md](../distributional_methodology.md)
+The M1 sequence is the policy timestep. M3 and higher bars are contextual
+inputs and may enter only after their source bars have closed. Report all
+selected feature and execution assumptions with each final result.

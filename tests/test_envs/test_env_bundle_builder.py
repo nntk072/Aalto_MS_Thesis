@@ -44,6 +44,45 @@ def test_bundle_key_separates_different_input_slices(tmp_path: Path) -> None:
     assert full != prefix
 
 
+def test_bundle_source_identity_hashes_native_timeframe_files(tmp_path: Path) -> None:
+    from quant_rl.envs.env_bundle_builder import _bundle_source_fingerprints
+
+    training = tmp_path / "training"
+    testing = tmp_path / "testing"
+    training.mkdir()
+    testing.mkdir()
+    train_file = training / "US100_M3.csv"
+    test_file = testing / "US100_M3.csv"
+    train_file.write_bytes(b"train native M3 bars")
+    test_file.write_bytes(b"test native M3 bars")
+    cfg = OmegaConf.create(
+        {
+            "data": {
+                "datasets": {
+                    "training": {
+                        "raw_dir": str(training),
+                        "timeframe_files": {"M3": {"US100": train_file.name}},
+                    },
+                    "testing": {
+                        "raw_dir": str(testing),
+                        "timeframe_files": {"M3": {"US100": test_file.name}},
+                    },
+                }
+            }
+        }
+    )
+
+    first = _bundle_source_fingerprints(cfg)
+    before = {record["sha256"] for record in first.values()}
+    assert len(before) == 2
+
+    train_file.write_bytes(b"changed train native M3 bars")
+    second = _bundle_source_fingerprints(cfg)
+    after = {record["sha256"] for record in second.values()}
+
+    assert before != after
+
+
 def test_bundled_observation_matrix_matches_frames_path(tmp_path: Path) -> None:
     """The bundle observation matrix is byte-identical to the frame conversion."""
     from quant_rl.config import load_config

@@ -376,7 +376,10 @@ def test_tick_mode_uses_correct_ask_and_records_actual_entry_quote(latency_ms: f
 
 
 @pytest.mark.parametrize("latency_ms", [0.0, 30.0])
-def test_tick_only_mode_rejects_candle_only_stop_fill(latency_ms: float) -> None:
+@pytest.mark.parametrize("tick_in_bar", [False, True])
+def test_tick_only_mode_uses_quotes_for_candle_only_stop_fill(
+    latency_ms: float, tick_in_bar: bool
+) -> None:
     index = pd.date_range("2026-01-05T14:30:00Z", periods=4, freq="min")
     close = np.full(len(index), 100.0)
     bars = pd.DataFrame(
@@ -392,7 +395,7 @@ def test_tick_only_mode_rejects_candle_only_stop_fill(latency_ms: float) -> None
         index=index,
     )
     features = pd.DataFrame(index=index)
-    tick_time = index[0] + pd.Timedelta(seconds=10)
+    tick_time = (index[1] if tick_in_bar else index[-1]) + pd.Timedelta(seconds=10)
     book = TickBook(np.array([tick_time.value]), np.array([100.0]), np.array([100.2]))
     env = TradingEnv(
         bars,
@@ -411,8 +414,13 @@ def test_tick_only_mode_rejects_candle_only_stop_fill(latency_ms: float) -> None
     env.position = pos
     bar = BarView(open=100.0, low=99.0, high=100.5, close=100.0)
 
-    with pytest.raises(TickExecutionUnavailable, match="candle fallback is disabled"):
+    if tick_in_bar:
         env._check_sl_tp(bar, 100.0, 100.2, env.step_idx)
+        assert env.position is pos
+        assert not any(row.get("type") == "stop_close" for row in env.trade_log)
+    else:
+        with pytest.raises(TickExecutionUnavailable, match="no tick observations"):
+            env._check_sl_tp(bar, 100.0, 100.2, env.step_idx)
 
 
 if __name__ == "__main__":

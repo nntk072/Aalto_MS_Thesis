@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 from scripts.thesis.compare_deterministic_reanalysis import (
     IDENTITY_FIELDS,
     NUMERICAL_ARTIFACTS,
@@ -55,7 +56,11 @@ def _write_reanalysis(path: Path) -> None:
             "historical_holdout_inspected": True,
             "evaluation_provenance": {
                 "source": {"available": True, "head": "test-head", "dirty_files": []},
-                "runtime": {"python": "3.x", "platform": "test"},
+                "runtime": {
+                    "python": "3.x",
+                    "platform": "test",
+                    "python_hash_seed_env": None,
+                },
                 "python_executable": "/test/python",
             },
             "legacy_sequence_columns_used": False,
@@ -212,6 +217,37 @@ def test_reanalysis_comparator_rejects_different_evaluator_source_identity(
 
     assert report["status"] == "failed"
     assert "reanalysis identity differs: evaluation_provenance" in report["errors"]
+
+
+def test_reanalysis_comparator_accepts_crossed_hash_seed_when_artifacts_match(
+    tmp_path: Path,
+) -> None:
+    first, second = tmp_path / "first", tmp_path / "second"
+    _write_reanalysis(first)
+    _write_reanalysis(second)
+    for run_dir, seed in ((first, "1"), (second, "12")):
+        manifest_path = run_dir / "reanalysis_manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["evaluation_provenance"]["runtime"]["python_hash_seed_env"] = seed
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    report = compare_reanalyses(first, second)
+
+    assert report["status"] == "passed"
+    assert report["python_hash_seed_env"] == {"first": "1", "second": "12"}
+
+
+def test_reanalysis_comparator_rejects_malformed_hash_seed_record(tmp_path: Path) -> None:
+    first, second = tmp_path / "first", tmp_path / "second"
+    _write_reanalysis(first)
+    _write_reanalysis(second)
+    manifest_path = second / "reanalysis_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["evaluation_provenance"]["runtime"]["python_hash_seed_env"] = 12
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="PYTHONHASHSEED provenance is missing or invalid"):
+        compare_reanalyses(first, second)
 
 
 def test_reanalysis_comparator_rejects_cache_identity_detached_from_source(

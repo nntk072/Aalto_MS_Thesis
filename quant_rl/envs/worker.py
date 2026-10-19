@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..backtest.costs import CostModel
+from ..trading_policy import resolve_trading_policy_mapping
 from .distribution_reward import DistributionReward
 from .env_spec import EnvSpec
 from .po3_reward import PO3Reward
@@ -104,12 +105,21 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
     risk = _block(cfg, "risk")
     account = _block(cfg, "account")
     strategy_actions = bool(env.get("strategy_actions", False))
+    policy = resolve_trading_policy_mapping(cfg)
     strategy, strategy_reward, strategy_weight = _strategy(cfg, strategy_actions)
-    if strategy_actions:
+    if policy.repeated_payout:
         strategy_risk = _block(cfg, "strategy").get("risk", {}) or {}
-        risk_frac_range = tuple(
+        risk_frac_range = (0.0, policy.max_agent_risk_frac)
+        rr_ratio_range = tuple(float(x) for x in strategy_risk.get("rr_range", [1.5, 5.0]))
+        max_loss = policy.operating_balance * policy.max_agent_risk_frac
+    elif strategy_actions:
+        strategy_risk = _block(cfg, "strategy").get("risk", {}) or {}
+        risk_frac_values = tuple(
             float(x) for x in strategy_risk.get("risk_frac_range", [0.005, 0.01])
         )
+        if len(risk_frac_values) != 2:
+            raise ValueError("strategy.risk.risk_frac_range must contain two values")
+        risk_frac_range = (risk_frac_values[0], risk_frac_values[1])
         rr_ratio_range = tuple(float(x) for x in strategy_risk.get("rr_range", [1.5, 5.0]))
         ftmo = _block(cfg, "ftmo")
         max_loss = float(ftmo.get("risk_per_trade_limit", 100.0))
@@ -131,6 +141,16 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
         "trailing_dd_limit": float(ftmo.get("trailing_dd_limit", 0.07)),
         "soft_trailing_dd_limit": float(ftmo.get("soft_trailing_dd_limit", 0.0)),
     }
+    if policy.repeated_payout:
+        guardrail_kwargs.update(
+            daily_loss_limit=policy.daily_loss_limit,
+            max_loss_limit=policy.operating_balance - policy.account_floor,
+            risk_per_trade_limit=policy.operating_balance * policy.max_agent_risk_frac,
+            soft_daily_loss_limit=0.0,
+            soft_max_loss_limit=0.0,
+            trailing_dd_limit=0.0,
+            soft_trailing_dd_limit=0.0,
+        )
     if spec.evaluation:
         # Match train_rl._eval_guardrail_kwargs: evaluation reports apply the
         # daily and initial-equity loss gates, while trailing drawdown remains
@@ -164,7 +184,11 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
         candidate_max_age_bars=int(env.get("candidate_max_age_bars", 5)),
         arm_requires_retest=bool(env.get("arm_requires_retest", False)),
         entry_state_observation=bool(env.get("entry_state_observation", True)),
-        observation_schema_version=str(env.get("observation_schema_version", "account-state-v1")),
+        observation_schema_version=(
+            "account-state-v3-repeated-payout"
+            if policy.repeated_payout
+            else str(env.get("observation_schema_version", "account-state-v1"))
+        ),
         observation_age_scale_bars=float(env.get("observation_age_scale_bars", 60.0)),
         strict_research_eligibility=bool(env.get("strict_research_eligibility", False)),
         sl_buffer_pts=float(env.get("sl_buffer_pts", 0.0)),
@@ -198,4 +222,5 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
         max_tick_quote_wait_ms=int(execution.get("max_tick_quote_wait_ms", 60_000)),
         mtf=spec.arch == "mtf",
         mtf_windows=windows,
+        trading_policy=policy.to_dict(),
     )

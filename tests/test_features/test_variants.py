@@ -318,7 +318,7 @@ def test_ifvg_mtf_behind_flag(m1_bars):
 
 
 def test_variant_config_files_merge():
-    """The three variant YAMLs load and set the right flags over default.yaml."""
+    """The variant YAMLs enable their feature blocks over the native MTF defaults."""
     base = OmegaConf.load("quant_rl/config/default.yaml")
     variants = [
         ("config/features/technical_mtf.yaml", False, False),
@@ -329,11 +329,20 @@ def test_variant_config_files_merge():
         merged = OmegaConf.merge(base, OmegaConf.load(fname))
         assert merged.features.include_po3 is want_po3
         assert merged.features.include_fvg_ifvg is want_fvg
-        assert list(merged.features.htf_timeframes) == ["M5", "M15", "H1"]
+        assert list(merged.features.htf_timeframes) == [
+            "M3",
+            "M5",
+            "M10",
+            "M15",
+            "M30",
+            "H1",
+            "H4",
+            "D1",
+        ]
 
 
 def test_idea_overlays_enable_synchronized_mtf_ifvg():
-    """The revised Idea variants consume M5/M15/H1 IFVGs on the M1 PO3 clock."""
+    """The revised Idea variants consume native M3-D1 IFVGs on the M1 PO3 clock."""
     base = OmegaConf.load("quant_rl/config/default.yaml")
     expected_ids = {
         "config/2_po3_ifvg.yaml": "po3_confirmed_ifvg_htf_mtf_v1",
@@ -341,9 +350,27 @@ def test_idea_overlays_enable_synchronized_mtf_ifvg():
     }
     for path, variant_id in expected_ids.items():
         merged = OmegaConf.merge(base, OmegaConf.load(path))
-        assert list(merged.features.po3_reference_timeframes) == ["M5", "M15", "H1"]
+        assert list(merged.features.po3_reference_timeframes) == [
+            "M3",
+            "M5",
+            "M10",
+            "M15",
+            "M30",
+            "H1",
+            "H4",
+            "D1",
+        ]
         assert merged.features.ifvg_mtf.enabled is True
-        assert list(merged.features.ifvg_mtf.timeframes) == ["M5", "M15", "H1"]
+        assert list(merged.features.ifvg_mtf.timeframes) == [
+            "M3",
+            "M5",
+            "M10",
+            "M15",
+            "M30",
+            "H1",
+            "H4",
+            "D1",
+        ]
         assert merged.strategy.variant_id == variant_id
 
 
@@ -400,5 +427,14 @@ def test_combined_config_merges_all_blocks():
     assert merged.features.include_fvg_ifvg is True
     assert merged.features.include_po3_full is True
     assert merged.features.po3_htf == "M15"
-    assert merged.features.po3_ltf == "M5"
-    assert list(merged.features.htf_timeframes) == ["M5", "M15", "H1"]
+    assert merged.features.po3_ltf == "M1"
+    assert list(merged.features.htf_timeframes) == [
+        "M3",
+        "M5",
+        "M10",
+        "M15",
+        "M30",
+        "H1",
+        "H4",
+        "D1",
+    ]

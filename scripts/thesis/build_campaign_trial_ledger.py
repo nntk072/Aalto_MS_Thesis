@@ -91,6 +91,28 @@ def _attempt_paths(attempt_dir: Path) -> tuple[Path | None, Path | None, Path | 
     )
 
 
+def _attempt_run_manifest(attempt_dir: Path) -> Path | None:
+    manifests = sorted(attempt_dir.rglob("run_manifest.json"))
+    return manifests[-1] if manifests else None
+
+
+def _attempt_feature_cache_identity(run_manifest_path: Path | None) -> dict[str, Any] | None:
+    if run_manifest_path is None:
+        return None
+    try:
+        manifest = json.loads(run_manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    cache = manifest.get("feature_cache") if isinstance(manifest, dict) else None
+    if not isinstance(cache, dict):
+        return None
+    return {
+        key: cache.get(key)
+        for key in ("identity", "sha256", "file_sha256", "path")
+        if isinstance(cache.get(key), str)
+    }
+
+
 def _data_hashes(value: Any) -> list[str]:
     if isinstance(value, dict):
         candidates = list(value.values())
@@ -105,6 +127,90 @@ def _data_hashes(value: Any) -> list[str]:
             if isinstance(item, str) and re.fullmatch(r"[0-9a-f]{64}", item)
         }
     )
+
+
+def _resolved_seed_evidence(config_path: Path | None, log_path: Path) -> dict[str, Any]:
+    """Keep campaign, resolver, CLI, and trainer seed claims separately auditable."""
+    config: dict[str, Any] = {}
+    if config_path is not None:
+        try:
+            value = json.loads(config_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            value = None
+        if isinstance(value, dict):
+            config = value
+
+    def seed_int(value: Any) -> int | None:
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+    train_args = config.get("train_args")
+    cli_seed: int | None = None
+    if isinstance(train_args, list):
+        parsed: list[int] = []
+        for index, item in enumerate(train_args):
+            if item == "--seed" and index + 1 < len(train_args):
+                candidate = train_args[index + 1]
+            elif isinstance(item, str) and item.startswith("--seed="):
+                candidate = item.partition("=")[2]
+            else:
+                continue
+            try:
+                parsed.append(int(candidate))
+            except (TypeError, ValueError):
+                continue
+        if len(parsed) == 1:
+            cli_seed = parsed[0]
+
+    startup_seed: int | None = None
+    if log_path.is_file():
+        try:
+            with log_path.open(encoding="utf-8", errors="replace") as stream:
+                for line in stream:
+                    match = re.search(r"\bseeds=(\d+)\b", line)
+                    if match:
+                        startup_seed = int(match.group(1))
+                        break
+        except OSError:
+            pass
+
+    return {
+        "attempt_provenance_seed": None,
+        "resolved_config_seed": seed_int(config.get("seed")),
+        "resolved_config_seeds": config.get("seeds")
+        if isinstance(config.get("seeds"), list)
+        else None,
+        "train_args_seed": cli_seed,
+        "worker_startup_seed": startup_seed,
+    }
+
+
+def _seed_identity_status(campaign_seed: int, evidence: dict[str, Any]) -> str:
+    values = [
+        campaign_seed,
+        evidence.get("attempt_provenance_seed"),
+        evidence.get("resolved_config_seed"),
+        evidence.get("train_args_seed"),
+        evidence.get("worker_startup_seed"),
+    ]
+    if any(value is None for value in values):
+        return "incomplete"
+    return "verified" if all(value == campaign_seed for value in values) else "mismatch"
+
+
+def _reported_artifact_hash(job: dict[str, Any], suffix: str) -> str | None:
+    """Return a campaign-recorded artifact hash when its payload is absent."""
+    hashes = job.get("artifact_hashes")
+    if not isinstance(hashes, dict):
+        return None
+    matches = [
+        value
+        for name, value in hashes.items()
+        if isinstance(name, str)
+        and (name == suffix or name.endswith(f"/{suffix}"))
+        and isinstance(value, str)
+        and re.fullmatch(r"[0-9a-f]{64}", value)
+    ]
+    return matches[-1] if len(matches) == 1 else None
 
 
 def _attempt_failure_map(campaign_dir: Path) -> dict[tuple[str, int], str]:
@@ -245,6 +351,28 @@ def build_trial_ledger(
                 log_artifact = _artifact(log_path)
                 if log_artifact:
                     run_artifacts.add(log_artifact)
+                run_manifest_path = _attempt_run_manifest(attempt_dir)
+                if run_manifest_path is not None:
+                    run_artifacts.add(
+                        _artifact(run_manifest_path) or str(run_manifest_path.resolve())
+                    )
+                seed_evidence = _resolved_seed_evidence(config_path, log_path)
+                seed_evidence["attempt_provenance_seed"] = (
+                    provenance.get("seed") if provenance else None
+                )
+                seed_evidence["identity_status"] = _seed_identity_status(seed, seed_evidence)
+                resolved_seeds = seed_evidence.get("resolved_config_seeds")
+                seed_evidence["plural_seed_metadata_contains_campaign_seed"] = (
+                    seed in resolved_seeds if isinstance(resolved_seeds, list) else None
+                )
+                feature_cache_identity = _attempt_feature_cache_identity(run_manifest_path)
+                cache_sha256 = (
+                    [feature_cache_identity["file_sha256"]]
+                    if feature_cache_identity is not None
+                    and isinstance(feature_cache_identity.get("file_sha256"), str)
+                    and re.fullmatch(r"[0-9a-f]{64}", feature_cache_identity["file_sha256"])
+                    else []
+                )
 
                 if steps is not None:
                     latest_steps = max(latest_steps or 0, steps)
@@ -300,6 +428,7 @@ def build_trial_ledger(
                         "attempt": number,
                         "variant": variant,
                         "seed": seed,
+                        "seed_evidence": seed_evidence,
                         "evidence_role": "runtime_benchmark"
                         if "probe" in campaign_id
                         else "selection",
@@ -307,7 +436,8 @@ def build_trial_ledger(
                         "source_sha": source_sha if isinstance(source_sha, str) else None,
                         "config_sha256": config_sha,
                         "data_sha256": data_sha256,
-                        "cache_sha256": [],
+                        "cache_sha256": cache_sha256,
+                        "feature_cache_identity": feature_cache_identity,
                         "checkpoint_sha256": checkpoint_sha,
                         "requested_timesteps": expected or None,
                         "completed_timesteps": steps,
@@ -348,7 +478,7 @@ def build_trial_ledger(
             ):
                 attempt_entries[-1]["status"] = run_status
                 attempt_entries[-1]["disposition"] = run_disposition
-            config_sha = latest_config_sha
+            config_sha = latest_config_sha or _reported_artifact_hash(job, "resolved_config.json")
             source_sha = latest_source_sha or manifest.get("git_sha")
             if config_sha is None or not latest_source_sha:
                 missing_identity_attempts += 1
@@ -362,12 +492,22 @@ def build_trial_ledger(
                     "attempt": None,
                     "variant": variant,
                     "seed": seed,
+                    "seed_evidence": (
+                        attempt_entries[-1].get("seed_evidence") if attempt_entries else None
+                    ),
                     "evidence_role": "runtime_benchmark" if "probe" in campaign_id else "selection",
                     "status": run_status,
                     "source_sha": source_sha if isinstance(source_sha, str) else None,
                     "config_sha256": config_sha,
                     "data_sha256": _data_hashes(manifest.get("data_inputs")),
-                    "cache_sha256": [],
+                    "cache_sha256": (
+                        attempt_entries[-1].get("cache_sha256", []) if attempt_entries else []
+                    ),
+                    "feature_cache_identity": (
+                        attempt_entries[-1].get("feature_cache_identity")
+                        if attempt_entries
+                        else None
+                    ),
                     "checkpoint_sha256": latest_checkpoint_sha,
                     "requested_timesteps": expected or None,
                     "completed_timesteps": latest_steps,
@@ -398,7 +538,7 @@ def build_trial_ledger(
                     "scheduler_state": latest_attempt_scheduler or manifest_scheduler,
                     "identity_completeness": (
                         "complete"
-                        if config_sha and latest_source_sha
+                        if latest_config_sha and latest_source_sha
                         else "partial"
                         if source_sha or config_sha
                         else "missing"
@@ -410,6 +550,14 @@ def build_trial_ledger(
                 limitations.append(
                     f"{campaign_id}/{key}: {missing_identity_attempts} record(s) lack per-attempt config or provenance."
                 )
+            if (
+                attempt_entries
+                and attempt_entries[-1]["status"] == "running"
+                and attempt_entries[-1].get("feature_cache_identity") is None
+            ):
+                limitations.append(
+                    f"{campaign_id}/{key}: active attempt has no finalized run_manifest feature-cache identity yet."
+                )
 
     return {
         "schema": "aalto.thesis_trial_ledger.v1",
@@ -418,7 +566,7 @@ def build_trial_ledger(
         "limitations": sorted(
             set(
                 [
-                    "This snapshot covers the six structured campaign manifests present under outputs/gpu_campaigns; standalone legacy runs and deleted artifacts are not enumerated.",
+                    "This snapshot covers only the campaign directories named in campaign_ids; standalone legacy runs and deleted artifacts are not enumerated.",
                     "Manifest job state is reconciled with the parent Slurm state where that job ID is recorded; historical child-step and allocation reuse relationships may require manual review.",
                     "A scheduler state is a point-in-time observation and does not establish full chronological split exposure or strategy validity.",
                     "Missing provenance/configuration is represented as incomplete; no hashes are invented for absent artifacts.",

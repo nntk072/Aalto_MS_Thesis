@@ -1,5 +1,6 @@
 """Evaluation must preserve input runs and reproduce training fit scope."""
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -30,6 +31,124 @@ def test_checkpoint_reanalysis_defaults_to_deterministic_actions() -> None:
     assert default_args.stochastic is False
     assert sampled_args.stochastic is True
     assert sampled_args.seed == 42
+
+
+def test_train_only_screen_is_explicit_opt_in() -> None:
+    default_args = eval_run._build_parser().parse_args(["--run", "source", "--output", "out"])
+    screen_args = eval_run._build_parser().parse_args(
+        ["--run", "source", "--output", "out", "--train-only-screen"]
+    )
+
+    assert default_args.train_only_screen is False
+    assert screen_args.train_only_screen is True
+
+
+def test_train_only_screen_rejects_stochastic_actions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        ["eval_run", "--run", "source", "--output", "out", "--train-only-screen", "--stochastic"],
+    )
+
+    with pytest.raises(SystemExit, match="requires deterministic policy actions"):
+        eval_run.main()
+
+
+def test_train_only_screen_report_records_evaluation_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    provenance = {
+        "source": {"available": True, "head": "test-revision", "dirty_files": []},
+        "runtime": {"python": "test-runtime"},
+        "python_executable": "/test/python",
+    }
+    monkeypatch.setattr(eval_run, "build_evaluation_provenance", lambda _repo: provenance)
+
+    report_path = eval_run._write_train_only_screen_report(
+        tmp_path / "screen",
+        {"artifact_role": "candidate_screen_train_only", "test_split_evaluated": False},
+    )
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["evaluation_provenance"] == provenance
+    assert report["test_split_evaluated"] is False
+
+
+def test_train_only_evaluation_receives_only_training_frames(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    train_bars = pd.DataFrame({"close": [100.0, 101.0]})
+    train_features = pd.DataFrame({"signal": [0.0, 1.0]})
+    captured: dict[str, object] = {}
+
+    def fake_evaluate(_model: object, *, stochastic: bool, **kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        captured["stochastic"] = stochastic
+        return {"equity": [100_000.0, 100_100.0], "trades": []}
+
+    monkeypatch.setattr(eval_run, "_evaluate_checkpoint_split", fake_evaluate)
+    result, metrics = eval_run._evaluate_train_split(
+        object(),
+        stochastic=False,
+        bars=train_bars,
+        features=train_features,
+        tickbook=None,
+        legacy_sequence_columns=False,
+        eval_common={},
+        initial_balance=100_000.0,
+        periods_per_year=100,
+    )
+
+    assert captured["bars"] is train_bars
+    assert captured["features"] is train_features
+    assert captured["stochastic"] is False
+    assert result["initial_balance"] == 100_000.0
+    assert metrics.n_trades == 0
+
+
+def test_train_only_dataset_parity_checks_training_inputs_only() -> None:
+    source = {
+        "train_bars": {"sha256": "train-bars"},
+        "train_features": {"sha256": "train-features"},
+        "test_bars": {"sha256": "source-test-bars"},
+        "test_features": {"sha256": "source-test-features"},
+        "primary_ticks": {"sha256": "full-ticks"},
+    }
+    evaluated = {
+        "train_bars": {"sha256": "train-bars"},
+        "train_features": {"sha256": "train-features"},
+        "primary_ticks": {"sha256": "training-ticks"},
+    }
+
+    assert (
+        _validate_reanalysis_datasets(
+            source,
+            evaluated,
+            allow_legacy=False,
+            train_only=True,
+        )
+        == "train_only_verified_full_tick_identity_not_reloaded"
+    )
+
+
+def test_train_only_dataset_parity_rejects_training_input_mismatch() -> None:
+    source = {
+        "train_bars": {"sha256": "source-train-bars"},
+        "train_features": {"sha256": "train-features"},
+    }
+    evaluated = {
+        "train_bars": {"sha256": "different-train-bars"},
+        "train_features": {"sha256": "train-features"},
+    }
+
+    with pytest.raises(ValueError, match="differs from training for train_bars"):
+        _validate_reanalysis_datasets(
+            source,
+            evaluated,
+            allow_legacy=False,
+            train_only=True,
+        )
 
 
 def test_execution_seed_uses_explicit_override_then_source_seed() -> None:

@@ -67,9 +67,12 @@ def _feature_build_scope(
     symbol: str,
     train_end: str,
     secondary: Any | None = None,
+    train_start: str | None = None,
+    timeframe_bars: dict[str, Any] | None = None,
+    secondary_timeframe_bars: dict[str, Any] | None = None,
 ) -> tuple[Any, Path]:
     """Reproduce the mask and content-hashed cache identity of training."""
-    mask = make_train_mask(cast(Any, bars.index), train_end)
+    mask = make_train_mask(cast(Any, bars.index), train_end, train_start)
     prebuilt_value = OmegaConf.select(cfg, "data.prebuilt_feature_cache", default=None)
     if prebuilt_value:
         cache_path = Path(str(prebuilt_value)).expanduser()
@@ -82,6 +85,8 @@ def _feature_build_scope(
             bars,
             train_mask=mask,
             secondary=secondary,
+            timeframe_bars=timeframe_bars,
+            secondary_timeframe_bars=secondary_timeframe_bars,
         )
         if not cache_path.is_file() or not hash_path.is_file():
             raise FileNotFoundError(
@@ -104,7 +109,14 @@ def _feature_build_scope(
                 )
         return mask, cache_path
     return mask, feature_cache_path(
-        cache_dir, symbol, cfg, bars, train_mask=mask, secondary=secondary
+        cache_dir,
+        symbol,
+        cfg,
+        bars,
+        train_mask=mask,
+        secondary=secondary,
+        timeframe_bars=timeframe_bars,
+        secondary_timeframe_bars=secondary_timeframe_bars,
     )
 
 
@@ -210,6 +222,7 @@ def _validate_reanalysis_datasets(
     evaluated_datasets: dict[str, dict[str, Any]],
     *,
     allow_legacy: bool,
+    train_only: bool = False,
 ) -> str:
     """Require the evaluation bars/features/ticks to match the training record."""
     if source_datasets is None:
@@ -222,7 +235,9 @@ def _validate_reanalysis_datasets(
     if not isinstance(source_datasets, dict):
         raise ValueError("source run manifest datasets must be an object")
 
-    required = {"train_bars", "train_features", "test_bars", "test_features"}
+    required = {"train_bars", "train_features"}
+    if not train_only:
+        required.update({"test_bars", "test_features"})
     source_keys = set(source_datasets)
     if not required.issubset(source_keys):
         if allow_legacy and not source_keys.intersection(required):
@@ -231,12 +246,17 @@ def _validate_reanalysis_datasets(
             "source run manifest has incomplete train/test dataset identities: "
             f"missing {sorted(required.difference(source_keys))}"
         )
-    if source_keys != set(evaluated_datasets):
+    keys_to_compare = {"train_bars", "train_features"} if train_only else source_keys
+    if train_only and "train_secondary" in source_keys:
+        keys_to_compare.add("train_secondary")
+    if not train_only and source_keys != set(evaluated_datasets):
         raise ValueError(
             "reanalysis dataset set differs from training: "
             f"expected {sorted(source_keys)}, got {sorted(evaluated_datasets)}"
         )
-    for name in sorted(source_keys):
+    for name in sorted(keys_to_compare):
+        if name not in evaluated_datasets:
+            raise ValueError(f"train-only reanalysis is missing dataset identity: {name}")
         source_record = source_datasets[name]
         evaluated_record = evaluated_datasets[name]
         if not isinstance(source_record, dict) or not isinstance(evaluated_record, dict):
@@ -250,7 +270,7 @@ def _validate_reanalysis_datasets(
                 f"reanalysis dataset differs from training for {name}: "
                 f"expected {source_digest}, got {evaluated_digest}"
             )
-    return "verified"
+    return "train_only_verified_full_tick_identity_not_reloaded" if train_only else "verified"
 
 
 def _evaluation_dataset_records(

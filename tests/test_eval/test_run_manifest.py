@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -114,7 +116,11 @@ def test_evaluation_provenance_records_source_and_runtime(
     monkeypatch.setattr(
         run_manifest,
         "_runtime_versions",
-        lambda: {"python": "3.12.0", "platform": "test"},
+        lambda: {
+            "python": "3.12.0",
+            "platform": "test",
+            "python_hash_seed_env": None,
+        },
     )
 
     provenance = build_evaluation_provenance(tmp_path)
@@ -122,7 +128,47 @@ def test_evaluation_provenance_records_source_and_runtime(
     assert provenance["source"]["available"] is True
     assert provenance["source"]["head"] == "abc123"
     assert provenance["runtime"]["python"] == "3.12.0"
+    assert "python_hash_seed_env" in provenance["runtime"]
     assert provenance["python_executable"]
+
+
+def test_runtime_provenance_captures_python_hash_seed_at_startup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import quant_rl.eval.run_manifest as run_manifest
+
+    monkeypatch.setattr(run_manifest, "_PYTHONHASHSEED_ENV_AT_STARTUP", "173")
+    monkeypatch.setenv("PYTHONHASHSEED", "999")
+
+    assert run_manifest._runtime_versions()["python_hash_seed_env"] == "173"
+
+
+@pytest.mark.parametrize("hash_seed", ["73", None])
+def test_runtime_provenance_reads_hash_seed_from_interpreter_startup(
+    hash_seed: str | None,
+) -> None:
+    env = os.environ.copy()
+    if hash_seed is None:
+        env.pop("PYTHONHASHSEED", None)
+    else:
+        env["PYTHONHASHSEED"] = hash_seed
+    repository = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import json; from quant_rl.eval.run_manifest import "
+            "_PYTHONHASHSEED_ENV_AT_STARTUP; "
+            "print(json.dumps(_PYTHONHASHSEED_ENV_AT_STARTUP))",
+        ],
+        cwd=repository,
+        env=env,
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+
+    assert json.loads(result.stdout) == hash_seed
 
 
 def test_manifest_records_config_dataset_checkpoint_and_split_hashes(tmp_path) -> None:
@@ -151,7 +197,11 @@ def test_manifest_records_config_dataset_checkpoint_and_split_hashes(tmp_path) -
         repository=repository,
         config_path=config,
         datasets=datasets,
-        split={"train_end": "2024-01-01", "test_start": "2024-01-02"},
+        split={
+            "train_start": "2023-12-01",
+            "train_end": "2024-01-01",
+            "test_start": "2024-01-02",
+        },
         seed=7,
         completed_steps=100,
         action_schema={
@@ -206,13 +256,17 @@ def test_manifest_records_config_dataset_checkpoint_and_split_hashes(tmp_path) -
     assert manifest["config"]["sha256"] == file_sha256(config)
     assert manifest["checkpoint"]["sha256"] == file_sha256(checkpoint)
     assert manifest["datasets"]["train_bars"]["sha256"] == dataframe_sha256(frame)
-    assert manifest["split"] == {"train_end": "2024-01-01", "test_start": "2024-01-02"}
+    assert manifest["split"] == {
+        "train_start": "2023-12-01",
+        "train_end": "2024-01-01",
+        "test_start": "2024-01-02",
+    }
     assert manifest["action_schema"]["key"] == "6_dir"
     assert manifest["observation_schema"]["version"] == "account-state-v2"
     assert manifest["training_protocol"]["requested_steps"] == 100
     assert manifest["feature_cache"]["sha256"] == "cache-identity"
     assert manifest["feature_cache"]["file_sha256"] == file_sha256(cache)
-    assert manifest["manifest_version"] == 5
+    assert manifest["manifest_version"] == 6
     assert manifest["sequence_feature_schema"]["columns"] == [
         "ema_9",
         "po3_ifvg_active",
@@ -314,7 +368,7 @@ def test_manifest_fails_closed_without_split_boundaries(tmp_path) -> None:
     config.write_text("seed: 1\n")
     frame = pd.DataFrame({"close": [1.0]})
 
-    with pytest.raises(ValueError, match="train_end and test_start"):
+    with pytest.raises(ValueError, match="train_start, train_end, and test_start"):
         build_training_run_manifest(
             repository=tmp_path,
             config_path=config,
@@ -341,7 +395,11 @@ def test_manifest_requires_exact_train_test_data_and_saved_artifacts(tmp_path) -
             repository=tmp_path,
             config_path=config,
             datasets={"train": pd.DataFrame({"close": [1.0]})},
-            split={"train_end": "2024-01-01", "test_start": "2024-01-02"},
+            split={
+                "train_start": "2023-12-01",
+                "train_end": "2024-01-01",
+                "test_start": "2024-01-02",
+            },
             seed=1,
             completed_steps=1,
             action_schema=_ACTION_SCHEMA,
@@ -369,7 +427,11 @@ def test_manifest_requires_an_existing_checkpoint(tmp_path) -> None:
             repository=tmp_path,
             config_path=config,
             datasets=datasets,
-            split={"train_end": "2024-01-01", "test_start": "2024-01-02"},
+            split={
+                "train_start": "2023-12-01",
+                "train_end": "2024-01-01",
+                "test_start": "2024-01-02",
+            },
             seed=1,
             completed_steps=1,
             action_schema=_ACTION_SCHEMA,

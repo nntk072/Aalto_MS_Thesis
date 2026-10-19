@@ -8,9 +8,8 @@
     "head": "960b2897df7451c18860392352b7ed50526efe29",
     "origin_main": "960b2897df7451c18860392352b7ed50526efe29",
     "working_tree_clean_at_capture": true,
-    "requested_plan_path": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/docs/thesis/master_project_execution_plan.md",
-    "canonical_plan_path": "docs/thesis/master_project_execution_plan.md",
-    "requested_path_note": "Aalto_MS_Thesis-main is a compatibility view whose source paths point to the canonical main checkout; it is not a Git worktree."
+    "requested_plan_path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/docs/thesis/master_project_execution_plan.md",
+    "canonical_plan_path": "docs/thesis/master_project_execution_plan.md"
   },
   "campaign": {
     "original_campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016",

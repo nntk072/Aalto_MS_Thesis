@@ -3,6 +3,7 @@
   "generated_at_utc": "2026-10-16T18:14:51+00:00",
   "generated_at_helsinki": "2026-10-16T21:14:51+03:00",
   "repository_path": "/scratch/work/nguyenl37/Aalto_MS_Thesis",
+  "historical_checkpoint_paths_note": "Checkpoint paths are relative to the archived campaign layout at capture; those files are not present in this checkout and these paths are not resumable here.",
   "repository_branch": "main",
   "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
   "campaign_fingerprint": "91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e",
@@ -166,7 +167,7 @@
         "next_attempt_provenance_sha256": "eb8028a334b60456d52943ad20eabc8a258dd1ad321472f8e40c106d2e45216c",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a0_flat__seed50/attempt2/ladder_a0_flat__seed50/20261016_035732_951039_rl_train_seed50_tcn/model/ppo_ckpt_12000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a0_flat__seed50/attempt2/ladder_a0_flat__seed50/20261016_035732_951039_rl_train_seed50_tcn/model/ppo_ckpt_12000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -302,7 +303,7 @@
         "next_attempt_provenance_sha256": "3e78fb54f5da9e7131254e10ccb03edd8752f5aac19af332d2e067374596eab3",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a0_flat_dist__seed50/attempt2/ladder_a0_flat_dist__seed50/20261016_035734_934897_rl_train_seed50_tcn/model/ppo_ckpt_11000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a0_flat_dist__seed50/attempt2/ladder_a0_flat_dist__seed50/20261016_035734_934897_rl_train_seed50_tcn/model/ppo_ckpt_11000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -438,7 +439,7 @@
         "next_attempt_provenance_sha256": "b812633ee8b46afd59a6e0c589862ed7f57d72169ab2c66aebb6134405df9728",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a0_flat_po3__seed50/attempt2/ladder_a0_flat_po3__seed50/20261016_035734_426724_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a0_flat_po3__seed50/attempt2/ladder_a0_flat_po3__seed50/20261016_035734_426724_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -572,7 +573,7 @@
         "next_attempt_provenance_sha256": "b5ba8e0acc7463775caa9a47c2405e26026360dbc2912fa6bd968a6b28d0c302",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a1_sl__seed50/attempt2/ladder_a1_sl__seed50/20261016_035734_180416_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a1_sl__seed50/attempt2/ladder_a1_sl__seed50/20261016_035734_180416_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -706,7 +707,7 @@
         "next_attempt_provenance_sha256": "b0bae5f26fc9b6f08cbb6a6ef0a3f4c902e7ba829f7fcd3bc2fedec880da4658",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a1_sl_dist__seed50/attempt2/ladder_a1_sl_dist__seed50/20261016_035738_470457_rl_train_seed50_tcn/model/ppo_ckpt_11000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a1_sl_dist__seed50/attempt2/ladder_a1_sl_dist__seed50/20261016_035738_470457_rl_train_seed50_tcn/model/ppo_ckpt_11000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -841,7 +842,7 @@
         "next_attempt_provenance_sha256": "7efe52570b9fbbdd5c1740d95e768d94dada911d51011ba96c6363094167b2fc",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a1_sl_po3__seed50/attempt2/ladder_a1_sl_po3__seed50/20261016_035734_462320_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a1_sl_po3__seed50/attempt2/ladder_a1_sl_po3__seed50/20261016_035734_462320_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -975,7 +976,7 @@
         "next_attempt_provenance_sha256": "092964032b16d98a86db9a75222e93456b6fced474b5a1ebe1ed0759ab627d6d",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a2_tp__seed50/attempt2/ladder_a2_tp__seed50/20261016_035733_871595_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a2_tp__seed50/attempt2/ladder_a2_tp__seed50/20261016_035733_871595_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -1112,7 +1113,7 @@
         "next_attempt_provenance_sha256": "937aefa417dd307cca1c7ba4321a0ab4e7a789cb7c22ae6751c920f70943d38b",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a2_tp_dist__seed50/attempt2/ladder_a2_tp_dist__seed50/20261016_035746_203925_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a2_tp_dist__seed50/attempt2/ladder_a2_tp_dist__seed50/20261016_035746_203925_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -1247,7 +1248,7 @@
         "next_attempt_provenance_sha256": "071735f38644264a05388b80df3435dab275fd90f8bd81e765e779582a015897",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a2_tp_po3__seed50/attempt2/ladder_a2_tp_po3__seed50/20261016_035734_678095_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a2_tp_po3__seed50/attempt2/ladder_a2_tp_po3__seed50/20261016_035734_678095_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -1381,7 +1382,7 @@
         "next_attempt_provenance_sha256": "7c49ec263ef1de652645d6c034909968eed5bda138beb6c1837dfd910fbb2e91",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a3_multi_tp__seed50/attempt2/ladder_a3_multi_tp__seed50/20261016_035734_196358_rl_train_seed50_tcn/model/ppo_ckpt_11000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a3_multi_tp__seed50/attempt2/ladder_a3_multi_tp__seed50/20261016_035734_196358_rl_train_seed50_tcn/model/ppo_ckpt_11000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -1517,7 +1518,7 @@
         "next_attempt_provenance_sha256": "97348812f23e7e962266e7c75659b204a8378d0fddba96c0085716498d027ce6",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a3_multi_tp_dist__seed50/attempt2/ladder_a3_multi_tp_dist__seed50/20261016_035735_164414_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a3_multi_tp_dist__seed50/attempt2/ladder_a3_multi_tp_dist__seed50/20261016_035735_164414_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -1651,7 +1652,7 @@
         "next_attempt_provenance_sha256": "8c56287c2180da9f7f97875bcfa78c34e9723a78ca4dc8e7172a0a85aa75aa6a",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a3_multi_tp_po3__seed50/attempt2/ladder_a3_multi_tp_po3__seed50/20261016_035734_572204_rl_train_seed50_tcn/model/ppo_ckpt_11000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a3_multi_tp_po3__seed50/attempt2/ladder_a3_multi_tp_po3__seed50/20261016_035734_572204_rl_train_seed50_tcn/model/ppo_ckpt_11000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -1785,7 +1786,7 @@
         "next_attempt_provenance_sha256": "0e1734970ef4061f65c086ee60a5dc1b9f8aec2e021495540e5d3c068d8db8d0",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt2/ladder_a4a_entry_fsm_hidden__seed50/20261016_035734_155086_rl_train_seed50_tcn/model/ppo_ckpt_11000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt2/ladder_a4a_entry_fsm_hidden__seed50/20261016_035734_155086_rl_train_seed50_tcn/model/ppo_ckpt_11000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -1919,7 +1920,7 @@
         "next_attempt_provenance_sha256": "2f4d407df7c054b9320aa20cb55bb800a7f9baebbfc3db37f6efcd03a9b80220",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a4a_entry_fsm_hidden_dist__seed50/attempt2/ladder_a4a_entry_fsm_hidden_dist__seed50/20261016_035738_724386_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a4a_entry_fsm_hidden_dist__seed50/attempt2/ladder_a4a_entry_fsm_hidden_dist__seed50/20261016_035738_724386_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -2053,7 +2054,7 @@
         "next_attempt_provenance_sha256": "28fbb19dbfbb4d7f5261c303b181681207fb8491a690a525be7495db8f8ad331",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a4a_entry_fsm_hidden_po3__seed50/attempt2/ladder_a4a_entry_fsm_hidden_po3__seed50/20261016_035734_645328_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a4a_entry_fsm_hidden_po3__seed50/attempt2/ladder_a4a_entry_fsm_hidden_po3__seed50/20261016_035734_645328_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -2187,7 +2188,7 @@
         "next_attempt_provenance_sha256": "6361ec2b3a5d056d3911d735d36a5835c76ccea1402d396e06ac35aba2094d4d",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a4b_distribution__seed50/attempt2/ladder_a4b_distribution__seed50/20261016_035736_723899_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a4b_distribution__seed50/attempt2/ladder_a4b_distribution__seed50/20261016_035736_723899_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -2321,7 +2322,7 @@
         "next_attempt_provenance_sha256": "7c073905d442cd2ed50caa4fe6e675685f345c707fab365be409b2c4e55eda48",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt2/ladder_a4b_entry_fsm__seed50/20261016_035734_018411_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt2/ladder_a4b_entry_fsm__seed50/20261016_035734_018411_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true
@@ -2456,7 +2457,7 @@
         "next_attempt_provenance_sha256": "eddfd675f35038f91730953b2d6f04a97ebea504659174b14316586440f91580",
         "next_attempt_provenance_hash_matches_lineage": true,
         "next_attempt_resume_from_attempt": 2,
-        "next_attempt_resume_checkpoint": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a4b_po3_ifvg__seed50/attempt2/ladder_a4b_po3_ifvg__seed50/20261016_035734_741336_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
+        "next_attempt_resume_checkpoint": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_v3_20261016/runs/attempts/ladder_a4b_po3_ifvg__seed50/attempt2/ladder_a4b_po3_ifvg__seed50/20261016_035734_741336_rl_train_seed50_tcn/model/ppo_ckpt_10000000_steps.zip",
         "next_attempt_resume_checkpoint_hash_matches": true,
         "current_lineage_checkpoint_matches_source_attempt": true,
         "verified_full_split_training_exposure": true

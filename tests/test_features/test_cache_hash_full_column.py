@@ -41,5 +41,16 @@ def test_train_mask_interior_change_changes_digest() -> None:
     )
 
 
+def test_native_timeframe_change_changes_digest() -> None:
+    primary = _bars()
+    native_m3 = _bars(100)
+    changed_m3 = native_m3.copy()
+    changed_m3.loc[changed_m3.index[50], "close"] += 0.5
+
+    assert feature_cache_content_hash(
+        None, primary, timeframe_bars={"M3": native_m3}
+    ) != feature_cache_content_hash(None, primary, timeframe_bars={"M3": changed_m3})
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

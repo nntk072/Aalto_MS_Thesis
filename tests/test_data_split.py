@@ -69,6 +69,15 @@ def test_empty_train_split():
     assert len(te_b) == len(bars)
 
 
+def test_train_start_excludes_warmup_rows_from_training():
+    bars = _make_bars("2024-12-30", "2025-01-03")
+    feat = _make_feats(bars)
+    tr_b, te_b, tr_f, _ = split_train_test(bars, feat, "2025-12-31", "2026-01-01", "2025-01-01")
+    assert tr_b.index.min() == pd.Timestamp("2025-01-01", tz="Etc/GMT-3")
+    assert tr_b.index.equals(tr_f.index)
+    assert te_b.empty
+
+
 def test_get_split_config_fallback():
     """get_split_config should return defaults when cfg is None."""
     train_end, test_start = get_split_config(None)

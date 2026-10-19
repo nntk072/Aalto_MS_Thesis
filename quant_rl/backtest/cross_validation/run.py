@@ -280,7 +280,7 @@ def main() -> None:
     parser.add_argument(
         "--data-path",
         type=str,
-        default="data/US100.cash_M1_202412300105_202607031959.csv",
+        default="data/US100.cash_M1_202412300105_202610162349.csv",
         help="Path to CSV data file (default: US100 M1 data)",
     )
     parser.add_argument(

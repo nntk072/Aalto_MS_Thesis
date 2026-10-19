@@ -18,7 +18,12 @@ from gymnasium import spaces
 
 from quant_rl.action_schema import build_action_schema
 from quant_rl.data.pipeline import build_tick_books, run_pipeline
-from quant_rl.data.split import get_split_config, split_bars, split_train_test
+from quant_rl.data.split import (
+    get_split_config,
+    get_train_start_config,
+    split_bars,
+    split_train_test,
+)
 from quant_rl.data.ticks import ticks_covering
 from quant_rl.envs.env_bundle_builder import build_env_bundle
 from quant_rl.envs.env_spec import EnvSpec
@@ -42,6 +47,7 @@ from quant_rl.features.build import (
     select_legacy_obs_columns,
     select_obs_columns,
 )
+from quant_rl.features.policy_market_context import attach_policy_market_context
 from quant_rl.models.agent import (
     validate_model_action_schema,
     validate_model_observation_schema,
@@ -310,7 +316,11 @@ def main() -> int:
     secondary_symbol = str(cfg.data.secondary)
     primary_m1 = data[primary_symbol]["M1"]
     secondary_m1 = data.get(secondary_symbol, {}).get("M1")
+    primary_timeframe_bars = data[primary_symbol]
+    secondary_timeframe_bars = data.get(secondary_symbol, {})
     train_end, test_start = get_split_config(cfg)
+    train_start = get_train_start_config(cfg)
+    primary_ticks = build_tick_books(cfg).get(primary_symbol)
     if args.source_feature_cache is not None:
         config_record = manifest.get("config")
         expected_config_hash = (
@@ -328,7 +338,15 @@ def main() -> int:
         )
     else:
         train_mask, feature_cache = _feature_build_scope(
-            primary_m1, cfg, Path(cfg.data.cache_dir), primary_symbol, train_end, secondary_m1
+            primary_m1,
+            cfg,
+            Path(cfg.data.cache_dir),
+            primary_symbol,
+            train_end,
+            secondary=secondary_m1,
+            train_start=train_start,
+            timeframe_bars=primary_timeframe_bars,
+            secondary_timeframe_bars=secondary_timeframe_bars,
         )
         features = build_features(
             primary_m1,
@@ -336,25 +354,41 @@ def main() -> int:
             cfg=cfg,
             train_mask=train_mask,
             cache_path=feature_cache,
+            timeframe_bars=primary_timeframe_bars,
+            secondary_timeframe_bars=secondary_timeframe_bars,
         )
+    schedule_path = Path(str(cfg.data.session_schedule_file))
+    if not schedule_path.is_absolute():
+        schedule_path = Path(__file__).resolve().parents[2] / schedule_path
+    features = attach_policy_market_context(
+        primary_m1,
+        features,
+        primary_ticks,
+        schedule_path=schedule_path,
+        session_start=str(cfg.session.start),
+        session_end=str(cfg.session.end),
+    )
     train_bars, test_bars, train_features, test_features = split_train_test(
-        primary_m1, features, train_end, test_start
+        primary_m1, features, train_end, test_start, train_start
     )
     train_secondary, test_secondary = (None, None)
     if secondary_m1 is not None and not secondary_m1.empty:
-        train_secondary, test_secondary = split_bars(secondary_m1, train_end, test_start)
-    primary_ticks = build_tick_books(cfg).get(primary_symbol)
+        train_secondary, test_secondary = split_bars(
+            secondary_m1, train_end, test_start, train_start
+        )
+    evaluated_datasets = _evaluation_dataset_records(
+        train_bars=train_bars,
+        train_features=train_features,
+        test_bars=test_bars,
+        test_features=test_features,
+        train_secondary=train_secondary,
+        test_secondary=test_secondary,
+        primary_ticks=primary_ticks,
+    )
+    source_datasets = manifest.get("datasets")
     dataset_disposition = _validate_reanalysis_datasets(
-        manifest.get("datasets"),
-        _evaluation_dataset_records(
-            train_bars=train_bars,
-            train_features=train_features,
-            test_bars=test_bars,
-            test_features=test_features,
-            train_secondary=train_secondary,
-            test_secondary=test_secondary,
-            primary_ticks=primary_ticks,
-        ),
+        source_datasets,
+        evaluated_datasets,
         allow_legacy=False,
     )
     eval_bars, eval_features, split_role = select_split(
@@ -456,10 +490,14 @@ def main() -> int:
         "attempt_provenance": str(provenance_path),
         "attempt_provenance_sha256": _sha256(provenance_path),
         "config_sha256": _sha256(run_dir / "config.yaml"),
+        "execution_seed": execution_seed,
+        "training_data_source": manifest.get("training_protocol", {}).get("data_source"),
         "sequence_feature_schema": sequence_schema,
         "sequence_feature_schema_disposition": sequence_schema_disposition,
         "legacy_sequence_columns_used": use_legacy_sequence_columns,
         "dataset_parity_disposition": dataset_disposition,
+        "source_datasets": source_datasets,
+        "evaluated_datasets": evaluated_datasets,
         "source_feature_cache_replay": args.source_feature_cache is not None,
         "feature_cache": str(feature_cache),
         "feature_cache_sha256": _sha256(feature_cache),

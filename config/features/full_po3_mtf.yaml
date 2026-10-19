@@ -1,6 +1,6 @@
 features:
   # Chain A multi-timeframe spine (identical across all three Chain B variants).
-  htf_timeframes: ["M5", "M15", "H1"]
+  htf_timeframes: ["M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]
   # Chain F combined config: all three additive blocks enabled simultaneously.
   # technical + structure            (base, always on)
   # + PO3 time-of-day phase tag      (include_po3)
@@ -11,4 +11,4 @@ features:
   include_po3_full: true
   # HTF / primary-LTF timeframes used by the full PO3 entry pipeline.
   po3_htf: "M15"
-  po3_ltf: "M5"
+  po3_ltf: "M1"

@@ -176,6 +176,25 @@ def plot_equity_curve(
             annotation_position="top right",
         )
 
+    if trades is not None and not trades.empty and "type" in trades.columns:
+        payout_rows = trades[trades["type"].astype(str).eq("payout_reset")]
+        if not payout_rows.empty and "time" in payout_rows.columns:
+            payout_times = pd.to_datetime(payout_rows["time"], errors="coerce").dropna()
+            for payout_time in payout_times:
+                x_position: int | pd.Timestamp = payout_time
+                if per_trade and times is not None and len(times):
+                    time_index = pd.DatetimeIndex(times)
+                    time_ns = np.asarray(time_index).astype(np.int64, copy=False)
+                    position = int(np.searchsorted(time_ns, pd.Timestamp(payout_time).value))
+                    x_position = min(max(position, 0), len(time_index) - 1)
+                fig.add_vline(
+                    x=x_position,
+                    line_color=_LONG_COLOR,
+                    line_dash="dash",
+                    line_width=1,
+                    opacity=0.7,
+                )
+
     # User preference: do not draw breach vertical lines on equity chart.
 
     fig.update_layout(

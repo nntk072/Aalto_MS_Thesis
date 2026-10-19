@@ -215,6 +215,7 @@ def test_idea2_environment_rejects_missing_bias_and_ifvg_gate_inputs() -> None:
             "strategy.name=distribution",
             "env.strict_research_eligibility=true",
             "costs.use_tick_execution=false",
+            "execution.randomized_fill_latency_ms=0.0",
         ]
     )
     index = pd.date_range("2024-01-02 14:30", periods=2, freq="min", tz="UTC")

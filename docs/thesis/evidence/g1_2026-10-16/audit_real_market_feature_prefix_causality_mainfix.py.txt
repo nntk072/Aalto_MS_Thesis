@@ -33,7 +33,7 @@ from quant_rl.features.build import (
 )
 from quant_rl.train.variant_resolver import resolve_variant
 
-ROOT = Path("/scratch/work/nguyenl37/Aalto_MS_Thesis-main")
+ROOT = Path("/scratch/work/nguyenl37/Aalto_MS_Thesis")
 DEFAULT_CUTOFFS = (
     "2025-12-15 12:37:00",
     "2026-03-09 12:37:00",

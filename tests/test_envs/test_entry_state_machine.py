@@ -16,7 +16,7 @@ from quant_rl.envs.entry_state import (
     EntryStateMachine,
     entry_state_one_hot,
 )
-from quant_rl.envs.strategies import PO3IFVGStrategy
+from quant_rl.envs.strategies import BaselineStrategy, PO3IFVGStrategy
 from quant_rl.envs.trading_env import TradingEnv
 
 
@@ -163,6 +163,40 @@ def _market_fixture(execution_direction: int = 0) -> tuple[pd.DataFrame, pd.Data
         index=index,
     )
     return bars, features
+
+
+def test_baseline_fsm_uses_causal_sweep_as_candidate_and_arms_next_bar() -> None:
+    bars, features = _market_fixture()
+    env = TradingEnv(
+        bars,
+        features,
+        obs_window=10,
+        strategy=BaselineStrategy(),
+        strategy_actions=True,
+        entry_state_machine=True,
+        candidate_max_age_bars=5,
+        entry_state_observation=True,
+        open_manipulation_bars=0,
+        entry_cooldown_bars=0,
+        min_sl_atr_mult=0.0,
+        min_sl_points=0.0,
+        allow_agent_sl_mode=False,
+        allow_ema_exit=False,
+    )
+    env.reset()
+    action_shape = env.action_space.shape
+    assert action_shape is not None
+    action = np.zeros(action_shape, dtype=np.float32)
+
+    env.step(action)  # bar 10: the low sweep creates a long candidate
+    assert env.entry_state_machine is not None
+    assert env.entry_state_machine.state == "CANDIDATE"
+    assert env.entry_state_machine.candidate is not None
+    assert env.entry_state_machine.candidate.direction == 1
+    assert env.entry_state_machine.candidate.setup_types == ("sweep",)
+
+    env.step(action)  # bar 11: the stored setup advances to ARMED
+    assert str(env.entry_state_machine.state) == "ARMED"
 
 
 @pytest.mark.parametrize("execution_direction", [0, -1])

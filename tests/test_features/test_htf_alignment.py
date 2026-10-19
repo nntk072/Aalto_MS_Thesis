@@ -5,6 +5,8 @@ M1 bar t sees only completed HTF candles (one-period shift before ffill).
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -63,6 +65,28 @@ def test_htf_columns_present(m1_bars, feat_cfg):
             assert f"{tf}_{native}" in [str(c) for c in feat.columns]
 
 
+def test_build_features_uses_supplied_native_timeframe_bars(m1_bars, feat_cfg) -> None:
+    feature_config = cast(dict[str, Any], OmegaConf.to_container(feat_cfg, resolve=True))
+    cfg = OmegaConf.create({"features": {**feature_config, "htf_timeframes": ["M3"]}})
+    native_m3 = resample(m1_bars, "M3")
+    native_close = np.where(np.arange(len(native_m3)) % 2, 250.0, 150.0)
+    native_m3 = native_m3.copy()
+    native_m3["open"] = native_close
+    native_m3["high"] = native_close + 1.0
+    native_m3["low"] = native_close - 1.0
+    native_m3["close"] = native_close
+
+    resampled_features = build_features(m1_bars, cfg=cfg)
+    native_features = build_features(m1_bars, cfg=cfg, timeframe_bars={"M3": native_m3})
+
+    valid = resampled_features["M3_ema_9"].notna() & native_features["M3_ema_9"].notna()
+    assert valid.any()
+    assert not np.allclose(
+        resampled_features.loc[valid, "M3_ema_9"].to_numpy(),
+        native_features.loc[valid, "M3_ema_9"].to_numpy(),
+    )
+
+
 def test_align_timeframes_completed_bar():
     """M1 during a forming H1 bar must not see that H1's final OHLC."""
     from quant_rl.data.align import align_timeframes
@@ -85,6 +109,33 @@ def test_align_timeframes_completed_bar():
         pd.isna(aligned.loc[t1630, "H1_close"]) or aligned.loc[t1630, "H1_close"] != hour_16_close
     )
     assert aligned.loc[t17, "H1_close"] == pytest.approx(hour_16_close)
+
+
+def test_align_timeframes_uses_explicit_close_times_for_short_final_bar() -> None:
+    from quant_rl.data.align import align_timeframes
+
+    tz = "Etc/GMT-3"
+    m1_idx = pd.date_range("2025-01-06 16:32", periods=4, freq="1min", tz=tz)
+    htf_idx = pd.DatetimeIndex(
+        [pd.Timestamp("2025-01-06 16:30", tz=tz), pd.Timestamp("2025-01-06 16:33", tz=tz)]
+    )
+    m1 = pd.DataFrame({"close": [1.0, 2.0, 3.0, 4.0]}, index=m1_idx)
+    htf_features = pd.DataFrame({"signal": [10.0, 20.0]}, index=htf_idx)
+    close_times = pd.Series(
+        [pd.Timestamp("2025-01-06 16:33", tz=tz), pd.Timestamp("2025-01-06 16:35", tz=tz)],
+        index=htf_idx,
+    )
+
+    aligned = align_timeframes(
+        m1,
+        {"M3": htf_features},
+        availability_times={"M3": close_times},
+    )
+
+    assert pd.isna(aligned.loc[pd.Timestamp("2025-01-06 16:32", tz=tz), "M3_signal"])
+    assert aligned.loc[pd.Timestamp("2025-01-06 16:33", tz=tz), "M3_signal"] == 10.0
+    assert aligned.loc[pd.Timestamp("2025-01-06 16:34", tz=tz), "M3_signal"] == 10.0
+    assert aligned.loc[pd.Timestamp("2025-01-06 16:35", tz=tz), "M3_signal"] == 20.0
 
 
 def test_htf_alignment_causal_open_time(m1_bars, feat_cfg):

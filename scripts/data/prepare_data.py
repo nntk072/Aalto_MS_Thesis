@@ -23,7 +23,7 @@ import pandas as pd
 
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import run_pipeline
-from quant_rl.data.split import get_split_config, make_train_mask
+from quant_rl.data.split import get_split_config, get_train_start_config, make_train_mask
 from quant_rl.features.build import build_features, feature_cache_path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -55,7 +55,9 @@ def main() -> None:
 
     cache_dir = Path(cfg.data.cache_dir)
     train_end, test_start = get_split_config(cfg)
-    train_mask = make_train_mask(cast(pd.DatetimeIndex, primary_m1.index), train_end)
+    train_mask = make_train_mask(
+        cast(pd.DatetimeIndex, primary_m1.index), train_end, get_train_start_config(cfg)
+    )
     feat_cache = feature_cache_path(
         cache_dir,
         primary_sym,

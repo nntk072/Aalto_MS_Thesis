@@ -18,6 +18,9 @@ from omegaconf import DictConfig, OmegaConf
 
 STOP_CANDIDATE_SCHEMA_VERSION = "rq1-stop-menu-v1"
 SEQUENCE_FEATURE_SCHEMA_VERSION = "sequence-feature-columns-v1"
+# Python's hash secret is fixed before module import. Capture the startup
+# environment once so later mutation of os.environ cannot misreport it.
+_PYTHONHASHSEED_ENV_AT_STARTUP = os.environ.get("PYTHONHASHSEED")
 
 
 def build_sequence_feature_schema(columns: list[str] | tuple[str, ...]) -> dict[str, Any]:
@@ -258,6 +261,7 @@ def _runtime_versions() -> dict[str, str | None]:
     versions: dict[str, str | None] = {
         "python": platform.python_version(),
         "platform": platform.platform(),
+        "python_hash_seed_env": _PYTHONHASHSEED_ENV_AT_STARTUP,
     }
     for distribution in ("numpy", "pandas", "torch", "stable-baselines3", "gymnasium"):
         try:
@@ -336,10 +340,10 @@ def build_training_run_manifest(
     resolved_dataset_records = dict(dataset_records or {})
     for name, frame in sorted(datasets.items()):
         resolved_dataset_records[name] = dataset_record(frame)
-    required_split = {"train_end", "test_start"}
+    required_split = {"train_start", "train_end", "test_start"}
     if not required_split.issubset(split):
         raise ValueError(
-            "run manifest split must include train_end and test_start; "
+            "run manifest split must include train_start, train_end, and test_start; "
             f"missing {sorted(required_split.difference(split))}"
         )
     required_datasets = {"train_bars", "train_features", "test_bars", "test_features"}
@@ -381,7 +385,7 @@ def build_training_run_manifest(
         sequence_feature_schema.get("columns", [])
     )
     return {
-        "manifest_version": 5,
+        "manifest_version": 6,
         "repository": str(repository.resolve()),
         "source": _source_state(repository),
         "config": {

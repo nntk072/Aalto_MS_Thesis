@@ -259,7 +259,12 @@ def _manager() -> int:
     )
 
     campaign_out = Path(os.environ["CAMPAIGN_OUT_DIR"])
-    done_marker = campaign_out / "allocation_controller.exit"
+    done_marker = Path(
+        os.environ.get(
+            "CAMPAIGN_ALLOCATION_DONE_MARKER",
+            str(campaign_out / "allocation_controller.exit"),
+        )
+    )
     cancelled = claimed.parent / "cancelled"
     cancelled.mkdir(parents=True, exist_ok=True)
     running: dict[str, tuple[subprocess.Popen[bytes], float | None]] = {}

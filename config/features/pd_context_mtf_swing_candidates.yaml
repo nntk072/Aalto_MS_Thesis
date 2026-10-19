@@ -4,6 +4,6 @@ features:
   include_pd_context: true
   structure:
     enabled: true
-    timeframes: ["M5", "M15", "H1"]
+    timeframes: ["M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]
     swing_candidate_count: 3
     # candidate_price_increment defaults to costs.point_size.

@@ -4,7 +4,7 @@
   "title": "Aalto thesis result manifest",
   "description": "Claim-to-run-to-artifact map. A valid schema instance is not scientific validation or readiness evidence.",
   "type": "object",
-  "required": ["schema", "manifest_status", "created_at_utc", "claims", "comparisons", "runs"],
+  "required": ["schema", "manifest_status", "created_at_utc", "claims", "comparisons", "runs", "supporting_artifacts"],
   "properties": {
     "schema": {"const": "aalto.thesis_result_manifest.v1"},
     "manifest_status": {"enum": ["draft", "frozen"]},
@@ -14,6 +14,7 @@
     "claims": {"type": "array", "items": {"$ref": "#/$defs/claim"}},
     "comparisons": {"type": "array", "items": {"$ref": "#/$defs/comparison"}},
     "runs": {"type": "array", "items": {"$ref": "#/$defs/run"}},
+    "supporting_artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
     "review_disposition": {"$ref": "#/$defs/reviewDisposition"},
     "limitations": {"type": "array", "items": {"type": "string"}}
   },
@@ -36,6 +37,7 @@
       "properties": {
         "git_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
         "source_hash_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "source_hash_manifest_path": {"type": ["string", "null"], "minLength": 1},
         "config_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "data_sha256": {"type": "array", "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
         "cache_sha256": {"type": "array", "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},

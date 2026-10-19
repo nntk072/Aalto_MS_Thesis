@@ -29,7 +29,12 @@ from quant_rl.backtest.engine import run_backtest
 from quant_rl.baselines.rule_based import ema_crossover, macd_ema50_baseline, rsi_mean_reversion
 from quant_rl.config import load_config
 from quant_rl.data.pipeline import build_tick_books, run_pipeline
-from quant_rl.data.split import get_split_config, split_bars, split_train_test
+from quant_rl.data.split import (
+    get_split_config,
+    get_train_start_config,
+    split_bars,
+    split_train_test,
+)
 from quant_rl.data.ticks import TickBook
 from quant_rl.eval.export import save_run
 from quant_rl.evaluation import PerformanceMetrics, calculate_metrics
@@ -132,12 +137,13 @@ def main() -> None:
 
     # Date-based train / test split
     train_end, test_start = get_split_config(cfg)
+    train_start = get_train_start_config(cfg)
     train_bars, test_bars, train_feat, test_feat = split_train_test(
-        primary_m1, features, train_end, test_start
+        primary_m1, features, train_end, test_start, train_start
     )
     train_sec = test_sec = None
     if secondary_m1 is not None and not secondary_m1.empty:
-        train_sec, test_sec = split_bars(secondary_m1, train_end, test_start)
+        train_sec, test_sec = split_bars(secondary_m1, train_end, test_start, train_start)
     log.info(
         "Split: train=%d bars (≤%s)  test=%d bars (≥%s)",
         len(train_bars),

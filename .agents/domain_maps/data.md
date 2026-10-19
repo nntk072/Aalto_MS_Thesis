@@ -63,7 +63,7 @@
 
 ## Critical Invariants
 
-1. **M1 is the only true source** — higher TFs are resampled from M1 files in `data.m1_files`
+1. **M1 is the policy sequence, not the only source** — the thesis input uses the supplied M3–D1 bars as native higher-timeframe context; M1 resampling is not a substitute for those source files.
 2. **Session labels are eligibility flags** — `filter_session` is mask-only, never drops feature bars
 3. **Locked OOS split** — `train_end` / `test_start` in `default.yaml` must not be overridden by variants
 4. **Cache version bump** — `BAR_CACHE_VERSION` must change when bar schema changes

@@ -49,7 +49,7 @@ def empty_sweeps(index: pd.Index) -> pd.DataFrame:
 
 
 def test_configured_ifvg_timeframes_align_and_merge_causally() -> None:
-    """Configured M5/M10/M15/H1 confirmations join M1 at source-bar completion."""
+    """Configured M3 and higher IFVG confirmations join M1 causally."""
     index = pd.date_range("2025-01-06 00:00", periods=130, freq="1min", tz="UTC")
     close = np.full(len(index), 100.0)
     bars = pd.DataFrame(
@@ -57,6 +57,7 @@ def test_configured_ifvg_timeframes_align_and_merge_causally() -> None:
     )
     primary_zones = build_ifvg_zone_features(bars)
     source_specs = {
+        "M3": ("3min", 3),
         "M5": ("5min", 5),
         "M10": ("10min", 10),
         "M15": ("15min", 15),
@@ -80,21 +81,24 @@ def test_configured_ifvg_timeframes_align_and_merge_causally() -> None:
     higher["M15"][1].loc[higher["M15"][0].index[[0, 1]], "ifvg_bull_confirmed"] = 1.0
     higher["H1"][1].loc[higher["H1"][0].index[0], "ifvg_bull_confirmed"] = 1.0
     higher["M10"][1].loc[higher["M10"][0].index[0], "ifvg_bull_confirmed"] = 1.0
+    higher["M3"][1].loc[higher["M3"][0].index[0], "ifvg_bull_confirmed"] = 1.0
     merged, visible = align_ifvg_zone_timeframes(bars, primary_zones, higher)
 
-    event_rows = np.asarray([5, 10, 15, 30, 60], dtype=int)
-    assert merged["ifvg_bull_confirmed"].iloc[event_rows].tolist() == [1.0] * 5
+    event_rows = np.asarray([3, 5, 10, 15, 30, 60], dtype=int)
+    assert merged["ifvg_bull_confirmed"].iloc[event_rows].tolist() == [1.0] * 6
     assert merged["_ifvg_bull_confirmation_tf_code"].iloc[event_rows].tolist() == [
+        3.0,
         5.0,
         10.0,
         5.0,
         15.0,
         60.0,
     ]
-    assert merged["ifvg_bull_confirmed"].iloc[:5].sum() == 0.0
-    assert merged["ifvg_bull_fvg_origin_bar"].iloc[event_rows].tolist() == [0.0] * 5
-    assert merged["ifvg_bull_low"].iloc[event_rows].tolist() == [99.5] * 5
+    assert merged["ifvg_bull_confirmed"].iloc[:3].sum() == 0.0
+    assert merged["ifvg_bull_fvg_origin_bar"].iloc[event_rows].tolist() == [0.0] * 6
+    assert merged["ifvg_bull_low"].iloc[event_rows].tolist() == [99.5] * 6
     assert {
+        "M3_ifvg_bull_active",
         "M5_ifvg_bull_active",
         "M10_ifvg_bull_active",
         "M15_ifvg_bull_active",
@@ -106,9 +110,9 @@ def test_configured_ifvg_timeframes_align_and_merge_causally() -> None:
     sweeps = empty_sweeps(index)
     sweeps.loc[index[0], ["sweep_low", "sweep_low_level"]] = [1.0, 99.0]
     state = build_po3_ifvg_state(bars, sweeps, merged)
-    assert state["po3_ifvg_confirmed"].iloc[5] == 1.0
-    assert state["po3_ifvg_confirmation_tf_code"].iloc[5] == 5.0
-    assert state["po3_ifvg_low"].iloc[5] == pytest.approx(99.5)
+    assert state["po3_ifvg_confirmed"].iloc[3] == 1.0
+    assert state["po3_ifvg_confirmation_tf_code"].iloc[3] == 3.0
+    assert state["po3_ifvg_low"].iloc[3] == pytest.approx(99.5)
 
 
 def flat_asian(index: pd.Index, high: float, low: float) -> pd.DataFrame:

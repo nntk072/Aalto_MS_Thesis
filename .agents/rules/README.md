@@ -16,7 +16,7 @@ Single source of truth for all coding agents in this repo (Cursor, Cline, Windsu
 | [security-rules.md](security-rules.md) | Secret & input safety checklist | Always at commit; deep on sensitive code |
 | [development-workflow.md](development-workflow.md) | Research-first → plan → TDD → review → commit | On non-trivial features |
 | [ci-verification.md](ci-verification.md) | **Blocking** full-tree `ruff` + `mypy .` (not path-scoped); scoped pytest before commit/push | On commit/push |
-| [triton-slurm.md](triton-slurm.md) | Triton GPU: reuse first; inspect each node's GPU/CPU/RAM; never use `srun --test-only`; run every new `srun` from persistent login tmux; never run `scancel`; preserve pending/active jobs | On Triton / GPU training |
+| [triton-slurm.md](triton-slurm.md) | Use suitable existing GPU-node allocations for thesis computation when GPU-capable; CPU-only heavy work runs inside a properly sized CPU-node `srun` launched from persistent login tmux; heavy work never runs on normal login; inspect GPU/CPU/RAM; never use `srun --test-only` or `scancel`; preserve pending/active jobs | On Triton / GPU training |
 
 ## Activation flow
 
@@ -49,8 +49,10 @@ Layered principle: **specific overrides general**.
 1. **RTK** wraps every command — never run raw commands.
 2. **Token-efficiency** (context + shell) governs all I/O volume.
 3. **Domain rules** (Python standards, testing, security, commit rules, review graph, workflow) apply by activity, layered on top of 1–2.
-4. **Triton:** reuse existing GPU tmux/`srun` first. Standing user
-   authorization permits necessary thesis allocations. Inspect each candidate
+4. **Triton:** reuse existing GPU tmux/`srun` first for GPU-capable thesis
+   computation. CPU-only work runs inside a properly sized CPU-node `srun`
+   launched from persistent login tmux; never run compute on normal login.
+   Standing user authorization permits necessary thesis allocations. Inspect each candidate
    node's live GPU, CPU, and RAM inventory, then run a real bounded `srun`
    from a named, persistent login tmux session when a compatible GPU is idle.
    Never use `srun --test-only` or scheduler forecasts.

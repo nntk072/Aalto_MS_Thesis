@@ -30,14 +30,14 @@ class FTMOGuardrails:
 
     def check_daily(self, acc: AccountState) -> bool:
         """Return True (breached) if daily loss exceeds the hard limit."""
-        return acc.daily_loss >= self.daily_loss_limit
+        return acc.canonical_daily_loss() >= self.daily_loss_limit
 
     def check_soft_daily(self, acc: AccountState) -> bool:
         """Return True when the soft brick is active (no new entries)."""
         soft = float(self.soft_daily_loss_limit)
         if soft <= 0.0:
             return False
-        return acc.daily_loss >= soft
+        return acc.canonical_daily_loss() >= soft
 
     def check_max_drawdown(self, acc: AccountState) -> bool:
         """Return True if absolute loss from *initial* balance ≥ ``max_loss_limit``.

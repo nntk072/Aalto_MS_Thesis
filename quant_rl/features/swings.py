@@ -11,6 +11,7 @@ from .indicators import atr as compute_atr
 
 TIMEFRAME_CONFIG: dict[str, dict[str, float | int]] = {
     "M1": {"left": 3, "right": 3, "atr_mult": 0.8, "atr_period": 14},
+    "M3": {"left": 3, "right": 3, "atr_mult": 0.75, "atr_period": 14},
     "M5": {"left": 3, "right": 3, "atr_mult": 0.7, "atr_period": 14},
     # M10 uses the midpoint ATR threshold of its adjacent M5/M15 profiles.
     "M10": {"left": 3, "right": 3, "atr_mult": 0.65, "atr_period": 14},

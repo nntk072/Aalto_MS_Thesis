@@ -370,6 +370,12 @@ def _write_split(
             )
         breach_frame = pd.DataFrame.from_records(breach_events, columns=_BREACH_EVENT_COLUMNS)
         breach_frame.to_csv(split_dir / "breach_events.csv", index=False)
+        cycle_events = result.get("cycle_events")
+        if isinstance(cycle_events, pd.DataFrame):
+            cycle_events.to_csv(split_dir / "cycle_events.csv", index=False)
+        payout_events = result.get("payout_events")
+        if isinstance(payout_events, pd.DataFrame):
+            payout_events.to_csv(split_dir / "payouts.csv", index=False)
         constraint_cost_summary = result.get("constraint_cost_summary")
         if constraint_cost_summary is not None:
             constraint_costs = result.get("constraint_costs")
@@ -434,6 +440,12 @@ def _write_split(
         "reward_attribution": result.get("reward_attribution", {}),
         "entry_funnel": result.get("entry_diag", {}),
         "entry_state_diagnostics": result.get("entry_state_diagnostics", {}),
+        "trading_policy_mode": result.get("trading_policy_mode", "legacy"),
+        "cumulative_payouts": float(result.get("cumulative_payouts", 0.0)),
+        "total_economic_value": float(result.get("total_economic_value", final_equity)),
+        "cycle_count": int(result.get("cycle_count", 0)),
+        "cycle_successes": int(result.get("cycle_successes", 0)),
+        "cycle_failures": int(result.get("cycle_failures", 0)),
     }
     if result.get("constraint_cost_summary") is not None:
         evaluation_diagnostics["constraint_cost_summary"] = result["constraint_cost_summary"]

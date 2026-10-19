@@ -1,10 +1,10 @@
 # `data/` — What Lives Here and How It Flows
 
-The real CSVs in this directory are **gitignored** (3.8 GB total). This
+The full replacement CSVs in this directory are **gitignored**. This
 `examples/` subfolder contains one small, tracked sample so a developer can
-understand the format without the full dataset. **`US100.cash_M1_*.csv` here
-is the first 2,880 rows (≈2 trading days) extracted verbatim from the real
-file** — same columns, same encoding, same naming convention.
+understand the format without the full dataset. The sample is the first 2,880
+rows (≈2 trading days) of the active US100 M1 source through 2026-10-16; its
+filename records the sample's actual final timestamp, not the full source end.
 
 ---
 
@@ -44,6 +44,19 @@ Files present locally (all ignored by git):
 | `*_M5/M15/M30/H1/H4/Daily_*` | MT5 exports of the same data at higher timeframes — kept for reference/spot-checks, **not read by the pipeline** (they are known duplicates of what resampling produces). |
 | `US100.cash_2025…_2026….csv` (no TF tag) | Real tick data (`<BID> <ASK> <LAST> <VOLUME> <FLAGS>`) used by `data.tick_files` for accurate fill pricing (spread/slippage) in backtests. |
 
+The active full-period M1 and tick sources end on **2026-10-16**. The
+date-specific `ny_session_schedule_inferred_from_export.csv` records observed
+short NY closes so the feature pipeline can expose a planned close from the
+first NY bar. Its schedule is inferred from this export; the provider's
+calendar has not been independently confirmed. Two training sessions with
+fewer rows but a final bar at 23:00 are feed-shape anomalies, not entries in
+this scheduled-close calendar.
+
+At present, timestamped bid/ask ticks are execution inputs for fills; they are
+not policy observation features. The active feature work must aggregate only
+quotes available at each decision timestamp before adding quote-derived model
+inputs.
+
 ## File format (bar files)
 
 MT5 tab-separated export, **no quoting**, header row included:
@@ -73,9 +86,9 @@ MT5 tab-separated export, **no quoting**, header row included:
 
 ## Using the sample
 
-The sample keeps the **exact real filename**, so you can drop it into `data/`
-(or point `data.raw_dir` at `data/examples`) and exercise the pipeline,
-features, and dataloaders without the full 3.8 GB. Note the sample only spans
+The sample uses the **same filename convention**, so you can drop it into
+`data/` (or point `data.raw_dir` at `data/examples`) and exercise the pipeline,
+features, and dataloaders without the full dataset. Note the sample only spans
 2024-12-30 → 2025-01-02, so any experiment on it must use config overrides
 that keep that window (e.g. `--mvp`-style short runs); the default split dates
 fall outside it.

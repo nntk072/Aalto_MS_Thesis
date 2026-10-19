@@ -12,7 +12,16 @@ from ..data.resample import resample
 from .indicators import atr
 from .swings import TIMEFRAME_CONFIG, detect_pivots
 
-_TF_MINUTES = {"M5": 5, "M10": 10, "M15": 15, "M30": 30, "H1": 60, "H4": 240, "D1": 1440}
+_TF_MINUTES = {
+    "M3": 3,
+    "M5": 5,
+    "M10": 10,
+    "M15": 15,
+    "M30": 30,
+    "H1": 60,
+    "H4": 240,
+    "D1": 1440,
+}
 _TF_CODE = dict(_TF_MINUTES)
 
 

@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 from quant_rl.data.session import add_session_id, add_session_labels
+from quant_rl.data.ticks import TickBook, TickExecutionUnavailable
 from quant_rl.envs.trading_env import TradingEnv
 
 
@@ -128,6 +129,93 @@ def test_block_overnight_true_force_close() -> None:
     env.step(0)
     assert env.position is None
     assert any(t.get("reason") == "session_end" for t in env.trade_log)
+
+
+@pytest.mark.unit
+def test_tick_execution_force_closes_with_quote_after_known_order_submission() -> None:
+    bars, features = _two_session_frame()
+    last_day_indices = np.flatnonzero(
+        pd.DatetimeIndex(bars.index).strftime("%Y-%m-%d") == "2025-01-06"
+    )
+    last_index = int(last_day_indices[-1])
+    deadline = pd.Timestamp(bars.index[last_index]) + pd.Timedelta(minutes=1)
+    last_quote = deadline - pd.Timedelta(seconds=16)
+    next_session_quote = deadline + pd.Timedelta(hours=5)
+    book = TickBook(
+        np.array([last_quote.value, next_session_quote.value], dtype=np.int64),
+        np.array([20000.0, 20100.0]),
+        np.array([20000.6, 20100.6]),
+    )
+    env = TradingEnv(
+        bars=bars,
+        features=features,
+        obs_window=10,
+        block_overnight=True,
+        tickbook=book,
+        tick_execution_required=True,
+        randomized_fill_latency_ms=30.0,
+    )
+    env.reset(seed=0)
+    env.step_idx = last_index
+    env._ny_pos = int(np.flatnonzero(env._ny_indices == last_index)[0])
+    assert env._session_ids_arr is not None
+    env.position = env.broker.open_position(env.account, (20000.0, 20000.6), 0.1, 1)
+    assert env.position is not None
+
+    env._progress_market(
+        env._bar_at(last_index),
+        env._feature_row_at(last_index),
+        env._bar_time(last_index),
+        int(env._session_ids_arr[last_index]),
+        last_index + 1,
+    )
+    assert env.position is None
+    closed = next(row for row in env.trade_log if row.get("type") == "eod_close")
+    assert closed["order_submission_time"] == pd.Timestamp(bars.index[last_index])
+    assert closed["execution_arrival_time"] < last_quote <= deadline
+    assert closed["actual_tick_time"] == last_quote
+    assert closed["fill_time"] == last_quote
+
+
+@pytest.mark.unit
+def test_tick_execution_force_close_rejects_quote_older_than_maximum_age() -> None:
+    bars, features = _two_session_frame()
+    last_day_indices = np.flatnonzero(
+        pd.DatetimeIndex(bars.index).strftime("%Y-%m-%d") == "2025-01-06"
+    )
+    last_index = int(last_day_indices[-1])
+    deadline = pd.Timestamp(bars.index[last_index]) + pd.Timedelta(minutes=1)
+    stale_quote = deadline - pd.Timedelta(seconds=61)
+    next_session_quote = deadline + pd.Timedelta(hours=5)
+    book = TickBook(
+        np.array([stale_quote.value, next_session_quote.value], dtype=np.int64),
+        np.array([20000.0, 20100.0]),
+        np.array([20000.6, 20100.6]),
+    )
+    env = TradingEnv(
+        bars=bars,
+        features=features,
+        obs_window=10,
+        block_overnight=True,
+        tickbook=book,
+        tick_execution_required=True,
+        randomized_fill_latency_ms=30.0,
+    )
+    env.reset(seed=0)
+    env.step_idx = last_index
+    env._ny_pos = int(np.flatnonzero(env._ny_indices == last_index)[0])
+    assert env._session_ids_arr is not None
+    env.position = env.broker.open_position(env.account, (20000.0, 20000.6), 0.1, 1)
+    assert env.position is not None
+
+    with pytest.raises(TickExecutionUnavailable, match="no executable tick between order"):
+        env._progress_market(
+            env._bar_at(last_index),
+            env._feature_row_at(last_index),
+            env._bar_time(last_index),
+            int(env._session_ids_arr[last_index]),
+            last_index + 1,
+        )
 
 
 @pytest.mark.unit

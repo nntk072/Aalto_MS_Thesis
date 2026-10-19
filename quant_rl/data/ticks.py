@@ -44,6 +44,18 @@ class TickExecutionQuote:
 
 
 @dataclass(frozen=True, slots=True)
+class TickDeadlineExecutionQuote:
+    """A tick quote selected after a scheduled-close order submission."""
+
+    order_time: pd.Timestamp
+    arrival_time: pd.Timestamp
+    tick_time: pd.Timestamp
+    bid: float
+    ask: float
+    latency_ns: int
+
+
+@dataclass(frozen=True, slots=True)
 class TickExitExecution:
     """A protective exit trigger and its latency-adjusted executable quote."""
 
@@ -103,6 +115,53 @@ def resolve_tick_execution(
         ask=ask,
         latency_ns=latency_ns,
     )
+
+
+def resolve_tick_execution_by_deadline(
+    book: TickBook,
+    submission_time: pd.Timestamp,
+    deadline: pd.Timestamp,
+    rng: np.random.Generator,
+    *,
+    max_latency_ns_exclusive: int = 30_000_000,
+    max_quote_wait_ns: int | None = 60_000_000_000,
+) -> TickDeadlineExecutionQuote | None:
+    """Resolve a scheduled close using only a quote after sampled arrival.
+
+    The close is known in advance, so callers can submit at the start of the
+    final interval. The first observed quote at or after sampled arrival must
+    occur by the deadline and within the quote-wait limit. A pre-arrival quote
+    is never an executable substitute when the market stops quoting before
+    the order arrives.
+    """
+    if max_latency_ns_exclusive < 0:
+        raise ValueError("max_latency_ns_exclusive cannot be negative")
+    end = pd.Timestamp(deadline)
+    lead_ns = max_latency_ns_exclusive
+    submitted = pd.Timestamp(submission_time)
+    if submitted.tz is None or end.tz is None:
+        raise ValueError("deadline execution timestamps must be timezone-aware")
+    if submitted > end:
+        raise ValueError("submission_time cannot be after deadline")
+    latency_ns = 0 if lead_ns == 0 else int(rng.integers(0, lead_ns))
+    arrival = submitted + pd.Timedelta(latency_ns, unit="ns")
+
+    event = book.execution_quote_event_at(arrival)
+    if event is not None:
+        tick_time, bid, ask = event
+        if tick_time <= end and (
+            max_quote_wait_ns is None or tick_time.value - arrival.value <= max_quote_wait_ns
+        ):
+            return TickDeadlineExecutionQuote(
+                order_time=submitted,
+                arrival_time=arrival,
+                tick_time=tick_time,
+                bid=bid,
+                ask=ask,
+                latency_ns=latency_ns,
+            )
+
+    return None
 
 
 def resolve_tick_exit(
@@ -254,6 +313,15 @@ class TickBook:
 
     def __len__(self) -> int:
         return len(self._ts)
+
+    def has_ticks_between(self, start: pd.Timestamp, end: pd.Timestamp) -> bool:
+        """Return whether any quote falls in the half-open interval [start, end)."""
+        start_ns = pd.Timestamp(start).value
+        end_ns = pd.Timestamp(end).value
+        if end_ns <= start_ns or len(self._ts) == 0:
+            return False
+        i0 = int(np.searchsorted(self._ts, start_ns, side="left"))
+        return i0 < len(self._ts) and int(self._ts[i0]) < end_ns
 
     def bar_quotes(
         self, bar_start: pd.Timestamp, bar_minutes: int = 1

@@ -33,26 +33,9 @@ EXPERIMENTS_PATH = PROJECT_ROOT / "config" / "experiments.yaml"
 DEFAULT_BASE = "quant_rl/config/default.yaml"
 FULL_PO3_BASE = "config/features/full_po3_mtf.yaml"
 
-PREBUILT_FEATURE_CACHES = {
-    "ladder_a0_flat": "data/prebuilt_feature_cache/baseline.parquet",
-    "ladder_a1_sl": "data/prebuilt_feature_cache/baseline_strategy_actions.parquet",
-    "ladder_a2_tp": "data/prebuilt_feature_cache/baseline_strategy_actions.parquet",
-    "ladder_a3_multi_tp": "data/prebuilt_feature_cache/baseline_strategy_actions.parquet",
-    "ladder_a4b_entry_fsm": "data/prebuilt_feature_cache/baseline_strategy_actions.parquet",
-    "ladder_a4a_entry_fsm_hidden": "data/prebuilt_feature_cache/baseline_strategy_actions.parquet",
-    "ladder_a0_flat_po3": "data/prebuilt_feature_cache/idea1_po3_ifvg.parquet",
-    "ladder_a1_sl_po3": "data/prebuilt_feature_cache/idea1_po3_ifvg.parquet",
-    "ladder_a2_tp_po3": "data/prebuilt_feature_cache/idea1_po3_ifvg.parquet",
-    "ladder_a3_multi_tp_po3": "data/prebuilt_feature_cache/idea1_po3_ifvg.parquet",
-    "ladder_a4b_po3_ifvg": "data/prebuilt_feature_cache/idea1_po3_ifvg.parquet",
-    "ladder_a4a_entry_fsm_hidden_po3": "data/prebuilt_feature_cache/idea1_po3_ifvg.parquet",
-    "ladder_a0_flat_dist": "data/prebuilt_feature_cache/idea2_distribution.parquet",
-    "ladder_a1_sl_dist": "data/prebuilt_feature_cache/idea2_distribution.parquet",
-    "ladder_a2_tp_dist": "data/prebuilt_feature_cache/idea2_distribution.parquet",
-    "ladder_a3_multi_tp_dist": "data/prebuilt_feature_cache/idea2_distribution.parquet",
-    "ladder_a4b_distribution": "data/prebuilt_feature_cache/idea2_distribution.parquet",
-    "ladder_a4a_entry_fsm_hidden_dist": "data/prebuilt_feature_cache/idea2_distribution.parquet",
-}
+# The replacement-data campaign builds content-hashed features in its fresh
+# split cache tree. Historical named caches are not assigned to new runs.
+PREBUILT_FEATURE_CACHES: dict[str, str] = {}
 
 STRATEGIES = ("baseline", "po3_ifvg", "distribution")
 ALGOS = ("ppo", "sac")

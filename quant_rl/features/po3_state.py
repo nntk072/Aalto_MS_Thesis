@@ -388,6 +388,7 @@ def align_ifvg_zone_timeframes(
     primary_bars: pd.DataFrame,
     primary_zones: pd.DataFrame,
     higher: dict[str, tuple[pd.DataFrame, pd.DataFrame]],
+    availability_times: dict[str, pd.Series] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Causally align HTF IFVG zones and merge their confirmation pulses.
 
@@ -411,6 +412,7 @@ def align_ifvg_zone_timeframes(
         )
     tf_codes = {
         "M1": 1.0,
+        "M3": 3.0,
         "M5": 5.0,
         "M10": 10.0,
         "M15": 15.0,
@@ -419,6 +421,19 @@ def align_ifvg_zone_timeframes(
         "H4": 240.0,
         "D1": 1440.0,
     }
+
+    def event_pulse(values: pd.Series, closes: pd.Series | None) -> npt.NDArray[np.float64]:
+        result = np.zeros(len(primary_bars), dtype=float)
+        if closes is None:
+            return values.shift(1).reindex(primary_bars.index).fillna(0.0).to_numpy(dtype=float)
+        for close, value in zip(closes, values.to_numpy(dtype=float), strict=True):
+            if pd.isna(close) or value <= 0.0:
+                continue
+            position = primary_bars.index.searchsorted(close, side="left")
+            if position < len(result):
+                result[position] = max(result[position], value)
+        return result
+
     for tf, (tf_bars, tf_zones) in higher.items():
         tf = tf.upper()
         if tf not in tf_codes:
@@ -428,20 +443,21 @@ def align_ifvg_zone_timeframes(
         zone_cols = tf_zones.drop(
             columns=["ifvg_bull_confirmed", "ifvg_bear_confirmed"], errors="ignore"
         )
-        aligned = align_timeframes(primary_bars.iloc[:, 0:0], {tf: zone_cols})
+        close_times = (availability_times or {}).get(tf)
+        aligned = align_timeframes(
+            primary_bars.iloc[:, 0:0],
+            {tf: zone_cols},
+            availability_times={tf: close_times} if close_times is not None else None,
+        )
         for side in ("bull", "bear"):
             # Retest is an event pulse, not a state value: expose it once at
             # source-bar completion instead of forward-filling it all period.
-            aligned[f"{tf}_ifvg_retest_{side}"] = (
-                tf_zones[f"ifvg_retest_{side}"].shift(1).reindex(primary_bars.index).fillna(0.0)
+            aligned[f"{tf}_ifvg_retest_{side}"] = event_pulse(
+                tf_zones[f"ifvg_retest_{side}"], close_times
             )
         visible_blocks[tf] = aligned
         pulses = {
-            side: tf_zones[f"ifvg_{side}_confirmed"]
-            .shift(1)
-            .reindex(primary_bars.index)
-            .fillna(0.0)
-            .to_numpy(dtype=float)
+            side: event_pulse(tf_zones[f"ifvg_{side}_confirmed"], close_times)
             for side in ("bull", "bear")
         }
         for side in ("bull", "bear"):

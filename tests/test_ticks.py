@@ -17,6 +17,7 @@ from quant_rl.data.ticks import (
     _ffill_inplace,
     build_tick_book,
     resolve_tick_execution,
+    resolve_tick_execution_by_deadline,
     resolve_tick_exit,
     tick_execution_coverage,
 )
@@ -162,6 +163,155 @@ def test_randomized_execution_rejects_first_tick_beyond_quote_wait_limit():
             start,
             np.random.default_rng(1729),
             max_quote_wait_ns=1_000_000_000,
+        )
+        is None
+    )
+
+
+def test_scheduled_close_execution_uses_first_tick_after_arrival():
+    deadline = pd.Timestamp("2025-01-06 20:00:00", tz="UTC")
+    latency_ns = int(np.random.default_rng(1729).integers(0, 30_000_000))
+    eligible_tick = deadline + pd.Timedelta(latency_ns + 1_000_000, unit="ns")
+    next_session_tick = deadline + pd.Timedelta(hours=5)
+    book = TickBook(
+        np.array([eligible_tick.value, next_session_tick.value], dtype=np.int64),
+        np.array([100.0, 101.0]),
+        np.array([100.5, 101.5]),
+    )
+
+    fill = resolve_tick_execution(
+        book,
+        deadline,
+        np.random.default_rng(1729),
+        max_latency_ns_exclusive=30_000_000,
+        max_quote_wait_ns=60_000_000_000,
+    )
+
+    assert fill is not None
+    assert 0 <= fill.latency_ns < 30_000_000
+    assert fill.arrival_time >= deadline
+    assert fill.tick_time > fill.arrival_time
+    assert fill.tick_time == eligible_tick
+    assert (fill.bid, fill.ask) == pytest.approx((100.0, 100.5))
+
+
+def test_scheduled_close_rejects_quotes_only_before_arrival():
+    deadline = pd.Timestamp("2025-01-06 20:00:00", tz="UTC")
+    prior_tick = deadline - pd.Timedelta(milliseconds=1)
+    book = TickBook(
+        np.array([prior_tick.value], dtype=np.int64),
+        np.array([100.0]),
+        np.array([100.5]),
+    )
+
+    fill = resolve_tick_execution(
+        book,
+        deadline,
+        np.random.default_rng(1729),
+        max_latency_ns_exclusive=30_000_000,
+        max_quote_wait_ns=60_000_000_000,
+    )
+
+    assert fill is None
+
+
+def test_scheduled_close_uses_first_quote_after_arrival_before_deadline():
+    deadline = pd.Timestamp("2025-01-06 20:00:00", tz="UTC")
+    order_time = deadline - pd.Timedelta(minutes=1)
+    latency_ns = int(np.random.default_rng(1729).integers(0, 30_000_000))
+    arrival = order_time + pd.Timedelta(latency_ns, unit="ns")
+    eligible_tick = arrival + pd.Timedelta(milliseconds=1)
+    book = TickBook(
+        np.array([eligible_tick.value], dtype=np.int64),
+        np.array([100.0]),
+        np.array([100.5]),
+    )
+
+    fill = resolve_tick_execution_by_deadline(
+        book,
+        order_time,
+        deadline,
+        np.random.default_rng(1729),
+        max_latency_ns_exclusive=30_000_000,
+        max_quote_wait_ns=60_000_000_000,
+    )
+
+    assert fill is not None
+    assert fill.order_time == order_time
+    assert order_time <= fill.arrival_time < fill.tick_time <= deadline
+    assert fill.tick_time == eligible_tick
+
+
+def test_scheduled_close_rejects_quote_before_sampled_arrival():
+    deadline = pd.Timestamp("2025-01-06 20:00:00", tz="UTC")
+    order_time = deadline - pd.Timedelta(minutes=1)
+    seed = 1729
+    latency_ns = int(np.random.default_rng(seed).integers(0, 30_000_000))
+    assert latency_ns > 0
+    pre_arrival_tick = order_time + pd.Timedelta(latency_ns - 1, unit="ns")
+    next_session_tick = deadline + pd.Timedelta(hours=5)
+    book = TickBook(
+        np.array([pre_arrival_tick.value, next_session_tick.value], dtype=np.int64),
+        np.array([100.0, 101.0]),
+        np.array([100.5, 101.5]),
+    )
+
+    fill = resolve_tick_execution_by_deadline(
+        book,
+        order_time,
+        deadline,
+        np.random.default_rng(seed),
+        max_latency_ns_exclusive=30_000_000,
+        max_quote_wait_ns=60_000_000_000,
+    )
+
+    assert fill is None
+
+
+def test_scheduled_close_rejects_first_quote_after_wait_bound():
+    deadline = pd.Timestamp("2025-01-06 20:00:00", tz="UTC")
+    order_time = deadline - pd.Timedelta(minutes=1)
+    seed = 1729
+    latency_ns = int(np.random.default_rng(seed).integers(0, 30_000_000))
+    arrival = order_time + pd.Timedelta(latency_ns, unit="ns")
+    late_tick = arrival + pd.Timedelta(seconds=1)
+    book = TickBook(
+        np.array([late_tick.value], dtype=np.int64),
+        np.array([100.0]),
+        np.array([100.5]),
+    )
+
+    assert (
+        resolve_tick_execution_by_deadline(
+            book,
+            order_time,
+            deadline,
+            np.random.default_rng(seed),
+            max_latency_ns_exclusive=30_000_000,
+            max_quote_wait_ns=500_000_000,
+        )
+        is None
+    )
+
+
+def test_scheduled_close_rejects_last_quote_outside_age_limit():
+    deadline = pd.Timestamp("2025-01-06 20:00:00", tz="UTC")
+    order_time = deadline - pd.Timedelta(minutes=1)
+    stale_tick = order_time - pd.Timedelta(seconds=1)
+    book = TickBook(
+        np.array([stale_tick.value], dtype=np.int64),
+        np.array([100.0]),
+        np.array([100.5]),
+    )
+
+    assert (
+        resolve_tick_execution_by_deadline(
+            book,
+            order_time,
+            deadline,
+            np.random.default_rng(1729),
+            max_latency_ns_exclusive=30_000_000,
+            max_quote_wait_ns=60_000_000_000,
         )
         is None
     )
@@ -347,6 +497,52 @@ def test_build_tick_books_bypasses_legacy_tick_cache(tmp_path: Path):
     assert legacy_cache.is_file()
     assert legacy_cache.read_bytes() == legacy_cache_contents
     assert (cache_dir / f"{symbol}_ticks_{TICK_CACHE_VERSION}.parquet").is_file()
+
+
+def test_build_tick_books_can_load_only_requested_symbols(tmp_path: Path) -> None:
+    primary, secondary = "US100.cash", "US500.cash"
+    primary_path = tmp_path / f"{primary}.csv"
+    secondary_path = tmp_path / f"{secondary}.csv"
+    _write_tick_csv(primary_path, [("2025.01.06", "16:30:00.000", 100.0, 100.6)])
+    _write_tick_csv(secondary_path, [("2025.01.06", "16:30:00.000", 200.0, 200.6)])
+    cache_dir = tmp_path / "cache"
+    config = OmegaConf.create(
+        {
+            "costs": {"use_tick_execution": True},
+            "data": {
+                "raw_dir": str(tmp_path),
+                "cache_dir": str(cache_dir),
+                "tick_files": {primary: primary_path.name, secondary: secondary_path.name},
+                "symbols": [primary, secondary],
+                "tz": "Etc/GMT-3",
+            },
+        }
+    )
+
+    books = build_tick_books(config, symbols=[primary])
+
+    assert set(books) == {primary}
+    assert books[primary] is not None
+    assert (cache_dir / f"{primary}_ticks_{TICK_CACHE_VERSION}.parquet").is_file()
+    assert not (cache_dir / f"{secondary}_ticks_{TICK_CACHE_VERSION}.parquet").exists()
+
+
+def test_build_tick_books_rejects_unconfigured_symbol(tmp_path: Path) -> None:
+    config = OmegaConf.create(
+        {
+            "costs": {"use_tick_execution": True},
+            "data": {
+                "raw_dir": str(tmp_path),
+                "cache_dir": str(tmp_path / "cache"),
+                "tick_files": {},
+                "symbols": ["US100.cash"],
+                "tz": "Etc/GMT-3",
+            },
+        }
+    )
+
+    with pytest.raises(ValueError, match="not configured"):
+        build_tick_books(config, symbols=["US500.cash"])
 
 
 def test_build_tick_book_chunked_matches_expected(tmp_path: Path):

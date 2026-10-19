@@ -152,6 +152,7 @@ def evaluate_model(
     mtf_windows: dict[str, int] | None = None,
     env: TradingEnv | None = None,
     legacy_sequence_columns: bool = False,
+    trading_policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Walk a trained RL ``model`` over *bars*/*features* and collect trades.
 
@@ -264,6 +265,7 @@ def evaluate_model(
             risk_floor=risk_floor,
             mtf=mtf,
             mtf_windows=mtf_windows,
+            trading_policy=trading_policy,
         )
 
     if execution_seed is None:
@@ -403,6 +405,17 @@ def evaluate_model(
         "max_trailing_dd": float(max_drawdown(env.equity_curve)),
         "action_counts": dict(action_counts),
         "entry_diag": dict(env._entry_diag),
+        "trading_policy_mode": getattr(getattr(env, "trading_policy", None), "mode", "legacy"),
+        "cumulative_payouts": float(getattr(env, "cumulative_payouts", 0.0)),
+        "total_economic_value": float(
+            getattr(getattr(env, "account", None), "equity", 0.0)
+            + getattr(env, "cumulative_payouts", 0.0)
+        ),
+        "cycle_count": int(getattr(env, "cycle_count", 0)),
+        "cycle_successes": int(getattr(env, "cycle_successes", 0)),
+        "cycle_failures": int(getattr(env, "cycle_failures", 0)),
+        "cycle_events": pd.DataFrame(getattr(env, "cycle_events", [])),
+        "payout_events": pd.DataFrame(getattr(env, "payout_events", [])),
         "entry_state_diagnostics": (
             env.entry_state_diagnostics()
             if callable(getattr(env, "entry_state_diagnostics", None))

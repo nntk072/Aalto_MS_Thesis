@@ -3,11 +3,11 @@
 features:
   include_strategy_state: true
   po3_reference_mode: "htf_confirmed"
-  po3_reference_timeframes: ["M5", "M15", "H1"]
+  po3_reference_timeframes: ["M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]
   po3_phase_mode: "reclaim_then_ifvg"
-  ifvg_mtf: {enabled: true, timeframes: ["M5", "M15", "H1"]}
+  ifvg_mtf: {enabled: true, timeframes: ["M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]}
   include_pd_context: true
-  structure: {enabled: true, timeframes: ["M5", "M15", "H1"]}
+  structure: {enabled: true, timeframes: ["M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]}
 
 env:
   strategy_actions: true   # trader Box[-1,1]^4 (affine-mapped at decode; PPO mean~0)

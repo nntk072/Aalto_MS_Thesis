@@ -4,4 +4,4 @@
 features:
   include_pd_context: true
   # LTF confluence: M5/M15/H1 structure + BOS flags aligned onto M1.
-  structure: {enabled: true, timeframes: ["M5", "M15", "H1"]}
+  structure: {enabled: true, timeframes: ["M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]}

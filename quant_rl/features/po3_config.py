@@ -450,6 +450,8 @@ def detect_htf_fvg(
     m1_bars: pd.DataFrame,
     htf: str = "M15",
     config: FVGConfig | None = None,
+    timeframe_bars: pd.DataFrame | None = None,
+    availability_times: pd.Series | None = None,
 ) -> pd.DataFrame:
     """Detect FVG on higher timeframe and map back to M1 bars.
 
@@ -482,7 +484,9 @@ def detect_htf_fvg(
     from quant_rl.data.resample import resample
 
     # Resample to HTF
-    htf_bars = resample(m1_bars, htf)  # type: ignore[arg-type]
+    htf_bars = timeframe_bars
+    if htf_bars is None:
+        htf_bars = resample(m1_bars, htf)  # type: ignore[arg-type]
 
     # Detect FVG on HTF
     if config is None:
@@ -497,7 +501,16 @@ def detect_htf_fvg(
     # spine — M1 bar t sees only HTF bars *completed* at or before t, never an
     # HTF bar still forming. The final HTF bar's signal is dropped because it
     # never completes inside this sample.
-    htf_aligned = htf_fvg.shift(1).reindex(m1_bars.index, method="ffill")
+    if availability_times is None:
+        htf_aligned = htf_fvg.shift(1).reindex(m1_bars.index, method="ffill")
+    else:
+        from ..data.align import align_timeframes
+
+        htf_aligned = align_timeframes(
+            m1_bars.iloc[:, 0:0],
+            {htf: htf_fvg},
+            availability_times={htf: availability_times},
+        ).rename(columns={f"{htf}_{column}": column for column in htf_fvg.columns})
 
     result = pd.DataFrame(
         {
@@ -522,6 +535,8 @@ def detect_ltf_ifvg(
     ltf: str = "M1",
     fvg_config: FVGConfig | None = None,
     ifvg_config: IFVGConfig | None = None,
+    timeframe_bars: pd.DataFrame | None = None,
+    availability_times: pd.Series | None = None,
 ) -> pd.DataFrame:
     """Detect IFVG on lower timeframe and map back to primary timeframe bars.
 
@@ -558,7 +573,9 @@ def detect_ltf_ifvg(
     from quant_rl.data.resample import resample
 
     # Resample M1 to primary TF
-    primary_bars = resample(m1_bars, primary_tf)  # type: ignore[arg-type]
+    primary_bars = timeframe_bars
+    if primary_bars is None:
+        primary_bars = resample(m1_bars, primary_tf)  # type: ignore[arg-type]
 
     # Detect FVG on primary TF
     if fvg_config is None:
@@ -575,7 +592,16 @@ def detect_ltf_ifvg(
     # completes at the next primary open, so confirmation signals are shifted
     # one period forward and forward-filled onto the M1 spine. The final
     # primary bar's signal is dropped since it never completes in-sample.
-    primary_aligned = primary_ifvg.shift(1).reindex(m1_bars.index, method="ffill")
+    if availability_times is None:
+        primary_aligned = primary_ifvg.shift(1).reindex(m1_bars.index, method="ffill")
+    else:
+        from ..data.align import align_timeframes
+
+        primary_aligned = align_timeframes(
+            m1_bars.iloc[:, 0:0],
+            {primary_tf: primary_ifvg},
+            availability_times={primary_tf: availability_times},
+        ).rename(columns={f"{primary_tf}_{column}": column for column in primary_ifvg.columns})
 
     result = pd.DataFrame(
         {
@@ -600,6 +626,8 @@ def detect_po3_entries(
     fvg_config: FVGConfig | None = None,
     ifvg_config: IFVGConfig | None = None,
     entry_config: EntryConfig | None = None,
+    timeframe_bars: dict[str, pd.DataFrame] | None = None,
+    availability_times: dict[str, pd.Series] | None = None,
 ) -> pd.DataFrame:
     """Unified PO3 entry detection combining HTF FVG, LTF IFVG, and entry triggers.
 
@@ -636,7 +664,17 @@ def detect_po3_entries(
         - entry_trigger_type: Type of entry trigger that fired
     """
     # Step 1: Detect HTF FVG
-    htf_fvg = detect_htf_fvg(m1_bars, htf=htf, config=fvg_config)
+    htf = str(htf).upper()
+    primary_tf = str(primary_tf).upper()
+    timeframe_bars = timeframe_bars or {}
+    availability_times = availability_times or {}
+    htf_fvg = detect_htf_fvg(
+        m1_bars,
+        htf=htf,
+        config=fvg_config,
+        timeframe_bars=timeframe_bars.get(htf),
+        availability_times=availability_times.get(htf),
+    )
 
     # Step 2: Detect LTF IFVG confirmation
     ltf_ifvg = detect_ltf_ifvg(
@@ -644,6 +682,8 @@ def detect_po3_entries(
         primary_tf=primary_tf,
         fvg_config=fvg_config,
         ifvg_config=ifvg_config,
+        timeframe_bars=timeframe_bars.get(primary_tf),
+        availability_times=availability_times.get(primary_tf),
     )
 
     # Step 3: Generate entry triggers based on LTF IFVG

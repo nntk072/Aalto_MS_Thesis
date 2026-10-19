@@ -9,11 +9,12 @@
 Frozen commands and artifact locations for chapter tables. Engine default:
 **TradingEnv** (see [validation_protocol.md](validation_protocol.md)).
 
-The configured period (`test_start: 2026-01-01`, available through 2026-07-03)
-was already inspected and has been explicitly reclassified as exposed
-development evidence. Exploratory tuning requires `selection_acknowledged`
-provenance and is non-confirmatory. It cannot serve as final OOS; see the
-[validation protocol](validation_protocol.md).
+The active replacement-data interval is `test_start: 2026-01-01` through
+2026-10-16. The full interval is exposed exploratory/report-only evidence;
+exploratory tuning requires `selection_acknowledged` provenance and is
+non-confirmatory. It cannot serve as final OOS; see the
+[validation protocol](validation_protocol.md) and the
+[master execution plan](master_project_execution_plan.md).
 
 > **Historical evidence only (2026-09-21 seed-50 campaign).** The tables below
 > describe the recorded run directories and may be superseded by newer campaigns.

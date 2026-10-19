@@ -307,6 +307,46 @@ def sha256_file(path: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
+def campaign_data_inputs(
+    data_config: dict[str, Any], *, root: pathlib.Path = ROOT
+) -> dict[str, str]:
+    """Fingerprint the exact split bar/tick inputs and date-level calendar."""
+    data_inputs: dict[str, str] = {}
+    configured_datasets = data_config.get("datasets")
+    if configured_datasets:
+        dataset_sources = [
+            (str(name), root / str(spec["raw_dir"]), spec)
+            for name, spec in configured_datasets.items()
+        ]
+    else:
+        dataset_sources = [("all", root / str(data_config["raw_dir"]), data_config)]
+
+    for dataset_name, raw_dir, dataset in dataset_sources:
+        for group in ("m1_files", "tick_files"):
+            for filename in dataset.get(group, {}).values():
+                path = raw_dir / str(filename)
+                relative = str(path.relative_to(root))
+                data_inputs[f"{dataset_name}:{relative}"] = (
+                    sha256_file(path) if path.is_file() else "MISSING"
+                )
+        for timeframe, symbol_files in dataset.get("timeframe_files", {}).items():
+            for filename in symbol_files.values():
+                path = raw_dir / str(filename)
+                relative = str(path.relative_to(root))
+                data_inputs[f"{dataset_name}:{relative}"] = (
+                    sha256_file(path) if path.is_file() else "MISSING"
+                )
+
+    schedule_value = data_config.get("session_schedule_file")
+    if schedule_value:
+        schedule_path = root / str(schedule_value)
+        relative = str(schedule_path.relative_to(root))
+        data_inputs[f"calendar:{relative}"] = (
+            sha256_file(schedule_path) if schedule_path.is_file() else "MISSING"
+        )
+    return data_inputs
+
+
 def cached_sha256_file(path: pathlib.Path) -> str:
     """Hash a shared campaign cache once per unchanged file identity."""
     stat = path.stat()
@@ -335,6 +375,11 @@ def campaign_source_files(
         "config",
         "scripts/train",
         "scripts/matrix",
+        "scripts/triton/activate_venv.sh",
+        "scripts/triton/campaign_worker_dispatch.py",
+        "scripts/triton/campaign_worker_bin/srun",
+        "scripts/triton/prebuild_campaign_bar_cache.py",
+        "scripts/research/run_p3_checkpoint_recovery_smoke.sh",
         "scripts/variant_list.txt",
         "pyproject.toml",
         "uv.lock",
@@ -1329,14 +1374,8 @@ def main() -> int:
     source_files = sorted(set(source_files))
     source_hashes = {str(path.relative_to(ROOT)): sha256_file(path) for path in source_files}
     raw_config = yaml.safe_load((ROOT / "quant_rl" / "config" / "default.yaml").read_text())
-    raw_dir = ROOT / str(raw_config["data"]["raw_dir"])
-    data_inputs = {}
-    for group in ("m1_files", "tick_files"):
-        for filename in raw_config["data"].get(group, {}).values():
-            path = raw_dir / str(filename)
-            data_inputs[str(path.relative_to(ROOT))] = (
-                sha256_file(path) if path.is_file() else "MISSING"
-            )
+    data_config = raw_config["data"]
+    data_inputs = campaign_data_inputs(data_config)
     missing_inputs = [path for path, digest in data_inputs.items() if digest == "MISSING"]
     if missing_inputs and not args.test_worker:
         raise RuntimeError(f"configured market-data inputs missing: {missing_inputs}")

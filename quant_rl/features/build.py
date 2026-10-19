@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 from omegaconf import DictConfig, OmegaConf
 
-from ..data.align import align_timeframes
+from ..data.align import align_timeframes, timeframe_close_times
 from ..data.resample import resample
 from .htf_sweeps import detect_confirmed_htf_sweeps
 from .indicators import (
@@ -100,7 +100,7 @@ from .swings import swing_history
 # v16: SL modes (state machine + agent veto), prev-NY session H/L, swing
 #      history columns (swing_high_{1..3}/swing_low_{1..3}), TF-SMT enablement.
 # v22: causal completed prior-NY levels use the configured NY session window.
-FEATURE_CACHE_VERSION = "v23-ftmo-mt5-us-dst-session-clock"
+FEATURE_CACHE_VERSION = "v24-native-source-timeframes"
 
 
 def feature_cache_content_hash(
@@ -109,6 +109,8 @@ def feature_cache_content_hash(
     train_mask: pd.Series | None = None,
     secondary: pd.DataFrame | None = None,
     normalization_mode: str = "legacy_masked_window",
+    timeframe_bars: dict[str, pd.DataFrame] | None = None,
+    secondary_timeframe_bars: dict[str, pd.DataFrame] | None = None,
 ) -> str:
     """Stable short hash for feature-cache invalidation (TI-3).
 
@@ -132,7 +134,10 @@ def feature_cache_content_hash(
         for path in (
             "data.tz",
             "data.timestamp_clock",
+            "data.session_schedule_file",
             "session.tz",
+            "session.start",
+            "session.end",
             "strategy.session.timezone",
         ):
             node: Any = cfg
@@ -145,6 +150,15 @@ def feature_cache_content_hash(
             if ok:
                 payload[path] = str(node)
         h.update(json.dumps(payload, sort_keys=True, default=str).encode())
+        schedule_value = OmegaConf.select(cfg, "data.session_schedule_file")
+        if schedule_value:
+            schedule_path = Path(str(schedule_value)).expanduser()
+            if not schedule_path.is_absolute():
+                schedule_path = Path(__file__).resolve().parents[2] / schedule_path
+            if schedule_path.is_file():
+                h.update(hashlib.sha256(schedule_path.read_bytes()).digest())
+            else:
+                h.update(b"missing-session-schedule")
     h.update(str(len(primary)).encode())
     if len(primary) > 0:
         primary_index_ns = (
@@ -179,6 +193,18 @@ def feature_cache_content_hash(
                 values = frame[column].to_numpy(dtype=np.float64, copy=False)
                 h.update(column.encode())
                 h.update(np.ascontiguousarray(values).tobytes())
+    for label, frames in (
+        ("primary_timeframe", timeframe_bars),
+        ("secondary_timeframe", secondary_timeframe_bars),
+    ):
+        if frames is None:
+            h.update(f"{label}:none".encode())
+            continue
+        for timeframe, frame in sorted(frames.items()):
+            h.update(f"{label}:{timeframe}".encode())
+            h.update(
+                pd.util.hash_pandas_object(frame, index=True).to_numpy(dtype=np.uint64).tobytes()
+            )
     if train_mask is not None:
         mask_arr = np.ascontiguousarray(np.asarray(train_mask, dtype=bool))
         h.update(str(int(mask_arr.sum())).encode())
@@ -194,6 +220,8 @@ def feature_cache_path(
     train_mask: pd.Series | None = None,
     secondary: pd.DataFrame | None = None,
     normalization_mode: str = "legacy_masked_window",
+    timeframe_bars: dict[str, pd.DataFrame] | None = None,
+    secondary_timeframe_bars: dict[str, pd.DataFrame] | None = None,
 ) -> Path:
     """Build ``{symbol}_features_{version}_{hash}.parquet`` under ``cache_dir``."""
     digest = feature_cache_content_hash(
@@ -202,11 +230,13 @@ def feature_cache_path(
         train_mask=train_mask,
         secondary=secondary,
         normalization_mode=normalization_mode,
+        timeframe_bars=timeframe_bars,
+        secondary_timeframe_bars=secondary_timeframe_bars,
     )
     return Path(cache_dir) / f"{symbol}_features_{FEATURE_CACHE_VERSION}_{digest}.parquet"
 
 
-_DEFAULT_HTF_TIMEFRAMES = ("M5", "M15", "H1")
+_DEFAULT_HTF_TIMEFRAMES = ("M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1")
 # Capped normalised FVG distance: value used when no zone is active nearby.
 _FVG_DIST_CAP = 5.0
 # Kept off the z-score path: prices for the stop ladder, and the 0/1 retest
@@ -323,12 +353,12 @@ OBS_RAW_PRICE_COLUMNS = MTF_RAW_SUFFIXES
 # Supported fallback timeframes for the state-heavy blocks (plan §8, option
 # (b)). Normal configs provide explicit subsets; IFVG can use any timeframe
 # supported by data.resample, while its M1 source is always included directly.
-_MTF_STATE_TFS = ("M1", "M5", "M10", "M15", "M30", "H1", "H4", "D1")
+_MTF_STATE_TFS = ("M1", "M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1")
 
 # Default MTF subset for SMT divergence (§4.1), structure/BOS (§4.2), and
 # liquidity sweeps (§4.3). Each block accepts an explicit list of any standard
 # resampled timeframe; the bounded default keeps column growth predictable.
-_MTF_LIGHT_TFS = ("M5", "M15", "H1")
+_MTF_LIGHT_TFS = ("M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1")
 
 
 def _split_fvg_raw(feat: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -368,18 +398,50 @@ def _resample_pair(
     primary: pd.DataFrame,
     secondary: pd.DataFrame | None,
     tf: str,
+    primary_timeframes: dict[str, pd.DataFrame] | None = None,
+    secondary_timeframes: dict[str, pd.DataFrame] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame | None]:
-    """Resample both symbols to ``tf`` (M1 = identity copy).
+    """Select native bars when supplied; otherwise aggregate each symbol's M1.
 
     The secondary symbol is resampled from its own M1 bars (never from
     primary's bars) so SMT divergence on TF compares like-for-like bars.
     Returns ``(primary_tf, secondary_tf_or_None)``.
     """
-    pri_tf = resample(primary, tf) if tf != "M1" else primary  # type: ignore[arg-type]
+    pri_tf = (primary_timeframes or {}).get(tf)
+    if pri_tf is None:
+        pri_tf = primary if tf == "M1" else resample(primary, tf)  # type: ignore[arg-type]
     sec_tf: pd.DataFrame | None = None
     if secondary is not None:
-        sec_tf = resample(secondary, tf) if tf != "M1" else secondary  # type: ignore[arg-type]
+        sec_tf = (secondary_timeframes or {}).get(tf)
+        if sec_tf is None:
+            sec_tf = secondary if tf == "M1" else resample(secondary, tf)  # type: ignore[arg-type]
     return pri_tf, sec_tf
+
+
+def _scheduled_close_map(cfg: DictConfig | None) -> dict[str, str]:
+    if cfg is None:
+        return {}
+    schedule_value = OmegaConf.select(cfg, "data.session_schedule_file")
+    if not schedule_value:
+        return {}
+    schedule_path = Path(str(schedule_value)).expanduser()
+    if not schedule_path.is_absolute():
+        schedule_path = Path(__file__).resolve().parents[2] / schedule_path
+    if not schedule_path.is_file():
+        raise FileNotFoundError(f"configured session schedule is missing: {schedule_path}")
+    schedule = pd.read_csv(schedule_path, dtype=str)
+    required = {"session_date", "scheduled_ny_close_broker_time"}
+    if not required.issubset(schedule.columns):
+        raise ValueError(
+            f"session schedule missing columns: {sorted(required - set(schedule.columns))}"
+        )
+    return dict(
+        zip(
+            schedule["session_date"].astype(str),
+            schedule["scheduled_ny_close_broker_time"].astype(str),
+            strict=True,
+        )
+    )
 
 
 def _enabled(feat_cfg: object, key: str, default: bool) -> bool:
@@ -766,6 +828,8 @@ def build_features(
     cache_path: Path | None = None,
     force: bool = False,
     normalization_mode: str = "legacy_masked_window",
+    timeframe_bars: dict[str, pd.DataFrame] | None = None,
+    secondary_timeframe_bars: dict[str, pd.DataFrame] | None = None,
 ) -> pd.DataFrame:
     """Build the full feature matrix for the primary instrument.
 
@@ -790,6 +854,8 @@ def build_features(
         train_mask=train_mask,
         secondary=secondary,
         normalization_mode=normalization_mode,
+        timeframe_bars=timeframe_bars,
+        secondary_timeframe_bars=secondary_timeframe_bars,
     )
     requested_reference_mode = str(
         (OmegaConf.select(cfg, "features.po3_reference_mode") if cfg is not None else None)
@@ -811,6 +877,43 @@ def build_features(
 
     feat_cfg = cfg.features if cfg is not None else None
     secondary_m1: pd.DataFrame | None = secondary  # M1 copy kept for per-TF resampling
+    primary_timeframes = {str(tf).upper(): frame for tf, frame in (timeframe_bars or {}).items()}
+    primary_timeframes["M1"] = primary
+    secondary_timeframe_frames = {
+        str(tf).upper(): frame for tf, frame in (secondary_timeframe_bars or {}).items()
+    }
+    if secondary is not None:
+        secondary_timeframe_frames["M1"] = secondary
+    scheduled_closes = _scheduled_close_map(cfg)
+    session_start = str(OmegaConf.select(cfg, "session.start") or "16:30") if cfg else "16:30"
+
+    def primary_tf_bars(tf: str) -> pd.DataFrame:
+        key = str(tf).upper()
+        frame = primary_timeframes.get(key)
+        if frame is None:
+            frame = primary if key == "M1" else resample(primary, key)  # type: ignore[arg-type]
+            primary_timeframes[key] = frame
+        return frame
+
+    def align_blocks(
+        target: pd.DataFrame,
+        blocks: dict[str, pd.DataFrame],
+        *,
+        completed_bars: bool = True,
+    ) -> pd.DataFrame:
+        availability = {
+            str(tf): timeframe_close_times(
+                primary_tf_bars(str(tf)), str(tf), scheduled_closes, session_start
+            )
+            for tf in blocks
+        }
+        return align_timeframes(
+            target,
+            blocks,
+            completed_bars=completed_bars,
+            availability_times=availability,
+        )
+
     htf_sweep_audit = pd.DataFrame()
 
     # --- base indicators ---
@@ -841,7 +944,13 @@ def build_features(
             for tf in smt_tfs:
                 if str(tf) == "M1":
                     continue  # M1 already present unprefixed
-                pri_tf, sec_tf = _resample_pair(primary, secondary_m1, str(tf))
+                pri_tf, sec_tf = _resample_pair(
+                    primary,
+                    secondary_m1,
+                    str(tf),
+                    primary_timeframes,
+                    secondary_timeframe_frames,
+                )
                 if sec_tf is None or pri_tf.empty or sec_tf.empty:
                     continue
                 smt_blocks[str(tf)] = smt_divergence(
@@ -851,7 +960,7 @@ def build_features(
                     corr_window=int(getattr(feat_cfg, "smt_corr_window", 20)),
                 )
             if smt_blocks:
-                feat = align_timeframes(feat, smt_blocks)
+                feat = align_blocks(feat, smt_blocks)
 
     # --- Higher-timeframe technical features (Chain A) ---
     # Run the same indicator build on each HTF's own bars, then causally
@@ -863,9 +972,9 @@ def build_features(
         if htf_tfs:
             htf_blocks: dict[str, pd.DataFrame] = {}
             for tf in htf_tfs:
-                tf_bars = resample(primary, tf)  # type: ignore[arg-type]
+                tf_bars = primary_tf_bars(str(tf))
                 htf_blocks[str(tf)] = build_indicators(tf_bars, feat_cfg)
-            feat = align_timeframes(feat, htf_blocks)
+            feat = align_blocks(feat, htf_blocks)
 
     # --- Chain B variant blocks (opt-in via config flags) ---
     _fvg_raw = pd.DataFrame(index=primary.index)
@@ -892,9 +1001,9 @@ def build_features(
                 fvg_tfs = ["M1", *[str(t) for t in htf_tfs]]
             fvg_blocks: dict[str, pd.DataFrame] = {}
             for tf in fvg_tfs:
-                tf_bars = primary if str(tf) == "M1" else resample(primary, tf)  # type: ignore[arg-type]
+                tf_bars = primary_tf_bars(str(tf))
                 fvg_blocks[str(tf)] = build_fvg_zone_features(tf_bars)
-            feat = align_timeframes(feat, fvg_blocks)
+            feat = align_blocks(feat, fvg_blocks)
             # Zone prices and the retest flag must stay raw. The distance
             # columns above are normalised with the rest of the matrix.
             feat, _fvg_raw = _split_fvg_raw(feat)
@@ -955,7 +1064,7 @@ def build_features(
             for tf in _htf_list(feat_cfg, "structure", _MTF_LIGHT_TFS):
                 if str(tf) == "M1":
                     continue
-                pri_tf, _ = _resample_pair(primary, None, str(tf))
+                pri_tf, _ = _resample_pair(primary, None, str(tf), primary_timeframes)
                 if pri_tf.empty:
                     continue
                 tf_cfg = TIMEFRAME_CONFIG.get(str(tf), m1_cfg)
@@ -963,6 +1072,7 @@ def build_features(
                     pd.Timedelta(
                         {
                             "M1": "1min",
+                            "M3": "3min",
                             "M5": "5min",
                             "M10": "10min",
                             "M15": "15min",
@@ -999,17 +1109,28 @@ def build_features(
                 bos_tf = detect_bos(pri_tf, lv_tf)[["bos_up", "bos_down"]]
                 struct_blocks[str(tf)] = pd.concat([lv_tf, bos_tf], axis=1)
             if struct_blocks:
-                feat = align_timeframes(feat, struct_blocks)
+                feat = align_blocks(feat, struct_blocks)
                 _mtf_struct_levels = struct_levels
 
     # --- Full PO3 pipeline (Chain F): HTF FVG -> LTF IFVG -> entry triggers ---
     # Added AFTER normalization so the 0/1 entry signals and the numeric
     # trigger code keep their raw meaning (exactly like structure levels).
     if feat_cfg is not None and bool(getattr(feat_cfg, "include_po3_full", False)):
+        po3_htf = str(getattr(feat_cfg, "po3_htf", "M15")).upper()
+        po3_ltf = str(getattr(feat_cfg, "po3_ltf", "M5")).upper()
         po3_signals = detect_po3_entries(
             primary,
-            htf=str(getattr(feat_cfg, "po3_htf", "M15")),
-            primary_tf=str(getattr(feat_cfg, "po3_ltf", "M5")),
+            htf=po3_htf,
+            primary_tf=po3_ltf,
+            timeframe_bars=primary_timeframes,
+            availability_times={
+                po3_htf: timeframe_close_times(
+                    primary_tf_bars(po3_htf), po3_htf, scheduled_closes, session_start
+                ),
+                po3_ltf: timeframe_close_times(
+                    primary_tf_bars(po3_ltf), po3_ltf, scheduled_closes, session_start
+                ),
+            },
         )
         po3_feats = po3_signals[["entry_long", "entry_short", "entry_trigger_type"]].copy()
         # entry_trigger_type is a string column; encode numerically so the
@@ -1048,7 +1169,7 @@ def build_features(
         htf_tfs = list(htf_cfg_tfs) if htf_cfg_tfs is not None else list(_DEFAULT_HTF_TIMEFRAMES)
         pd_htf_blocks: dict[str, pd.DataFrame] = {}
         for tf in htf_tfs:
-            pri_tf, _ = _resample_pair(primary, None, str(tf))
+            pri_tf, _ = _resample_pair(primary, None, str(tf), primary_timeframes)
             if pri_tf.empty:
                 continue
             tf_cfg = TIMEFRAME_CONFIG.get(str(tf), TIMEFRAME_CONFIG["M1"])
@@ -1059,7 +1180,7 @@ def build_features(
                 atr_mult=float(tf_cfg["atr_mult"]),
             )
         if pd_htf_blocks:
-            feat = align_timeframes(feat, pd_htf_blocks)
+            feat = align_blocks(feat, pd_htf_blocks)
 
     # --- Sweep Velocity and Wick Ratio - for PLAN 3 ---
     # Add sweep velocity (uses liquidity levels from levels)
@@ -1086,7 +1207,7 @@ def build_features(
         for tf in _htf_list(feat_cfg, "liquidity", _MTF_LIGHT_TFS):
             if str(tf) == "M1":
                 continue
-            pri_tf, _ = _resample_pair(primary, None, str(tf))
+            pri_tf, _ = _resample_pair(primary, None, str(tf), primary_timeframes)
             if pri_tf.empty:
                 continue
             sweeps_tf = detect_liquidity_sweeps(pri_tf, swing_period=swing)
@@ -1097,7 +1218,7 @@ def build_features(
             sweep_blocks[str(tf)] = pd.concat([sweeps_tf, events_tf], axis=1)
             _mtf_sweep_levels[str(tf)] = detect_session_levels(pri_tf)
         if sweep_blocks:
-            feat = align_timeframes(feat, sweep_blocks)
+            feat = align_blocks(feat, sweep_blocks)
 
     # --- MTF structure/BOS ATR distances (plan §4.2, second half) ---
     # Needs atr_5 (computed above) + aligned {TF}_swing levels via ffill.
@@ -1181,7 +1302,7 @@ def build_features(
                 tf = str(tf).upper()
                 if tf == "M1":
                     continue  # M1 zones are already the primary block.
-                pri_tf, _ = _resample_pair(primary, None, tf)
+                pri_tf, _ = _resample_pair(primary, None, tf, primary_timeframes)
                 if pri_tf.empty:
                     continue
                 higher_ifvg[tf] = (
@@ -1189,7 +1310,13 @@ def build_features(
                     build_ifvg_zone_features(pri_tf, ifvg_config=ifvg_config),
                 )
             state_ifvg_zones, ifvg_mtf_blocks = align_ifvg_zone_timeframes(
-                primary, ifvg_zones, higher_ifvg
+                primary,
+                ifvg_zones,
+                higher_ifvg,
+                availability_times={
+                    tf: timeframe_close_times(tf_bars, tf, scheduled_closes, session_start)
+                    for tf, (tf_bars, _) in higher_ifvg.items()
+                },
             )
         if phase_mode == "reclaim_then_ifvg":
             po3_state = build_po3_ifvg_state(
@@ -1249,7 +1376,7 @@ def build_features(
             for tf in _htf_list(feat_cfg, "po3_state_mtf", _MTF_STATE_TFS):
                 if str(tf) == "M1":
                     continue  # M1 already present unprefixed
-                pri_tf, _ = _resample_pair(primary, None, str(tf))
+                pri_tf, _ = _resample_pair(primary, None, str(tf), primary_timeframes)
                 if pri_tf.empty:
                     continue
                 sweeps_tf = detect_liquidity_sweeps(pri_tf, swing_period=swings)
@@ -1264,7 +1391,7 @@ def build_features(
                 # Rename AFTER align: align_timeframes prefixes every column
                 # with {TF}_ (e.g. M5_po3_manipulation_active), so renaming
                 # per-TF frames beforehand would double-prefix (M5_M5_po3_*).
-                feat = align_timeframes(feat, po3_mtf_blocks)
+                feat = align_blocks(feat, po3_mtf_blocks)
 
         if phase_mode == "legacy":
             feat["po3_distribution_after_ifvg"] = build_distribution_after_ifvg(

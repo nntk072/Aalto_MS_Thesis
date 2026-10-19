@@ -215,7 +215,16 @@ class TestBuildFeaturesPipeline:
         merged = OmegaConf.merge(base, overlay)
 
         assert merged.features.structure.enabled is True
-        assert list(merged.features.structure.timeframes) == ["M5", "M15", "H1"]
+        assert list(merged.features.structure.timeframes) == [
+            "M3",
+            "M5",
+            "M10",
+            "M15",
+            "M30",
+            "H1",
+            "H4",
+            "D1",
+        ]
         assert merged.features.structure.swing_candidate_count == 3
         assert merged.features.structure.candidate_price_increment is None
         assert merged.costs.point_size == 0.01

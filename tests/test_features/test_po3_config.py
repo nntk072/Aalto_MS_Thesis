@@ -811,19 +811,33 @@ class TestMTFCausality:
         # zone [11, 12] -> long entry fires
         assert res.loc[pd.Timestamp("2025-01-01 00:21"), "entry_long"] == 1
 
+    def test_explicit_close_alignment_does_not_add_a_second_delay(self, causal_m5_bars) -> None:
+        """Native timeframe signals first appear at their explicit close time."""
+        from quant_rl.data.align import timeframe_close_times
+        from quant_rl.data.resample import resample
 
-def test_po3_not_double_shifted() -> None:
-    """Chain F maps with its own shift(1); it must not call align_timeframes."""
-    import inspect
+        m5_bars = resample(causal_m5_bars, "M5")
+        m5_closes = timeframe_close_times(m5_bars, "M5")
 
-    from quant_rl.features import po3_config
+        htf = detect_htf_fvg(
+            causal_m5_bars,
+            htf="M5",
+            timeframe_bars=m5_bars,
+            availability_times=m5_closes,
+        )
+        assert (htf.loc[: pd.Timestamp("2025-01-01 00:14"), "htf_fvg_bullish"] == 0).all()
+        assert htf.loc[pd.Timestamp("2025-01-01 00:15"), "htf_fvg_bullish"] == 1
 
-    src = inspect.getsource(po3_config.detect_htf_fvg)
-    assert "shift(1)" in src
-    assert "align_timeframes" not in src
-    src_ltf = inspect.getsource(po3_config.detect_ltf_ifvg)
-    assert "shift(1)" in src_ltf
-    assert "align_timeframes" not in src_ltf
+        ltf = detect_ltf_ifvg(
+            causal_m5_bars,
+            primary_tf="M5",
+            timeframe_bars=m5_bars,
+            availability_times=m5_closes,
+        )
+        assert (
+            ltf.loc["2025-01-01 00:15":"2025-01-01 00:19", "ltf_ifvg_bullish_confirmed"] == 0
+        ).all()
+        assert ltf.loc[pd.Timestamp("2025-01-01 00:20"), "ltf_ifvg_bullish_confirmed"] == 1
 
 
 class TestBuildFVGZonesForPlot:

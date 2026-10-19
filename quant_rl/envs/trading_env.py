@@ -36,6 +36,7 @@ from ..data.ticks import (
     TickBook,
     TickExecutionUnavailable,
     resolve_tick_execution,
+    resolve_tick_execution_by_deadline,
     resolve_tick_exit,
 )
 from ..envs.entry_state import (
@@ -61,10 +62,12 @@ if TYPE_CHECKING:
 from quant_rl.observation_schema import (
     OBSERVATION_SCHEMA_V1,
     OBSERVATION_SCHEMA_V2,
+    OBSERVATION_SCHEMA_V3,
     account_state_v2,
     build_observation_schema,
 )
 
+from ..trading_policy import TradingPolicyConfig
 from ..train.debug_trace import (
     DebugStepError,
     new_debug_window,
@@ -330,6 +333,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         bundle_data: Any | None = None,
         strict_research_eligibility: bool = False,
         legacy_sequence_columns: bool | None = None,
+        trading_policy: dict[str, Any] | None = None,
     ):
         """Initialize trading environment.
 
@@ -530,9 +534,32 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.initial_balance = initial_balance
         self.cost_model = cost_model
         self.broker = Broker(cost_model=cost_model, **(broker_kwargs or {}))
-        self.guardrails = FTMOGuardrails(**(guardrail_kwargs or {}))
+        policy_values = dict(trading_policy or {})
+        self.trading_policy = TradingPolicyConfig(**policy_values).validate()
+        self.repeated_payout_policy = self.trading_policy.repeated_payout
+        if (
+            self.repeated_payout_policy
+            and abs(float(initial_balance) - self.trading_policy.operating_balance) > 1e-9
+        ):
+            raise ValueError("repeated-payout initial balance must equal operating_balance")
+        resolved_guardrails = dict(guardrail_kwargs or {})
+        if self.repeated_payout_policy:
+            resolved_guardrails.update(
+                daily_loss_limit=self.trading_policy.daily_loss_limit,
+                max_loss_limit=self.trading_policy.operating_balance
+                - self.trading_policy.account_floor,
+                risk_per_trade_limit=self.trading_policy.operating_balance
+                * self.trading_policy.max_agent_risk_frac,
+                trailing_dd_limit=0.0,
+                soft_trailing_dd_limit=0.0,
+            )
+        self.guardrails = FTMOGuardrails(**resolved_guardrails)
 
-        self.risk_frac_range = risk_frac_range
+        self.risk_frac_range = (
+            (0.0, self.trading_policy.max_agent_risk_frac)
+            if self.repeated_payout_policy
+            else risk_frac_range
+        )
         self.rr_ratio_range = rr_ratio_range
         self.swing_buffer_pts = float(sl_buffer_pts)
         self.sl_mode = str(sl_mode or "fixed").lower()
@@ -597,7 +624,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # Training behavior, not an FTMO kill-switch. 0 disables it.
         # At this fraction of peak equity, flatten the open position at the
         # market quote and refuse new risk. Stops and targets are not rewritten.
-        self.peak_trailing_dd_limit = float(peak_trailing_dd_limit)
+        self.peak_trailing_dd_limit = (
+            0.0 if self.repeated_payout_policy else float(peak_trailing_dd_limit)
+        )
         self._peak_dd_fired = False
         # Opt-in agent direction control (see agent_implementation_plan.md).
         # False keeps the 5-D overlay layout where the strategy owns the side.
@@ -626,7 +655,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self.observation_age_scale_bars = float(observation_age_scale_bars)
         if self.observation_age_scale_bars <= 0.0:
             raise ValueError("observation_age_scale_bars must be positive")
-        self.risk_floor = float(risk_floor)
+        self.risk_floor = 0.0 if self.repeated_payout_policy else float(risk_floor)
         self._tickbook = tickbook
         self.tick_execution_required = bool(tick_execution_required)
         self._fill_delay_ms = int(fill_delay_ms)
@@ -866,7 +895,16 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         # Action space: strategy actions, continuous, or discrete
         self.continuous_actions = continuous_actions
-        self.max_risk_frac = max_risk_frac
+        self.max_risk_frac = (
+            self.trading_policy.max_agent_risk_frac
+            if self.repeated_payout_policy
+            else max_risk_frac
+        )
+        if self.repeated_payout_policy and not (self.strategy_actions or self.continuous_actions):
+            raise ValueError(
+                "repeated-payout mode requires a continuous risk action coordinate "
+                "(strategy_actions=true or continuous_actions=true)"
+            )
         self.action_schema: ActionSchema | DiscreteActionSchema
 
         # VAE for narrative embedding
@@ -888,8 +926,11 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         # Whether to rescale the account vector so its per-element magnitudes
         # are comparable with the z-scored seq features. See __init__ docstring.
         self.normalize_account = bool(normalize_account)
-        if self.observation_schema.version == OBSERVATION_SCHEMA_V2 and not self.normalize_account:
-            raise ValueError("account-state-v2 requires normalize_account=True")
+        if (
+            self.observation_schema.version in (OBSERVATION_SCHEMA_V2, OBSERVATION_SCHEMA_V3)
+            and not self.normalize_account
+        ):
+            raise ValueError(f"{self.observation_schema.version} requires normalize_account=True")
 
         if use_vae:
             if vae is None:
@@ -1138,6 +1179,16 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         self._ep_reward_sum = 0.0
         self._entry_diag = _empty_entry_diag(self.entry_state_machine is not None)
         self._previous_constraint_ratios = {"daily": 0.0, "max_loss": 0.0, "trailing": 0.0}
+        self.cumulative_payouts = 0.0
+        self.cycle_count = 1
+        self.cycle_successes = 0
+        self.cycle_failures = 0
+        self.cycle_events: list[dict[str, Any]] = []
+        self.payout_events: list[dict[str, Any]] = []
+        self._last_requested_risk_usd = 0.0
+        self._last_approved_risk_usd = 0.0
+        self._last_execution_reserve_usd = 0.0
+        self._payout_withdrawn_this_step = 0.0
 
         if self.entry_state_machine is not None:
             self.entry_state_machine.reset()
@@ -1162,7 +1213,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
     def _create_account(self) -> AccountState:
         """Factory for fresh account state."""
-        return AccountState(initial_balance=self.initial_balance)
+        return AccountState(
+            initial_balance=self.initial_balance, policy_mode=self.trading_policy.mode
+        )
 
     def _sync_bar_arrays(self) -> None:
         """Rebuild OHLC/spread numpy caches from ``self.bars``.
@@ -1297,7 +1350,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         When a breach occurs, any open position is force-closed and the
         breach is recorded in ``breach_log`` / ``breach_events``.
         """
-        if self.episodic:
+        if self.repeated_payout_policy:
+            reason = self.guardrails.breach_reason(self.account)
+            session_blocked = False
+        elif self.episodic:
             reason = self.guardrails.breach_reason(self.account)
             session_blocked = False
         elif self._year_failed:
@@ -1351,8 +1407,26 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     "fill_time": fill_time if fill_time is not None else bar_time,
                 }
             )
-            # Year-fail: terminated (done), not truncated. Eval latch continues.
-            done = self.episodic
+            if self.repeated_payout_policy:
+                self.cycle_failures += 1
+                self.cycle_events.append(
+                    {
+                        "type": "cycle_failure",
+                        "time": bar_time,
+                        "cycle": int(self.cycle_count),
+                        "outcome": "failure",
+                        "reason": reason,
+                        "equity": float(self.account.equity),
+                        "cumulative_payouts": float(self.cumulative_payouts),
+                        "total_economic_value": float(
+                            self.account.equity + self.cumulative_payouts
+                        ),
+                    }
+                )
+            # Repeated-payout breaches fail the sustainability path even during
+            # chronological evaluation. Legacy non-episodic evaluation retains
+            # its session/year latch behavior.
+            done = self.episodic or self.repeated_payout_policy
             truncated = False
         elif session_blocked:
             done = False
@@ -1496,10 +1570,17 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 for target in target_levels
             )
             if stop_touched or target_touched:
-                raise TickExecutionUnavailable(
-                    "OHLC indicates a protective level was reached, but no matching "
-                    "tick trigger was found; candle fallback is disabled"
-                )
+                bar_end = log_time + pd.Timedelta(minutes=getattr(self, "_minutes_per_step", 1))
+                if self._tickbook is None or not self._tickbook.has_ticks_between(
+                    log_time, bar_end
+                ):
+                    raise TickExecutionUnavailable(
+                        "OHLC indicates a protective level was reached, but the bar "
+                        "has no tick observations; candle fallback is disabled"
+                    )
+                # Intrabar OHLC extrema are not executable bid/ask evidence.
+                # When quotes exist but none crosses the position's executable
+                # level, keep the position open instead of inventing a fill.
             self._maybe_ema_exit(bar, idx, log_time)
             return
 
@@ -2371,6 +2452,20 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             else:
                 lots = 0.0
 
+            if has_levels and self.repeated_payout_policy:
+                assert sl_price is not None
+                approved_risk = float(self._last_approved_risk_usd)
+                modeled_risk = abs(entry_price - float(sl_price)) * float(lots) * self.contract_size
+                modeled_execution = self._modeled_execution_reserve_usd(lots)
+                self._last_execution_reserve_usd = (
+                    float(self.trading_policy.execution_reserve_usd) + modeled_execution
+                )
+                if lots <= 0.0 or approved_risk <= 0.0:
+                    self._reject("risk_capacity")
+                    return
+                if modeled_risk + modeled_execution > approved_risk + 1e-9:
+                    self._reject("risk_rounding_cap")
+                    return
             if has_levels:
                 entry_equity = float(self.account.equity)
                 sl_already_hit = False
@@ -2524,6 +2619,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                         {
                             "type": "open",
                             "position_id": self.position.position_id,
+                            "requested_risk_usd": float(self._last_requested_risk_usd),
+                            "approved_risk_usd": float(self._last_approved_risk_usd),
+                            "execution_reserve_usd": float(self._last_execution_reserve_usd),
+                            "modeled_stop_risk_usd": float(self.position.planned_risk_usd or 0.0),
                             "strategy": self.strategy.name,
                             "variant_id": str(
                                 getattr(self.strategy, "variant_id", self.strategy.name)
@@ -2710,9 +2809,40 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         ``fixed``  -> ``fixed_risk_usd``, independent of equity and risk_frac.
         ``dynamic`` -> live equity times the agent's chosen fraction.
         """
-        if self.risk_mode == "fixed":
+        if self.risk_mode == "fixed" and not bool(getattr(self, "repeated_payout_policy", False)):
             return float(self.fixed_risk_usd)
-        return float(self.account.equity) * float(risk_frac)
+        requested = max(0.0, float(self.account.equity) * float(risk_frac))
+        self._last_requested_risk_usd = requested
+        if not bool(getattr(self, "repeated_payout_policy", False)):
+            self._last_approved_risk_usd = requested
+            self._last_execution_reserve_usd = 0.0
+            return requested
+        daily_capacity = self.account.remaining_daily_capacity(self.guardrails.daily_loss_limit)
+        account_capacity = self.account.remaining_account_capacity(
+            self.trading_policy.account_floor
+        )
+        policy_cap = min(
+            self.trading_policy.max_agent_risk_frac * float(self.account.equity),
+            daily_capacity,
+            account_capacity,
+        )
+        reserve = float(self.trading_policy.execution_reserve_usd)
+        approved = max(0.0, min(requested, max(0.0, policy_cap - reserve)))
+        self._last_approved_risk_usd = approved
+        self._last_execution_reserve_usd = reserve
+        return approved
+
+    def _modeled_execution_reserve_usd(self, lots: float) -> float:
+        """Variable execution loss allowance implied by the active cost model.
+
+        Entry spread is already embedded in the actual bid/ask ``entry_price``
+        used by stop-risk sizing. This reserve therefore covers adverse stop
+        slippage plus explicit commission on both entry and exit.
+        """
+        lots_f = max(0.0, float(lots))
+        adverse_stop_slippage = float(self.cost_model.slippage_points) * lots_f * self.contract_size
+        round_trip_commission = 2.0 * float(self.cost_model.commission_per_lot) * lots_f
+        return max(0.0, adverse_stop_slippage + round_trip_commission)
 
     def _compute_lots_for(self, risk_frac: float, entry_price: float, sl_price: float) -> float:
         """Lot size for one trade under the active sizing mode.
@@ -2722,6 +2852,35 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         overrode the requested risk (a $500 request was clamped to the $100
         default, so no stop width could ever risk $500).
         """
+        if bool(getattr(self, "repeated_payout_policy", False)):
+            approved_total_risk = self._risk_budget_usd(risk_frac)
+            if approved_total_risk <= 0.0:
+                return 0.0
+            stop_risk_per_lot = abs(float(entry_price) - float(sl_price)) * self.contract_size
+            if stop_risk_per_lot <= 0.0:
+                return 0.0
+            variable_execution_per_lot = self._modeled_execution_reserve_usd(1.0)
+            total_risk_per_lot = stop_risk_per_lot + variable_execution_per_lot
+            stop_budget = (
+                approved_total_risk * stop_risk_per_lot / total_risk_per_lot
+                if total_risk_per_lot > 0.0
+                else 0.0
+            )
+            lots = compute_lots(
+                self._sizing_equity(),
+                risk_frac,
+                entry_price,
+                sl_price,
+                contract_size=self.contract_size,
+                min_lot=self.min_lot,
+                max_lot=self.max_lot,
+                max_loss_cap=None,
+                risk_usd=stop_budget,
+            )
+            self._last_execution_reserve_usd = float(
+                self.trading_policy.execution_reserve_usd
+            ) + self._modeled_execution_reserve_usd(lots)
+            return lots
         if self.risk_mode == "fixed":
             return compute_lots(
                 self._sizing_equity(),
@@ -3727,6 +3886,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                         if entry_machine is not None and self._opened_this_step:
                             entry_machine.mark_entered()
 
+        payout_terminal = self._handle_repeated_payout(bar_time)
+        if payout_terminal:
+            done = True
+
         valuation_time = bar_time + pd.Timedelta(minutes=self._minutes_per_step)
         for event in self.trade_log[step_trade_log_start:]:
             event_time = event.get("fill_time")
@@ -3741,7 +3904,9 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                     valuation_time = event_timestamp
         self.equity_curve.append(self.account.equity)
         self.equity_times.append(valuation_time)
-        pnl_step = self.account.equity - self.equity_curve[-2]
+        pnl_step = (
+            self.account.equity + float(self._payout_withdrawn_this_step) - self.equity_curve[-2]
+        )
         self.pnl_history.append(pnl_step)
 
         reward = self._calculate_reward(pnl_step, bar, feat_row, done, truncated)
@@ -3828,9 +3993,33 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             ),
             "entry_funnel": entry_funnel,
         }
+        if self.repeated_payout_policy:
+            info.update(
+                {
+                    "trading_policy_mode": self.trading_policy.mode,
+                    "daily_loss": float(self.account.canonical_daily_loss()),
+                    "daily_floor": float(
+                        self.account.daily_floor(self.guardrails.daily_loss_limit)
+                    ),
+                    "remaining_daily_capacity": float(
+                        self.account.remaining_daily_capacity(self.guardrails.daily_loss_limit)
+                    ),
+                    "remaining_account_capacity": float(
+                        self.account.remaining_account_capacity(self.trading_policy.account_floor)
+                    ),
+                    "cumulative_payouts": float(self.cumulative_payouts),
+                    "total_economic_value": float(self.account.equity + self.cumulative_payouts),
+                    "cycle_count": int(self.cycle_count),
+                    "cycle_successes": int(self.cycle_successes),
+                    "cycle_failures": int(self.cycle_failures),
+                    "requested_risk_usd": float(self._last_requested_risk_usd),
+                    "approved_risk_usd": float(self._last_approved_risk_usd),
+                    "execution_reserve_usd": float(self._last_execution_reserve_usd),
+                }
+            )
         constraint_ratios = {
             "daily": (
-                self.account.daily_loss / self.guardrails.daily_loss_limit
+                self.account.canonical_daily_loss() / self.guardrails.daily_loss_limit
                 if self.guardrails.daily_loss_limit > 0.0
                 else 0.0
             ),
@@ -3947,7 +4136,10 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             )
             completed_data_split = self._ny_pos >= len(self._ny_indices)
             if done:
-                episode_end_reason = "risk_breach" if self.breach_log else "terminated"
+                if self.repeated_payout_policy and self.cycle_successes > 0 and not self.breach_log:
+                    episode_end_reason = "payout_success"
+                else:
+                    episode_end_reason = "risk_breach" if self.breach_log else "terminated"
             elif completed_data_split:
                 episode_end_reason = "data_end"
             elif self.max_episode_steps is not None and (
@@ -3997,13 +4189,6 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
     def entry_evidence_context(self, feat_row: FeatureRow | pd.Series) -> EntryEvidence:
         """Translate existing strategy predicates into one causal evidence record."""
         context_direction = int(self.strategy.context_direction(feat_row))  # type: ignore[arg-type]
-        setup_predicate = getattr(self.strategy, "entry_setup", None)
-        setup_matches = (
-            bool(setup_predicate(feat_row, context_direction))
-            if context_direction in (-1, 1) and callable(setup_predicate)
-            else context_direction in (-1, 1) and not callable(setup_predicate)
-        )
-
         names = tuple(str(name) for name in feat_row.index)
 
         def flagged(stem: str) -> bool:
@@ -4019,6 +4204,14 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         bull_retest = flagged("ifvg_retest_bull") or flagged("fvg_retest_bull")
         bear_retest = flagged("ifvg_retest_bear") or flagged("fvg_retest_bear")
+        sweep_low = flagged("sweep_low")
+        sweep_high = flagged("sweep_high")
+        setup_predicate = getattr(self.strategy, "entry_setup", None)
+        setup_matches = (
+            bool(setup_predicate(feat_row, context_direction))
+            if context_direction in (-1, 1) and callable(setup_predicate)
+            else context_direction in (-1, 1) and not callable(setup_predicate)
+        )
         direction = context_direction
         if direction not in (-1, 1):
             direction = (
@@ -4028,6 +4221,22 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 if bear_retest and not bull_retest
                 else 0
             )
+        baseline_sweep_setup = (
+            isinstance(self.strategy, BaselineStrategy)
+            and self.entry_state_machine is not None
+            and sweep_low != sweep_high
+            and direction not in (-1, 1)
+        )
+        if direction not in (-1, 1) and baseline_sweep_setup:
+            direction = 1 if sweep_low else -1
+        candidate = (
+            self.entry_state_machine.candidate
+            if isinstance(self.strategy, BaselineStrategy) and self.entry_state_machine is not None
+            else None
+        )
+        if direction not in (-1, 1) and candidate is not None:
+            direction = candidate.direction
+        setup_matches = setup_matches or (baseline_sweep_setup and direction in (-1, 1))
         suffix = "bull" if direction == 1 else "bear"
         retest_confirmed = (direction == 1 and bull_retest) or (direction == -1 and bear_retest)
         distribution_ready = getattr(self.strategy, "distribution_ready", None)
@@ -4045,12 +4254,13 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 setup_types.add("sweep")
             if flagged(swing_stem):
                 setup_types.add("swing")
-            for setup_type, stems in (
-                ("ifvg", (f"ifvg_{suffix}_active", f"ifvg_retest_{suffix}")),
-                ("fvg", (f"fvg_{suffix}_active", f"fvg_retest_{suffix}")),
-            ):
-                if any(flagged(stem) for stem in stems):
-                    setup_types.add(setup_type)
+            if not isinstance(self.strategy, BaselineStrategy):
+                for setup_type, stems in (
+                    ("ifvg", (f"ifvg_{suffix}_active", f"ifvg_retest_{suffix}")),
+                    ("fvg", (f"fvg_{suffix}_active", f"fvg_retest_{suffix}")),
+                ):
+                    if any(flagged(stem) for stem in stems):
+                        setup_types.add(setup_type)
         if distribution_arm:
             setup_types.add("distribution")
         if setup_matches and not setup_types:
@@ -4081,7 +4291,12 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             bar=self.step_idx,
             evidence_detected=setup_matches,
             invalidated=conflicting_sweeps or conflicting_swings or (bull_retest and bear_retest),
-            arm_condition=setup_matches or retest_confirmed or distribution_arm,
+            arm_condition=(
+                setup_matches
+                or retest_confirmed
+                or distribution_arm
+                or (candidate is not None and direction == candidate.direction)
+            ),
             retest_confirmed=retest_confirmed,
             direction=direction,
             setup_types=tuple(sorted(setup_types)),
@@ -4231,11 +4446,37 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         if self.block_overnight and self.position is not None and self._is_ny_session_boundary():
             eod_quote = (bid, ask)
             eod_fill_time = bar_time + pd.Timedelta(minutes=self._minutes_per_step)
+            eod_deadline = eod_fill_time
             execution_meta: dict[str, Any] = {}
-            if getattr(self, "tick_execution_required", False):
-                execution, execution_meta = self._resolve_randomized_tick_quote(eod_fill_time)
+            if (
+                getattr(self, "tick_execution_required", False)
+                or getattr(self, "randomized_fill_latency_ms", 0.0) > 0
+            ):
+                if self._tickbook is None:
+                    raise TickExecutionUnavailable("tick-only execution requires a TickBook")
+                execution = resolve_tick_execution_by_deadline(
+                    self._tickbook,
+                    bar_time,
+                    eod_deadline,
+                    self.np_random,
+                    max_latency_ns_exclusive=int(self.randomized_fill_latency_ms * 1_000_000),
+                    max_quote_wait_ns=self.max_tick_quote_wait_ms * 1_000_000,
+                )
+                if execution is None:
+                    raise TickExecutionUnavailable(
+                        "no executable tick between order submission and scheduled session close "
+                        f"{eod_deadline} within {self.max_tick_quote_wait_ms}ms"
+                    )
                 eod_quote = (execution.bid, execution.ask)
                 eod_fill_time = execution.tick_time
+                execution_meta = {
+                    "order_submission_time": execution.order_time,
+                    "execution_order_time": execution.order_time,
+                    "execution_arrival_time": execution.arrival_time,
+                    "execution_latency_ns": execution.latency_ns,
+                    "actual_tick_time": execution.tick_time,
+                    "fill_quote_source": "tick",
+                }
             elif self._active_step_execution is not None:
                 execution = self._active_step_execution["quote"]
                 eod_quote = (execution.bid, execution.ask)
@@ -4261,6 +4502,33 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
 
         return fill_bid, fill_ask, None
 
+    def _handle_repeated_payout(self, event_time: Any) -> bool:
+        """Record a flat realized payout success; reset capital only for continued eval."""
+        if not self.repeated_payout_policy or self.position is not None:
+            return False
+        if float(self.account.balance) < self.trading_policy.profit_target_balance:
+            return False
+        payout = float(self.account.balance) - self.trading_policy.operating_balance
+        event = {
+            "type": "payout_reset",
+            "time": event_time,
+            "cycle": int(self.cycle_count),
+            "payout": payout,
+            "balance_before_reset": float(self.account.balance),
+            "operating_balance": float(self.trading_policy.operating_balance),
+        }
+        self.cumulative_payouts += payout
+        self.cycle_successes += 1
+        self.payout_events.append(dict(event))
+        self.cycle_events.append({**event, "outcome": "success"})
+        self.trade_log.append(dict(event))
+        if self.episodic:
+            return True
+        self._payout_withdrawn_this_step = payout
+        self.cycle_count += 1
+        self.account.reset_operating_balance(self.trading_policy.operating_balance)
+        return False
+
     def _calculate_reward(
         self,
         pnl_step: float,
@@ -4274,7 +4542,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
         Delegates to the active reward implementation (DSR or composite)
         with the appropriate kwargs.
         """
-        daily_loss = float(self.account.daily_loss)
+        daily_loss = float(self.account.canonical_daily_loss())
         # Elapsed session time in minutes. Derived from the bar spacing rather
         # than assumed, because the sweep time-decay term is a linear penalty
         # in this value and a wrong factor dominates the whole reward.
@@ -4935,7 +5203,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
             if self.entry_state_observation and self.entry_state_machine is not None
             else None
         )
-        if self.observation_schema.version == OBSERVATION_SCHEMA_V2:
+        if self.observation_schema.version in (OBSERVATION_SCHEMA_V2, OBSERVATION_SCHEMA_V3):
             if not self.normalize_account:
                 raise ValueError("account-state-v2 requires normalize_account=True")
             position = self.position
@@ -4955,7 +5223,7 @@ class TradingEnv(gym.Env[dict[str, np.ndarray[Any, Any]], int | np.ndarray[Any, 
                 else 0.0,
                 trailing_drawdown_pct=trailing_dd,
                 trailing_drawdown_limit=float(self.guardrails.trailing_dd_limit),
-                daily_loss=float(self.account.daily_loss),
+                daily_loss=float(self.account.canonical_daily_loss()),
                 daily_loss_limit=float(self.guardrails.daily_loss_limit),
                 loss_from_initial=float(self.account.loss_from_initial()),
                 max_loss_limit=float(self.guardrails.max_loss_limit),

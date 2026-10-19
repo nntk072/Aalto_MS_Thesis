@@ -16,6 +16,7 @@ import hashlib
 import json
 import logging
 import re
+from dataclasses import asdict
 from datetime import datetime
 from typing import Any
 from zipfile import ZipFile
@@ -31,6 +32,7 @@ from quant_rl.action_schema import build_action_schema, build_discrete_trading_a
 from quant_rl.data.pipeline import build_tick_books, run_pipeline
 from quant_rl.data.split import (
     get_split_config,
+    get_train_start_config,
     make_train_mask,
     split_bars,
     split_train_test,
@@ -61,6 +63,9 @@ from quant_rl.features.build import (
     select_legacy_obs_columns,
     select_obs_columns,
 )
+from quant_rl.features.policy_market_context import (
+    attach_policy_market_context,
+)
 from quant_rl.models.agent import (
     LegacyFourToFiveActionAdapter,
     validate_model_action_schema,
@@ -71,6 +76,7 @@ from quant_rl.models.ppo_policy import (
     ClampedStdMultiInputPolicy,
     LegacyClampedStdMultiInputPolicy,
 )
+from quant_rl.trading_policy import resolve_trading_policy
 from quant_rl.train.train_rl import (
     _build_eval_common,
 )
@@ -244,12 +250,65 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--force", action="store_true", help="Force the data pipeline to rebuild caches"
     )
+    parser.add_argument(
+        "--train-only-screen",
+        action="store_true",
+        help=(
+            "Evaluate only the training split and write a candidate-screen report; the test "
+            "split is not evaluated or reported"
+        ),
+    )
     return parser
 
 
 def _evaluate_checkpoint_split(model: Any, *, stochastic: bool, **kwargs: Any) -> dict[str, Any]:
     """Replay one final split using the explicitly selected policy action mode."""
     return evaluate_model(model, deterministic=not stochastic, **kwargs)
+
+
+def _evaluate_train_split(
+    model: Any,
+    *,
+    stochastic: bool,
+    bars: pd.DataFrame,
+    features: pd.DataFrame,
+    tickbook: Any,
+    legacy_sequence_columns: bool,
+    eval_common: dict[str, Any],
+    initial_balance: float,
+    periods_per_year: int,
+) -> tuple[dict[str, Any], Any]:
+    """Evaluate only the supplied training split and calculate its metrics."""
+    result = _evaluate_checkpoint_split(
+        model,
+        stochastic=stochastic,
+        bars=bars,
+        features=features,
+        tickbook=tickbook,
+        legacy_sequence_columns=legacy_sequence_columns,
+        **eval_common,
+    )
+    result["initial_balance"] = initial_balance
+    metrics = calculate_metrics(
+        result["equity"],
+        trades=result["trades"],
+        n_sessions=result.get("n_sessions", 1),
+        n_breach_sessions=result.get("n_breach_sessions", 0),
+        initial_balance=initial_balance,
+        periods_per_year=periods_per_year,
+    )
+    return result, metrics
+
+
+def _write_train_only_screen_report(output_dir: Path, report: dict[str, Any]) -> Path:
+    """Write the minimal train-only candidate screen into a new directory."""
+    report["evaluation_provenance"] = build_evaluation_provenance(
+        Path(__file__).resolve().parents[2]
+    )
+    output_dir.mkdir(parents=True, exist_ok=False)
+    report_path = output_dir / "train_only_screen.json"
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True, default=str) + "\n")
+    return report_path
 
 
 def _resolve_execution_seed(
@@ -341,6 +400,8 @@ def _validate_checkpoint_manifest_hash(path: Path, manifest: dict[str, Any]) -> 
 
 def main() -> None:
     args = _build_parser().parse_args()
+    if args.train_only_screen and args.stochastic:
+        raise SystemExit("--train-only-screen requires deterministic policy actions")
 
     run_dir = Path(args.run)
     if not run_dir.is_dir():
@@ -410,8 +471,13 @@ def main() -> None:
     from quant_rl.models.agent import validate_model_observation_schema
     from quant_rl.observation_schema import build_observation_schema
 
+    policy = resolve_trading_policy(cfg)
     expected_observation_schema = build_observation_schema(
-        str(cfg.env.get("observation_schema_version", "account-state-v1")),
+        (
+            "account-state-v3-repeated-payout"
+            if policy.repeated_payout
+            else str(cfg.env.get("observation_schema_version", "account-state-v1"))
+        ),
         entry_state_visibility=bool(
             cfg.env.get("entry_state_machine", False)
             and cfg.env.get("entry_state_observation", True)
@@ -467,13 +533,28 @@ def main() -> None:
             legacy_layout_key=args.legacy_action_layout,
         )
 
-    data = run_pipeline(cfg, force=args.force)
+    selected_datasets = ["training"] if args.train_only_screen else None
+    data = run_pipeline(cfg, force=args.force, datasets=selected_datasets)
     primary_m1 = data[cfg.data.primary]["M1"]
     secondary_m1 = data.get(cfg.data.secondary, {}).get("M1")
+    primary_timeframe_bars = data[cfg.data.primary]
+    secondary_timeframe_bars = data.get(cfg.data.secondary, {})
+    primary_symbol = str(cfg.data.primary)
+    primary_ticks = build_tick_books(
+        cfg,
+        symbols=[primary_symbol],
+        datasets=selected_datasets,
+    ).get(primary_symbol)
 
     cache_dir = Path(cfg.data.cache_dir)
     train_end, test_start = get_split_config(cfg)
+    train_start = get_train_start_config(cfg)
     source_cache_replay_path = None
+    if args.source_feature_cache and args.train_only_screen:
+        raise ValueError(
+            "--train-only-screen rebuilds features from training inputs to stay within memory; "
+            "omit --source-feature-cache"
+        )
     if args.source_feature_cache:
         config_record = source_manifest.get("config")
         source_config_path = run_dir / "config.yaml"
@@ -492,7 +573,7 @@ def main() -> None:
             source_cache_replay_path = (
                 Path(__file__).resolve().parents[2] / source_cache_replay_path
             )
-        train_mask = make_train_mask(pd.DatetimeIndex(primary_m1.index), train_end)
+        train_mask = make_train_mask(pd.DatetimeIndex(primary_m1.index), train_end, train_start)
         (
             features,
             feat_cache,
@@ -502,7 +583,15 @@ def main() -> None:
         feature_cache_disposition = "source_cache_replay_verified"
     else:
         train_mask, feat_cache = _feature_build_scope(
-            primary_m1, cfg, cache_dir, str(cfg.data.primary), train_end, secondary_m1
+            primary_m1,
+            cfg,
+            cache_dir,
+            str(cfg.data.primary),
+            train_end,
+            secondary=secondary_m1,
+            train_start=train_start,
+            timeframe_bars=primary_timeframe_bars,
+            secondary_timeframe_bars=secondary_timeframe_bars,
         )
         features = build_features(
             primary_m1,
@@ -510,24 +599,43 @@ def main() -> None:
             cfg=cfg,
             train_mask=train_mask,
             cache_path=feat_cache,
+            timeframe_bars=primary_timeframe_bars,
+            secondary_timeframe_bars=secondary_timeframe_bars,
         )
-        (
-            feature_cache_disposition,
-            evaluated_feature_cache_hash,
-            evaluated_feature_cache_file_sha256,
-        ) = _validate_reanalysis_feature_cache(
-            source_feature_cache,
-            feat_cache,
-            allow_legacy=bool(args.allow_legacy_data_provenance),
-        )
+        if args.train_only_screen:
+            hash_path = Path(f"{feat_cache}.hash")
+            evaluated_feature_cache_hash = hash_path.read_text(encoding="utf-8").strip()
+            evaluated_feature_cache_file_sha256 = file_sha256(feat_cache)
+            feature_cache_disposition = "training_partition_rebuilt_train_feature_digest_checked"
+        else:
+            (
+                feature_cache_disposition,
+                evaluated_feature_cache_hash,
+                evaluated_feature_cache_file_sha256,
+            ) = _validate_reanalysis_feature_cache(
+                source_feature_cache,
+                feat_cache,
+                allow_legacy=bool(args.allow_legacy_data_provenance),
+            )
+
+    schedule_path = Path(str(cfg.data.session_schedule_file))
+    if not schedule_path.is_absolute():
+        schedule_path = Path(__file__).resolve().parents[2] / schedule_path
+    features = attach_policy_market_context(
+        primary_m1,
+        features,
+        primary_ticks,
+        schedule_path=schedule_path,
+        session_start=str(cfg.session.start),
+        session_end=str(cfg.session.end),
+    )
 
     train_bars, test_bars, train_feat, test_feat = split_train_test(
-        primary_m1, features, train_end, test_start
+        primary_m1, features, train_end, test_start, train_start
     )
     train_sec = test_sec = None
     if secondary_m1 is not None and not secondary_m1.empty:
-        train_sec, test_sec = split_bars(secondary_m1, train_end, test_start)
-    primary_ticks = build_tick_books(cfg).get(str(cfg.data.primary))
+        train_sec, test_sec = split_bars(secondary_m1, train_end, test_start, train_start)
     evaluated_datasets = _evaluation_dataset_records(
         train_bars=train_bars,
         train_features=train_feat,
@@ -541,6 +649,7 @@ def main() -> None:
         source_datasets,
         evaluated_datasets,
         allow_legacy=bool(args.allow_legacy_data_provenance),
+        train_only=bool(args.train_only_screen),
     )
     training_data_source, backend_parity_disposition = _reanalysis_backend_disposition(
         source_execution_protocol,
@@ -586,6 +695,106 @@ def main() -> None:
     )
     _validate_sequence_input_width(model, expected_sequence_schema["width"])
 
+    train_tickbook = ticks_covering(primary_ticks, train_bars)
+    if args.train_only_screen:
+        train_result, train_m = _evaluate_train_split(
+            model,
+            stochastic=args.stochastic,
+            bars=train_bars,
+            features=train_feat,
+            tickbook=train_tickbook,
+            legacy_sequence_columns=use_legacy_sequence_columns,
+            eval_common=eval_common,
+            initial_balance=float(cfg.account.initial_balance),
+            periods_per_year=evaluation_periods_per_year(cfg),
+        )
+        log.info(
+            "[train screen] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%  fail_time=%s",
+            train_m.sharpe,
+            train_m.max_drawdown * 100,
+            train_m.n_trades,
+            train_m.total_return_pct,
+            train_result.get("fail_time"),
+        )
+        train_dataset_records = _evaluation_dataset_records(
+            train_bars=train_bars,
+            train_features=train_feat,
+            test_bars=train_bars.iloc[:0],
+            test_features=train_feat.iloc[:0],
+            train_secondary=train_sec,
+            primary_ticks=train_tickbook,
+        )
+        train_dataset_records = {
+            key: value
+            for key, value in train_dataset_records.items()
+            if key in {"train_bars", "train_features", "train_secondary", "primary_ticks"}
+        }
+        report_path = _write_train_only_screen_report(
+            output_dir,
+            {
+                "artifact_role": "candidate_screen_train_only",
+                "test_split_evaluated": False,
+                "source_run": str(run_dir.resolve()),
+                "source_run_manifest_sha256": (
+                    file_sha256(source_manifest_path) if source_manifest_path.is_file() else None
+                ),
+                "source_config_sha256": (
+                    file_sha256(run_dir / "config.yaml")
+                    if (run_dir / "config.yaml").is_file()
+                    else None
+                ),
+                "checkpoint": str(ckpt_path.resolve()),
+                "checkpoint_sha256": file_sha256(ckpt_path),
+                "checkpoint_manifest_hash_disposition": checkpoint_hash_disposition,
+                "training_split": {
+                    "start": str(train_bars.index.min()),
+                    "end": str(train_bars.index.max()),
+                    "bar_count": len(train_bars),
+                    "metrics": asdict(train_m),
+                    "trade_count": train_m.n_trades,
+                    "survived_full_period": bool(train_result.get("survived_full_year", False)),
+                    "completed_data_split": bool(train_result.get("completed_data_split", False)),
+                    "episode_end_reason": train_result.get("episode_end_reason"),
+                    "fail_time": (
+                        str(train_result["fail_time"])
+                        if train_result.get("fail_time") is not None
+                        else None
+                    ),
+                },
+                "training_input_identity": train_dataset_records,
+                "dataset_parity_disposition": dataset_parity_disposition,
+                "tick_identity_scope": {
+                    "source_manifest_full_tick_record": (
+                        source_datasets.get("primary_ticks")
+                        if isinstance(source_datasets, dict)
+                        else None
+                    ),
+                    "replayed_training_tick_record": train_dataset_records.get("primary_ticks"),
+                    "full_tick_identity_reloaded": False,
+                    "disposition": "training_partition_only",
+                },
+                "feature_cache": {
+                    "identity": feat_cache.name,
+                    "content_hash": evaluated_feature_cache_hash or None,
+                    "file_sha256": evaluated_feature_cache_file_sha256,
+                    "disposition": feature_cache_disposition,
+                },
+                "evaluation_protocol": {
+                    "policy_action_mode": policy_action_mode,
+                    "seed": args.seed,
+                    "execution_seed": execution_seed,
+                    "training_data_source": training_data_source,
+                    "evaluation_backend": "frame",
+                    "backend_parity_disposition": backend_parity_disposition,
+                    "sequence_feature_schema": expected_sequence_schema,
+                    "sequence_feature_schema_disposition": sequence_schema_disposition,
+                    "observation_schema": expected_observation_schema.to_dict(),
+                },
+            },
+        )
+        log.info("Train-only screen written to %s", report_path)
+        return
+
     test_result = _evaluate_checkpoint_split(
         model,
         stochastic=args.stochastic,
@@ -612,22 +821,14 @@ def main() -> None:
         test_m.total_return_pct,
         test_result.get("fail_time"),
     )
-
-    train_result = _evaluate_checkpoint_split(
+    train_result, train_m = _evaluate_train_split(
         model,
         stochastic=args.stochastic,
         bars=train_bars,
         features=train_feat,
-        tickbook=ticks_covering(primary_ticks, train_bars),
+        tickbook=train_tickbook,
         legacy_sequence_columns=use_legacy_sequence_columns,
-        **eval_common,
-    )
-    train_result["initial_balance"] = cfg.account.initial_balance
-    train_m = calculate_metrics(
-        train_result["equity"],
-        trades=train_result["trades"],
-        n_sessions=train_result.get("n_sessions", 1),
-        n_breach_sessions=train_result.get("n_breach_sessions", 0),
+        eval_common=eval_common,
         initial_balance=float(cfg.account.initial_balance),
         periods_per_year=evaluation_periods_per_year(cfg),
     )
@@ -719,6 +920,7 @@ def main() -> None:
         "action_layout_key": getattr(model, "_action_layout_key", None),
         "action_schema": getattr(model, "_action_schema", None),
         "observation_schema": expected_observation_schema.to_dict(),
+        "trading_policy": policy.to_dict(),
         "sequence_feature_schema": expected_sequence_schema,
         "sequence_feature_schema_disposition": sequence_schema_disposition,
         "legacy_sequence_columns_used": use_legacy_sequence_columns,

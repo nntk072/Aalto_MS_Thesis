@@ -8,8 +8,7 @@
     "head": "a13dcd467a14b08224633a5329b24375ec0df2cb",
     "origin_main": "a13dcd467a14b08224633a5329b24375ec0df2cb",
     "working_tree_clean_at_capture": true,
-    "requested_plan_path": "/scratch/work/nguyenl37/Aalto_MS_Thesis-main/docs/thesis/master_project_execution_plan.md",
-    "requested_plan_path_note": "Aalto_MS_Thesis-main is not a Git worktree; its source directories are compatibility symlinks to the canonical checkout, and its outputs preserve historical campaign artifact paths. The canonical plan is in this main checkout.",
+    "requested_plan_path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/docs/thesis/master_project_execution_plan.md",
     "canonical_plan_path": "docs/thesis/master_project_execution_plan.md"
   },
   "campaign": {

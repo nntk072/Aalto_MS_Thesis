@@ -711,6 +711,67 @@ def test_build_features_uses_ftmo_clock_model_for_ct_sessions() -> None:
 
 
 @pytest.mark.integration
+def test_ftmo_ct_session_features_are_prefix_invariant_across_dst() -> None:
+    """Future bars cannot alter assembled CT session features before a cutoff."""
+    from quant_rl.features.build import build_features
+
+    ny_instants = pd.date_range(
+        "2026-03-05 00:00", periods=8 * 1440, freq="1min", tz="America/New_York"
+    )
+    # FTMO server wall time stays seven hours ahead of New York; its labels
+    # therefore skip the spring-forward hour even though the index uses the
+    # repository's fixed-offset compatibility timezone.
+    idx = (ny_instants.tz_localize(None) + pd.Timedelta(hours=7)).tz_localize(DATA_TZ)
+    close = 20_000.0 + np.sin(np.arange(len(idx), dtype=np.float64) / 31.0)
+    bars = pd.DataFrame(
+        {
+            "open": close - 0.1,
+            "high": close + 0.4,
+            "low": close - 0.4,
+            "close": close,
+            "tickvol": np.full(len(idx), 10.0),
+            "volume": np.zeros(len(idx)),
+        },
+        index=idx,
+    )
+    cfg = OmegaConf.merge(
+        OmegaConf.create(_sess_base_cfg()),
+        OmegaConf.create(
+            {
+                "data": {"timestamp_clock": "ftmo_mt5_us_dst"},
+                "features": {
+                    "include_session_ohlc": True,
+                    "include_previous_session_pd": True,
+                },
+            }
+        ),
+    )
+
+    original = build_features(bars, cfg=cast(DictConfig, cfg))
+    cutoff = pd.Timestamp("2026-03-09 23:59", tz=DATA_TZ)
+    poisoned_bars = bars.copy()
+    future = poisoned_bars.index > cutoff
+    poisoned_bars.loc[future, ["open", "high", "low", "close"]] += 500.0
+    poisoned = build_features(poisoned_bars, cfg=cast(DictConfig, cfg))
+
+    session_columns = [
+        name
+        for name in original.columns
+        if name.endswith("_ct_open")
+        or name.endswith("_ct_high")
+        or name.endswith("_ct_low")
+        or name.endswith("_ct_close")
+        or name.startswith(("yesterday_", "lastweek_", "prev_ny_", "previous_session_"))
+    ]
+    assert session_columns
+    pd.testing.assert_frame_equal(
+        original.loc[:cutoff, session_columns],
+        poisoned.loc[:cutoff, session_columns],
+        check_freq=False,
+    )
+
+
+@pytest.mark.integration
 def test_default_config_carries_sessions_block() -> None:
     """default.yaml ships the sessions block, flag off by default."""
     cfg = OmegaConf.load("quant_rl/config/default.yaml")

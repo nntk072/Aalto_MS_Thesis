@@ -171,6 +171,14 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
   seconds. Leave pending requests untouched and inspect alternatives without
   creating an overlapping request.
   Do not create short diagnostic jobs or fan out Slurm steps.
+- **Where computation runs:** use a suitable existing GPU-node allocation for
+  thesis computation whenever the workload can use a GPU. Never run training,
+  evaluation, feature construction, or other memory/CPU-intensive work directly
+  on the normal x86 login host or in login tmux. For CPU-only work, inspect a
+  candidate CPU node's live CPU/RAM availability, obtain any required allocation
+  approval, and launch one substantive bounded `srun` from a named persistent
+  login tmux session requesting enough CPUs and RAM. Run the workload inside
+  that CPU-node allocation; login tmux is only the launch/monitor shell.
 - **Cancellation:** never run `scancel`. Preserve active and pending
   allocations; never pass `REPLACE=1`.
 - **Before alloc:** first check the user's current allocation and reuse it if
@@ -218,3 +226,20 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
   appear, stop submitting/retrying, preserve logs and allocation state, and
   diagnose. Never cancel Slurm jobs or allocations. Follow the
   detailed hard gate in `.agents/rules/triton-slurm.md`.
+- **Long-running work wait cadence:** before waiting on an active training,
+  evaluation, or allocation, estimate the current stage's remaining time from
+  measured throughput or prior stage durations and compare it with the live
+  Slurm time limit. When no independent work remains, schedule the next check
+  near the estimated stage completion, with enough margin to preserve outputs
+  before the allocation ends. Do not poll every few seconds or repeat
+  unchanged status checks. Use no more than 10 planned checks for one stable
+  stage; add an earlier check only for a likely failure, checkpoint boundary,
+  allocation transition, or explicit progress signal. Prefer an existing
+  supervisor/notification or wait-for-output mechanism where available. This
+  does not change the separate 60-second maximum for waiting on a new allocation.
+- **Campaign status updates:** when asked for campaign status, or when a
+  meaningful campaign transition/blocker occurs, run
+  `scripts/triton/report_campaign_status.py` and include its generated report
+  without manually rebuilding the tables. It reports all variants in ladder
+  order (`a0`, `a1`, `a2`, `a3`, then `a4a`, `a4b`); follow
+  `.agents/rules/triton-slurm.md`.

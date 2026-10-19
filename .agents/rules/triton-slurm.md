@@ -37,6 +37,24 @@ Helper scripts: [`scripts/triton/`](../../scripts/triton/) (`status.sh`, `find_g
 Triton emails when many jobs last &lt; ~120s. Prefer one long shell (hours),
 never a burst of short diagnostic jobs.
 
+### Long-running task wait cadence
+
+For an active training, evaluation, or allocation, estimate the current stage's
+remaining duration before choosing when to check again. Use observed throughput
+or prior measured durations, then compare the estimate with the live Slurm
+time-limit and leave enough margin to verify checkpoint/output completion
+before expiry. If independent thesis work remains, continue it while compute
+runs. If there is nothing independent to do, wait toward the estimated stage
+completion instead of polling repeatedly; use no more than 10 planned checks
+per stable stage. Add an intermediate check only when expected to catch a
+failure, checkpoint boundary, allocation transition, or explicit progress
+signal. Prefer a persistent supervisor's completion notification or another
+wait-for-output mechanism when available. Report meaningful transitions and
+blockers, not unchanged polling results. Never cancel or replace active or
+pending jobs to simplify monitoring. This cadence applies after an allocation
+starts; the separate 60-second limit for waiting on a new allocation request
+still applies.
+
 ### Short-job / step monitor hard gate
 
 The cluster monitoring rule is operationally strict: a job or step with an
@@ -473,6 +491,61 @@ shape or the one-minute alternative-selection rule above:
    **inside** the GPU bash.
 3. Run train/eval/tests there. Leave the shell open when finished.
 
+### Campaign status reporting
+
+When the user asks for campaign status, or when a meaningful campaign
+transition, failure, recovery, or resource blocker occurs, generate the report
+with `scripts/triton/report_campaign_status.py` instead of composing its tables
+from memory. For example:
+
+```bash
+python3 scripts/triton/report_campaign_status.py \
+  outputs/gpu_campaigns/<campaign-id> --job-id <slurm-job-id> \
+  --supervisor <persistent-tmux-session>
+```
+
+The `--job-id` and `--supervisor` options may be omitted when automatic
+discovery identifies one allocation and tmux session. If allocation discovery
+is ambiguous, pass the live job ID from `squeue`; never resolve ambiguity by
+guessing. Include the generated report in the user update without reordering
+or rewriting its table rows. Add a short explanation only for findings the
+report cannot encode. Do not send routine unchanged polling updates. The report
+distinguishes observed facts from planned assignments and marks unavailable
+measurements instead of guessing.
+
+Include these tables:
+
+1. **Allocation summary:** Slurm job ID and state, allocated nodes, requested
+   and granted GPU/CPU/host-RAM resources, start time, elapsed time, walltime
+   limit, estimated remaining time/end time, and any pending successor's ID,
+   dependency, and state. Include the campaign/supervisor name and run
+   fingerprint when known. Reconcile live Slurm state with the supervisor,
+   worker logs, manifest, and checkpoint timestamps before calling a run
+   finished or a worker active.
+2. **Per-node resources:** one row per allocated node with node name, GPU type
+   and allocated GPU IDs/count, sampled GPU utilization and VRAM used/total
+   when the sampler records total capacity (otherwise say `total unavailable`),
+   CPU allocated/total and free (plus campaign CPU request/worker slots where
+   available), host RAM allocated/total and free, and manager readiness plus
+   active worker count. Include the sample time/source for utilization values.
+3. **Per-variant progress:** include every configured variant, including
+   pending, running, failed, completed, and evaluation states. Sort by ladder
+   rung in this order: `a0`, `a1`, `a2`, `a3`, `a4a`, `a4b`; within each rung,
+   list the canonical base, PO3/IFVG, then distribution family variants in the
+   campaign's declared order. Use the exact variant name from the resolved
+   config/manifest. Columns should cover status/phase, assigned node and GPU
+   (or planned assignment if not started), attempt, elapsed time, latest
+   logged timestep versus target, latest valid checkpoint and its timestamp,
+   and concise failure/recovery detail. Do not imply that logged timesteps are
+   checkpointed or that a checkpoint passed evaluation.
+
+The reporter uses `squeue`/`scontrol`, campaign manifests, worker logs,
+checkpoints, and existing per-node sampler CSVs. It creates no Slurm jobs or
+steps and never queries a GPU by starting a diagnostic allocation. Keep any
+unavailable field visible in the generated report; do not silently infer it.
+The report keeps variants in ladder order even when worker placement or
+completion order differs.
+
 ### Node architecture, environments and storage
 
 Read [Triton environment guidance](../../docs/operations/triton_environment.md)
@@ -508,6 +581,15 @@ Login-node SSH: `ls`, `cat`, `tmux capture-pane`, `squeue`, `sinfo`, edits,
 
 Never `source` the wrong-arch venv on login (`.venv` is aarch64-only). Use
 `scripts/triton/activate_venv.sh` only inside the GPU bash.
+
+Use a suitable existing GPU-node allocation for thesis computation whenever the
+workload can use a GPU. Training, evaluation, feature construction, and similar
+memory/CPU-intensive work must never run directly on the normal x86 login host
+or in login tmux. For CPU-only work, inspect a candidate CPU node's live CPU and
+host-RAM inventory, obtain any required approval, and run one substantive
+bounded `srun` from a named persistent login tmux session requesting enough
+CPUs and RAM. Execute the workload inside that CPU-node allocation; login tmux
+is only the launch/monitor shell. Preserve logs and outputs on scratch.
 
 ## Train + eval
 

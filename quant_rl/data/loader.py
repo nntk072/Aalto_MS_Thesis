@@ -15,6 +15,7 @@ from pathlib import Path
 import pandas as pd
 
 _BAR_COLS = ["date", "time", "open", "high", "low", "close", "tickvol", "vol", "spread"]
+_DAILY_BAR_COLS = ["date", "open", "high", "low", "close", "tickvol", "vol", "spread"]
 _TICK_COLS = ["date", "time", "bid", "ask", "last", "volume", "flags"]
 
 
@@ -25,11 +26,27 @@ def load_bars(path: str | Path) -> pd.DataFrame:
     (naive) because the caller applies the broker timezone via the config.
     """
     path = Path(path)
+    with path.open(encoding="utf-8-sig") as stream:
+        header = [
+            value.strip().strip("<>").upper()
+            for value in stream.readline().rstrip("\r\n").split("\t")
+        ]
+    intraday_header = [name.upper() for name in _BAR_COLS]
+    daily_header = [name.upper() for name in _DAILY_BAR_COLS]
+    if header == intraday_header:
+        columns = _BAR_COLS
+        has_time = True
+    elif header == daily_header:
+        columns = _DAILY_BAR_COLS
+        has_time = False
+    else:
+        raise ValueError(f"unsupported bar CSV header in {path}: {header}")
+
     df = pd.read_csv(
         path,
         sep="\t",
         header=0,
-        names=_BAR_COLS,
+        names=columns,
         dtype={
             "open": "float64",
             "high": "float64",
@@ -41,6 +58,8 @@ def load_bars(path: str | Path) -> pd.DataFrame:
         },
         na_values=[""],
     )
+    if not has_time:
+        df["time"] = "00:00:00"
     df["datetime"] = pd.to_datetime(df["date"] + " " + df["time"], format="%Y.%m.%d %H:%M:%S")
     df = df.drop(columns=["date", "time"])
     df = df.set_index("datetime")

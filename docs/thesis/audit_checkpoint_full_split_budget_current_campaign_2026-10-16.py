@@ -126,9 +126,7 @@ def source_lineage_coverage(
     ]
     attempt3_resume_path = Path(attempt_provenance["resume_checkpoint"])
     if not attempt3_resume_path.exists():
-        attempt3_resume_path = source_dir / attempt3_resume_path.relative_to(
-            "/scratch/work/nguyenl37/Aalto_MS_Thesis-main"
-        )
+        attempt3_resume_path = ROOT / Path(*attempt3_resume_path.parts[5:])
     resume_hash_matches = (
         attempt3_resume_path.is_file()
         and sha256(attempt3_resume_path) == attempt_provenance["resume_checkpoint_sha256"]

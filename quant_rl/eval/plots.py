@@ -183,6 +183,28 @@ def plot_equity_curve(
             label=f"Profit target (${initial_balance + profit_target:,.0f})",
         )
 
+    # Payout resets are economic withdrawals, so mark them explicitly on the
+    # operating-equity curve instead of letting the reset look like an unexplained loss.
+    if trades is not None and not trades.empty and "type" in trades.columns:
+        payout_rows = trades[trades["type"].astype(str).eq("payout_reset")]
+        if not payout_rows.empty and "time" in payout_rows.columns:
+            payout_times = pd.to_datetime(payout_rows["time"], errors="coerce").dropna()
+            for i, payout_time in enumerate(payout_times):
+                x_position = float(mdates.date2num(pd.Timestamp(payout_time).to_pydatetime()))
+                if per_trade and times is not None and len(times):
+                    time_index = pd.DatetimeIndex(times)
+                    time_ns = np.asarray(time_index).astype(np.int64, copy=False)
+                    position = int(np.searchsorted(time_ns, pd.Timestamp(payout_time).value))
+                    x_position = float(min(max(position, 0), len(time_index) - 1))
+                ax.axvline(
+                    x_position,
+                    color=LONG_COLOR,
+                    linestyle="--",
+                    linewidth=0.9,
+                    alpha=0.7,
+                    label="Payout reset" if i == 0 else None,
+                )
+
     # User preference: do not draw breach vertical lines on equity chart.
 
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"${x:,.0f}"))

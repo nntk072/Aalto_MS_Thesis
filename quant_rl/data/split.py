@@ -18,6 +18,7 @@ def split_train_test(
     features: pd.DataFrame,
     train_end: str = "2025-12-31",
     test_start: str = "2026-01-01",
+    train_start: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Split aligned bars + features into train (≤ *train_end*) and test (≥ *test_start*).
 
@@ -29,6 +30,9 @@ def split_train_test(
         Last date included in the training set (inclusive, full day).
     test_start:
         First date included in the test set (inclusive, midnight).
+    train_start:
+        Optional first date exposed to the training environment. Earlier rows
+        remain available for causal feature warmup but are not training rows.
 
     Returns
     -------
@@ -59,6 +63,14 @@ def split_train_test(
     train_end_ts = train_end_ts + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
 
     train_mask = b.index <= train_end_ts
+    if train_start is not None:
+        train_start_ts = pd.Timestamp(train_start)
+        if tz is not None:
+            if train_start_ts.tzinfo is None:
+                train_start_ts = train_start_ts.tz_localize(tz)
+            else:
+                train_start_ts = train_start_ts.tz_convert(tz)
+        train_mask &= b.index >= train_start_ts
     test_mask = b.index >= test_start_ts
 
     return b[train_mask], b[test_mask], f[train_mask], f[test_mask]
@@ -68,9 +80,10 @@ def split_bars(
     bars: pd.DataFrame,
     train_end: str = "2025-12-31",
     test_start: str = "2026-01-01",
+    train_start: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Split a single bar frame on the same date boundaries as ``split_train_test``."""
-    train, test, _, _ = split_train_test(bars, bars, train_end, test_start)
+    train, test, _, _ = split_train_test(bars, bars, train_end, test_start, train_start)
     return train, test
 
 
@@ -85,11 +98,21 @@ def get_split_config(cfg: Any) -> tuple[str, str]:
     return train_end, test_start
 
 
+def get_train_start_config(cfg: Any) -> str | None:
+    """Read the optional first train date without changing legacy split config."""
+    try:
+        value = cfg.data.split.train_start
+    except Exception:
+        return None
+    return str(value) if value is not None and str(value).strip() else None
+
+
 def make_train_mask(
     index: pd.DatetimeIndex,
     train_end: str,
+    train_start: str | None = None,
 ) -> pd.Series:
-    """Boolean mask of bars on or before the inclusive ``train_end`` calendar day."""
+    """Boolean mask for the inclusive configured training date range."""
     tz = index.tz
     train_end_ts = pd.Timestamp(train_end)
     if tz is not None:
@@ -98,4 +121,13 @@ def make_train_mask(
         else:
             train_end_ts = train_end_ts.tz_convert(tz)
     train_end_ts = train_end_ts + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
-    return pd.Series(index <= train_end_ts, index=index)
+    mask = index <= train_end_ts
+    if train_start is not None:
+        train_start_ts = pd.Timestamp(train_start)
+        if tz is not None:
+            if train_start_ts.tzinfo is None:
+                train_start_ts = train_start_ts.tz_localize(tz)
+            else:
+                train_start_ts = train_start_ts.tz_convert(tz)
+        mask &= index >= train_start_ts
+    return pd.Series(mask, index=index)

@@ -15,6 +15,7 @@ from quant_rl.envs.entry_state import ENTRY_STATES, entry_state_one_hot
 
 OBSERVATION_SCHEMA_V1 = "account-state-v1"
 OBSERVATION_SCHEMA_V2 = "account-state-v2"
+OBSERVATION_SCHEMA_V3 = "account-state-v3-repeated-payout"
 
 V1_COORDINATES = (
     "log_equity_over_initial",
@@ -87,7 +88,7 @@ def build_observation_schema(
     coordinates: tuple[str, ...]
     if version == OBSERVATION_SCHEMA_V1:
         coordinates = V1_COORDINATES
-    elif version == OBSERVATION_SCHEMA_V2:
+    elif version in (OBSERVATION_SCHEMA_V2, OBSERVATION_SCHEMA_V3):
         coordinates = V2_COORDINATES
     else:
         raise ValueError(f"unknown observation schema version: {version!r}")
@@ -158,8 +159,9 @@ def account_state_v2(
 ) -> np.ndarray[Any, Any]:
     """Build normalized v2 state without changing account or risk semantics.
 
-    ``daily_loss`` intentionally retains the existing realized-loss-only
-    definition. ``active_sl_headroom_over_initial_risk`` is positive when the
+    The caller supplies the policy-canonical ``daily_loss`` value. For v2 that
+    remains legacy realized-loss-only; repeated-payout v3 supplies the fixed-session
+    equity loss. ``active_sl_headroom_over_initial_risk`` is positive when the
     current price is on the safe side of the active stop.
     """
     has_position = float(position_direction) != 0.0
