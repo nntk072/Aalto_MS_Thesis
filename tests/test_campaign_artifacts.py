@@ -74,6 +74,17 @@ def test_campaign_runner_entrypoints_follow_current_layout() -> None:
     assert controller.RESOURCE_SAMPLER_SCRIPT.is_file()
 
 
+def test_allocation_cache_prebuild_uses_python_module_not_optional_console_script() -> None:
+    wrappers = (
+        controller.ROOT / "scripts/compute/slurm/campaigns/run_replacement_campaign_allocation.sh",
+        controller.ROOT / "scripts/compute/slurm/campaign_allocation_wrapper.sh",
+    )
+    for wrapper in wrappers:
+        content = wrapper.read_text(encoding="utf-8")
+        assert "python -m market_data.commands.prebuild_campaign_cache" in content
+        assert "thesis-data prebuild-campaign-cache" not in content
+
+
 def test_worker_step_envelope_must_cover_the_cpu_mask() -> None:
     with pytest.raises(ValueError, match="cannot be smaller"):
         controller.worker_command(

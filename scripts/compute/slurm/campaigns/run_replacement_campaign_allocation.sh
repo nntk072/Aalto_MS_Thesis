@@ -115,7 +115,7 @@ trap finish_allocation EXIT
 CACHE_READY="$OUT_DIR/reports/split_cache_ready.json"
 if [[ ! -s "$CACHE_READY" ]] || ! python3 -m json.tool "$CACHE_READY" >/dev/null 2>&1; then
   CACHE_BUILD_TMP="$CACHE_READY.job_${SLURM_JOB_ID}.tmp"
-  if thesis-data prebuild-campaign-cache \
+  if python -m market_data.commands.prebuild_campaign_cache \
     2>&1 | tee "$OUT_DIR/logs/split_cache_build_${SLURM_JOB_ID}.log" \
     > "$CACHE_BUILD_TMP"; then
     python3 -m json.tool "$CACHE_BUILD_TMP" >/dev/null

@@ -46,7 +46,7 @@ while ! source "$REPO/scripts/compute/slurm/activate_venv.sh"; do
 done
 
 cache_retry=1
-while ! thesis-data prebuild-campaign-cache; do
+while ! python -m market_data.commands.prebuild_campaign_cache; do
   touch "$FAILED" "$GPU_GATE_FAILED"
   retry_marker="$OUT_DIR/retry_bar_cache_prebuild.$cache_retry"
   echo "Bar-cache prebuild failed; fix the cause, then touch $retry_marker"
