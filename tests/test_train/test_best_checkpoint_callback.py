@@ -62,9 +62,9 @@ def test_best_checkpoint_saves_when_reward_improves(tmp_path: Path) -> None:
     expose a loadable SB3 artifact at the configured path."""
     pytest.importorskip("torch")
     pytest.importorskip("stable_baselines3")
-    from learning.rl.callbacks import BestCheckpointEvalCallback
     from stable_baselines3 import PPO
 
+    from learning.rl.callbacks import BestCheckpointEvalCallback
     from simulation.environment.env import TradingEnv
 
     bars = _bars()
@@ -121,9 +121,9 @@ def test_best_checkpoint_keeps_strictly_better_model(tmp_path: Path) -> None:
     """
     pytest.importorskip("torch")
     pytest.importorskip("stable_baselines3")
-    from learning.rl.callbacks import BestCheckpointEvalCallback
     from stable_baselines3 import PPO
 
+    from learning.rl.callbacks import BestCheckpointEvalCallback
     from simulation.environment.env import TradingEnv
 
     bars = _bars()

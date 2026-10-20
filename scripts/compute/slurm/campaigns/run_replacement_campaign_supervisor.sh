@@ -48,29 +48,14 @@ node_is_ready() {
   local record
   record="$(scontrol show node -o "$node")"
   echo "$(date --iso-8601=seconds) inventory $record"
-  printf '%s\n' "$record" | python3 -c '
-import re
-import sys
-fields = dict(token.split("=", 1) for token in sys.stdin.read().split() if "=" in token)
-state = fields.get("State", "").split("+", 1)[0]
-cpus = int(fields.get("CPUEfctv", fields.get("CPUTot", "0"))) - int(fields.get("CPUAlloc", "0"))
-memory = int(fields.get("FreeMem", "0"))
-real_memory = int(fields.get("RealMemory", "0"))
-allocated_memory = int(fields.get("AllocMem", "0"))
-gres = fields.get("Gres", "")
-alloc_tres = fields.get("AllocTRES", "")
-gpu_allocations = re.search(r"(?:^|,)gres/gpu(?::[^=,]+)?=(\d+)(?:,|$)", alloc_tres)
-gpu_clear = gpu_allocations is None or int(gpu_allocations.group(1)) == 0
-ready = (
-    state == "IDLE"
-    and cpus >= 48
-    and memory >= 512 * 1024
-    and real_memory - allocated_memory >= 512 * 1024
-    and "gpu:gh200:2" in gres
-    and gpu_clear
-)
-raise SystemExit(0 if ready else 1)
-'
+  python3 "$REPO/compute/slurm/capacity.py" \
+    --partition gpu-grace-h200-141g \
+    --node "$node" \
+    --nodes 1 \
+    --gpu-type gh200 \
+    --gpus-per-node 1 \
+    --cpus-per-node "$MIN_CPUS" \
+    --memory-mb "$MIN_MEM_MB" >/dev/null
 }
 
 campaign_finished() {

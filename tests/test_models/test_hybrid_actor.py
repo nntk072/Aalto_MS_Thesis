@@ -7,16 +7,16 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 import torch
-from decisioning.actions import build_action_schema
 from gymnasium import spaces
+from stable_baselines3 import PPO
+
+from decisioning.actions import build_action_schema
 from learning.rl.hybrid import (
     HybridActorHeads,
     HybridBoxDistribution,
     HybridClampedStdMultiInputPolicy,
     _encoded_centers,
 )
-from stable_baselines3 import PPO
-
 from models.encoders import TCNEncoder
 from trading.orders.selection import decode_tp_mode
 

@@ -6,7 +6,6 @@ from typing import Any
 
 from decisioning.adapters.sb3 import SB3DecisionProvider
 from decisioning.contracts import DecisionProvider
-
 from evaluation.rollout.model import evaluate_model
 from simulation.environment.factory import (
     build_eval_common,

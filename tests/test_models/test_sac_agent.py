@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
+
 from learning.rl.agent import build_agent
 
 
@@ -105,8 +106,9 @@ class TestSACAgentAct:
 
     def test_act_returns_valid_continuous_actions(self) -> None:
         """model.predict returns actions within [-1, 1]."""
-        from learning.rl.agent import build_agent
         from omegaconf import OmegaConf
+
+        from learning.rl.agent import build_agent
 
         cfg = OmegaConf.create({"env": {"obs_window": 10}, "sac": {}, "ppo": {"batch_size": 32}})
         env = make_env(continuous=True)

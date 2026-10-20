@@ -6,6 +6,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+
 from decisioning.observation_state import ENTRY_STATE_DIM, entry_state_one_hot
 from decisioning.observations import (
     OBSERVATION_SCHEMA_V1,
@@ -15,7 +16,6 @@ from decisioning.observations import (
     build_observation_schema,
     validate_observation_schema,
 )
-
 from simulation.environment.env import TradingEnv
 from tests.test_envs.test_account_normalization import _make_bars, _make_features
 

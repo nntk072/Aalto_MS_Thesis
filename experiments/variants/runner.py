@@ -18,12 +18,12 @@ from typing import Any
 
 import pandas as pd
 import yaml
-from learning.rl.agent import build_agent
 from omegaconf import DictConfig, OmegaConf
 
 from configuration import load_config
 from evaluation import build_run_report, run_episode
 from evaluation.rollout.model import make_action_fn
+from learning.rl.agent import build_agent
 from market_data.splits.definitions import split_train_test
 from training.configuration.variants import merge_variant_cfg
 from training.setup.environments import make_env

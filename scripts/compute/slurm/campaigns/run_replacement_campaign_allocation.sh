@@ -70,7 +70,10 @@ if [[ ! -s "$OUT_DIR/campaign.json" ]]; then
     tests/test_envs/test_baseline_regression.py \
     tests/test_envs/test_bundle_env_equivalence.py \
     tests/test_envs/test_strategy_env.py \
-    tests/test_matrix_campaign_controller.py -q
+    tests/test_matrix_campaign_controller.py \
+    tests/test_campaign_artifacts.py \
+    tests/test_triton_gh200_capacity.py \
+    tests/architecture/test_public_imports.py -q
 
   if ((gate_failed == 0)); then
     printf 'passed\n' >"$GATE_STATUS"
@@ -165,12 +168,25 @@ resume_args=()
 if [[ -s "$OUT_DIR/campaign.json" ]]; then
   resume_args+=(--resume)
 fi
+initial_checkpoint_args=()
+if [[ -n "${CAMPAIGN_INITIAL_CHECKPOINTS:-}" ]]; then
+  initial_checkpoints="$CAMPAIGN_INITIAL_CHECKPOINTS"
+  if [[ "$initial_checkpoints" != /* ]]; then
+    initial_checkpoints="$REPO/$initial_checkpoints"
+  fi
+  if [[ ! -s "$initial_checkpoints" ]]; then
+    echo "initial checkpoint map is missing or empty: $initial_checkpoints" >&2
+    exit 2
+  fi
+  initial_checkpoint_args+=(--initial-checkpoints "$initial_checkpoints")
+fi
 
 set +e
 timeout --signal=TERM --kill-after=2m 20700s \
   python "$REPO/experiments/campaigns/execution.py" \
   --campaign-spec "$REPO/$SPEC" \
   "${resume_args[@]}" \
+  "${initial_checkpoint_args[@]}" \
   --workers 18 \
   --n-envs 64 \
   --worker-nodes "${SLURM_JOB_NODELIST:?}" \

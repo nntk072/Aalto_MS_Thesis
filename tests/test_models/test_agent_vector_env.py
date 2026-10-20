@@ -7,11 +7,12 @@ from typing import Any
 
 import gymnasium as gym
 import numpy as np
-from learning.rl.agent import build_vector_env
-from learning.rl.environment_adapter import ShardedBundleVecEnv
 from omegaconf import OmegaConf
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+
+from learning.rl.agent import build_vector_env
+from learning.rl.environment_adapter import ShardedBundleVecEnv
 
 
 def _make_cartpole() -> gym.Env[Any, Any]:

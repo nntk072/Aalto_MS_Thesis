@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from decisioning.contracts import PredictorMetadata
-
 from market_data.contracts import DatasetRef
 
 

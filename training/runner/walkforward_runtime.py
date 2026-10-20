@@ -8,11 +8,11 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from learning.rl.agent import build_agent
 
 from evaluation import calculate_metrics, evaluation_periods_per_year
 from features import build_walkforward_fold_features
 from features.context.policy_market import attach_policy_market_context
+from learning.rl.agent import build_agent
 from market_data.loading.ticks import ticks_covering
 from market_data.splits.walkforward import purged_walk_forward
 from training.setup.data import _publish_obs_memmap

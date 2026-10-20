@@ -4,6 +4,8 @@ from typing import Any
 
 import numpy as np
 import pytest
+from gymnasium import spaces
+
 from decisioning.adapters.rule_based import RuleBasedDecisionProvider
 from decisioning.adapters.sb3 import SB3DecisionProvider
 from decisioning.contracts import (
@@ -15,8 +17,6 @@ from decisioning.contracts import (
     PredictorMetadata,
     StructuredAction,
 )
-from gymnasium import spaces
-
 from evaluation.rollout.model import make_action_fn
 from evaluation.rollout.provider import make_provider_action_fn
 

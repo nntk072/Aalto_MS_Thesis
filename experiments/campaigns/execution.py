@@ -111,6 +111,11 @@ from experiments.campaigns.state_store import (
     validate_inputs as validate_inputs,
 )
 
+TRAIN_ONE_VARIANT_SCRIPT = (
+    ROOT / "scripts" / "research" / "frozen-launches" / "train_one_variant.sh"
+)
+RESOURCE_SAMPLER_SCRIPT = ROOT / "compute" / "slurm" / "resources.py"
+
 __all__ = [
     "DEFAULT_VARIANTS",
     "ROOT",
@@ -517,7 +522,7 @@ def main() -> int:
             sampler_cmd = worker_command(
                 [
                     sys.executable,
-                    str(ROOT / "scripts" / "triton" / "sample_campaign_resources.py"),
+                    str(RESOURCE_SAMPLER_SCRIPT),
                     "--campaign",
                     str(manifest_path),
                     "--out",
@@ -629,7 +634,7 @@ def main() -> int:
         cmd = (
             [str(args.test_worker), key]
             if args.test_worker
-            else ["bash", str(ROOT / "scripts" / "train" / "train_one_variant.sh")]
+            else ["bash", str(TRAIN_ONE_VARIANT_SCRIPT)]
         )
         if worker_nodes:
             cmd = worker_command(

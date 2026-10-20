@@ -14,6 +14,9 @@ from typing import Any, cast
 
 import numpy as np
 import torch
+from torch import nn
+
+from artifacts.contracts import ArtifactRef
 from decisioning.actions import build_discrete_trading_action_schema
 from decisioning.contracts import (
     ActionSchemaRef,
@@ -22,9 +25,6 @@ from decisioning.contracts import (
     DiscreteAction,
     PredictorMetadata,
 )
-from torch import nn
-
-from artifacts.contracts import ArtifactRef
 from learning.contracts import FitRequest, FitResult, Learner
 
 

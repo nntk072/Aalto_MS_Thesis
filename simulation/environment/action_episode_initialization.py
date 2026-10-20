@@ -6,6 +6,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from gymnasium import spaces
+
 from decisioning.actions import (
     ActionSchema,
     DiscreteActionSchema,
@@ -13,7 +15,6 @@ from decisioning.actions import (
     build_discrete_trading_action_schema,
 )
 from decisioning.observations import OBSERVATION_SCHEMA_V2, OBSERVATION_SCHEMA_V3
-from gymnasium import spaces
 
 from .mixin_base import RuntimeMixinBase
 

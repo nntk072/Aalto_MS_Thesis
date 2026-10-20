@@ -5,9 +5,9 @@ from typing import Any, cast
 
 import numpy as np
 import pytest
-from learning.rl.ppo import mode_index
 
 from evaluation.metrics.bootstrap import metrics_with_ci
+from learning.rl.ppo import mode_index
 from simulation.environment.env import TradingEnv
 
 

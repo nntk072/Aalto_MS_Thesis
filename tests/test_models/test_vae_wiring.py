@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 import torch
 from gymnasium import spaces
+
 from learning.rl.vae_extractor import VAEFeatureExtractor
 from learning.self_supervised.vae_pre_ny import build_pre_ny_by_date, load_vae_from_checkpoint
-
 from models.auxiliary.vae import VAE
 
 

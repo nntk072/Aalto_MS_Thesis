@@ -16,11 +16,11 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+
+from configuration.paths import repository_root
 from decisioning.actions import build_action_schema, build_discrete_trading_action_schema
 from decisioning.adapters.sb3 import SB3DecisionProvider
 from decisioning.observations import build_observation_schema
-
-from configuration.paths import repository_root
 from evaluation import calculate_metrics, evaluation_periods_per_year
 from evaluation.reanalysis.checkpoint import resolve_checkpoint
 from evaluation.reanalysis.cli import build_reanalysis_parser

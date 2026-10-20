@@ -13,10 +13,10 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
-from decisioning.actions import build_action_schema
 from omegaconf import OmegaConf
 
 from configuration.paths import repository_root
+from decisioning.actions import build_action_schema
 from training.configuration.cli import load_merged_config
 from training.configuration.variant_resolution import resolve_variant
 

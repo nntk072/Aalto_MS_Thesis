@@ -15,13 +15,13 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
-from learning.rl.agent import build_agent
 from scripts.research.benchmarks.measure_env_memory import (
     _cgroup_memory_bytes,
     _load_train_slice,
     _tree_pss_mib,
 )
 
+from learning.rl.agent import build_agent
 from simulation.environment.bundles import build_env_bundle
 from simulation.environment.spec import EnvSpec
 from simulation.environment.worker import make_bundle_env

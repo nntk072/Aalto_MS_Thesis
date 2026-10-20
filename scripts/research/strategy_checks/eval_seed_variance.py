@@ -26,13 +26,13 @@ from typing import Any, cast
 
 import numpy as np
 import torch
-from learning.rl.ppo import ClampedStdMultiInputPolicy
 from omegaconf import DictConfig, OmegaConf
 from stable_baselines3 import PPO
 
 from evaluation import calculate_metrics
 from evaluation.rollout.model import evaluate_model
 from features import FEATURE_CACHE_VERSION, build_features
+from learning.rl.ppo import ClampedStdMultiInputPolicy
 from market_data.loading.pipeline import build_tick_books, run_pipeline
 from market_data.loading.ticks import ticks_covering
 from market_data.splits.definitions import get_split_config, split_bars, split_train_test

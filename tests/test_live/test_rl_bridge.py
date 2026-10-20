@@ -15,11 +15,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
+from gymnasium import spaces
+
 from decisioning.actions import build_discrete_trading_action_schema
 from decisioning.adapters.sb3 import SB3DecisionProvider
 from decisioning.observations import OBSERVATION_SCHEMA_V1, build_observation_schema
-from gymnasium import spaces
-
 from integrations.mt5.adapters.data import TradingData
 
 # --- headless MetaTrader5 stub (Windows-only package, absent on Linux) -----

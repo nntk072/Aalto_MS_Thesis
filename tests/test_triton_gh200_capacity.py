@@ -26,6 +26,16 @@ def test_node_capacity_accepts_one_free_gh200_with_requested_cpu_and_ram() -> No
     assert capacity.node_has_capacity(_node(), gpu_type="gh200", gpus=1, cpus=48, memory_mb=524288)
 
 
+def test_node_capacity_accepts_mixed_node_with_one_gpu_already_allocated() -> None:
+    assert capacity.node_has_capacity(
+        _node(state="MIXED", cpu_alloc=8, memory_alloc=32768, gpu_alloc=1),
+        gpu_type="gh200",
+        gpus=1,
+        cpus=48,
+        memory_mb=524288,
+    )
+
+
 def test_node_capacity_rejects_busy_gpu_or_insufficient_cpu_or_ram() -> None:
     for output in (
         _node(gpu_alloc=2),

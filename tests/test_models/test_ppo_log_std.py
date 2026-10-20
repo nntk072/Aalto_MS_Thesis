@@ -6,8 +6,9 @@ from typing import Any, cast
 
 import pytest
 import torch
-from decisioning.actions import build_discrete_trading_action_schema
 from gymnasium import spaces
+
+from decisioning.actions import build_discrete_trading_action_schema
 from learning.rl.agent import build_agent
 from learning.rl.callbacks import ClipLogStdCallback
 from learning.rl.ppo import (
@@ -16,7 +17,6 @@ from learning.rl.ppo import (
     install_post_update_std_clip,
     mode_index,
 )
-
 from simulation.environment.env import TradingEnv
 from tests.test_models.test_sac_agent import make_env
 

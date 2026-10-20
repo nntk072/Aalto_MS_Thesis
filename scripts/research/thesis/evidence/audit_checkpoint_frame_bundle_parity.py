@@ -14,15 +14,11 @@ from typing import Any, cast
 
 import numpy as np
 import pandas as pd
-from decisioning.actions import build_action_schema
-from decisioning.observations import build_observation_schema
 from gymnasium import spaces
-from learning.rl.agent import (
-    validate_model_action_schema,
-    validate_model_observation_schema,
-)
 
 from configuration.paths import repository_root
+from decisioning.actions import build_action_schema
+from decisioning.observations import build_observation_schema
 from evaluation import calculate_metrics, evaluation_periods_per_year
 from evaluation.reanalysis import runner as eval_run
 from evaluation.reanalysis.provenance import (
@@ -43,6 +39,10 @@ from features import (
     select_obs_columns,
 )
 from features.context.policy_market import attach_policy_market_context
+from learning.rl.agent import (
+    validate_model_action_schema,
+    validate_model_observation_schema,
+)
 from market_data.loading.pipeline import build_tick_books, run_pipeline
 from market_data.loading.ticks import ticks_covering
 from market_data.splits.definitions import (

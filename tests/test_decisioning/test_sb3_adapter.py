@@ -4,6 +4,8 @@ from typing import Any
 
 import numpy as np
 import pytest
+from gymnasium import spaces
+
 from decisioning.adapters.sb3 import SB3DecisionProvider
 from decisioning.contracts import (
     ActionSchemaRef,
@@ -14,7 +16,6 @@ from decisioning.contracts import (
     StructuredAction,
     to_policy_action,
 )
-from gymnasium import spaces
 
 
 class _Policy:

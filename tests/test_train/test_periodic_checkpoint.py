@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from learning.rl.callbacks import PeriodicCheckpointCallback
 from omegaconf import OmegaConf
 
+from learning.rl.callbacks import PeriodicCheckpointCallback
 from training.setup.callbacks import _periodic_checkpoint_callback
 
 

@@ -180,8 +180,8 @@ def build_robot(model_path: Path, run_config: Path, args: argparse.Namespace) ->
     """Construct the fully-wired ``RLRobot`` from env/CLI config."""
     try:
         import MetaTrader5 as mt5  # noqa: F401  (used via mt5.* below)
-        from decisioning.adapters.sb3 import SB3DecisionProvider
 
+        from decisioning.adapters.sb3 import SB3DecisionProvider
         from integrations.mt5.domain.data_sources.mt5_data import MT5Data
         from integrations.mt5.domain.mt5_connection import ensure_mt5_logged_in
         from integrations.mt5.domain.risk_manager import RiskManager

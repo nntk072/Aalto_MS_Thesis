@@ -4,8 +4,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from decisioning.actions import ActionSchema
 
+from decisioning.actions import ActionSchema
 from trading.orders.selection import decode_tp_mode
 
 from .action_diagnostics import _decision_from_action, _empty_decision

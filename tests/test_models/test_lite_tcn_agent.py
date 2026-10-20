@@ -8,12 +8,12 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 import torch
-from decisioning.actions import build_discrete_trading_action_schema
 from gymnasium import spaces
-from learning.rl.agent import build_agent, validate_model_architecture
 from stable_baselines3 import PPO
 
 from configuration import load_config
+from decisioning.actions import build_discrete_trading_action_schema
+from learning.rl.agent import build_agent, validate_model_architecture
 from models.encoders import LiteTCNEncoder
 
 FloatArray = npt.NDArray[np.float32]

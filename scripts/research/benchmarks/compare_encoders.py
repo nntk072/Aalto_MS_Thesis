@@ -19,11 +19,11 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from learning.rl.agent import build_agent  # noqa: E402
 from omegaconf import DictConfig, OmegaConf  # noqa: E402
 
 from evaluation import build_run_report, run_episode  # noqa: E402
 from evaluation.rollout.model import make_action_fn  # noqa: E402
+from learning.rl.agent import build_agent  # noqa: E402
 from market_data.splits.definitions import split_train_test  # noqa: E402
 from simulation.environment.env import TradingEnv  # noqa: E402
 

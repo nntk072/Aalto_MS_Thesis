@@ -5,8 +5,8 @@ from typing import Any
 
 import numpy as np
 import pytest
-from decisioning.actions import build_action_schema
 
+from decisioning.actions import build_action_schema
 from simulation.environment.action_diagnostics import _decision_from_action
 from simulation.environment.env import TradingEnv
 

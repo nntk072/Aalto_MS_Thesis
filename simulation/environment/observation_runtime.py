@@ -4,6 +4,7 @@ from typing import Any, cast
 
 import numpy as np
 import pandas as pd
+
 from decisioning.observation_state import entry_state_one_hot
 from decisioning.observations import (
     OBSERVATION_SCHEMA_V2,

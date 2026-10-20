@@ -7,8 +7,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from decisioning.actions import build_action_schema
 
+from decisioning.actions import build_action_schema
 from evaluation.metrics import calculate_metrics
 from simulation.environment.rewards import REWARD_PART_KEYS, DSRReward, PnLReward
 from training.callbacks.dashboard import (

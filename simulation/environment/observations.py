@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+
 from decisioning.observations import pad_observation_window
 
 HTF_BRANCHES: tuple[tuple[str, str, str], ...] = (

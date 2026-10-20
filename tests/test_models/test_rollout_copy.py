@@ -5,8 +5,9 @@ from __future__ import annotations
 import numpy as np
 import torch
 from gymnasium import spaces
-from learning.rl.rollout_buffer import DeviceDictRolloutBuffer, install_single_copy_add
 from stable_baselines3.common.buffers import DictRolloutBuffer
+
+from learning.rl.rollout_buffer import DeviceDictRolloutBuffer, install_single_copy_add
 
 
 def _space() -> spaces.Dict:

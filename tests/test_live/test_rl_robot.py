@@ -13,10 +13,10 @@ from typing import Any, cast
 
 import numpy as np
 import pandas as pd
-from decisioning.actions import build_discrete_trading_action_schema
-from decisioning.observations import OBSERVATION_SCHEMA_V1, build_observation_schema
 from gymnasium import spaces
 
+from decisioning.actions import build_discrete_trading_action_schema
+from decisioning.observations import OBSERVATION_SCHEMA_V1, build_observation_schema
 from integrations.mt5.adapters import Trader, TradingData
 
 # --- headless MetaTrader5 stub (Windows-only package, absent on Linux) -----

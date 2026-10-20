@@ -11,7 +11,22 @@ from pathlib import Path
 from typing import Any, cast
 
 import pandas as pd
+from omegaconf import OmegaConf
+
+from configuration.paths import repository_root
 from decisioning.contracts import DecisionProvider
+from evaluation import calculate_metrics, evaluation_periods_per_year
+from evaluation.reporting.export import save_run
+from evaluation.reporting.run_manifest import (
+    build_stop_candidate_schema,
+    build_training_run_manifest,
+    file_sha256,
+    write_run_manifest,
+)
+from evaluation.rollout.model import BAR_CLOSE_EXPOSURE_MEASURE, evaluate_provider
+from features.context.policy_market import (
+    POLICY_MARKET_CONTEXT_VERSION,
+)
 from learning.contracts import FitResult
 from learning.rl.agent import build_agent
 from learning.rl.auxiliary import AuxiliaryTrainerCallback
@@ -27,21 +42,6 @@ from learning.rl.callbacks import (
 )
 from learning.rl.checkpoint import is_sb3_box_model, load_sb3_training_checkpoint
 from learning.rl.ppo import install_post_update_std_clip
-from omegaconf import OmegaConf
-
-from configuration.paths import repository_root
-from evaluation import calculate_metrics, evaluation_periods_per_year
-from evaluation.reporting.export import save_run
-from evaluation.reporting.run_manifest import (
-    build_stop_candidate_schema,
-    build_training_run_manifest,
-    file_sha256,
-    write_run_manifest,
-)
-from evaluation.rollout.model import BAR_CLOSE_EXPOSURE_MEASURE, evaluate_provider
-from features.context.policy_market import (
-    POLICY_MARKET_CONTEXT_VERSION,
-)
 from market_data.loading.ticks import ticks_covering
 from trading.policy.config import resolve_trading_policy
 from training.artifacts.aggregation import _save_seed_artifacts

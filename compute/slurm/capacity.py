@@ -97,6 +97,7 @@ def available_nodes(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--partition", required=True)
+    parser.add_argument("--node", help="inspect only this named node")
     parser.add_argument("--nodes", type=int, default=2)
     parser.add_argument("--gpu-type", default="gh200")
     parser.add_argument("--gpus-per-node", type=int, default=1)
@@ -104,13 +105,33 @@ def main() -> int:
     parser.add_argument("--memory-mb", type=int, default=512 * 1024)
     args = parser.parse_args()
     try:
-        nodes = available_nodes(
-            args.partition,
-            gpu_type=args.gpu_type,
-            gpus_per_node=args.gpus_per_node,
-            cpus_per_node=args.cpus_per_node,
-            memory_mb=args.memory_mb,
-        )
+        if args.node:
+            detail = subprocess.run(
+                ["scontrol", "show", "node", args.node],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=15,
+            )
+            nodes = (
+                [args.node]
+                if node_has_capacity(
+                    detail.stdout,
+                    gpu_type=args.gpu_type,
+                    gpus=args.gpus_per_node,
+                    cpus=args.cpus_per_node,
+                    memory_mb=args.memory_mb,
+                )
+                else []
+            )
+        else:
+            nodes = available_nodes(
+                args.partition,
+                gpu_type=args.gpu_type,
+                gpus_per_node=args.gpus_per_node,
+                cpus_per_node=args.cpus_per_node,
+                memory_mb=args.memory_mb,
+            )
     except (OSError, subprocess.SubprocessError) as exc:
         print(f"Slurm capacity query failed: {exc}", file=sys.stderr)
         return 2

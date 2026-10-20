@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 from learning.rl import callbacks
-
 from training.setup import environments as training_environments
 
 

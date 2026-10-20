@@ -12,6 +12,8 @@ from typing import Any
 from experiments.campaigns.constants import ROOT
 from experiments.campaigns.state_store import utc
 
+WORKER_CPU_AFFINITY_GUARD = ROOT / "scripts" / "compute" / "slurm" / "verify_worker_cpu_affinity.py"
+
 
 def cgroup_memory_file(name: str) -> pathlib.Path | None:
     """Locate a memory-controller file under this process's cgroup."""
@@ -143,10 +145,9 @@ def worker_command(
     cpu_binding = f"mask_cpu:{cpu_mask}" if cpu_mask is not None else "cores"
     worker_command = command
     if cpu_mask is not None and expected_cpu_ids is not None:
-        guard = ROOT / "scripts" / "matrix" / "verify_worker_cpu_affinity.py"
         worker_command = [
             sys.executable,
-            str(guard),
+            str(WORKER_CPU_AFFINITY_GUARD),
             "--expected-cpus",
             ",".join(str(cpu) for cpu in expected_cpu_ids),
             "--",

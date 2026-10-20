@@ -4,8 +4,9 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from decisioning.actions import build_action_schema, build_discrete_trading_action_schema
 from gymnasium import spaces
+
+from decisioning.actions import build_action_schema, build_discrete_trading_action_schema
 from learning.rl.agent import (
     LegacyFourToFiveActionAdapter,
     bind_discrete_action_schema,

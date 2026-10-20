@@ -26,8 +26,6 @@ from stable_baselines3 import PPO  # noqa: E402
 
 ROOT = repository_root(__file__)
 
-from learning.rl.ppo import ClampedStdMultiInputPolicy  # noqa: E402
-
 from evaluation import (  # noqa: E402
     build_comparison_table,
     calculate_metrics,
@@ -35,6 +33,7 @@ from evaluation import (  # noqa: E402
 )
 from evaluation.rollout.model import evaluate_model  # noqa: E402
 from features import build_features, feature_cache_path  # noqa: E402
+from learning.rl.ppo import ClampedStdMultiInputPolicy  # noqa: E402
 from market_data.loading.pipeline import run_pipeline  # noqa: E402
 from market_data.splits.definitions import (  # noqa: E402
     get_split_config,

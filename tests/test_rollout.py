@@ -15,11 +15,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
+from gymnasium import spaces
+
 from decisioning.actions import build_discrete_trading_action_schema
 from decisioning.adapters.sb3 import SB3DecisionProvider
 from decisioning.observations import OBSERVATION_SCHEMA_V1
-from gymnasium import spaces
-
 from evaluation.rollout.model import evaluate_model, evaluate_provider
 
 
@@ -272,7 +272,6 @@ def test_evaluate_model_does_not_mark_step_capped_rollout_as_full_survival():
 def test_evaluate_model_uses_requested_observation_schema(monkeypatch):
     """Training and evaluation must construct the same account observation."""
     from decisioning.observations import OBSERVATION_SCHEMA_V2, V2_COORDINATES
-
     from simulation.environment.env import TradingEnv as OriginalTradingEnv
 
     env_kwargs = {}

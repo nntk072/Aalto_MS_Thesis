@@ -6,8 +6,8 @@ from typing import Any
 import gymnasium as gym
 import numpy as np
 import pandas as pd
-from decisioning.observations import OBSERVATION_SCHEMA_V1
 
+from decisioning.observations import OBSERVATION_SCHEMA_V1
 from market_data.loading.ticks import TickBook
 from simulation.contracts import SimulationTransition
 from simulation.environment.diagnostics import DebugStepError

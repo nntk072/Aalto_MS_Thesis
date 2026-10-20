@@ -59,7 +59,19 @@ def test_worker_command_uses_explicit_cpu_mask_when_provided() -> None:
     assert "--exact" not in command
     assert "--expected-cpus" in command
     assert ",".join(str(cpu) for cpu in range(5, 10)) in command
+    guard_path = Path(command[command.index("--expected-cpus") - 1])
+    assert guard_path == (controller.ROOT / "scripts/compute/slurm/verify_worker_cpu_affinity.py")
+    assert guard_path.is_file()
     assert command[-2:] == ["python", "train.py"]
+
+
+def test_campaign_runner_entrypoints_follow_current_layout() -> None:
+    assert controller.TRAIN_ONE_VARIANT_SCRIPT == (
+        controller.ROOT / "scripts/research/frozen-launches/train_one_variant.sh"
+    )
+    assert controller.TRAIN_ONE_VARIANT_SCRIPT.is_file()
+    assert controller.RESOURCE_SAMPLER_SCRIPT == (controller.ROOT / "compute/slurm/resources.py")
+    assert controller.RESOURCE_SAMPLER_SCRIPT.is_file()
 
 
 def test_worker_step_envelope_must_cover_the_cpu_mask() -> None:

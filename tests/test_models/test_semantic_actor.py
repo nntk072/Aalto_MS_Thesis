@@ -9,17 +9,17 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 import torch
+from gymnasium import spaces
+from stable_baselines3 import PPO
+
 from decisioning.actions import build_action_schema
 from decisioning.observations import OBSERVATION_SCHEMA_V2, build_observation_schema
-from gymnasium import spaces
 from learning.rl.agent import validate_model_observation_schema
 from learning.rl.semantic import (
     SemanticActorHeads,
     SemanticClampedStdMultiInputPolicy,
     semantic_action_groups,
 )
-from stable_baselines3 import PPO
-
 from models.encoders import TCNEncoder
 
 

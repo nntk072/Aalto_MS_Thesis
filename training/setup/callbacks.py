@@ -6,13 +6,13 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from omegaconf import DictConfig
+
 from learning.rl.callbacks import (
     EarlyAbortCallback,
     LagrangianRiskCallback,
     PeriodicCheckpointCallback,
 )
-from omegaconf import DictConfig
-
 from training.setup.environments import _training_episodic
 
 log = logging.getLogger(__name__)

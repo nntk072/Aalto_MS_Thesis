@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from learning.contracts import FitRequest, FitResult, Learner
-from learning.rl.learner import SB3Learner
 
 from artifacts.contracts import ArtifactRef
+from learning.contracts import FitRequest, FitResult, Learner
+from learning.rl.learner import SB3Learner
 from market_data.contracts import DatasetRef, MarketEventSchema
 
 

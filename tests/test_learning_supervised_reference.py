@@ -6,15 +6,15 @@ from typing import cast
 
 import numpy as np
 import pandas as pd
+
 from decisioning.contracts import DecisionInput, DiscreteAction
+from evaluation.rollout.model import evaluate_provider
 from learning.build import build_learner
 from learning.contracts import FitRequest
 from learning.supervised.reference import (
     ReferenceTorchLearner,
     load_reference_torch_provider,
 )
-
-from evaluation.rollout.model import evaluate_provider
 from market_data.contracts import DatasetRef, MarketEventSchema
 
 

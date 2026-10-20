@@ -7,6 +7,7 @@ from typing import Any, cast
 
 import torch
 import torch.nn as nn
+
 from decisioning.observation_state import BASE_ACCOUNT_DIM
 
 ACCOUNT_DIM = BASE_ACCOUNT_DIM

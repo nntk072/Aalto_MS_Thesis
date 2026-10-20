@@ -27,6 +27,9 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from omegaconf import OmegaConf
+
+from configuration.paths import repository_root
 from decisioning.adapters.sb3 import SB3DecisionProvider
 from decisioning.contracts import (
     ContinuousAction,
@@ -44,9 +47,6 @@ from decisioning.observations import (
     pad_observation_window,
     validate_observation_schema,
 )
-from omegaconf import OmegaConf
-
-from configuration.paths import repository_root
 from features import attach_reachable_r, select_obs_columns
 from live.runtime.contracts import LiveSignal, MarketDataSource
 from trading.policy.config import resolve_trading_policy

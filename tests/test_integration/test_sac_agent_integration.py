@@ -14,9 +14,9 @@ class TestSACAgentIntegration:
     @pytest.fixture
     def sac_setup(self) -> Any:
         """Build a continuous-action env and an SAC agent wired to it."""
-        from learning.rl.agent import build_agent
         from omegaconf import OmegaConf
 
+        from learning.rl.agent import build_agent
         from tests.test_models.test_sac_agent import make_env
 
         cfg = OmegaConf.create(

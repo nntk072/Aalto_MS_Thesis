@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+
 from decisioning.actions import ActionSchema
 
 _DECISION_KEYS: tuple[str, ...] = (

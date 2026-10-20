@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from learning import Learner, build_learner
-from learning.contracts import FitRequest
 from omegaconf import DictConfig, OmegaConf
 
+from learning import Learner, build_learner
+from learning.contracts import FitRequest
 from market_data.contracts import DatasetRef, MarketEventSchema
 
 
