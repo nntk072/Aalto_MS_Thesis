@@ -329,7 +329,13 @@ def test_migrated_checkpoint_model_load_checks_embedded_steps(
             assert device == "cpu"
             return SimpleNamespace(num_timesteps=1_000_000)
 
-    monkeypatch.setitem(sys.modules, "stable_baselines3", SimpleNamespace(PPO=FakePPO))
+    from learning.rl import checkpoint as checkpoint_loading
+
+    monkeypatch.setattr(
+        checkpoint_loading,
+        "load_sb3_checkpoint",
+        lambda _path, *, device: FakePPO.load(_path, device=device),
+    )
     checkpoint = tmp_path / "checkpoint.zip"
     checkpoint.touch()
     loaded_steps = controller.verify_initial_checkpoint_models(
