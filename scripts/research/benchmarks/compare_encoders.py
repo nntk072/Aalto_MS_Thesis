@@ -19,12 +19,12 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from learning.rl.agent import build_agent  # noqa: E402
 from omegaconf import DictConfig, OmegaConf  # noqa: E402
 
 from evaluation import build_run_report, run_episode  # noqa: E402
 from evaluation.rollout.model import make_action_fn  # noqa: E402
 from market_data.splits.definitions import split_train_test  # noqa: E402
-from models.factory.agent import build_agent  # noqa: E402
 from simulation.environment.env import TradingEnv  # noqa: E402
 
 
@@ -45,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--train-end", default="2025-12-31", help="Last in-sample date")
     parser.add_argument("--test-start", default="2026-01-01", help="First out-of-sample date")
-    parser.add_argument("--out", default="results/encoder_comparison.json")
+    parser.add_argument("--out", default="outputs/benchmarks/encoder_comparison.json")
     return parser.parse_args()
 
 

@@ -15,17 +15,17 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
+from learning.rl.agent import build_agent
 from scripts.research.benchmarks.measure_env_memory import (
     _cgroup_memory_bytes,
     _load_train_slice,
     _tree_pss_mib,
 )
 
-from models.factory.agent import build_agent
 from simulation.environment.bundles import build_env_bundle
 from simulation.environment.spec import EnvSpec
 from simulation.environment.worker import make_bundle_env
-from training.setup.environments import _strategy_from_cfg
+from training.setup.environments import strategy_from_cfg
 
 
 def _parse_args() -> argparse.Namespace:
@@ -40,7 +40,7 @@ def _parse_args() -> argparse.Namespace:
 
 def _prepare_bundle() -> tuple[Any, EnvSpec, Path]:
     cfg, bars, features, tickbook = _load_train_slice(None)
-    strategy = _strategy_from_cfg(cfg)[0]
+    strategy = strategy_from_cfg(cfg)[0]
     bundle_path = build_env_bundle(
         cfg.data.cache_dir,
         bars,

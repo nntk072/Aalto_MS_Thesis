@@ -8,19 +8,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from features.po3.config import (
+from features.po3.fvg_detection import FVGConfig, detect_fvg
+from features.po3.ifvg_detection import IFVGConfig, detect_ifvg_confirmation
+from features.po3.trigger_rules import (
     EntryConfig,
-    FVGConfig,
-    IFVGConfig,
-    build_fvg_zones,
-    build_fvg_zones_for_plot,
     detect_entry_trigger,
-    detect_fvg,
     detect_htf_fvg,
-    detect_ifvg_confirmation,
     detect_ltf_ifvg,
     detect_po3_entries,
 )
+from features.po3.zones import build_fvg_zones, build_fvg_zones_for_plot
 
 
 @pytest.fixture

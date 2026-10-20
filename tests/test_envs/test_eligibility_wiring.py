@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import simulation.environment.factory as environment_factory
 from configuration import load_config
 from evaluation.rollout.model import evaluate_model
 from market_data.loading.ticks import TickBook
@@ -25,13 +26,13 @@ def test_strict_eligibility_config_override_propagates_to_env_and_eval(monkeypat
         captured.update(kwargs)
         return kwargs
 
-    monkeypatch.setattr(training_environments, "TradingEnv", fake_env)
+    monkeypatch.setattr(environment_factory, "TradingEnv", fake_env)
     empty = pd.DataFrame()
     training_environments.make_env(empty, empty, cfg, algo="ppo", reward="dsr")
     assert captured["strict_research_eligibility"] is True
     assert captured["tick_execution_required"] is True
 
-    eval_kwargs = training_environments._build_eval_common(cfg)[0]
+    eval_kwargs = training_environments.build_eval_common(cfg)[0]
     assert eval_kwargs["strict_research_eligibility"] is True
     assert "strict_research_eligibility" in inspect.signature(evaluate_model).parameters
 
@@ -173,12 +174,10 @@ def test_management_settings_match_training_and_evaluation_environment_kwargs(mo
         ]
     )
     captured = {}
-    monkeypatch.setattr(
-        training_environments, "TradingEnv", lambda **kwargs: captured.update(kwargs)
-    )
+    monkeypatch.setattr(environment_factory, "TradingEnv", lambda **kwargs: captured.update(kwargs))
     empty = pd.DataFrame()
     training_environments.make_env(empty, empty, cfg, algo="ppo", reward="pnl")
-    evaluation_kwargs = training_environments._build_eval_common(cfg)[0]
+    evaluation_kwargs = training_environments.build_eval_common(cfg)[0]
 
     for key, expected in {
         "sl_mode": "trailing",
@@ -206,7 +205,7 @@ def test_eval_environment_uses_campaign_seed_for_randomized_fill_latency() -> No
     cfg = load_config(["execution.randomized_fill_latency_ms=30"])
     args = SimpleNamespace(algo="ppo", reward="dsr", use_vae=False, seed=23)
 
-    evaluation_kwargs = training_environments._build_eval_common(cfg, args=args)[0]
+    evaluation_kwargs = training_environments.build_eval_common(cfg, args=args)[0]
 
     assert evaluation_kwargs["execution_seed"] == 23
 

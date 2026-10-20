@@ -26,6 +26,8 @@ from stable_baselines3 import PPO  # noqa: E402
 
 ROOT = repository_root(__file__)
 
+from learning.rl.ppo import ClampedStdMultiInputPolicy  # noqa: E402
+
 from evaluation import (  # noqa: E402
     build_comparison_table,
     calculate_metrics,
@@ -39,13 +41,12 @@ from market_data.splits.definitions import (  # noqa: E402
     make_train_mask,
     split_train_test,
 )
-from models.encoders.core import GRUEncoder, TCNEncoder, TransformerEncoder  # noqa: E402
-from models.policies.ppo import ClampedStdMultiInputPolicy  # noqa: E402
+from models.encoders import GRUEncoder, TCNEncoder, TransformerEncoder  # noqa: E402
 from training.setup.environments import (  # noqa: E402
-    _eval_guardrail_kwargs,
-    _max_loss_per_trade,
-    _strategy_from_cfg,
-    _strategy_risk_ranges,
+    eval_guardrail_kwargs,
+    max_loss_per_trade,
+    strategy_from_cfg,
+    strategy_risk_ranges,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -164,17 +165,17 @@ def _lot_block(closes: list[dict]) -> dict:
 
 
 def _eval_common(cfg) -> dict:
-    strategy, strategy_reward, strategy_weight = _strategy_from_cfg(cfg)
-    risk_frac_range, rr_ratio_range = _strategy_risk_ranges(cfg)
+    strategy, strategy_reward, strategy_weight = strategy_from_cfg(cfg)
+    risk_frac_range, rr_ratio_range = strategy_risk_ranges(cfg)
     return dict(
         obs_window=cfg.env.obs_window,
         initial_balance=cfg.account.initial_balance,
-        guardrail_kwargs=_eval_guardrail_kwargs(cfg),
+        guardrail_kwargs=eval_guardrail_kwargs(cfg),
         risk_frac_range=risk_frac_range,
         rr_ratio_range=rr_ratio_range,
         swing_buffer_pts=cfg.risk.swing_buffer_pts,
         contract_size=cfg.account.contract_size,
-        max_loss_per_trade_usd=_max_loss_per_trade(cfg),
+        max_loss_per_trade_usd=max_loss_per_trade(cfg),
         dsr_eta=cfg.env.reward_dsr_eta,
         continuous_actions=False,
         block_overnight=bool(cfg.env.get("block_overnight", True)),

@@ -18,7 +18,7 @@ from configuration.paths import repository_root
 from features import build_features, feature_cache_path
 from market_data.loading.pipeline import run_pipeline
 from market_data.splits.definitions import make_train_mask
-from training.configuration.cli import _load_merged_config
+from training.configuration.cli import load_merged_config
 from training.configuration.variant_resolution import resolve_variant
 from training.setup.environments import make_env
 
@@ -61,7 +61,7 @@ def main() -> int:
     feature_sets: dict[str, Any] = {}
     for name in names:
         resolved = resolve_variant(name, steps=100_000, seeds=[42])
-        cfg = _load_merged_config(
+        cfg = load_merged_config(
             argparse.Namespace(
                 config=resolved["base_config"],
                 strategy=resolved["strategy"],

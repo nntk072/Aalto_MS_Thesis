@@ -1,7 +1,17 @@
-# ruff: noqa: F403, F405
 from __future__ import annotations
 
-from .runtime_dependencies import *
+from typing import Any, cast
+
+import numpy as np
+import pandas as pd
+
+from trading.execution.broker import Position
+from trading.risk.sizing import compute_sl_tp_long, compute_sl_tp_short
+
+from .entry_diagnostics import _previous_session_audit
+from .entry_state import EntryCandidate
+from .market_view import BarView, FeatureRow
+from .mixin_base import RuntimeMixinBase
 
 
 class EntryExecutionRuntimeMixin(RuntimeMixinBase):
@@ -288,10 +298,10 @@ class EntryExecutionRuntimeMixin(RuntimeMixinBase):
             self.position.tp_lot_fractions = (1.0,)
             if feat_row is not None and tp_price is not None:
                 try:
-                    from trading.orders.entries import _target_menu
+                    from trading.orders.targets import target_menu
 
                     sl_d = abs(entry_price - float(sl_price)) if sl_price is not None else 0.0
-                    targets = _target_menu(
+                    targets = target_menu(
                         direction=discrete_action,
                         entry_price=entry_price,
                         row=feat_row,

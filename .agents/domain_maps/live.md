@@ -32,9 +32,11 @@
 
 ## Direct Dependencies
 
-- `models/factory/agent.py` (model loading)
+- `decisioning.DecisionProvider`; `live_trading_rl.py` wraps the loaded SB3
+  model at the composition root before constructing the runtime strategy.
+- The direct model argument on `RLStrategyAdapter` remains for compatibility.
 - `features/pipeline/builder.py` (feature rebuild for live observations)
-- `simulation/environment/` (action semantics — discrete vs continuous vs strategy mode)
+- `trading/` signal semantics and `decisioning/observations.py` (the live bridge has no simulation-runtime dependency)
 
 ## Consumers (Callers)
 
@@ -63,7 +65,30 @@
 2. **Silent divergence is the failure mode** — training under $1000 cap, live under $5000 is a bug
 3. **Action semantics must match** — discrete (PPO), continuous (SAC), or
    flag-derived strategy-overlay `Box` coordinates from
-   `simulation/contracts/actions.py`; checkpoint schema metadata must match the live
+  `decisioning/actions.py`; checkpoint schema metadata must match the live
    environment configuration
 4. **PAPER_TRADING defaults to true** — no orders placed unless explicitly disabled
 5. **Model loading** — must load with same encoder architecture used in training
+## Change Map
+
+| Task | Axis | Start file | Contract and focused test | Expected scope | Keep unchanged |
+|---|---|---|---|---|---|
+| Add a live data or broker adapter | external adapter | `integrations/mt5/adapters/` | live ports; `tests/test_live/test_rl_bridge.py` | adapter and conversion contract tests | provider schema and training workflow |
+| Change provider handling | inference runtime | `live/runtime/strategy.py` | `DecisionProvider`; `tests/test_live/test_rl_robot.py` | runtime adapter and schema test | vendor SDK boundary |
+
+## Axis of Change
+
+- **Axis:** live runtime lifecycle, data feeds, and provider selection.
+- **Owner:** `live/` owns broker-neutral runtime behavior; `integrations/` owns venue protocols.
+- **Stable boundary:** `MarketDataSource`, `DecisionProvider`, and live signal contracts.
+- **Expected edit radius:** one runtime port or one adapter with contract tests.
+- **Must not depend on:** training workflows or vendor SDK types.
+
+## Verified Source Paths
+
+- `live/runtime/strategy.py`
+- `decisioning/contracts.py`
+- `decisioning/adapters/sb3.py`
+- `decisioning/observations.py`
+- `integrations/mt5/adapters/trader.py`
+- `integrations/mt5/domain/trader.py`

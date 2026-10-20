@@ -9,7 +9,7 @@ produced by `train_rl.py` (an `out_of_sample` block readable by
 
 Example:
     python scripts/run_baseline_eval.py --bars-csv data/us100_2025.csv \
-        --out models/rl_runs/baselines
+        --out outputs/rl_runs/baselines
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ def parse_args() -> argparse.Namespace:
         default=["buy_and_hold", "ema_macd_rsi", "breakout"],
         choices=["buy_and_hold", "ema_macd_rsi", "breakout", "session_momentum"],
     )
-    parser.add_argument("--out-dir", default="models/rl_runs", help="Base directory for reports")
+    parser.add_argument("--out-dir", default="outputs/rl_runs", help="Base directory for reports")
     return parser.parse_args()
 
 

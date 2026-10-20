@@ -27,5 +27,10 @@ def write_text_atomic(path: str | Path, text: str, *, encoding: str = "utf-8") -
     return _atomic_replace(Path(path), text.encode(encoding))
 
 
+def write_bytes_atomic(path: str | Path, payload: bytes) -> Path:
+    """Atomically write opaque bytes while preserving the destination on failure."""
+    return _atomic_replace(Path(path), payload)
+
+
 def write_json_atomic(path: str | Path, value: Any) -> Path:
     return write_text_atomic(path, json.dumps(value, indent=2, sort_keys=True, default=str) + "\n")

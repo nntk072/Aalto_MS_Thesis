@@ -31,7 +31,9 @@ orchestra run "refactor risk module" --dry-run
 | 8. Fixing | Address review findings (up to `max_fixes`) |
 | 9. Verification | Run CI gate (`CI_CHECKS`) |
 
-State is persisted under `orchestra/state/` per task.
+Runtime state, logs, backups, and reports are persisted under
+`outputs/orchestra/state/` per task. This keeps generated state out of the
+source package.
 
 ## CI verification gate
 

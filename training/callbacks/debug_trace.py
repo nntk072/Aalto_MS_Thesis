@@ -20,7 +20,7 @@ import numpy as np
 
 from simulation.environment.diagnostics import (
     DebugStepError,
-    _jsonable,
+    jsonable,
 )
 
 Check = Callable[[Sequence[Mapping[str, Any]]], str]
@@ -246,7 +246,7 @@ class FlightRecorder:
         self.wiring_path = self.directory / "debug_wiring.json"
 
     def write_wiring(self, payload: Mapping[str, Any]) -> None:
-        snap = _jsonable(dict(payload))
+        snap = jsonable(dict(payload))
         self.wiring_path.write_text(json.dumps(snap, indent=2) + "\n", encoding="utf-8")
         reason = ""
         for check in self.checks:
@@ -259,7 +259,7 @@ class FlightRecorder:
     def record(self, snapshot: Mapping[str, Any]) -> None:
         """Append one update. Write an incident when the snapshot is unhealthy."""
         reason = nonfinite_reason(snapshot)
-        snap = _jsonable(dict(snapshot))
+        snap = jsonable(dict(snapshot))
         _append_jsonl(self.trace_path, snap)
         if not reason:
             window = list(self.ring) + [snap]
@@ -286,7 +286,7 @@ class FlightRecorder:
             return
         if text and text != "NoneType: None\n":
             self._last_tb = text
-        snap = _jsonable(dict(snapshot or {}))
+        snap = jsonable(dict(snapshot or {}))
         self._write_incident(reason, snap, "" if text == "NoneType: None\n" else text)
 
     def _write_incident(self, reason: str, snapshot: Mapping[str, Any], tb: str) -> None:
@@ -295,7 +295,7 @@ class FlightRecorder:
             {
                 "reason": reason,
                 "traceback": tb,
-                "snapshot": _jsonable(dict(snapshot)),
+                "snapshot": jsonable(dict(snapshot)),
                 "history": [dict(row) for row in self.ring],
             },
         )
@@ -423,7 +423,7 @@ def _corr(
 
 def _append_jsonl(path: Path, payload: Mapping[str, Any]) -> None:
     with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(_jsonable(dict(payload))) + "\n")
+        handle.write(json.dumps(jsonable(dict(payload))) + "\n")
         handle.flush()
 
 

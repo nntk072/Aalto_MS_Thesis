@@ -407,7 +407,7 @@ def test_minutes_per_step_is_read_from_the_index() -> None:
     reward, so an assumed 5 minutes on an M1 feed made that term five times
     too large and let it dominate the PnL component.
     """
-    from simulation.environment.env import _minutes_per_step
+    from simulation.environment.timebase import _minutes_per_step
 
     m1 = pd.date_range("2025-01-06 16:30", periods=10, freq="1min", tz="Etc/GMT-3")
     m5 = pd.date_range("2025-01-06 16:30", periods=10, freq="5min", tz="Etc/GMT-3")
@@ -417,7 +417,7 @@ def test_minutes_per_step_is_read_from_the_index() -> None:
 
 @pytest.mark.unit
 def test_minutes_per_step_falls_back_on_degenerate_index() -> None:
-    from simulation.environment.env import _minutes_per_step
+    from simulation.environment.timebase import _minutes_per_step
 
     single = pd.date_range("2025-01-06 16:30", periods=1, freq="1min", tz="Etc/GMT-3")
     assert _minutes_per_step(single) == pytest.approx(1.0)

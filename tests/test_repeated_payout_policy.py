@@ -8,7 +8,7 @@ from trading.account.state import AccountState
 from trading.execution.broker import Position
 from trading.policy.config import TradingPolicyConfig, resolve_trading_policy
 from trading.risk.guardrails import FTMOGuardrails
-from training.setup.environments import _build_eval_common, _training_episodic
+from training.setup.environments import _training_episodic, build_eval_common
 
 
 def test_repeated_policy_config_resolves_without_changing_default() -> None:
@@ -150,7 +150,7 @@ def test_repeated_training_and_eval_use_v3_schema_and_single_cycle_training() ->
         ]
     )
     assert _training_episodic(cfg) is True
-    common, *_ = _build_eval_common(cfg)
+    common, *_ = build_eval_common(cfg)
     assert common["observation_schema_version"] == "account-state-v3-repeated-payout"
     assert common["risk_frac_range"] == pytest.approx((0.0, 0.009))
     assert common["trading_policy"]["mode"] == "repeated_payout"

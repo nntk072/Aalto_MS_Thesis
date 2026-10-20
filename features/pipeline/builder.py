@@ -30,13 +30,6 @@ from features.context.premium_discount import (
     build_pd_context_features,
     build_trader_context_features,
 )
-from features.context.session_levels import (
-    prev_ny_high_low,
-    previous_labeled_session_ohlc,
-    prior_period_high_low,
-    range_quadrants,
-    session_ohlc,
-)
 from features.context.smt import smt_divergence
 from features.pipeline.cache import (
     feature_cache_content_hash,
@@ -45,39 +38,26 @@ from features.pipeline.context import (
     ensure_london_atr_distances,
 )
 from features.pipeline.normalization import rolling_zscore
-from features.po3.config import (
-    IFVGConfig,
-    detect_po3_entries,
-)
+from features.pipeline.po3_stage import append_po3_state_features
+from features.pipeline.session_stage import append_session_features
+from features.pipeline.structure_stage import append_structure_features
 from features.po3.entries import build_po3_phase_features
 from features.po3.fvg import build_fvg_zone_features
-from features.po3.ifvg_state import build_po3_ifvg_state
-from features.po3.state import (
-    align_ifvg_zone_timeframes,
-    build_distribution_after_ifvg,
-    build_ifvg_zone_features,
-    build_po3_state,
-)
-from features.technical.htf_sweeps import detect_confirmed_htf_sweeps
+from features.po3.trigger_rules import detect_po3_entries
 from features.technical.indicators import (
     atr,
     build_indicators,
     ny_session_clock,
     sweep_velocity,
     volume_spike,
-    vwap_level,
     wick_ratio,
 )
 from features.technical.structure import (
     TIMEFRAME_CONFIG,
-    classify_structure,
     detect_pivots,
     detect_session_levels,
     detect_swings,
-    structure_levels,
-    swing_features,
 )
-from features.technical.swings import swing_history
 from market_data.transforms.align import align_timeframes, timeframe_close_times
 from market_data.transforms.resample import resample
 
@@ -127,11 +107,6 @@ _FVG_RAW_STEMS = (
 # Numeric encoding of detect_po3_entries' entry_trigger_type string column so
 # the feature matrix stays homogeneous float (TradingEnv casts to float32).
 _PO3_TRIGGER_CODE = {"": 0, "retest": 1, "close_through": 2, "ltf_fvg": 3}
-
-# Supported fallback timeframes for the state-heavy blocks (plan §8, option
-# (b)). Normal configs provide explicit subsets; IFVG can use any timeframe
-# supported by data.resample, while its M1 source is always included directly.
-_MTF_STATE_TFS = ("M1", "M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1")
 
 # Default MTF subset for SMT divergence (§4.1), structure/BOS (§4.2), and
 # liquidity sweeps (§4.3). Each block accepts an explicit list of any standard
@@ -429,103 +404,19 @@ def build_features(
     if len(_fvg_raw.columns) > 0:
         feat = pd.concat([feat, _fvg_raw], axis=1)
 
-    # --- Structure levels (swings) + MTF structure/BOS (plan §4.2) ---
-    # Raw price levels after normalization (existing convention). M1 stays
-    # unprefixed; MTF variants add {TF}_last_swing_high/low + {TF}_bos_up/down
-    # (close-through flags) + ATR-normalized distances. Per-TF BOS uses the
-    # TF's own swings (detect_bos(tf_bars, structure_tf)), not M1 proxies.
-    structure = None
-    _mtf_struct_levels: dict[str, pd.DataFrame] = {}
-    if feat_cfg is not None:
-        m1_cfg = TIMEFRAME_CONFIG["M1"]
-        left = int(m1_cfg["left"])
-        atr_mult = float(m1_cfg["atr_mult"])
-        structure = structure_levels(primary, swing_period=left, atr_mult=atr_mult)
-        structure = structure[["last_swing_high", "last_swing_low"]]
-        pivots = detect_pivots(primary, left=left, right=int(m1_cfg["right"]))
-        swings_df = detect_swings(primary, pivots, atr_mult=atr_mult)
-        struct_cls = classify_structure(swings_df)
-        obs_window = 60
-        if cfg is not None:
-            selected = OmegaConf.select(cfg, "env.obs_window")
-            if selected is not None:
-                obs_window = int(selected)
-        feat = pd.concat(
-            [
-                feat,
-                structure,
-                swing_features(primary, swings_df, struct_cls, obs_window=obs_window),
-                swing_history(swings_df, n=3),
-            ],
-            axis=1,
-        )
-        if _enabled(feat_cfg, "structure", False):
-            struct_blocks: dict[str, pd.DataFrame] = {}
-            struct_levels: dict[str, pd.DataFrame] = {}
-            swing_candidate_count = int(
-                OmegaConf.select(cfg, "features.structure.swing_candidate_count", default=1)
-                if cfg is not None
-                else 1
-            )
-            if not 1 <= swing_candidate_count <= 3:
-                raise ValueError("features.structure.swing_candidate_count must be between 1 and 3")
-            candidate_price_increment = (
-                OmegaConf.select(cfg, "features.structure.candidate_price_increment", default=None)
-                if cfg is not None
-                else None
-            )
-            if candidate_price_increment is None and cfg is not None:
-                candidate_price_increment = OmegaConf.select(cfg, "costs.point_size", default=None)
-            for tf in _htf_list(feat_cfg, "structure", _MTF_LIGHT_TFS):
-                if str(tf) == "M1":
-                    continue
-                pri_tf, _ = _resample_pair(primary, None, str(tf), primary_timeframes)
-                if pri_tf.empty:
-                    continue
-                tf_cfg = TIMEFRAME_CONFIG.get(str(tf), m1_cfg)
-                tf_duration_ms = int(
-                    pd.Timedelta(
-                        {
-                            "M1": "1min",
-                            "M3": "3min",
-                            "M5": "5min",
-                            "M10": "10min",
-                            "M15": "15min",
-                            "M30": "30min",
-                            "H1": "1h",
-                            "H4": "4h",
-                            "D1": "1d",
-                        }[str(tf)]
-                    ).total_seconds()
-                    * 1000
-                )
-                lv_tf = structure_levels(
-                    pri_tf,
-                    swing_period=int(tf_cfg["left"]),
-                    atr_mult=float(tf_cfg["atr_mult"]),
-                    swing_candidate_count=swing_candidate_count,
-                    price_increment=(
-                        float(candidate_price_increment)
-                        if candidate_price_increment is not None
-                        else None
-                    ),
-                    confirmation_delay_ms=tf_duration_ms,
-                )
-                keep_columns = ["last_swing_high", "last_swing_low"]
-                if swing_candidate_count > 1:
-                    keep_columns.extend(
-                        f"swing_{side}_candidate_{slot}{suffix}"
-                        for side in ("high", "low")
-                        for slot in range(1, swing_candidate_count + 1)
-                        for suffix in ("", "_pivot_time_ms", "_confirmed_at_ms", "_age_bars")
-                    )
-                lv_tf = lv_tf[keep_columns]
-                struct_levels[str(tf)] = lv_tf
-                bos_tf = detect_bos(pri_tf, lv_tf)[["bos_up", "bos_down"]]
-                struct_blocks[str(tf)] = pd.concat([lv_tf, bos_tf], axis=1)
-            if struct_blocks:
-                feat = align_blocks(feat, struct_blocks)
-                _mtf_struct_levels = struct_levels
+    feat, structure, _mtf_struct_levels = append_structure_features(
+        primary,
+        feat,
+        feature_config=feat_cfg,
+        cfg=cfg,
+        resample_pair=lambda timeframe: _resample_pair(
+            primary, None, timeframe, primary_timeframes
+        ),
+        align_blocks=align_blocks,
+        timeframe_list=_htf_list,
+        enabled=_enabled,
+        default_timeframes=_MTF_LIGHT_TFS,
+    )
 
     # --- Full PO3 pipeline (Chain F): HTF FVG -> LTF IFVG -> entry triggers ---
     # Added AFTER normalization so the 0/1 entry signals and the numeric
@@ -645,177 +536,19 @@ def build_features(
             feat[f"{tf}_dist_to_swing_high_atr"] = (hi - primary["close"]) / atr5_m1
             feat[f"{tf}_dist_to_swing_low_atr"] = (primary["close"] - lo) / atr5_m1
 
-    # --- Idea 1 (PO3 + IFVG) strategy state features (opt-in) ---
-    # Assembled after session levels and ATR so the state machine can consume
-    # the causal Asian levels and the distance features can use atr_5.
-    if feat_cfg is not None and bool(getattr(feat_cfg, "include_strategy_state", False)):
-        swings = int(getattr(feat_cfg, "smt_swing_period", 5))
-        reference_mode = str(getattr(feat_cfg, "po3_reference_mode", "m1_legacy"))
-        if reference_mode == "htf_confirmed":
-            reference_timeframes = tuple(_htf_list(feat_cfg, "po3_reference", ("M5", "M15", "H1")))
-            sweeps, htf_sweep_audit = detect_confirmed_htf_sweeps(
-                primary,
-                timeframes=reference_timeframes,
-                return_audit=True,
-            )
-        elif reference_mode == "m1_legacy":
-            sweeps = detect_liquidity_sweeps(primary, swing_period=swings)
-        else:
-            raise ValueError(
-                "features.po3_reference_mode must be 'm1_legacy' or 'htf_confirmed', "
-                f"got {reference_mode!r}"
-            )
-        bos = (
-            detect_bos(primary, structure)
-            if structure is not None
-            else detect_bos(
-                primary,
-                structure_levels(primary, swing_period=swings)[
-                    ["last_swing_high", "last_swing_low"]
-                ],
-            )
-        )
-        phase_mode = str(getattr(feat_cfg, "po3_phase_mode", "legacy"))
-        if phase_mode not in {"legacy", "reclaim_then_ifvg"}:
-            raise ValueError(
-                "features.po3_phase_mode must be 'legacy' or 'reclaim_then_ifvg', "
-                f"got {phase_mode!r}"
-            )
-        close_threshold = (
-            OmegaConf.select(cfg, "strategy.ifvg.close_through_threshold")
-            if cfg is not None
-            else None
-        )
-        inverse_opposing = bool(
-            (
-                OmegaConf.select(cfg, "strategy.ifvg.require_opposing_fvg")
-                if cfg is not None
-                else False
-            )
-            or False
-        )
-        ifvg_config = (
-            IFVGConfig(
-                close_through_threshold=float(close_threshold),
-                inverse_opposing_fvg=inverse_opposing,
-            )
-            if close_threshold is not None
-            else IFVGConfig(inverse_opposing_fvg=inverse_opposing)
-        )
-        ifvg_zones = build_ifvg_zone_features(primary, ifvg_config=ifvg_config)
-        state_ifvg_zones = ifvg_zones.copy()
-        state_ifvg_zones["_ifvg_bull_confirmation_tf_code"] = np.where(
-            state_ifvg_zones["ifvg_bull_confirmed"] > 0.0, 1.0, 0.0
-        )
-        state_ifvg_zones["_ifvg_bear_confirmation_tf_code"] = np.where(
-            state_ifvg_zones["ifvg_bear_confirmed"] > 0.0, 1.0, 0.0
-        )
-        ifvg_mtf_blocks = pd.DataFrame(index=primary.index)
-        if _enabled(feat_cfg, "ifvg_mtf", False):
-            higher_ifvg: dict[str, tuple[pd.DataFrame, pd.DataFrame]] = {}
-            for tf in _htf_list(feat_cfg, "ifvg_mtf", _MTF_STATE_TFS):
-                tf = str(tf).upper()
-                if tf == "M1":
-                    continue  # M1 zones are already the primary block.
-                pri_tf, _ = _resample_pair(primary, None, tf, primary_timeframes)
-                if pri_tf.empty:
-                    continue
-                higher_ifvg[tf] = (
-                    pri_tf,
-                    build_ifvg_zone_features(pri_tf, ifvg_config=ifvg_config),
-                )
-            state_ifvg_zones, ifvg_mtf_blocks = align_ifvg_zone_timeframes(
-                primary,
-                ifvg_zones,
-                higher_ifvg,
-                availability_times={
-                    tf: timeframe_close_times(tf_bars, tf, scheduled_closes, session_start)
-                    for tf, (tf_bars, _) in higher_ifvg.items()
-                },
-            )
-        if phase_mode == "reclaim_then_ifvg":
-            po3_state = build_po3_ifvg_state(
-                primary,
-                sweeps,
-                state_ifvg_zones,
-                max_ifvg_age_bars=int(
-                    (
-                        OmegaConf.select(cfg, "strategy.ifvg.max_age_bars")
-                        if cfg is not None
-                        else None
-                    )
-                    or 50
-                ),
-            )
-        else:
-            po3_state = build_po3_state(primary, sweeps, levels)
-        bull_conf = state_ifvg_zones["ifvg_bull_confirmed"].to_numpy(dtype=float)
-        bear_conf = state_ifvg_zones["ifvg_bear_confirmed"].to_numpy(dtype=float)
-        zone_cols = [c for c in ifvg_zones.columns if not str(c).endswith("_confirmed")]
-        feat = pd.concat(
-            [feat, sweeps, bos, po3_state, ifvg_zones[zone_cols]],
-            axis=1,
-        )
-        feat["ifvg_bull_confirmed"] = bull_conf
-        feat["ifvg_bear_confirmed"] = bear_conf
-        feat["ifvg_bull_confirmation_tf_code"] = state_ifvg_zones[
-            "_ifvg_bull_confirmation_tf_code"
-        ].to_numpy(dtype=float)
-        feat["ifvg_bear_confirmation_tf_code"] = state_ifvg_zones[
-            "_ifvg_bear_confirmation_tf_code"
-        ].to_numpy(dtype=float)
-        if not ifvg_mtf_blocks.empty:
-            feat = pd.concat([feat, ifvg_mtf_blocks], axis=1)
-
-        # ATR-normalised distances for the model; the raw levels in the frame
-        # above stay available for the environment's structural SL/TP logic
-        # and must be excluded from the model sequence (env seq_exclude).
-        atr5 = feat["atr_5"].where(feat["atr_5"] > 0)
-        feat["asian_range"] = feat["asian_high"] - feat["asian_low"]
-        feat["price_to_asian_high_atr"] = (feat["asian_high"] - primary["close"]) / atr5
-        feat["price_to_asian_low_atr"] = (primary["close"] - feat["asian_low"]) / atr5
-        feat["manipulation_low_distance_atr"] = (
-            primary["close"] - feat["po3_manipulation_low"]
-        ) / atr5
-        feat["manipulation_high_distance_atr"] = (
-            feat["po3_manipulation_high"] - primary["close"]
-        ) / atr5
-
-        # --- PO3 state MTF (plan §4.4, opt-in, default off) ---
-        # One independent state machine per TF on that TF's own resampled
-        # bars (own sweeps + own Asian levels), prefixed {TF}_po3_*, aligned
-        # onto M1. Ships behind po3_state_mtf.enabled until causality tests
-        # (§6.1) and an ablation run justify it as default.
-        if _enabled(feat_cfg, "po3_state_mtf", False):
-            po3_mtf_blocks: dict[str, pd.DataFrame] = {}
-            for tf in _htf_list(feat_cfg, "po3_state_mtf", _MTF_STATE_TFS):
-                if str(tf) == "M1":
-                    continue  # M1 already present unprefixed
-                pri_tf, _ = _resample_pair(primary, None, str(tf), primary_timeframes)
-                if pri_tf.empty:
-                    continue
-                sweeps_tf = detect_liquidity_sweeps(pri_tf, swing_period=swings)
-                cached_lv = _mtf_sweep_levels.get(str(tf))
-                if cached_lv is not None and len(cached_lv) == len(pri_tf):
-                    po3_lv_tf: pd.DataFrame = cached_lv
-                else:
-                    po3_lv_tf = detect_session_levels(pri_tf)
-                po3_tf = build_po3_state(pri_tf, sweeps_tf, po3_lv_tf)
-                po3_mtf_blocks[str(tf)] = po3_tf
-            if po3_mtf_blocks:
-                # Rename AFTER align: align_timeframes prefixes every column
-                # with {TF}_ (e.g. M5_po3_manipulation_active), so renaming
-                # per-TF frames beforehand would double-prefix (M5_M5_po3_*).
-                feat = align_blocks(feat, po3_mtf_blocks)
-
-        if phase_mode == "legacy":
-            feat["po3_distribution_after_ifvg"] = build_distribution_after_ifvg(
-                po3_state["po3_distribution_direction"].to_numpy(dtype=float),
-                po3_state["po3_manipulation_active"].to_numpy(dtype=float),
-                po3_state["po3_manipulation_direction"].to_numpy(dtype=float),
-                bull_conf,
-                bear_conf,
-            )
+    feat, htf_sweep_audit = append_po3_state_features(
+        primary,
+        feat,
+        feature_config=feat_cfg,
+        cfg=cfg,
+        primary_timeframes=primary_timeframes,
+        scheduled_closes=scheduled_closes,
+        session_start=session_start,
+        levels=levels,
+        structure=structure,
+        mtf_sweep_levels=_mtf_sweep_levels,
+        align_blocks=align_blocks,
+    )
 
     # --- LTF BOS + MSS decision stack ---
     # With include_strategy_state, BOS is already present; with include_pd_context
@@ -840,94 +573,7 @@ def build_features(
             feat["mss_up_dist_atr"] = (feat["mss_up_level"] - primary["close"]) / atr5_ltf
             feat["mss_down_dist_atr"] = (primary["close"] - feat["mss_down_level"]) / atr5_ltf
 
-    # --- CT-anchored session levels (opt-in) ---
-    # Raw price levels like the structure block above, so added AFTER
-    # normalization. Windows are defined in America/Chicago wall-clock time
-    # and resolved per bar (DST-safe); columns are additive to the legacy
-    # broker-tz asian_*/london_* levels and carry a _ct suffix.
-    if feat_cfg is not None and bool(getattr(feat_cfg, "include_session_ohlc", False)):
-        sess_cfg = feat_cfg.sessions
-        sess_tz = str(sess_cfg.get("tz", "America/Chicago"))
-        source_clock_model = str(
-            (
-                OmegaConf.select(cfg, "data.timestamp_clock", default="native")
-                if cfg is not None
-                else "native"
-            )
-            or "native"
-        )
-        for name in ("asian", "london", "ny"):
-            window = sess_cfg[name]
-            ohlc = session_ohlc(
-                primary,
-                str(window["start"]),
-                str(window["end"]),
-                session_tz=sess_tz,
-                prefix=f"{name}_ct",
-                source_clock_model=source_clock_model,
-            )
-            feat = pd.concat([feat, ohlc], axis=1)
-
-        yday = prior_period_high_low(
-            primary, freq="D", tz=sess_tz, source_clock_model=source_clock_model
-        )
-        lweek = prior_period_high_low(
-            primary, freq="W", tz=sess_tz, source_clock_model=source_clock_model
-        )
-        ny_window = sess_cfg["ny"]
-        prev_ny = prev_ny_high_low(
-            primary,
-            start_ct=str(ny_window["start"]),
-            end_ct=str(ny_window["end"]),
-            session_tz=sess_tz,
-            source_clock_model=source_clock_model,
-        )
-        feat = pd.concat([feat, yday, lweek, prev_ny], axis=1)
-
-        for range_name in list(sess_cfg.get("quadrant_ranges", ["yesterday", "lastweek"])):
-            feat = pd.concat(
-                [
-                    feat,
-                    range_quadrants(
-                        feat[f"{range_name}_high"],
-                        feat[f"{range_name}_low"],
-                        prefix=str(range_name),
-                    ),
-                ],
-                axis=1,
-            )
-
-        # Raw VWAP level; tick-count weights via activity_series.
-        from market_data.transforms.activity import activity_series
-
-        if (
-            bool(getattr(feat_cfg, "vwap_session", False))
-            and activity_series(primary) is not None
-            and "session_id" in primary.columns
-        ):
-            feat["vwap"] = vwap_level(primary)
-
-    # Separate from running session levels: Idea 2 reads only the latest
-    # configured session whose final expected bar has already closed.
-    if feat_cfg is not None and bool(getattr(feat_cfg, "include_previous_session_pd", False)):
-        sess_cfg = feat_cfg.sessions
-        sess_tz = str(sess_cfg.get("tz", "America/Chicago"))
-        windows = {
-            name: {"start": str(sess_cfg[name]["start"]), "end": str(sess_cfg[name]["end"])}
-            for name in ("asian", "london", "ny")
-        }
-        feat = pd.concat(
-            [
-                feat,
-                previous_labeled_session_ohlc(
-                    primary,
-                    windows,
-                    session_tz=sess_tz,
-                    source_clock_model=source_clock_model,
-                ),
-            ],
-            axis=1,
-        )
+    feat = append_session_features(primary, feat, cfg, feat_cfg)
 
     # --- Trader-context HTF bias / manip reverse / trade direction ---
     # Wired when PD context or strategy state is on (Idea 1/2).

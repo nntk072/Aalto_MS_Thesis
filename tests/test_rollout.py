@@ -15,8 +15,12 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
+from decisioning.actions import build_discrete_trading_action_schema
+from decisioning.adapters.sb3 import SB3DecisionProvider
+from decisioning.observations import OBSERVATION_SCHEMA_V1
+from gymnasium import spaces
 
-from evaluation.rollout.model import evaluate_model
+from evaluation.rollout.model import evaluate_model, evaluate_provider
 
 
 class _ScriptedModel:
@@ -30,6 +34,8 @@ class _ScriptedModel:
         self.script = script
         self.default = default
         self.t = 0
+        self.action_space: spaces.Space[Any] = spaces.Discrete(20)
+        self._action_schema: dict[str, object] = build_discrete_trading_action_schema().to_dict()
 
     def predict(self, obs, deterministic: bool = True):
         action = self.script.get(self.t, self.default)
@@ -111,6 +117,31 @@ def test_evaluate_model_produces_trades_and_valid_equity():
     assert close_rows["bar"].notna().all()
     # Equity must not stay flat at the initial balance the whole rollout.
     assert not np.isclose(equity.iloc[-1], 100_000.0)
+
+
+def test_evaluate_provider_uses_the_same_trading_rollout():
+    obs_window = 10
+    n = 120
+    bars = _make_bars(n)
+    features = _make_features(bars)
+    script = {t: (1 if t % 20 == 0 else 19 if t % 20 == 5 else 0) for t in range(n - obs_window)}
+    provider = SB3DecisionProvider(
+        _ScriptedModel(script),
+        input_schema_version=OBSERVATION_SCHEMA_V1,
+    )
+
+    result = evaluate_provider(
+        provider,
+        bars=bars,
+        features=features,
+        obs_window=obs_window,
+        initial_balance=100_000.0,
+    )
+
+    assert not result["trades"].empty
+    assert result["completed_data_split"] is True
+    assert result["equity"].index[0] == bars.index[obs_window]
+    assert len(result["equity"]) == len(bars) - obs_window + 1
 
 
 class _ExposureEnv:
@@ -240,7 +271,8 @@ def test_evaluate_model_does_not_mark_step_capped_rollout_as_full_survival():
 
 def test_evaluate_model_uses_requested_observation_schema(monkeypatch):
     """Training and evaluation must construct the same account observation."""
-    from simulation.contracts.observations import OBSERVATION_SCHEMA_V2, V2_COORDINATES
+    from decisioning.observations import OBSERVATION_SCHEMA_V2, V2_COORDINATES
+
     from simulation.environment.env import TradingEnv as OriginalTradingEnv
 
     env_kwargs = {}

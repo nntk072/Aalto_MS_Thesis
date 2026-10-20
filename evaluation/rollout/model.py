@@ -60,9 +60,23 @@ def make_action_fn(
     When ``strategy_actions`` is set (Idea 1 PO3 Box(4)), the full float32
     vector is returned so eval matches training.
 
+    A backend-neutral DecisionProvider follows the same rollout path after its
+    semantic output is validated and adapted to the environment action shape.
+
     This is the single shared implementation — ``scripts/train_rl.py`` and
     ``scripts/compare_encoders.py`` used to each carry private copies.
     """
+
+    if hasattr(model, "metadata") and hasattr(model, "predict"):
+        from evaluation.rollout.provider import make_provider_action_fn
+
+        return make_provider_action_fn(
+            model,
+            input_schema_version=model.metadata.input_schema_version,
+            deterministic=deterministic,
+            continuous_actions=continuous_actions,
+            strategy_actions=strategy_actions,
+        )
 
     def action_fn(obs: dict[str, Any]) -> Any:
         action = model.predict(obs, deterministic=deterministic)[0]
@@ -430,3 +444,15 @@ def evaluate_model(
             else {}
         ),
     }
+
+
+def evaluate_provider(
+    provider: Any,
+    bars: pd.DataFrame,
+    features: pd.DataFrame,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Evaluate a backend-neutral decision provider through the trading environment."""
+    if not hasattr(provider, "metadata") or not hasattr(provider, "predict"):
+        raise TypeError("evaluate_provider requires a DecisionProvider implementation")
+    return evaluate_model(provider, bars, features, **kwargs)

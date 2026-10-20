@@ -214,7 +214,7 @@ def build_env_bundle(
     }
     arrays.update(_tick_arrays(tickbook))
     if bool(cfg.env.get("strategy_actions", False)) and "atr_5" in features:
-        from trading.positions.tp_reach import max_tp_distance
+        from features.context.reachability import max_tp_distance
 
         max_tp = max_tp_distance(bars, features["atr_5"]).reindex(bars.index)
         arrays["max_tp_dist"] = max_tp.to_numpy(dtype=np.float64, copy=True)

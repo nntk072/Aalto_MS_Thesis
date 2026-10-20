@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Create the isolated CUDA 12.6 project environment required by V100 (sm_70).
+set -euo pipefail
+
+REPO="${TRITON_REPO:-/scratch/work/nguyenl37/Aalto_MS_Thesis}"
+V100_ENV="${TRITON_V100_ENV:-/scratch/work/nguyenl37/.venv-v100}"
+cd "$REPO"
+
+if [[ "$(uname -m)" != "x86_64" ]]; then
+  echo "ERROR: V100 environment setup requires x86_64" >&2
+  exit 1
+fi
+if [[ -z "${SLURM_JOB_ID:-}" ]]; then
+  echo "ERROR: run this installer inside an allocated V100 compute shell" >&2
+  exit 1
+fi
+if ! command -v uv >/dev/null 2>&1; then
+  echo "ERROR: uv is required on the V100 compute node" >&2
+  exit 1
+fi
+
+export UV_PROJECT_ENVIRONMENT="$V100_ENV"
+uv python install 3.12
+if [[ -x "$V100_ENV/bin/python" ]]; then
+  "$V100_ENV/bin/python" -c 'import sys; assert sys.version_info[:2] == (3, 12)'
+elif [[ -e "$V100_ENV" ]]; then
+  echo "ERROR: $V100_ENV exists without a Python interpreter; inspect it before replacing it" >&2
+  exit 1
+else
+  uv venv --python 3.12 "$V100_ENV"
+fi
+
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/aalto-v100-env.XXXXXX")"
+trap 'rm -rf "$tmp_dir"' EXIT
+uv export --locked --extra dev --no-emit-project --no-emit-package torch \
+  -o "$tmp_dir/locked-requirements.txt"
+
+# The project lock targets CUDA 13, while V100 needs the CUDA 12.6 torch wheel.
+awk '
+/^[[:alnum:]][[:alnum:]_.-]*(\[[^]]+\])?([<=>!~;[:space:]]|$)/ {
+  name=$0
+  sub(/\[[^]]*\]/, "", name)
+  sub(/[<=>!~;[:space:]].*/, "", name)
+  skip=(name == "torch" || name == "torchvision" || name == "triton" ||
+        name ~ /^(nvidia-|cuda-)/)
+}
+!skip { print }
+' "$tmp_dir/locked-requirements.txt" > "$tmp_dir/v100-requirements.txt"
+
+uv pip sync --python "$V100_ENV/bin/python" "$tmp_dir/v100-requirements.txt"
+uv pip install --python "$V100_ENV/bin/python" torch==2.14.1 \
+  --index-url https://download.pytorch.org/whl/cu126
+uv pip install --python "$V100_ENV/bin/python" -e "$REPO" --no-deps
+uv pip check --python "$V100_ENV/bin/python"
+
+"$V100_ENV/bin/python" - <<'PY'
+import torch
+
+assert torch.__version__.startswith("2.14.1+cu126"), torch.__version__
+assert torch.cuda.is_available(), "CUDA device unavailable"
+assert torch.cuda.get_device_capability(0) == (7, 0)
+assert "sm_70" in torch.cuda.get_arch_list(), torch.cuda.get_arch_list()
+with torch.autocast(device_type="cuda", dtype=torch.float16):
+    result = torch.randn((1024, 1024), device="cuda") @ torch.randn(
+        (1024, 1024), device="cuda"
+    )
+torch.cuda.synchronize()
+assert torch.isfinite(result).all()
+print(
+    f"V100 ready: torch={torch.__version__}, device={torch.cuda.get_device_name(0)}, "
+    f"capability={torch.cuda.get_device_capability(0)}"
+)
+PY

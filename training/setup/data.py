@@ -10,7 +10,7 @@ import pandas as pd
 
 from market_data.loading.ticks import TickBook, tick_execution_coverage
 from market_data.transforms.sessions import ny_session_mask
-from training.setup.environments import _strategy_from_cfg
+from training.setup.environments import strategy_from_cfg
 
 
 def _publish_obs_memmap(
@@ -26,7 +26,7 @@ def _publish_obs_memmap(
     """
     if int(cfg.env.get("n_envs", 1)) <= 1:
         return None
-    strategy, _, _ = _strategy_from_cfg(cfg)
+    strategy, _, _ = strategy_from_cfg(cfg)
     from simulation.environment.bundles import observation_features
 
     array, _ = observation_features(bars, features, strategy.raw_columns)

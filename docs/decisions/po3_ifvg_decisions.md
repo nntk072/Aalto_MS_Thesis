@@ -156,7 +156,7 @@ structural reference, and lot fraction; non-strategy execution continues to
 distinguish the executed RR price from its nearest structural anchor.
 
 WP6 adds `docs/decisions/fixtures/idea12_synthetic_fixtures.json`, a renderer
-at `scripts/research/render_idea12_synthetic_figures.py`, and three standalone
+at `scripts/research/audits/render_idea12_synthetic_figures.py`, and three standalone
 SVGs in `docs/thesis/figures/`. These are clearly synthetic illustrations,
 not replacements for unavailable original Figure 17/18 sources and not
 historical or performance evidence. The separate thesis alignment note was

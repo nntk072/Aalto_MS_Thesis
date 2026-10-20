@@ -7,9 +7,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
+from decisioning.actions import build_action_schema
 
 from evaluation.metrics import calculate_metrics
-from simulation.contracts.actions import build_action_schema
 from simulation.environment.rewards import REWARD_PART_KEYS, DSRReward, PnLReward
 from training.callbacks.dashboard import (
     TrainingDashboardCallback,
@@ -461,7 +461,8 @@ def test_format_diversity_table() -> None:
     """The diversity table is a DIVERSITY box with --- borders."""
     import pandas as pd
 
-    from evaluation.metrics.decision_diversity import DiversityThresholds, format_diversity_table
+    from evaluation.metrics.decision_diversity import DiversityThresholds
+    from evaluation.reporting.diversity_table import format_diversity_table
 
     trades = pd.DataFrame(
         {

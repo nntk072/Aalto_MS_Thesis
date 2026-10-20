@@ -2,7 +2,7 @@
 
 YOU implement:
   - ``models/encoders/core.py``  (TCN or Transformer as SB3 BaseFeaturesExtractor)
-  - ``models/factory/agent.py``    (PPO policy wiring)
+  - ``learning/rl/agent.py``       (PPO policy wiring)
 
 Observation contract
 --------------------

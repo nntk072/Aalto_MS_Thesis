@@ -4,15 +4,14 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from decisioning.actions import build_action_schema, build_discrete_trading_action_schema
 from gymnasium import spaces
-
-from models.factory.agent import (
+from learning.rl.agent import (
     LegacyFourToFiveActionAdapter,
     bind_discrete_action_schema,
     validate_model_action_schema,
     validate_model_discrete_action_schema,
 )
-from simulation.contracts.actions import build_action_schema, build_discrete_trading_action_schema
 
 
 def _model(width: int, key: str | None, version: str | None) -> SimpleNamespace:

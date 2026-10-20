@@ -13,11 +13,11 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
+from decisioning.actions import build_action_schema
 from omegaconf import OmegaConf
 
 from configuration.paths import repository_root
-from simulation.contracts.actions import build_action_schema
-from training.configuration.cli import _load_merged_config
+from training.configuration.cli import load_merged_config
 from training.configuration.variant_resolution import resolve_variant
 
 ROOT = repository_root(__file__)
@@ -45,7 +45,7 @@ def _config_for_gate(gate_enabled: bool) -> dict[str, Any]:
         quality_variant=None,
         overrides=overrides,
     )
-    cfg = _load_merged_config(args)
+    cfg = load_merged_config(args)
     value = OmegaConf.to_container(cfg, resolve=True, enum_to_str=True)
     if not isinstance(value, dict):
         raise TypeError("resolved configuration must be a mapping")
@@ -173,7 +173,7 @@ def main() -> int:
             "config/base/default.yaml",
             "training/runner/training.py",
             "training/configuration/variant_resolution.py",
-            "simulation/contracts/actions.py",
+            "decisioning/actions.py",
         ],
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)

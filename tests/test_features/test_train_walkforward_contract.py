@@ -63,8 +63,8 @@ class TestWalkForwardSourceContract(unittest.TestCase):
             assert isinstance(value.value, ast.Name)
             self.assertEqual(
                 (value.value.id, value.attr),
-                ("prep", attr),
-                f"{keyword} must remain owned by prepared training state until walk-forward",
+                ("data", attr),
+                f"{keyword} must come from the prepared training dataset",
             )
 
 

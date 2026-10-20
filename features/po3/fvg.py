@@ -7,7 +7,8 @@ from typing import cast
 import numpy as np
 import pandas as pd
 
-from features.po3.config import FVGConfig, build_fvg_zones, detect_fvg
+from features.po3.fvg_detection import FVGConfig, detect_fvg
+from features.po3.zones import build_fvg_zones
 from features.technical.indicators import atr
 
 _FVG_DIST_CAP = 5.0

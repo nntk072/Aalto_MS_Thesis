@@ -72,9 +72,9 @@ def note_debug_step(
         raise DebugStepError(
             "non-finite reward",
             {
-                "action": _jsonable(action),
+                "action": jsonable(action),
                 "reward": None if not math.isfinite(float(reward)) else float(reward),
-                "reward_parts": _jsonable(dict(reward_parts)),
+                "reward_parts": jsonable(dict(reward_parts)),
                 "position": bool(position),
                 "position_direction": int(position_direction),
             },
@@ -175,13 +175,13 @@ def _spike_share(rewards: Sequence[float]) -> float:
     return float(np.dot(centered[top], centered[top]) / total)
 
 
-def _jsonable(value: Any) -> Any:
+def jsonable(value: Any) -> Any:
     if isinstance(value, dict):
-        return {str(key): _jsonable(item) for key, item in value.items()}
+        return {str(key): jsonable(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
-        return [_jsonable(item) for item in value]
+        return [jsonable(item) for item in value]
     if isinstance(value, np.ndarray):
-        return _jsonable(value.tolist())
+        return jsonable(value.tolist())
     if isinstance(value, np.floating):
         number = float(value)
         return number if math.isfinite(number) else None

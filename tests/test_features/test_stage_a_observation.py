@@ -6,6 +6,9 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from decisioning.actions import build_discrete_trading_action_schema
+from decisioning.observations import OBSERVATION_SCHEMA_V1, build_observation_schema
+from gymnasium import spaces
 
 from features import (
     attach_reachable_r,
@@ -14,12 +17,13 @@ from features import (
 )
 from features.technical.indicators import ny_session_clock
 from live.runtime.strategy import RLStrategyAdapter
-from simulation.contracts.observations import OBSERVATION_SCHEMA_V1, build_observation_schema
 from simulation.environment.env import TradingEnv
 
 
 class _StubModel:
     _observation_schema = build_observation_schema(OBSERVATION_SCHEMA_V1).to_dict()
+    _action_schema = build_discrete_trading_action_schema().to_dict()
+    action_space: Any = spaces.Discrete(20)
 
     def predict(self, obs: dict[str, Any], deterministic: bool = True) -> np.ndarray[Any, Any]:  # noqa: ARG002
         return np.array([1])

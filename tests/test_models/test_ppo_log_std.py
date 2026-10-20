@@ -2,22 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 import torch
-
-from models.factory.agent import build_agent
-from models.policies.ppo import (
+from decisioning.actions import build_discrete_trading_action_schema
+from gymnasium import spaces
+from learning.rl.agent import build_agent
+from learning.rl.callbacks import ClipLogStdCallback
+from learning.rl.ppo import (
     attach_mode_prior,
     clip_policy_log_std,
     install_post_update_std_clip,
     mode_index,
 )
-from simulation.contracts.actions import build_discrete_trading_action_schema
+
 from simulation.environment.env import TradingEnv
 from tests.test_models.test_sac_agent import make_env
-from training.callbacks.core import ClipLogStdCallback
 
 
 def _log_std_range(log_std: Any) -> tuple[float, float]:
@@ -263,7 +264,7 @@ def test_policy_terms_follow_the_active_names() -> None:
 
 
 def test_build_agent_box_uses_clamped_policy() -> None:
-    from models.policies.ppo import ClampedStdMultiInputPolicy
+    from learning.rl.ppo import ClampedStdMultiInputPolicy
 
     env = make_env(continuous=True)
     model = build_agent(env, _ppo_cfg(), arch="tcn", algo="ppo")
@@ -338,5 +339,8 @@ def test_policy_account_value_weight_matches_observation_width() -> None:
         episodic=True,
     )
     model = build_agent(env, _ppo_cfg(), arch="tcn", algo="ppo")
-    account_dim = env.observation_space["account"].shape[0]
+    observation_space = cast(spaces.Dict, env.observation_space)
+    account_shape = observation_space["account"].shape
+    assert account_shape is not None
+    account_dim = account_shape[0]
     assert model.policy.account_value_weight.shape == (account_dim,)

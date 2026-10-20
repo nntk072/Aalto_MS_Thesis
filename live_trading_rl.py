@@ -180,13 +180,14 @@ def build_robot(model_path: Path, run_config: Path, args: argparse.Namespace) ->
     """Construct the fully-wired ``RLRobot`` from env/CLI config."""
     try:
         import MetaTrader5 as mt5  # noqa: F401  (used via mt5.* below)
+        from decisioning.adapters.sb3 import SB3DecisionProvider
 
         from integrations.mt5.domain.data_sources.mt5_data import MT5Data
         from integrations.mt5.domain.mt5_connection import ensure_mt5_logged_in
         from integrations.mt5.domain.risk_manager import RiskManager
         from integrations.mt5.domain.trader import MT5Trader
         from integrations.mt5.robot.rl_robot import RLRobot
-        from live.runtime.strategy import RLStrategyAdapter
+        from live.runtime.strategy import RLStrategyAdapter, build_live_observation_schema
     except ModuleNotFoundError as exc:
         if getattr(exc, "name", "") == "MetaTrader5":
             raise SystemExit(
@@ -198,6 +199,11 @@ def build_robot(model_path: Path, run_config: Path, args: argparse.Namespace) ->
 
     model = load_model(model_path)
     cfg = OmegaConf.load(run_config)
+    observation_schema = build_live_observation_schema(cfg)
+    provider = SB3DecisionProvider(
+        model,
+        input_schema_version=observation_schema.version,
+    )
     risk = load_risk_overrides(cfg)
     paper_trading = os.environ.get("PAPER_TRADING", "true").strip().lower() != "false"
 
@@ -222,7 +228,7 @@ def build_robot(model_path: Path, run_config: Path, args: argparse.Namespace) ->
             "(no SMT features to feed live)"
         )
 
-    adapter = RLStrategyAdapter(model=model, config_path=str(run_config))
+    adapter = RLStrategyAdapter(provider=provider, config_path=str(run_config))
     return RLRobot(
         adapter=adapter,
         data_source=data_source,

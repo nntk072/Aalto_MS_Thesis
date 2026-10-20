@@ -21,8 +21,8 @@ from evaluation.metrics.decision_diversity import (
     choice_rank_median,
     risk_mean_collapsed,
 )
+from evaluation.reporting.box_table import kv_lines, kv_widths, render_box_table
 from simulation.environment.rewards import REWARD_PART_KEYS, empty_reward_parts
-from training.reporting.box_table import kv_lines, kv_widths, render_box_table
 
 log = logging.getLogger(__name__)
 

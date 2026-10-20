@@ -26,6 +26,7 @@ from typing import Any, cast
 
 import numpy as np
 import torch
+from learning.rl.ppo import ClampedStdMultiInputPolicy
 from omegaconf import DictConfig, OmegaConf
 from stable_baselines3 import PPO
 
@@ -35,16 +36,15 @@ from features import FEATURE_CACHE_VERSION, build_features
 from market_data.loading.pipeline import build_tick_books, run_pipeline
 from market_data.loading.ticks import ticks_covering
 from market_data.splits.definitions import get_split_config, split_bars, split_train_test
-from models.policies.ppo import ClampedStdMultiInputPolicy
 from training.setup.environments import (
-    _eval_guardrail_kwargs,
-    _fill_delay_ms,
-    _max_loss_per_trade,
-    _max_tick_quote_wait_ms,
-    _randomized_fill_latency_ms,
-    _strategy_from_cfg,
-    _strategy_risk_ranges,
-    _tick_execution_required,
+    eval_guardrail_kwargs,
+    fill_delay_ms,
+    max_loss_per_trade,
+    max_tick_quote_wait_ms,
+    randomized_fill_latency_ms,
+    strategy_from_cfg,
+    strategy_risk_ranges,
+    tick_execution_required,
 )
 
 
@@ -60,17 +60,17 @@ def _summarise(values: list[float]) -> dict[str, float]:
 
 def _eval_kwargs(cfg: Any) -> dict[str, Any]:
     """Env kwargs mirroring train_rl.py's post-training evaluation."""
-    strategy, strategy_reward, strategy_weight = _strategy_from_cfg(cfg)
-    risk_frac_range, rr_ratio_range = _strategy_risk_ranges(cfg)
+    strategy, strategy_reward, strategy_weight = strategy_from_cfg(cfg)
+    risk_frac_range, rr_ratio_range = strategy_risk_ranges(cfg)
     return dict(
         obs_window=cfg.env.obs_window,
         initial_balance=cfg.account.initial_balance,
-        guardrail_kwargs=_eval_guardrail_kwargs(cfg),
+        guardrail_kwargs=eval_guardrail_kwargs(cfg),
         risk_frac_range=risk_frac_range,
         rr_ratio_range=rr_ratio_range,
         swing_buffer_pts=cfg.risk.swing_buffer_pts,
         contract_size=cfg.account.contract_size,
-        max_loss_per_trade_usd=_max_loss_per_trade(cfg),
+        max_loss_per_trade_usd=max_loss_per_trade(cfg),
         dsr_eta=cfg.env.reward_dsr_eta,
         continuous_actions=False,
         # This diagnostic intentionally samples actions; only the RNG seed varies.
@@ -92,10 +92,10 @@ def _eval_kwargs(cfg: Any) -> dict[str, Any]:
         peak_trailing_dd_limit=float(cfg.env.get("peak_trailing_dd_limit", 0.0)),
         agent_direction_control=bool(cfg.env.get("agent_direction_control", False)),
         direction_override_threshold=float(cfg.env.get("direction_override_threshold", 0.0)),
-        fill_delay_ms=_fill_delay_ms(cfg),
-        randomized_fill_latency_ms=_randomized_fill_latency_ms(cfg),
-        tick_execution_required=_tick_execution_required(cfg),
-        max_tick_quote_wait_ms=_max_tick_quote_wait_ms(cfg),
+        fill_delay_ms=fill_delay_ms(cfg),
+        randomized_fill_latency_ms=randomized_fill_latency_ms(cfg),
+        tick_execution_required=tick_execution_required(cfg),
+        max_tick_quote_wait_ms=max_tick_quote_wait_ms(cfg),
     )
 
 

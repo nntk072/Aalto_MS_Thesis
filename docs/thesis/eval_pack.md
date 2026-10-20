@@ -102,9 +102,9 @@ uv run python -m quant_rl.train.train_rl --mvp --seed=50
 |--------|------|
 | Frozen Idea 1 / 2 / 3 | `outputs/20260921_{113043,135435,160121}_rl_train_seed50/` |
 | Campaign log | `outputs/idea123_20m_final_tmux.log` |
-| Ablation JSON | `results/ablations/<variant>.json` |
-| OOS cost grid | `results/oos_*.json` |
-| Leak report | `results/leak_detectors.json` |
+| Ablation JSON | `outputs/ablations/<variant>.json` |
+| OOS cost grid | `outputs/reports/oos_report.json` |
+| Leak report | `outputs/research/leak_detectors.json` |
 
 ## Methods language
 

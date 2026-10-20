@@ -1,9 +1,19 @@
-# ruff: noqa: F403, F405
 from __future__ import annotations
 
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+from market_data.loading.ticks import TickExecutionUnavailable, resolve_tick_execution_by_deadline
+from market_data.transforms.sessions import ny_session_mask
+from simulation.contracts import SimulationTransition
+from trading.execution.broker import Position
 from trading.policy.repeated_payout import evaluate_payout
 
-from .runtime_dependencies import *
+from .market_view import BarView, FeatureRow
+from .mixin_base import RuntimeMixinBase
+from .sweep_reward import CompositeReward
 
 
 class EpisodeRuntimeMixin(RuntimeMixinBase):
@@ -16,10 +26,10 @@ class EpisodeRuntimeMixin(RuntimeMixinBase):
     def _step_untraced(
         self,
         action: int | float | np.ndarray[Any, Any],
-    ) -> tuple[dict[str, np.ndarray[Any, Any]], float, bool, bool, dict[str, Any]]:
+    ) -> SimulationTransition[dict[str, np.ndarray[Any, Any]]]:
         """Execute one environment step through explicit semantic stages."""
         if self.step_idx >= self._n_bars or self._ny_pos >= len(self._ny_indices):
-            return self._get_observation(), 0.0, False, True, {}
+            return SimulationTransition(self._get_observation(), 0.0, False, True, {})
 
         bar = self._bar_at(self.step_idx)
         feat_row = self._feature_row_at(self.step_idx)
@@ -146,22 +156,26 @@ class EpisodeRuntimeMixin(RuntimeMixinBase):
             entry_state_for_action,
             done,
         )
-        return cast(
-            tuple[dict[str, np.ndarray[Any, Any]], float, bool, bool, dict[str, Any]],
-            self._resolve_step_end(
-                action,
-                discrete_action,
-                risk_frac,
-                entry_machine,
-                valuation_time,
-                close_reason,
-                reward,
-                reward_parts,
-                obs,
-                info,
-                done,
-                truncated,
-            ),
+        observation, final_reward, terminated, truncated, final_info = self._resolve_step_end(
+            action,
+            discrete_action,
+            risk_frac,
+            entry_machine,
+            valuation_time,
+            close_reason,
+            reward,
+            reward_parts,
+            obs,
+            info,
+            done,
+            truncated,
+        )
+        return SimulationTransition(
+            observation,
+            float(final_reward),
+            bool(terminated),
+            bool(truncated),
+            final_info,
         )
 
     def _progress_market(

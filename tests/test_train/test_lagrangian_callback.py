@@ -9,11 +9,11 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 from gymnasium import spaces
+from learning.rl.callbacks import LagrangianRiskCallback
 from omegaconf import OmegaConf
 from stable_baselines3 import PPO
 
 from configuration import load_config
-from training.callbacks.core import LagrangianRiskCallback
 from training.setup.callbacks import _build_lagrangian_callback
 from training.setup.models import _validate_q5_resume_state
 

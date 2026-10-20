@@ -216,7 +216,7 @@ The command writes `week_3/manifest.json`, a report for each
 both Markdown reports. Use a distinct `--week` for a new reporting boundary;
 do not delete or reuse a run directory when rerunning a failed attempt.
 `dataset_hash`, train/test dates, and evaluation protocol can be supplied by
-using `BatchSpec` from `quant_rl.orchestration.weekly` when embedding the
+using `BatchSpec` from `experiments.orchestration.weekly` when embedding the
 orchestrator in a research script.
 
 Every reported number must link to its batch, run, dataset hash, code commit,
@@ -225,7 +225,7 @@ are valid when they are reproducible and honestly explained.
 
 ## Repository constraints
 
-Use the canonical `quant_rl.train.train_rl` entrypoint and shared evaluation
+Use the canonical `thesis-train train` entrypoint and shared evaluation
 and export code. Read [`AGENTS.md`](../../AGENTS.md), the relevant
 `.agents/domain_maps/*.md`, and
 [`validation_protocol.md`](validation_protocol.md) before experiments.

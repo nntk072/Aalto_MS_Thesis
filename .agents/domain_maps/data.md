@@ -67,3 +67,26 @@
 2. **Session labels are eligibility flags** — `filter_session` is mask-only, never drops feature bars
 3. **Locked OOS split** — `train_end` / `test_start` in `default.yaml` must not be overridden by variants
 4. **Cache version bump** — `BAR_CACHE_VERSION` must change when bar schema changes
+## Change Map
+
+| Task | Axis | Start file | Contract and focused test | Expected scope | Keep unchanged |
+|---|---|---|---|---|---|
+| Add a market source | source adapter | `market_data/loading/bars.py` | `DatasetRef` and `MarketEventSchema`; `tests/test_dataset_source_contract.py` | one source and source contract tests | feature algorithms and training workflows |
+| Change session or split semantics | dataset policy | `market_data/splits/definitions.py` | partition identity; focused tests under `tests/test_data/` | one transform or split module | model and report code |
+
+## Axis of Change
+
+- **Axis:** market source, event representation, transforms, and split policy.
+- **Owner:** `market_data/` owns dataset identity, timestamps, event schema, and partitioning.
+- **Stable boundary:** `DatasetRef`, `MarketEventSchema`, and `MarketDataset`.
+- **Expected edit radius:** one source, transform, or split implementation with focused data tests.
+- **Must not depend on:** training workflows, model internals, or report rendering.
+
+## Verified Source Paths
+
+- `market_data/loading/pipeline.py`
+- `market_data/loading/bars.py`
+- `market_data/loading/ticks.py`
+- `market_data/splits/definitions.py`
+- `market_data/transforms/align.py`
+- `market_data/contracts.py`

@@ -13,10 +13,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from simulation.environment.env import (
-    _REJECTION_COUNTERS,
-    TradingEnv,
-)
+from simulation.environment.entry_diagnostics import _REJECTION_COUNTERS
+from simulation.environment.env import TradingEnv
 from trading.strategies import PO3IFVGStrategy
 
 
@@ -107,7 +105,7 @@ def _policy_env(
 
 def test_registry_covers_every_counter() -> None:
     """Each rejected_* bucket in _empty_entry_diag has exactly one reason key."""
-    from simulation.environment.env import _empty_entry_diag
+    from simulation.environment.entry_diagnostics import _empty_entry_diag
 
     buckets = {k for k in _empty_entry_diag(entry_state_machine=True) if k.startswith("rejected_")}
     assert set(_REJECTION_COUNTERS.values()) == buckets
@@ -182,7 +180,7 @@ def test_gate_rejection_counts_and_names_the_reason() -> None:
 
 
 def test_rr_window_prefers_in_range_targets() -> None:
-    from trading.orders.entries import _target_menu
+    from trading.orders.targets import target_menu
 
     row = pd.Series(
         {
@@ -191,7 +189,7 @@ def test_rr_window_prefers_in_range_targets() -> None:
             "prev_day_high": 105.0,  # 5R: inside the wide window
         }
     )
-    wide = _target_menu(
+    wide = target_menu(
         direction=1,
         entry_price=100.0,
         row=row,
@@ -201,7 +199,7 @@ def test_rr_window_prefers_in_range_targets() -> None:
     )
     assert [name for name, _, _ in wide] == ["last_swing_high", "prev_day_high", "asian_high"]
     # Tight window: only the 1R level qualifies, so the menu shrinks to it.
-    tight = _target_menu(
+    tight = target_menu(
         direction=1,
         entry_price=100.0,
         row=row,
@@ -213,10 +211,10 @@ def test_rr_window_prefers_in_range_targets() -> None:
 
 
 def test_rr_window_falls_back_when_nothing_qualifies() -> None:
-    from trading.orders.entries import _target_menu
+    from trading.orders.targets import target_menu
 
     row = pd.Series({"last_swing_high": 101.0, "asian_high": 110.0})
-    menu = _target_menu(
+    menu = target_menu(
         direction=1,
         entry_price=100.0,
         row=row,
@@ -276,7 +274,7 @@ def test_reset_clears_the_funnel() -> None:
 def test_config_slippage_reaches_sl_tp_fills() -> None:
     """``costs.slippage_points`` (price points) widens stop/target fills.
 
-    Pins the wiring ``default.yaml -> _cost_model -> TradingEnv.cost_model ->
+    Pins the wiring ``default.yaml -> cost_model -> TradingEnv.cost_model ->
     _sl_tp_fill_quote``: a 5-point slippage must worsen both sides by exactly
     5 points, and ``min_sl_points=10`` keeps its 2x sizing margin over it.
     """
@@ -284,14 +282,14 @@ def test_config_slippage_reaches_sl_tp_fills() -> None:
 
     from configuration import load_config
     from trading.execution.costs import CostModel
-    from training.setup.environments import _cost_model
+    from training.setup.environments import cost_model
 
     cfg = load_config([])
     assert float(cfg.costs.slippage_points) == 5.0
     assert float(cfg.risk.min_sl_points) == 10.0
     assert float(cfg.risk.min_sl_points) >= 2 * float(cfg.costs.slippage_points)
 
-    model = _cost_model(cfg)
+    model = cost_model(cfg)
     assert isinstance(model, CostModel)
     assert model.slippage_points == 5.0
 
@@ -308,4 +306,4 @@ def test_config_slippage_reaches_sl_tp_fills() -> None:
     assert bid_s == ask_s - model.spread_points
 
     us500_cfg = OmegaConf.merge(cfg, {"data": {"primary": "US500.cash"}})
-    assert _cost_model(us500_cfg).spread_points == float(cfg.costs.spread_us500)
+    assert cost_model(us500_cfg).spread_points == float(cfg.costs.spread_us500)

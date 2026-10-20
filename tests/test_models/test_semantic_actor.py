@@ -9,18 +9,18 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 import torch
+from decisioning.actions import build_action_schema
+from decisioning.observations import OBSERVATION_SCHEMA_V2, build_observation_schema
 from gymnasium import spaces
-from stable_baselines3 import PPO
-
-from models.encoders.core import TCNEncoder
-from models.factory.agent import validate_model_observation_schema
-from models.policies.semantic import (
+from learning.rl.agent import validate_model_observation_schema
+from learning.rl.semantic import (
     SemanticActorHeads,
     SemanticClampedStdMultiInputPolicy,
     semantic_action_groups,
 )
-from simulation.contracts.actions import build_action_schema
-from simulation.contracts.observations import OBSERVATION_SCHEMA_V2, build_observation_schema
+from stable_baselines3 import PPO
+
+from models.encoders import TCNEncoder
 
 
 class _OverlayEnv(gym.Env[dict[str, npt.NDArray[np.float32]], npt.NDArray[np.float32]]):

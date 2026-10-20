@@ -51,9 +51,12 @@ orchestra run "task"      # full pipeline
 ## Architecture
 
 ```
-data → features → envs → models → train → evaluation
-              ↕           ↕
-         backtest ←───────┘
+market_data → features → training → learning backends → models
+      │          │            │              │
+      └──────→ trading ←→ simulation ←── decisioning
+                             │                 │
+                         evaluation         live → integrations
+compute supplies device/scheduler capabilities to workflows
 ```
 
 | Domain | Entry File | Role |
@@ -62,7 +65,7 @@ data → features → envs → models → train → evaluation
 | features | `features/pipeline/builder.py` | indicators + SMT + structure + PO3 → matrix |
 | envs | `simulation/environment/env.py` | Gymnasium env (obs, act, reward) |
 | backtest | `simulation/backtest/engine.py` | event-driven engine (fill, SL/TP, guardrails) |
-| models | `models/factory/agent.py` | encoder + PPO/SAC wiring |
+| models | `models/encoders/` | reusable neural architectures; PPO/SAC wiring is in `learning/rl/agent.py` |
 | train | `training/runner/training.py` | full training loop |
 | evaluation | `evaluation/rollout/runner.py` | metrics, walk-forward, bootstrap CIs |
 | eval | `evaluation/rollout/model.py` | rollout, plots, export, `eval_run` |

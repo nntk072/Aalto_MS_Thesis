@@ -12,13 +12,13 @@ from typing import Any, cast
 import numpy as np
 import pytest
 import torch
-from omegaconf import OmegaConf
-
-from configuration import load_config
-from training.callbacks.auxiliary import (
+from learning.rl.auxiliary import (
     AuxiliaryTrainerCallback,
     build_supervised_windows,
 )
+from omegaconf import OmegaConf
+
+from configuration import load_config
 
 
 @pytest.fixture
@@ -153,8 +153,8 @@ def test_callback_co_trains_with_ppo_on_trading_env():
     """
     pytest.importorskip("torch")
     import pandas as pd
+    from learning.rl.agent import build_agent
 
-    from models.factory.agent import build_agent
     from simulation.environment.env import TradingEnv
 
     rng = np.random.default_rng(7)

@@ -8,14 +8,13 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from gymnasium import spaces
-
-from simulation.environment.entry_state import (
+from decisioning.observation_state import (
     ENTRY_STATES,
-    EntryEvidence,
-    EntryStateMachine,
     entry_state_one_hot,
 )
+from gymnasium import spaces
+
+from simulation.environment.entry_state import EntryEvidence, EntryStateMachine
 from simulation.environment.env import TradingEnv
 from trading.strategies import BaselineStrategy, PO3IFVGStrategy
 

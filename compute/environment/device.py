@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 import torch
-import torch.nn as nn
 
 _GiB = 1024**3
 # SubprocVecEnv workers import torch and copy the full feature/environment
@@ -52,16 +51,6 @@ def get_device(config_device: str | None = None) -> torch.device:
         return torch.device(config_device)
     except (RuntimeError, TypeError) as exc:
         raise ValueError(f"Invalid device value {config_device!r}") from exc
-
-
-def configure_cuda() -> None:
-    """Enable TF32 Tensor Cores and cuDNN autotune. No-op when CUDA is absent."""
-    if not torch.cuda.is_available():
-        return
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cudnn.allow_tf32 = True
-    torch.backends.cudnn.benchmark = True
-    torch.set_float32_matmul_precision("high")
 
 
 def suggest_n_envs(
@@ -195,7 +184,6 @@ def scale_training_cfg(
     mode, reject an environment count that exceeds the estimated host-memory
     capacity rather than silently changing the comparison arm.
     """
-    configure_cuda()
     total_ram, avail_ram = _read_meminfo()
     cgroup_memory = _read_cgroup_memory_limit()
     if cgroup_memory is not None:
@@ -265,28 +253,6 @@ def scale_training_cfg(
             vram_bytes=vram,
             arch=arch,
         )
-
-
-def enable_extractor_autocast(extractor: nn.Module) -> None:
-    """Run the encoder under bf16 autocast; cast back to fp32 for SB3 heads."""
-    from models.encoders.core import TransformerEncoder
-
-    # Transformer attention in bf16 can NaN under PPO's large rollout batches.
-    if isinstance(extractor, TransformerEncoder):
-        return
-    if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
-        return
-    if getattr(extractor, "_amp_wrapped", False):
-        return
-    orig = extractor.forward
-
-    def forward_amp(observations: dict[str, torch.Tensor]) -> torch.Tensor:
-        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-            out = orig(observations)
-        return out.float()  # type: ignore[no-any-return]
-
-    extractor.forward = forward_amp
-    setattr(extractor, "_amp_wrapped", True)
 
 
 def _gpu_n_envs_target(vram_bytes: int, available_ram_bytes: int) -> int:

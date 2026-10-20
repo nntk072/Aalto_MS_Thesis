@@ -6,7 +6,7 @@ from typing import cast
 
 import pandas as pd
 
-from features.technical.indicators import _ema
+from features.technical.indicators import ema
 
 
 def _sma(series: pd.Series, period: int) -> pd.Series:
@@ -16,7 +16,7 @@ def _sma(series: pd.Series, period: int) -> pd.Series:
 
 def compute_ema50(bars: pd.DataFrame) -> pd.Series:
     """Compute EMA(50) on close prices."""
-    return _ema(bars["close"], 50)
+    return ema(bars["close"], 50)
 
 
 def compute_macd_sma(
@@ -29,8 +29,8 @@ def compute_macd_sma(
     pd.DataFrame with columns: macd, signal, histogram
     """
     close = bars["close"]
-    fast_ema = _ema(close, fast)
-    slow_ema = _ema(close, slow)
+    fast_ema = ema(close, fast)
+    slow_ema = ema(close, slow)
     macd_line = fast_ema - slow_ema
     signal_line = _sma(macd_line, signal_period)
     histogram = macd_line - signal_line

@@ -32,7 +32,7 @@ from market_data.loading.pipeline import build_tick_books, run_pipeline
 from market_data.loading.ticks import TickBook, ticks_covering
 from market_data.splits.definitions import get_split_config, make_train_mask, split_train_test
 from training.setup.data import _publish_obs_memmap
-from training.setup.environments import _strategy_from_cfg, make_env
+from training.setup.environments import make_env, strategy_from_cfg
 
 
 def _read_pss_kib(pid: int) -> int:
@@ -284,7 +284,7 @@ def main() -> None:
     if args.data_source == "bundle":
         from simulation.environment.bundles import build_env_bundle
 
-        strategy = _strategy_from_cfg(cfg)[0]
+        strategy = strategy_from_cfg(cfg)[0]
         bundle_path = build_env_bundle(
             cfg.data.cache_dir,
             bars,

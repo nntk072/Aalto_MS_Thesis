@@ -343,7 +343,7 @@ def main() -> None:
     config = load_config(args.config)
 
     # Create output directory
-    output_dir = Path(config.get("output_dir", "output/vae"))
+    output_dir = Path(config.get("output_dir", "outputs/vae"))
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Set device

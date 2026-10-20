@@ -16,7 +16,7 @@ import pandas as pd
 # ---------------------------------------------------------------------------
 
 
-def _ema(s: pd.Series, span: int) -> pd.Series:
+def ema(s: pd.Series, span: int) -> pd.Series:
     return s.ewm(span=span, adjust=False).mean()
 
 
@@ -47,10 +47,10 @@ def rsi(close: pd.Series, period: int = 14) -> pd.Series:
 
 
 def macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.DataFrame:
-    fast_ema = _ema(close, fast)
-    slow_ema = _ema(close, slow)
+    fast_ema = ema(close, fast)
+    slow_ema = ema(close, slow)
     macd_line = fast_ema - slow_ema
-    signal_line = _ema(macd_line, signal)
+    signal_line = ema(macd_line, signal)
     histogram = macd_line - signal_line
     return pd.DataFrame(
         {"macd": macd_line, "macd_signal": signal_line, "macd_hist": histogram},
@@ -62,7 +62,7 @@ def ema_features(close: pd.Series, periods: list[int]) -> pd.DataFrame:
     """EMA values + slopes (1-bar diff) for each period."""
     out: dict[str, pd.Series] = {}
     for p in periods:
-        e = _ema(close, p)
+        e = ema(close, p)
         out[f"ema_{p}"] = e
         out[f"ema_{p}_slope"] = e.diff()
         out[f"ema_{p}_dist"] = (close - e) / e.replace(0, np.nan)

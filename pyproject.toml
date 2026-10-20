@@ -165,6 +165,11 @@ disallow_incomplete_defs = false
 [[tool.mypy.overrides]]
 module = [
     "evaluation.plotting.plots",
+    "evaluation.plotting.common",
+    "evaluation.plotting.equity",
+    "evaluation.plotting.performance",
+    "evaluation.plotting.comparison",
+    "evaluation.plotting.orders",
     "evaluation.plotting.plots_interactive",
     "evaluation.plotting.plot_series",
     "evaluation.plotting.chart_overlays",

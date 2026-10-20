@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from training.callbacks.core import save_ppo_checkpoint
+from learning.rl.callbacks import save_ppo_checkpoint
 
 
 class _FakeModel:

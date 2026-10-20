@@ -13,9 +13,11 @@ from typing import Any, cast
 
 import numpy as np
 import pandas as pd
+from decisioning.actions import build_discrete_trading_action_schema
+from decisioning.observations import OBSERVATION_SCHEMA_V1, build_observation_schema
+from gymnasium import spaces
 
 from integrations.mt5.adapters import Trader, TradingData
-from simulation.contracts.observations import OBSERVATION_SCHEMA_V1, build_observation_schema
 
 # --- headless MetaTrader5 stub (Windows-only package, absent on Linux) -----
 # Additive: several sibling test modules install their own partial stub; always
@@ -92,6 +94,8 @@ def _make_bars(n: int = 300, seed: int = 7) -> pd.DataFrame:
 class _StubModel:
     """Duck-typed SB3 model; action = +1 (long) always."""
 
+    action_space: Any = spaces.Discrete(20)
+    _action_schema: dict[str, object] = build_discrete_trading_action_schema().to_dict()
     _observation_schema = build_observation_schema(OBSERVATION_SCHEMA_V1).to_dict()
 
     def predict(self, obs: dict[str, Any], deterministic: bool = True) -> np.ndarray[Any, Any]:  # noqa: ARG002

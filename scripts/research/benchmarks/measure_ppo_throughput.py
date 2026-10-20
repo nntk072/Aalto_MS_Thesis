@@ -39,6 +39,7 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
+from learning.rl.agent import build_agent
 from scripts.research.benchmarks.measure_env_memory import (
     _cgroup_memory_bytes,
     _load_train_slice,
@@ -46,18 +47,18 @@ from scripts.research.benchmarks.measure_env_memory import (
 )
 
 from compute.environment.device import scale_training_cfg
+from compute.environment.precision import configure_cuda_for_training
 from compute.slurm.resources import (
     descendant_pids,
     process_tree_cpu_usec,
     read_process_table,
 )
-from models.factory.agent import build_agent
 from simulation.environment.bundles import build_env_bundle
 from simulation.environment.spec import EnvSpec
 from simulation.environment.worker import make_bundle_env
-from training.configuration.cli import _load_merged_config
+from training.configuration.cli import load_merged_config
 from training.runner.seed import _setup_rngs
-from training.setup.environments import _strategy_from_cfg
+from training.setup.environments import strategy_from_cfg
 
 
 class _StepTimingWrapper(gym.Wrapper[Any, Any, Any, Any]):
@@ -234,7 +235,7 @@ def _prepare_bundle(
 
     if config_path is None and bundle_dir is None and not resolved_overrides:
         cfg, bars, features, tickbook = _load_train_slice(None)
-        strategy_obj = _strategy_from_cfg(cfg)[0]
+        strategy_obj = strategy_from_cfg(cfg)[0]
         bundle_path = build_env_bundle(
             cfg.data.cache_dir,
             bars,
@@ -259,7 +260,7 @@ def _prepare_bundle(
     config_name = str(config_path or "config/base/default.yaml")
     # This is the same merge routine used by the production CLI: base config,
     # strategy overlay, then explicit overrides.
-    cfg = _load_merged_config(
+    cfg = load_merged_config(
         argparse.Namespace(
             config=config_name,
             strategy=strategy,
@@ -322,6 +323,7 @@ def _train_probe(
     # This probe always instantiates the shared-bundle backend; make the
     # hardware scaler use the same worker memory estimate as that backend.
     cfg.env.data_source = "bundle"
+    configure_cuda_for_training()
     scale_training_cfg(cfg, torch.device(device), arch)
     if matmul_precision is not None:
         torch.set_float32_matmul_precision(matmul_precision)

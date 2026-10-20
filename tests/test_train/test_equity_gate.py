@@ -5,9 +5,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
+from learning.rl.callbacks import EpisodeEquityCallback
+from learning.rl.stopping import decide_early_abort
 
-from training.callbacks.core import EpisodeEquityCallback
-from training.callbacks.equity import assess_train_equity, decide_early_abort, equity_slope
+from training.callbacks.equity import assess_train_equity, equity_slope
 
 
 @pytest.mark.unit

@@ -15,7 +15,8 @@ import pytest
 
 from evaluation.plotting.plots_interactive import plot_fvg_signals_interactive
 from evaluation.plotting.po3_plots import plot_fvg_signals
-from features.po3.config import detect_fvg, detect_po3_entries
+from features.po3.fvg_detection import detect_fvg
+from features.po3.trigger_rules import detect_po3_entries
 
 
 @pytest.fixture()

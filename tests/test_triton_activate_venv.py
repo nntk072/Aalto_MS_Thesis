@@ -39,6 +39,9 @@ def _run_activation(tmp_path: Path, partition: str, *, include_mi210: bool = Tru
     )
     fake_uname.chmod(0o755)
     environment = os.environ.copy()
+    # This test exercises architecture selection, not a resumed campaign's
+    # identity helper. Do not inherit the caller's live campaign environment.
+    environment.pop("CAMPAIGN_ID", None)
     environment.update(
         {
             "PATH": f"{fake_bin}:{environment['PATH']}",

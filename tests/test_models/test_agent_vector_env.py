@@ -7,12 +7,11 @@ from typing import Any
 
 import gymnasium as gym
 import numpy as np
+from learning.rl.agent import build_vector_env
+from learning.rl.environment_adapter import ShardedBundleVecEnv
 from omegaconf import OmegaConf
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
-
-from models.factory.agent import _build_vector_env
-from simulation.environment.vectorized import ShardedBundleVecEnv
 
 
 def _make_cartpole() -> gym.Env[Any, Any]:
@@ -28,7 +27,7 @@ def test_resumed_ppo_uses_configured_vector_environment(tmp_path: Path) -> None:
     original_env.close()
 
     cfg = OmegaConf.create({"env": {"n_envs": 2, "data_source": "frames"}})
-    resume_env = _build_vector_env(_make_cartpole(), cfg, _make_cartpole)
+    resume_env = build_vector_env(_make_cartpole(), cfg, _make_cartpole)
     try:
         resumed = PPO.load(checkpoint, env=resume_env, device="cpu")
         assert resumed.n_envs == 2
@@ -42,7 +41,7 @@ def test_serial_backend_keeps_logical_environment_count() -> None:
         {"env": {"n_envs": 3, "data_source": "bundle", "vector_backend": "serial"}}
     )
     parent_env = _make_cartpole()
-    vec_env = _build_vector_env(parent_env, cfg, _make_cartpole)
+    vec_env = build_vector_env(parent_env, cfg, _make_cartpole)
     try:
         assert isinstance(vec_env, DummyVecEnv)
         assert vec_env.num_envs == 3
@@ -61,8 +60,8 @@ def test_serial_and_subprocess_backends_match_seeded_traces() -> None:
     )
     serial_parent = _make_cartpole()
     subproc_parent = _make_cartpole()
-    serial = _build_vector_env(serial_parent, serial_cfg, _make_cartpole)
-    subproc = _build_vector_env(subproc_parent, subproc_cfg, _make_cartpole)
+    serial = build_vector_env(serial_parent, serial_cfg, _make_cartpole)
+    subproc = build_vector_env(subproc_parent, subproc_cfg, _make_cartpole)
     try:
         serial.seed(314)
         subproc.seed(314)
@@ -109,8 +108,8 @@ def test_sharded_bundle_backend_matches_subprocess_traces_and_index_order() -> N
     )
     serial_parent = _make_cartpole()
     sharded_parent = _make_cartpole()
-    serial = _build_vector_env(serial_parent, serial_cfg, _make_cartpole)
-    sharded = _build_vector_env(sharded_parent, sharded_cfg, _make_cartpole)
+    serial = build_vector_env(serial_parent, serial_cfg, _make_cartpole)
+    sharded = build_vector_env(sharded_parent, sharded_cfg, _make_cartpole)
     try:
         assert isinstance(sharded, ShardedBundleVecEnv)
         assert sharded.num_envs == 3
@@ -161,7 +160,7 @@ def test_sharded_backend_requires_bundle_data_source() -> None:
     parent_env = _make_cartpole()
     try:
         try:
-            _build_vector_env(parent_env, cfg, _make_cartpole)
+            build_vector_env(parent_env, cfg, _make_cartpole)
         except ValueError as exc:
             assert "requires env.data_source='bundle'" in str(exc)
         else:
@@ -175,7 +174,7 @@ def test_sharded_backend_auto_shards_never_exceed_logical_envs() -> None:
         {"env": {"n_envs": 3, "data_source": "bundle", "vector_backend": "sharded_bundle"}}
     )
     parent_env = _make_cartpole()
-    vec_env = _build_vector_env(parent_env, cfg, _make_cartpole)
+    vec_env = build_vector_env(parent_env, cfg, _make_cartpole)
     try:
         assert isinstance(vec_env, ShardedBundleVecEnv)
         assert vec_env.num_shards == 3

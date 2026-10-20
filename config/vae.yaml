@@ -4,7 +4,7 @@
 
 # Data configuration
 data_path: data/pre_ny_sequences.npy  # Path to pre-NY sequence data (n_samples, seq_len, n_features)
-output_dir: output/vae  # Directory to save trained models and configs
+output_dir: outputs/vae  # Generated checkpoints and configs stay outside source packages.
 
 # Sequence parameters
 seq_len: 186  # Number of 5-minute bars in pre-NY sequence (01:05-16:29 UTC+3)

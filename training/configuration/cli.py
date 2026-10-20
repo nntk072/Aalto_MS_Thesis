@@ -114,7 +114,7 @@ def parse_train_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _load_merged_config(args: argparse.Namespace) -> DictConfig:
+def load_merged_config(args: argparse.Namespace) -> DictConfig:
     """Load base config and merge strategy variant if requested.
 
     CLI ``overrides`` apply *after* the strategy overlay merge: the Idea 1

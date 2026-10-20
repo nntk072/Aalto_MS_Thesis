@@ -3,7 +3,7 @@
 import itertools
 import unittest
 
-from simulation.contracts.actions import build_action_schema
+from decisioning.actions import build_action_schema
 
 
 class ActionSchemaContractTest(unittest.TestCase):

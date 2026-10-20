@@ -117,10 +117,10 @@ def test_macd_baseline_no_auto_flip(sample_bars):
 
 def test_macd_baseline_respects_ema50_filter(sample_bars):
     """Test that long entries generally occur when close > EMA50 and short entries when close < EMA50."""
-    from features.technical.indicators import _ema
+    from features.technical.indicators import ema
 
     close = sample_bars["close"]
-    ema50 = _ema(close, 50)
+    ema50 = ema(close, 50)
     actions = macd_ema50_baseline(sample_bars)
 
     eps = 0.2  # Allow small tolerance for rounding/numerical errors
@@ -139,12 +139,12 @@ def test_macd_baseline_respects_ema50_filter(sample_bars):
 
 def test_macd_sma_signal(sample_bars):
     """Test that signal line uses SMA(9), not EMA."""
-    from features.technical.indicators import _ema
+    from features.technical.indicators import ema
     from trading.baselines.rule_based import _sma
 
     close = sample_bars["close"]
-    fast_ema = _ema(close, 12)
-    slow_ema = _ema(close, 26)
+    fast_ema = ema(close, 12)
+    slow_ema = ema(close, 26)
     macd_line = fast_ema - slow_ema
     signal_line = _sma(macd_line, 9)
 

@@ -18,13 +18,9 @@ Output: Latent vector z of shape (16,)
 
 from __future__ import annotations
 
-from typing import Any
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from gymnasium import spaces
-from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
 
 class VAEEncoder(nn.Module):
@@ -380,71 +376,3 @@ class VAE(nn.Module):
         z: torch.Tensor = self.reparameterize(mu, log_var)
         x_recon: torch.Tensor = self.decode(z)
         return x_recon, mu, log_var
-
-
-class VAEFeatureExtractor(BaseFeaturesExtractor):
-    """Feature extractor wrapper for VAE encoder.
-
-    This wraps the VAE encoder to be compatible with Stable Baselines3
-    feature extractors. It extracts the latent vector z from the pre-NY
-    sequence and concatenates it with the account state (matching the
-    TCNEncoder/GRUEncoder/TransformerEncoder pattern in encoder.py).
-
-    Parameters
-    ----------
-    observation_space : spaces.Space
-        The observation space of the environment
-    vae : VAE
-        The trained VAE model (encoder will be used)
-    freeze : bool
-        Whether to freeze the VAE encoder weights (default: True)
-    """
-
-    def __init__(
-        self,
-        observation_space: spaces.Space[Any],
-        vae: VAE,
-        freeze: bool = True,
-        account_dim: int | None = None,
-    ) -> None:
-        if not isinstance(observation_space, spaces.Dict):
-            raise TypeError("VAEFeatureExtractor requires a Dict observation space")
-        account_space = observation_space.spaces.get("account")
-        if not isinstance(account_space, spaces.Box) or account_space.shape is None:
-            raise TypeError("observation space must contain a Box account vector")
-        observed_account_dim = int(account_space.shape[0])
-        if account_dim is not None and int(account_dim) != observed_account_dim:
-            raise ValueError(
-                f"account_dim {account_dim} does not match observation space width "
-                f"{observed_account_dim}"
-            )
-        super().__init__(
-            observation_space,
-            features_dim=vae.encoder.latent_dim + observed_account_dim,
-        )
-        self.vae = vae
-        self.freeze = freeze
-
-        if freeze:
-            # Freeze all VAE parameters
-            for param in vae.parameters():
-                param.requires_grad = False
-
-    def forward(self, observations: dict[str, torch.Tensor]) -> torch.Tensor:
-        """Extract features from observations.
-
-        Prefers a precomputed ``vae_z`` from the env; otherwise encodes
-        ``pre_ny_seq``. Result is concatenated with ``account``.
-        """
-        account = observations["account"]  # [B, A]
-        if "vae_z" in observations:
-            z = observations["vae_z"]
-        else:
-            pre_ny_seq = observations["pre_ny_seq"]  # [B, T, F]
-            device = next(self.vae.parameters()).device
-            mu: torch.Tensor
-            mu, _ = self.vae.encode(pre_ny_seq.to(device))
-            z = mu
-        if z.device != account.device:
-            z = z.to(account.device)
-        return torch.cat([z, account], dim=1)  # [B, latent_dim + A]

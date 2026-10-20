@@ -61,7 +61,7 @@ def test_through_tick_is_the_fill_not_a_later_bounce() -> None:
         np.array([98.5, 99.4], dtype=np.float64),
         np.array([98.7, 99.6], dtype=np.float64),
     )
-    env._fill_delay_ms = 0
+    env.fill_delay_ms = 0
 
     bar = BarView(open=100.0, high=100.4, low=98.4, close=99.2, spread=0.6)
     env._check_sl_tp(bar, fill_bid=100.0, fill_ask=100.6)

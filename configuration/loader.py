@@ -41,7 +41,7 @@ def apply_overrides(cfg: DictConfig, overrides: list[str] | None) -> DictConfig:
     """Apply ``key=value`` string overrides on top of an already-merged ``cfg``.
 
     Split out of :func:`load_config` so callers that merge an extra layer can
-    apply CLI overrides *last*. ``train_rl._load_merged_config`` used to call
+    apply CLI overrides *last*. ``train_rl.load_merged_config`` used to call
     ``load_config(overrides)`` and then merge the strategy variant YAML on top,
     which silently reverted every CLI override — that is why
     ``--overrides env.reward_mode=rr`` stopped taking effect for Idea 1/2 runs.

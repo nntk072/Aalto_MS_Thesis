@@ -18,7 +18,9 @@ from omegaconf import DictConfig, OmegaConf
 
 from features import (
     FEATURE_CACHE_VERSION,
+    InputSchema,
     build_features,
+    input_view_from_frame,
     select_legacy_obs_columns,
     select_obs_columns,
 )
@@ -91,6 +93,31 @@ class TestBuildFeaturesPipeline:
         feat = build_features(deterministic_bars, cfg=cfg)
         assert isinstance(feat, pd.DataFrame)
         assert len(feat) == len(deterministic_bars)
+
+    def test_raw_input_view_bypasses_handcrafted_feature_pipeline(
+        self, deterministic_bars: pd.DataFrame
+    ) -> None:
+        """Raw and engineered inputs share a view boundary."""
+        raw_schema = InputSchema("raw-close-volume", "v1", "raw_market", ("close", "volume"))
+        raw_view = input_view_from_frame(
+            deterministic_bars, dataset_id="synthetic-m1", schema=raw_schema
+        )
+
+        engineered = build_features(deterministic_bars, cfg=OmegaConf.create(_default_cfg()))
+        feature_schema = InputSchema("ema-rsi", "v1", "handcrafted_features", ("ema_9", "rsi"))
+        feature_view = input_view_from_frame(
+            engineered, dataset_id="synthetic-m1", schema=feature_schema
+        )
+
+        def consume(view: Any) -> tuple[str, int, int]:
+            return view.schema.kind, len(view.values), len(view.schema.columns)
+
+        assert consume(raw_view) == ("raw_market", len(deterministic_bars), 2)
+        assert consume(feature_view) == (
+            "handcrafted_features",
+            len(deterministic_bars),
+            2,
+        )
 
     def test_expected_base_columns_present(self, deterministic_bars: pd.DataFrame) -> None:
         """Default config produces indicator + structure + session columns."""

@@ -27,6 +27,7 @@ from .reporting.summary import (
     print_report,
     save_metrics_json,
 )
+from .rollout.model import evaluate_provider
 from .rollout.runner import run_episode
 
 __all__ = [
@@ -59,4 +60,5 @@ __all__ = [
     "print_report",
     "save_metrics_json",
     "run_episode",
+    "evaluate_provider",
 ]

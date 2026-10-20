@@ -76,7 +76,7 @@ def _strategy(config: dict[str, Any], strategy_actions: bool) -> tuple[Any, Any,
     return BaselineStrategy(), None, 0.0
 
 
-def _cost_model(config: dict[str, Any]) -> CostModel:
+def cost_model(config: dict[str, Any]) -> CostModel:
     costs = _block(config, "costs")
     primary = str(_block(config, "data").get("primary", "US100.cash"))
     spread_key = "spread_us500" if "US500" in primary else "spread_us100"
@@ -88,7 +88,7 @@ def _cost_model(config: dict[str, Any]) -> CostModel:
     )
 
 
-def _max_episode_steps(config: dict[str, Any]) -> int | None:
+def max_episode_steps(config: dict[str, Any]) -> int | None:
     value = _block(config, "env").get("max_episode_steps")
     if value is None or (isinstance(value, str) and value.strip().lower() in {"", "null", "none"}):
         return None
@@ -153,7 +153,7 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
             soft_trailing_dd_limit=0.0,
         )
     if spec.evaluation:
-        # Match train_rl._eval_guardrail_kwargs: evaluation reports apply the
+        # Match train_rl.eval_guardrail_kwargs: evaluation reports apply the
         # daily and initial-equity loss gates, while trailing drawdown remains
         # a training kill switch only.
         guardrail_kwargs["trailing_dd_limit"] = 0.0
@@ -166,7 +166,7 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
         spec.bundle_dir,
         obs_window=int(env.get("obs_window", 60)),
         initial_balance=float(account.get("initial_balance", 100_000.0)),
-        cost_model=_cost_model(cfg),
+        cost_model=cost_model(cfg),
         guardrail_kwargs=guardrail_kwargs,
         risk_frac_range=risk_frac_range,
         rr_ratio_range=rr_ratio_range,
@@ -175,7 +175,7 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
         contract_size=float(account.get("contract_size", 1.0)),
         max_loss_per_trade_usd=max_loss,
         dsr_eta=float(env.get("reward_dsr_eta", 0.01)),
-        max_episode_steps=_max_episode_steps(cfg),
+        max_episode_steps=max_episode_steps(cfg),
         episodic=spec.episodic,
         continuous_actions=spec.algo == "sac",
         use_sweep_reward=spec.reward == "sweep",

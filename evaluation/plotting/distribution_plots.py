@@ -203,7 +203,7 @@ def write_distribution_artifacts(
     (split_dir / "pnl_distribution.json").write_text(json.dumps(payload, indent=2))
 
     if save_plots and not trades.empty:
-        from evaluation.plotting.plots import _pair_trades
+        from evaluation.metrics.trade_pairs import pair_trades
 
         plot_pnl_histogram(
             groups["overall"],
@@ -214,7 +214,7 @@ def write_distribution_artifacts(
         plot_pnl_box_by_regime(groups, path=split_dir / "pnl_regime_box.png", dpi=dpi)
         pairs_hold = [
             float((pd.Timestamp(c["time"]) - pd.Timestamp(o["time"])).total_seconds())
-            for o, c in _pair_trades(trades)
+            for o, c in pair_trades(trades)
             if pd.notna(o.get("time")) and pd.notna(c.get("time"))
         ]
         plot_holding_time_hist(pairs_hold, path=split_dir / "hold_time_dist.png", dpi=dpi)

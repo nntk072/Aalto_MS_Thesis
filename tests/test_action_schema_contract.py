@@ -5,9 +5,10 @@ from typing import Any
 
 import numpy as np
 import pytest
+from decisioning.actions import build_action_schema
 
-from simulation.contracts.actions import build_action_schema
-from simulation.environment.env import TradingEnv, _decision_from_action
+from simulation.environment.action_diagnostics import _decision_from_action
+from simulation.environment.env import TradingEnv
 
 
 @pytest.mark.parametrize(
@@ -49,12 +50,12 @@ def test_eval_common_preserves_multi_tp_without_simplex() -> None:
     """A 9-D config must survive the train/eval configuration boundary."""
     from omegaconf import OmegaConf
 
-    from training.setup.environments import _build_eval_common
+    from training.setup.environments import build_eval_common
 
     cfg = OmegaConf.load("config/base/default.yaml")
     cfg.env.strategy_actions = True
     cfg.env.allow_multi_tp = True
     cfg.env.allow_agent_tp_mode = True
     cfg.env.allow_simplex = False
-    kwargs, *_ = _build_eval_common(cfg)
+    kwargs, *_ = build_eval_common(cfg)
     assert kwargs["allow_simplex"] is False

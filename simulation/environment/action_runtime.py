@@ -1,7 +1,16 @@
-# ruff: noqa: F403, F405
 from __future__ import annotations
 
-from .runtime_dependencies import *
+from typing import Any
+
+import numpy as np
+import pandas as pd
+from decisioning.actions import ActionSchema
+
+from trading.orders.selection import decode_tp_mode
+
+from .action_diagnostics import _decision_from_action, _empty_decision
+from .market_view import FeatureRow
+from .mixin_base import RuntimeMixinBase
 
 
 class ActionDecodingMixin(RuntimeMixinBase):
@@ -95,8 +104,6 @@ class ActionDecodingMixin(RuntimeMixinBase):
         # Decode tp_mode
         self._tp_mode_explicit = False
         if tp_mode_offset and u.size > tp_idx:
-            from simulation.environment.target_decoding import decode_tp_mode
-
             u_tp = float(u[tp_idx])
             decoded, explicit = decode_tp_mode(
                 u_tp, self.tp_mode, self.tp_mode_defer_threshold, is_unit=True

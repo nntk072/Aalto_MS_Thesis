@@ -119,7 +119,7 @@ def test_spawn_writes_prompt_file_not_tmux_argv(tmp_path) -> None:
     assert "trivial|medium|complex" not in joined
     assert "orchestra.agent_runner" in joined
     assert "--" in calls[0]
-    job_path = tmp_path / "orchestra" / "state" / "runs" / session / "job.json"
+    job_path = tmp_path / "outputs" / "orchestra" / "state" / "runs" / session / "job.json"
     spec = json.loads(job_path.read_text())
     assert Path(spec["prompt_file"]).read_text() == prompt
 
@@ -147,7 +147,7 @@ def test_collect_raises_on_nonzero_exit(tmp_path) -> None:
         cmd, 0, stdout="", stderr=""
     )
     session = sm.spawn(_opencode(), "planner", "hi", task_id="t")
-    run_dir = tmp_path / "orchestra" / "state" / "runs" / session
+    run_dir = tmp_path / "outputs" / "orchestra" / "state" / "runs" / session
     (run_dir / "output.log").write_text("bash: json: command not found\n")
     (run_dir / "exit_code").write_text("1")
     try:
@@ -163,7 +163,7 @@ def test_collect_raises_on_empty_output(tmp_path) -> None:
         cmd, 0, stdout="", stderr=""
     )
     session = sm.spawn(_opencode(), "planner", "hi", task_id="t")
-    run_dir = tmp_path / "orchestra" / "state" / "runs" / session
+    run_dir = tmp_path / "outputs" / "orchestra" / "state" / "runs" / session
     (run_dir / "output.log").write_text("   \n")
     (run_dir / "exit_code").write_text("0")
     try:
@@ -179,7 +179,7 @@ def test_collect_raises_on_exec_header_only(tmp_path) -> None:
         cmd, 0, stdout="", stderr=""
     )
     session = sm.spawn(_opencode(), "planner", "hi", task_id="t")
-    run_dir = tmp_path / "orchestra" / "state" / "runs" / session
+    run_dir = tmp_path / "outputs" / "orchestra" / "state" / "runs" / session
     (run_dir / "output.log").write_text("[orchestra] exec opencode run --auto <prompt>\n")
     (run_dir / "exit_code").write_text("0")
     try:
@@ -276,7 +276,7 @@ def test_collect_timeout_includes_log_tail(tmp_path) -> None:
         cmd, 0, stdout="", stderr=""
     )
     session = sm.spawn(_opencode(), "planner", "hi", task_id="t")
-    run_dir = tmp_path / "orchestra" / "state" / "runs" / session
+    run_dir = tmp_path / "outputs" / "orchestra" / "state" / "runs" / session
     (run_dir / "output.log").write_text("still grepping plots.py\n")
     sm.is_running = lambda _name: True  # type: ignore[assignment]
     try:
@@ -299,7 +299,7 @@ def test_collect_success_kills_session(tmp_path) -> None:
 
     sm._run = fake_run  # type: ignore[method-assign]
     session = sm.spawn(_opencode(), "planner", "hi", task_id="t")
-    run_dir = tmp_path / "orchestra" / "state" / "runs" / session
+    run_dir = tmp_path / "outputs" / "orchestra" / "state" / "runs" / session
     (run_dir / "output.log").write_text("review synthesis done\n")
     (run_dir / "exit_code").write_text("0")
     sm.collect(session, timeout=1, idle_timeout=0)
@@ -318,7 +318,7 @@ def test_collect_keep_alive_leaves_successful_session(tmp_path) -> None:
 
     sm._run = fake_run  # type: ignore[method-assign]
     session = sm.spawn(_opencode(), "planner", "hi", task_id="t")
-    run_dir = tmp_path / "orchestra" / "state" / "runs" / session
+    run_dir = tmp_path / "outputs" / "orchestra" / "state" / "runs" / session
     (run_dir / "output.log").write_text("ok\n")
     (run_dir / "exit_code").write_text("0")
     sm.collect(session, timeout=1, idle_timeout=0, keep_alive=True)
@@ -358,7 +358,7 @@ def test_wait_for_idle_aborts_on_transport_error(tmp_path) -> None:
         cmd, 0, stdout="0\n", stderr=""
     )
     session = sm.spawn(_opencode(), "planner", "hi", task_id="t")
-    run_dir = tmp_path / "orchestra" / "state" / "runs" / session
+    run_dir = tmp_path / "outputs" / "orchestra" / "state" / "runs" / session
     (run_dir / "output.log").write_text(
         "Cannot connect to API: The socket connection was closed unexpectedly (ECONNRESET)\n"
     )
@@ -395,7 +395,7 @@ def test_collect_returns_sanitized_cline_output(tmp_path) -> None:
         extra_args=["--json"],
     )
     session = sm.spawn(model, "implementer", "fix ci", task_id="t")
-    run_dir = tmp_path / "orchestra" / "state" / "runs" / session
+    run_dir = tmp_path / "outputs" / "orchestra" / "state" / "runs" / session
     (run_dir / "output.log").write_text(
         "[orchestra] exec cline -p <prompt> --json\n"
         '{"type":"agent_event","event":{"type":"content_end","contentType":"tool",'
@@ -422,7 +422,7 @@ def test_wait_for_idle_completes_on_cline_done_event(tmp_path) -> None:
         cmd, 0, stdout="0\n", stderr=""
     )
     session = sm.spawn(_opencode(), "planner", "hi", task_id="t")
-    run_dir = tmp_path / "orchestra" / "state" / "runs" / session
+    run_dir = tmp_path / "outputs" / "orchestra" / "state" / "runs" / session
     (run_dir / "output.log").write_text(text + "\n")
     sm.is_running = lambda _name: True  # type: ignore[assignment]
     sm.session_exists = lambda _n: True  # type: ignore[assignment]
@@ -436,7 +436,7 @@ def test_wait_for_idle_aborts_on_codex_usage_limit(tmp_path) -> None:
         cmd, 0, stdout="0\n", stderr=""
     )
     session = sm.spawn(_opencode(), "planner", "hi", task_id="t")
-    run_dir = tmp_path / "orchestra" / "state" / "runs" / session
+    run_dir = tmp_path / "outputs" / "orchestra" / "state" / "runs" / session
     (run_dir / "output.log").write_text(
         "ERROR: You've hit your usage limit. try again at Oct 13th, 2026 3:06 PM.\n"
     )

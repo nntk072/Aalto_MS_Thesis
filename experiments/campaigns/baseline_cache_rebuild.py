@@ -20,7 +20,7 @@ from configuration.paths import repository_root
 from features import build_features, feature_cache_content_hash
 from market_data.loading.pipeline import run_pipeline
 from market_data.splits.definitions import get_split_config, make_train_mask
-from training.configuration.cli import _load_merged_config
+from training.configuration.cli import load_merged_config
 from training.configuration.variant_resolution import resolve_variant
 
 ROOT = repository_root(__file__)
@@ -37,7 +37,7 @@ def _sha256(path: Path) -> str:
 
 def rebuild(backup_dir: Path, report_path: Path) -> dict[str, Any]:
     resolved = resolve_variant("ladder_a0_flat", steps=100_000, seeds=[42])
-    cfg = _load_merged_config(
+    cfg = load_merged_config(
         argparse.Namespace(
             config=resolved["base_config"],
             strategy=resolved["strategy"],

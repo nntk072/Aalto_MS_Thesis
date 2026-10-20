@@ -106,7 +106,7 @@ def build_final_report(state: TaskState) -> str:
 
 
 def write_final_report(state: TaskState) -> Path:
-    """Write ``orchestra/state/reports/<task-id>.md`` and record the path."""
+    """Write ``outputs/orchestra/state/reports/<task-id>.md`` and record the path."""
     dest = state.state_dir / "reports" / f"{state.task_id}.md"
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(build_final_report(state), encoding="utf-8")

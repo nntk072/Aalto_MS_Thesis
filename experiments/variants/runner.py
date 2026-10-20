@@ -18,13 +18,13 @@ from typing import Any
 
 import pandas as pd
 import yaml
+from learning.rl.agent import build_agent
 from omegaconf import DictConfig, OmegaConf
 
 from configuration import load_config
 from evaluation import build_run_report, run_episode
 from evaluation.rollout.model import make_action_fn
 from market_data.splits.definitions import split_train_test
-from models.factory.agent import build_agent
 from training.configuration.variants import merge_variant_cfg
 from training.setup.environments import make_env
 
@@ -81,7 +81,7 @@ def parse_args() -> argparse.Namespace:
         help="Optional subset of variant names to run",
     )
     parser.add_argument("--reward", choices=["dsr", "sweep"], default="dsr")
-    parser.add_argument("--out-dir", default="results/ablations")
+    parser.add_argument("--out-dir", default="outputs/ablations")
     parser.add_argument(
         "--allow-locked-oos-for-selection",
         action="store_true",

@@ -14,7 +14,13 @@ from typing import Any, cast
 
 import numpy as np
 import pandas as pd
+from decisioning.actions import build_action_schema
+from decisioning.observations import build_observation_schema
 from gymnasium import spaces
+from learning.rl.agent import (
+    validate_model_action_schema,
+    validate_model_observation_schema,
+)
 
 from configuration.paths import repository_root
 from evaluation import calculate_metrics, evaluation_periods_per_year
@@ -45,16 +51,10 @@ from market_data.splits.definitions import (
     split_bars,
     split_train_test,
 )
-from models.factory.agent import (
-    validate_model_action_schema,
-    validate_model_observation_schema,
-)
-from simulation.contracts.actions import build_action_schema
-from simulation.contracts.observations import build_observation_schema
 from simulation.environment.bundles import build_env_bundle
 from simulation.environment.spec import EnvSpec
 from simulation.environment.worker import make_bundle_env
-from training.setup.environments import _build_eval_common, _strategy_from_cfg
+from training.setup.environments import build_eval_common, strategy_from_cfg
 
 __all__ = ["evaluation_periods_per_year"]
 
@@ -275,9 +275,9 @@ def main() -> int:
     use_legacy_sequence_columns = bool(
         sequence_schema_is_legacy and args.allow_legacy_sequence_schema
     )
-    model = eval_run._load_checkpoint(checkpoint, legacy_layout_key=args.legacy_action_layout)
-    checkpoint_hash_disposition = eval_run._validate_checkpoint_manifest_hash(checkpoint, manifest)
-    stop_schema_disposition = eval_run._validate_stop_candidate_schema(
+    model = eval_run.load_checkpoint(checkpoint, legacy_layout_key=args.legacy_action_layout)
+    checkpoint_hash_disposition = eval_run.validate_checkpoint_manifest_hash(checkpoint, manifest)
+    stop_schema_disposition = eval_run.validate_stop_candidate_schema(
         checkpoint_schema=getattr(model, "stop_candidate_schema", None),
         manifest_schema=manifest.get("stop_candidate_schema"),
         expected_schema=build_stop_candidate_schema(cfg),
@@ -396,12 +396,12 @@ def main() -> int:
         args.split, train_bars, test_bars, train_features, test_features
     )
     eval_tickbook = ticks_covering(primary_ticks, eval_bars)
-    eval_common, _, _, _, _ = _build_eval_common(cfg, args=None, env_vae=None, pre_ny_by_date=None)
-    execution_seed = eval_run._resolve_execution_seed(None, manifest)
+    eval_common, _, _, _, _ = build_eval_common(cfg, args=None, env_vae=None, pre_ny_by_date=None)
+    execution_seed = eval_run.resolve_execution_seed(None, manifest)
     if eval_common["randomized_fill_latency_ms"] > 0 and execution_seed is None:
         raise ValueError("randomized tick-fill parity requires a seed in the source run manifest")
     eval_common["execution_seed"] = execution_seed
-    strategy = _strategy_from_cfg(cfg)[0]
+    strategy = strategy_from_cfg(cfg)[0]
     sequence_selector = (
         select_legacy_obs_columns if use_legacy_sequence_columns else select_obs_columns
     )
@@ -416,7 +416,7 @@ def main() -> int:
         sequence_schema,
         allow_legacy=use_legacy_sequence_columns,
     )
-    eval_run._validate_sequence_input_width(model, sequence_schema["width"])
+    eval_run.validate_sequence_input_width(model, sequence_schema["width"])
     frame_result = evaluate_model(
         model,
         bars=eval_bars,

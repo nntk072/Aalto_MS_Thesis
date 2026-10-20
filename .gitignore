@@ -57,7 +57,6 @@ cover/
 *.pot
 
 # Django stuff:
-*.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
@@ -163,24 +162,17 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
-*.csv
-*.ipynb
-
-logs/
+# Generated data and runtime output directories. Source CSVs/notebooks outside
+# data remain visible to Git; examples under data/examples are versioned.
+/logs/
 /data/*
 # Tracked-on-purpose developer example (see data/examples/README.md)
 !/data/examples/
 !/data/examples/**
 
-# Generated artifacts and local runtime outputs (root-level only —
-# do NOT anchor-less match, or quant_rl/data, quant_rl/models etc. get swallowed)
+# Derived caches and all generated runs, checkpoints, reports, and logs.
 /cache/
-/models/
 /outputs/
-
-# Docker pipeline logs
-/outputs/pipeline-logs/
-/outputs/parallel-logs/
 
 # Local corporate certificate (not reproducible outside this env)
 zscaler.crt
@@ -194,5 +186,5 @@ zscaler.crt
 .cursor/
 .kilocode/
 
-# Orchestra runtime (task JSON, agent logs, backups, reports)
-orchestra/state/
+# Legacy Orchestra runtime state; new state lives under outputs/orchestra/.
+/orchestra/state/

@@ -27,20 +27,48 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from decisioning.adapters.sb3 import SB3DecisionProvider
+from decisioning.contracts import (
+    ContinuousAction,
+    DecisionInput,
+    DecisionProvider,
+    DiscreteAction,
+    StructuredAction,
+)
+from decisioning.observations import (
+    OBSERVATION_SCHEMA_V2,
+    ObservationSchema,
+    account_state_v2,
+    build_observation_schema,
+    normalized_account_vector,
+    pad_observation_window,
+    validate_observation_schema,
+)
 from omegaconf import OmegaConf
 
 from configuration.paths import repository_root
 from features import attach_reachable_r, select_obs_columns
 from live.runtime.contracts import LiveSignal, MarketDataSource
-from simulation.contracts.observations import (
-    OBSERVATION_SCHEMA_V2,
-    account_state_v2,
-    build_observation_schema,
-    validate_observation_schema,
-)
-from simulation.environment.observations import normalized_account_vector, pad_observation_window
+from trading.policy.config import resolve_trading_policy
 
 DEFAULT_CONFIG = repository_root(__file__) / "config" / "base" / "default.yaml"
+
+
+def build_live_observation_schema(cfg: Any) -> ObservationSchema:
+    """Resolve the live observation schema using the training policy rules."""
+    env_cfg = getattr(cfg, "env", None)
+    version = (
+        "account-state-v3-repeated-payout"
+        if resolve_trading_policy(cfg).repeated_payout
+        else str(getattr(env_cfg, "observation_schema_version", "account-state-v1"))
+    )
+    return build_observation_schema(
+        version,
+        entry_state_visibility=bool(
+            getattr(env_cfg, "entry_state_machine", False)
+            and getattr(env_cfg, "entry_state_observation", True)
+        ),
+    )
 
 
 class RLStrategyAdapter:
@@ -53,13 +81,16 @@ class RLStrategyAdapter:
 
     def __init__(
         self,
-        model: Any,
+        model: Any | None = None,
         config_path: str | Path = DEFAULT_CONFIG,
         features_config_path: str | Path | None = None,
         obs_window: int = 60,
         allow_legacy_observation_schema: bool = False,
+        *,
+        provider: DecisionProvider | None = None,
     ) -> None:
-        self.model = model
+        if (model is None) == (provider is None):
+            raise ValueError("provide exactly one of model or provider")
         cfg = OmegaConf.create(OmegaConf.load(config_path))
         if features_config_path is not None:
             cfg = OmegaConf.merge(cfg, OmegaConf.load(features_config_path))
@@ -68,18 +99,23 @@ class RLStrategyAdapter:
         self.obs_window = int(getattr(env_cfg, "obs_window", obs_window))
         account_cfg = getattr(self.cfg, "account", None)
         self._initial_balance = float(getattr(account_cfg, "initial_balance", 100_000.0))
-        self._observation_schema = build_observation_schema(
-            str(getattr(env_cfg, "observation_schema_version", "account-state-v1")),
-            entry_state_visibility=bool(
-                getattr(env_cfg, "entry_state_machine", False)
-                and getattr(env_cfg, "entry_state_observation", True)
-            ),
-        )
-        validate_observation_schema(
-            getattr(model, "_observation_schema", None),
-            self._observation_schema,
-            allow_legacy_v1=allow_legacy_observation_schema,
-        )
+        self._observation_schema = build_live_observation_schema(self.cfg)
+        if provider is not None:
+            if provider.metadata.input_schema_version != self._observation_schema.version:
+                raise ValueError(
+                    "decision provider input schema differs from the live observation schema"
+                )
+            self.provider = provider
+        else:
+            validate_observation_schema(
+                getattr(model, "_observation_schema", None),
+                self._observation_schema,
+                allow_legacy_v1=allow_legacy_observation_schema,
+            )
+            self.provider = SB3DecisionProvider(
+                model,
+                input_schema_version=self._observation_schema.version,
+            )
         self._features: pd.DataFrame | None = None
         self._bars: pd.DataFrame | None = None
         self._last_close = 1.0
@@ -237,12 +273,24 @@ class RLStrategyAdapter:
             )
         return {"seq": seq, "seq_mask": seq_mask, "account": account}
 
-    def predict_signal(self, account_state: dict[str, float] | None = None) -> int:
-        """Run the policy on the current observation; returns the raw action id."""
+    def predict_signal(self, account_state: dict[str, float] | None = None) -> int | float:
+        """Run the provider and return its discrete id or scalar direction."""
         obs = self.build_observation(account_state)
-        batched = {key: np.asarray(value)[np.newaxis, ...] for key, value in obs.items()}
-        action = self.model.predict(batched, deterministic=True)[0]
-        return int(np.asarray(action).reshape(-1)[0])
+        decision = self.provider.predict(
+            DecisionInput(
+                observation=obs,
+                schema_version=self._observation_schema.version,
+            ),
+            deterministic=True,
+        )
+        action = decision.action
+        if isinstance(action, DiscreteAction):
+            return action.index
+        if isinstance(action, ContinuousAction):
+            return action.value
+        if isinstance(action, StructuredAction) and "direction" in action.coordinates:
+            return float(action.coordinates["direction"])
+        raise ValueError("live decisions must be discrete, scalar or include direction")
 
     # ------------------------------------------------------------------
     # integrations.mt5 adapter

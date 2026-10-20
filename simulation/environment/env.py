@@ -1,13 +1,24 @@
-# ruff: noqa: F403, F405
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import Any
 
-if TYPE_CHECKING:
-    from models.auxiliary.vae import VAE
+import gymnasium as gym
+import numpy as np
+import pandas as pd
+from decisioning.observations import OBSERVATION_SCHEMA_V1
 
+from market_data.loading.ticks import TickBook
+from simulation.contracts import SimulationTransition
+from simulation.environment.diagnostics import DebugStepError
+from trading.execution.broker import Position
+from trading.execution.costs import COST_US100, CostModel
+from trading.strategies import TradingStrategy
+
+from .action_diagnostics import _empty_decision
 from .action_runtime import ActionDecodingMixin
 from .diagnostics_runtime import DiagnosticsRuntimeMixin
+from .entry_diagnostics import _empty_entry_diag
 from .entry_execution_runtime import EntryExecutionRuntimeMixin
 from .entry_runtime import EntryRuntimeMixin
 from .episode_runtime import EpisodeRuntimeMixin
@@ -17,8 +28,9 @@ from .market_access import MarketAccessMixin
 from .observation_runtime import ObservationRuntimeMixin
 from .position_runtime import PositionRuntimeMixin
 from .risk_runtime import RiskRuntimeMixin
-from .runtime_dependencies import *
 from .step_runtime import StepRuntimeMixin
+
+__all__ = ["TradingEnv"]
 
 
 class TradingEnv(
@@ -34,7 +46,7 @@ class TradingEnv(
     EpisodeRuntimeMixin,
     PositionRuntimeMixin,
     ObservationRuntimeMixin,
-    gym.Env[dict[str, np.ndarray[Any, Any]], np.ndarray[Any, Any]],
+    gym.Env[Any, np.ndarray[Any, Any]],
 ):
     """RL trading environment with structure-aware SL/TP and hybrid action space."""
 
@@ -68,7 +80,7 @@ class TradingEnv(
         continuous_actions: bool = False,
         max_risk_frac: float = 0.01,
         use_vae: bool = False,
-        vae: VAE | None = None,
+        vae: Any | None = None,
         pre_ny_data: pd.DataFrame | None = None,
         pre_ny_by_date: dict[Any, np.ndarray[Any, Any]] | None = None,
         ny_session_start_idx: int | None = None,
@@ -346,7 +358,14 @@ class TradingEnv(
         self,
         action: int | float | np.ndarray[Any, Any],
     ) -> tuple[dict[str, np.ndarray[Any, Any]], float, bool, bool, dict[str, Any]]:
-        """Execute one step. With tracing on, failures become :class:`DebugStepError`."""
+        """Gymnasium adapter for :meth:`transition`."""
+        return self.transition(action).as_gymnasium()
+
+    def transition(
+        self,
+        action: int | float | np.ndarray[Any, Any],
+    ) -> SimulationTransition[dict[str, np.ndarray[Any, Any]]]:
+        """Advance the simulator through its framework-neutral transition API."""
         if not self._debug_trace:
             return self._step_untraced(action)
         try:

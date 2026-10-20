@@ -9,7 +9,7 @@
 | Exposed exploratory/report-only interval | 2026-01-01 through 2026-10-16 | Report the continuous interval together; no subperiod is fresh or confirmatory. Exploratory use only with explicit selection provenance |
 | Fresh locked OOS | Data not used for training, selection, or prior inspection, after the accepted exposure boundary | **Final report only** |
 
-Default dates live in `quant_rl/config/default.yaml` and `config/experiments.yaml`
+Default dates live in `config/base/default.yaml` and `config/experiments.yaml`
 (`train_end: 2025-12-31`, `test_start: 2026-01-01`).
 
 ## Rules
@@ -21,13 +21,13 @@ Default dates live in `quant_rl/config/default.yaml` and `config/experiments.yam
     exploratory: permanently classify it as exposed development data, record
     `oos_role: selection_acknowledged`, and make no confirmatory or pristine
     holdout claim from it. Do not use the same period again as final OOS.
-3. `scripts/matrix/ablation_runner.py` writes `oos_role: final_report_only` by default.
+3. `experiments/variants/runner.py` writes `oos_role: final_report_only` by default.
     Pass `--allow-locked-oos-for-selection` only for explicitly authorized
     exploratory selection on exposed data; record the selection acknowledgment.
-4. `train_rl.py` requires `--allow-locked-oos-for-selection` when used with
+4. `thesis-train train` requires `--allow-locked-oos-for-selection` when used with
     `--wandb` so the sweep does not log locked-OOS Sharpe by default.
     The bundled `config/wandb_sweep.yaml` opts in explicitly.
-5. Prefer `train_rl --walk-forward` (non-overlapping purged folds, T-03.1) for
+5. Prefer `thesis-train train --walk-forward` (non-overlapping purged folds, T-03.1) for
     selection metrics.
 6. Changing locked OOS dates is HUMAN-GATED and must update
     [threats_to_validity.md](threats_to_validity.md).

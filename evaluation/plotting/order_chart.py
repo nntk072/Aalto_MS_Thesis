@@ -9,13 +9,13 @@ from typing import Any
 
 import pandas as pd
 
+from evaluation.metrics.candle_quality import tradable_mask
 from evaluation.metrics.trades import TradeChartMetrics
 from evaluation.plotting.chart_levels import (
     at_sample_extreme,
     chart_ylim,
     deviation_levels,
     level_near_candles,
-    tradable_mask,
 )
 from evaluation.plotting.overlay_events import OverlayEvents
 

@@ -1,7 +1,15 @@
-# ruff: noqa: F403, F405
 from __future__ import annotations
 
-from .runtime_dependencies import *
+from dataclasses import asdict
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+from trading.execution.broker import Position
+
+from .market_view import BarView, FeatureRow
+from .mixin_base import RuntimeMixinBase
 
 
 class EntryRuntimeMixin(RuntimeMixinBase):
@@ -198,7 +206,7 @@ class EntryRuntimeMixin(RuntimeMixinBase):
         return float(self._max_tp_dist[i])
 
     def _rr_fits(self, entry_price: float, sl_price: float, rr_ratio: float) -> bool:
-        from trading.positions.tp_reach import rr_reaches
+        from features.context.reachability import rr_reaches
 
         return rr_reaches(entry_price, sl_price, rr_ratio, self._max_tp_here())
 

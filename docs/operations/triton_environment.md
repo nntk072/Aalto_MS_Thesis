@@ -16,7 +16,7 @@ Do not infer node architecture from the SSH gateway.
 | --- | --- | --- | --- |
 | ARM64 / `aarch64` | `gpuarm1`, NVIDIA GH200 | `.venv` | `uv sync --locked --extra dev` with ARM64 uv |
 | AMD64 / `x86_64` | H100/H200 compute nodes | `.venv-x86` | `tools/setup-venv-x86` on x86_64 |
-| AMD64 / `x86_64` | V100 (CC 7.0) | `.venv-v100` | Separate environment; torch 2.14.0+cu126, Python 3.12, project lock dependencies excluding its cu130 CUDA packages. Verify `sm_70`, CC `(7, 0)`, and a real CUDA op before use. |
+| AMD64 / `x86_64` | V100 (CC 7.0) | `.venv-v100` | Separate environment; run `tools/setup-venv-v100` inside an allocated V100 shell. It installs torch 2.14.1+cu126, Python 3.12, and locked project dependencies excluding cu130 CUDA packages, then verifies `sm_70`, CC `(7, 0)`, and a real CUDA op. |
 | AMD64 / `x86_64` | MI210 (`gfx90a`) | `/scratch/work/nguyenl37/.venv-mi210` | `tools/setup-venv-mi210`; observed Triton ROCm 6.3.1, Python 3.12.14, torch 2.7.1+rocm6.3. Keep separate from the CUDA 13.0 project lock; validate the runtime and a real device operation before use. |
 
 Activate with `source scripts/compute/slurm/activate_venv.sh` inside the allocation.
@@ -31,13 +31,12 @@ availability change; inspect current Slurm state rather than hardcoding
 resource assumptions.
 
 The x86 `.venv-x86` is built with torch 2.14.0+cu130 and does not include V100
-(`sm_70`) kernels. The V100 environment is isolated from it and uses the
-CUDA 12.6 wheel that includes `sm_70`. Its creation must not edit `pyproject.toml`
-or `uv.lock`; install application dependencies from the locked export while
-excluding the torch/cu130 CUDA runtime packages, then install `torch==2.14.0`
-from the official cu126 index. Re-run the compatibility checks after recreating
-the environment. Do not claim V100 training support from environment creation
-alone; a representative trainer smoke run is still required.
+(`sm_70`) kernels. The isolated V100 environment uses the CUDA 12.6 wheel that
+includes `sm_70`. Its setup script leaves `pyproject.toml` and `uv.lock`
+unchanged, installs application dependencies from the locked export while
+excluding the torch/cu130 CUDA runtime packages, and verifies a real CUDA
+operation. A representative trainer run is still required to qualify training
+support.
 
 The MI210 environment is isolated from `.venv-x86`: the project lock selects
 CUDA 13.0 packages, while the observed MI210 node exposes ROCm 6.3.1. The setup
@@ -57,6 +56,37 @@ This historical result does not validate later dirty-tree changes.
 This adds cross-runtime test evidence but still does not establish full trainer
 parity or throughput. An end-to-end trainer and resource/throughput benchmark
 remain required before MI210 training use.
+
+## Automatic accelerator precision setup
+
+Training detects PyTorch's active accelerator at startup. CUDA builds identify
+NVIDIA GPUs; ROCm builds use PyTorch's `torch.cuda` device interface and are
+reported as the `rocm` backend. Capability detection uses the selected device's
+name, compute capability (where available), memory, and bf16 support rather
+than relying on a fixed GPU-name allowlist. This covers V100, A100, H100/H200,
+GH200, B300 and newer NVIDIA devices, plus MI-series devices exposed by the
+installed ROCm PyTorch runtime.
+
+`compute.environment.get_autocast_context()` selects fp16 on pre-Ampere NVIDIA GPUs
+such as V100, bf16 when the active modern accelerator reports bf16 support,
+and fp16 as the accelerator fallback. CPU use is a no-op context. Eligible
+extractors return fp32 features, keeping actor/critic heads, action
+distributions, value estimates, log-probabilities and losses in fp32. V100
+fp16 autocast is limited to no-grad rollout and inference: SB3 PPO currently
+updates weights without a GradScaler, so its gradient-enabled encoder passes
+remain fp32 to avoid fp16 gradient overflow. The Transformer extractor remains
+fp32 because bf16 autocast has produced PPO NaNs in large-rollout training.
+
+At training startup, NVIDIA Ampere-or-newer devices enable TF32, available
+cuDNN builds enable convolution benchmarking, and the allocator defaults to
+`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` unless the caller set an
+allocator policy already. Set allocator options in the launch environment to
+ensure they are active before Python initializes CUDA. ROCm does not receive
+the NVIDIA allocator or TF32 settings; PyTorch's cuDNN compatibility backend
+is benchmarked only when it reports available. The Python package/runtime must
+match the node architecture and accelerator family as documented above; this
+runtime policy does not install CUDA or ROCm drivers or replace the dedicated
+V100/MI210 environments.
 
 ## Storage characteristics
 

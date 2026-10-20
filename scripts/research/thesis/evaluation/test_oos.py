@@ -66,7 +66,7 @@ def parse_args() -> argparse.Namespace:
             "Emitted as spread*m_slip*m keys alongside the base grid."
         ),
     )
-    parser.add_argument("--out", default="results/oos_report.json")
+    parser.add_argument("--out", default="outputs/reports/oos_report.json")
     return parser.parse_args()
 
 

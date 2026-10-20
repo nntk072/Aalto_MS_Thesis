@@ -205,7 +205,7 @@ def roster() -> None:
 @main.command()
 def tasks() -> None:
     """List all orchestra tasks."""
-    state_dir = WORKSPACE / "orchestra" / "state"
+    state_dir = WORKSPACE / "outputs" / "orchestra" / "state"
     all_tasks = list_tasks(state_dir)
     if not all_tasks:
         click.echo("No tasks found.")
@@ -222,7 +222,7 @@ def tasks() -> None:
 @click.argument("task_id")
 def show(task_id: str) -> None:
     """Show details of a specific task."""
-    state_dir = WORKSPACE / "orchestra" / "state"
+    state_dir = WORKSPACE / "outputs" / "orchestra" / "state"
     try:
         state = TaskState.load(task_id, state_dir)
     except FileNotFoundError:
@@ -279,7 +279,7 @@ def show(task_id: str) -> None:
 @click.option("--max-fixes", default=3, help="Maximum fix iterations.", type=int)
 def fix(task_id: str, max_fixes: int) -> None:
     """Run fix loop on an existing task."""
-    state_dir = WORKSPACE / "orchestra" / "state"
+    state_dir = WORKSPACE / "outputs" / "orchestra" / "state"
     try:
         state = TaskState.load(task_id, state_dir)
     except FileNotFoundError:
@@ -374,7 +374,7 @@ def plan(task: str, model: str | None, dry_run: bool) -> None:
 )
 def cost(date: str | None, month: str | None) -> None:
     """Show cost and token usage report."""
-    state_dir = WORKSPACE / "orchestra" / "state"
+    state_dir = WORKSPACE / "outputs" / "orchestra" / "state"
     from .cost import CostTracker
 
     tracker = CostTracker(state_dir)
@@ -420,7 +420,7 @@ def cost(date: str | None, month: str | None) -> None:
 @click.argument("task_id")
 def cost_task(task_id: str) -> None:
     """Show cost breakdown for a specific task."""
-    state_dir = WORKSPACE / "orchestra" / "state"
+    state_dir = WORKSPACE / "outputs" / "orchestra" / "state"
     from .cost import CostTracker
 
     tracker = CostTracker(state_dir)
@@ -441,7 +441,7 @@ def cost_task(task_id: str) -> None:
 @main.command()
 def perf() -> None:
     """Show model performance statistics across all tasks."""
-    state_dir = WORKSPACE / "orchestra" / "state"
+    state_dir = WORKSPACE / "outputs" / "orchestra" / "state"
     all_tasks = list_tasks(state_dir)
     if not all_tasks:
         click.echo("No tasks found.")
@@ -505,7 +505,7 @@ def perf() -> None:
 @click.option("--yes", is_flag=True, help="Do not prompt for confirmation.")
 def restore(task_id: str, step: str | None, yes: bool) -> None:
     """Restore a per-step workspace snapshot for a task."""
-    state_dir = WORKSPACE / "orchestra" / "state"
+    state_dir = WORKSPACE / "outputs" / "orchestra" / "state"
     root = state_dir / "backups" / task_id
     slots = list_slots(root)
     if not slots:

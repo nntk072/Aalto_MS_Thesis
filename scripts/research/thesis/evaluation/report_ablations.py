@@ -1,11 +1,11 @@
 """Aggregate ablation JSON reports into a comparison table.
 
-Reads ``results/ablations/*.json`` produced by ``experiments/variants/runner.py``
+Reads ``outputs/ablations/*.json`` produced by ``experiments/variants/runner.py``
 and prints a markdown-friendly table of mean OOS metrics (Sharpe, MaxDD,
 trades, win rate, key ``pnl_dist_*`` extras when present).
 
 Example:
-    python scripts/report_ablations.py --ablations-dir results/ablations
+    python scripts/report_ablations.py --ablations-dir outputs/ablations
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--ablations-dir",
-        default="results/ablations",
+        default="outputs/ablations",
         help="Directory of per-variant *.json reports from ablation_runner",
     )
     parser.add_argument(

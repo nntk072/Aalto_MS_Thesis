@@ -15,9 +15,12 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
+from decisioning.actions import build_discrete_trading_action_schema
+from decisioning.adapters.sb3 import SB3DecisionProvider
+from decisioning.observations import OBSERVATION_SCHEMA_V1, build_observation_schema
+from gymnasium import spaces
 
 from integrations.mt5.adapters.data import TradingData
-from simulation.contracts.observations import OBSERVATION_SCHEMA_V1, build_observation_schema
 
 # --- headless MetaTrader5 stub (Windows-only package, absent on Linux) -----
 if "MetaTrader5" not in sys.modules:
@@ -159,6 +162,8 @@ class _StubModel:
     """Duck-typed SB3 model: action = +1 (long) always."""
 
     _observation_schema = build_observation_schema(OBSERVATION_SCHEMA_V1).to_dict()
+    action_space: Any = spaces.Discrete(20)
+    _action_schema: dict[str, object] = build_discrete_trading_action_schema().to_dict()
 
     def predict(self, obs: dict[str, Any], deterministic: bool = True) -> np.ndarray[Any, Any]:  # noqa: ARG002
         return np.array([1])
@@ -190,6 +195,20 @@ def test_rl_bridge_observation_contract(trending_bars):
     assert obs["seq_mask"].shape == (obs["seq"].shape[0],)
     action = adapter.predict_signal()
     assert action == 1
+
+
+def test_rl_bridge_accepts_a_decision_provider(trending_bars):
+    """The live consumer uses the provider contract independently of model loading."""
+    from live.runtime.strategy import RLStrategyAdapter
+
+    provider = SB3DecisionProvider(
+        _StubModel(),
+        input_schema_version=OBSERVATION_SCHEMA_V1,
+    )
+    adapter = RLStrategyAdapter(provider=provider, config_path="config/base/default.yaml")
+    adapter.update_bars(trending_bars)
+
+    assert adapter.predict_signal() == 1
 
 
 def test_rl_bridge_maps_actions_to_signals(trending_bars):

@@ -25,7 +25,8 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
-from features.po3.config import FVGConfig, IFVGConfig, detect_fvg, detect_ifvg_confirmation
+from features.po3.fvg_detection import FVGConfig, detect_fvg
+from features.po3.ifvg_detection import IFVGConfig, detect_ifvg_confirmation
 from features.technical.indicators import atr
 
 # State-machine states.

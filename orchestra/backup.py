@@ -20,6 +20,9 @@ _SKIP_DIRS = {
     "htmlcov",
     "mlruns",
     ".cache",
+    "cache",
+    "logs",
+    "outputs",
 }
 _SKIP_SUFFIXES = {".pyc", ".pyo", ".parquet"}
 _MANIFEST = "manifest.json"
@@ -31,7 +34,7 @@ def _rel(path: Path, root: Path) -> Path:
 
 
 def iter_backup_paths(workspace: Path) -> list[Path]:
-    """Source files to snapshot (skips venv, git, orchestra state, caches)."""
+    """Snapshot source files while excluding runtime, data, and cache roots."""
     found: list[Path] = []
     for path in sorted(workspace.rglob("*")):
         if not path.is_file():

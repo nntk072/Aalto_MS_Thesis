@@ -202,23 +202,25 @@ Research pipeline, one configuration run (`training/runner/training.py`):
 
 ```mermaid
 sequenceDiagram
-    participant P as run_pipeline (data/pipeline.py)
-    participant B as build_features (features/build.py)
+    participant P as run_pipeline (market_data/loading/pipeline.py)
+    participant B as build_features (features/pipeline/builder.py)
     participant L as liquidity / po3_state
-    participant S as split_train_test (data/split.py)
-    participant E as TradingEnv
-    participant ST as _strategy_from_cfg (train_rl.py)
-    participant A as build_agent (models/agent.py)
-    participant V as evaluate_model (eval/rollout.py)
+    participant S as split_train_test (market_data/splits/definitions.py)
+    participant E as SimulationTransition / TradingEnv
+    participant ST as _strategy_from_cfg (training/runner/training.py)
+    participant A as build_agent (learning/rl/agent.py)
+    participant D as DecisionProvider (decisioning/contracts.py)
+    participant V as evaluate_provider (evaluation/rollout/model.py)
     P->>B: true M1 CSVs (data.m1_files)
     B->>L: only when include_strategy_state
     L-->>B: sweep / BOS / PO3 / IFVG columns
     B-->>P: feature frames (versioned parquet cache)
-    P->>S: feature frames
-    S-->>E: in-sample / OOS frames (locked dates)
+    P->>S: dataset and feature frames
+    S-->>E: in-sample / OOS inputs (locked dates)
     ST-->>E: strategy + alignment reward (or baseline)
-    E-->>A: observation space
-    A-->>V: trained checkpoint
+    E-->>A: Gym adapter observation space
+    A-->>D: model artifact / provider adapter
+    D-->>V: semantic decisions
     V-->>V: metrics, trades, plots -> outputs/
 ```
 
@@ -304,19 +306,24 @@ provides the structural risk helpers `compute_sl_tp_from_structure`
 buffer) and `resolve_tp_target` (`rr`, liquidity and
 previous-day-high/low targets with `rr_fallback` for invalid ones).
 
-**Models** — `models/factory/agent.py` (`build_agent`) assembles the
-PPO/SAC agent with its sequence encoder; optional VAE latents are frozen
-when present.
+**Models and learning** — `models/encoders/` and `models/auxiliary/` hold
+reusable neural architectures. `learning/rl/agent.py` assembles the PPO/SAC
+backend and vector environment. `learning/supervised/` contains a small
+reference classifier that uses the same `Learner` and `DecisionProvider`
+contracts without importing Gymnasium or SB3. Optional VAE latents are frozen
+when used by the RL backend.
 
 **Training** — `training/runner/training.py` wires everything: `_STRATEGY_CONFIGS`
 maps strategy names to variant YAMLs, `_strategy_from_cfg` builds
 `(strategy, strategy_reward, weight)`, and the merged config drives
-`make_env`, `build_agent` and learning.
+`make_env`, `learning/rl/agent.py::build_agent` and the selected learner.
 
 **Evaluation** — `evaluation/` holds the canonical metrics stack
 (`calculate_metrics`, `purged_walk_forward`, bootstrap CIs, calibration,
 `run_episode`, distributional extras). `evaluation/` owns rollout
-(`evaluate_model`), plot export, and `eval_run` checkpoint re-evaluation.
+(`evaluate_provider`), plot export, and provider-based `eval_run` checkpoint
+re-evaluation. `evaluate_model` remains the compatibility entry point for
+older callers that pass a model directly.
 Thesis ablation / OOS cost harnesses live as scripts only:
 `experiments/variants/runner.py` (+ `config/experiments.yaml`),
 `scripts/research/thesis/evaluation/test_oos.py`, `scripts/research/thesis/evaluation/report_ablations.py`. There is no parallel
@@ -402,9 +409,12 @@ classDiagram
 |---------|-------------|------|
 | `market_data/` | `run_pipeline`, `split_train_test` | M1 ingest, resample, cache, split |
 | `features/` | `build_features` | Feature matrix + `FEATURE_CACHE_VERSION` |
-| `simulation/environment/` | `TradingEnv` | Gym interface, mechanics, rewards |
+| `simulation/` | `SimulationTransition`, `TradingEnv` | Native transitions and Gym adapter |
 | `simulation/backtest/` | `engine`, `broker`, `guardrails` | Fills, costs, FTMO kill-switches |
-| `models/` | `build_agent` | PPO/SAC + encoder wiring |
+| `models/` | encoders, factory | Reusable model architectures |
+| `learning/rl/` | `build_agent` | PPO/SAC and vector-environment wiring |
+| `learning/supervised/` | `ReferenceTorchLearner` | Optional supervised backend reference |
+| `decisioning/` | `DecisionProvider` | Versioned model input and semantic action boundary |
 | `training/` | `train_rl` | Pipeline orchestration |
 | `evaluation/` | `calculate_metrics`, `purged_walk_forward` | Metrics and reporting |
 | `evaluation/` | `evaluate_model`, `eval_run` | Rollout and artifact export |
@@ -483,11 +493,11 @@ One `TradingEnv` step:
 
 ### Training, evaluation and walk-forward
 
-`train_rl.py` merges `config/base/default.yaml` with the variant
+`thesis-train train` merges `config/base/default.yaml` with the variant
 YAML selected from `_STRATEGY_CONFIGS`, builds the environment via
-`make_env` and `_strategy_from_cfg`, the agent via `build_agent`, and
-trains. `BestCheckpointEvalCallback` checkpoints during training;
-`evaluation/rollout/model.py` (`evaluate_model`) replays checkpoints on the
+`make_env` and `_strategy_from_cfg`, the agent via `learning/rl/agent.py`, and
+trains through `Learner.fit()`. `BestCheckpointEvalCallback` checkpoints during training;
+`evaluation/rollout/model.py` (`evaluate_provider`) replays checkpoints on the
 locked OOS window; `evaluation/` computes metrics, bootstrap CIs,
 and walk-forward reports; `evaluation/reporting/export.py` writes artifacts to
 `outputs/`. Feature caches use `FEATURE_CACHE_VERSION` plus the resolved
@@ -496,8 +506,9 @@ variants.
 
 ### Live: paper first, then promote
 
-`live_trading_rl.py` loads a trained checkpoint into
-`RLStrategyAdapter`, which converts each MT5 M1 bar into the same
+`live_trading_rl.py` loads a trained checkpoint, wraps it in the SB3
+`DecisionProvider` adapter at the composition root, and supplies that provider
+to `RLStrategyAdapter`, which converts each MT5 M1 bar into the same
 observation the environment produced during training. `RLRobot.trade()`
 derives the signal, sizes it via `RiskManager` (percent-of-balance under
 `live_risk_overrides:`), and either places orders through `Trader` or

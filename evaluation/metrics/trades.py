@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from evaluation.plotting.chart_levels import tradable_mask, wick_time
+from evaluation.metrics.candle_quality import tradable_mask, wick_time
 
 
 @dataclass

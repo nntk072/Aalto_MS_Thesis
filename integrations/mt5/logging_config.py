@@ -4,7 +4,7 @@ from pathlib import Path
 from loguru import logger
 
 
-def configure_logging(log_path: str = "logs/log.txt") -> None:
+def configure_logging(log_path: str = "logs/mt5.log") -> None:
     Path(log_path).parent.mkdir(parents=True, exist_ok=True)
     logger.remove()
 

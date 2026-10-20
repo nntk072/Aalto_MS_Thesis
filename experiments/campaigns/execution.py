@@ -8,1181 +8,150 @@ from __future__ import annotations
 
 import argparse
 import csv
-import datetime as dt
 import fcntl
 import hashlib
-import importlib.metadata
 import json
 import math
-import numbers
 import os
 import pathlib
-import platform
 import re
-import shutil
 import signal
 import socket
 import subprocess
 import sys
 import time
-import zipfile
 from typing import Any, TextIO, cast
 
-from configuration.paths import repository_root
+from experiments.campaigns.artifact_validation import (
+    hash_run_artifacts as hash_run_artifacts,
+)
+from experiments.campaigns.artifact_validation import (
+    validate_campaign_evaluation as validate_campaign_evaluation,
+)
+from experiments.campaigns.artifact_validation import (
+    verify_run_artifacts as verify_run_artifacts,
+)
+from experiments.campaigns.checkpoint_lineage import (
+    archive_initial_checkpoints as archive_initial_checkpoints,
+)
+from experiments.campaigns.checkpoint_lineage import (
+    build_initial_checkpoint_map as build_initial_checkpoint_map,
+)
+from experiments.campaigns.checkpoint_lineage import (
+    choose_resume_checkpoint as choose_resume_checkpoint,
+)
+from experiments.campaigns.checkpoint_lineage import (
+    latest_resumable_checkpoint as latest_resumable_checkpoint,
+)
+from experiments.campaigns.checkpoint_lineage import (
+    validate_initial_checkpoints as validate_initial_checkpoints,
+)
+from experiments.campaigns.checkpoint_lineage import (
+    verify_initial_checkpoint_models as verify_initial_checkpoint_models,
+)
+from experiments.campaigns.constants import DEFAULT_VARIANTS, ROOT
+from experiments.campaigns.resources import (
+    available_resources as available_resources,
+)
+from experiments.campaigns.resources import (
+    cgroup_memory_file as cgroup_memory_file,
+)
+from experiments.campaigns.resources import (
+    cpu_mask_for_slot as cpu_mask_for_slot,
+)
+from experiments.campaigns.resources import (
+    expand_slurm_hosts as expand_slurm_hosts,
+)
+from experiments.campaigns.resources import (
+    resolve_worker_nodes as resolve_worker_nodes,
+)
+from experiments.campaigns.resources import (
+    sample_resources as sample_resources,
+)
+from experiments.campaigns.resources import (
+    worker_command as worker_command,
+)
+from experiments.campaigns.runtime_metadata import (
+    runtime_metadata as runtime_metadata,
+)
+from experiments.campaigns.source_snapshot import (
+    action_space_matches_width as action_space_matches_width,
+)
+from experiments.campaigns.source_snapshot import (
+    cached_sha256_file as cached_sha256_file,
+)
+from experiments.campaigns.source_snapshot import (
+    campaign_data_inputs as campaign_data_inputs,
+)
+from experiments.campaigns.source_snapshot import (
+    campaign_source_files as campaign_source_files,
+)
+from experiments.campaigns.source_snapshot import (
+    sha256_file as sha256_file,
+)
+from experiments.campaigns.source_snapshot import (
+    verify_campaign_source_snapshot as verify_campaign_source_snapshot,
+)
+from experiments.campaigns.source_snapshot import (
+    write_campaign_source_snapshot as write_campaign_source_snapshot,
+)
+from experiments.campaigns.state_store import (
+    atomic_json as atomic_json,
+)
+from experiments.campaigns.state_store import (
+    read_manifest as read_manifest,
+)
+from experiments.campaigns.state_store import (
+    record as record,
+)
+from experiments.campaigns.state_store import (
+    utc as utc,
+)
+from experiments.campaigns.state_store import (
+    validate_inputs as validate_inputs,
+)
 
-ROOT = repository_root(__file__)
-DEFAULT_VARIANTS = ROOT / "scripts" / "variant_list.txt"
+__all__ = [
+    "DEFAULT_VARIANTS",
+    "ROOT",
+    "action_space_matches_width",
+    "archive_initial_checkpoints",
+    "atomic_json",
+    "available_resources",
+    "build_initial_checkpoint_map",
+    "cached_sha256_file",
+    "campaign_data_inputs",
+    "campaign_source_files",
+    "choose_resume_checkpoint",
+    "cpu_mask_for_slot",
+    "expand_slurm_hosts",
+    "hash_run_artifacts",
+    "latest_resumable_checkpoint",
+    "main",
+    "read_manifest",
+    "record",
+    "resolve_worker_nodes",
+    "runtime_metadata",
+    "sample_resources",
+    "sha256_file",
+    "utc",
+    "validate_campaign_evaluation",
+    "validate_initial_checkpoints",
+    "validate_inputs",
+    "verify_campaign_source_snapshot",
+    "verify_initial_checkpoint_models",
+    "verify_run_artifacts",
+    "worker_command",
+    "write_campaign_source_snapshot",
+]
+
 STOP = False
 _CACHE_FILE_HASHES: dict[tuple[str, int, int, int], str] = {}
-
-
-def utc() -> str:
-    return dt.datetime.now(dt.timezone.utc).isoformat()  # noqa: UP017
-
-
-def atomic_json(path: pathlib.Path, value: object) -> None:
-    tmp = path.with_name(path.name + ".tmp")
-    with tmp.open("w", encoding="utf-8") as handle:
-        json.dump(value, handle, indent=2, sort_keys=True)
-        handle.write("\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(tmp, path)
-
-
-def record(path: pathlib.Path, value: dict[str, object]) -> None:
-    with path.open("a", encoding="utf-8") as out:
-        out.write(json.dumps({"timestamp": utc(), **value}, sort_keys=True) + "\n")
-        out.flush()
-
-
-def read_manifest(path: pathlib.Path) -> dict[str, Any]:
-    return cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
-
-
-def validate_inputs(args: argparse.Namespace) -> list[dict[str, Any]]:
-    variants = [
-        v.strip()
-        for v in args.variant_file.read_text().splitlines()
-        if v.strip() and not v.lstrip().startswith("#")
-    ]
-    for variant in variants:
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", variant):
-            raise ValueError(f"unsafe variant name: {variant}")
-    if len(variants) != len(set(variants)):
-        raise ValueError("duplicate variants in variant file")
-    if not variants:
-        raise ValueError("variant list empty")
-    seeds = [int(s) for s in args.seeds.replace(",", " ").split()]
-    if not seeds or len(seeds) != len(set(seeds)):
-        raise ValueError("seeds empty or duplicate")
-    if args.timesteps <= 0 or args.workers <= 0 or args.n_envs <= 0:
-        raise ValueError("timesteps/workers/n-envs must be positive")
-    jobs = [
-        {"key": f"{v}__seed{s}", "variant": v, "seed": s, "status": "pending", "attempts": 0}
-        for v in variants
-        for s in seeds
-    ]
-    if len(jobs) != len({j["key"] for j in jobs}):
-        raise ValueError("duplicate run keys")
-    return jobs
 
 
 def signal_stop(_sig: int, _frame: object) -> None:
     global STOP
     STOP = True
-
-
-def cgroup_memory_file(name: str) -> pathlib.Path | None:
-    """Locate a memory-controller file under this process's cgroup."""
-    root = pathlib.Path("/sys/fs/cgroup")
-    try:
-        entries = pathlib.Path("/proc/self/cgroup").read_text().splitlines()
-    except OSError:
-        entries = []
-    for entry in entries:
-        parts = entry.split(":", maxsplit=2)
-        if len(parts) != 3:
-            continue
-        _hierarchy, controllers, relative = parts
-        if controllers == "":
-            base = root / relative.lstrip("/")
-        elif "memory" in controllers.split(","):
-            base = root / "memory" / relative.lstrip("/")
-        else:
-            continue
-        candidate = base / name
-        try:
-            candidate.resolve().relative_to(root.resolve())
-        except (OSError, ValueError):
-            continue
-        if candidate.is_file():
-            return candidate
-    for fallback in (root / name, root / "memory" / name):
-        try:
-            fallback.resolve().relative_to(root.resolve())
-        except (OSError, ValueError):
-            continue
-        if fallback.is_file():
-            return fallback
-    return None
-
-
-def available_resources() -> dict[str, Any]:
-    mem_limit = 0
-    memory = cgroup_memory_file("memory.max")
-    if memory is not None:
-        # Slurm task cgroups often report "max" while a parent job cgroup
-        # carries the actual allocation limit. Use the tightest finite limit
-        # visible from this task instead of treating that allocation as unbound.
-        for parent in (memory, *memory.parents):
-            if not parent.is_relative_to(pathlib.Path("/sys/fs/cgroup")):
-                break
-            candidate = parent / "memory.max"
-            try:
-                value = candidate.read_text().strip()
-            except OSError:
-                continue
-            if value.isdigit() and 0 < int(value) < 2**60:
-                mem_limit = int(value) if not mem_limit else min(mem_limit, int(value))
-    if not mem_limit:
-        memory = cgroup_memory_file("memory.limit_in_bytes")
-        if memory is not None and memory.read_text().strip().isdigit():
-            legacy_value = int(memory.read_text().strip())
-            if 0 < legacy_value < 2**60:
-                mem_limit = legacy_value
-    cpu_ids = sorted(os.sched_getaffinity(0))
-    return {
-        "memory_limit_bytes": mem_limit,
-        "cpu_affinity": len(cpu_ids),
-        "cpu_ids": cpu_ids,
-    }
-
-
-def cpu_mask_for_slot(cpu_ids: list[int], slot: int, cpus: int) -> tuple[str, list[int]]:
-    """Assign a distinct contiguous slice of allocated CPU IDs to one worker."""
-    if slot < 0 or cpus <= 0:
-        raise ValueError("CPU slot and worker CPU count must be non-negative/positive")
-    start = slot * cpus
-    selected = cpu_ids[start : start + cpus]
-    if len(selected) != cpus:
-        raise ValueError(f"CPU slot {slot} needs {cpus} CPUs but only {len(selected)} remain")
-    mask = sum(1 << cpu for cpu in selected)
-    return f"0x{mask:x}", selected
-
-
-def expand_slurm_hosts(node_list: str) -> list[str]:
-    """Expand a Slurm host expression, preserving the scheduler's host order."""
-    result = subprocess.run(
-        ["scontrol", "show", "hostnames", node_list],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=10,
-    )
-    if result.returncode != 0:
-        raise ValueError(f"could not expand Slurm node list {node_list!r}: {result.stderr.strip()}")
-    hosts = [line.strip() for line in result.stdout.splitlines() if line.strip()]
-    if not hosts or len(hosts) != len(set(hosts)):
-        raise ValueError("Slurm node list expanded to no hosts or duplicate hosts")
-    return hosts
-
-
-def worker_command(
-    command: list[str],
-    *,
-    node: str | None,
-    gpu_type: str,
-    cpus: int,
-    gpu_count: int = 1,
-    gpu_id: int = 0,
-    cpu_mask: str | None = None,
-    expected_cpu_ids: list[int] | None = None,
-    step_cpus: int | None = None,
-) -> list[str]:
-    """Build an allocation-local or explicitly GPU-pinned Slurm worker command."""
-    if node is None:
-        return command
-    if gpu_count < 0 or (gpu_count and not 0 <= gpu_id < gpu_count):
-        raise ValueError("worker GPU count or binding index is invalid")
-    if (cpu_mask is None) != (expected_cpu_ids is None):
-        raise ValueError("CPU mask and expected CPU IDs must be provided together")
-    allocated_cpus = cpus if step_cpus is None else step_cpus
-    if allocated_cpus < cpus:
-        raise ValueError("Slurm step CPU envelope cannot be smaller than the worker CPU mask")
-    result = [
-        "srun",
-        "--overlap",
-        "--nodes=1",
-        "--ntasks=1",
-        f"--nodelist={node}",
-        f"--cpus-per-task={allocated_cpus}",
-    ]
-    if gpu_count:
-        result.extend([f"--gpus={gpu_type}:{gpu_count}", f"--gpu-bind=map_gpu:{gpu_id}"])
-    cpu_binding = f"mask_cpu:{cpu_mask}" if cpu_mask is not None else "cores"
-    worker_command = command
-    if cpu_mask is not None and expected_cpu_ids is not None:
-        guard = ROOT / "scripts" / "matrix" / "verify_worker_cpu_affinity.py"
-        worker_command = [
-            sys.executable,
-            str(guard),
-            "--expected-cpus",
-            ",".join(str(cpu) for cpu in expected_cpu_ids),
-            "--",
-            *command,
-        ]
-    result.extend(
-        [
-            f"--cpu-bind={cpu_binding}",
-            "--chdir",
-            str(ROOT),
-            "--export=ALL",
-            *worker_command,
-        ]
-    )
-    return result
-
-
-def resolve_worker_nodes(raw: str | None, *, dry_run: bool) -> list[str]:
-    if not raw:
-        return []
-    if dry_run:
-        requested = [host.strip() for host in raw.split(",") if host.strip()]
-        if not requested or len(requested) != len(set(requested)):
-            raise ValueError("worker node list is empty or contains duplicates")
-        return requested
-    job_node_list = os.getenv("SLURM_JOB_NODELIST") or os.getenv("SLURM_NODELIST")
-    if not job_node_list:
-        raise ValueError("--worker-nodes requires an existing multi-node Slurm allocation")
-    allocated = set(expand_slurm_hosts(job_node_list))
-    requested = expand_slurm_hosts(raw)
-    outside = sorted(set(requested) - allocated)
-    if outside:
-        raise ValueError(f"worker nodes are outside the Slurm allocation: {outside}")
-    return requested
-
-
-def sample_resources(path: pathlib.Path) -> None:
-    def read(name: str) -> str:
-        p = cgroup_memory_file(name)
-        return p.read_text().strip().replace("\n", ";") if p is not None else ""
-
-    gpu_util = gpu_memory = ""
-    try:
-        gpu = subprocess.run(
-            [
-                "nvidia-smi",
-                "--query-gpu=utilization.gpu,memory.used",
-                "--format=csv,noheader,nounits",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-        if gpu.returncode == 0:
-            gpu_util, _, gpu_memory = gpu.stdout.strip().partition(", ")
-    except (OSError, subprocess.TimeoutExpired):
-        pass
-    with path.open("a", newline="", encoding="utf-8") as f:
-        csv.writer(f).writerow(
-            [
-                utc(),
-                os.getloadavg()[0],
-                read("memory.current"),
-                read("memory.max"),
-                read("memory.peak"),
-                read("memory.events"),
-                gpu_util,
-                gpu_memory,
-            ]
-        )
-        f.flush()
-
-
-def sha256_file(path: pathlib.Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def campaign_data_inputs(
-    data_config: dict[str, Any], *, root: pathlib.Path = ROOT
-) -> dict[str, str]:
-    """Fingerprint the exact split bar/tick inputs and date-level calendar."""
-    data_inputs: dict[str, str] = {}
-    configured_datasets = data_config.get("datasets")
-    if configured_datasets:
-        dataset_sources = [
-            (str(name), root / str(spec["raw_dir"]), spec)
-            for name, spec in configured_datasets.items()
-        ]
-    else:
-        dataset_sources = [("all", root / str(data_config["raw_dir"]), data_config)]
-
-    for dataset_name, raw_dir, dataset in dataset_sources:
-        for group in ("m1_files", "tick_files"):
-            for filename in dataset.get(group, {}).values():
-                path = raw_dir / str(filename)
-                relative = str(path.relative_to(root))
-                data_inputs[f"{dataset_name}:{relative}"] = (
-                    sha256_file(path) if path.is_file() else "MISSING"
-                )
-        for timeframe, symbol_files in dataset.get("timeframe_files", {}).items():
-            for filename in symbol_files.values():
-                path = raw_dir / str(filename)
-                relative = str(path.relative_to(root))
-                data_inputs[f"{dataset_name}:{relative}"] = (
-                    sha256_file(path) if path.is_file() else "MISSING"
-                )
-
-    schedule_value = data_config.get("session_schedule_file")
-    if schedule_value:
-        schedule_path = root / str(schedule_value)
-        relative = str(schedule_path.relative_to(root))
-        data_inputs[f"calendar:{relative}"] = (
-            sha256_file(schedule_path) if schedule_path.is_file() else "MISSING"
-        )
-    return data_inputs
-
-
-def cached_sha256_file(path: pathlib.Path) -> str:
-    """Hash a shared campaign cache once per unchanged file identity."""
-    stat = path.stat()
-    identity = (str(path.resolve()), stat.st_ino, stat.st_size, stat.st_mtime_ns)
-    digest = _CACHE_FILE_HASHES.get(identity)
-    if digest is None:
-        digest = sha256_file(path)
-        _CACHE_FILE_HASHES[identity] = digest
-    return digest
-
-
-def action_space_matches_width(action_space: Any, width: int) -> bool:
-    """Check vector and legacy discrete action spaces without conflating them."""
-    discrete_width = getattr(action_space, "n", None)
-    if isinstance(discrete_width, numbers.Integral):
-        return int(discrete_width) == width and tuple(getattr(action_space, "shape", ())) == ()
-    return getattr(action_space, "shape", None) == (width,)
-
-
-def campaign_source_files(
-    root: pathlib.Path, campaign_spec: pathlib.Path | None = None
-) -> list[pathlib.Path]:
-    """Return tracked and untracked source inputs hashed into campaign identity."""
-    pathspecs = [
-        "configuration",
-        "artifacts",
-        "market_data",
-        "features",
-        "trading",
-        "simulation",
-        "models",
-        "training",
-        "evaluation",
-        "experiments",
-        "live",
-        "integrations",
-        "compute",
-        "config",
-        "scripts/compute/slurm",
-        "scripts/research",
-        "pyproject.toml",
-        "uv.lock",
-    ]
-    tracked = subprocess.check_output(["git", "ls-files", "-z", *pathspecs], cwd=root)
-    untracked = subprocess.check_output(
-        ["git", "ls-files", "--others", "--exclude-standard", "-z", *pathspecs], cwd=root
-    )
-    files = {
-        (root / item.decode()).resolve()
-        for listing in (tracked, untracked)
-        for item in listing.split(b"\0")
-        if item
-    }
-    if campaign_spec is not None:
-        files.add(campaign_spec.resolve())
-    return sorted(path for path in files if path.is_file())
-
-
-def write_campaign_source_snapshot(
-    root: pathlib.Path,
-    source_files: list[pathlib.Path],
-    destination: pathlib.Path,
-    *,
-    git_sha: str,
-    expected_source_hashes: dict[str, str],
-) -> dict[str, Any]:
-    """Archive the exact hashed campaign inputs before any worker is launched."""
-    root = root.resolve()
-    records: dict[str, str] = {}
-    resolved_files: dict[str, pathlib.Path] = {}
-    for path in source_files:
-        resolved = path.resolve()
-        try:
-            relative = resolved.relative_to(root).as_posix()
-        except ValueError as exc:
-            raise ValueError(f"campaign source must be inside repository: {resolved}") from exc
-        if not resolved.is_file():
-            raise FileNotFoundError(f"campaign source disappeared before snapshot: {resolved}")
-        if relative in resolved_files:
-            continue
-        resolved_files[relative] = resolved
-        records[relative] = sha256_file(resolved)
-
-    if not records:
-        raise ValueError("campaign source snapshot cannot be empty")
-    if records != expected_source_hashes:
-        raise RuntimeError("campaign source files changed while creating the source snapshot")
-    snapshot_manifest = {
-        "schema_version": 1,
-        "git_sha": git_sha,
-        "files": dict(sorted(records.items())),
-    }
-    manifest_bytes = (json.dumps(snapshot_manifest, indent=2, sort_keys=True) + "\n").encode()
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_suffix(destination.suffix + ".tmp")
-    with zipfile.ZipFile(
-        temporary,
-        mode="w",
-        compression=zipfile.ZIP_DEFLATED,
-        compresslevel=6,
-        strict_timestamps=True,
-    ) as archive:
-        for relative, path in sorted(resolved_files.items()):
-            info = zipfile.ZipInfo(relative, date_time=(1980, 1, 1, 0, 0, 0))
-            info.compress_type = zipfile.ZIP_DEFLATED
-            info.external_attr = 0o100644 << 16
-            with path.open("rb") as source, archive.open(info, mode="w") as target:
-                while chunk := source.read(8 * 1024 * 1024):
-                    target.write(chunk)
-        manifest_info = zipfile.ZipInfo("source_manifest.json", date_time=(1980, 1, 1, 0, 0, 0))
-        manifest_info.compress_type = zipfile.ZIP_DEFLATED
-        manifest_info.external_attr = 0o100644 << 16
-        archive.writestr(manifest_info, manifest_bytes, compresslevel=6)
-
-    with zipfile.ZipFile(temporary, mode="r") as archive:
-        for relative, expected_hash in records.items():
-            digest = hashlib.sha256()
-            with archive.open(relative, mode="r") as source:
-                while chunk := source.read(8 * 1024 * 1024):
-                    digest.update(chunk)
-            if digest.hexdigest() != expected_hash:
-                temporary.unlink(missing_ok=True)
-                raise RuntimeError(f"campaign source snapshot verification failed: {relative}")
-        if archive.read("source_manifest.json") != manifest_bytes:
-            temporary.unlink(missing_ok=True)
-            raise RuntimeError("campaign source snapshot manifest verification failed")
-    temporary.replace(destination)
-    return {
-        "path": destination.name,
-        "sha256": sha256_file(destination),
-        "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
-        "file_count": len(records),
-    }
-
-
-def verify_campaign_source_snapshot(archive_path: pathlib.Path, record: object) -> tuple[bool, str]:
-    """Check an archived campaign source bundle against its campaign manifest."""
-    if not isinstance(record, dict):
-        return False, "source snapshot record is invalid"
-    expected_hash = record.get("sha256")
-    if not archive_path.is_file():
-        return False, "source snapshot archive is missing"
-    if not isinstance(expected_hash, str) or sha256_file(archive_path) != expected_hash:
-        return False, "source snapshot archive hash mismatch"
-    try:
-        with zipfile.ZipFile(archive_path, mode="r") as archive:
-            manifest_bytes = archive.read("source_manifest.json")
-            source_manifest = json.loads(manifest_bytes)
-            files = source_manifest["files"]
-            if not isinstance(files, dict) or len(files) != record.get("file_count"):
-                return False, "source snapshot file manifest is invalid"
-            if hashlib.sha256(manifest_bytes).hexdigest() != record.get("manifest_sha256"):
-                return False, "source snapshot manifest hash mismatch"
-            if set(archive.namelist()) != set(files) | {"source_manifest.json"}:
-                return False, "source snapshot contents differ from its file manifest"
-            for name, expected_file_hash in files.items():
-                digest = hashlib.sha256()
-                with archive.open(name, mode="r") as source:
-                    while chunk := source.read(8 * 1024 * 1024):
-                        digest.update(chunk)
-                if digest.hexdigest() != expected_file_hash:
-                    return False, f"source snapshot file hash mismatch: {name}"
-    except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
-        return False, f"source snapshot is unreadable: {exc}"
-    return True, "verified"
-
-
-def validate_campaign_evaluation(value: object) -> dict[str, Any]:
-    """Validate report-only use or explicit selection on exposed historical data."""
-    if not isinstance(value, dict) or value.get("deterministic") is not True:
-        raise ValueError("campaign evaluation must be deterministic")
-    allowed = {"locked_oos_role", "deterministic", "locked_oos_exposure", "selection_allowed"}
-    if set(value) - allowed:
-        raise ValueError("campaign evaluation contains unknown fields")
-    exposure = value.get("locked_oos_exposure")
-    if exposure is not None and exposure != "previously_inspected_holdout":
-        raise ValueError("unrecognized locked-OOS exposure status")
-    selection_allowed = value.get("selection_allowed", False)
-    if not isinstance(selection_allowed, bool):
-        raise ValueError("selection_allowed must be a boolean")
-    if selection_allowed and exposure != "previously_inspected_holdout":
-        raise ValueError("selection is allowed only on explicitly exposed historical data")
-    expected_role = "selection_acknowledged" if selection_allowed else "final_report_only"
-    if value.get("locked_oos_role") != expected_role:
-        raise ValueError(f"evaluation role must be {expected_role!r} for this selection setting")
-    return dict(value)
-
-
-def verify_run_artifacts(
-    run_out: pathlib.Path,
-    key: str,
-    expected_steps: int,
-    *,
-    expected_fingerprint: str,
-    expected_attempt: int,
-) -> tuple[bool, str]:
-    """Require the requested budget, a readable checkpoint, and a valid training record."""
-    provenance_path = run_out / "attempt_provenance.json"
-    try:
-        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return False, "missing or invalid attempt_provenance.json"
-    variant, _, seed_text = key.rpartition("__seed")
-    if (
-        not isinstance(provenance, dict)
-        or not seed_text.isdigit()
-        or provenance.get("run_key") != key
-        or provenance.get("variant") != variant
-        or provenance.get("seed") != int(seed_text)
-        or provenance.get("requested_timesteps") != expected_steps
-        or provenance.get("attempt") != expected_attempt
-        or provenance.get("campaign_fingerprint") != expected_fingerprint
-    ):
-        return False, "attempt provenance does not match the expected campaign run"
-    identity = provenance.get("identity")
-    if (
-        not isinstance(identity, dict)
-        or identity.get("steps") != expected_steps
-        or not isinstance(identity.get("jobs"), list)
-        or key not in identity["jobs"]
-    ):
-        return False, "attempt provenance identity does not include the requested run"
-    identity_fingerprint = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
-    if identity_fingerprint != expected_fingerprint:
-        return False, "attempt provenance identity does not match the campaign fingerprint"
-    for path in run_out.glob("**/training_log.json"):
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (ValueError, OSError):
-            continue
-        if not isinstance(payload, dict):
-            continue
-        if (
-            not isinstance(payload.get("env_flags"), dict)
-            or not isinstance(payload.get("observation_space_shapes"), dict)
-            or not isinstance(payload.get("action_space_width"), int)
-        ):
-            continue
-        if not seed_text.isdigit() or payload.get("seed") != int(seed_text):
-            continue
-        try:
-            config_manifest = json.loads(
-                (path.parent.parent / "resolved_config.json").read_text(encoding="utf-8")
-            )
-        except (OSError, ValueError):
-            continue
-        if not isinstance(config_manifest, dict):
-            continue
-        if (
-            config_manifest.get("variant") != variant
-            or config_manifest.get("seed") != int(seed_text)
-            or config_manifest.get("steps") != expected_steps
-        ):
-            continue
-        required_metrics = (
-            "test_sharpe",
-            "test_max_dd",
-            "test_trades",
-            "test_return",
-            "test_survived_full_year",
-            "train_equity_ok",
-            "feature_cache_hash",
-            "feature_columns",
-            "feature_schema_sha256",
-            "effective_config_sha256",
-            "action_space_width",
-            "observation_space_shapes",
-            "env_flags",
-        )
-        if any(key not in payload for key in required_metrics):
-            continue
-        numeric_metrics = ("test_sharpe", "test_max_dd", "test_return")
-        if any(
-            not isinstance(payload[key], (int, float)) or not math.isfinite(payload[key])
-            for key in numeric_metrics
-        ):
-            continue
-        if (
-            not isinstance(payload["test_trades"], int)
-            or not isinstance(payload["test_survived_full_year"], bool)
-            or not isinstance(payload["train_equity_ok"], bool)
-        ):
-            continue
-        if not payload["train_equity_ok"]:
-            reason = "training risk-survival gate failed"
-            gate_path = path.parent / "train_equity_gate.json"
-            try:
-                gate = json.loads(gate_path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                gate = None
-            if isinstance(gate, dict) and isinstance(gate.get("reason"), str):
-                reason += f": {gate['reason']}"
-            return False, reason
-        # The cache sidecar is intentionally a 16-hex content key produced by
-        # feature_cache_content_hash(); the full parquet SHA-256 is recorded
-        # separately in run_manifest.json. Requiring 64 characters here made
-        # every otherwise-complete run fail artifact admission.
-        cache_hash = payload.get("feature_cache_hash")
-        cache_name = payload.get("feature_cache_name")
-        manifest_names = payload.get("run_manifests")
-        if (
-            not isinstance(cache_hash, str)
-            or not re.fullmatch(r"[0-9a-f]{16}", cache_hash)
-            or not isinstance(cache_name, str)
-            or not cache_name
-            or not isinstance(manifest_names, list)
-            or not manifest_names
-            or any(not isinstance(name, str) or not name for name in manifest_names)
-        ):
-            continue
-        cache_manifest_checkpoint_hash: str | None = None
-        cache_manifest_valid = True
-        for name in manifest_names:
-            manifest_path = (path.parent / name).resolve()
-            try:
-                manifest_path.relative_to(path.parent.resolve())
-                run_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                cache_manifest_valid = False
-                break
-            if not isinstance(run_manifest, dict):
-                cache_manifest_valid = False
-                break
-            feature_cache = run_manifest.get("feature_cache")
-            checkpoint_manifest = run_manifest.get("checkpoint")
-            config_manifest = run_manifest.get("config")
-            if not isinstance(feature_cache, dict):
-                cache_manifest_valid = False
-                break
-            if not isinstance(checkpoint_manifest, dict):
-                cache_manifest_valid = False
-                break
-            if not isinstance(config_manifest, dict):
-                cache_manifest_valid = False
-                break
-            cache_path_text = feature_cache.get("path")
-            cache_file_hash = feature_cache.get("file_sha256")
-            if (
-                feature_cache.get("identity") != cache_name
-                or feature_cache.get("sha256") != cache_hash
-                or not isinstance(cache_path_text, str)
-                or not isinstance(cache_file_hash, str)
-                or not re.fullmatch(r"[0-9a-f]{64}", cache_file_hash)
-                or config_manifest.get("sha256") != payload.get("effective_config_sha256")
-                or not isinstance(checkpoint_manifest.get("sha256"), str)
-                or not re.fullmatch(r"[0-9a-f]{64}", checkpoint_manifest["sha256"])
-            ):
-                cache_manifest_valid = False
-                break
-            cache_path = pathlib.Path(cache_path_text)
-            sidecar_path = pathlib.Path(str(cache_path) + ".hash")
-            try:
-                if (
-                    not cache_path.is_file()
-                    or sidecar_path.read_text(encoding="utf-8").strip() != cache_hash
-                    or cached_sha256_file(cache_path) != cache_file_hash
-                ):
-                    cache_manifest_valid = False
-                    break
-            except OSError:
-                cache_manifest_valid = False
-                break
-            if cache_manifest_checkpoint_hash not in (None, checkpoint_manifest["sha256"]):
-                cache_manifest_valid = False
-                break
-            cache_manifest_checkpoint_hash = checkpoint_manifest["sha256"]
-        if not cache_manifest_valid:
-            continue
-        feature_columns = payload.get("feature_columns")
-        schema_hash = payload.get("feature_schema_sha256")
-        if not isinstance(feature_columns, list) or any(
-            not isinstance(column, str) for column in feature_columns
-        ):
-            continue
-        actual_schema_hash = hashlib.sha256(
-            json.dumps(feature_columns, separators=(",", ":")).encode()
-        ).hexdigest()
-        if schema_hash != actual_schema_hash:
-            continue
-        import yaml
-
-        try:
-            effective_config = yaml.safe_load(
-                (path.parent / "config.yaml").read_text(encoding="utf-8")
-            )
-        except (OSError, yaml.YAMLError):
-            continue
-        if not isinstance(effective_config, dict) or not isinstance(
-            effective_config.get("env"), dict
-        ):
-            continue
-        config_hash = payload.get("effective_config_sha256")
-        if (
-            not isinstance(config_hash, str)
-            or sha256_file(path.parent / "config.yaml") != config_hash
-        ):
-            continue
-        if any(
-            effective_config["env"].get(name) != value
-            for name, value in payload["env_flags"].items()
-        ):
-            continue
-        completed = payload.get("timesteps_completed")
-        if not isinstance(completed, int) or completed < expected_steps:
-            continue
-        if payload.get("timesteps") != expected_steps:
-            continue
-        model_file = path.parent / "model" / "ppo_final.zip"
-        if not model_file.is_file() or model_file.stat().st_size == 0:
-            continue
-        if cache_manifest_checkpoint_hash != sha256_file(model_file):
-            continue
-        try:
-            with zipfile.ZipFile(model_file) as archive:
-                if archive.testzip() is not None:
-                    continue
-            algo = str(payload.get("algo", "")).lower()
-            model_class: Any
-            if algo == "ppo":
-                from stable_baselines3 import PPO
-
-                model_class = PPO
-            elif algo == "sac":
-                from stable_baselines3 import SAC
-
-                model_class = SAC
-            else:
-                continue
-            model = model_class.load(model_file, device="cpu")
-            if int(model.num_timesteps) < expected_steps:
-                continue
-            if not action_space_matches_width(model.action_space, payload["action_space_width"]):
-                continue
-            model_obs = getattr(model.observation_space, "spaces", {})
-            model_obs_shapes = {
-                str(name): [int(size) for size in space.shape]
-                for name, space in model_obs.items()
-                if hasattr(space, "shape")
-            }
-            if model_obs_shapes != payload["observation_space_shapes"]:
-                continue
-        except Exception:
-            continue
-        return True, ""
-    return False, f"missing valid training record/checkpoint at requested {expected_steps} steps"
-
-
-def hash_run_artifacts(run_out: pathlib.Path) -> dict[str, str]:
-    """Record checksums for completed logs, configs, and model checkpoints."""
-    suffixes = {
-        "training_log.json",
-        "ppo_final.zip",
-        "config.yaml",
-        "config.json",
-        "attempt_provenance.json",
-    }
-    return {
-        str(path.relative_to(run_out)): sha256_file(path)
-        for path in run_out.rglob("*")
-        if path.is_file() and (path.name in suffixes or path.name == "resolved_config.json")
-    }
-
-
-def latest_resumable_checkpoint(
-    campaign_out: pathlib.Path,
-    key: str,
-    previous_attempt: int,
-    fingerprint: str,
-    max_steps: int | None = None,
-) -> pathlib.Path | None:
-    """Return the newest intact PPO checkpoint from a verified interrupted attempt."""
-    attempt_out = campaign_out / "runs" / "attempts" / key / f"attempt{previous_attempt}"
-    try:
-        provenance = json.loads(
-            (attempt_out / "attempt_provenance.json").read_text(encoding="utf-8")
-        )
-    except (OSError, ValueError):
-        return None
-    if (
-        not isinstance(provenance, dict)
-        or provenance.get("campaign_fingerprint") != fingerprint
-        or provenance.get("run_key") != key
-        or provenance.get("attempt") != previous_attempt
-    ):
-        return None
-    checkpoints: list[tuple[int, pathlib.Path]] = []
-    for path in attempt_out.rglob("ppo_ckpt_*_steps.zip"):
-        match = re.fullmatch(r"ppo_ckpt_(\d+)_steps\.zip", path.name)
-        if match:
-            step = int(match.group(1))
-            if max_steps is None or step <= max_steps:
-                checkpoints.append((step, path))
-    if max_steps is None:
-        latest = list(attempt_out.rglob("ppo_latest.zip"))
-        checkpoints.extend((0, path) for path in latest)
-    for _step, path in sorted(checkpoints, key=lambda item: item[0], reverse=True):
-        try:
-            if zipfile.is_zipfile(path):
-                with zipfile.ZipFile(path) as archive:
-                    if archive.testzip() is None:
-                        return path
-        except (OSError, zipfile.BadZipFile):
-            continue
-    return None
-
-
-def validate_initial_checkpoints(
-    map_path: pathlib.Path | None, jobs: list[dict[str, Any]], target_steps: int
-) -> dict[str, dict[str, Any]]:
-    """Validate explicit parent-campaign checkpoints for a new lineage campaign."""
-    if map_path is None:
-        return {}
-    raw = json.loads(map_path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict) or raw.get("schema_version") != 1:
-        raise ValueError("initial checkpoint map must use schema_version=1")
-    entries = raw.get("checkpoints")
-    if not isinstance(entries, list):
-        raise ValueError("initial checkpoint map must contain a checkpoints list")
-    expected = {str(job["key"]): job for job in jobs}
-    by_key: dict[str, dict[str, Any]] = {}
-    for item in entries:
-        if not isinstance(item, dict):
-            raise ValueError("initial checkpoint entries must be mappings")
-        key = str(item.get("key", ""))
-        if key not in expected or key in by_key:
-            raise ValueError(f"initial checkpoint map has unknown or duplicate run key: {key}")
-        parent_dir_raw = item.get("source_campaign_dir")
-        checkpoint_raw = item.get("checkpoint_path")
-        if not isinstance(parent_dir_raw, str) or not isinstance(checkpoint_raw, str):
-            raise ValueError(f"initial checkpoint paths are missing for {key}")
-        parent_dir = pathlib.Path(parent_dir_raw)
-        if not parent_dir.is_absolute():
-            parent_dir = map_path.parent / parent_dir
-        parent_dir = parent_dir.resolve()
-        parent_manifest_path = parent_dir / "campaign.json"
-        try:
-            parent_manifest = read_manifest(parent_manifest_path)
-        except (OSError, ValueError) as exc:
-            raise ValueError(f"cannot read source campaign manifest for {key}") from exc
-        source_fingerprint = str(item.get("source_campaign_fingerprint", ""))
-        if parent_manifest.get("fingerprint") != source_fingerprint:
-            raise ValueError(f"source campaign fingerprint mismatch for {key}")
-        if item.get("source_campaign_id") not in (None, parent_dir.name):
-            raise ValueError(f"source campaign ID mismatch for {key}")
-        source_git_sha = str(parent_manifest.get("git_sha", ""))
-        if item.get("source_campaign_git_sha") not in (None, source_git_sha):
-            raise ValueError(f"source campaign revision mismatch for {key}")
-        source_budget = int(parent_manifest.get("timesteps", 0))
-        if item.get("source_requested_timesteps") not in (None, source_budget):
-            raise ValueError(f"source campaign budget mismatch for {key}")
-        parent_jobs = [job for job in parent_manifest.get("jobs", []) if job.get("key") == key]
-        if len(parent_jobs) != 1:
-            raise ValueError(f"source campaign does not contain exactly one {key}")
-        parent_job = parent_jobs[0]
-        expected_job = expected[key]
-        if (parent_job.get("variant"), parent_job.get("seed")) != (
-            expected_job["variant"],
-            expected_job["seed"],
-        ):
-            raise ValueError(f"source campaign run identity mismatch for {key}")
-        attempt = int(item.get("source_attempt", 0))
-        latest_attempt = int(parent_job.get("attempts", 0))
-        if attempt < 1 or attempt > latest_attempt:
-            raise ValueError(f"source attempt is outside recorded campaign attempts for {key}")
-        attempt_dir = parent_dir / "runs" / "attempts" / key / f"attempt{attempt}"
-        provenance_path = attempt_dir / "attempt_provenance.json"
-        if not provenance_path.is_file():
-            raise ValueError(f"source attempt provenance is missing for {key}")
-        provenance_sha = sha256_file(provenance_path)
-        if provenance_sha != item.get("source_attempt_provenance_sha256"):
-            raise ValueError(f"source attempt provenance hash mismatch for {key}")
-        provenance = read_manifest(provenance_path)
-        provenance_identity = provenance.get("identity")
-        provenance_fingerprint = (
-            hashlib.sha256(json.dumps(provenance_identity, sort_keys=True).encode()).hexdigest()
-            if isinstance(provenance_identity, dict)
-            else ""
-        )
-        if (
-            provenance.get("campaign_fingerprint") != source_fingerprint
-            or provenance_fingerprint != source_fingerprint
-            or provenance.get("run_key") != key
-            or provenance.get("attempt") != attempt
-            or provenance.get("variant") != expected_job["variant"]
-            or provenance.get("seed") != expected_job["seed"]
-        ):
-            raise ValueError(f"source attempt provenance identity mismatch for {key}")
-        checkpoint = pathlib.Path(checkpoint_raw)
-        if not checkpoint.is_absolute():
-            checkpoint = map_path.parent / checkpoint
-        checkpoint = checkpoint.resolve()
-        try:
-            checkpoint.relative_to(attempt_dir.resolve())
-        except ValueError:
-            raise ValueError(
-                f"source checkpoint is outside the recorded attempt for {key}"
-            ) from None
-        match = re.fullmatch(r"ppo_ckpt_(\d+)_steps\.zip", checkpoint.name)
-        if match is None:
-            raise ValueError(f"source checkpoint must be a numbered PPO checkpoint for {key}")
-        source_steps = int(match.group(1))
-        if source_steps != int(item.get("source_num_timesteps", -1)):
-            raise ValueError(f"source checkpoint step metadata mismatch for {key}")
-        if source_steps > int(provenance.get("requested_timesteps", 0)):
-            raise ValueError(f"source checkpoint exceeds its parent budget for {key}")
-        if source_steps <= 0 or source_steps > target_steps:
-            raise ValueError(f"source checkpoint step count is outside target budget for {key}")
-        checkpoint_sha = sha256_file(checkpoint)
-        if checkpoint_sha != item.get("checkpoint_sha256") or not zipfile.is_zipfile(checkpoint):
-            raise ValueError(f"source checkpoint is corrupt or hash-mismatched for {key}")
-        with zipfile.ZipFile(checkpoint) as archive:
-            if archive.testzip() is not None:
-                raise ValueError(f"source checkpoint zip CRC check failed for {key}")
-            try:
-                checkpoint_data = json.loads(archive.read("data"))
-            except (KeyError, ValueError, UnicodeDecodeError) as exc:
-                raise ValueError(f"source checkpoint metadata is unreadable for {key}") from exc
-        if (
-            not isinstance(checkpoint_data, dict)
-            or checkpoint_data.get("num_timesteps") != source_steps
-        ):
-            raise ValueError(f"source checkpoint step count disagrees with its filename for {key}")
-        by_key[key] = {
-            "key": key,
-            "source_campaign_dir": str(parent_dir),
-            "source_campaign_id": parent_dir.name,
-            "source_campaign_git_sha": source_git_sha,
-            "source_requested_timesteps": source_budget,
-            "source_campaign_fingerprint": source_fingerprint,
-            "source_attempt": attempt,
-            "source_attempt_provenance_sha256": provenance_sha,
-            "source_num_timesteps": source_steps,
-            "checkpoint_path": str(checkpoint),
-            "checkpoint_sha256": checkpoint_sha,
-        }
-    missing = set(expected) - set(by_key)
-    if missing:
-        raise ValueError(f"initial checkpoint map is missing run keys: {sorted(missing)}")
-    return by_key
-
-
-def build_initial_checkpoint_map(
-    source_campaign_dirs: list[pathlib.Path],
-    required_keys: set[str],
-    target_steps: int,
-) -> dict[str, Any]:
-    """Build an explicit, checksummed parent-lineage map for incomplete runs."""
-    records: dict[str, dict[str, Any]] = {}
-    for source_dir_raw in source_campaign_dirs:
-        source_dir = source_dir_raw.resolve()
-        manifest = read_manifest(source_dir / "campaign.json")
-        snapshot = manifest.get("source_snapshot")
-        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("path"), str):
-            raise ValueError(f"source campaign snapshot is missing: {source_dir}")
-        snapshot_path = (source_dir / snapshot["path"]).resolve()
-        if snapshot_path.parent != source_dir:
-            raise ValueError(f"source snapshot path escapes campaign: {source_dir}")
-        valid, reason = verify_campaign_source_snapshot(snapshot_path, snapshot)
-        if not valid:
-            raise ValueError(f"source campaign snapshot is invalid: {reason}")
-        try:
-            with zipfile.ZipFile(snapshot_path) as archive:
-                archived_source = json.loads(archive.read("source_manifest.json"))
-        except (OSError, ValueError, zipfile.BadZipFile, KeyError) as exc:
-            raise ValueError(
-                f"source campaign snapshot manifest is unreadable: {source_dir}"
-            ) from exc
-        if archived_source.get("files") != manifest.get("source_hashes") or archived_source.get(
-            "git_sha"
-        ) != manifest.get("git_sha"):
-            raise ValueError(f"source campaign snapshot/manifest disagree: {source_dir}")
-        fingerprint = str(manifest.get("fingerprint", ""))
-        if not fingerprint:
-            raise ValueError(f"source campaign fingerprint is missing: {source_dir}")
-        for job in manifest.get("jobs", []):
-            key = str(job.get("key", ""))
-            if key not in required_keys:
-                continue
-            latest_attempt = int(job.get("attempts", 0))
-            if latest_attempt < 1:
-                continue
-            attempt = 0
-            checkpoint = None
-            for candidate_attempt in range(latest_attempt, 0, -1):
-                candidate_checkpoint = latest_resumable_checkpoint(
-                    source_dir, key, candidate_attempt, fingerprint, max_steps=target_steps
-                )
-                if candidate_checkpoint is not None:
-                    attempt = candidate_attempt
-                    checkpoint = candidate_checkpoint
-                    break
-            if checkpoint is None:
-                continue
-            match = re.fullmatch(r"ppo_ckpt_(\d+)_steps\.zip", checkpoint.name)
-            if match is None:
-                continue
-            provenance_path = (
-                source_dir
-                / "runs"
-                / "attempts"
-                / key
-                / f"attempt{attempt}"
-                / "attempt_provenance.json"
-            )
-            candidate = {
-                "key": key,
-                "source_campaign_dir": str(source_dir),
-                "source_campaign_id": source_dir.name,
-                "source_campaign_git_sha": str(manifest.get("git_sha", "")),
-                "source_requested_timesteps": int(manifest.get("timesteps", 0)),
-                "source_campaign_fingerprint": fingerprint,
-                "source_attempt": attempt,
-                "source_attempt_provenance_sha256": sha256_file(provenance_path),
-                "source_num_timesteps": int(match.group(1)),
-                "checkpoint_path": str(checkpoint.resolve()),
-                "checkpoint_sha256": sha256_file(checkpoint),
-            }
-            previous = records.get(key)
-            if (
-                previous is None
-                or candidate["source_num_timesteps"] > previous["source_num_timesteps"]
-            ):
-                records[key] = candidate
-    missing = required_keys - set(records)
-    extra = set(records) - required_keys
-    if missing or extra:
-        raise ValueError(
-            f"source campaigns do not cover required keys exactly; missing={sorted(missing)} "
-            f"extra={sorted(extra)}"
-        )
-    return {"schema_version": 1, "checkpoints": [records[key] for key in sorted(records)]}
-
-
-def archive_initial_checkpoints(
-    campaign_out: pathlib.Path, checkpoints: dict[str, dict[str, Any]]
-) -> dict[str, pathlib.Path]:
-    """Copy validated bootstrap checkpoints into the successor campaign."""
-    archived: dict[str, pathlib.Path] = {}
-    for key, checkpoint in checkpoints.items():
-        destination = campaign_out / "bootstrap_checkpoints" / f"{key}.zip"
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        expected_sha = str(checkpoint["checkpoint_sha256"])
-        if destination.is_file():
-            if sha256_file(destination) != expected_sha:
-                raise RuntimeError(f"archived bootstrap checkpoint changed for {key}")
-        else:
-            shutil.copy2(pathlib.Path(str(checkpoint["checkpoint_path"])), destination)
-            if sha256_file(destination) != expected_sha:
-                destination.unlink(missing_ok=True)
-                raise RuntimeError(f"bootstrap checkpoint copy failed verification for {key}")
-        archived[key] = destination
-    return archived
-
-
-def choose_resume_checkpoint(
-    campaign_out: pathlib.Path,
-    key: str,
-    previous_attempt: int | None,
-    fingerprint: str,
-    archived_bootstrap: dict[str, pathlib.Path],
-) -> tuple[pathlib.Path | None, str | None]:
-    """Prefer this campaign's latest checkpoint, else its verified parent input."""
-    if previous_attempt is not None:
-        checkpoint = latest_resumable_checkpoint(campaign_out, key, previous_attempt, fingerprint)
-        if checkpoint is not None:
-            return checkpoint, "interrupted_campaign_attempt"
-    checkpoint = archived_bootstrap.get(key)
-    if checkpoint is not None:
-        return checkpoint, "parent_campaign_checkpoint"
-    return None, None
-
-
-def verify_initial_checkpoint_models(
-    archived: dict[str, pathlib.Path], lineage: dict[str, dict[str, Any]]
-) -> dict[str, int]:
-    """Deserialize migrated PPO checkpoints on CPU and check saved step counts."""
-    import gc
-
-    root_path = str(ROOT)
-    if root_path not in sys.path:
-        sys.path.insert(0, root_path)
-    from stable_baselines3 import PPO
-
-    loaded_steps: dict[str, int] = {}
-    for key, path in archived.items():
-        model = PPO.load(path, device="cpu")
-        actual_steps = int(model.num_timesteps)
-        expected_steps = int(lineage[key]["source_num_timesteps"])
-        if actual_steps != expected_steps:
-            raise ValueError(
-                f"loaded checkpoint step mismatch for {key}: "
-                f"expected {expected_steps}, got {actual_steps}"
-            )
-        loaded_steps[key] = actual_steps
-        del model
-        gc.collect()
-    return loaded_steps
-
-
-def runtime_metadata() -> dict[str, Any]:
-    packages: dict[str, str | None] = {}
-    for name in (
-        "numpy",
-        "pandas",
-        "torch",
-        "stable-baselines3",
-        "gymnasium",
-        "omegaconf",
-        "pyyaml",
-    ):
-        try:
-            packages[name] = importlib.metadata.version(name)
-        except importlib.metadata.PackageNotFoundError:
-            packages[name] = None
-    gpu = ""
-    try:
-        result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name,uuid,driver_version", "--format=csv,noheader"],
-            capture_output=True,
-            check=False,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode == 0:
-            gpu = result.stdout.strip()
-    except (OSError, subprocess.TimeoutExpired):
-        pass
-    return {
-        "python": platform.python_version(),
-        "platform": platform.platform(),
-        "machine": platform.machine(),
-        "packages": packages,
-        "gpu": gpu,
-    }
 
 
 def main() -> int:

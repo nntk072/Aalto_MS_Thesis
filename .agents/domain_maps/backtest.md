@@ -62,3 +62,22 @@
 1. **MT5 spread is in broker points** — must convert via `point_size` (e.g., 0.01 for US100)
 2. **Mark-to-market uses bar-close quote** — long @ bid, short @ ask
 3. **Guardrail breach blocks new trading** — for the rest of the session (episodic=False)
+## Change Map
+
+| Task | Axis | Start file | Contract and focused test | Expected scope | Keep unchanged |
+|---|---|---|---|---|---|
+| Change replay or fill behavior | execution policy | `simulation/backtest/engine.py` | trading fill semantics; `tests/test_backtest/` | replay service and parity tests | metric rendering and learner construction |
+
+## Axis of Change
+
+- **Axis:** event replay, fill/cost policy, and account transition.
+- **Owner:** simulation owns replay; trading owns account, execution, and risk semantics.
+- **Stable boundary:** trading order/execution contracts and the backtest request/result behavior.
+- **Expected edit radius:** one execution or replay service with parity/regression tests.
+- **Must not depend on:** learner classes, report renderers, or CLI behavior.
+
+## Verified Source Paths
+
+- `simulation/backtest/engine.py`
+- `trading/execution/broker.py`
+- `tests/test_backtest/test_engine_cross_validation.py`

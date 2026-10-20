@@ -21,9 +21,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
+from learning.rl.agent import build_agent
 from omegaconf import OmegaConf
-
-from models.factory.agent import build_agent
 
 pytestmark = pytest.mark.slow
 

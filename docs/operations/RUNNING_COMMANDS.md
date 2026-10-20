@@ -126,7 +126,7 @@ uv run thesis-train train --mvp --strategy distribution --seed=42
 
 # Optional frozen VAE narrative latent (train checkpoint first via training/runner/vae.py)
 uv run thesis-train train --mvp --use-vae \
-    --vae-path output/vae/vae_best.pth --vae-config config/vae.yaml --seed=42
+    --vae-path outputs/vae/vae_best.pth --vae-config config/vae.yaml --seed=42
 
 # Feature variant config (MTF expansion)
 uv run thesis-train train --mvp \
@@ -201,7 +201,7 @@ uv run thesis-campaign variants \
     --steps 8192 --seeds 42 \
     --variants ablation_baseline_unconditional ablation_pd_context
 
-uv run python scripts/research/thesis/evaluation/report_ablations.py --ablations-dir results/ablations
+uv run python scripts/research/thesis/evaluation/report_ablations.py --ablations-dir outputs/ablations
 
 # Cost-sensitivity grid on a saved SB3 zip (CostModel spread_points + slippage).
 # --cost-multipliers scales both (TI-7); default 0.5 1 2 3.
@@ -213,13 +213,13 @@ uv run python scripts/research/thesis/evaluation/test_oos.py \
     --spreads 0.6 1.0 1.5 \
     --slippages 0.0 0.1 0.2 \
     --cost-multipliers 0.5 1.0 2.0 3.0 \
-    --out results/oos_report.json
+    --out outputs/reports/oos_report.json
 
 # Leak detectors (label-shuffle + time-shift)
 uv run python scripts/research/audits/leak_detectors.py \
     --features-csv data/us100_feat.csv \
     --target-col ret_1 --feature-col rsi \
-    --out results/leak_detectors.json
+    --out outputs/research/leak_detectors.json
 
 # Thin orchestration (ablation smoke → walk-forward → optional OOS)
 BARS_CSV=data/us100_2025.csv STEPS=8192 SEEDS=42 \

@@ -7,8 +7,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-
-from models.factory.agent import build_agent
+from learning.rl.agent import build_agent
 
 
 def make_env(continuous: bool = True, n_bars: int = 120) -> Any:
@@ -106,9 +105,8 @@ class TestSACAgentAct:
 
     def test_act_returns_valid_continuous_actions(self) -> None:
         """model.predict returns actions within [-1, 1]."""
+        from learning.rl.agent import build_agent
         from omegaconf import OmegaConf
-
-        from models.factory.agent import build_agent
 
         cfg = OmegaConf.create({"env": {"obs_window": 10}, "sac": {}, "ppo": {"batch_size": 32}})
         env = make_env(continuous=True)
@@ -129,7 +127,7 @@ class TestSACAgentAct:
         """Encoder features should differ when observations differ."""
         from gymnasium import spaces
 
-        from models.encoders.core import TCNEncoder
+        from models.encoders import TCNEncoder
 
         observation_space = spaces.Dict(
             {

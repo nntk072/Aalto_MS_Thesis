@@ -33,7 +33,7 @@ each result; dated historical planning notes do not define the current run.
 4. `training/runner/training.py:parse_train_args` exposes `--config`, `--variant`,
    `--strategy`, `--seed`, `--seeds`, `--algo`, `--arch`, `--reward`, `--mvp`,
    `--walk-forward`, `--wf-splits`, `--purge-bars` and `--embargo-bars`.
-   `models/factory/agent.py:build_agent` chooses SB3 PPO or SAC and TCN,
+   `learning/rl/agent.py:build_agent` chooses SB3 PPO or SAC and TCN,
    GRU, Transformer or MTF encoder. An available path or CLI option does not
    prove every combination was validated experimentally.
 5. Evaluation is implemented under `evaluation/` and `evaluation/`.

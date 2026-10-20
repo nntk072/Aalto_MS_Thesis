@@ -7,18 +7,18 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 import torch
+from decisioning.actions import build_action_schema
 from gymnasium import spaces
-from stable_baselines3 import PPO
-
-from models.encoders.core import TCNEncoder
-from models.policies.hybrid import (
+from learning.rl.hybrid import (
     HybridActorHeads,
     HybridBoxDistribution,
     HybridClampedStdMultiInputPolicy,
     _encoded_centers,
 )
-from simulation.contracts.actions import build_action_schema
-from simulation.environment.target_decoding import decode_tp_mode
+from stable_baselines3 import PPO
+
+from models.encoders import TCNEncoder
+from trading.orders.selection import decode_tp_mode
 
 
 def test_hybrid_mode_centers_match_existing_box_decoders() -> None:

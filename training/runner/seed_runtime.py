@@ -2,24 +2,34 @@
 
 from __future__ import annotations
 
-import sys
-from dataclasses import dataclass
-from pathlib import Path
-
-from configuration.paths import repository_root
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 import json
 import logging
 import time
+from dataclasses import dataclass
 from functools import partial
+from pathlib import Path
 from typing import Any, cast
 
 import pandas as pd
-from gymnasium import spaces
+from decisioning.contracts import DecisionProvider
+from learning.contracts import FitResult
+from learning.rl.agent import build_agent
+from learning.rl.auxiliary import AuxiliaryTrainerCallback
+from learning.rl.callbacks import (
+    BestCheckpointEvalCallback,
+    ClipLogStdCallback,
+    EarlyAbortCallback,
+    EpisodeEquityCallback,
+    LagrangianRiskCallback,
+    LearningDiagnosticsCallback,
+    PeriodicCheckpointCallback,
+    ProgressLoggerCallback,
+)
+from learning.rl.checkpoint import is_sb3_box_model, load_sb3_training_checkpoint
+from learning.rl.ppo import install_post_update_std_clip
 from omegaconf import OmegaConf
 
+from configuration.paths import repository_root
 from evaluation import calculate_metrics, evaluation_periods_per_year
 from evaluation.reporting.export import save_run
 from evaluation.reporting.run_manifest import (
@@ -28,13 +38,11 @@ from evaluation.reporting.run_manifest import (
     file_sha256,
     write_run_manifest,
 )
-from evaluation.rollout.model import BAR_CLOSE_EXPOSURE_MEASURE, evaluate_model
+from evaluation.rollout.model import BAR_CLOSE_EXPOSURE_MEASURE, evaluate_provider
 from features.context.policy_market import (
     POLICY_MARKET_CONTEXT_VERSION,
 )
 from market_data.loading.ticks import ticks_covering
-from models.factory.agent import build_agent
-from models.policies.ppo import install_post_update_std_clip
 from trading.policy.config import resolve_trading_policy
 from training.artifacts.aggregation import _save_seed_artifacts
 from training.artifacts.manifests import (
@@ -47,35 +55,32 @@ from training.artifacts.manifests import (
     _training_protocol_manifest,
 )
 from training.artifacts.metrics import _write_evaluation_artifacts
-from training.callbacks.auxiliary import AuxiliaryTrainerCallback
-from training.callbacks.core import (
-    BestCheckpointEvalCallback,
-    ClipLogStdCallback,
-    EarlyAbortCallback,
-    EpisodeEquityCallback,
-    LagrangianRiskCallback,
-    LearningDiagnosticsCallback,
-    PeriodicCheckpointCallback,
-    ProgressLoggerCallback,
-    save_ppo_checkpoint,
-)
 from training.callbacks.dashboard import TrainingDashboardCallback, ppo_log_interval
 from training.callbacks.debug_trace import install_flight_recorder
 from training.callbacks.equity import assess_train_equity
 from training.runner.seed import _direction_summary, _setup_rngs
+from training.runner.seed_stages import (
+    EvaluatedSeedRun,
+    PersistedSeedRun,
+    PreparedSeedRun,
+    TrainedSeedRun,
+)
+from training.runner.setup_runtime import TrainingPreparation
 from training.setup.callbacks import (
     _dashboard_block,
     _early_abort_callback,
     _periodic_checkpoint_callback,
 )
 from training.setup.environments import (
-    _build_eval_common,
     _evaluate_final_split,
-    _fill_delay_ms,
-    _strategy_from_cfg,
     _training_episodic,
+    build_eval_common,
+    build_sb3_provider,
+    fill_delay_ms,
     make_env,
+    strategy_from_cfg,
 )
+from training.setup.learner import build_fit_request, build_training_learner
 from training.setup.models import (
     _initialize_value_head,
     _log_effective_ppo,
@@ -88,44 +93,7 @@ log = logging.getLogger(__name__)
 
 @dataclass(slots=True)
 class SeedRunContext:
-    args: Any
-    cfg: Any
-    device: Any
-    seeds: list[int]
-    is_multi_seed: bool
-    run_dir: Path
-    model_dir: Path
-    train_env_spec: Any
-    train_bars: Any
-    train_feat: Any
-    env_vae: Any
-    pre_ny_by_date: Any
-    obs_mmap: str | None
-    primary_ticks: Any
-    lagrangian_cb: Any
-    train_bar_count: int
-    best_bars: pd.DataFrame | None
-    best_features: pd.DataFrame | None
-    bundle_path: Path | None
-    cache_dir: Path
-    feat_cache: Path
-    dashboard_bars: pd.DataFrame | None
-    dashboard_features: pd.DataFrame | None
-    test_eval_spec: Any
-    test_bars: Any
-    test_feat: Any
-    train_eval_spec: Any
-    train_sec: pd.DataFrame | None
-    test_sec: pd.DataFrame | None
-    test_bundle_path: Path | None
-    dataset_records: dict[str, Any]
-    train_start: Any
-    train_end: Any
-    test_start: Any
-    data_source: str
-    primary_sym: str
-    schedule_path: Path
-    vae_model: Any
+    preparation: TrainingPreparation
 
 
 class SeedRunner:
@@ -134,26 +102,29 @@ class SeedRunner:
     def __init__(self, context: SeedRunContext, seed: int) -> None:
         self.context = context
         self.seed = int(seed)
+        self.fit_result: FitResult | None = None
+        self.model_path: Path | None = None
+        self.provider: DecisionProvider | None = None
 
-    def prepare_training(self) -> None:
+    def prepare_training(self) -> PreparedSeedRun:
         ctx = self.context
-        args = ctx.args
-        cfg = ctx.cfg
+        args = ctx.preparation.configuration.args
+        cfg = ctx.preparation.configuration.cfg
         seed = self.seed
-        seeds = ctx.seeds
-        is_multi_seed = ctx.is_multi_seed
-        run_dir = ctx.run_dir
-        model_dir = ctx.model_dir
-        train_env_spec = ctx.train_env_spec
-        train_bars = ctx.train_bars
-        train_feat = ctx.train_feat
-        env_vae = ctx.env_vae
-        pre_ny_by_date = ctx.pre_ny_by_date
-        obs_mmap = ctx.obs_mmap
-        primary_ticks = ctx.primary_ticks
-        device = ctx.device
-        vae_model = ctx.vae_model
-        lagrangian_cb = ctx.lagrangian_cb
+        seeds = ctx.preparation.run_assets.seeds
+        is_multi_seed = ctx.preparation.run_assets.is_multi_seed
+        run_dir = ctx.preparation.run_assets.run_dir
+        model_dir = ctx.preparation.run_assets.model_dir
+        train_env_spec = ctx.preparation.run_assets.train_env_spec
+        train_bars = ctx.preparation.data.train_bars
+        train_feat = ctx.preparation.data.train_feat
+        env_vae = ctx.preparation.data.env_vae
+        pre_ny_by_date = ctx.preparation.data.pre_ny_by_date
+        obs_mmap = ctx.preparation.run_assets.obs_mmap
+        primary_ticks = ctx.preparation.data.primary_ticks
+        device = ctx.preparation.configuration.device
+        vae_model = ctx.preparation.data.vae_model
+        lagrangian_cb = ctx.preparation.configuration.lagrangian_cb
         _setup_rngs(seed)
         phase_timings_seconds: dict[str, float] = {}
         log.info("=== Seed %d / %d ===", seed, len(seeds))
@@ -211,17 +182,15 @@ class SeedRunner:
         log.info("Training %s for %d timesteps...", args.algo.upper(), timesteps)
 
         if args.resume_checkpoint:
-            from stable_baselines3 import PPO
-
-            from models.factory.agent import _build_vector_env, validate_model_architecture
+            from learning.rl.agent import build_vector_env, validate_model_architecture
 
             resume_path = Path(args.resume_checkpoint)
             if not resume_path.is_file():
                 raise FileNotFoundError(f"resume checkpoint not found: {resume_path}")
-            resume_env = _build_vector_env(train_env, cfg, env_factory)
-            model = PPO.load(resume_path, env=resume_env, device=device)
+            resume_env = build_vector_env(train_env, cfg, env_factory)
+            model = load_sb3_training_checkpoint(resume_path, env=resume_env, device=device)
             validate_model_architecture(model, args.arch, use_vae=args.use_vae)
-            from models.factory.agent import validate_model_observation_schema
+            from learning.rl.agent import validate_model_observation_schema
 
             validate_model_observation_schema(
                 model,
@@ -311,11 +280,19 @@ class SeedRunner:
         self.stop_candidate_schema = stop_candidate_schema
         self.callbacks = callbacks
         self.abort_cb = abort_cb
+        return PreparedSeedRun(
+            seed=seed,
+            seed_dir=seed_dir,
+            model_dir=seed_model_dir,
+            environment=train_env,
+            model=model,
+            requested_timesteps=int(timesteps),
+        )
 
-    def train_model(self) -> None:
+    def train_model(self) -> TrainedSeedRun:
         ctx = self.context
-        args = ctx.args
-        cfg = ctx.cfg
+        args = ctx.preparation.configuration.args
+        cfg = ctx.preparation.configuration.cfg
         train_env = self.train_env
         model = self.model
         callbacks = self.callbacks
@@ -325,20 +302,20 @@ class SeedRunner:
         learning_timesteps = self.learning_timesteps
         abort_cb = self.abort_cb
         phase_timings_seconds = self.phase_timings_seconds
-        train_bar_count = ctx.train_bar_count
-        best_bars = ctx.best_bars
-        best_features = ctx.best_features
-        train_bars = ctx.train_bars
-        train_feat = ctx.train_feat
-        bundle_path = ctx.bundle_path
-        train_env_spec = ctx.train_env_spec
-        cache_dir = ctx.cache_dir
-        feat_cache = ctx.feat_cache
-        primary_ticks = ctx.primary_ticks
-        env_vae = ctx.env_vae
-        pre_ny_by_date = ctx.pre_ny_by_date
-        dashboard_bars = ctx.dashboard_bars
-        dashboard_features = ctx.dashboard_features
+        train_bar_count = ctx.preparation.run_assets.train_bar_count
+        best_bars = ctx.preparation.run_assets.best_bars
+        best_features = ctx.preparation.run_assets.best_features
+        train_bars = ctx.preparation.data.train_bars
+        train_feat = ctx.preparation.data.train_feat
+        bundle_path = ctx.preparation.run_assets.bundle_path
+        train_env_spec = ctx.preparation.run_assets.train_env_spec
+        cache_dir = ctx.preparation.data.cache_dir
+        feat_cache = ctx.preparation.data.feat_cache
+        primary_ticks = ctx.preparation.data.primary_ticks
+        env_vae = ctx.preparation.data.env_vae
+        pre_ny_by_date = ctx.preparation.data.pre_ny_by_date
+        dashboard_bars = ctx.preparation.run_assets.dashboard_bars
+        dashboard_features = ctx.preparation.run_assets.dashboard_features
         # Best checkpoint: one short prefix of the train calendar, scored by
         # end equity. Full replay risk checks run after training; PnL and trade
         # counts are reported as metrics and do not stop this callback.
@@ -355,7 +332,7 @@ class SeedRunner:
                 short_bars,
                 short_feat,
                 cfg,
-                raw_columns=list(_strategy_from_cfg(cfg)[0].raw_columns),
+                raw_columns=list(strategy_from_cfg(cfg)[0].raw_columns),
                 feature_config_hash=feat_cache.stem,
                 tickbook=ticks_covering(primary_ticks, short_bars),
                 pre_ny_by_date=None,
@@ -396,7 +373,7 @@ class SeedRunner:
 
         progress_log = seed_model_dir / "training_log.csv"
         callbacks.append(ProgressLoggerCallback(log_path=progress_log))
-        if isinstance(train_env.action_space, spaces.Box):
+        if is_sb3_box_model(model):
             callbacks.append(
                 ClipLogStdCallback(
                     log_std_min=float(cfg.ppo.get("log_std_min", -0.7)),
@@ -405,8 +382,9 @@ class SeedRunner:
             )
 
         eval_common, _strategy, _strategy_reward, _strategy_weight, strategy_actions = (
-            _build_eval_common(cfg, args, env_vae, pre_ny_by_date, arch=args.arch)
+            build_eval_common(cfg, args, env_vae, pre_ny_by_date, arch=args.arch)
         )
+        self.provider = build_sb3_provider(model, str(eval_common["observation_schema_version"]))
         dash = _dashboard_block(cfg)
         if bool(dash.get("enabled", True)):
             eval_bars = int(dash.get("eval_bars", 20_000))
@@ -417,8 +395,10 @@ class SeedRunner:
             )
 
             def _dashboard_eval() -> dict[str, Any]:
-                result = evaluate_model(
-                    model,
+                if self.provider is None:
+                    raise RuntimeError("decision provider was not created for evaluation")
+                result = evaluate_provider(
+                    self.provider,
                     bars=dash_bars,
                     features=dash_feat,
                     max_episode_steps=None,
@@ -484,7 +464,7 @@ class SeedRunner:
             log_every=log_every,
         )
         log.info("SB3 log every %d rollouts (~%d env steps)", log_interval, log_every)
-        if isinstance(train_env.action_space, spaces.Box):
+        if is_sb3_box_model(model):
             install_post_update_std_clip(
                 model,
                 float(cfg.ppo.get("log_std_min", -0.7)),
@@ -495,14 +475,28 @@ class SeedRunner:
             install_flight_recorder(model, seed_dir, thresholds=debug_cfg)
         _initialize_value_head(model, resumed=bool(args.resume_checkpoint))
         phase_started = time.perf_counter()
-        if learning_timesteps > 0:
-            model.learn(
-                total_timesteps=learning_timesteps,
-                callback=cast(Any, callbacks),
-                log_interval=log_interval,
-                reset_num_timesteps=not bool(args.resume_checkpoint),
-            )
-        elif args.resume_checkpoint:
+        fit_request = build_fit_request(
+            dataset_record=ctx.preparation.data.dataset_records["train_bars"],
+            instrument_id=ctx.preparation.data.primary_sym,
+            config=cfg,
+            input_schema={
+                "observation": _observation_schema_manifest(train_env),
+                "sequence": _sequence_feature_schema_manifest(train_env),
+            },
+            seed=self.seed,
+            requested_steps=int(learning_timesteps),
+        )
+        model_path = seed_model_dir / "ppo_final"
+        learner = build_training_learner(
+            model=model,
+            callbacks=cast(Any, callbacks),
+            checkpoint_path=model_path,
+            log_interval=log_interval,
+            reset_num_timesteps=not bool(args.resume_checkpoint),
+        )
+        self.fit_result = learner.fit(fit_request)
+        self.model_path = model_path
+        if learning_timesteps == 0 and args.resume_checkpoint:
             best_cb.model = model
             best_cb._run_eval()
         phase_timings_seconds["ppo_learn"] = time.perf_counter() - phase_started
@@ -521,22 +515,32 @@ class SeedRunner:
         self.strategy_actions = strategy_actions
         self.progress_log = progress_log
         self.abort_reason = abort_reason
+        if self.fit_result is None:
+            raise RuntimeError("learner did not return a fit result")
+        return TrainedSeedRun(
+            model_path=model_path,
+            fit_result=self.fit_result,
+            abort_reason=abort_reason,
+        )
 
     def evaluate_test_split(self) -> None:
         ctx = self.context
-        cfg = ctx.cfg
-        model = self.model
+        cfg = ctx.preparation.configuration.cfg
+        provider = self.provider
+        if provider is None:
+            raise RuntimeError("decision provider was not created for evaluation")
         seed_model_dir = self.seed_model_dir
         progress_log = self.progress_log
         phase_timings_seconds = self.phase_timings_seconds
         eval_common = self.eval_common
-        test_eval_spec = ctx.test_eval_spec
-        test_bars = ctx.test_bars
-        test_feat = ctx.test_feat
-        primary_ticks = ctx.primary_ticks
-        # Save final model
-        model_path = seed_model_dir / "ppo_final"
-        save_ppo_checkpoint(model, model_path)
+        test_eval_spec = ctx.preparation.run_assets.test_eval_spec
+        test_bars = ctx.preparation.data.test_bars
+        test_feat = ctx.preparation.data.test_feat
+        primary_ticks = ctx.preparation.data.primary_ticks
+        # The learner saved the final model and returned its content identity.
+        model_path = self.model_path
+        if model_path is None:
+            raise RuntimeError("learner did not produce a final checkpoint path")
         log.info("Model saved: %s", model_path)
 
         # Learning-curve / loss charts from the SB3 progress CSV.
@@ -574,7 +578,7 @@ class SeedRunner:
             empty_features = test_feat
             test_ticks = ticks_covering(primary_ticks, test_bars)
         test_result = _evaluate_final_split(
-            model,
+            provider,
             bars=empty_bars,
             features=empty_features,
             max_episode_steps=None,
@@ -621,20 +625,23 @@ class SeedRunner:
         self.test_result = test_result
         self.test_m = test_m
 
-    def evaluate_train_split(self) -> None:
+    def evaluate_train_split(self) -> EvaluatedSeedRun:
         ctx = self.context
-        cfg = ctx.cfg
+        cfg = ctx.preparation.configuration.cfg
         seed = self.seed
         model = self.model
+        provider = self.provider
+        if provider is None:
+            raise RuntimeError("decision provider was not created for evaluation")
         seed_dir = self.seed_dir
         phase_timings_seconds = self.phase_timings_seconds
         eval_common = self.eval_common
         test_result = self.test_result
         test_m = self.test_m
-        train_eval_spec = ctx.train_eval_spec
-        train_bars = ctx.train_bars
-        train_feat = ctx.train_feat
-        primary_ticks = ctx.primary_ticks
+        train_eval_spec = ctx.preparation.run_assets.train_eval_spec
+        train_bars = ctx.preparation.data.train_bars
+        train_feat = ctx.preparation.data.train_feat
+        primary_ticks = ctx.preparation.data.primary_ticks
         # In-sample evaluation on the training split so the run dir carries the same
         # training/ + testing/ artifact layout as the baseline runners.
         phase_started = time.perf_counter()
@@ -652,7 +659,7 @@ class SeedRunner:
             empty_features = train_feat
             train_ticks = ticks_covering(primary_ticks, train_bars)
         train_result = _evaluate_final_split(
-            model,
+            provider,
             bars=empty_bars,
             features=empty_features,
             max_episode_steps=None,
@@ -721,11 +728,18 @@ class SeedRunner:
         self.train_result = train_result
         self.train_m = train_m
         self.train_gate = train_gate
+        return EvaluatedSeedRun(
+            train_result=train_result,
+            test_result=test_result,
+            train_metrics=train_m,
+            test_metrics=test_m,
+            train_gate=train_gate,
+        )
 
-    def write_artifacts(self) -> None:
+    def write_artifacts(self) -> PersistedSeedRun:
         ctx = self.context
-        args = ctx.args
-        cfg = ctx.cfg
+        args = ctx.preparation.configuration.args
+        cfg = ctx.preparation.configuration.cfg
         seed = self.seed
         model = self.model
         seed_dir = self.seed_dir
@@ -733,27 +747,32 @@ class SeedRunner:
         timesteps = self.timesteps
         stop_candidate_schema = self.stop_candidate_schema
         model_path = self.model_path
+        if model_path is None:
+            raise RuntimeError("learner did not produce a final checkpoint path")
         test_result = self.test_result
         test_m = self.test_m
         train_result = self.train_result
         train_m = self.train_m
         phase_timings_seconds = self.phase_timings_seconds
-        bundle_path = ctx.bundle_path
-        test_bundle_path = ctx.test_bundle_path
-        train_bars = ctx.train_bars
-        test_bars = ctx.test_bars
-        train_sec = ctx.train_sec
-        test_sec = ctx.test_sec
-        feat_cache = ctx.feat_cache
-        dataset_records = ctx.dataset_records
-        train_start = ctx.train_start
-        train_end = ctx.train_end
-        test_start = ctx.test_start
-        data_source = ctx.data_source
-        primary_ticks = ctx.primary_ticks
-        primary_sym = ctx.primary_sym
-        schedule_path = ctx.schedule_path
-        is_multi_seed = ctx.is_multi_seed
+        bundle_path = ctx.preparation.run_assets.bundle_path
+        test_bundle_path = ctx.preparation.run_assets.test_bundle_path
+        train_bars = ctx.preparation.data.train_bars
+        test_bars = ctx.preparation.data.test_bars
+        train_sec = ctx.preparation.data.train_sec
+        test_sec = ctx.preparation.data.test_sec
+        feat_cache = ctx.preparation.data.feat_cache
+        dataset_records = ctx.preparation.data.dataset_records
+        train_start = ctx.preparation.data.train_start
+        train_end = ctx.preparation.data.train_end
+        test_start = ctx.preparation.data.test_start
+        data_source = ctx.preparation.run_assets.data_source
+        primary_ticks = ctx.preparation.data.primary_ticks
+        primary_sym = ctx.preparation.data.primary_sym
+        schedule_path = ctx.preparation.data.schedule_path
+        is_multi_seed = ctx.preparation.run_assets.is_multi_seed
+        fit_result = self.fit_result
+        if fit_result is None:
+            raise RuntimeError("seed workflow has no learner fit result")
         # Export both splits for this seed
         phase_started = time.perf_counter()
         if bundle_path is not None:
@@ -792,6 +811,10 @@ class SeedRunner:
         checkpoint_path = Path(f"{model_path}.zip")
         if not checkpoint_path.is_file():
             checkpoint_path = model_path
+        if file_sha256(checkpoint_path) != fit_result.artifact.sha256:
+            raise ValueError("saved checkpoint content differs from the learner fit result")
+        if fit_result.training_steps != int(model.num_timesteps):
+            raise ValueError("learner fit-step count differs from the final model checkpoint")
         sequence_feature_schema = _sequence_feature_schema_manifest(train_env)
         manifest = build_training_run_manifest(
             repository=repository_root(__file__),
@@ -819,7 +842,7 @@ class SeedRunner:
                 "execution": OmegaConf.to_container(cfg.execution, resolve=True)
                 if "execution" in cfg
                 else {},
-                "fill_delay_ms": _fill_delay_ms(cfg),
+                "fill_delay_ms": fill_delay_ms(cfg),
                 "block_overnight": bool(cfg.env.get("block_overnight", True)),
                 "tick_data_configured": bool(primary_ticks is not None),
                 "primary_symbol": str(primary_sym),
@@ -872,6 +895,21 @@ class SeedRunner:
         manifest["feature_cache"]["file_sha256"] = (
             file_sha256(feat_cache) if feat_cache.is_file() else None
         )
+        manifest["learning_result"] = {
+            "backend": "stable_baselines3",
+            "paradigm": "reinforcement_learning",
+            "dataset_id": fit_result.dataset.dataset_id,
+            "dataset_provenance_id": fit_result.dataset.provenance_id,
+            "config_identity": fit_result.config_identity,
+            "input_schema_version": fit_result.input_schema_version,
+            "requested_steps": fit_result.requested_steps,
+            "training_steps": fit_result.training_steps,
+            "artifact": {
+                "key": fit_result.artifact.key,
+                "media_type": fit_result.artifact.media_type,
+                "sha256": fit_result.artifact.sha256,
+            },
+        }
         manifest_path = seed_dir / "run_manifest.json"
         write_run_manifest(manifest_path, manifest)
         phase_timings_seconds["report_export"] = time.perf_counter() - phase_started
@@ -883,11 +921,15 @@ class SeedRunner:
 
         self.sequence_feature_schema = sequence_feature_schema
         self.manifest_path = manifest_path
+        return PersistedSeedRun(
+            manifest_path=manifest_path,
+            sequence_feature_schema=sequence_feature_schema,
+        )
 
     def build_result(self) -> dict[str, Any]:
         ctx = self.context
-        args = ctx.args
-        cfg = ctx.cfg
+        args = ctx.preparation.configuration.args
+        cfg = ctx.preparation.configuration.cfg
         seed = self.seed
         train_env = self.train_env
         model = self.model
@@ -900,7 +942,7 @@ class SeedRunner:
         sequence_feature_schema = self.sequence_feature_schema
         phase_timings_seconds = self.phase_timings_seconds
         manifest_path = self.manifest_path
-        run_dir = ctx.run_dir
+        run_dir = ctx.preparation.run_assets.run_dir
         # Collect per-seed results for aggregation
         entry_diag = test_result.get("entry_diag", {})
         entry_state_diag = test_result.get("entry_state_diagnostics", {})
@@ -951,11 +993,11 @@ class SeedRunner:
         }
 
     def run(self) -> dict[str, Any]:
-        self.prepare_training()
-        self.train_model()
+        self.prepared: PreparedSeedRun = self.prepare_training()
+        self.trained: TrainedSeedRun = self.train_model()
         self.evaluate_test_split()
-        self.evaluate_train_split()
-        self.write_artifacts()
+        self.evaluated: EvaluatedSeedRun = self.evaluate_train_split()
+        self.persisted: PersistedSeedRun = self.write_artifacts()
         return self.build_result()
 
 
@@ -963,7 +1005,7 @@ def run_seed_training(context: SeedRunContext) -> tuple[list[dict[str, Any]], in
     """Run every configured seed and return aggregation payloads plus requested timesteps."""
     results: list[dict[str, Any]] = []
     timesteps = 0
-    for seed in context.seeds:
+    for seed in context.preparation.run_assets.seeds:
         runner = SeedRunner(context, seed)
         results.append(runner.run())
         timesteps = runner.timesteps

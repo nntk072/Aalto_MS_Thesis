@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from simulation.environment.distribution_reward import DistributionReward
-from simulation.environment.env import _previous_session_audit
+from simulation.environment.entry_diagnostics import _previous_session_audit
 from trading.strategies.distribution import DistributionStrategy
 
 

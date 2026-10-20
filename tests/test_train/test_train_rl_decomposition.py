@@ -1,6 +1,6 @@
 """Tests for the decomposed train_rl.py helper functions.
 
-Verifies that parse_train_args, _setup_rngs, _load_merged_config, and
+Verifies that parse_train_args, _setup_rngs, load_merged_config, and
 _build_training_log behave correctly after the main() decomposition.
 """
 
@@ -18,9 +18,9 @@ import torch
 from evaluation.metrics import PerformanceMetrics
 from training.artifacts.manifests import _action_space_width, _build_training_log
 from training.artifacts.metrics import _write_evaluation_artifacts
-from training.configuration.cli import _load_merged_config, parse_train_args
+from training.configuration.cli import load_merged_config, parse_train_args
 from training.runner.seed import _setup_rngs
-from training.setup.environments import _cost_model, _training_episodic
+from training.setup.environments import _training_episodic, cost_model
 from training.setup.models import _initialize_value_head
 
 
@@ -272,7 +272,7 @@ class TestBuildTrainingLog:
 
 
 class TestLoadMergedConfig:
-    """Tests for _load_merged_config() override ordering (SL Phase 0.1)."""
+    """Tests for load_merged_config() override ordering (SL Phase 0.1)."""
 
     def test_overrides_win_over_strategy_overlay(self) -> None:
         """CLI overrides apply after the Idea 1 variant merge.
@@ -284,25 +284,25 @@ class TestLoadMergedConfig:
         import argparse
 
         ns = argparse.Namespace(config=None, strategy="po3_ifvg", overrides=["env.reward_mode=rr"])
-        cfg = _load_merged_config(ns)
+        cfg = load_merged_config(ns)
         assert str(cfg.env.reward_mode) == "rr"
 
     def test_baseline_leaves_overrides_intact(self) -> None:
         import argparse
 
         ns = argparse.Namespace(config=None, strategy="baseline", overrides=["env.reward_mode=rr"])
-        cfg = _load_merged_config(ns)
+        cfg = load_merged_config(ns)
         assert str(cfg.env.reward_mode) == "rr"
 
 
 class TestCostModel:
-    """Tests for _cost_model() YAML wiring (SL Phase 0.5)."""
+    """Tests for cost_model() YAML wiring (SL Phase 0.5)."""
 
     def test_cost_model_matches_default_yaml(self) -> None:
         from configuration import load_config
 
         cfg = load_config([])
-        model = _cost_model(cfg)
+        model = cost_model(cfg)
         assert model.slippage_points == float(cfg.costs.slippage_points) == 5.0
         assert model.spread_points == float(cfg.costs.spread_us100)
         assert float(cfg.risk.min_sl_points) >= 2 * model.slippage_points

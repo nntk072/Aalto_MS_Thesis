@@ -654,6 +654,21 @@ def test_build_features_session_ohlc_additive() -> None:
     assert {"asian_high", "asian_low", "london_high", "london_low"} <= set(map(str, sess.columns))
 
 
+@pytest.mark.unit
+def test_previous_session_context_does_not_require_running_session_ohlc() -> None:
+    """Previous-session context owns its clock even when running levels are off."""
+    from features import build_features
+
+    bars = _dst_week_m1_bars()
+    cfg = OmegaConf.create(_sess_base_cfg())
+    cfg.features.include_previous_session_pd = True
+
+    features = build_features(bars, cfg=cfg)
+
+    assert "previous_session_high" in features.columns
+    assert "previous_session_low" in features.columns
+
+
 @pytest.mark.integration
 def test_build_features_uses_ftmo_clock_model_for_ct_sessions() -> None:
     """The resolved config must carry FTMO clock correction into the CT block."""

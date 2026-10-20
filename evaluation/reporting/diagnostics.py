@@ -17,7 +17,8 @@ import pandas as pd
 
 from evaluation.metrics.bootstrap import metrics_with_ci
 from evaluation.metrics.calibration import calibration_report, plot_reliability_diagram
-from evaluation.plotting.plots import _pair_trades, _save
+from evaluation.metrics.trade_pairs import pair_trades
+from evaluation.plotting.plots import _save
 
 log = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ def write_bootstrap_cis(
     split_dir = Path(split_dir)
     split_dir.mkdir(parents=True, exist_ok=True)
     eq = np.asarray(equity.astype(float).to_numpy(), dtype=np.float64)
-    pairs = _pair_trades(trades) if not trades.empty else []
+    pairs = pair_trades(trades) if not trades.empty else []
     pnls = np.asarray(
         [float(c["pnl"]) for _, c in pairs if pd.notna(c.get("pnl"))],
         dtype=np.float64,
@@ -67,7 +68,7 @@ def write_calibration_artifacts(
     direction (long vs short) on the same split — a baseline calibration
     check that does not require policy logits.
     """
-    pairs = _pair_trades(trades) if not trades.empty else []
+    pairs = pair_trades(trades) if not trades.empty else []
     if len(pairs) < 2:
         return None
 

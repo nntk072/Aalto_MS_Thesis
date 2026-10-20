@@ -159,7 +159,7 @@ def _load_fresh_market(
 
 
 def load_variant(name: str) -> tuple[dict[str, Any], DictConfig]:
-    from training.configuration.cli import _load_merged_config
+    from training.configuration.cli import load_merged_config
 
     resolved = resolve_variant(name, steps=100_000, seeds=[42])
     resolved = {
@@ -169,7 +169,7 @@ def load_variant(name: str) -> tuple[dict[str, Any], DictConfig]:
             f"data.prebuilt_feature_cache={_historical_named_cache_path(name, resolved)}",
         ],
     }
-    cfg = _load_merged_config(
+    cfg = load_merged_config(
         argparse.Namespace(
             config=resolved["base_config"],
             strategy=resolved["strategy"],

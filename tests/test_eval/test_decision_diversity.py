@@ -9,8 +9,8 @@ from evaluation.metrics.decision_diversity import (
     candidate_rank,
     diversity_report,
     shannon_entropy,
-    write_decision_artifacts,
 )
+from evaluation.reporting.diversity_artifacts import write_decision_artifacts
 
 
 def _open(**values: object) -> dict[str, object]:

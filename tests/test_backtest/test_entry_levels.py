@@ -6,17 +6,17 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from evaluation.reporting.geometry import geometry_summary
 from features.technical.swings import recent_unswept_swing_candidates
 from simulation.environment.env import TradingEnv
 from simulation.environment.market_view import BarView, FeatureRow
 from trading.execution.broker import Position
 from trading.orders.entries import (
     OrderGeometry,
-    collapse_levels,
-    geometry_summary,
     place_strategy_order,
     select_index,
 )
+from trading.orders.targets import collapse_levels
 from trading.risk.sizing import compute_lots
 
 

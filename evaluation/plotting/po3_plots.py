@@ -27,7 +27,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 
 from evaluation.plotting.plots import LONG_COLOR, SHORT_COLOR, _apply_style, _save
-from features.po3.config import FVGZone, build_fvg_zones_for_plot
+from features.po3.zones import FVGZone, build_fvg_zones_for_plot
 
 log = logging.getLogger(__name__)
 

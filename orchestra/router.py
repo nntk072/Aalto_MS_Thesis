@@ -107,7 +107,9 @@ class ModelRouter:
         state_dir: Path | None = None,
     ):
         self.models = models or load_models()
-        state_dir = state_dir or Path(__file__).parent / "state"
+        state_dir = (
+            state_dir or Path(__file__).resolve().parent.parent / "outputs" / "orchestra" / "state"
+        )
         state_dir.mkdir(parents=True, exist_ok=True)
         self.quota = QuotaTracker(state_dir)
         self.health = HealthRegistry(state_dir)

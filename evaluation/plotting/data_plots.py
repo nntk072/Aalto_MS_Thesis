@@ -555,7 +555,7 @@ def _write_po3_charts(
         return
     try:
         from evaluation.plotting.po3_plots import plot_fvg_signals
-        from features.po3.config import detect_po3_entries
+        from features.po3.trigger_rules import detect_po3_entries
     except Exception as exc:
         log.warning("PO3 charts skipped (import): %s", exc)
         return

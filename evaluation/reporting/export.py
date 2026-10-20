@@ -233,7 +233,7 @@ def _action_schema_manifest(cfg: Any) -> dict[str, Any] | None:
         env = cfg.env
         if not bool(env.get("strategy_actions", False)):
             return None
-        from simulation.contracts.actions import build_action_schema
+        from decisioning.actions import build_action_schema
 
         multi_tp = bool(env.get("allow_multi_tp", False))
         schema = build_action_schema(
@@ -361,8 +361,8 @@ def _write_split(
         fill_events.to_csv(split_dir / "fills.csv", index=False)
         position_records.to_csv(split_dir / "positions.csv", index=False)
         if not trades.empty and "sl_ref" in trades.columns:
-            from evaluation.metrics.decision_diversity import write_decision_artifacts
-            from trading.orders.entries import geometry_summary
+            from evaluation.reporting.diversity_artifacts import write_decision_artifacts
+            from evaluation.reporting.geometry import geometry_summary
 
             geometry_summary(trades).to_csv(split_dir / "geometry_summary.csv", index=False)
             write_decision_artifacts(
@@ -467,9 +467,9 @@ def _write_split(
             "short_pnl": 0.0,
         }
         if not closes.empty and not opens.empty:
-            from evaluation.plotting.plots import _pair_trades
+            from evaluation.metrics.trade_pairs import pair_trades
 
-            pairs = _pair_trades(trades)
+            pairs = pair_trades(trades)
             for open_row, close_row in pairs:
                 key = "long_pnl" if int(open_row.get("direction", 0)) == 1 else "short_pnl"
                 direction_summary[key] += float(close_row.get("pnl", 0.0) or 0.0)

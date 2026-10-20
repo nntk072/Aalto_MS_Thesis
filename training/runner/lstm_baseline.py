@@ -14,7 +14,7 @@ to the RL agent and rule-based baselines.
 Example:
     thesis-train lstm-baseline \
         --bars-csv data/us100_2025.csv --features-csv data/us100_feat.csv \
-        --epochs 20 --out models/lstm_sweep.pt
+        --epochs 20 --out outputs/lstm_sweep.pt
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--out", default="models/lstm_sweep.pt")
+    parser.add_argument("--out", default="outputs/lstm_sweep.pt")
     parser.add_argument("--train-end", default="2025-12-31", help="Last in-sample date")
     parser.add_argument("--test-start", default="2026-01-01", help="First held-out date")
     parser.add_argument("--obs-window", type=int, default=OBS_WINDOW, help="Env observation window")

@@ -14,7 +14,7 @@ block only:
 
 Example:
     python scripts/report_g3.py --runs-dir outputs --sharpe-threshold 1.0
-    python scripts/report_g3.py --runs-dir models/rl_runs --sharpe-threshold 1.0
+    python scripts/report_g3.py --runs-dir outputs/rl_runs --sharpe-threshold 1.0
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--runs-dir",
-        default="models/rl_runs",
+        default="outputs/rl_runs",
         help="Base dir containing either */metrics.json (scripts/train_rl.py) "
         "or */training_log.json (training/runner/training.py) run reports",
     )

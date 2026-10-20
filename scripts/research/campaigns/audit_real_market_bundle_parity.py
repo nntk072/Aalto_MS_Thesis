@@ -27,10 +27,10 @@ from market_data.splits.definitions import get_split_config, make_train_mask, sp
 from simulation.environment.bundles import build_env_bundle
 from simulation.environment.spec import EnvSpec
 from simulation.environment.worker import make_bundle_env
-from training.configuration.cli import _load_merged_config
+from training.configuration.cli import load_merged_config
 from training.configuration.variant_resolution import resolve_variant
 from training.setup.data import _publish_obs_memmap
-from training.setup.environments import _strategy_from_cfg, make_env
+from training.setup.environments import make_env, strategy_from_cfg
 
 ROOT = repository_root(__file__)
 
@@ -350,7 +350,7 @@ def main() -> int:
         progress_path.write_text(json.dumps(progress, indent=2) + "\n")
         try:
             resolved = resolve_variant(name, steps=100_000, seeds=[42])
-            cfg = _load_merged_config(
+            cfg = load_merged_config(
                 argparse.Namespace(
                     config=resolved["base_config"],
                     strategy=resolved["strategy"],
@@ -374,7 +374,7 @@ def main() -> int:
                 cache_path=cache,
             )
             _, test_bars, _, test_features = split_train_test(bars, features, train_end, test_start)
-            strategy = _strategy_from_cfg(cfg)[0]
+            strategy = strategy_from_cfg(cfg)[0]
             episode_bars = test_bars
             episode_features = test_features
             raw_ticks = None

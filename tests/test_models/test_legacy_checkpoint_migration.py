@@ -3,14 +3,14 @@
 import gymnasium as gym
 import numpy as np
 import numpy.typing as npt
+from decisioning.actions import build_action_schema
 from gymnasium import spaces
+from learning.rl.agent import LegacyFourToFiveActionAdapter, validate_model_action_schema
+from learning.rl.ppo import LegacyClampedStdMultiInputPolicy
 from stable_baselines3 import PPO
 
-from evaluation.reanalysis.runner import _load_checkpoint
-from models.encoders.core import LegacyTCNEncoderV1
-from models.factory.agent import LegacyFourToFiveActionAdapter, validate_model_action_schema
-from models.policies.ppo import LegacyClampedStdMultiInputPolicy
-from simulation.contracts.actions import build_action_schema
+from evaluation.reanalysis.runner import load_checkpoint
+from models.encoders import LegacyTCNEncoderV1
 
 
 class _LegacyObservationEnv(gym.Env[dict[str, npt.NDArray[np.float32]], npt.NDArray[np.float32]]):
@@ -61,7 +61,7 @@ def test_legacy4_checkpoint_loads_and_adapter_appends_structural_exit(tmp_path):
     path = tmp_path / "legacy4.zip"
     model.save(path)
 
-    loaded = _load_checkpoint(path, legacy_layout_key="legacy4_no_exit_v1")
+    loaded = load_checkpoint(path, legacy_layout_key="legacy4_no_exit_v1")
     migration = validate_model_action_schema(
         loaded,
         build_action_schema(),

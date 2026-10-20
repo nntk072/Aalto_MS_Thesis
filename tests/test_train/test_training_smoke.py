@@ -25,7 +25,7 @@ import pandas as pd
 import pytest
 
 from configuration import load_config
-from training.setup.environments import _eval_guardrail_kwargs, _guardrail_kwargs
+from training.setup.environments import eval_guardrail_kwargs, guardrail_kwargs
 
 pytestmark = pytest.mark.slow
 
@@ -129,7 +129,7 @@ def test_ppo_smoke_runs_and_takes_gradient_steps(synthetic_env, arch: str) -> No
     extractor_cls: type[Any]
     extractor_kwargs: dict[str, Any]
     if arch == "transformer":
-        from models.encoders.core import TransformerEncoder
+        from models.encoders import TransformerEncoder
 
         extractor_cls = TransformerEncoder
         extractor_kwargs = dict(
@@ -143,7 +143,7 @@ def test_ppo_smoke_runs_and_takes_gradient_steps(synthetic_env, arch: str) -> No
             dropout=0.1,
         )
     elif arch == "gru":
-        from models.encoders.core import GRUEncoder
+        from models.encoders import GRUEncoder
 
         extractor_cls = GRUEncoder
         extractor_kwargs = dict(
@@ -155,7 +155,7 @@ def test_ppo_smoke_runs_and_takes_gradient_steps(synthetic_env, arch: str) -> No
             dropout=0.1,
         )
     else:
-        from models.encoders.core import TCNEncoder
+        from models.encoders import TCNEncoder
 
         extractor_cls = TCNEncoder
         extractor_kwargs = dict(
@@ -272,8 +272,8 @@ def test_default_config_exposes_max_episode_steps() -> None:
     assert float(diversity.risk_u_max) == 0.05
     assert int(cfg.ppo.checkpoint_freq) == 1_000_000
     assert float(cfg.env.entry_intensity_threshold) == 0.0
-    train_g = _guardrail_kwargs(cfg)
-    eval_g = _eval_guardrail_kwargs(cfg)
+    train_g = guardrail_kwargs(cfg)
+    eval_g = eval_guardrail_kwargs(cfg)
     assert train_g["trailing_dd_limit"] == 0.07
     assert eval_g["trailing_dd_limit"] == 0.0
     assert eval_g["max_loss_limit"] == 10_000.0

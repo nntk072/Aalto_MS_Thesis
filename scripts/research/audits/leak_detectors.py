@@ -25,7 +25,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--features-csv", required=True)
     p.add_argument("--target-col", required=True)
     p.add_argument("--feature-col", required=True)
-    p.add_argument("--out", default="results/leak_detectors.json")
+    p.add_argument("--out", default="outputs/research/leak_detectors.json")
     p.add_argument("--n-perm", type=int, default=64)
     return p.parse_args()
 

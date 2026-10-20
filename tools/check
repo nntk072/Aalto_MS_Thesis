@@ -28,9 +28,9 @@ run_deps() {
 }
 run_quality() {
   sync_dev
-  run_module ruff format --check configuration artifacts market_data features trading simulation models training evaluation experiments live integrations compute orchestra tests
-  run_module ruff check configuration artifacts market_data features trading simulation models training evaluation experiments live integrations compute orchestra tests
-  run_module mypy
+  run_module ruff format --check .
+  run_module ruff check .
+  run_module mypy .
 }
 run_architecture() { sync_dev; run_module pytest -q tests/architecture; }
 run_contracts() {
@@ -46,18 +46,41 @@ run_contracts() {
 run_unit() { sync_dev; run_module pytest -q -m "not slow and not integration" tests; }
 run_build() {
   sync_dev
-  rm -rf dist
+  local build_dir build_status
+  build_dir="$(mktemp -d "${TMPDIR:-/tmp}/thesis-build.XXXXXX")"
   if [[ -n "$PYTHON_BIN" ]]; then
-    uv build --python "$PYTHON_BIN"
+    if uv build --python "$PYTHON_BIN" --out-dir "$build_dir"; then
+      build_status=0
+    else
+      build_status=$?
+    fi
   else
-    uv build
+    if uv build --out-dir "$build_dir"; then
+      build_status=0
+    else
+      build_status=$?
+    fi
   fi
-  smoke='import importlib; [importlib.import_module(name) for name in ("configuration","artifacts","market_data","features","trading","simulation","models","training","evaluation","experiments","live","integrations","compute","orchestra","market_data.cli","training.cli","evaluation.cli","experiments.cli","compute.cli")]; print("build-import-smoke-ok")'
+  if [[ "$build_status" -ne 0 ]]; then
+    rm -rf -- "$build_dir"
+    return "$build_status"
+  fi
+  smoke='import importlib; [importlib.import_module(name) for name in ("configuration","artifacts","market_data","features","trading","simulation","models","learning","learning.supervised","decisioning","training","evaluation","experiments","live","integrations","compute","orchestra","market_data.cli","training.cli","evaluation.cli","experiments.cli","compute.cli")]; print("build-import-smoke-ok")'
   if [[ -n "$PYTHON_BIN" ]]; then
-    "$PYTHON_BIN" -c "$smoke"
+    if "$PYTHON_BIN" -c "$smoke"; then
+      build_status=0
+    else
+      build_status=$?
+    fi
   else
-    uv run python -c "$smoke"
+    if uv run python -c "$smoke"; then
+      build_status=0
+    else
+      build_status=$?
+    fi
   fi
+  rm -rf -- "$build_dir"
+  return "$build_status"
 }
 run_integration() { sync_dev; run_module pytest -q tests/test_integration; }
 run_parity() {

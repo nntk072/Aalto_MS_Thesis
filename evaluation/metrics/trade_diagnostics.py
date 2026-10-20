@@ -8,8 +8,8 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
+from evaluation.metrics.trade_pairs import pair_trades
 from evaluation.metrics.trades import compute_trade_metrics
-from evaluation.plotting.plots import _pair_trades
 
 _WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 _SL_TYPES = {"stop_close", "forced_close"}
@@ -21,7 +21,7 @@ def closed_trades_table(trades: pd.DataFrame) -> pd.DataFrame:
     if trades.empty:
         return pd.DataFrame()
     rows: list[dict[str, Any]] = []
-    for open_row, close_row in _pair_trades(trades):
+    for open_row, close_row in pair_trades(trades):
         t_open = pd.Timestamp(open_row["time"])
         t_close = pd.Timestamp(close_row["time"])
         pnl = float(close_row["pnl"]) if pd.notna(close_row.get("pnl")) else 0.0
@@ -64,7 +64,7 @@ def mae_mfe_table(
     if trades.empty or bars.empty:
         return pd.DataFrame()
     rows: list[dict[str, Any]] = []
-    for open_row, close_row in _pair_trades(trades):
+    for open_row, close_row in pair_trades(trades):
         trade_lots = float(open_row["lots"]) if pd.notna(open_row.get("lots")) else lots
         metrics = compute_trade_metrics(
             bars,

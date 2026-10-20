@@ -12,7 +12,7 @@ import pytest
 from market_data.transforms.sessions import add_session_id, add_session_labels
 from simulation.environment.env import TradingEnv
 from trading.account.state import AccountState
-from training.setup.environments import _max_episode_steps, _training_episodic
+from training.setup.environments import _training_episodic, max_episode_steps
 
 
 def _ohlc(idx: pd.DatetimeIndex, close: np.ndarray[Any, Any]) -> pd.DataFrame:
@@ -249,7 +249,7 @@ def test_max_episode_steps_parser_none() -> None:
     class _C:
         env = _E()
 
-    assert _max_episode_steps(_C()) is None
+    assert max_episode_steps(_C()) is None
 
 
 @pytest.mark.unit

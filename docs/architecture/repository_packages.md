@@ -22,8 +22,10 @@ compute and orchestra provide execution and engineering interfaces
 | `market_data/` | Bar and tick loading, cleaning, alignment, splits, and data preparation |
 | `features/` | Causal indicators, market structure, PO3, feature building, and normalization |
 | `trading/` | Accounts, risk limits, orders, execution costs, policies, and strategies |
-| `simulation/` | Environment facade, observations/actions, vectorization, and backtest execution |
-| `models/` | PPO/SAC agent construction, encoders, policies, and auxiliary models |
+| `simulation/` | Native state transitions, Gymnasium adapter, and backtest execution |
+| `models/` | Reusable encoders, architectures, and inference components |
+| `decisioning/` | Versioned input/action schemas and backend-neutral decision providers |
+| `learning/` | Paradigm-neutral fit contracts and supervised/RL learner backends |
 | `training/` | Training orchestration, callbacks, run setup, and training reports |
 | `evaluation/` | Rollouts, metrics, reanalysis, reports, and plots |
 | `experiments/` | Variant resolution, campaign lifecycle, and experiment orchestration |
@@ -33,7 +35,8 @@ compute and orchestra provide execution and engineering interfaces
 
 Data, configuration assets, caches, outputs, logs, baselines, scripts, and
 documentation are not Python packages. Their ownership and retention rules are
-described in [`architecture_refactor_plan.md`](../architecture_refactor_plan.md).
+described in
+[`repository_context_local_architecture_plan.md`](repository_context_local_architecture_plan.md).
 
 ## Stable commands
 
@@ -57,11 +60,13 @@ reusable domain logic.
 
 ## Model and environment contract
 
-`models.factory.agent.build_agent` wires the selected PPO/SAC policy and encoder.
-The simulation package owns the Gymnasium interface and action/observation
-contracts; the trading package owns account, risk, order, and execution rules.
-Training composes these services, while evaluation consumes saved run artifacts
-and manifests.
+`learning.rl.agent.build_agent` wires the selected PPO/SAC backend and reusable
+model encoders. `decisioning/` owns versioned input/action contracts and the
+provider boundary. `simulation/` owns state transitions and environment
+adapters; `trading/` owns account, risk, order, and execution semantics.
+Training composes capabilities through `Learner` contracts. Evaluation and live
+runtime consume `DecisionProvider` implementations; the current tree includes
+SB3 and rule-based providers plus a supervised Torch reference backend.
 
 Configuration overrides are passed through the stable training command, for
 example:

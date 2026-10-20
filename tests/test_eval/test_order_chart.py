@@ -36,9 +36,9 @@ from evaluation.plotting.plots import plot_per_trade_orders
 from evaluation.plotting.plots_interactive import (
     plot_per_trade_orders as plot_per_trade_orders_html,
 )
+from features.context.reachability import max_tp_distance, rr_reaches
 from features.technical.structure import structure_levels
 from simulation.environment.env import TradingEnv
-from trading.positions.tp_reach import max_tp_distance, rr_reaches
 from trading.strategies.po3_ifvg import PO3IFVGStrategy
 
 

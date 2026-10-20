@@ -14,9 +14,9 @@ from typing import TypedDict
 import numpy as np
 import pandas as pd
 import pytest
+from decisioning.actions import build_discrete_trading_action_schema
 from gymnasium.spaces import Box, Discrete
 
-from simulation.contracts.actions import build_discrete_trading_action_schema
 from simulation.environment.env import TradingEnv
 from simulation.environment.rewards import DSRReward
 from simulation.environment.sweep_reward import CompositeReward

@@ -77,20 +77,22 @@ average across failed trials.
 The checkpoint that `live_trading_rl.py` loads is **explicit, not tribal
 knowledge**:
 
-1. A checkpoint is promoted by copying it into `models/production/`:
+1. Promote a checkpoint into a durable deployment-owned model store outside
+   the source checkout. Set `MODEL_STORE` to that location:
    ```bash
-   mkdir -p models/production
-   cp -r outputs/<run>/model models/production/<run>_ppo_final
-   cp outputs/<run>/config.yaml models/production/<run>_config.yaml
+   export MODEL_STORE=/path/to/persistent/model-store
+   mkdir -p "$MODEL_STORE/production"
+   cp -r "outputs/<run>/model" "$MODEL_STORE/production/<run>_ppo_final"
+   cp "outputs/<run>/config.yaml" "$MODEL_STORE/production/<run>_config.yaml"
    echo "promoted <run> on <date>; trial: <dates>; report: <path>" \
-       >> models/production/PROMOTIONS.log
+       >> "$MODEL_STORE/production/PROMOTIONS.log"
    ```
 2. `RL_MODEL_PATH` in the deployment environment (`.env`) points at
-   `models/production/<run>_ppo_final` — never at a mutable `outputs/`
+   `$MODEL_STORE/production/<run>_ppo_final` — never at a mutable `outputs/`
    directory that future training runs write into.
 3. Rollback = repoint `RL_MODEL_PATH` at the previous production copy and
    restart. The `PROMOTIONS.log` line is the audit trail.
-4. Never overwrite an existing `models/production/<run>_*` directory;
+4. Never overwrite an existing `$MODEL_STORE/production/<run>_*` directory;
    promote a retrained model under a new run id.
 
 ---

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from features.technical.indicators import _ema, atr
+from features.technical.indicators import atr, ema
 from features.technical.indicators import macd as _macd
 from features.technical.indicators import rsi as _rsi
 
@@ -29,8 +29,8 @@ def ema_crossover(
     Returns a signal Series aligned to bars.index.
     """
     close = bars["close"]
-    fast_e = _ema(close, fast)
-    slow_e = _ema(close, slow)
+    fast_e = ema(close, fast)
+    slow_e = ema(close, slow)
     atr(bars, atr_period)
 
     signal = pd.Series(0, index=bars.index, dtype=int)
@@ -79,11 +79,11 @@ def macd_ema50_baseline(
     close = bars["close"]
 
     # Compute MACD with SMA(9) signal line (not EMA)
-    fast_ema = _ema(close, fast)
-    slow_ema = _ema(close, slow)
+    fast_ema = ema(close, fast)
+    slow_ema = ema(close, slow)
     macd_line = fast_ema - slow_ema
     signal_line = _sma(macd_line, signal_period)
-    ema50 = _ema(close, ema50_period)
+    ema50 = ema(close, ema50_period)
 
     # Detect crosses (causal: t-1 vs t)
     bullish_cross = (macd_line.shift(1) <= signal_line.shift(1)) & (macd_line > signal_line)

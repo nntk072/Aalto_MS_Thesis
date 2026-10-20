@@ -2,7 +2,35 @@
 
 from __future__ import annotations
 
-from orchestra.backup import create_snapshot, list_slots, resolve_slot, restore_snapshot
+from pathlib import Path
+
+from orchestra.backup import (
+    create_snapshot,
+    iter_backup_paths,
+    list_slots,
+    resolve_slot,
+    restore_snapshot,
+)
+
+
+def test_snapshot_skips_generated_repository_roots(tmp_path) -> None:
+    source = tmp_path / "orchestra" / "pipeline.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("source\n")
+    generated = (
+        Path("outputs/run/model/checkpoint.zip"),
+        Path("cache/features.parquet"),
+        Path("logs/runtime.log"),
+    )
+    for relative in generated:
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("generated\n")
+
+    paths = iter_backup_paths(tmp_path)
+
+    assert Path("orchestra/pipeline.py") in paths
+    assert all(path not in paths for path in generated)
 
 
 def test_snapshot_restore_reverts_edits_and_new_files(tmp_path) -> None:
@@ -10,7 +38,7 @@ def test_snapshot_restore_reverts_edits_and_new_files(tmp_path) -> None:
     src.mkdir()
     target = src / "plots.py"
     target.write_text("original\n")
-    dest = tmp_path / "orchestra" / "state" / "backups" / "task-1" / "00-start"
+    dest = tmp_path / "outputs" / "orchestra" / "state" / "backups" / "task-1" / "00-start"
     meta = create_snapshot(tmp_path, dest)
     assert meta["files"] >= 1
     target.write_text("changed by orchestra\n")
@@ -26,7 +54,7 @@ def test_per_step_slots_restore_implementation_checkpoint(tmp_path) -> None:
     src.mkdir()
     target = src / "plots.py"
     target.write_text("before\n")
-    root = tmp_path / "orchestra" / "state" / "backups" / "task-1"
+    root = tmp_path / "outputs" / "orchestra" / "state" / "backups" / "task-1"
     create_snapshot(tmp_path, root / "00-start")
     target.write_text("after-implement\n")
     create_snapshot(tmp_path, root / "05-implementation")

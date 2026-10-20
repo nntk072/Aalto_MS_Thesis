@@ -4,7 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
-from training.callbacks import core as callbacks
+from learning.rl import callbacks
+
 from training.setup import environments as training_environments
 
 

@@ -13,7 +13,7 @@ set -euo pipefail
 
 export PATH="/usr/bin:$HOME/.local/bin:$PATH"
 REPO="$HOME/Aalto_MS_Thesis"
-STATE_DIR="$REPO/orchestra/state"
+STATE_DIR="$REPO/outputs/orchestra/state"
 
 if ! command -v tmux >/dev/null 2>&1; then
     echo "ERROR: tmux is not installed. Install with: sudo apt install -y tmux"

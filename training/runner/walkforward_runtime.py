@@ -8,23 +8,24 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from learning.rl.agent import build_agent
 
 from evaluation import calculate_metrics, evaluation_periods_per_year
 from features import build_walkforward_fold_features
 from features.context.policy_market import attach_policy_market_context
 from market_data.loading.ticks import ticks_covering
 from market_data.splits.walkforward import purged_walk_forward
-from models.factory.agent import build_agent
 from training.setup.data import _publish_obs_memmap
 from training.setup.environments import (
-    _eval_guardrail_kwargs,
     _evaluate_final_split,
-    _fill_delay_ms,
-    _max_episode_steps,
-    _max_loss_per_trade,
-    _strategy_from_cfg,
-    _strategy_risk_ranges,
+    build_eval_provider,
+    eval_guardrail_kwargs,
+    fill_delay_ms,
     make_env,
+    max_episode_steps,
+    max_loss_per_trade,
+    strategy_from_cfg,
+    strategy_risk_ranges,
 )
 
 log = logging.getLogger(__name__)
@@ -145,26 +146,35 @@ def run_walk_forward_validation(
         )
         fold_model.learn(total_timesteps=wf_steps, callback=None, progress_bar=False)
 
-        fold_result = _evaluate_final_split(
+        provider = build_eval_provider(
             fold_model,
+            cfg=cfg,
+            args=args,
+            env_vae=env_vae,
+            pre_ny_by_date=pre_ny_by_date,
+            arch=args.arch,
+        )
+
+        fold_result = _evaluate_final_split(
+            provider,
             bars=fold_test_bars,
             features=fold_test_feat,
             obs_window=cfg.env.obs_window,
             initial_balance=cfg.account.initial_balance,
-            guardrail_kwargs=_eval_guardrail_kwargs(cfg),
-            risk_frac_range=_strategy_risk_ranges(cfg)[0],
-            rr_ratio_range=_strategy_risk_ranges(cfg)[1],
+            guardrail_kwargs=eval_guardrail_kwargs(cfg),
+            risk_frac_range=strategy_risk_ranges(cfg)[0],
+            rr_ratio_range=strategy_risk_ranges(cfg)[1],
             swing_buffer_pts=cfg.risk.swing_buffer_pts,
             sl_mode=str(cfg.risk.get("sl_mode", "fixed")),
             contract_size=cfg.account.contract_size,
-            max_loss_per_trade_usd=_max_loss_per_trade(cfg),
+            max_loss_per_trade_usd=max_loss_per_trade(cfg),
             dsr_eta=cfg.env.reward_dsr_eta,
-            max_episode_steps=_max_episode_steps(cfg),
+            max_episode_steps=max_episode_steps(cfg),
             continuous_actions=(args.algo == "sac"),
             use_sweep_reward=(args.reward == "sweep"),
             block_overnight=bool(cfg.env.get("block_overnight", True)),
             eod_risk=dict(cfg.env.get("eod_risk", {})),
-            strategy=_strategy_from_cfg(cfg)[0],
+            strategy=strategy_from_cfg(cfg)[0],
             strategy_actions=bool(cfg.env.get("strategy_actions", False)),
             entry_state_machine=bool(cfg.env.get("entry_state_machine", False)),
             candidate_max_age_bars=int(cfg.env.get("candidate_max_age_bars", 5)),
@@ -190,7 +200,7 @@ def run_walk_forward_validation(
             allow_simplex=bool(cfg.env.get("allow_simplex", True)),
             tp_breakeven_alpha=float(cfg.env.get("tp_breakeven_alpha", 0.5)),
             tickbook=ticks_covering(primary_ticks, fold_test_bars),
-            fill_delay_ms=_fill_delay_ms(cfg),
+            fill_delay_ms=fill_delay_ms(cfg),
         )
         fold_m = calculate_metrics(
             fold_result["equity"],

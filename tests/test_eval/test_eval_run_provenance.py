@@ -25,8 +25,10 @@ from features import feature_cache_path
 
 
 def test_checkpoint_reanalysis_defaults_to_deterministic_actions() -> None:
-    default_args = eval_run._build_parser().parse_args(["--run", "source", "--output", "out"])
-    sampled_args = eval_run._build_parser().parse_args(
+    default_args = eval_run.build_reanalysis_parser().parse_args(
+        ["--run", "source", "--output", "out"]
+    )
+    sampled_args = eval_run.build_reanalysis_parser().parse_args(
         ["--run", "source", "--output", "out", "--stochastic", "--seed", "42"]
     )
     assert default_args.stochastic is False
@@ -35,8 +37,10 @@ def test_checkpoint_reanalysis_defaults_to_deterministic_actions() -> None:
 
 
 def test_train_only_screen_is_explicit_opt_in() -> None:
-    default_args = eval_run._build_parser().parse_args(["--run", "source", "--output", "out"])
-    screen_args = eval_run._build_parser().parse_args(
+    default_args = eval_run.build_reanalysis_parser().parse_args(
+        ["--run", "source", "--output", "out"]
+    )
+    screen_args = eval_run.build_reanalysis_parser().parse_args(
         ["--run", "source", "--output", "out", "--train-only-screen"]
     )
 
@@ -66,7 +70,7 @@ def test_train_only_screen_report_records_evaluation_provenance(
     }
     monkeypatch.setattr(eval_run, "build_evaluation_provenance", lambda _repo: provenance)
 
-    report_path = eval_run._write_train_only_screen_report(
+    report_path = eval_run.write_train_only_screen_report(
         tmp_path / "screen",
         {"artifact_role": "candidate_screen_train_only", "test_split_evaluated": False},
     )
@@ -88,8 +92,8 @@ def test_train_only_evaluation_receives_only_training_frames(
         captured["stochastic"] = stochastic
         return {"equity": [100_000.0, 100_100.0], "trades": []}
 
-    monkeypatch.setattr(eval_run, "_evaluate_checkpoint_split", fake_evaluate)
-    result, metrics = eval_run._evaluate_train_split(
+    monkeypatch.setattr(eval_run, "evaluate_checkpoint_split", fake_evaluate)
+    result, metrics = eval_run.evaluate_train_split(
         object(),
         stochastic=False,
         bars=train_bars,
@@ -159,21 +163,21 @@ def test_execution_seed_uses_explicit_override_then_source_seed() -> None:
         "metrics_protocol": {"execution_seed": 52},
     }
 
-    assert eval_run._resolve_execution_seed(7, manifest) == 7
-    assert eval_run._resolve_execution_seed(None, manifest) == 50
+    assert eval_run.resolve_execution_seed(7, manifest) == 7
+    assert eval_run.resolve_execution_seed(None, manifest) == 50
 
 
 def test_execution_seed_rejects_negative_and_reports_missing_seed() -> None:
     with pytest.raises(ValueError, match="non-negative"):
-        eval_run._resolve_execution_seed(-1, {})
-    assert eval_run._resolve_execution_seed(None, {}) is None
+        eval_run.resolve_execution_seed(-1, {})
+    assert eval_run.resolve_execution_seed(None, {}) is None
 
 
 def test_legacy_input_provenance_reanalysis_requires_explicit_opt_in() -> None:
-    args = eval_run._build_parser().parse_args(["--run", "source", "--output", "out"])
+    args = eval_run.build_reanalysis_parser().parse_args(["--run", "source", "--output", "out"])
     assert args.allow_legacy_data_provenance is False
     assert args.source_feature_cache is None
-    opted_in = eval_run._build_parser().parse_args(
+    opted_in = eval_run.build_reanalysis_parser().parse_args(
         [
             "--run",
             "source",
@@ -189,8 +193,10 @@ def test_legacy_input_provenance_reanalysis_requires_explicit_opt_in() -> None:
 
 
 def test_legacy_sequence_schema_reanalysis_requires_explicit_opt_in() -> None:
-    default_args = eval_run._build_parser().parse_args(["--run", "source", "--output", "out"])
-    opted_in = eval_run._build_parser().parse_args(
+    default_args = eval_run.build_reanalysis_parser().parse_args(
+        ["--run", "source", "--output", "out"]
+    )
+    opted_in = eval_run.build_reanalysis_parser().parse_args(
         ["--run", "source", "--output", "out", "--allow-legacy-sequence-schema"]
     )
 
@@ -209,7 +215,7 @@ def test_checkpoint_replay_forwards_legacy_sequence_mode(monkeypatch: pytest.Mon
         return {"status": "captured"}
 
     monkeypatch.setattr(eval_run, "evaluate_model", fake_evaluate_model)
-    result = eval_run._evaluate_checkpoint_split(
+    result = eval_run.evaluate_checkpoint_split(
         object(),
         stochastic=False,
         bars=pd.DataFrame(),
@@ -229,9 +235,9 @@ def test_checkpoint_sequence_width_must_match_ordered_feature_schema() -> None:
         )
     )
 
-    assert eval_run._validate_sequence_input_width(model, 7) == 7
+    assert eval_run.validate_sequence_input_width(model, 7) == 7
     with pytest.raises(ValueError, match="sequence input width disagrees"):
-        eval_run._validate_sequence_input_width(model, 8)
+        eval_run.validate_sequence_input_width(model, 8)
 
 
 def test_reanalysis_feature_cache_requires_identity_or_legacy_opt_in(tmp_path: Path) -> None:
@@ -406,7 +412,7 @@ def test_exact_source_feature_cache_replay_requires_manifest_file_identity(
 def test_stop_schema_requires_checkpoint_manifest_and_config_agreement() -> None:
     schema = {"menu": "recent_confirmed_unswept_mtf_swings_v1"}
     assert (
-        eval_run._validate_stop_candidate_schema(
+        eval_run.validate_stop_candidate_schema(
             checkpoint_schema=schema,
             manifest_schema=schema,
             expected_schema=schema,
@@ -415,14 +421,14 @@ def test_stop_schema_requires_checkpoint_manifest_and_config_agreement() -> None
         == "versioned"
     )
     with pytest.raises(ValueError, match="disagree"):
-        eval_run._validate_stop_candidate_schema(
+        eval_run.validate_stop_candidate_schema(
             checkpoint_schema=schema,
             manifest_schema={"menu": "legacy_last_accepted_swing_v1"},
             expected_schema=schema,
             allow_legacy=False,
         )
     with pytest.raises(ValueError, match="differs from the run config"):
-        eval_run._validate_stop_candidate_schema(
+        eval_run.validate_stop_candidate_schema(
             checkpoint_schema=schema,
             manifest_schema=schema,
             expected_schema={"menu": "legacy_last_accepted_swing_v1"},
@@ -433,14 +439,14 @@ def test_stop_schema_requires_checkpoint_manifest_and_config_agreement() -> None
 def test_legacy_stop_schema_requires_opt_in_and_cannot_claim_expanded_menu() -> None:
     legacy = {"menu": "legacy_last_accepted_swing_v1"}
     with pytest.raises(ValueError, match="no stop-candidate schema"):
-        eval_run._validate_stop_candidate_schema(
+        eval_run.validate_stop_candidate_schema(
             checkpoint_schema=None,
             manifest_schema=None,
             expected_schema=legacy,
             allow_legacy=False,
         )
     assert (
-        eval_run._validate_stop_candidate_schema(
+        eval_run.validate_stop_candidate_schema(
             checkpoint_schema=None,
             manifest_schema=None,
             expected_schema=legacy,
@@ -449,7 +455,7 @@ def test_legacy_stop_schema_requires_opt_in_and_cannot_claim_expanded_menu() -> 
         == "legacy_opt_in"
     )
     with pytest.raises(ValueError, match="cannot assert that menu was trained"):
-        eval_run._validate_stop_candidate_schema(
+        eval_run.validate_stop_candidate_schema(
             checkpoint_schema=None,
             manifest_schema=None,
             expected_schema={"menu": "recent_confirmed_unswept_mtf_swings_v1"},
@@ -463,16 +469,12 @@ def test_checkpoint_reanalysis_checks_manifest_artifact_hash(tmp_path: Path) -> 
     expected = file_sha256(checkpoint)
 
     assert (
-        eval_run._validate_checkpoint_manifest_hash(
-            checkpoint, {"checkpoint": {"sha256": expected}}
-        )
+        eval_run.validate_checkpoint_manifest_hash(checkpoint, {"checkpoint": {"sha256": expected}})
         == "verified"
     )
     with pytest.raises(ValueError, match="does not match"):
-        eval_run._validate_checkpoint_manifest_hash(
-            checkpoint, {"checkpoint": {"sha256": "0" * 64}}
-        )
-    assert eval_run._validate_checkpoint_manifest_hash(checkpoint, {}) == (
+        eval_run.validate_checkpoint_manifest_hash(checkpoint, {"checkpoint": {"sha256": "0" * 64}})
+    assert eval_run.validate_checkpoint_manifest_hash(checkpoint, {}) == (
         "unavailable_legacy_manifest"
     )
 
@@ -490,7 +492,7 @@ def test_checkpoint_split_replay_passes_selected_action_mode(
         return {}
 
     monkeypatch.setattr(eval_run, "evaluate_model", fake_evaluate_model)
-    result = eval_run._evaluate_checkpoint_split(object(), stochastic=stochastic)
+    result = eval_run.evaluate_checkpoint_split(object(), stochastic=stochastic)
 
     assert result == {}
     assert captured["deterministic"] is expected_deterministic

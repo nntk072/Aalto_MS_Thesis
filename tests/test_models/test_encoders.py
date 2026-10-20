@@ -7,15 +7,15 @@ from typing import Any
 import numpy as np
 import torch
 from gymnasium import spaces
+from learning.rl.agent import encoder_for
 
-from models.encoders.core import (
+from models.encoders import (
     GRUEncoder,
     LiteTCNEncoder,
     MTFEncoder,
     TCNEncoder,
     TransformerEncoder,
 )
-from models.factory.agent import encoder_for
 
 
 class TestTCNEncoder:

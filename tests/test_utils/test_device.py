@@ -2,19 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import numpy as np
 import pytest
 from omegaconf import OmegaConf
 
 from compute.environment.device import (
     _GiB,
-    configure_cuda,
     get_device,
     scale_training_cfg,
     suggest_batch_size,
     suggest_n_envs,
     suggest_n_epochs,
     suggest_n_steps,
+)
+from compute.environment.precision import (
+    configure_cuda_for_training,
+    get_autocast_context,
+    get_autocast_dtype,
 )
 
 
@@ -194,9 +200,124 @@ class TestSuggestNStepsEpochs:
         assert suggest_n_epochs(current=10, has_cuda=False) == 10
 
 
-def test_configure_cuda_is_noop_safe() -> None:
+def test_configure_cuda_for_training_is_noop_safe() -> None:
     """Must not raise on CPU-only hosts."""
-    configure_cuda()
+    configure_cuda_for_training()
+
+
+def test_autocast_is_a_noop_on_cpu() -> None:
+    import torch
+
+    assert get_autocast_dtype("cpu") is None
+    with get_autocast_context("cpu"):
+        assert not torch.is_autocast_enabled("cpu")
+
+
+@pytest.mark.parametrize(
+    ("capability", "supports_bfloat16", "expected"),
+    [
+        ((7, 0), False, "torch.float16"),  # V100
+        ((8, 0), True, "torch.bfloat16"),  # A100
+        ((9, 0), True, "torch.bfloat16"),  # H100/H200/GH200
+        ((10, 0), True, "torch.bfloat16"),  # B300 and newer
+        ((9, 0), False, "torch.float16"),  # Runtime fallback
+    ],
+)
+def test_autocast_dtype_tracks_device_capabilities(
+    monkeypatch: pytest.MonkeyPatch,
+    capability: tuple[int, int],
+    supports_bfloat16: bool,
+    expected: str,
+) -> None:
+    import torch
+
+    from compute.contracts import DeviceCapabilities
+    from compute.environment import precision
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(
+        precision,
+        "discover_device_capabilities",
+        lambda _device: DeviceCapabilities(
+            architecture="x86_64",
+            accelerator_kind="cuda",
+            accelerator_count=1,
+            accelerator_memory_bytes=None,
+            supports_bfloat16=supports_bfloat16,
+            compute_capability=capability,
+        ),
+    )
+    assert str(get_autocast_dtype("cuda:0")) == expected
+
+
+def test_configure_cuda_enables_nvidia_tf32_and_allocator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    import torch
+
+    from compute.contracts import DeviceCapabilities
+    from compute.environment import precision
+
+    monkeypatch.delenv("PYTORCH_CUDA_ALLOC_CONF", raising=False)
+    monkeypatch.setattr(torch.version, "hip", None)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    cuda_matmul = SimpleNamespace(allow_tf32=False)
+    cudnn = SimpleNamespace(is_available=lambda: True, allow_tf32=False, benchmark=False)
+    monkeypatch.setattr(torch.backends.cuda, "matmul", cuda_matmul)
+    monkeypatch.setattr(torch.backends, "cudnn", cudnn)
+    monkeypatch.setattr(
+        precision,
+        "discover_device_capabilities",
+        lambda _device=None: DeviceCapabilities(
+            architecture="x86_64",
+            accelerator_kind="cuda",
+            accelerator_count=1,
+            accelerator_memory_bytes=None,
+            supports_bfloat16=True,
+            accelerator_backend="cuda",
+            compute_capability=(8, 0),
+        ),
+    )
+    configure_cuda_for_training()
+    assert __import__("os").environ["PYTORCH_CUDA_ALLOC_CONF"] == "expandable_segments:True"
+    assert cuda_matmul.allow_tf32 is True
+    assert cudnn.allow_tf32 is True
+    assert cudnn.benchmark is True
+
+
+def test_configure_rocm_skips_cuda_allocator_and_tf32(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import torch
+
+    from compute.contracts import DeviceCapabilities
+    from compute.environment import precision
+
+    monkeypatch.setattr(torch.version, "hip", "6.3")
+    monkeypatch.delenv("PYTORCH_CUDA_ALLOC_CONF", raising=False)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(
+        precision,
+        "discover_device_capabilities",
+        lambda _device=None: DeviceCapabilities(
+            architecture="x86_64",
+            accelerator_kind="rocm",
+            accelerator_count=1,
+            accelerator_memory_bytes=None,
+            supports_bfloat16=True,
+            accelerator_backend="rocm",
+            device_name="AMD Instinct MI210",
+        ),
+    )
+    monkeypatch.setattr(torch.backends.cudnn, "is_available", lambda: False)
+    monkeypatch.setattr(torch.backends.cuda.matmul, "allow_tf32", False)
+    monkeypatch.setattr(torch.backends.cudnn, "allow_tf32", False)
+    configure_cuda_for_training()
+    assert "PYTORCH_CUDA_ALLOC_CONF" not in __import__("os").environ
+    assert torch.backends.cuda.matmul.allow_tf32 is False
+    assert torch.backends.cudnn.allow_tf32 is False
 
 
 def test_scale_training_cfg_cpu_keeps_n_envs(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -206,6 +327,8 @@ def test_scale_training_cfg_cpu_keeps_n_envs(monkeypatch: pytest.MonkeyPatch) ->
     from compute.environment import device as device_mod
 
     monkeypatch.setattr(device_mod, "_read_meminfo", lambda: (256 * _GiB, 200 * _GiB))
+    monkeypatch.setattr(device_mod, "_read_cgroup_memory_limit", lambda: None)
+    monkeypatch.setattr(device_mod, "_read_slurm_memory_limit", lambda: None)
     cfg = OmegaConf.create(
         {
             "env": {"n_envs": 4},
@@ -227,6 +350,8 @@ def test_scale_training_cfg_preserves_exact_quality_geometry(
     from compute.environment import device as device_mod
 
     monkeypatch.setattr(device_mod, "_read_meminfo", lambda: (256 * _GiB, 200 * _GiB))
+    monkeypatch.setattr(device_mod, "_read_cgroup_memory_limit", lambda: None)
+    monkeypatch.setattr(device_mod, "_read_slurm_memory_limit", lambda: None)
     cfg = OmegaConf.create(
         {
             "env": {"n_envs": 16, "data_source": "bundle"},
@@ -286,11 +411,11 @@ def test_scale_training_cfg_uses_bundle_worker_budget(monkeypatch: pytest.Monkey
 
 def test_enable_extractor_autocast_skips_transformer() -> None:
     """Transformer stays fp32; bf16 autocast caused PPO policy NaNs on GH200."""
-    pytest.importorskip("torch")
+    torch = pytest.importorskip("torch")
     from gymnasium import spaces
 
-    from compute.environment.device import enable_extractor_autocast
-    from models.encoders.core import TransformerEncoder
+    from models.encoders import TransformerEncoder
+    from models.runtime.precision import enable_extractor_autocast
 
     observation_space = spaces.Dict(
         {
@@ -308,5 +433,85 @@ def test_enable_extractor_autocast_skips_transformer() -> None:
         num_layers=1,
         dim_feedforward=32,
     )
-    enable_extractor_autocast(encoder)
+    enable_extractor_autocast(encoder, torch.bfloat16)
     assert getattr(encoder, "_amp_wrapped", False) is False
+
+
+def test_fp16_extractor_autocast_is_disabled_for_grad_enabled_ppo_updates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import contextlib
+
+    import torch
+
+    from models.runtime import precision as model_precision
+
+    contexts: list[tuple[str, torch.dtype]] = []
+
+    def autocast_context(
+        *, device_type: str, dtype: torch.dtype
+    ) -> contextlib.AbstractContextManager[object]:
+        contexts.append((device_type, dtype))
+        return contextlib.nullcontext()
+
+    monkeypatch.setattr(torch, "autocast", autocast_context)
+    extractor = torch.nn.Linear(3, 2)
+    model_precision.enable_extractor_autocast(extractor, torch.float16)
+
+    inputs = torch.ones((4, 3), requires_grad=True)
+    train_output = extractor(inputs)
+    train_output.sum().backward()
+    assert train_output.dtype == torch.float32
+    assert train_output.grad_fn is not None
+    assert contexts == []
+
+    with torch.no_grad():
+        inference_output = extractor(inputs)
+    assert inference_output.dtype == torch.float32
+    assert len(contexts) == 1
+    assert contexts[0] == ("cuda", torch.float16)
+
+
+def test_fp16_inference_retries_in_fp32_if_features_are_nonfinite(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import contextlib
+
+    import torch
+
+    from models.runtime import precision as model_precision
+
+    amp_enabled = False
+
+    @contextlib.contextmanager
+    def autocast_context(*, device_type: str, dtype: torch.dtype) -> Iterator[None]:
+        nonlocal amp_enabled
+        del device_type, dtype
+        amp_enabled = True
+        try:
+            yield
+        finally:
+            amp_enabled = False
+
+    class OverflowOnAutocast(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.ones(()))
+            self.calls = 0
+
+        def forward(self, value: torch.Tensor) -> torch.Tensor:
+            self.calls += 1
+            if amp_enabled:
+                return value * torch.tensor(float("inf"))
+            return value * self.weight
+
+    monkeypatch.setattr(torch, "autocast", autocast_context)
+    extractor = OverflowOnAutocast()
+    model_precision.enable_extractor_autocast(extractor, torch.float16)
+
+    with torch.no_grad():
+        output = extractor(torch.ones((2, 1)))
+
+    assert output.dtype == torch.float32
+    assert torch.isfinite(output).all()
+    assert extractor.calls == 2

@@ -29,7 +29,7 @@ class SessionManager:
         self.workspace = workspace
         self.dry_run = dry_run
         self.active_sessions: dict[str, dict[str, Any]] = {}
-        self.runs_dir = workspace / "orchestra" / "state" / "runs"
+        self.runs_dir = workspace / "outputs" / "orchestra" / "state" / "runs"
 
     @staticmethod
     def display_session_name(role: str, model: Model, task_id: str = "") -> str:

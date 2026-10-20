@@ -15,10 +15,10 @@ from features import build_features, feature_cache_path
 from market_data.loading.pipeline import prepare_data
 from simulation.environment.env import TradingEnv
 from training.setup.environments import (
-    _guardrail_kwargs,
-    _max_loss_per_trade,
-    _strategy_from_cfg,
-    _strategy_risk_ranges,
+    guardrail_kwargs,
+    max_loss_per_trade,
+    strategy_from_cfg,
+    strategy_risk_ranges,
 )
 
 MVP = Path("outputs/20260920_205105_rl_train_seed50")
@@ -26,19 +26,19 @@ FULL = Path("outputs/20260920_210733_rl_train_seed50")
 
 
 def make_env(cfg, bars, feat):
-    strategy, strategy_reward, strategy_weight = _strategy_from_cfg(cfg)
-    risk_frac_range, rr_ratio_range = _strategy_risk_ranges(cfg)
+    strategy, strategy_reward, strategy_weight = strategy_from_cfg(cfg)
+    risk_frac_range, rr_ratio_range = strategy_risk_ranges(cfg)
     return TradingEnv(
         bars=bars,
         features=feat,
         obs_window=cfg.env.obs_window,
         initial_balance=cfg.account.initial_balance,
-        guardrail_kwargs=_guardrail_kwargs(cfg),
+        guardrail_kwargs=guardrail_kwargs(cfg),
         risk_frac_range=risk_frac_range,
         rr_ratio_range=rr_ratio_range,
         swing_buffer_pts=cfg.risk.swing_buffer_pts,
         contract_size=cfg.account.contract_size,
-        max_loss_per_trade_usd=_max_loss_per_trade(cfg),
+        max_loss_per_trade_usd=max_loss_per_trade(cfg),
         dsr_eta=cfg.env.reward_dsr_eta,
         episodic=False,
         continuous_actions=False,

@@ -6,40 +6,44 @@ inspected; it must never overwrite the original training or testing artifacts.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-from configuration.paths import repository_root
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-import argparse
 import hashlib
 import json
 import logging
-import re
 from dataclasses import asdict
 from datetime import datetime
+from pathlib import Path
 from typing import Any
-from zipfile import ZipFile
 
 import numpy as np
 import pandas as pd
-import torch
-from gymnasium import spaces
-from stable_baselines3 import PPO
-from stable_baselines3.common.save_util import json_to_data
+from decisioning.actions import build_action_schema, build_discrete_trading_action_schema
+from decisioning.adapters.sb3 import SB3DecisionProvider
+from decisioning.observations import build_observation_schema
 
+from configuration.paths import repository_root
 from evaluation import calculate_metrics, evaluation_periods_per_year
+from evaluation.reanalysis.checkpoint import resolve_checkpoint
+from evaluation.reanalysis.cli import build_reanalysis_parser
+from evaluation.reanalysis.datasets import reconstruct_reanalysis_datasets
+from evaluation.reanalysis.legacy_sb3 import (
+    is_sb3_box_model,
+    is_sb3_discrete_model,
+    load_sb3_checkpoint,
+    seed_sb3,
+    validate_sb3_discrete_action_schema,
+    validate_sb3_observation_schema,
+    validate_sb3_overlay_action_schema,
+)
 from evaluation.reanalysis.provenance import (
     _evaluation_dataset_records,
-    _feature_build_scope,
-    _load_exact_source_feature_cache,
     _load_run_config,
-    _reanalysis_backend_disposition,
-    _validate_reanalysis_datasets,
-    _validate_reanalysis_feature_cache,
     _validate_reanalysis_request,
+)
+from evaluation.reanalysis.validation import (
+    resolve_execution_seed,
+    validate_checkpoint_manifest_hash,
+    validate_sequence_input_width,
+    validate_stop_candidate_schema,
 )
 from evaluation.reporting.export import save_run
 from evaluation.reporting.run_manifest import (
@@ -49,227 +53,46 @@ from evaluation.reporting.run_manifest import (
     file_sha256,
     validate_sequence_feature_schema,
 )
-from evaluation.rollout.model import BAR_CLOSE_EXPOSURE_MEASURE, evaluate_model
-from features import (
-    build_features,
-    select_legacy_obs_columns,
-    select_obs_columns,
-)
-from features.context.policy_market import (
-    attach_policy_market_context,
-)
-from market_data.loading.pipeline import build_tick_books, run_pipeline
+from evaluation.rollout.model import BAR_CLOSE_EXPOSURE_MEASURE, evaluate_model, evaluate_provider
+from features import select_legacy_obs_columns, select_obs_columns
 from market_data.loading.ticks import ticks_covering
-from market_data.splits.definitions import (
-    get_split_config,
-    get_train_start_config,
-    make_train_mask,
-    split_bars,
-    split_train_test,
+from simulation.environment.factory import (
+    build_eval_common,
 )
-from models.encoders.core import LegacyTCNEncoderV1, TCNEncoder
-from models.factory.agent import (
-    LegacyFourToFiveActionAdapter,
-    validate_model_action_schema,
-    validate_model_discrete_action_schema,
-)
-from models.policies.ppo import (
-    ClampedStdMultiInputPolicy,
-    LegacyClampedStdMultiInputPolicy,
-)
-from simulation.contracts.actions import build_action_schema, build_discrete_trading_action_schema
 from trading.policy.config import resolve_trading_policy
-from training.setup.environments import (
-    _build_eval_common,
-)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-_CKPT_STEPS_RE = re.compile(r"_(\d+)_steps\.zip$")
+__all__ = [
+    "build_reanalysis_parser",
+    "evaluate_checkpoint_split",
+    "evaluate_train_split",
+    "load_checkpoint",
+    "main",
+    "resolve_checkpoint",
+    "resolve_execution_seed",
+    "validate_checkpoint_manifest_hash",
+    "validate_sequence_input_width",
+    "validate_stop_candidate_schema",
+    "write_train_only_screen_report",
+]
 
 
-def _resolve_checkpoint(run_dir: Path, checkpoint: str | None) -> Path:
-    """Return the model checkpoint to evaluate.
-
-    Prefers an explicit ``--checkpoint``, then ``model/ppo_final.zip``
-    (written on successful training completion), then the highest-step
-    ``ppo_ckpt_*_steps.zip`` (for a run whose training hasn't finished, or
-    was interrupted, but has intermediate checkpoints).
-    """
-    if checkpoint:
-        path = Path(checkpoint)
-        if not path.is_absolute():
-            path = run_dir / checkpoint
-        if not path.exists():
-            raise SystemExit(f"Checkpoint not found: {path}")
-        return path
-
-    model_dir = run_dir / "model"
-    final = model_dir / "ppo_final.zip"
-    if final.exists():
-        return final
-
-    ckpts = list(model_dir.glob("ppo_ckpt_*_steps.zip"))
-    if not ckpts:
-        raise SystemExit(f"No model checkpoints found under {model_dir}")
-
-    def _steps(p: Path) -> int:
-        m = _CKPT_STEPS_RE.search(p.name)
-        return int(m.group(1)) if m else -1
-
-    latest = max(ckpts, key=_steps)
-    log.warning("No ppo_final.zip in %s; using latest checkpoint: %s", model_dir, latest.name)
-    return latest
+def load_checkpoint(path: Path, *, legacy_layout_key: str | None) -> Any:
+    """Compatibility entry point; SB3 checkpoint loading belongs to its adapter."""
+    return load_sb3_checkpoint(path, legacy_layout_key=legacy_layout_key)
 
 
-def _load_checkpoint(path: Path, *, legacy_layout_key: str | None) -> Any:
-    """Load a checkpoint, selecting the archived extractor only by explicit layout."""
-    if legacy_layout_key != "legacy4_no_exit_v1":
-        return PPO.load(path)
-    with ZipFile(path) as archive:
-        if "data" not in archive.namelist():
-            raise ValueError(f"legacy checkpoint has no SB3 data record: {path}")
-        data = json_to_data(archive.read("data").decode("utf-8"))
-    action_space = data.get("action_space")
-    if getattr(action_space, "shape", None) != (4,):
-        raise ValueError("legacy4_no_exit_v1 requires a saved 4D action space")
-    policy_kwargs = data.get("policy_kwargs")
-    if not isinstance(policy_kwargs, dict):
-        raise ValueError("legacy 4D checkpoint has no readable policy kwargs")
-    extractor = policy_kwargs.get("features_extractor_class")
-    if extractor not in (TCNEncoder, LegacyTCNEncoderV1):
-        raise ValueError("legacy4_no_exit_v1 migration is defined only for the archived TCN family")
-    migrated_kwargs = dict(policy_kwargs)
-    if extractor is TCNEncoder:
-        migrated_kwargs["features_extractor_class"] = LegacyTCNEncoderV1
-    return PPO.load(
-        path,
-        device="cpu",
-        custom_objects={
-            "policy_class": LegacyClampedStdMultiInputPolicy,
-            "policy_kwargs": migrated_kwargs,
-        },
-    )
-
-
-def _build_parser() -> argparse.ArgumentParser:
-    """Build the checkpoint-reanalysis CLI with an explicit action mode."""
-    parser = argparse.ArgumentParser(
-        description="Reanalyse a PPO checkpoint into a separate, new output directory."
-    )
-    parser.add_argument("--run", required=True, help="Existing source RL run (read-only)")
-    parser.add_argument("--output", required=True, help="New, non-existing reanalysis directory")
-    parser.add_argument(
-        "--allow-historical",
-        action="store_true",
-        help="Acknowledge that this run's historical test split is already inspected",
-    )
-    parser.add_argument(
-        "--allow-legacy-action-schema",
-        action="store_true",
-        help="Explicitly opt in to an unversioned checkpoint using the selected legacy layout",
-    )
-    parser.add_argument(
-        "--allow-legacy-observation-schema",
-        action="store_true",
-        help="Explicitly opt in to an unversioned account-state-v1 checkpoint",
-    )
-    parser.add_argument(
-        "--allow-legacy-sequence-schema",
-        action="store_true",
-        help=(
-            "Explicitly replay a manifest without ordered model-feature coordinates using "
-            "the pre-filter sequence columns; the schema remains legacy_unverified"
-        ),
-    )
-    parser.add_argument(
-        "--allow-legacy-stop-schema",
-        action="store_true",
-        help=(
-            "Explicitly opt in when an older checkpoint or run manifest has no stop-candidate "
-            "schema; this does not assert that it used the expanded multi-HTF menu"
-        ),
-    )
-    parser.add_argument(
-        "--allow-legacy-data-provenance",
-        action="store_true",
-        help=(
-            "Explicitly allow reanalysis when the source run lacks feature-cache or dataset "
-            "identities; the resulting report will label input parity unverified"
-        ),
-    )
-    parser.add_argument(
-        "--source-feature-cache",
-        default=None,
-        help=(
-            "Read-only replay of a preserved training cache; its filename, sidecar content hash, "
-            "file SHA-256, saved config, and train/test feature fingerprints must match the run"
-        ),
-    )
-    parser.add_argument(
-        "--legacy-action-layout",
-        default=None,
-        help=(
-            "Explicit layout for an unversioned checkpoint; must match the run config "
-            "(for example 5, 6_dir, 6_sl, 7, 8, 11, discrete-20). Use legacy4_no_exit_v1 only "
-            "for the documented 4D no-exit policy migration."
-        ),
-    )
-    parser.add_argument(
-        "--checkpoint",
-        default=None,
-        help="Checkpoint path (relative to --run or absolute); defaults to "
-        "model/ppo_final.zip, else the highest-step model/ppo_ckpt_*_steps.zip",
-    )
-    parser.add_argument(
-        "--max-charts",
-        type=int,
-        default=None,
-        help="Cap on per-trade charts per split (default: config output.max_order_charts, else 0).",
-    )
-    parser.add_argument(
-        "--save-html",
-        dest="save_html",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="Render interactive HTML (default: config output.save_html).",
-    )
-    parser.add_argument(
-        "--stochastic",
-        action="store_true",
-        help="Opt in to sampled policy actions; deterministic actions are the default.",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=None,
-        help=(
-            "Seed NumPy and PyTorch. This makes --stochastic evaluation repeatable; "
-            "without --stochastic, policy actions remain deterministic."
-        ),
-    )
-    parser.add_argument(
-        "--force", action="store_true", help="Force the data pipeline to rebuild caches"
-    )
-    parser.add_argument(
-        "--train-only-screen",
-        action="store_true",
-        help=(
-            "Evaluate only the training split and write a candidate-screen report; the test "
-            "split is not evaluated or reported"
-        ),
-    )
-    return parser
-
-
-def _evaluate_checkpoint_split(model: Any, *, stochastic: bool, **kwargs: Any) -> dict[str, Any]:
+def evaluate_checkpoint_split(provider: Any, *, stochastic: bool, **kwargs: Any) -> dict[str, Any]:
     """Replay one final split using the explicitly selected policy action mode."""
-    return evaluate_model(model, deterministic=not stochastic, **kwargs)
+    if hasattr(provider, "metadata") and hasattr(provider, "predict"):
+        return evaluate_provider(provider, deterministic=not stochastic, **kwargs)
+    return evaluate_model(provider, deterministic=not stochastic, **kwargs)
 
 
-def _evaluate_train_split(
-    model: Any,
+def evaluate_train_split(
+    provider: Any,
     *,
     stochastic: bool,
     bars: pd.DataFrame,
@@ -281,8 +104,8 @@ def _evaluate_train_split(
     periods_per_year: int,
 ) -> tuple[dict[str, Any], Any]:
     """Evaluate only the supplied training split and calculate its metrics."""
-    result = _evaluate_checkpoint_split(
-        model,
+    result = evaluate_checkpoint_split(
+        provider,
         stochastic=stochastic,
         bars=bars,
         features=features,
@@ -302,7 +125,7 @@ def _evaluate_train_split(
     return result, metrics
 
 
-def _write_train_only_screen_report(output_dir: Path, report: dict[str, Any]) -> Path:
+def write_train_only_screen_report(output_dir: Path, report: dict[str, Any]) -> Path:
     """Write the minimal train-only candidate screen into a new directory."""
     report["evaluation_provenance"] = build_evaluation_provenance(repository_root(__file__))
     output_dir.mkdir(parents=True, exist_ok=False)
@@ -311,95 +134,8 @@ def _write_train_only_screen_report(output_dir: Path, report: dict[str, Any]) ->
     return report_path
 
 
-def _resolve_execution_seed(
-    requested_seed: int | None, source_manifest: dict[str, Any]
-) -> int | None:
-    """Use an explicit replay seed or the recorded training seed for fill jitter."""
-    if requested_seed is not None:
-        if requested_seed < 0:
-            raise ValueError("evaluation seed must be non-negative")
-        return requested_seed
-    training_protocol = source_manifest.get("training_protocol")
-    metrics_protocol = source_manifest.get("metrics_protocol")
-    candidates = (
-        source_manifest.get("seed"),
-        training_protocol.get("seed") if isinstance(training_protocol, dict) else None,
-        metrics_protocol.get("execution_seed") if isinstance(metrics_protocol, dict) else None,
-    )
-    for candidate in candidates:
-        if isinstance(candidate, int) and not isinstance(candidate, bool) and candidate >= 0:
-            return candidate
-    return None
-
-
-def _validate_sequence_input_width(model: Any, expected_width: int) -> int:
-    """Require the checkpoint's sequence tensor width to match its feature schema."""
-    observation_spaces = getattr(getattr(model, "observation_space", None), "spaces", None)
-    get_space = getattr(observation_spaces, "get", None)
-    sequence_space = get_space("seq") if callable(get_space) else None
-    shape = getattr(sequence_space, "shape", None)
-    if not shape or int(shape[-1]) != int(expected_width):
-        raise ValueError(
-            "checkpoint sequence input width disagrees with evaluated feature coordinates: "
-            f"checkpoint={shape}, expected={expected_width}"
-        )
-    return int(shape[-1])
-
-
-def _validate_stop_candidate_schema(
-    *,
-    checkpoint_schema: dict[str, Any] | None,
-    manifest_schema: dict[str, Any] | None,
-    expected_schema: dict[str, Any],
-    allow_legacy: bool,
-) -> str:
-    """Reject checkpoint/config drift and label explicit latest-swing legacy use."""
-    if checkpoint_schema is None or manifest_schema is None:
-        if not allow_legacy:
-            raise ValueError(
-                "checkpoint or run manifest has no stop-candidate schema; pass "
-                "--allow-legacy-stop-schema only when intentionally reanalysing a legacy run"
-            )
-        available_schema = checkpoint_schema if checkpoint_schema is not None else manifest_schema
-        if available_schema is None:
-            if expected_schema.get("menu") != "legacy_last_accepted_swing_v1":
-                raise ValueError(
-                    "legacy checkpoint has no stop schema and the run config requests the "
-                    "expanded multi-timeframe menu; legacy opt-in cannot assert that menu "
-                    "was trained"
-                )
-        elif available_schema != expected_schema:
-            raise ValueError(
-                "available stop-candidate schema differs from the run config; legacy opt-in "
-                "does not authorize evaluating under a changed stop menu"
-            )
-        return "legacy_opt_in"
-    if checkpoint_schema != manifest_schema:
-        raise ValueError("checkpoint and run manifest stop-candidate schemas disagree")
-    if checkpoint_schema != expected_schema:
-        raise ValueError(
-            "checkpoint stop-candidate schema differs from the run config; refusing to evaluate "
-            "under a changed stop menu"
-        )
-    return "versioned"
-
-
-def _validate_checkpoint_manifest_hash(path: Path, manifest: dict[str, Any]) -> str:
-    """Verify the checkpoint is the exact artifact recorded by its run manifest."""
-    checkpoint_record = manifest.get("checkpoint")
-    expected_hash = checkpoint_record.get("sha256") if isinstance(checkpoint_record, dict) else None
-    if expected_hash is None:
-        return "unavailable_legacy_manifest"
-    actual_hash = file_sha256(path)
-    if actual_hash != expected_hash:
-        raise ValueError(
-            "checkpoint SHA-256 does not match the source run manifest; refusing reanalysis"
-        )
-    return "verified"
-
-
 def main() -> None:
-    args = _build_parser().parse_args()
+    args = build_reanalysis_parser().parse_args()
     if args.train_only_screen and args.stochastic:
         raise SystemExit("--train-only-screen requires deterministic policy actions")
 
@@ -412,7 +148,7 @@ def main() -> None:
     if args.seed is not None:
         # Seed all stochastic components in this fresh reanalysis process.
         np.random.seed(args.seed)
-        torch.manual_seed(args.seed)
+        seed_sb3(args.seed)
         log.info("Seeded evaluation RNG: %d", args.seed)
     elif args.stochastic:
         log.warning(
@@ -437,7 +173,7 @@ def main() -> None:
         save_html,
         max_order_charts,
     )
-    ckpt_path = _resolve_checkpoint(run_dir, args.checkpoint)
+    ckpt_path = resolve_checkpoint(run_dir, args.checkpoint)
     log.info("Loading model: %s", ckpt_path)
     source_manifest_path = run_dir / "run_manifest.json"
     source_manifest: dict[str, Any] = {}
@@ -448,7 +184,6 @@ def main() -> None:
         source_manifest = manifest_value
     source_feature_cache = source_manifest.get("feature_cache")
     source_datasets = source_manifest.get("datasets")
-    source_execution_protocol = source_manifest.get("execution_protocol")
     if (
         source_feature_cache is None or source_datasets is None
     ) and not args.allow_legacy_data_provenance:
@@ -456,21 +191,17 @@ def main() -> None:
             "source run manifest lacks feature-cache or dataset identities; pass "
             "--allow-legacy-data-provenance only for an explicitly unverified legacy replay"
         )
-    checkpoint_hash_disposition = _validate_checkpoint_manifest_hash(ckpt_path, source_manifest)
-    _ = ClampedStdMultiInputPolicy
-    model: Any = _load_checkpoint(ckpt_path, legacy_layout_key=args.legacy_action_layout)
+    checkpoint_hash_disposition = validate_checkpoint_manifest_hash(ckpt_path, source_manifest)
+    model: Any = load_checkpoint(ckpt_path, legacy_layout_key=args.legacy_action_layout)
     expected_stop_schema = build_stop_candidate_schema(cfg)
     checkpoint_stop_schema = getattr(model, "stop_candidate_schema", None)
     manifest_stop_schema = source_manifest.get("stop_candidate_schema")
-    stop_schema_disposition = _validate_stop_candidate_schema(
+    stop_schema_disposition = validate_stop_candidate_schema(
         checkpoint_schema=checkpoint_stop_schema,
         manifest_schema=manifest_stop_schema,
         expected_schema=expected_stop_schema,
         allow_legacy=bool(args.allow_legacy_stop_schema),
     )
-    from models.factory.agent import validate_model_observation_schema
-    from simulation.contracts.observations import build_observation_schema
-
     policy = resolve_trading_policy(cfg)
     expected_observation_schema = build_observation_schema(
         (
@@ -483,15 +214,13 @@ def main() -> None:
             and cfg.env.get("entry_state_observation", True)
         ),
     )
-    validate_model_observation_schema(
+    validate_sb3_observation_schema(
         model,
         expected_observation_schema,
         allow_legacy_v1=bool(args.allow_legacy_observation_schema),
     )
     is_overlay = bool(cfg.env.get("strategy_actions", False))
     if is_overlay:
-        if not isinstance(model.action_space, spaces.Box):
-            raise ValueError("checkpoint action space must be Box for strategy overlay")
         if args.legacy_action_layout == "legacy4_no_exit_v1":
             if not args.allow_legacy_action_schema:
                 raise ValueError("legacy4_no_exit_v1 requires --allow-legacy-action-schema")
@@ -510,22 +239,20 @@ def main() -> None:
             has_multi_tp=multi_tp,
             has_simplex=multi_tp and bool(cfg.env.get("allow_simplex", True)),
         )
-        migration = validate_model_action_schema(
+        model = validate_sb3_overlay_action_schema(
             model,
             schema,
             allow_legacy=args.allow_legacy_action_schema,
             legacy_layout_key=args.legacy_action_layout,
         )
-        if migration == "legacy4_no_exit_v1_to_overlay-action-v2-5":
-            model = LegacyFourToFiveActionAdapter(model)
-    elif isinstance(model.action_space, spaces.Box):
+    elif is_sb3_box_model(model):
         raise ValueError("Box checkpoint with non-overlay run config: action semantics unclear")
-    elif isinstance(model.action_space, spaces.Discrete):
+    elif is_sb3_discrete_model(model):
         discrete_schema = build_discrete_trading_action_schema(int(model.action_space.n))
         source_action_schema = source_manifest.get("action_schema")
         if source_action_schema is not None and not isinstance(source_action_schema, dict):
             raise ValueError("source run manifest action_schema must be an object or null")
-        validate_model_discrete_action_schema(
+        validate_sb3_discrete_action_schema(
             model,
             discrete_schema,
             source_action_schema,
@@ -533,140 +260,39 @@ def main() -> None:
             legacy_layout_key=args.legacy_action_layout,
         )
 
-    selected_datasets = ["training"] if args.train_only_screen else None
-    data = run_pipeline(cfg, force=args.force, datasets=selected_datasets)
-    primary_m1 = data[cfg.data.primary]["M1"]
-    secondary_m1 = data.get(cfg.data.secondary, {}).get("M1")
-    primary_timeframe_bars = data[cfg.data.primary]
-    secondary_timeframe_bars = data.get(cfg.data.secondary, {})
-    primary_symbol = str(cfg.data.primary)
-    primary_ticks = build_tick_books(
-        cfg,
-        symbols=[primary_symbol],
-        datasets=selected_datasets,
-    ).get(primary_symbol)
-
-    cache_dir = Path(cfg.data.cache_dir)
-    train_end, test_start = get_split_config(cfg)
-    train_start = get_train_start_config(cfg)
-    source_cache_replay_path = None
-    if args.source_feature_cache and args.train_only_screen:
-        raise ValueError(
-            "--train-only-screen rebuilds features from training inputs to stay within memory; "
-            "omit --source-feature-cache"
-        )
-    if args.source_feature_cache:
-        config_record = source_manifest.get("config")
-        source_config_path = run_dir / "config.yaml"
-        expected_config_hash = (
-            config_record.get("sha256") if isinstance(config_record, dict) else None
-        )
-        if not isinstance(expected_config_hash, str) or not expected_config_hash:
-            raise ValueError("exact source-cache replay requires a saved config SHA-256")
-        if (
-            not source_config_path.is_file()
-            or file_sha256(source_config_path) != expected_config_hash
-        ):
-            raise ValueError("saved run config does not match its manifest SHA-256")
-        source_cache_replay_path = Path(args.source_feature_cache).expanduser()
-        if not source_cache_replay_path.is_absolute():
-            source_cache_replay_path = repository_root(__file__) / source_cache_replay_path
-        train_mask = make_train_mask(pd.DatetimeIndex(primary_m1.index), train_end, train_start)
-        (
-            features,
-            feat_cache,
-            evaluated_feature_cache_hash,
-            evaluated_feature_cache_file_sha256,
-        ) = _load_exact_source_feature_cache(source_feature_cache, source_cache_replay_path)
-        feature_cache_disposition = "source_cache_replay_verified"
-    else:
-        train_mask, feat_cache = _feature_build_scope(
-            primary_m1,
-            cfg,
-            cache_dir,
-            str(cfg.data.primary),
-            train_end,
-            secondary=secondary_m1,
-            train_start=train_start,
-            timeframe_bars=primary_timeframe_bars,
-            secondary_timeframe_bars=secondary_timeframe_bars,
-        )
-        features = build_features(
-            primary_m1,
-            secondary=secondary_m1,
-            cfg=cfg,
-            train_mask=train_mask,
-            cache_path=feat_cache,
-            timeframe_bars=primary_timeframe_bars,
-            secondary_timeframe_bars=secondary_timeframe_bars,
-        )
-        if args.train_only_screen:
-            hash_path = Path(f"{feat_cache}.hash")
-            evaluated_feature_cache_hash = hash_path.read_text(encoding="utf-8").strip()
-            evaluated_feature_cache_file_sha256 = file_sha256(feat_cache)
-            feature_cache_disposition = "training_partition_rebuilt_train_feature_digest_checked"
-        else:
-            (
-                feature_cache_disposition,
-                evaluated_feature_cache_hash,
-                evaluated_feature_cache_file_sha256,
-            ) = _validate_reanalysis_feature_cache(
-                source_feature_cache,
-                feat_cache,
-                allow_legacy=bool(args.allow_legacy_data_provenance),
-            )
-
-    schedule_path = Path(str(cfg.data.session_schedule_file))
-    if not schedule_path.is_absolute():
-        schedule_path = repository_root(__file__) / schedule_path
-    features = attach_policy_market_context(
-        primary_m1,
-        features,
-        primary_ticks,
-        schedule_path=schedule_path,
-        session_start=str(cfg.session.start),
-        session_end=str(cfg.session.end),
+    datasets = reconstruct_reanalysis_datasets(
+        args=args,
+        run_dir=run_dir,
+        cfg=cfg,
+        source_manifest=source_manifest,
     )
-
-    train_bars, test_bars, train_feat, test_feat = split_train_test(
-        primary_m1, features, train_end, test_start, train_start
-    )
-    train_sec = test_sec = None
-    if secondary_m1 is not None and not secondary_m1.empty:
-        train_sec, test_sec = split_bars(secondary_m1, train_end, test_start, train_start)
-    evaluated_datasets = _evaluation_dataset_records(
-        train_bars=train_bars,
-        train_features=train_feat,
-        test_bars=test_bars,
-        test_features=test_feat,
-        train_secondary=train_sec,
-        test_secondary=test_sec,
-        primary_ticks=primary_ticks,
-    )
-    dataset_parity_disposition = _validate_reanalysis_datasets(
-        source_datasets,
-        evaluated_datasets,
-        allow_legacy=bool(args.allow_legacy_data_provenance),
-        train_only=bool(args.train_only_screen),
-    )
-    training_data_source, backend_parity_disposition = _reanalysis_backend_disposition(
-        source_execution_protocol,
-        evaluation_backend="frame",
-    )
-    log.info(
-        "Evaluating train=%d bars (≤%s)  test=%d bars (≥%s) under FTMO eval guardrails",
-        len(train_bars),
-        train_end,
-        len(test_bars),
-        test_start,
-    )
+    primary_ticks = datasets.primary_ticks
+    features = datasets.features
+    train_bars = datasets.train_bars
+    test_bars = datasets.test_bars
+    train_feat = datasets.train_features
+    test_feat = datasets.test_features
+    train_sec = datasets.train_secondary
+    test_sec = datasets.test_secondary
+    train_end = datasets.train_end
+    test_start = datasets.test_start
+    feat_cache = datasets.feature_cache
+    feature_cache_disposition = datasets.feature_cache_disposition
+    evaluated_feature_cache_hash = datasets.evaluated_feature_cache_hash
+    evaluated_feature_cache_file_sha256 = datasets.evaluated_feature_cache_file_sha256
+    source_cache_replay_path = datasets.source_cache_replay_path
+    evaluated_datasets = datasets.dataset_records
+    dataset_parity_disposition = datasets.dataset_parity_disposition
+    training_data_source = datasets.training_data_source
+    backend_parity_disposition = datasets.backend_parity_disposition
+    train_tickbook = ticks_covering(primary_ticks, train_bars)
 
     # Eval CLI does not expose training --algo / --reward flags; PPO replay
     # uses the configuration's saved environment defaults.
-    eval_common, eval_strategy, _, _, _ = _build_eval_common(
+    eval_common, eval_strategy, _, _, _ = build_eval_common(
         cfg, args=None, env_vae=None, pre_ny_by_date=None
     )
-    execution_seed = _resolve_execution_seed(args.seed, source_manifest)
+    execution_seed = resolve_execution_seed(args.seed, source_manifest)
     if eval_common["randomized_fill_latency_ms"] > 0 and execution_seed is None:
         raise ValueError(
             "randomized tick-fill reanalysis requires --seed or a seed in the source run manifest"
@@ -691,12 +317,16 @@ def main() -> None:
         expected_sequence_schema,
         allow_legacy=bool(args.allow_legacy_sequence_schema),
     )
-    _validate_sequence_input_width(model, expected_sequence_schema["width"])
+    validate_sequence_input_width(model, expected_sequence_schema["width"])
+    provider = SB3DecisionProvider(
+        model,
+        input_schema_version=expected_observation_schema.version,
+    )
 
     train_tickbook = ticks_covering(primary_ticks, train_bars)
     if args.train_only_screen:
-        train_result, train_m = _evaluate_train_split(
-            model,
+        train_result, train_m = evaluate_train_split(
+            provider,
             stochastic=args.stochastic,
             bars=train_bars,
             features=train_feat,
@@ -727,7 +357,7 @@ def main() -> None:
             for key, value in train_dataset_records.items()
             if key in {"train_bars", "train_features", "train_secondary", "primary_ticks"}
         }
-        report_path = _write_train_only_screen_report(
+        report_path = write_train_only_screen_report(
             output_dir,
             {
                 "artifact_role": "candidate_screen_train_only",
@@ -793,8 +423,8 @@ def main() -> None:
         log.info("Train-only screen written to %s", report_path)
         return
 
-    test_result = _evaluate_checkpoint_split(
-        model,
+    test_result = evaluate_checkpoint_split(
+        provider,
         stochastic=args.stochastic,
         bars=test_bars,
         features=test_feat,
@@ -819,8 +449,8 @@ def main() -> None:
         test_m.total_return_pct,
         test_result.get("fail_time"),
     )
-    train_result, train_m = _evaluate_train_split(
-        model,
+    train_result, train_m = evaluate_train_split(
+        provider,
         stochastic=args.stochastic,
         bars=train_bars,
         features=train_feat,

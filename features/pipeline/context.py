@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from omegaconf import DictConfig
 
+from features.context.reachability import max_tp_distance
 from features.pipeline.cache import feature_cache_path
 
 
@@ -18,8 +19,6 @@ def reachable_r_series(bars: pd.DataFrame, features: pd.DataFrame) -> pd.Series:
     higher-timeframe bias. A flat bar uses the tighter of the two stops.
     The ratio is scale-free, so it can sit in the model sequence.
     """
-    from trading.positions.tp_reach import max_tp_distance
-
     idx = bars.index
     if "atr_5" not in features.columns or "close" not in bars.columns:
         return pd.Series(0.0, index=idx, name="reachable_r")

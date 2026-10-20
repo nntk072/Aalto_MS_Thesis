@@ -10,17 +10,23 @@ from typing import Any
 import click
 
 from .backup import create_snapshot
-from .ci_gate import CI_CHECKS, ci_command_lines, gate_passed
+from .ci_gate import CI_CHECKS, gate_passed
 from .cost import CostTracker
 from .failures import FailureKind, classify_failure
 from .handoff import build_handoff_bundle, render_handoff_prompt, save_handoff
 from .models import Model, complexity_to_tier, get_error_signatures, load_models
-from .parse import parse_complexity, parse_tier, parse_verdict, static_tier_fast_path
-from .prompts import render_prompt
-from .report import write_final_report
+from .parse import parse_complexity, parse_verdict, static_tier_fast_path
+from .phase_critique import PhaseCritiqueMixin
+from .phase_fixing import PhaseFixingMixin
+from .phase_implementation import PhaseImplementationMixin
+from .phase_planning import PhasePlanningMixin
+from .phase_reporting import PhaseReportingMixin
+from .phase_review import PhaseReviewMixin
+from .phase_triage import PhaseTriageMixin
+from .phase_verification import PhaseVerificationMixin
+from .pipeline_base import PipelineMixinBase
 from .router import ModelRouter
 from .routing import (
-    apply_triage_bootstrap,
     effective_critic_count,
     effective_planner_count,
     effective_reviewer_count,
@@ -28,7 +34,6 @@ from .routing import (
     parse_route_from_text,
     record_phase_visit,
     resolve_next_phase,
-    route_notes_for_role,
 )
 from .sessions import SessionManager
 from .state import Phase, TaskState, generate_task_id
@@ -43,7 +48,17 @@ def _cmd_tail(result: CompletedProcess[str], limit: int = 1000) -> str:
     return text[-limit:]
 
 
-class Pipeline:
+class Pipeline(
+    PhaseTriageMixin,
+    PhasePlanningMixin,
+    PhaseCritiqueMixin,
+    PhaseImplementationMixin,
+    PhaseReviewMixin,
+    PhaseFixingMixin,
+    PhaseVerificationMixin,
+    PhaseReportingMixin,
+    PipelineMixinBase,
+):
     """Orchestrates the multi-model coding orchestra pipeline."""
 
     def __init__(
@@ -64,7 +79,7 @@ class Pipeline:
         self.max_fixes = max_fixes
         self.keep_alive = keep_alive
         self.escalate_mode = False
-        self.state_dir = workspace / "orchestra" / "state"
+        self.state_dir = workspace / "outputs" / "orchestra" / "state"
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.cost_tracker = CostTracker(state_dir=self.state_dir)
         self.router = ModelRouter(
@@ -599,452 +614,11 @@ class Pipeline:
             return text[:_DIFF_CHARS] + "\n... [diff truncated]"
         return text
 
-    def _phase_triage(self) -> None:
-        """Phase 1: Triage the task."""
-        click.echo("\n[1/10] TRIAGE")
-        models = self._select_models("triage", count=1)
-        if not models:
-            return
-        model = models[0]
-        click.echo(f"  Model: {model.display_name}")
-
-        prompt = render_prompt(
-            "triage",
-            task=self.state.task_description,
-            route_notes=route_notes_for_role(self.state.data, "triage"),
-        )
-        if self.dry_run:
-            self._echo_cmd(model, "triage")
-            if not self.state.data.get("complexity_override") and not self.state.data.get(
-                "complexity"
-            ):
-                self.state.data["complexity"] = "medium"
-                self.state.save()
-            tier = self._task_tier()
-            apply_triage_bootstrap(self.state.data, tier=tier, had_explicit_goto=False)
-            return
-
-        _session, output = self._invoke_required(model, "triage", prompt, timeout=600, lines=0)
-        if self.state.data.get("complexity_override"):
-            detected_complexity = self.state.data["complexity"]
-        else:
-            detected_complexity = self._parse_complexity(output)
-        detected_tier = parse_tier(output)
-        self.state.set_triage(output, model.display_name, detected_complexity, tier=detected_tier)
-        route_update = parse_route_from_text(output)
-        apply_triage_bootstrap(
-            self.state.data,
-            tier=detected_tier,
-            had_explicit_goto=route_update is not None and route_update.goto is not None,
-        )
-        click.echo(f"  Complexity: {detected_complexity}  Tier: {detected_tier}")
-
-    def _phase_planning(self) -> None:
-        """Phase 2: Parallel planning with multiple models."""
-        planner_n = self._effective_planner_count()
-        click.echo(f"\n[2/10] PARALLEL PLANNING ({planner_n} planners)")
-
-        if planner_n <= 0:
-            click.echo("  Skipping planning (planner_count=0).")
-            return
-
-        models = self._select_models("planner", count=planner_n)
-        if not models:
-            return
-        if len(models) < planner_n:
-            click.echo(f"  WARNING: requested {planner_n} planners, got {len(models)}")
-
-        self.state.data["planner_outputs"] = []
-        self.state.data["planner_session_map"] = {}
-        self.state.save()
-
-        spawned: list[tuple[str, Model, str]] = []
-        for i, model in enumerate(models):
-            click.echo(f"  Planner {i + 1}: {model.display_name}")
-            prompt = render_prompt(
-                "planner",
-                task=self.state.task_description,
-                triage=self.state.data.get("triage_output", ""),
-                workspace=str(self.workspace),
-                route_notes=route_notes_for_role(self.state.data, "planner"),
-            )
-            if self.dry_run:
-                self._echo_cmd(model, "planner")
-                continue
-            session = self.sessions.spawn(
-                model,
-                "planner",
-                prompt,
-                task_id=self.state.task_id,
-                keep_alive=self.keep_alive,
-                tier=self._task_tier(),
-            )
-            spawned.append((session, model, prompt))
-            click.echo(f"    Session: {session}")
-
-        if self.dry_run:
-            return
-
-        click.echo("  Waiting for planners...")
-        successes = 0
-        for session_name, model, prompt in spawned:
-            click.echo(f"  … {model.display_name}")
-            try:
-                output = self.sessions.collect(
-                    session_name, timeout=600, lines=0, keep_alive=self.keep_alive
-                )
-            except (RuntimeError, TimeoutError) as exc:
-                click.echo(f"  WARNING: {model.display_name} failed: {exc}", err=True)
-                self._record_model_call(
-                    model, prompt, str(exc), self.state.task_id, False, "planner"
-                )
-                continue
-            self.state.add_planner_output(model.display_name, output, session_name)
-            self._record_model_call(model, prompt, output, self.state.task_id, True, "planner")
-            click.echo(f"  {model.display_name}: {len(output)} chars received")
-            successes += 1
-        if successes == 0:
-            raise RuntimeError("All planners failed")
-
-    def _phase_critique(self) -> None:
-        """Phase 3: Critique each plan independently."""
-        critic_n = self._effective_critic_count()
-        click.echo(f"\n[3/10] CRITIQUE ({critic_n} critics)")
-
-        if critic_n <= 0:
-            click.echo("  Skipping critique (critic_count=0).")
-            return
-
-        models = self._select_models("critic", count=critic_n)
-        if not models:
-            return
-        plans_text = self.state.get_planner_outputs_text()
-        self.state.data["critic_outputs"] = []
-        self.state.save()
-
-        spawned: list[tuple[str, Model, str]] = []
-        for i, model in enumerate(models):
-            click.echo(f"  Critic {i + 1}: {model.display_name}")
-            prompt = render_prompt(
-                "critic",
-                plan=plans_text,
-                other_plans=plans_text,
-                triage=self.state.data.get("triage_output", ""),
-                route_notes=route_notes_for_role(self.state.data, "critic"),
-            )
-            if self.dry_run:
-                self._echo_cmd(model, "critic")
-                continue
-            session = self.sessions.spawn(
-                model,
-                "critic",
-                prompt,
-                task_id=self.state.task_id,
-                keep_alive=self.keep_alive,
-                tier=self._task_tier(),
-            )
-            spawned.append((session, model, prompt))
-            click.echo(f"    Session: {session}")
-
-        if self.dry_run:
-            return
-
-        successes = 0
-        for session_name, model, prompt in spawned:
-            try:
-                output = self.sessions.collect(
-                    session_name, timeout=300, lines=0, keep_alive=self.keep_alive
-                )
-            except (RuntimeError, TimeoutError) as exc:
-                click.echo(f"  WARNING: {model.display_name} failed: {exc}", err=True)
-                self._record_model_call(
-                    model, prompt, str(exc), self.state.task_id, False, "critic"
-                )
-                continue
-            self.state.add_critic_output(model.display_name, output, session_name)
-            self._record_model_call(model, prompt, output, self.state.task_id, True, "critic")
-            successes += 1
-        if successes == 0:
-            raise RuntimeError("All critics failed")
-
-    def _phase_synthesis(self) -> None:
-        """Phase 4: Synthesize plans and critiques into final plan."""
-        click.echo("\n[4/10] SYNTHESIS")
-
-        models = self._select_models("synthesizer", count=1)
-        if not models:
-            return
-        model = models[0]
-        click.echo(f"  Model: {model.display_name}")
-
-        prompt = render_prompt(
-            "synthesizer",
-            plans=self.state.get_planner_outputs_text(),
-            critiques=self.state.get_critic_outputs_text(),
-            triage=self.state.data.get("triage_output", ""),
-            workspace=str(self.workspace),
-            route_notes=route_notes_for_role(self.state.data, "synthesizer"),
-        )
-        if self.dry_run:
-            self._echo_cmd(model, "synthesizer")
-            return
-
-        _session, output = self._invoke_required(model, "synthesizer", prompt, timeout=300, lines=0)
-        self.state.set_synthesis(output, model.display_name)
-        click.echo(f"  Final plan: {len(output)} chars")
-
-    def _phase_implementation(self) -> None:
-        """Phase 5: Implement the final plan."""
-        click.echo("\n[5/10] IMPLEMENTATION")
-
-        models = self._select_models("implementer", count=1)
-        if not models:
-            return
-        model = models[0]
-        click.echo(f"  Model: {model.display_name}")
-
-        prompt = render_prompt(
-            "implementer",
-            plan=self.state.data.get("final_plan", ""),
-            triage=self.state.data.get("triage_output", ""),
-            workspace=str(self.workspace),
-            route_notes=route_notes_for_role(self.state.data, "implementer"),
-        )
-        if self.dry_run:
-            self._echo_cmd(model, "implementer")
-            self.state.data["implementation_succeeded"] = True
-            self.state.save()
-            return
-
-        _session, output = self._invoke_required(model, "implementer", prompt, timeout=900, lines=0)
-        self.state.set_implementation(output, model.display_name)
-
-    def _phase_review(self) -> None:
-        """Phase 6: Independent review of implementation."""
-        reviewer_n = self._effective_reviewer_count()
-        click.echo(f"\n[6/10] REVIEW ({reviewer_n} reviewers)")
-
-        if reviewer_n <= 0:
-            click.echo("  Skipping review (reviewer_count=0).")
-            return
-
-        models = self._select_models("reviewer", count=reviewer_n)
-        if not models:
-            return
-        if len(models) < reviewer_n:
-            click.echo(f"  WARNING: requested {reviewer_n} reviewers, got {len(models)}")
-
-        diff_text = self._git_diff()
-        test_results = "Not yet run (verification runs full CI gate: format, lint, mypy, pytest)."
-        if not self.dry_run:
-            click.echo("  Skipping pre-review pytest; verification is the test gate.")
-
-        self.state.data["review_outputs"] = []
-        self.state.save()
-
-        spawned: list[tuple[str, Model, str]] = []
-        for i, model in enumerate(models):
-            click.echo(f"  Reviewer {i + 1}: {model.display_name}")
-            prompt = render_prompt(
-                "reviewer",
-                plan=self.state.data.get("final_plan", ""),
-                diff=diff_text,
-                test_results=test_results,
-                route_notes=route_notes_for_role(self.state.data, "reviewer"),
-            )
-            if self.dry_run:
-                self._echo_cmd(model, "reviewer")
-                continue
-            session = self.sessions.spawn(
-                model,
-                "reviewer",
-                prompt,
-                task_id=self.state.task_id,
-                keep_alive=self.keep_alive,
-                tier=self._task_tier(),
-            )
-            spawned.append((session, model, prompt))
-            click.echo(f"    Session: {session}")
-
-        if self.dry_run:
-            return
-
-        for session_name, model, prompt in spawned:
-            try:
-                output = self.sessions.collect(
-                    session_name, timeout=300, lines=0, keep_alive=self.keep_alive
-                )
-            except (RuntimeError, TimeoutError) as exc:
-                click.echo(f"  WARNING: {model.display_name} failed: {exc}", err=True)
-                self._record_model_call(
-                    model, prompt, str(exc), self.state.task_id, False, "reviewer"
-                )
-                continue
-            self.state.add_reviewer_output(model.display_name, output, session_name)
-            self._record_model_call(model, prompt, output, self.state.task_id, True, "reviewer")
-
-    def _phase_review_synthesis(self) -> None:
-        """Phase 7: Synthesize multiple reviews into actionable report."""
-        click.echo("\n[7/10] REVIEW SYNTHESIS")
-
-        models = self._select_models("review_synthesizer", count=1)
-        if not models:
-            return
-        model = models[0]
-        click.echo(f"  Model: {model.display_name}")
-
-        prompt = render_prompt(
-            "review_synthesizer",
-            task=self.state.task_description,
-            plan=self.state.data.get("final_plan", ""),
-            diff=self._git_diff(),
-            test_results=str(self.state.data.get("verification_result", "Not yet run")),
-            reviews=self.state.get_review_outputs_text(),
-            route_notes=route_notes_for_role(self.state.data, "review_synthesizer"),
-        )
-        if self.dry_run:
-            self._echo_cmd(model, "review_synthesizer")
-            return
-
-        _session, output = self._invoke_required(
-            model, "review_synthesizer", prompt, timeout=1800, lines=0
-        )
-        verdict = self._parse_verdict(output)
-        self.state.set_review_synthesis(output, model.display_name, verdict)
-        click.echo(f"  Verdict: {verdict}")
-
     def _verification_gate_failed(self) -> bool:
         result = self.state.data.get("verification_result")
         if not result:
             return False
         return not gate_passed(result)
-
-    def _phase_fixing(self) -> None:
-        """Phase 8: Apply targeted fixes based on review synthesis."""
-        fix_count = self.state.data.get("fix_loop_count", 0)
-        max_fixes = self.state.data.get("fix_loop_max", 3)
-        verdict = self.state.data.get("review_verdict")
-        synthesis = self.state.data.get("review_synthesis_output")
-
-        click.echo(f"\n[8/10] FIX LOOP (iteration {fix_count + 1}/{max_fixes})")
-
-        tests_failed = self._verification_gate_failed()
-        if not tests_failed and (not synthesis or not verdict):
-            click.echo("  No review synthesis available. Skipping fixes.")
-            return
-
-        if not tests_failed and verdict == "pass":
-            click.echo("  Review passed; skipping fixes until verification.")
-            return
-
-        if fix_count >= max_fixes:
-            click.echo(f"  Max fix iterations ({max_fixes}) reached. Giving up.")
-            return
-
-        models = self._select_models("implementer", count=1)
-        if not models:
-            return
-        model = models[0]
-        click.echo(f"  Model: {model.display_name}")
-
-        synthesis = self.state.data.get("review_synthesis_output", "") or ""
-        verify = self.state.data.get("verification_result") or {}
-        ci_failures = self._format_ci_failure_output(verify)
-        prompt = f"""You are fixing specific issues found during code review or CI verification.
-
-## Original Task
-{self.state.task_description}
-
-## Review Synthesis
-{synthesis or "(none)"}
-
-## CI verification failures (if already ran)
-{ci_failures or "(not yet run)"}
-
-## Required CI gate (same as GitHub CI — not nightly)
-{ci_command_lines()}
-
-## Instructions
-1. Fix ONLY the failing checks / critical issues listed above
-2. Do NOT refactor unrelated code
-3. Do NOT add new features
-4. Make minimal, targeted changes
-5. Re-run only the failing check(s); phase 9 will re-run the full CI gate
-6. Report what you fixed and command results
-
-Focus on correctness and safety. Do not change code style unless it's part of the fix.
-
-## Routing (phase 8 — fixing)
-
-| May goto | 1, 2, 5, 6, 9, 10 |
-| Must-not goto | 3, 4, 7 |
-
-Silent default: → **9**. Optional JSON tail:
-
-```json
-{{"route": {{"goto": 9}}}}
-```"""
-
-        if self.dry_run:
-            self._echo_cmd(model, "fixer")
-            return
-
-        _session, output = self._invoke_required(
-            model, "fixer", prompt, timeout=600, lines=0, select_role="implementer"
-        )
-        self.state.add_fix_output(output, model.display_name)
-        click.echo(f"  Fix applied: {len(output)} chars")
-
-    def _phase_verification(self) -> bool:
-        """Phase 9: Deterministic verification with fix loop.
-
-        Returns True when the CI gate passes, False when fixes are needed.
-        """
-        click.echo("\n[9/10] VERIFICATION")
-
-        route = self.state.data.get("route") or {}
-        verify_mode = route.get("verify_mode", "full")
-
-        if self.dry_run:
-            click.echo("  Would run CI gate (.github/workflows/ci.yml, not nightly):")
-            for check in CI_CHECKS:
-                timeout = f" timeout={check.timeout}s" if check.timeout else ""
-                click.echo(f"    {' '.join(check.argv)}{timeout}")
-            if verify_mode == "skip":
-                click.echo("  verify_mode=skip (dry-run treats as pass)")
-            return True
-
-        if verify_mode == "skip":
-            click.echo("  verify_mode=skip — skipping CI gate")
-            skipped = {
-                check.name: {"success": True, "output": "skipped (verify_mode=skip)"}
-                for check in CI_CHECKS
-            }
-            self.state.set_verification(skipped)
-            return True
-
-        results = self._run_verification()
-        self.state.set_verification(results)
-
-        fix_count = self.state.data.get("fix_loop_count", 0)
-        max_fixes = self.state.data.get("fix_loop_max", 3)
-
-        if gate_passed(results):
-            click.echo("  CI gate: PASS")
-            return True
-
-        click.echo(self._format_ci_failure_output(results)[-1500:])
-        if fix_count >= max_fixes:
-            click.echo(
-                f"\n[FAIL] Max fix iterations ({max_fixes}) reached. Manual intervention needed."
-            )
-            self.state.add_error(f"CI gate still failing after {max_fixes} fix attempts")
-            self._phase_report()
-            self.state.set_phase(Phase.FAILED)
-            return True
-
-        click.echo(f"\n[FAIL] CI gate failed. Routing to fix loop ({fix_count + 1}/{max_fixes})...")
-        return False
 
     def _format_ci_failure_output(self, results: dict[str, Any]) -> str:
         parts: list[str] = []
@@ -1079,10 +653,3 @@ Silent default: → **9**. Optional JSON tail:
             }
             click.echo(f"  {check.name}: {'PASS' if ok else 'FAIL'}")
         return results
-
-    def _phase_report(self) -> None:
-        """Phase 10: Write a markdown report covering steps 1-9."""
-        click.echo("\n[10/10] FINAL REPORT")
-        path = write_final_report(self.state)
-        click.echo(f"  Wrote {path}")
-        click.echo(f"\n[PASS] Pipeline complete. Report: {path}")
