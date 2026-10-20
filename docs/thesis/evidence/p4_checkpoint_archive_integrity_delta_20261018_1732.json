@@ -1,0 +1,59 @@
+{
+  "base_snapshot": "p4_checkpoint_archive_integrity_20261018_1648.json",
+  "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+  "campaign_id": "replacement18_seed50_train2025_test2026_20261018_repair1",
+  "checked_at_local": "2026-10-18T17:31:59+03:00",
+  "prior_deltas": [
+    "p4_checkpoint_archive_integrity_delta_20261018_1657.json",
+    "p4_checkpoint_archive_integrity_delta_20261018_1702.json",
+    "p4_checkpoint_archive_integrity_delta_20261018_1707.json",
+    "p4_checkpoint_archive_integrity_delta_20261018_1710.json",
+    "p4_checkpoint_archive_integrity_delta_20261018_1720.json",
+    "p4_checkpoint_archive_integrity_delta_20261018_1723.json",
+    "p4_checkpoint_archive_integrity_delta_20261018_1724.json",
+    "p4_checkpoint_archive_integrity_delta_20261018_1727.json",
+    "p4_checkpoint_archive_integrity_delta_20261018_1728.json",
+    "p4_checkpoint_archive_integrity_delta_20261018_1730.json",
+    "p4_checkpoint_archive_integrity_delta_20261018_1731.json"
+  ],
+  "records": [
+    {
+      "bytes": 36517739,
+      "checkpoint": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a1_sl_dist__seed50/attempt1/ladder_a1_sl_dist__seed50/20261018_145700_718425_rl_train_seed50_tcn/model/ppo_ckpt_5000000_steps.zip",
+      "fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+      "passed": true,
+      "run_key": "ladder_a1_sl_dist__seed50",
+      "seed": 50,
+      "sha256": "1ee89afb0805016cacd574352e9a84b89ea916a71faeaa5750a2a7d9af18dd4d",
+      "stable_during_check": true,
+      "steps": 5000000,
+      "variant": "ladder_a1_sl_dist",
+      "zip_crc_passed": true,
+      "zip_members": 6
+    },
+    {
+      "bytes": 36519340,
+      "checkpoint": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a2_tp_dist__seed50/attempt1/ladder_a2_tp_dist__seed50/20261018_145720_271355_rl_train_seed50_tcn/model/ppo_ckpt_5000000_steps.zip",
+      "fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+      "passed": true,
+      "run_key": "ladder_a2_tp_dist__seed50",
+      "seed": 50,
+      "sha256": "d0d20367ef2b28293099d7a05dad8d58e5be0dd8fc34d69504da8fe30dba381e",
+      "stable_during_check": true,
+      "steps": 5000000,
+      "variant": "ladder_a2_tp_dist",
+      "zip_crc_passed": true,
+      "zip_members": 6
+    }
+  ],
+  "schema": "p4-checkpoint-integrity-delta-v1",
+  "slurm_job_id": "21029742",
+  "summary": {
+    "changed": 2,
+    "failed": 0,
+    "max_steps": 5000000,
+    "min_steps": 5000000,
+    "passed": 2
+  },
+  "validation_scope": "latest numbered checkpoints not covered by prior P4 snapshots; ZIP CRC/hash/stability and attempt identity"
+}

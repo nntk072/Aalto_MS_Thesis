@@ -1,0 +1,37 @@
+{
+  "base_snapshot": "p4_checkpoint_archive_integrity_20261018_1648.json",
+  "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+  "campaign_id": "replacement18_seed50_train2025_test2026_20261018_repair1",
+  "checked_at_local": "2026-10-18T17:10:11+03:00",
+  "prior_deltas": [
+    "p4_checkpoint_archive_integrity_delta_20261018_1657.json",
+    "p4_checkpoint_archive_integrity_delta_20261018_1702.json",
+    "p4_checkpoint_archive_integrity_delta_20261018_1707.json"
+  ],
+  "records": [
+    {
+      "bytes": 33044663,
+      "checkpoint": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/20261018_145510_410476_rl_train_seed50_tcn/model/ppo_ckpt_4000000_steps.zip",
+      "fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+      "passed": true,
+      "run_key": "ladder_a4b_entry_fsm__seed50",
+      "seed": 50,
+      "sha256": "cc3e351f60444965cd43eb1e580e9a29557393baa757047e035300323756564a",
+      "stable_during_check": true,
+      "steps": 4000000,
+      "variant": "ladder_a4b_entry_fsm",
+      "zip_crc_passed": true,
+      "zip_members": 6
+    }
+  ],
+  "schema": "p4-checkpoint-integrity-delta-v1",
+  "slurm_job_id": "21029742",
+  "summary": {
+    "changed": 1,
+    "failed": 0,
+    "max_steps": 4000000,
+    "min_steps": 4000000,
+    "passed": 1
+  },
+  "validation_scope": "latest numbered checkpoints not covered by prior P4 snapshots; ZIP CRC/hash/stability and attempt identity"
+}

@@ -1,0 +1,994 @@
+{
+  "claims": [
+    {
+      "allowed_interpretation": "This records the historical screen disposition and its eligibility boundary only; summary-derived performance values remain exploratory.",
+      "artifacts": [
+        {
+          "path": "docs/thesis/evidence/p1_18_variant_screen_disposition_2026-10-16.md",
+          "role": "screen_disposition",
+          "sha256": "1939509491043ffef4c52badacc2fcd6ce32f1f8628a0b33dbd1973686bd08fe"
+        },
+        {
+          "path": "docs/thesis/evidence/p3_seed50_report_pack_recoverability_20261018.json",
+          "role": "report_pack_recoverability_audit",
+          "sha256": "810fe4f2108f9b41cbcd85c39afa9edf58cef6b87e66b1cca3eaae39d924ed1c"
+        }
+      ],
+      "claim_id": "p1-screen-selection-disposition-seed50",
+      "comparison_ids": [
+        "seed50-18variant-screen-disposition"
+      ],
+      "evidence_role": "screening",
+      "forbidden_overclaims": [
+        "causal treatment effect",
+        "profitability",
+        "robust multi-seed effect",
+        "generalization to a pristine holdout",
+        "production readiness"
+      ],
+      "limitations": [
+        "Single-seed exploratory screen.",
+        "Lookahead was found in 17/18 configurations; the sole profile passing the bounded poison check failed the training survival gate.",
+        "Raw report packs and checkpoints were not recovered in the audited outputs tree.",
+        "The 2026 report interval was previously inspected and is not pristine confirmatory evidence.",
+        "Feed identity, account-specific publication terms, schedule interpretation, and true sub-millisecond chronology remain unresolved."
+      ],
+      "rq": "P1 screen reconciliation / RQ1 candidate selection boundary",
+      "statement": "The retained seed-50 18-variant campaign contains no candidate eligible for variant selection under the current causal and survival gates.",
+      "thesis_destination": "Methods or appendix: screen disposition and evidence limitations."
+    }
+  ],
+  "comparisons": [
+    {
+      "comparability_audit": [
+        "18 run keys, seed 50, campaign fingerprint 91d2f05c4c13e67753a47b88a1c900f4887ced66dad51980a018eb09465dd10e.",
+        "This is a reconciled screening set, not a matched causal comparison.",
+        "No per-run raw report pack or checkpoint is linked as canonical numerical evidence."
+      ],
+      "comparison_id": "seed50-18variant-screen-disposition",
+      "evidence_role": "screening",
+      "figures_and_tables": [],
+      "limitations": [
+        "Summary report identity and run cards are traceability evidence only.",
+        "No strategy-performance or selection claim is supported."
+      ],
+      "metrics": [
+        {
+          "notes": "Copied from the campaign summary; not canonical numerical reports.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "summary_metrics",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        }
+      ],
+      "question": "Does the retained one-seed screen provide an eligible variant for selection?",
+      "run_ids": [
+        "ladder_a0_flat__seed50",
+        "ladder_a0_flat_dist__seed50",
+        "ladder_a0_flat_po3__seed50",
+        "ladder_a1_sl__seed50",
+        "ladder_a1_sl_dist__seed50",
+        "ladder_a1_sl_po3__seed50",
+        "ladder_a2_tp__seed50",
+        "ladder_a2_tp_dist__seed50",
+        "ladder_a2_tp_po3__seed50",
+        "ladder_a3_multi_tp__seed50",
+        "ladder_a3_multi_tp_dist__seed50",
+        "ladder_a3_multi_tp_po3__seed50",
+        "ladder_a4a_entry_fsm_hidden__seed50",
+        "ladder_a4a_entry_fsm_hidden_dist__seed50",
+        "ladder_a4a_entry_fsm_hidden_po3__seed50",
+        "ladder_a4b_distribution__seed50",
+        "ladder_a4b_entry_fsm__seed50",
+        "ladder_a4b_po3_ifvg__seed50"
+      ],
+      "statistics": [],
+      "status": "complete"
+    }
+  ],
+  "created_at_utc": "2026-10-18T02:26:41.393118+00:00",
+  "frozen_at_utc": null,
+  "limitations": [
+    "Draft traceability manifest only; do not freeze until P1/P2/P3 acceptance and independent review.",
+    "All run-level metrics are retained summary values with unavailable raw run artifacts.",
+    "The linked ledger records historical campaign status and incomplete per-attempt provenance."
+  ],
+  "manifest_status": "draft",
+  "protocol_path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/campaign.json",
+  "review_disposition": {
+    "artifact": null,
+    "open_findings": [
+      "Independent review remains open.",
+      "This draft does not establish admissibility of numerical results."
+    ],
+    "reviewed_at_utc": null,
+    "reviewer": null,
+    "status": "not_started"
+  },
+  "runs": [
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a0_flat__seed50.md",
+          "role": "finding_card",
+          "sha256": "3753ca127087a57a3855729d8bcdae4265d565732dec334b2667e6b86869f96e"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": "Campaign manifest status retained. Reported manifest state=failed; attempt records follow.",
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "ee10eb518736954028579c60812d6ce91fc99ac0aedcbc8c9256cbf86415ec56",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: failed; summary controller status: failed.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a0_flat__seed50",
+      "seed": 50,
+      "status": "failed",
+      "variant": "ladder_a0_flat"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a0_flat_dist__seed50.md",
+          "role": "finding_card",
+          "sha256": "d43b862e2cc36f6052e40cb66574328056e6101ad2013c67d09e520dcc224927"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": "Campaign manifest status retained. Reported manifest state=failed; attempt records follow.",
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "96d57742d2cd9f00d23bf8e0bf9b954123c41a5d0861f961e3bb66ac6dd25e8e",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: failed; summary controller status: failed.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a0_flat_dist__seed50",
+      "seed": 50,
+      "status": "failed",
+      "variant": "ladder_a0_flat_dist"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a0_flat_po3__seed50.md",
+          "role": "finding_card",
+          "sha256": "e80edf76381e094148d717c48586a0dcc28a0a24c200ebbf749d632123c69321"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": null,
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "88eab88f238352b88d4ea353ed1ea0d530cac1a629203e0843fff0a4f3d9f44a",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: inactive; summary controller status: succeeded.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a0_flat_po3__seed50",
+      "seed": 50,
+      "status": "succeeded",
+      "variant": "ladder_a0_flat_po3"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a1_sl__seed50.md",
+          "role": "finding_card",
+          "sha256": "1b523d1436936b3adccca33eebc0fb58bff0c30e7bae98b496a3d70cdac7ccf5"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": null,
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "f918ecffd863d61f24d00c8cdfc8b1427e8d2be59656c694fedd6b3c71bb1c69",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: inactive; summary controller status: succeeded.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a1_sl__seed50",
+      "seed": 50,
+      "status": "succeeded",
+      "variant": "ladder_a1_sl"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a1_sl_dist__seed50.md",
+          "role": "finding_card",
+          "sha256": "66b948121453d95c27c68112906fc60c9d32930ed4e90f61ffd73fbecc98208d"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": null,
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "dc754c3ace8921b8131aef61aaf672af0ca17f47ba327bdae17573551b7108f9",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: inactive; summary controller status: succeeded.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a1_sl_dist__seed50",
+      "seed": 50,
+      "status": "succeeded",
+      "variant": "ladder_a1_sl_dist"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a1_sl_po3__seed50.md",
+          "role": "finding_card",
+          "sha256": "515a28a2e0528ddc91405fa74667527ebf6c33de4fd502b03d904051e454e8dc"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": "Campaign manifest status retained. Reported manifest state=interrupted; attempt records follow.",
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "fbb43b4d42d64feda585b53dc998a45b309d25197ff84613a4f5db19ce416117",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: not-tested; summary controller status: interrupted.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a1_sl_po3__seed50",
+      "seed": 50,
+      "status": "interrupted",
+      "variant": "ladder_a1_sl_po3"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a2_tp__seed50.md",
+          "role": "finding_card",
+          "sha256": "07a7d432c9a7d2e5c39f50d22f0e47f8cdb7fa22ffb795c1380b7d00272a5069"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": "Campaign manifest status retained. Reported manifest state=failed; attempt records follow.",
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "b56e6477ab5cbb334cc647d8bebd1c0aab6a5246a2bc7c8860f63cb35b67b9b8",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: failed; summary controller status: failed.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a2_tp__seed50",
+      "seed": 50,
+      "status": "failed",
+      "variant": "ladder_a2_tp"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a2_tp_dist__seed50.md",
+          "role": "finding_card",
+          "sha256": "382e8a4eb4a1a59c6b3bd3ee4a025e6ee5d2e94887aace986d481167794c1d89"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": "Campaign manifest status retained. Reported manifest state=interrupted; attempt records follow.",
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "b6ee0e60b2af515800dc12f1b3d8caeb9ff5591c63f52b559551daf72ef76ec5",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: not-tested; summary controller status: interrupted.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a2_tp_dist__seed50",
+      "seed": 50,
+      "status": "interrupted",
+      "variant": "ladder_a2_tp_dist"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a2_tp_po3__seed50.md",
+          "role": "finding_card",
+          "sha256": "bdc3132abf8f7eb62a927e4ea7339e4c28a87c1bb45683351d21392dbeb79397"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": null,
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "0f507bc6c23105897c7408d8b570ccad576525b6e354e2cc3cb71a9ab57b3c19",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: inactive; summary controller status: succeeded.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a2_tp_po3__seed50",
+      "seed": 50,
+      "status": "succeeded",
+      "variant": "ladder_a2_tp_po3"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a3_multi_tp__seed50.md",
+          "role": "finding_card",
+          "sha256": "35b0e24e78b0c4df3073c8be1f3cd496de061ecb016b00cc8d69e72ec2a8e1f4"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": "Campaign manifest status retained. Reported manifest state=failed; attempt records follow.",
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "f6cde33ea8a91377658919745e110f30dc5160c863bbc61f1805a16283a13dc1",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: failed; summary controller status: failed.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a3_multi_tp__seed50",
+      "seed": 50,
+      "status": "failed",
+      "variant": "ladder_a3_multi_tp"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a3_multi_tp_dist__seed50.md",
+          "role": "finding_card",
+          "sha256": "245f842e823fb5664d9f180cd0143cf0565acaf17cc1f871f112714c01f49787"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": "Campaign manifest status retained. Reported manifest state=interrupted; attempt records follow.",
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "4dfab6bea945911a49fc042bd55f2505803643fe73849d0d61cfd84e634b1cfe",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: not-tested; summary controller status: interrupted.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a3_multi_tp_dist__seed50",
+      "seed": 50,
+      "status": "interrupted",
+      "variant": "ladder_a3_multi_tp_dist"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a3_multi_tp_po3__seed50.md",
+          "role": "finding_card",
+          "sha256": "a285d31acc75900f13369e39cc94728d5136085a4dc4dee4b531740fb38e073b"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": null,
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "fe63df4b7f9c4d4fa72fb2399d9381c34c41cf9ae6b41fe6a98cd41cc628c924",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: inactive; summary controller status: succeeded.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a3_multi_tp_po3__seed50",
+      "seed": 50,
+      "status": "succeeded",
+      "variant": "ladder_a3_multi_tp_po3"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a4a_entry_fsm_hidden__seed50.md",
+          "role": "finding_card",
+          "sha256": "c45af8f4ee1b34926f616019de196d51134b0315d1ae05a9893f49abbf87c366"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": null,
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "44616740cff3848ac9bbde4802fa4402a56a64dfe7fa20629fc35547aff9c63f",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: inactive; summary controller status: succeeded.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a4a_entry_fsm_hidden__seed50",
+      "seed": 50,
+      "status": "succeeded",
+      "variant": "ladder_a4a_entry_fsm_hidden"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a4a_entry_fsm_hidden_dist__seed50.md",
+          "role": "finding_card",
+          "sha256": "1e982e67107c2ea0e1f33270ce3802b7126f127763e5434209f64af6cd9f0706"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": null,
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "71eb413b593d6e46c7a628565ead02c292253130a07bb0c3f8225de9b2f7bf56",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: engineering-only; summary controller status: succeeded.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a4a_entry_fsm_hidden_dist__seed50",
+      "seed": 50,
+      "status": "succeeded",
+      "variant": "ladder_a4a_entry_fsm_hidden_dist"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a4a_entry_fsm_hidden_po3__seed50.md",
+          "role": "finding_card",
+          "sha256": "068d7827e59bca666cff547fee990e5a8b7cc74d132a16259e8fa6e03bcedc42"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": null,
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "5ae405876d612347fd9a77e85d45a54c3fcf4f85bb0c682e970819252a284f8f",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: engineering-only; summary controller status: succeeded.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a4a_entry_fsm_hidden_po3__seed50",
+      "seed": 50,
+      "status": "succeeded",
+      "variant": "ladder_a4a_entry_fsm_hidden_po3"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a4b_distribution__seed50.md",
+          "role": "finding_card",
+          "sha256": "a5e8bcdfc5b37d73e622325b0a32abd00a1f6cf938c32579ff135d3bb6df8984"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": null,
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "7f0f20cd34ceab06bd2237fa360e240b49f6959ce3e9712b0ef23f766ba62718",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: engineering-only; summary controller status: succeeded.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a4b_distribution__seed50",
+      "seed": 50,
+      "status": "succeeded",
+      "variant": "ladder_a4b_distribution"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a4b_entry_fsm__seed50.md",
+          "role": "finding_card",
+          "sha256": "aa296481dd338250bfdd800c9c14bab530ad626f0137107fed3be6a6149c4bb0"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": null,
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "7b686af3b48c752ae8f2d02fa3c82238a7b503c9a3583432ae30c8f2ddbeae48",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: inactive; summary controller status: succeeded.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a4b_entry_fsm__seed50",
+      "seed": 50,
+      "status": "succeeded",
+      "variant": "ladder_a4b_entry_fsm"
+    },
+    {
+      "artifacts": [
+        {
+          "notes": "Summary-derived; not a canonical numerical report.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+          "role": "controller_summary",
+          "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+        },
+        {
+          "notes": "Traceability card; its copied metrics are not canonical.",
+          "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/findings/seed50_run_cards_20261018/ladder_a4b_po3_ifvg__seed50.md",
+          "role": "finding_card",
+          "sha256": "c5614b9b6cd5fec56a27ceb7d888df68254dc4383255edb940b72f1c3bbb13a7"
+        }
+      ],
+      "campaign_id": "ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016",
+      "completed_timesteps": null,
+      "data_calendar_role": "previously_inspected_selection_acknowledged_report_interval",
+      "failure_disposition": null,
+      "full_split_exposure": "not_verified",
+      "identity": {
+        "cache_sha256": [],
+        "checkpoint_sha256": null,
+        "config_sha256": "651e92caaa69169b72208ae1c793db2055cfce1c88b9899fe33158b3e6246886",
+        "data_sha256": [
+          "59c14312a9d42a53adbcdd24925f991e488d3c7346a583810ead57fb897ce897",
+          "87716e3d6ee8d0f5031f83641f1e438931e29d7299a3c80114f34b9e51865d91",
+          "d4563f58c5bd367dfa11a92a9cb22e9d3fb10a241575c2572046365a8422e6d9",
+          "f0ee746eab46bada61b39a8877a4c40745eef8941e50ae9d01e149c4b127ad91"
+        ],
+        "git_sha": "413729ec3d68f342498434fba538b16a4b2776a7",
+        "source_hash_manifest_path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+        "source_hash_manifest_sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+      },
+      "interpretation_limitations": [
+        "Raw per-run report pack and checkpoint were not recoverable in the audited outputs tree.",
+        "Card disposition: engineering-only; summary controller status: succeeded.",
+        "No selection, causal-effect, profitability, robustness, or pristine-holdout claim is supported."
+      ],
+      "n_envs": 64,
+      "requested_timesteps": 20000000,
+      "role": "selection",
+      "run_id": "ladder_a4b_po3_ifvg__seed50",
+      "seed": 50,
+      "status": "succeeded",
+      "variant": "ladder_a4b_po3_ifvg"
+    }
+  ],
+  "schema": "aalto.thesis_result_manifest.v1",
+  "supporting_artifacts": [
+    {
+      "notes": "Campaign manifest and declared run configuration.",
+      "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/campaign.json",
+      "role": "protocol",
+      "sha256": "76a4ea35169386ebac57d07f46595b8aeaf5defe5392e50578b529aaf463b688"
+    },
+    {
+      "notes": "Generated snapshot covering seven preserved seed-50 campaign manifests.",
+      "path": "docs/thesis/evidence/trial_ledger_seed50_campaigns_20261018.json",
+      "role": "trial_ledger",
+      "sha256": "5cc9f0857bde327a68ca48735c29a758365cf84138763742fecdecc17ebf89cb"
+    },
+    {
+      "notes": "Schema-v2 campaign summary; not a canonical numerical report.",
+      "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/reports/campaign_results_summary_v2.json",
+      "role": "results_summary",
+      "sha256": "aeeb5eabab0fd568b619f368d4bb937265dbfd6f19bc32f1f85849af5cadbda7"
+    },
+    {
+      "notes": "Script used to build summary-derived per-run finding cards.",
+      "path": "scripts/thesis/build_seed50_screen_finding_cards.py",
+      "role": "reproduction_notes",
+      "sha256": "4bde83eb0a03c2941866eb09ba16fde199e1fa19c4e599eb5535b483106d35bf"
+    },
+    {
+      "notes": "Archived source snapshot containing the recorded source hash manifest.",
+      "path": "outputs/gpu_campaigns/ladder18_seed50_20m_full_split_n64_cpumask_recovery_20261016/source_snapshot.zip",
+      "role": "source_snapshot",
+      "sha256": "75dff657e235e2447a10da3d44d6fc4fae595bbe977645e5f2c0de9c71aaee0c"
+    },
+    {
+      "notes": "Byte-for-byte extracted source_manifest.json from the linked campaign source_snapshot.zip.",
+      "path": "docs/thesis/evidence/seed50_recovery_source_manifest_20261018.json",
+      "role": "source_hash_manifest",
+      "sha256": "065e43657fe47600239909476a52945c8491d54fcfa5795f52af5f36f883e91f"
+    }
+  ]
+}

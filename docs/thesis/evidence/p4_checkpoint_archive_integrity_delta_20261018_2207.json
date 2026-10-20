@@ -1,0 +1,34 @@
+{
+  "schema": "p4_checkpoint_archive_integrity_delta_v1",
+  "campaign_id": "replacement18_seed50_train2025_test2026_20261018_repair1",
+  "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+  "slurm_job_id": "21035048",
+  "checked_at_utc": "2026-10-18T19:07:31",
+  "base_snapshot": "docs/thesis/evidence/p4_checkpoint_archive_integrity_delta_20261018_2154.json",
+  "validation_scope": "new numbered checkpoint beyond previously checked latest archive for this run; SHA-256, ZIP CRC, stability and attempt provenance",
+  "records": [
+    {
+      "run_key": "ladder_a0_flat__seed50",
+      "variant": "ladder_a0_flat",
+      "attempt": 2,
+      "seed": 50,
+      "steps": 16000000,
+      "checkpoint": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a0_flat__seed50/attempt2/ladder_a0_flat__seed50/20261018_202751_850668_rl_train_seed50_tcn/model/ppo_ckpt_16000000_steps.zip",
+      "bytes": 23622597,
+      "sha256": "76d0b335e5d59ccb1d8ef610608015adb7000cf10809d8fb6fa9bdf8fa74cdae",
+      "zip_crc_passed": true,
+      "zip_members": 6,
+      "stable_during_check": true,
+      "provenance_matches_campaign": true,
+      "passed": true
+    }
+  ],
+  "summary": {
+    "checked": 1,
+    "passed": 1,
+    "failed": 0,
+    "new_steps": {
+      "ladder_a0_flat__seed50": 16000000
+    }
+  }
+}

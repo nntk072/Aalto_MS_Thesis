@@ -1,0 +1,50 @@
+{
+  "base_snapshot": "docs/thesis/evidence/p4_checkpoint_archive_integrity_delta_20261018_2149.json",
+  "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+  "campaign_id": "replacement18_seed50_train2025_test2026_20261018_repair1",
+  "checked_at_utc": "2026-10-18T18:51:48.392946+00:00",
+  "records": [
+    {
+      "attempt": 2,
+      "bytes": 36269979,
+      "checkpoint": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a0_flat_po3__seed50/attempt2/ladder_a0_flat_po3__seed50/20261018_202757_071507_rl_train_seed50_tcn/model/ppo_ckpt_12000000_steps.zip",
+      "passed": true,
+      "provenance_matches_campaign": true,
+      "run_key": "ladder_a0_flat_po3__seed50",
+      "seed": 50,
+      "sha256": "6ae86d86f3d3d46eb7fed4b3d8cff1386a39132710348c73db973a5a94261788",
+      "stable_during_check": true,
+      "steps": 12000000,
+      "variant": "ladder_a0_flat_po3",
+      "zip_crc_passed": true,
+      "zip_members": 6
+    },
+    {
+      "attempt": 2,
+      "bytes": 36526817,
+      "checkpoint": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_distribution__seed50/attempt2/ladder_a4b_distribution__seed50/20261018_202757_165890_rl_train_seed50_tcn/model/ppo_ckpt_11000000_steps.zip",
+      "passed": true,
+      "provenance_matches_campaign": true,
+      "run_key": "ladder_a4b_distribution__seed50",
+      "seed": 50,
+      "sha256": "e84909bb885bc5dfc07403aa7fe041b20673d741462a51c2359edb1debee62e1",
+      "stable_during_check": true,
+      "steps": 11000000,
+      "variant": "ladder_a4b_distribution",
+      "zip_crc_passed": true,
+      "zip_members": 6
+    }
+  ],
+  "schema": "p4_checkpoint_archive_integrity_delta_v1",
+  "slurm_job_id": "21035048",
+  "summary": {
+    "checked": 2,
+    "failed": 0,
+    "new_steps": {
+      "ladder_a0_flat_po3__seed50": 12000000,
+      "ladder_a4b_distribution__seed50": 11000000
+    },
+    "passed": 2
+  },
+  "validation_scope": "new numbered checkpoints beyond the previously checked latest archive per run; SHA-256, ZIP CRC, stability and attempt provenance"
+}

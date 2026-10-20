@@ -1,0 +1,220 @@
+{
+  "allocation_elapsed_observed": "01:37:02",
+  "allocation_state_observed": "RUNNING",
+  "allocation_timelimit": "06:00:00",
+  "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+  "campaign_id": "replacement18_seed50_train2025_test2026_20261018_repair1",
+  "campaign_manifest_job_states": {
+    "running": 18
+  },
+  "captured_at_utc": "2026-10-18T13:00:03.581932+00:00",
+  "limitations": [
+    "Active debug traces are interim training telemetry, not final deterministic model evaluation.",
+    "No per-run run_manifest.json is present; P5 replay cannot yet be accepted.",
+    "No campaign state, checkpoint, or fingerprint was modified."
+  ],
+  "run_manifest_count": 0,
+  "scheduler_observation_at_local": "2026-10-18T15:58 Europe/Helsinki",
+  "schema_version": 1,
+  "slurm_job_id": "21029742",
+  "variants": [
+    {
+      "debug_records": 341,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a0_flat__seed50/attempt1/ladder_a0_flat__seed50/20261018_145216_837344_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 62.3,
+      "latest_timesteps": 2793472,
+      "sha256": "e70ccb229ad5e58b02002d75f9e9e0444cc6fbb6c390639ac4ceaaffbe93cdf3",
+      "summed_entries": 11910,
+      "summed_opens": 5731,
+      "summed_reward_steps": 2793472,
+      "variant": "ladder_a0_flat"
+    },
+    {
+      "debug_records": 244,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a0_flat_dist__seed50/attempt1/ladder_a0_flat_dist__seed50/20261018_145719_640630_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 69.3,
+      "latest_timesteps": 1998848,
+      "sha256": "05bfae94c660dd7177bc835614502ec50625f0b0682e1aeb281ea69ab3a2d9da",
+      "summed_entries": 79304,
+      "summed_opens": 1979,
+      "summed_reward_steps": 1998848,
+      "variant": "ladder_a0_flat_dist"
+    },
+    {
+      "debug_records": 248,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a0_flat_po3__seed50/attempt1/ladder_a0_flat_po3__seed50/20261018_145710_487478_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 5.3,
+      "latest_timesteps": 2031616,
+      "sha256": "4f864db3aa505bfd30c4d988678628f159dec810b8ca10cb832f9c0e6ff4638f",
+      "summed_entries": 50620,
+      "summed_opens": 2904,
+      "summed_reward_steps": 2031616,
+      "variant": "ladder_a0_flat_po3"
+    },
+    {
+      "debug_records": 256,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a1_sl__seed50/attempt1/ladder_a1_sl__seed50/20261018_145504_333013_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 73.3,
+      "latest_timesteps": 2097152,
+      "sha256": "2972fa8dc1f40802e2ce18dc2c0233e3268627efb86436b925a6b66b798033c4",
+      "summed_entries": 313060,
+      "summed_opens": 6500,
+      "summed_reward_steps": 2097152,
+      "variant": "ladder_a1_sl"
+    },
+    {
+      "debug_records": 244,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a1_sl_dist__seed50/attempt1/ladder_a1_sl_dist__seed50/20261018_145700_718425_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 30.3,
+      "latest_timesteps": 1998848,
+      "sha256": "3929b42a2fc879487fc7f01c56fab4dfaa670b11afc1ce62b41ae02b5d00c624",
+      "summed_entries": 76645,
+      "summed_opens": 2625,
+      "summed_reward_steps": 1998848,
+      "variant": "ladder_a1_sl_dist"
+    },
+    {
+      "debug_records": 249,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a1_sl_po3__seed50/attempt1/ladder_a1_sl_po3__seed50/20261018_145652_223885_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 6.4,
+      "latest_timesteps": 2039808,
+      "sha256": "e8447774d478124e6c42b7c2bc0df0eb5210e032cbb509de44df83752704adc3",
+      "summed_entries": 51230,
+      "summed_opens": 3619,
+      "summed_reward_steps": 2039808,
+      "variant": "ladder_a1_sl_po3"
+    },
+    {
+      "debug_records": 256,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a2_tp__seed50/attempt1/ladder_a2_tp__seed50/20261018_145510_167911_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 12.4,
+      "latest_timesteps": 2097152,
+      "sha256": "c60bcb7f98f8ed00f8f49aa71006a2741f16511078527066a3467b7a368ff91a",
+      "summed_entries": 334343,
+      "summed_opens": 7871,
+      "summed_reward_steps": 2097152,
+      "variant": "ladder_a2_tp"
+    },
+    {
+      "debug_records": 243,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a2_tp_dist__seed50/attempt1/ladder_a2_tp_dist__seed50/20261018_145720_271355_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 2.4,
+      "latest_timesteps": 1990656,
+      "sha256": "53085f8622a9ea7b08893b8e66cbd38285a2f1443c5dd324955928d1395d7a04",
+      "summed_entries": 82866,
+      "summed_opens": 3412,
+      "summed_reward_steps": 1990656,
+      "variant": "ladder_a2_tp_dist"
+    },
+    {
+      "debug_records": 244,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a2_tp_po3__seed50/attempt1/ladder_a2_tp_po3__seed50/20261018_145711_544003_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 27.4,
+      "latest_timesteps": 1998848,
+      "sha256": "2c777c2e7796830fd2237390f785a2971d852d5a311a71955295a5ff65b36e1c",
+      "summed_entries": 45418,
+      "summed_opens": 4251,
+      "summed_reward_steps": 1998848,
+      "variant": "ladder_a2_tp_po3"
+    },
+    {
+      "debug_records": 256,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a3_multi_tp__seed50/attempt1/ladder_a3_multi_tp__seed50/20261018_145505_078577_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 88.5,
+      "latest_timesteps": 2097152,
+      "sha256": "0cec699bb58eb18dbf5479baa89b707a8a9f829d3ef56f3b51aed6dc950ea576",
+      "summed_entries": 369667,
+      "summed_opens": 7262,
+      "summed_reward_steps": 2097152,
+      "variant": "ladder_a3_multi_tp"
+    },
+    {
+      "debug_records": 240,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a3_multi_tp_dist__seed50/attempt1/ladder_a3_multi_tp_dist__seed50/20261018_145700_446081_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 7.5,
+      "latest_timesteps": 1966080,
+      "sha256": "5744845b30cd97b4d79383504d1462796eaf6181e695300c313e287293292253",
+      "summed_entries": 72394,
+      "summed_opens": 3044,
+      "summed_reward_steps": 1966080,
+      "variant": "ladder_a3_multi_tp_dist"
+    },
+    {
+      "debug_records": 244,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a3_multi_tp_po3__seed50/attempt1/ladder_a3_multi_tp_po3__seed50/20261018_145652_075903_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 51.5,
+      "latest_timesteps": 1998848,
+      "sha256": "1b2341ed638927163d00efe580fb7dc9fc6b1e2c2e5147a71062f0b4626dfb91",
+      "summed_entries": 43592,
+      "summed_opens": 4428,
+      "summed_reward_steps": 1998848,
+      "variant": "ladder_a3_multi_tp_po3"
+    },
+    {
+      "debug_records": 244,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/20261018_145500_650604_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 16.5,
+      "latest_timesteps": 1998848,
+      "sha256": "de767098cb47fcb4c4e210c20e04797238d4197150a136a58744065d7bf165f7",
+      "summed_entries": 0,
+      "summed_opens": 0,
+      "summed_reward_steps": 1998848,
+      "variant": "ladder_a4a_entry_fsm_hidden"
+    },
+    {
+      "debug_records": 220,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden_dist__seed50/attempt1/ladder_a4a_entry_fsm_hidden_dist__seed50/20261018_145656_298177_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 6.5,
+      "latest_timesteps": 1802240,
+      "sha256": "4e14a8c968dd36e21cf4bc0ae526c4a1dfeed910ae7966c447c3463e3d49cd60",
+      "summed_entries": 0,
+      "summed_opens": 0,
+      "summed_reward_steps": 1802240,
+      "variant": "ladder_a4a_entry_fsm_hidden_dist"
+    },
+    {
+      "debug_records": 222,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden_po3__seed50/attempt1/ladder_a4a_entry_fsm_hidden_po3__seed50/20261018_145649_771079_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 3.5,
+      "latest_timesteps": 1818624,
+      "sha256": "c0bdac97c2b41bdf02d967ea2a32fc2f7939e4a2b539861c62c8d0845d964d09",
+      "summed_entries": 128,
+      "summed_opens": 128,
+      "summed_reward_steps": 1818624,
+      "variant": "ladder_a4a_entry_fsm_hidden_po3"
+    },
+    {
+      "debug_records": 217,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_distribution__seed50/attempt1/ladder_a4b_distribution__seed50/20261018_145716_103388_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 1.6,
+      "latest_timesteps": 1777664,
+      "sha256": "032c734a787912fbc609586a16bb9becb757b8b87d8ac03dbc21bcc216f25322",
+      "summed_entries": 0,
+      "summed_opens": 0,
+      "summed_reward_steps": 1777664,
+      "variant": "ladder_a4b_distribution"
+    },
+    {
+      "debug_records": 237,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/20261018_145510_410476_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 5.6,
+      "latest_timesteps": 1941504,
+      "sha256": "8f728ce2623a92cc0a55953079c4b79d278a55b95e2b81fdde50252265fffeb2",
+      "summed_entries": 0,
+      "summed_opens": 0,
+      "summed_reward_steps": 1941504,
+      "variant": "ladder_a4b_entry_fsm"
+    },
+    {
+      "debug_records": 219,
+      "debug_trace": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_po3_ifvg__seed50/attempt1/ladder_a4b_po3_ifvg__seed50/20261018_145711_077098_rl_train_seed50_tcn/debug.jsonl",
+      "latest_record_age_seconds": 11.6,
+      "latest_timesteps": 1794048,
+      "sha256": "46053e63928139b88d2e3589684919c6988a6c3b575868306b1551d635d97e45",
+      "summed_entries": 128,
+      "summed_opens": 128,
+      "summed_reward_steps": 1794048,
+      "variant": "ladder_a4b_po3_ifvg"
+    }
+  ]
+}

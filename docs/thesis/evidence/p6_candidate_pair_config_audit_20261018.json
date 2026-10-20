@@ -1,0 +1,543 @@
+{
+  "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+  "campaign_git_sha": "d0183cd34f5707eaadc5dad8af9ce0abf7d42dd1",
+  "campaign_id": "replacement18_seed50_train2025_test2026_20261018_repair1",
+  "campaign_seed": 50,
+  "campaign_status_at_capture": {
+    "ladder_a0_flat__seed50": "running",
+    "ladder_a0_flat_dist__seed50": "running",
+    "ladder_a0_flat_po3__seed50": "running",
+    "ladder_a1_sl__seed50": "running",
+    "ladder_a1_sl_dist__seed50": "running",
+    "ladder_a1_sl_po3__seed50": "running",
+    "ladder_a2_tp__seed50": "running",
+    "ladder_a2_tp_dist__seed50": "running",
+    "ladder_a2_tp_po3__seed50": "running",
+    "ladder_a3_multi_tp__seed50": "running",
+    "ladder_a3_multi_tp_dist__seed50": "running",
+    "ladder_a3_multi_tp_po3__seed50": "running",
+    "ladder_a4a_entry_fsm_hidden__seed50": "running",
+    "ladder_a4a_entry_fsm_hidden_dist__seed50": "running",
+    "ladder_a4a_entry_fsm_hidden_po3__seed50": "running",
+    "ladder_a4b_distribution__seed50": "running",
+    "ladder_a4b_entry_fsm__seed50": "running",
+    "ladder_a4b_po3_ifvg__seed50": "running"
+  },
+  "campaign_steps_per_variant": 20000000,
+  "created_at_local": "2026-10-18T15:50:24.269365+03:00",
+  "pair_disposition": "all three candidates differ semantically only by env.entry_state_observation; no pair selected or frozen; P4/P5 evidence remains required",
+  "pairs": [
+    {
+      "checkpoint_snapshot": {
+        "control": {
+          "filename": "ppo_ckpt_1000000_steps.zip",
+          "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/20261018_145510_410476_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+          "sha256": "8b398f244b62993641eab985470916f2358d08e278753ac2a1b69f0973e8e05e",
+          "size_bytes": 33045555
+        },
+        "treatment": {
+          "filename": "ppo_ckpt_1000000_steps.zip",
+          "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/20261018_145500_650604_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+          "sha256": "7a440c90563b285c0796431153e26ad0551cb3beb1c4316bdae69a6046b409ac",
+          "size_bytes": 33041692
+        }
+      },
+      "common_fields": {
+        "algo": "ppo",
+        "arch": "tcn",
+        "base_config": "config/features/full_po3_mtf.yaml",
+        "reward_mode": "dsr",
+        "seed": 50,
+        "seeds": [
+          42,
+          43,
+          44,
+          45,
+          46
+        ],
+        "steps": 20000000,
+        "strategy": "baseline",
+        "use_vae": false,
+        "vae_path": null
+      },
+      "comparison_status": "configuration_match_candidate",
+      "control_run_id": "ladder_a4b_entry_fsm__seed50",
+      "intended_treatment_delta": {
+        "env.entry_state_observation": {
+          "control": "true",
+          "treatment": "false"
+        }
+      },
+      "resolved_config": {
+        "control_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/resolved_config.json",
+        "control_sha256": "12740e84d24ea6f3089a458619cbf23c2ae0857ea43bd8b7b562308bf0c70cdd",
+        "treatment_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/resolved_config.json",
+        "treatment_sha256": "4536da938c214e82b23b4c632864db7df8fb58f687b81fd230e0e7ea63da2ebb"
+      },
+      "resolved_config_field_differences": {
+        "overrides": {
+          "control": [
+            "features.include_session_ohlc=true",
+            "features.liquidity.enabled=true",
+            "features.po3_state_mtf.enabled=true",
+            "features.ifvg_mtf.enabled=true",
+            "features.include_strategy_state=true",
+            "env.open_manipulation_bars=0",
+            "env.peak_trailing_dd_limit=0",
+            "env.entry_state_machine=true",
+            "env.entry_state_observation=true",
+            "env.allow_agent_sl_mode=true",
+            "env.allow_agent_tp_mode=true",
+            "env.allow_multi_tp=true",
+            "env.agent_direction_control=true",
+            "env.strategy_actions=true",
+            "strategy.name=baseline",
+            "env.reward_mode=dsr",
+            "ppo.total_timesteps=20000000"
+          ],
+          "treatment": [
+            "features.include_session_ohlc=true",
+            "features.liquidity.enabled=true",
+            "features.po3_state_mtf.enabled=true",
+            "features.ifvg_mtf.enabled=true",
+            "features.include_strategy_state=true",
+            "env.open_manipulation_bars=0",
+            "env.peak_trailing_dd_limit=0",
+            "env.entry_state_machine=true",
+            "env.entry_state_observation=false",
+            "env.allow_agent_sl_mode=true",
+            "env.allow_agent_tp_mode=true",
+            "env.allow_multi_tp=true",
+            "env.agent_direction_control=true",
+            "env.strategy_actions=true",
+            "strategy.name=baseline",
+            "env.reward_mode=dsr",
+            "ppo.total_timesteps=20000000"
+          ]
+        },
+        "train_args": {
+          "control": [
+            "--config",
+            "config/features/full_po3_mtf.yaml",
+            "--strategy",
+            "baseline",
+            "--algo",
+            "ppo",
+            "--arch",
+            "tcn",
+            "--seed",
+            "50",
+            "features.include_session_ohlc=true",
+            "features.liquidity.enabled=true",
+            "features.po3_state_mtf.enabled=true",
+            "features.ifvg_mtf.enabled=true",
+            "features.include_strategy_state=true",
+            "env.open_manipulation_bars=0",
+            "env.peak_trailing_dd_limit=0",
+            "env.entry_state_machine=true",
+            "env.entry_state_observation=true",
+            "env.allow_agent_sl_mode=true",
+            "env.allow_agent_tp_mode=true",
+            "env.allow_multi_tp=true",
+            "env.agent_direction_control=true",
+            "env.strategy_actions=true",
+            "strategy.name=baseline",
+            "env.reward_mode=dsr",
+            "ppo.total_timesteps=20000000",
+            "execution.randomized_fill_latency_ms=30.0"
+          ],
+          "treatment": [
+            "--config",
+            "config/features/full_po3_mtf.yaml",
+            "--strategy",
+            "baseline",
+            "--algo",
+            "ppo",
+            "--arch",
+            "tcn",
+            "--seed",
+            "50",
+            "features.include_session_ohlc=true",
+            "features.liquidity.enabled=true",
+            "features.po3_state_mtf.enabled=true",
+            "features.ifvg_mtf.enabled=true",
+            "features.include_strategy_state=true",
+            "env.open_manipulation_bars=0",
+            "env.peak_trailing_dd_limit=0",
+            "env.entry_state_machine=true",
+            "env.entry_state_observation=false",
+            "env.allow_agent_sl_mode=true",
+            "env.allow_agent_tp_mode=true",
+            "env.allow_multi_tp=true",
+            "env.agent_direction_control=true",
+            "env.strategy_actions=true",
+            "strategy.name=baseline",
+            "env.reward_mode=dsr",
+            "ppo.total_timesteps=20000000",
+            "execution.randomized_fill_latency_ms=30.0"
+          ]
+        },
+        "variant": {
+          "control": "ladder_a4b_entry_fsm",
+          "treatment": "ladder_a4a_entry_fsm_hidden"
+        }
+      },
+      "selection_status": "candidate_only_not_frozen",
+      "semantic_override_differences": {
+        "env.entry_state_observation": {
+          "control": "true",
+          "treatment": "false"
+        }
+      },
+      "train_args_element_differences": [
+        {
+          "control": "env.entry_state_observation=true",
+          "treatment": "env.entry_state_observation=false"
+        }
+      ],
+      "treatment_run_id": "ladder_a4a_entry_fsm_hidden__seed50"
+    },
+    {
+      "checkpoint_snapshot": {
+        "control": {
+          "filename": "ppo_ckpt_1000000_steps.zip",
+          "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_po3_ifvg__seed50/attempt1/ladder_a4b_po3_ifvg__seed50/20261018_145711_077098_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+          "sha256": "5fe8203414443f7f59474efc19ad3e1890e700dd81e74f8abcf50dbdb4d254a8",
+          "size_bytes": 36288172
+        },
+        "treatment": {
+          "filename": "ppo_ckpt_1000000_steps.zip",
+          "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden_po3__seed50/attempt1/ladder_a4a_entry_fsm_hidden_po3__seed50/20261018_145649_771079_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+          "sha256": "efcf41c010e8dd843ffbba27613432582db5fb947d31e05af7c40a46be69f3cc",
+          "size_bytes": 36281045
+        }
+      },
+      "common_fields": {
+        "algo": "ppo",
+        "arch": "tcn",
+        "base_config": "config/features/full_po3_mtf.yaml",
+        "reward_mode": "pnl",
+        "seed": 50,
+        "seeds": [
+          42,
+          43,
+          44,
+          45,
+          46
+        ],
+        "steps": 20000000,
+        "strategy": "po3_ifvg",
+        "use_vae": false,
+        "vae_path": null
+      },
+      "comparison_status": "configuration_match_candidate",
+      "control_run_id": "ladder_a4b_po3_ifvg__seed50",
+      "intended_treatment_delta": {
+        "env.entry_state_observation": {
+          "control": "true",
+          "treatment": "false"
+        }
+      },
+      "resolved_config": {
+        "control_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_po3_ifvg__seed50/attempt1/ladder_a4b_po3_ifvg__seed50/resolved_config.json",
+        "control_sha256": "b815eb564cb75acfadaa7d0812a182233a8b68982df6ae330321ac0b9bb8ab6f",
+        "treatment_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden_po3__seed50/attempt1/ladder_a4a_entry_fsm_hidden_po3__seed50/resolved_config.json",
+        "treatment_sha256": "fdb98c6e4c9495413010c04f261e72268516cb10e04b105ecaf1ecdc97fdba77"
+      },
+      "resolved_config_field_differences": {
+        "overrides": {
+          "control": [
+            "features.include_session_ohlc=true",
+            "features.liquidity.enabled=true",
+            "features.po3_state_mtf.enabled=true",
+            "features.ifvg_mtf.enabled=true",
+            "features.include_strategy_state=true",
+            "env.open_manipulation_bars=0",
+            "env.peak_trailing_dd_limit=0",
+            "features.include_pd_context=true",
+            "features.structure.enabled=true",
+            "env.entry_state_machine=true",
+            "env.entry_state_observation=true",
+            "env.allow_agent_sl_mode=true",
+            "env.allow_agent_tp_mode=true",
+            "env.allow_multi_tp=true",
+            "env.strategy_actions=true",
+            "env.reward_mode=pnl",
+            "ppo.total_timesteps=20000000"
+          ],
+          "treatment": [
+            "features.include_session_ohlc=true",
+            "features.liquidity.enabled=true",
+            "features.po3_state_mtf.enabled=true",
+            "features.ifvg_mtf.enabled=true",
+            "features.include_strategy_state=true",
+            "env.open_manipulation_bars=0",
+            "env.peak_trailing_dd_limit=0",
+            "features.include_pd_context=true",
+            "features.structure.enabled=true",
+            "env.entry_state_machine=true",
+            "env.entry_state_observation=false",
+            "env.allow_agent_sl_mode=true",
+            "env.allow_agent_tp_mode=true",
+            "env.allow_multi_tp=true",
+            "env.strategy_actions=true",
+            "env.reward_mode=pnl",
+            "ppo.total_timesteps=20000000"
+          ]
+        },
+        "train_args": {
+          "control": [
+            "--config",
+            "config/features/full_po3_mtf.yaml",
+            "--strategy",
+            "po3_ifvg",
+            "--algo",
+            "ppo",
+            "--arch",
+            "tcn",
+            "--seed",
+            "50",
+            "features.include_session_ohlc=true",
+            "features.liquidity.enabled=true",
+            "features.po3_state_mtf.enabled=true",
+            "features.ifvg_mtf.enabled=true",
+            "features.include_strategy_state=true",
+            "env.open_manipulation_bars=0",
+            "env.peak_trailing_dd_limit=0",
+            "features.include_pd_context=true",
+            "features.structure.enabled=true",
+            "env.entry_state_machine=true",
+            "env.entry_state_observation=true",
+            "env.allow_agent_sl_mode=true",
+            "env.allow_agent_tp_mode=true",
+            "env.allow_multi_tp=true",
+            "env.strategy_actions=true",
+            "env.reward_mode=pnl",
+            "ppo.total_timesteps=20000000",
+            "execution.randomized_fill_latency_ms=30.0"
+          ],
+          "treatment": [
+            "--config",
+            "config/features/full_po3_mtf.yaml",
+            "--strategy",
+            "po3_ifvg",
+            "--algo",
+            "ppo",
+            "--arch",
+            "tcn",
+            "--seed",
+            "50",
+            "features.include_session_ohlc=true",
+            "features.liquidity.enabled=true",
+            "features.po3_state_mtf.enabled=true",
+            "features.ifvg_mtf.enabled=true",
+            "features.include_strategy_state=true",
+            "env.open_manipulation_bars=0",
+            "env.peak_trailing_dd_limit=0",
+            "features.include_pd_context=true",
+            "features.structure.enabled=true",
+            "env.entry_state_machine=true",
+            "env.entry_state_observation=false",
+            "env.allow_agent_sl_mode=true",
+            "env.allow_agent_tp_mode=true",
+            "env.allow_multi_tp=true",
+            "env.strategy_actions=true",
+            "env.reward_mode=pnl",
+            "ppo.total_timesteps=20000000",
+            "execution.randomized_fill_latency_ms=30.0"
+          ]
+        },
+        "variant": {
+          "control": "ladder_a4b_po3_ifvg",
+          "treatment": "ladder_a4a_entry_fsm_hidden_po3"
+        }
+      },
+      "selection_status": "candidate_only_not_frozen",
+      "semantic_override_differences": {
+        "env.entry_state_observation": {
+          "control": "true",
+          "treatment": "false"
+        }
+      },
+      "train_args_element_differences": [
+        {
+          "control": "env.entry_state_observation=true",
+          "treatment": "env.entry_state_observation=false"
+        }
+      ],
+      "treatment_run_id": "ladder_a4a_entry_fsm_hidden_po3__seed50"
+    },
+    {
+      "checkpoint_snapshot": {
+        "control": {
+          "filename": "ppo_ckpt_1000000_steps.zip",
+          "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_distribution__seed50/attempt1/ladder_a4b_distribution__seed50/20261018_145716_103388_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+          "sha256": "3e7e183143547b5f0ba3357a022b63cf0646050221f216baa355c5967a84b4d8",
+          "size_bytes": 36526987
+        },
+        "treatment": {
+          "filename": "ppo_ckpt_1000000_steps.zip",
+          "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden_dist__seed50/attempt1/ladder_a4a_entry_fsm_hidden_dist__seed50/20261018_145656_298177_rl_train_seed50_tcn/model/ppo_ckpt_1000000_steps.zip",
+          "sha256": "6c03ea0f50e25f85197203dcc52eaf701a395f50c9178561e68f66d190a0e6e7",
+          "size_bytes": 36523124
+        }
+      },
+      "common_fields": {
+        "algo": "ppo",
+        "arch": "tcn",
+        "base_config": "config/features/full_po3_mtf.yaml",
+        "reward_mode": "pnl",
+        "seed": 50,
+        "seeds": [
+          42,
+          43,
+          44,
+          45,
+          46
+        ],
+        "steps": 20000000,
+        "strategy": "distribution",
+        "use_vae": false,
+        "vae_path": null
+      },
+      "comparison_status": "configuration_match_candidate",
+      "control_run_id": "ladder_a4b_distribution__seed50",
+      "intended_treatment_delta": {
+        "env.entry_state_observation": {
+          "control": "true",
+          "treatment": "false"
+        }
+      },
+      "resolved_config": {
+        "control_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_distribution__seed50/attempt1/ladder_a4b_distribution__seed50/resolved_config.json",
+        "control_sha256": "5a8dff83f075fc8ebd2568f7049e46b9fe791d4125bb08097cb5609607a76b61",
+        "treatment_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden_dist__seed50/attempt1/ladder_a4a_entry_fsm_hidden_dist__seed50/resolved_config.json",
+        "treatment_sha256": "c2492f1d3499c9c59a927affcd255712a9ab34af3d55324fa2a9e166e0d0e76e"
+      },
+      "resolved_config_field_differences": {
+        "overrides": {
+          "control": [
+            "features.include_session_ohlc=true",
+            "features.liquidity.enabled=true",
+            "features.po3_state_mtf.enabled=true",
+            "features.ifvg_mtf.enabled=true",
+            "features.include_strategy_state=true",
+            "env.open_manipulation_bars=0",
+            "env.peak_trailing_dd_limit=0",
+            "features.include_pd_context=true",
+            "features.structure.enabled=true",
+            "env.entry_state_machine=true",
+            "env.entry_state_observation=true",
+            "env.allow_agent_sl_mode=true",
+            "env.allow_agent_tp_mode=true",
+            "env.allow_multi_tp=true",
+            "env.strategy_actions=true",
+            "env.reward_mode=pnl",
+            "ppo.total_timesteps=20000000"
+          ],
+          "treatment": [
+            "features.include_session_ohlc=true",
+            "features.liquidity.enabled=true",
+            "features.po3_state_mtf.enabled=true",
+            "features.ifvg_mtf.enabled=true",
+            "features.include_strategy_state=true",
+            "env.open_manipulation_bars=0",
+            "env.peak_trailing_dd_limit=0",
+            "features.include_pd_context=true",
+            "features.structure.enabled=true",
+            "env.entry_state_machine=true",
+            "env.entry_state_observation=false",
+            "env.allow_agent_sl_mode=true",
+            "env.allow_agent_tp_mode=true",
+            "env.allow_multi_tp=true",
+            "env.strategy_actions=true",
+            "env.reward_mode=pnl",
+            "ppo.total_timesteps=20000000"
+          ]
+        },
+        "train_args": {
+          "control": [
+            "--config",
+            "config/features/full_po3_mtf.yaml",
+            "--strategy",
+            "distribution",
+            "--algo",
+            "ppo",
+            "--arch",
+            "tcn",
+            "--seed",
+            "50",
+            "features.include_session_ohlc=true",
+            "features.liquidity.enabled=true",
+            "features.po3_state_mtf.enabled=true",
+            "features.ifvg_mtf.enabled=true",
+            "features.include_strategy_state=true",
+            "env.open_manipulation_bars=0",
+            "env.peak_trailing_dd_limit=0",
+            "features.include_pd_context=true",
+            "features.structure.enabled=true",
+            "env.entry_state_machine=true",
+            "env.entry_state_observation=true",
+            "env.allow_agent_sl_mode=true",
+            "env.allow_agent_tp_mode=true",
+            "env.allow_multi_tp=true",
+            "env.strategy_actions=true",
+            "env.reward_mode=pnl",
+            "ppo.total_timesteps=20000000",
+            "execution.randomized_fill_latency_ms=30.0"
+          ],
+          "treatment": [
+            "--config",
+            "config/features/full_po3_mtf.yaml",
+            "--strategy",
+            "distribution",
+            "--algo",
+            "ppo",
+            "--arch",
+            "tcn",
+            "--seed",
+            "50",
+            "features.include_session_ohlc=true",
+            "features.liquidity.enabled=true",
+            "features.po3_state_mtf.enabled=true",
+            "features.ifvg_mtf.enabled=true",
+            "features.include_strategy_state=true",
+            "env.open_manipulation_bars=0",
+            "env.peak_trailing_dd_limit=0",
+            "features.include_pd_context=true",
+            "features.structure.enabled=true",
+            "env.entry_state_machine=true",
+            "env.entry_state_observation=false",
+            "env.allow_agent_sl_mode=true",
+            "env.allow_agent_tp_mode=true",
+            "env.allow_multi_tp=true",
+            "env.strategy_actions=true",
+            "env.reward_mode=pnl",
+            "ppo.total_timesteps=20000000",
+            "execution.randomized_fill_latency_ms=30.0"
+          ]
+        },
+        "variant": {
+          "control": "ladder_a4b_distribution",
+          "treatment": "ladder_a4a_entry_fsm_hidden_dist"
+        }
+      },
+      "selection_status": "candidate_only_not_frozen",
+      "semantic_override_differences": {
+        "env.entry_state_observation": {
+          "control": "true",
+          "treatment": "false"
+        }
+      },
+      "train_args_element_differences": [
+        {
+          "control": "env.entry_state_observation=true",
+          "treatment": "env.entry_state_observation=false"
+        }
+      ],
+      "treatment_run_id": "ladder_a4a_entry_fsm_hidden_dist__seed50"
+    }
+  ],
+  "schema": "aalto.thesis.p6_candidate_pair_config_audit.v1",
+  "seed_metadata_caveat": "Each resolved_config also contains a plural seeds list [42,43,44,45,46], which differs from campaign seed 50; singular seed and train_args seed are 50. This stale metadata remains disclosed and must not be interpreted as the actual run seed."
+}

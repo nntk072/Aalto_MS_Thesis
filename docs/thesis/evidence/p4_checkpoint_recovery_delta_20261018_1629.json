@@ -1,0 +1,49 @@
+{
+  "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+  "campaign_id": "replacement18_seed50_train2025_test2026_20261018_repair1",
+  "created_at_utc": "2026-10-18T13:29:29.023569+00:00",
+  "device": "cpu",
+  "ledger_snapshot": "docs/thesis/evidence/trial_ledger_replacement18_live_20261018_1629.json",
+  "previous_ledger": "docs/thesis/evidence/trial_ledger_replacement18_live_20261018_1627.json",
+  "records": [
+    {
+      "bytes": 36270610,
+      "checkpoint_steps": 3000000,
+      "error": null,
+      "ledger_hash_match": true,
+      "loaded": true,
+      "loaded_timesteps": 3000000,
+      "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a0_flat_po3__seed50/attempt1/ladder_a0_flat_po3__seed50/20261018_145710_487478_rl_train_seed50_tcn/model/ppo_ckpt_3000000_steps.zip",
+      "seed": 50,
+      "sha256": "bcc22850bbc68d49cdb3dd31d552c9f775dc508b2c4331bd37ff608f504b518f",
+      "stable_during_check": true,
+      "status": "passed",
+      "variant": "ladder_a0_flat_po3",
+      "zip_members": 6,
+      "zip_test_corrupt_member": null
+    },
+    {
+      "bytes": 36270861,
+      "checkpoint_steps": 3000000,
+      "error": null,
+      "ledger_hash_match": true,
+      "loaded": true,
+      "loaded_timesteps": 3000000,
+      "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a1_sl_po3__seed50/attempt1/ladder_a1_sl_po3__seed50/20261018_145652_223885_rl_train_seed50_tcn/model/ppo_ckpt_3000000_steps.zip",
+      "seed": 50,
+      "sha256": "c5cd0918869c56a56355a09c9773cf9a785594dd49600c1b97712feaae3045bb",
+      "stable_during_check": true,
+      "status": "passed",
+      "variant": "ladder_a1_sl_po3",
+      "zip_members": 6,
+      "zip_test_corrupt_member": null
+    }
+  ],
+  "schema": "aalto.thesis_checkpoint_recovery_delta.v1",
+  "slurm_job_id": 21029742,
+  "summary": {
+    "failed": 0,
+    "passed": 2,
+    "total": 2
+  }
+}

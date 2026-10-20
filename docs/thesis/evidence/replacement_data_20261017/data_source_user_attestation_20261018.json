@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-10-18T10:48:39Z",
+  "status": "training_use_user_attested; provider_and_publication_terms_unverified",
+  "subject": {
+    "symbols": ["US100.cash", "US500.cash"],
+    "source_period_inclusive": {
+      "start": "2024-12-30",
+      "end": "2026-10-16"
+    },
+    "source_files_and_hashes": "See data_partition_integrity_20261018.json; that report inventories all 19 source exports and their ordered train/test partitions."
+  },
+  "user_attestation": {
+    "platform_server": "FTMO Demo server",
+    "underlying_liquidity_provider": "Unknown",
+    "training_use_statement": "User considers the data suitable for training and says there is no problem using it for that purpose; the model is the focus.",
+    "export_or_license_record": "None supplied; account-specific export and publication terms are not established.",
+    "attestation_date": "2026-10-18"
+  },
+  "verification_boundary": {
+    "independently_verified": false,
+    "integrity_report": "data_partition_integrity_20261018.json",
+    "integrity_report_scope": "Verifies exact ordered reconstruction of source exports from training and testing partitions; does not verify broker/feed identity, platform export rights, market-data accuracy, or publication rights."
+  },
+  "not_established": [
+    "The liquidity provider or providers for the historical exports.",
+    "The account-specific platform and export path for these files.",
+    "The applicable historical data-use terms or rights to publish the raw exports.",
+    "Whether thesis results derived from the data may be published under account-specific terms."
+  ],
+  "disposition": "Proceed with model training as user-directed and identify the source as FTMO Demo based on user attestation. Do not describe the liquidity provider, export license, or publication rights as verified. Resolve the data-use and disclosure treatment before final thesis submission."
+}

@@ -1,0 +1,50 @@
+{
+  "schema": "p4_checkpoint_archive_integrity_delta_v1",
+  "campaign_id": "replacement18_seed50_train2025_test2026_20261018_repair1",
+  "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+  "slurm_job_id": "21035048",
+  "checked_at_utc": "2026-10-18T20:00:56",
+  "base_snapshot": "docs/thesis/evidence/p4_checkpoint_archive_integrity_delta_20261018_2221.json",
+  "validation_scope": "new numbered checkpoint beyond previously checked latest archive for this run; SHA-256, ZIP CRC, stability and attempt provenance",
+  "records": [
+    {
+      "run_key": "ladder_a2_tp__seed50",
+      "variant": "ladder_a2_tp",
+      "attempt": 2,
+      "seed": 50,
+      "steps": 14000000,
+      "checkpoint": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a2_tp__seed50/attempt2/ladder_a2_tp__seed50/20261018_202755_390020_rl_train_seed50_tcn/model/ppo_ckpt_14000000_steps.zip",
+      "bytes": 33039952,
+      "sha256": "6a938a4cbf3d1142789c25ebb183674ca0d8e54f29d88e850ea19bd8199bdf8a",
+      "zip_crc_passed": true,
+      "zip_members": 6,
+      "stable_during_check": true,
+      "provenance_matches_campaign": true,
+      "passed": true
+    },
+    {
+      "run_key": "ladder_a0_flat__seed50",
+      "variant": "ladder_a0_flat",
+      "attempt": 2,
+      "seed": 50,
+      "steps": 17000000,
+      "checkpoint": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a0_flat__seed50/attempt2/ladder_a0_flat__seed50/20261018_202751_850668_rl_train_seed50_tcn/model/ppo_ckpt_17000000_steps.zip",
+      "bytes": 23622597,
+      "sha256": "cefb6bfc6a9b2f758e48e5965f4b63b872a241733fdd097f9e922c2d072eb0e0",
+      "zip_crc_passed": true,
+      "zip_members": 6,
+      "stable_during_check": true,
+      "provenance_matches_campaign": true,
+      "passed": true
+    }
+  ],
+  "summary": {
+    "checked": 2,
+    "passed": 2,
+    "failed": 0,
+    "new_steps": {
+      "ladder_a2_tp__seed50": 14000000,
+      "ladder_a0_flat__seed50": 17000000
+    }
+  }
+}

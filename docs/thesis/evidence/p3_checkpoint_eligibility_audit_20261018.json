@@ -1,0 +1,90 @@
+{
+  "candidates": [
+    {
+      "checkpoint_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018/smoke/job_21028835/training/ladder_a0_flat__seed50/20261018_131658_631004_rl_train_seed50_tcn/model/ppo_final.zip",
+      "checkpoint_sha256_current": "f2bad0fa3a25d1fb72b6234d472a8cdd4672975b52938899c8adb340ddda2ead",
+      "checkpoint_sha256_recorded": "f2bad0fa3a25d1fb72b6234d472a8cdd4672975b52938899c8adb340ddda2ead",
+      "completed_steps": 16384,
+      "eligible_for_p3_recovery": false,
+      "run_id": "20261018_131658_631004_rl_train_seed50_tcn",
+      "run_manifest_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018/smoke/job_21028835/training/ladder_a0_flat__seed50/20261018_131658_631004_rl_train_seed50_tcn/run_manifest.json",
+      "run_manifest_sha256": "194991af9a2bd7d054d593e5846d810f932df1a5639d2f5f3881a6b7f940b5d7",
+      "source_identity_checks": {
+        "quant_rl/data/ticks.py": {
+          "current_sha256": "b08e4da232eae5fef6a4498e967bcb4bf86095b105fb801f045faa561eaf63cd",
+          "matches": false,
+          "saved_sha256": "20ee3205be1b1c88514a8cdd21e52dd62064e56bc681c632f0c2b196dc63d38a"
+        },
+        "quant_rl/envs/trading_env.py": {
+          "current_sha256": "73798b54bbe10e2b865eb849fc186939deb6b3964bb0ced9cc607ba623eed588",
+          "matches": false,
+          "saved_sha256": "48f969847ac99112a7b6b2a8d6b904d8cd17a9d9252f0027bbdea70fb71f3290"
+        },
+        "quant_rl/eval/eval_run.py": {
+          "current_sha256": "ea8800393be07140102eb84f9d664a931e2bece1f62ceb63644084d8c68e7dff",
+          "matches": true,
+          "saved_sha256": "ea8800393be07140102eb84f9d664a931e2bece1f62ceb63644084d8c68e7dff"
+        },
+        "quant_rl/eval/run_manifest.py": {
+          "current_sha256": "0d044d565aba0883790db2d51c2b51abf9a1487dd01ccb08072e5376d5312687",
+          "matches": true,
+          "saved_sha256": "0d044d565aba0883790db2d51c2b51abf9a1487dd01ccb08072e5376d5312687"
+        },
+        "quant_rl/features/po3_state.py": {
+          "current_sha256": "d528ca72ad484d22ea38e271c3c0d9098ebe2efad420740846ea9acb97fea8f0",
+          "matches": false,
+          "saved_sha256": null
+        }
+      }
+    },
+    {
+      "checkpoint_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018/smoke/job_21029177/training/ladder_a0_flat__seed50/20261018_133704_707999_rl_train_seed50_tcn/model/ppo_final.zip",
+      "checkpoint_sha256_current": "83ab699b1b736f76b36d1c7bc73e14363e6963fb4bd14345acbfa860c69e3911",
+      "checkpoint_sha256_recorded": "83ab699b1b736f76b36d1c7bc73e14363e6963fb4bd14345acbfa860c69e3911",
+      "completed_steps": 16384,
+      "eligible_for_p3_recovery": false,
+      "run_id": "20261018_133704_707999_rl_train_seed50_tcn",
+      "run_manifest_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018/smoke/job_21029177/training/ladder_a0_flat__seed50/20261018_133704_707999_rl_train_seed50_tcn/run_manifest.json",
+      "run_manifest_sha256": "238bb80835f37e4d837d59fdf6ef47a123a1e1c0de521b590b61595e7c066fb3",
+      "source_identity_checks": {
+        "quant_rl/data/ticks.py": {
+          "current_sha256": "b08e4da232eae5fef6a4498e967bcb4bf86095b105fb801f045faa561eaf63cd",
+          "matches": false,
+          "saved_sha256": "2d336610bd15441f573caeb1e982ce8d97262dd3e510f6e864c864d4ab38a521"
+        },
+        "quant_rl/envs/trading_env.py": {
+          "current_sha256": "73798b54bbe10e2b865eb849fc186939deb6b3964bb0ced9cc607ba623eed588",
+          "matches": false,
+          "saved_sha256": "8e9e5665fa1315e9d256e9feb177784af067122c44fca7d6ca79fb124a66b473"
+        },
+        "quant_rl/eval/eval_run.py": {
+          "current_sha256": "ea8800393be07140102eb84f9d664a931e2bece1f62ceb63644084d8c68e7dff",
+          "matches": true,
+          "saved_sha256": "ea8800393be07140102eb84f9d664a931e2bece1f62ceb63644084d8c68e7dff"
+        },
+        "quant_rl/eval/run_manifest.py": {
+          "current_sha256": "0d044d565aba0883790db2d51c2b51abf9a1487dd01ccb08072e5376d5312687",
+          "matches": true,
+          "saved_sha256": "0d044d565aba0883790db2d51c2b51abf9a1487dd01ccb08072e5376d5312687"
+        },
+        "quant_rl/features/po3_state.py": {
+          "current_sha256": "d528ca72ad484d22ea38e271c3c0d9098ebe2efad420740846ea9acb97fea8f0",
+          "matches": false,
+          "saved_sha256": null
+        }
+      }
+    }
+  ],
+  "created_at_utc": "2026-10-18T11:21:46.419844+00:00",
+  "current_source_sha256": {
+    "quant_rl/data/ticks.py": "b08e4da232eae5fef6a4498e967bcb4bf86095b105fb801f045faa561eaf63cd",
+    "quant_rl/envs/trading_env.py": "73798b54bbe10e2b865eb849fc186939deb6b3964bb0ced9cc607ba623eed588",
+    "quant_rl/eval/eval_run.py": "ea8800393be07140102eb84f9d664a931e2bece1f62ceb63644084d8c68e7dff",
+    "quant_rl/eval/run_manifest.py": "0d044d565aba0883790db2d51c2b51abf9a1487dd01ccb08072e5376d5312687",
+    "quant_rl/features/po3_state.py": "d528ca72ad484d22ea38e271c3c0d9098ebe2efad420740846ea9acb97fea8f0"
+  },
+  "disposition": "No existing 2026-10-18 smoke checkpoint matches all current execution, feature, and evaluation source hashes; a new exact-source P3 smoke is required. The archived checkpoints are retained and remain invalid for current P3.",
+  "eligible_checkpoint_count": 0,
+  "repository_head": "d0183cd34f5707eaadc5dad8af9ce0abf7d42dd1",
+  "schema": "thesis.p3_checkpoint_eligibility_audit.v1"
+}

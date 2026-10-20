@@ -1,0 +1,81 @@
+{
+  "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+  "campaign_id": "replacement18_seed50_train2025_test2026_20261018_repair1",
+  "created_at_utc": "2026-10-18T13:31:37.446165+00:00",
+  "device": "cpu",
+  "ledger_snapshot": "docs/thesis/evidence/trial_ledger_replacement18_live_20261018_1631.json",
+  "previous_ledger": "docs/thesis/evidence/trial_ledger_replacement18_live_20261018_1630.json",
+  "records": [
+    {
+      "bytes": 23621948,
+      "checkpoint_steps": 4000000,
+      "error": null,
+      "ledger_hash_match": true,
+      "loaded": true,
+      "loaded_timesteps": 4000000,
+      "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a0_flat__seed50/attempt1/ladder_a0_flat__seed50/20261018_145216_837344_rl_train_seed50_tcn/model/ppo_ckpt_4000000_steps.zip",
+      "seed": 50,
+      "sha256": "cb35b8bc180460f9afe1a30d00395e257ff3e25e64326035bd41db5bfb5dfe31",
+      "stable_during_check": true,
+      "status": "passed",
+      "variant": "ladder_a0_flat",
+      "zip_members": 6,
+      "zip_test_corrupt_member": null
+    },
+    {
+      "bytes": 36517740,
+      "checkpoint_steps": 3000000,
+      "error": null,
+      "ledger_hash_match": true,
+      "loaded": true,
+      "loaded_timesteps": 3000000,
+      "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a1_sl_dist__seed50/attempt1/ladder_a1_sl_dist__seed50/20261018_145700_718425_rl_train_seed50_tcn/model/ppo_ckpt_3000000_steps.zip",
+      "seed": 50,
+      "sha256": "9322c895430caca23664d23463d55c5103ed0ec1a9ed54393b09ca8ccf245a0e",
+      "stable_during_check": true,
+      "status": "passed",
+      "variant": "ladder_a1_sl_dist",
+      "zip_members": 6,
+      "zip_test_corrupt_member": null
+    },
+    {
+      "bytes": 36519341,
+      "checkpoint_steps": 3000000,
+      "error": null,
+      "ledger_hash_match": true,
+      "loaded": true,
+      "loaded_timesteps": 3000000,
+      "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a2_tp_dist__seed50/attempt1/ladder_a2_tp_dist__seed50/20261018_145720_271355_rl_train_seed50_tcn/model/ppo_ckpt_3000000_steps.zip",
+      "seed": 50,
+      "sha256": "943844389380aed7effaa7e9a77d0b080c4c28b9656dae08cb13732dfaf478fa",
+      "stable_during_check": true,
+      "status": "passed",
+      "variant": "ladder_a2_tp_dist",
+      "zip_members": 6,
+      "zip_test_corrupt_member": null
+    },
+    {
+      "bytes": 36272462,
+      "checkpoint_steps": 3000000,
+      "error": null,
+      "ledger_hash_match": true,
+      "loaded": true,
+      "loaded_timesteps": 3000000,
+      "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a2_tp_po3__seed50/attempt1/ladder_a2_tp_po3__seed50/20261018_145711_544003_rl_train_seed50_tcn/model/ppo_ckpt_3000000_steps.zip",
+      "seed": 50,
+      "sha256": "2090faad03b4618e531dbfc9a47bf33669828e81ded365e53dd30b1497866354",
+      "stable_during_check": true,
+      "status": "passed",
+      "variant": "ladder_a2_tp_po3",
+      "zip_members": 6,
+      "zip_test_corrupt_member": null
+    }
+  ],
+  "schema": "aalto.thesis_checkpoint_recovery_delta.v1",
+  "slurm_job_id": 21029742,
+  "summary": {
+    "failed": 0,
+    "passed": 4,
+    "total": 4
+  }
+}

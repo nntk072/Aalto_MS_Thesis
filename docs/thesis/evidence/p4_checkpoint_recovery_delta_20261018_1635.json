@@ -1,0 +1,33 @@
+{
+  "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+  "campaign_id": "replacement18_seed50_train2025_test2026_20261018_repair1",
+  "created_at_utc": "2026-10-18T13:36:05.504386+00:00",
+  "device": "cpu",
+  "ledger_snapshot": "docs/thesis/evidence/trial_ledger_replacement18_live_20261018_1635.json",
+  "previous_ledger": "docs/thesis/evidence/trial_ledger_replacement18_live_20261018_1634.json",
+  "records": [
+    {
+      "bytes": 33044663,
+      "checkpoint_steps": 3000000,
+      "error": null,
+      "ledger_hash_match": true,
+      "loaded": true,
+      "loaded_timesteps": 3000000,
+      "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/20261018_145510_410476_rl_train_seed50_tcn/model/ppo_ckpt_3000000_steps.zip",
+      "seed": 50,
+      "sha256": "ebbef012073e787706635ff8ed11c3a9a69f9d269e97414b4fc8c539cb74e001",
+      "stable_during_check": true,
+      "status": "passed",
+      "variant": "ladder_a4b_entry_fsm",
+      "zip_members": 6,
+      "zip_test_corrupt_member": null
+    }
+  ],
+  "schema": "aalto.thesis_checkpoint_recovery_delta.v1",
+  "slurm_job_id": 21029742,
+  "summary": {
+    "failed": 0,
+    "passed": 1,
+    "total": 1
+  }
+}

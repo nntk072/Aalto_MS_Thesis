@@ -1,0 +1,226 @@
+{
+  "schema_version": 1,
+  "campaign_id": "replacement18_seed50_train2025_test2026_20261018_repair1",
+  "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+  "slurm_job_id": "21029742",
+  "observed_at_utc": "2026-10-18T13:19:42+00:00",
+  "variants": [
+    "ladder_a4b_distribution",
+    "ladder_a4a_entry_fsm_hidden_dist"
+  ],
+  "active_bundle": "cache/train_test_2025_2026/shared_env/fbfc8718eed47e17ab2756299d5a97192bb4bcd960ca2f016f586e98854bc3bc",
+  "bundle_manifest_sha256": "69da1e9311b0eff4f3035bd6d7a17e0f0b270dfc53b5a389543ea68ee5d6c889",
+  "feature_cache": "cache/train_test_2025_2026/US100.cash_features_v23-ftmo-mt5-us-dst-session-clock_7b77b4e051dbdbb1.parquet",
+  "feature_cache_hash": "7b77b4e051dbdbb1",
+  "feature_config_hash": "US100.cash_features_v23-ftmo-mt5-us-dst-session-clock_7b77b4e051dbdbb1",
+  "training_rows": 351432,
+  "training_date_range": [
+    "2024-12-30",
+    "2025-12-31"
+  ],
+  "ny_eligibility_window_broker_time": [
+    "16:30",
+    "23:00"
+  ],
+  "ny_eligible_training_rows": 99492,
+  "entry_mode": "confirmed_first_eligible",
+  "entry_state_machine": true,
+  "readiness_rule": "po3_distribution > 0; po3_distribution_direction and htf_day_bias finite, nonzero, and same sign; then po3_ifvg_confirmed > 0 OR direction-matched ifvg_bull_confirmed/ifvg_bear_confirmed > 0",
+  "feature_row_counts": {
+    "finite_on_all_required_columns": 351432,
+    "distribution_active": 172329,
+    "distribution_and_bias_direction_aligned": 96817,
+    "legacy_distribution_ready": 90551,
+    "legacy_distribution_ready_long": 36706,
+    "legacy_distribution_ready_short": 53845,
+    "confirmed_first_eligible_ready": 18835,
+    "confirmed_first_eligible_ready_long": 7731,
+    "confirmed_first_eligible_ready_short": 11104
+  },
+  "ny_eligible_feature_row_counts": {
+    "legacy_distribution_ready": 26350,
+    "legacy_distribution_ready_long": 11891,
+    "legacy_distribution_ready_short": 14459,
+    "confirmed_first_eligible_ready": 5494,
+    "confirmed_first_eligible_ready_long": 2519,
+    "confirmed_first_eligible_ready_short": 2975
+  },
+  "cumulative_debug_trace_through_latest_record": {
+    "ladder_a4b_distribution": {
+      "timesteps": 2293760,
+      "debug_records": 280,
+      "debug_reward_steps": 2293760,
+      "opens": 0,
+      "entries": 0,
+      "debug_jsonl": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_distribution__seed50/attempt1/ladder_a4b_distribution__seed50/20261018_145716_103388_rl_train_seed50_tcn/debug.jsonl"
+    },
+    "ladder_a4a_entry_fsm_hidden_dist": {
+      "timesteps": 2392064,
+      "debug_records": 292,
+      "debug_reward_steps": 2392064,
+      "opens": 0,
+      "entries": 0,
+      "debug_jsonl": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden_dist__seed50/attempt1/ladder_a4a_entry_fsm_hidden_dist__seed50/20261018_145656_298177_rl_train_seed50_tcn/debug.jsonl"
+    }
+  },
+  "matched_fsm_comparator": {
+    "ladder_a4b_po3_ifvg": {
+      "timesteps": 2310144,
+      "debug_records": 282,
+      "debug_reward_steps": 2310144,
+      "opens": 128,
+      "entries": 128,
+      "debug_jsonl": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_po3_ifvg__seed50/attempt1/ladder_a4b_po3_ifvg__seed50/20261018_145711_077098_rl_train_seed50_tcn/debug.jsonl"
+    },
+    "ladder_a4a_entry_fsm_hidden_po3": {
+      "timesteps": 2392064,
+      "debug_records": 292,
+      "debug_reward_steps": 2392064,
+      "opens": 128,
+      "entries": 128,
+      "debug_jsonl": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden_po3__seed50/attempt1/ladder_a4a_entry_fsm_hidden_po3__seed50/20261018_145649_771079_rl_train_seed50_tcn/debug.jsonl"
+    }
+  },
+  "interpretation": "The active confirmed_first_eligible predicate is present in the source feature cache on 5,494 training bars inside the environment NY clock window (2,519 long and 2,975 short). Two direction-specific NY-ready rows match all six readiness fields in the active shared bundle. At the latest interim debug traces, both distribution FSM variants still show zero entry actions and opens, while both matched PO3 FSM variants show 128 each. Since exact worker sampled-row exposure has not been measured, this does not localize the cause; it remains an unresolved distribution FSM policy/context or exposure issue. Final P4 disposition requires completed and reconciled runs.",
+  "method": "Read only datetime index plus six active readiness columns from the exact US100 feature Parquet named in feature_cache. Applied DistributionStrategy.distribution_ready semantics from quant_rl/envs/strategies/distribution.py:192-212, restricted to train_start 2024-12-30 through train_end 2025-12-31 and ny_session_mask default 16:30-23:00. Counts are source rows, not sampled environment observations. The original legacy counts and legacy bundle spot checks remain separately labeled and are not used for the active-mode count.",
+  "scope_limit": "The active source-cache predicate has two representative cache-to-bundle spot checks, but no full-column parity or per-worker sampled-row exposure is established. The scan does not explain zero signed actions/opens, and it is not final P4 disposition or performance evidence.",
+  "audit_status": "ACTIVE_MODE_SOURCE_CACHE_SCAN_COMPLETE_BUNDLE_AND_WORKER_EXPOSURE_UNVERIFIED",
+  "effective_entry_mode_verified_from": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_distribution__seed50/attempt1/ladder_a4b_distribution__seed50/20261018_145716_103388_rl_train_seed50_tcn/config.yaml",
+  "effective_entry_mode": "confirmed_first_eligible",
+  "legacy_counts_applicability": "Legacy counts are retained for audit history only; they do not implement the active readiness predicate.",
+  "active_mode_first_ready_rows": {
+    "long": {
+      "training_rows": 7731,
+      "ny_window_training_rows": 2519,
+      "first_ny_ready_bar": "2024-12-30 16:50:00+03:00",
+      "first_ny_ready_values": {
+        "po3_distribution": 1.0,
+        "po3_distribution_direction": 1.0,
+        "htf_day_bias": 1.0,
+        "po3_ifvg_confirmed": 1.0,
+        "ifvg_bull_confirmed": 1.0
+      }
+    },
+    "short": {
+      "training_rows": 11104,
+      "ny_window_training_rows": 2975,
+      "first_ny_ready_bar": "2025-01-02 17:20:00+03:00",
+      "first_ny_ready_values": {
+        "po3_distribution": 1.0,
+        "po3_distribution_direction": -1.0,
+        "htf_day_bias": -1.0,
+        "po3_ifvg_confirmed": 1.0,
+        "ifvg_bear_confirmed": 1.0
+      }
+    }
+  },
+  "legacy_first_ready_bar": {
+    "long": "2024-12-30 09:00:00+03:00",
+    "short": "2024-12-30 19:47:00+03:00"
+  },
+  "legacy_first_ny_eligible_ready_bar": {
+    "long": "2024-12-30 16:51:00+03:00",
+    "short": "2024-12-30 19:47:00+03:00"
+  },
+  "legacy_active_bundle_sample_checks": [
+    {
+      "training_row": 946,
+      "time": "2024-12-30 16:51:00+03:00",
+      "source_values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "bundle_values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "matches": true
+    },
+    {
+      "training_row": 1122,
+      "time": "2024-12-30 19:47:00+03:00",
+      "source_values": [
+        1.0,
+        -1.0,
+        -1.0,
+        1.0
+      ],
+      "bundle_values": [
+        1.0,
+        -1.0,
+        -1.0,
+        1.0
+      ],
+      "matches": true
+    }
+  ],
+  "active_mode_bundle_sample_checks": [
+    {
+      "direction": "long",
+      "row": 945,
+      "bundle_row": 945,
+      "time": "2024-12-30 16:50:00+03:00",
+      "columns": [
+        "po3_distribution",
+        "po3_distribution_direction",
+        "htf_day_bias",
+        "po3_ifvg_confirmed",
+        "ifvg_bull_confirmed",
+        "ifvg_bear_confirmed"
+      ],
+      "source_values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "bundle_values": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "matches": true
+    },
+    {
+      "direction": "short",
+      "row": 3705,
+      "bundle_row": 3705,
+      "time": "2025-01-02 17:20:00+03:00",
+      "columns": [
+        "po3_distribution",
+        "po3_distribution_direction",
+        "htf_day_bias",
+        "po3_ifvg_confirmed",
+        "ifvg_bull_confirmed",
+        "ifvg_bear_confirmed"
+      ],
+      "source_values": [
+        1.0,
+        -1.0,
+        -1.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "bundle_values": [
+        1.0,
+        -1.0,
+        -1.0,
+        1.0,
+        0.0,
+        1.0
+      ],
+      "matches": true
+    }
+  ],
+  "active_mode_bundle_sample_check_scope": "Two direction-specific NY-ready feature rows matched exactly in the active shared bundle; this is a spot check, not full-column parity."
+}

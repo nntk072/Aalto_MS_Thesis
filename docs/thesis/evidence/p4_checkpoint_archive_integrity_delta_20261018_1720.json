@@ -1,0 +1,80 @@
+{
+  "base_snapshot": "p4_checkpoint_archive_integrity_20261018_1648.json",
+  "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+  "campaign_id": "replacement18_seed50_train2025_test2026_20261018_repair1",
+  "checked_at_local": "2026-10-18T17:20:54+03:00",
+  "prior_deltas": [
+    "p4_checkpoint_archive_integrity_delta_20261018_1657.json",
+    "p4_checkpoint_archive_integrity_delta_20261018_1702.json",
+    "p4_checkpoint_archive_integrity_delta_20261018_1707.json",
+    "p4_checkpoint_archive_integrity_delta_20261018_1710.json"
+  ],
+  "records": [
+    {
+      "bytes": 36522228,
+      "checkpoint": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden_dist__seed50/attempt1/ladder_a4a_entry_fsm_hidden_dist__seed50/20261018_145656_298177_rl_train_seed50_tcn/model/ppo_ckpt_4000000_steps.zip",
+      "fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+      "passed": true,
+      "run_key": "ladder_a4a_entry_fsm_hidden_dist__seed50",
+      "seed": 50,
+      "sha256": "a10f8690c6bd19e3b9a0345a77e1bfa33f72bbd407c5a1bf3b91b0802b9efe9a",
+      "stable_during_check": true,
+      "steps": 4000000,
+      "variant": "ladder_a4a_entry_fsm_hidden_dist",
+      "zip_crc_passed": true,
+      "zip_members": 6
+    },
+    {
+      "bytes": 36280149,
+      "checkpoint": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden_po3__seed50/attempt1/ladder_a4a_entry_fsm_hidden_po3__seed50/20261018_145649_771079_rl_train_seed50_tcn/model/ppo_ckpt_4000000_steps.zip",
+      "fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+      "passed": true,
+      "run_key": "ladder_a4a_entry_fsm_hidden_po3__seed50",
+      "seed": 50,
+      "sha256": "f5756a803f62c40855e5c6b0b4987101b0e09bc06ae04fbf6868c647d78294bf",
+      "stable_during_check": true,
+      "steps": 4000000,
+      "variant": "ladder_a4a_entry_fsm_hidden_po3",
+      "zip_crc_passed": true,
+      "zip_members": 6
+    },
+    {
+      "bytes": 36526095,
+      "checkpoint": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_distribution__seed50/attempt1/ladder_a4b_distribution__seed50/20261018_145716_103388_rl_train_seed50_tcn/model/ppo_ckpt_4000000_steps.zip",
+      "fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+      "passed": true,
+      "run_key": "ladder_a4b_distribution__seed50",
+      "seed": 50,
+      "sha256": "2bb587c97255ca86d22cf5b3547e8b481a2f0729541e606f0ca6f8e739e770be",
+      "stable_during_check": true,
+      "steps": 4000000,
+      "variant": "ladder_a4b_distribution",
+      "zip_crc_passed": true,
+      "zip_members": 6
+    },
+    {
+      "bytes": 36287920,
+      "checkpoint": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_po3_ifvg__seed50/attempt1/ladder_a4b_po3_ifvg__seed50/20261018_145711_077098_rl_train_seed50_tcn/model/ppo_ckpt_4000000_steps.zip",
+      "fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+      "passed": true,
+      "run_key": "ladder_a4b_po3_ifvg__seed50",
+      "seed": 50,
+      "sha256": "7dc6124733d24a7f1223a4ecfc8365eb4b6377be1d5d39e23f5010306bc7f1f7",
+      "stable_during_check": true,
+      "steps": 4000000,
+      "variant": "ladder_a4b_po3_ifvg",
+      "zip_crc_passed": true,
+      "zip_members": 6
+    }
+  ],
+  "schema": "p4-checkpoint-integrity-delta-v1",
+  "slurm_job_id": "21029742",
+  "summary": {
+    "changed": 4,
+    "failed": 0,
+    "max_steps": 4000000,
+    "min_steps": 4000000,
+    "passed": 4
+  },
+  "validation_scope": "latest numbered checkpoints not covered by prior P4 snapshots; ZIP CRC/hash/stability and attempt identity"
+}

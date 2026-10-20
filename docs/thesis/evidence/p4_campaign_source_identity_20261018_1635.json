@@ -1,0 +1,32 @@
+{
+  "archived_source_snapshot": {
+    "matching_files": 240,
+    "mismatched_files": [],
+    "missing_files": []
+  },
+  "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+  "campaign_git_sha": "d0183cd34f5707eaadc5dad8af9ce0abf7d42dd1",
+  "campaign_id": "replacement18_seed50_train2025_test2026_20261018_repair1",
+  "created_at_utc": "2026-10-18T13:35:18.627500+00:00",
+  "current_branch": "main",
+  "current_checkout": {
+    "matching_files": 240,
+    "mismatched_files": [],
+    "missing_files": []
+  },
+  "current_git_sha": "d0183cd34f5707eaadc5dad8af9ce0abf7d42dd1",
+  "disposition": "passed",
+  "schema": "aalto.thesis_campaign_source_identity.v1",
+  "slurm_job_id": "21029742",
+  "source_file_count_expected": 240,
+  "source_snapshot": {
+    "actual_sha256": "ad20e51ec17bdce70c364635fa18045cc232a2c564b94031cd7e1c8fca306de9",
+    "archive_entries": 241,
+    "bytes": 814951,
+    "expected_manifest_sha256": "95f50d71724edfb4510f946eeb8f8488c80ad5e41385fa48640e0f73b0f0e2d0",
+    "expected_sha256": "ad20e51ec17bdce70c364635fa18045cc232a2c564b94031cd7e1c8fca306de9",
+    "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/source_snapshot.zip",
+    "sha256_match": true,
+    "zip_test_corrupt_member": null
+  }
+}

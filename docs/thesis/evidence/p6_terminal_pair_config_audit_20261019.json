@@ -1,0 +1,264 @@
+{
+  "campaign": {
+    "fingerprint": "b8001ab6430bb2e23d5e044b1dba7bfe2b407323c5d1e13065f459db335701cb",
+    "id": "replacement18_seed50_train2025_test2026_current_mtf_20261019"
+  },
+  "candidate_pairs_in_preflight_order": [
+    {
+      "control": {
+        "attempt": 3,
+        "checkpoint": {
+          "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt3/ladder_a4b_entry_fsm__seed50/20261019_153204_610795_rl_train_seed50_tcn/model/ppo_final.zip",
+          "sha256": "f5863aaf6a4a161b577fbaa8743649416c8cb4e38a247ee0ad596898c70f6592"
+        },
+        "completed_steps": 20006464,
+        "config_sha256": "93788f5028f037bd7b0abb7e15cbd88d4e74aa01e2b24b6188429fb6a267de52",
+        "feature_cache": {
+          "file_sha256": "2ecb2c35c2fa964239029c5500ddc9c31296418862f9759f0286fa385287f9c8",
+          "identity": "US100.cash_features_v24-native-source-timeframes_753fccd28c376816.parquet",
+          "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/train_test_2025_2026/US100.cash_features_v24-native-source-timeframes_753fccd28c376816.parquet",
+          "sha256": "753fccd28c376816"
+        },
+        "requested_steps": 20000000,
+        "run_dir": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt3/ladder_a4b_entry_fsm__seed50/20261019_153204_610795_rl_train_seed50_tcn",
+        "run_manifest_sha256": "cd0ec865405aa4a477b868146ea5c1efe5c5af80b75db44e187574279c4c2c7a",
+        "seed": 50,
+        "train_bars": {
+          "columns": [
+            "open",
+            "high",
+            "low",
+            "close",
+            "tickvol",
+            "vol",
+            "spread",
+            "gap_flag",
+            "session",
+            "session_id"
+          ],
+          "end": "2025-12-31 23:49:00+03:00",
+          "rows": 351432,
+          "sha256": "ddb03dd3494803dfd5fda1dc4edf9f7601301480c5246d119cb1a815dc0819ad",
+          "start": "2024-12-30 01:05:00+03:00"
+        },
+        "variant": "ladder_a4b_entry_fsm"
+      },
+      "effective_config_changed_paths": [
+        "env.entry_state_observation"
+      ],
+      "intended_delta_matches": true,
+      "same_seed_and_budget": true,
+      "same_train_inputs": true,
+      "treatment": {
+        "attempt": 3,
+        "checkpoint": {
+          "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt3/ladder_a4a_entry_fsm_hidden__seed50/20261019_153152_862268_rl_train_seed50_tcn/model/ppo_final.zip",
+          "sha256": "e29795e11390bf55edf6f0a03f60a34b4388b46cbe4f787b6572fd81b39f422c"
+        },
+        "completed_steps": 20006464,
+        "config_sha256": "e401d38c159bbf1bc3927eb553880a5e9b2308885c8527e86e920e8567f9d20b",
+        "feature_cache": {
+          "file_sha256": "2ecb2c35c2fa964239029c5500ddc9c31296418862f9759f0286fa385287f9c8",
+          "identity": "US100.cash_features_v24-native-source-timeframes_753fccd28c376816.parquet",
+          "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/train_test_2025_2026/US100.cash_features_v24-native-source-timeframes_753fccd28c376816.parquet",
+          "sha256": "753fccd28c376816"
+        },
+        "requested_steps": 20000000,
+        "run_dir": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt3/ladder_a4a_entry_fsm_hidden__seed50/20261019_153152_862268_rl_train_seed50_tcn",
+        "run_manifest_sha256": "1e1d65287cd74ed8aabd10d5bff551ee24182d910467a8d1fd4911b66839a77b",
+        "seed": 50,
+        "train_bars": {
+          "columns": [
+            "open",
+            "high",
+            "low",
+            "close",
+            "tickvol",
+            "vol",
+            "spread",
+            "gap_flag",
+            "session",
+            "session_id"
+          ],
+          "end": "2025-12-31 23:49:00+03:00",
+          "rows": 351432,
+          "sha256": "ddb03dd3494803dfd5fda1dc4edf9f7601301480c5246d119cb1a815dc0819ad",
+          "start": "2024-12-30 01:05:00+03:00"
+        },
+        "variant": "ladder_a4a_entry_fsm_hidden"
+      }
+    },
+    {
+      "control": {
+        "attempt": 3,
+        "checkpoint": {
+          "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4b_po3_ifvg__seed50/attempt3/ladder_a4b_po3_ifvg__seed50/20261019_153205_433484_rl_train_seed50_tcn/model/ppo_final.zip",
+          "sha256": "4d61f6a0bdd251c60707c606e2dc54e22078176fc2d6785e30571fa7d928c569"
+        },
+        "completed_steps": 20006464,
+        "config_sha256": "4d2c5efee2a21de1d23f6a9b79680b920f7cb84d0e6a32f131ad9875de540747",
+        "feature_cache": {
+          "file_sha256": "306a40d31669f83b57c4f48a0de80f690d773be6027aef420ab53c14e4fcba26",
+          "identity": "US100.cash_features_v24-native-source-timeframes_b9600dd72c482315.parquet",
+          "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/train_test_2025_2026/US100.cash_features_v24-native-source-timeframes_b9600dd72c482315.parquet",
+          "sha256": "b9600dd72c482315"
+        },
+        "requested_steps": 20000000,
+        "run_dir": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4b_po3_ifvg__seed50/attempt3/ladder_a4b_po3_ifvg__seed50/20261019_153205_433484_rl_train_seed50_tcn",
+        "run_manifest_sha256": "9f400b91dbf08680ac86b1205fbd127c5a1a97e6e74efca507c772b2550254bf",
+        "seed": 50,
+        "train_bars": {
+          "columns": [
+            "open",
+            "high",
+            "low",
+            "close",
+            "tickvol",
+            "vol",
+            "spread",
+            "gap_flag",
+            "session",
+            "session_id"
+          ],
+          "end": "2025-12-31 23:49:00+03:00",
+          "rows": 351432,
+          "sha256": "ddb03dd3494803dfd5fda1dc4edf9f7601301480c5246d119cb1a815dc0819ad",
+          "start": "2024-12-30 01:05:00+03:00"
+        },
+        "variant": "ladder_a4b_po3_ifvg"
+      },
+      "effective_config_changed_paths": [
+        "env.entry_state_observation"
+      ],
+      "intended_delta_matches": true,
+      "same_seed_and_budget": true,
+      "same_train_inputs": true,
+      "treatment": {
+        "attempt": 3,
+        "checkpoint": {
+          "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4a_entry_fsm_hidden_po3__seed50/attempt3/ladder_a4a_entry_fsm_hidden_po3__seed50/20261019_153154_320312_rl_train_seed50_tcn/model/ppo_final.zip",
+          "sha256": "34b0c878129e3df8f5a49c2f96f96e3c458e2ae7819e0f0b7fad113695b2bf93"
+        },
+        "completed_steps": 20006464,
+        "config_sha256": "34d3b3c0de837d10b08f0033acfdd4ba2ac93d4e857c70500cd7863a17972b1f",
+        "feature_cache": {
+          "file_sha256": "306a40d31669f83b57c4f48a0de80f690d773be6027aef420ab53c14e4fcba26",
+          "identity": "US100.cash_features_v24-native-source-timeframes_b9600dd72c482315.parquet",
+          "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/train_test_2025_2026/US100.cash_features_v24-native-source-timeframes_b9600dd72c482315.parquet",
+          "sha256": "b9600dd72c482315"
+        },
+        "requested_steps": 20000000,
+        "run_dir": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4a_entry_fsm_hidden_po3__seed50/attempt3/ladder_a4a_entry_fsm_hidden_po3__seed50/20261019_153154_320312_rl_train_seed50_tcn",
+        "run_manifest_sha256": "5996ce31de603818c20e6854485bc79b955a05db56783650df69e9818d28c5c4",
+        "seed": 50,
+        "train_bars": {
+          "columns": [
+            "open",
+            "high",
+            "low",
+            "close",
+            "tickvol",
+            "vol",
+            "spread",
+            "gap_flag",
+            "session",
+            "session_id"
+          ],
+          "end": "2025-12-31 23:49:00+03:00",
+          "rows": 351432,
+          "sha256": "ddb03dd3494803dfd5fda1dc4edf9f7601301480c5246d119cb1a815dc0819ad",
+          "start": "2024-12-30 01:05:00+03:00"
+        },
+        "variant": "ladder_a4a_entry_fsm_hidden_po3"
+      }
+    },
+    {
+      "control": {
+        "attempt": 3,
+        "checkpoint": {
+          "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4b_distribution__seed50/attempt3/ladder_a4b_distribution__seed50/20261019_153205_474922_rl_train_seed50_tcn/model/ppo_final.zip",
+          "sha256": "83b2b0721e42500a4f2921ba8a9a7a79619e1f430067c4881711b0e039213ebf"
+        },
+        "completed_steps": 20006464,
+        "config_sha256": "042755f7e728ba3dbfc0203713a85ae78f58dceb3f0357724dd9ecd9d43fdf00",
+        "feature_cache": {
+          "file_sha256": "34e05024a1b28ed483d2943828738ae24ad7ecfef21490e845a59bbdf7ca8aae",
+          "identity": "US100.cash_features_v24-native-source-timeframes_c1bad5dead0a4e96.parquet",
+          "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/train_test_2025_2026/US100.cash_features_v24-native-source-timeframes_c1bad5dead0a4e96.parquet",
+          "sha256": "c1bad5dead0a4e96"
+        },
+        "requested_steps": 20000000,
+        "run_dir": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4b_distribution__seed50/attempt3/ladder_a4b_distribution__seed50/20261019_153205_474922_rl_train_seed50_tcn",
+        "run_manifest_sha256": "2f18c9d71301b614d4c4a388091871f4ba4de537fe2fd48d16bdf2100f6cdc75",
+        "seed": 50,
+        "train_bars": {
+          "columns": [
+            "open",
+            "high",
+            "low",
+            "close",
+            "tickvol",
+            "vol",
+            "spread",
+            "gap_flag",
+            "session",
+            "session_id"
+          ],
+          "end": "2025-12-31 23:49:00+03:00",
+          "rows": 351432,
+          "sha256": "ddb03dd3494803dfd5fda1dc4edf9f7601301480c5246d119cb1a815dc0819ad",
+          "start": "2024-12-30 01:05:00+03:00"
+        },
+        "variant": "ladder_a4b_distribution"
+      },
+      "effective_config_changed_paths": [
+        "env.entry_state_observation"
+      ],
+      "intended_delta_matches": true,
+      "same_seed_and_budget": true,
+      "same_train_inputs": true,
+      "treatment": {
+        "attempt": 3,
+        "checkpoint": {
+          "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4a_entry_fsm_hidden_dist__seed50/attempt3/ladder_a4a_entry_fsm_hidden_dist__seed50/20261019_153154_175103_rl_train_seed50_tcn/model/ppo_final.zip",
+          "sha256": "f34bc3099382ac3bd1469a0064841d9786f385791f034af59a49559bea679ce6"
+        },
+        "completed_steps": 20006464,
+        "config_sha256": "02649d92478a888dfaa9ccee38e509b53f8abdbba3f564390629a1a3ca8e02d5",
+        "feature_cache": {
+          "file_sha256": "34e05024a1b28ed483d2943828738ae24ad7ecfef21490e845a59bbdf7ca8aae",
+          "identity": "US100.cash_features_v24-native-source-timeframes_c1bad5dead0a4e96.parquet",
+          "path": "/scratch/work/nguyenl37/Aalto_MS_Thesis/cache/train_test_2025_2026/US100.cash_features_v24-native-source-timeframes_c1bad5dead0a4e96.parquet",
+          "sha256": "c1bad5dead0a4e96"
+        },
+        "requested_steps": 20000000,
+        "run_dir": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4a_entry_fsm_hidden_dist__seed50/attempt3/ladder_a4a_entry_fsm_hidden_dist__seed50/20261019_153154_175103_rl_train_seed50_tcn",
+        "run_manifest_sha256": "f6d20c0811f8ef96ca635a67d2944d96e288d7e28a33cf42ff6a26cf2cdab1ff",
+        "seed": 50,
+        "train_bars": {
+          "columns": [
+            "open",
+            "high",
+            "low",
+            "close",
+            "tickvol",
+            "vol",
+            "spread",
+            "gap_flag",
+            "session",
+            "session_id"
+          ],
+          "end": "2025-12-31 23:49:00+03:00",
+          "rows": 351432,
+          "sha256": "ddb03dd3494803dfd5fda1dc4edf9f7601301480c5246d119cb1a815dc0819ad",
+          "start": "2024-12-30 01:05:00+03:00"
+        },
+        "variant": "ladder_a4a_entry_fsm_hidden_dist"
+      }
+    }
+  ],
+  "method": "Compare saved attempt-3 effective config snapshots and run manifests; do not inspect test metrics.",
+  "role": "terminal-run configuration comparability audit only; no pair frozen; no performance or test outcomes used",
+  "schema": "aalto.current_campaign_terminal_pair_config_audit.v1",
+  "source_campaign_config_preflight": "docs/thesis/evidence/p6_current_campaign_pair_config_preflight_20261019.json"
+}

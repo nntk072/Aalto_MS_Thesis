@@ -1,0 +1,122 @@
+{
+  "campaign": {
+    "campaign_spec": "config/campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019.yaml",
+    "fingerprint": "b8001ab6430bb2e23d5e044b1dba7bfe2b407323c5d1e13065f459db335701cb",
+    "git_sha": "d0183cd34f5707eaadc5dad8af9ce0abf7d42dd1",
+    "id": "replacement18_seed50_train2025_test2026_current_mtf_20261019"
+  },
+  "candidate_pairs": [
+    {
+      "control": {
+        "effective_config_sha256": "7fd3c7088e7cf8f6abd719bc3b66bbc35df8153649aa6437875cbb8ceda67aa2",
+        "resolved_config_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/resolved_config.json",
+        "resolved_config_sha256": "12740e84d24ea6f3089a458619cbf23c2ae0857ea43bd8b7b562308bf0c70cdd",
+        "variant": "ladder_a4b_entry_fsm"
+      },
+      "effective_changed_paths": [
+        "env.entry_state_observation"
+      ],
+      "intended_delta": {
+        "env.entry_state_observation": {
+          "control": true,
+          "treatment": false
+        }
+      },
+      "matched_except_intended_delta": true,
+      "shared_effective_config_sha256": "b1fc24518f0730796382c780292ed4c3978af34e1d2287594073f9fedc45a512",
+      "treatment": {
+        "effective_config_sha256": "34c74b8e1f92de0fc95a28bc22ee4495ba618d56f9604176f00e07e7fa5489b6",
+        "resolved_config_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/resolved_config.json",
+        "resolved_config_sha256": "4536da938c214e82b23b4c632864db7df8fb58f687b81fd230e0e7ea63da2ebb",
+        "variant": "ladder_a4a_entry_fsm_hidden"
+      }
+    },
+    {
+      "control": {
+        "effective_config_sha256": "e91ddb80d7d6afd1b2e88f54502a0ad7181c8c71b50f1f7ebb68258bfe9eeaf3",
+        "resolved_config_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4b_po3_ifvg__seed50/attempt1/ladder_a4b_po3_ifvg__seed50/resolved_config.json",
+        "resolved_config_sha256": "b815eb564cb75acfadaa7d0812a182233a8b68982df6ae330321ac0b9bb8ab6f",
+        "variant": "ladder_a4b_po3_ifvg"
+      },
+      "effective_changed_paths": [
+        "env.entry_state_observation"
+      ],
+      "intended_delta": {
+        "env.entry_state_observation": {
+          "control": true,
+          "treatment": false
+        }
+      },
+      "matched_except_intended_delta": true,
+      "shared_effective_config_sha256": "fe1cecabb3f1d81ba0ccbc7f0da7a9b0ec76ef45c19ed674f74ae57ddcba6002",
+      "treatment": {
+        "effective_config_sha256": "630f6e3a7ec3e1f67d9350c75be0ebedee0b0c89161d127eea7dc98996ae58df",
+        "resolved_config_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4a_entry_fsm_hidden_po3__seed50/attempt1/ladder_a4a_entry_fsm_hidden_po3__seed50/resolved_config.json",
+        "resolved_config_sha256": "fdb98c6e4c9495413010c04f261e72268516cb10e04b105ecaf1ecdc97fdba77",
+        "variant": "ladder_a4a_entry_fsm_hidden_po3"
+      }
+    },
+    {
+      "control": {
+        "effective_config_sha256": "9e2b2cfbe5065879ceb28160b324730a2e2e1e235fab53a72660cf4289ce8c68",
+        "resolved_config_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4b_distribution__seed50/attempt1/ladder_a4b_distribution__seed50/resolved_config.json",
+        "resolved_config_sha256": "5a8dff83f075fc8ebd2568f7049e46b9fe791d4125bb08097cb5609607a76b61",
+        "variant": "ladder_a4b_distribution"
+      },
+      "effective_changed_paths": [
+        "env.entry_state_observation"
+      ],
+      "intended_delta": {
+        "env.entry_state_observation": {
+          "control": true,
+          "treatment": false
+        }
+      },
+      "matched_except_intended_delta": true,
+      "shared_effective_config_sha256": "88588139e6a5d7704ba244d828c5d8a993f36e674e72941f8dd0511f30c3cbf7",
+      "treatment": {
+        "effective_config_sha256": "d1bc6691d098164712adf9aa5d70035790d7954333941a270e5a65b45bdcf28c",
+        "resolved_config_path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019/runs/attempts/ladder_a4a_entry_fsm_hidden_dist__seed50/attempt1/ladder_a4a_entry_fsm_hidden_dist__seed50/resolved_config.json",
+        "resolved_config_sha256": "c2492f1d3499c9c59a927affcd255712a9ab34af3d55324fa2a9e166e0d0e76e",
+        "variant": "ladder_a4a_entry_fsm_hidden_dist"
+      }
+    }
+  ],
+  "created_at_utc": "2026-10-19T02:27:07.184096+00:00",
+  "method": "Resolve each candidate through resolve_variant and the production _load_merged_config path; compare the full effective config mappings.",
+  "role": "configuration-match candidates only; no pair selected or frozen; no training metrics or test outcomes inspected",
+  "schema": "aalto.current_campaign_rq1_pair_config_preflight.v1",
+  "source_files": [
+    {
+      "matches_campaign_source_snapshot": true,
+      "path": "config/features/full_po3_mtf.yaml",
+      "sha256": "2aa28994914f20291fda43b5080220d2f965805756c57ea704c98c53186b4061"
+    },
+    {
+      "matches_campaign_source_snapshot": true,
+      "path": "config/2_po3_ifvg.yaml",
+      "sha256": "d1b82169cb8b55cac5dae5fe43ee93fe24beb1144d6278fd606d310789d39a88"
+    },
+    {
+      "matches_campaign_source_snapshot": true,
+      "path": "config/3_distribution.yaml",
+      "sha256": "c04d194cc5e87a148c47fde63a910af9c3aacd914c93d0b06ca747b10f9b451c"
+    },
+    {
+      "matches_campaign_source_snapshot": true,
+      "path": "quant_rl/config/default.yaml",
+      "sha256": "b6db47fc89e9278e93ef2e84bc77e314620a746e910b1722351e2507a8240ad5"
+    },
+    {
+      "matches_campaign_source_snapshot": true,
+      "path": "quant_rl/train/train_rl.py",
+      "sha256": "2a8f1fee6435a05021977accd19eea4d07b9842ea77503dadc20353a37f78aff"
+    },
+    {
+      "matches_campaign_source_snapshot": true,
+      "path": "quant_rl/train/variant_resolver.py",
+      "sha256": "839574e76162fd89540e571f955f81922533bc47447764a34c34e0e0bf5e7df4"
+    }
+  ],
+  "status": "passed"
+}

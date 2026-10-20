@@ -1,0 +1,546 @@
+{
+  "audit_script": "scripts/research/audit_replacement_partition_integrity.py",
+  "audit_script_sha256": "740a57b46b2b8855aa0e8428060bb462949ae92aa89f6f858b284dc0a06cfa7b",
+  "created_at_utc": "2026-10-18T10:32:04.854777+00:00",
+  "date_contract": {
+    "report_only_test_end_inclusive": "2026-10-16",
+    "test_role": "continuous exploratory/report-only; previously inspected",
+    "testing_start_inclusive": "2026-01-01",
+    "training_end_inclusive": "2025-12-31",
+    "training_start_inclusive": "2024-12-30"
+  },
+  "exports": {
+    "US100.cash_202412300105_202610162349.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 6345169212,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US100.cash_202412300105_202610162349.csv",
+        "row_count": 135043551,
+        "sha256": "e70a971fb84bf1c32083886eebbaa0691c2e122d9775394b87b644905d52afcb"
+      },
+      "testing": {
+        "bytes": 3702942466,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US100.cash_202412300105_202610162349.csv",
+        "row_count": 78798505,
+        "sha256": "01730f3c2adb2087468964267fdfec4bbb1186db10f82ea4157f7939092d687e"
+      },
+      "training": {
+        "bytes": 2642226797,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US100.cash_202412300105_202610162349.csv",
+        "row_count": 56245046,
+        "sha256": "631dbc13f17e6a974429cd00c87e9019b4f2c8f459fa9109e799c02863df5b23"
+      }
+    },
+    "US100.cash_H1_202412300100_202610162300.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 728311,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US100.cash_H1_202412300100_202610162300.csv",
+        "row_count": 10636,
+        "sha256": "c9e398bd45a3d2f6bb9e1991a4bac6a48d06b17afacc76da36b4c44529f48610"
+      },
+      "testing": {
+        "bytes": 323897,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US100.cash_H1_202412300100_202610162300.csv",
+        "row_count": 4707,
+        "sha256": "cd469d110a8ac47fd72f7e04d38b4e7f888bfaad262c8205cab2f0f902564545"
+      },
+      "training": {
+        "bytes": 404482,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US100.cash_H1_202412300100_202610162300.csv",
+        "row_count": 5929,
+        "sha256": "693e9b3df53e522b16c63f1d9ab9c7e29f0c29555f066b3a90554b34a9dd7c0b"
+      }
+    },
+    "US100.cash_H4_202412300000_202610162000.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 191698,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US100.cash_H4_202412300000_202610162000.csv",
+        "row_count": 2781,
+        "sha256": "9aa409187df685642350faae6f9652fe804befb5e569a0e00def4385506dfc51"
+      },
+      "testing": {
+        "bytes": 85030,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US100.cash_H4_202412300000_202610162000.csv",
+        "row_count": 1229,
+        "sha256": "7497a0660038382ff633db23a74776578699cf1a654f19263a767e0e5a00dfbb"
+      },
+      "training": {
+        "bytes": 106736,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US100.cash_H4_202412300000_202610162000.csv",
+        "row_count": 1552,
+        "sha256": "83855aed1db0517f43b76ef2e3484908e43d9744d955abb8c828aad699a1e2af"
+      }
+    },
+    "US100.cash_M10_202412300100_202610162340.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 4287341,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US100.cash_M10_202412300100_202610162340.csv",
+        "row_count": 63331,
+        "sha256": "4fa1998033185ec06eac79343853bcb4128d1a22b45bd002426222c7d5b18eb9"
+      },
+      "testing": {
+        "bytes": 1904952,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US100.cash_M10_202412300100_202610162340.csv",
+        "row_count": 28039,
+        "sha256": "cf22ac27950d54b964731ce660ac38edc550276adb9b3e2097757c946b2a3362"
+      },
+      "training": {
+        "bytes": 2382457,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US100.cash_M10_202412300100_202610162340.csv",
+        "row_count": 35292,
+        "sha256": "a13bdee2606d3bed19e301196fc29e426d97fdf05373fee83a734181004ade53"
+      }
+    },
+    "US100.cash_M15_202412300100_202610162345.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 2883224,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US100.cash_M15_202412300100_202610162345.csv",
+        "row_count": 42519,
+        "sha256": "b7c43a6beb51f12b8bf6ca81598539ec5829e25de851cc661c864c1355abe08f"
+      },
+      "testing": {
+        "bytes": 1279708,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US100.cash_M15_202412300100_202610162345.csv",
+        "row_count": 18825,
+        "sha256": "d9c89e63e62ba08563895093cfa2498acf7e132a8614a0d3502c2798dd83c615"
+      },
+      "training": {
+        "bytes": 1603584,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US100.cash_M15_202412300100_202610162345.csv",
+        "row_count": 23694,
+        "sha256": "1eb96fafbdbcfa140e50d6430e7fdfbd891dcad22eae597771678c0ed607c6cd"
+      }
+    },
+    "US100.cash_M1_202412300105_202610162349.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 42077931,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US100.cash_M1_202412300105_202610162349.csv",
+        "row_count": 630787,
+        "sha256": "4c46c6c9820cba15cea38487228d9c334467087b8bb109e3ffad7ca234d83f8c"
+      },
+      "testing": {
+        "bytes": 18698100,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US100.cash_M1_202412300105_202610162349.csv",
+        "row_count": 279355,
+        "sha256": "0a8268734f6b6564dd48836c5a86b074748487538ca5b640fcd13fe11c23e08e"
+      },
+      "training": {
+        "bytes": 23379899,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US100.cash_M1_202412300105_202610162349.csv",
+        "row_count": 351432,
+        "sha256": "c0ad7d79a8769fa93323e630fd27ff73de32eac3882c252994d0a426b93137e0"
+      }
+    },
+    "US100.cash_M30_202412300100_202610162330.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 1447422,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US100.cash_M30_202412300100_202610162330.csv",
+        "row_count": 21265,
+        "sha256": "250a746d65064190035d90ba99acf9f956cf4e2fd8e3fe6e97240518e60904b5"
+      },
+      "testing": {
+        "bytes": 643138,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US100.cash_M30_202412300100_202610162330.csv",
+        "row_count": 9413,
+        "sha256": "c4957b803c200b2d3f1d6d14e822534239f2e88329e6c1f72d23d8878605bdf1"
+      },
+      "training": {
+        "bytes": 804352,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US100.cash_M30_202412300100_202610162330.csv",
+        "row_count": 11852,
+        "sha256": "256a8fb8c959a61f2fada196163ba8da0edf94de67146d175fbdab9eba75c5d7"
+      }
+    },
+    "US100.cash_M3_202412300103_202610162348.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 14138570,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US100.cash_M3_202412300103_202610162348.csv",
+        "row_count": 210746,
+        "sha256": "21c200a927db10622022dbf3f846c48f5f8eba0a4eb4cfc998d21d55bee40ac2"
+      },
+      "testing": {
+        "bytes": 6283678,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US100.cash_M3_202412300103_202610162348.csv",
+        "row_count": 93322,
+        "sha256": "0c8f3ec400b9159d1e86b85b2bbf3c783c0d38f2b968d4108196409e55fe4f18"
+      },
+      "training": {
+        "bytes": 7854960,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US100.cash_M3_202412300103_202610162348.csv",
+        "row_count": 117424,
+        "sha256": "217c2f8bfdd1ff30938868f81d3fb682f8919bc703171cb29f88ddc6a6bab461"
+      }
+    },
+    "US100.cash_M5_202412300105_202610162345.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 8506586,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US100.cash_M5_202412300105_202610162345.csv",
+        "row_count": 126179,
+        "sha256": "10ecf18c879731c716d1e569534eb0b1b7931b4d31b64da615ed31b20d40a319"
+      },
+      "testing": {
+        "bytes": 3783010,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US100.cash_M5_202412300105_202610162345.csv",
+        "row_count": 55871,
+        "sha256": "1749a005fac4fbddcfd7b793f1e721e71a6e4f5fbdd342c922996f0c20a07d2b"
+      },
+      "training": {
+        "bytes": 4723644,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US100.cash_M5_202412300105_202610162345.csv",
+        "row_count": 70308,
+        "sha256": "07e162ade037e3da909bce02041e0f4ce6e2e85d417c5e3fab9bfeaacc94a7ec"
+      }
+    },
+    "US500.cash_202412300105_202610162349.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 1675150780,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US500.cash_202412300105_202610162349.csv",
+        "row_count": 37246832,
+        "sha256": "0185a863f83118d1b0884e0fc7173a04b266767c9dcc941ee19a84b4a0986457"
+      },
+      "testing": {
+        "bytes": 920762133,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US500.cash_202412300105_202610162349.csv",
+        "row_count": 20462508,
+        "sha256": "da1c930e200e4776778a3ff4d1b9b4f970a01681a41aa3ca34150747e3936b01"
+      },
+      "training": {
+        "bytes": 754388698,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US500.cash_202412300105_202610162349.csv",
+        "row_count": 16784324,
+        "sha256": "36e59a0d20c06bf008c81d5d3126c48b5cc2dd06f7fdd92428e068760415e1b3"
+      }
+    },
+    "US500.cash_D1_202412300000_202610160000.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 25812,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US500.cash_D1_202412300000_202610160000.csv",
+        "row_count": 466,
+        "sha256": "6417bc90dde1d82c3a5f84761c9c01f0c2dffa7a77cb96e179fada98eea6374d"
+      },
+      "testing": {
+        "bytes": 11473,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US500.cash_D1_202412300000_202610160000.csv",
+        "row_count": 206,
+        "sha256": "e09e1a4a26e8b37b9f2176c15d338c1307face292a8871a1ce9827cae5bea8a3"
+      },
+      "training": {
+        "bytes": 14400,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US500.cash_D1_202412300000_202610160000.csv",
+        "row_count": 260,
+        "sha256": "8eccb7d28f99e403df36adbd76097df388187f110e0c19544487dde7b8ceb990"
+      }
+    },
+    "US500.cash_H1_202412300100_202610162300.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 668557,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US500.cash_H1_202412300100_202610162300.csv",
+        "row_count": 10636,
+        "sha256": "a47cc8d9dd2f3926c470693a103d9842b7734c022c87d5b7dcd23aae74bfd076"
+      },
+      "testing": {
+        "bytes": 296545,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US500.cash_H1_202412300100_202610162300.csv",
+        "row_count": 4707,
+        "sha256": "e72435cc1af1353a76bba7b4e9018aff3e804301f4c81741fe5c96ddd01f0355"
+      },
+      "training": {
+        "bytes": 372080,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US500.cash_H1_202412300100_202610162300.csv",
+        "row_count": 5929,
+        "sha256": "bb19f7ef3f8fdf3729b34b91379a3ccef0822d83e73e30b22b9cddbbe785051e"
+      }
+    },
+    "US500.cash_H4_202412300000_202610162000.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 176594,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US500.cash_H4_202412300000_202610162000.csv",
+        "row_count": 2781,
+        "sha256": "fafa6490194182054d731b11b20103532872914782a31fcb2e90f19217c445ac"
+      },
+      "testing": {
+        "bytes": 78261,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US500.cash_H4_202412300000_202610162000.csv",
+        "row_count": 1229,
+        "sha256": "48dabafb91081ced384fcade51f58e37ed76bbb82fd02a62813bb788922e4af4"
+      },
+      "training": {
+        "bytes": 98401,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US500.cash_H4_202412300000_202610162000.csv",
+        "row_count": 1552,
+        "sha256": "d34786fb2fd9f5514298d66756f51b08ac7d3a77b846f133c7e278f4f046235c"
+      }
+    },
+    "US500.cash_M10_202412300100_202610162340.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 3931081,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US500.cash_M10_202412300100_202610162340.csv",
+        "row_count": 63328,
+        "sha256": "cdf77ea1c77758579616d458752cfbc0e1e08b5ab87fd5129d5bc9878c25a9c2"
+      },
+      "testing": {
+        "bytes": 1744125,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US500.cash_M10_202412300100_202610162340.csv",
+        "row_count": 28039,
+        "sha256": "f94830a18f1794ba2374db4dd42258fd5132213bfc65004c06cc2cb3b3df1b9f"
+      },
+      "training": {
+        "bytes": 2187024,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US500.cash_M10_202412300100_202610162340.csv",
+        "row_count": 35289,
+        "sha256": "3326e4e0063ca941d90bf7041b8a53cddcc2e971f47d0cdadb7f8e117ca8ce0a"
+      }
+    },
+    "US500.cash_M15_202412300100_202610162345.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 2646951,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US500.cash_M15_202412300100_202610162345.csv",
+        "row_count": 42518,
+        "sha256": "9997248e41e8481179dc404cc19585ccb930e26b42267fe8d139171655ae8624"
+      },
+      "testing": {
+        "bytes": 1174456,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US500.cash_M15_202412300100_202610162345.csv",
+        "row_count": 18825,
+        "sha256": "3f5d0f9e60d008a5c3d7d3a7761b2ecf8e7dbe17c0588d039277e9b019352156"
+      },
+      "training": {
+        "bytes": 1472563,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US500.cash_M15_202412300100_202610162345.csv",
+        "row_count": 23693,
+        "sha256": "a7785b7005bf7dd8dc1e68c202cd7c10a5a0b2eeebc87fa18021b111a42a4b04"
+      }
+    },
+    "US500.cash_M1_202412300105_202610162349.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 38404762,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US500.cash_M1_202412300105_202610162349.csv",
+        "row_count": 628929,
+        "sha256": "e5929a798083b77ce631407132d4d2efeb658512d49bea296c578b3724a57b51"
+      },
+      "testing": {
+        "bytes": 17069374,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US500.cash_M1_202412300105_202610162349.csv",
+        "row_count": 278956,
+        "sha256": "94f3674d303bd8430a6882c90b508a4a61c6c173a943b3c6d17b8884e66cd8d0"
+      },
+      "training": {
+        "bytes": 21335456,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US500.cash_M1_202412300105_202610162349.csv",
+        "row_count": 349973,
+        "sha256": "8ee4ef65d952974dadb3ba0f5e39536060a1563665dd5ad509404355b888d41e"
+      }
+    },
+    "US500.cash_M30_202412300100_202610162330.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 1330270,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US500.cash_M30_202412300100_202610162330.csv",
+        "row_count": 21264,
+        "sha256": "458e8b7e0e3b790fe1cd4cf6bf91f81ed00c29303952eba4149b36c618321677"
+      },
+      "testing": {
+        "bytes": 590336,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US500.cash_M30_202412300100_202610162330.csv",
+        "row_count": 9413,
+        "sha256": "1615c15e45d610ff4e7f55725b25d5cb62aa7e3641e063f19974e13407dd45d2"
+      },
+      "training": {
+        "bytes": 740002,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US500.cash_M30_202412300100_202610162330.csv",
+        "row_count": 11851,
+        "sha256": "afcf8b1928c3a6a740f6cb15de21a50430a8ef114c157789bfd5fed245649e65"
+      }
+    },
+    "US500.cash_M3_202412300103_202610162348.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 12970192,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US500.cash_M3_202412300103_202610162348.csv",
+        "row_count": 210741,
+        "sha256": "9dbd4be0956b31bf810870959ac6ab8bc4bb5ae23201464c290f3b523e87877e"
+      },
+      "testing": {
+        "bytes": 5757483,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US500.cash_M3_202412300103_202610162348.csv",
+        "row_count": 93322,
+        "sha256": "496ede59d30e19b61dfa8832bf306d3ee2e2ffdcb673c20fa099c68b2a4a130f"
+      },
+      "training": {
+        "bytes": 7212777,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US500.cash_M3_202412300103_202610162348.csv",
+        "row_count": 117419,
+        "sha256": "076fbc56d648817308174cd1e5c0487fb6da96a9ea4c727dcb2e4565fa0ac684"
+      }
+    },
+    "US500.cash_M5_202412300105_202610162345.csv": {
+      "ordered_partitions_reconstruct_source": true,
+      "source": {
+        "bytes": 7792901,
+        "first_date": "2024-12-30",
+        "last_date": "2026-10-16",
+        "path": "data/US500.cash_M5_202412300105_202610162345.csv",
+        "row_count": 126177,
+        "sha256": "14d6a8222c16218cd0a75a883e33879931343ce4ac82b7b652efc6e846ddb2d6"
+      },
+      "testing": {
+        "bytes": 3458768,
+        "first_date": "2026-01-02",
+        "last_date": "2026-10-16",
+        "path": "data/testing/US500.cash_M5_202412300105_202610162345.csv",
+        "row_count": 55871,
+        "sha256": "e73ddc12d5663b8b0f88ffd4db673237ee17afe0d42bb396e566187b61b75d59"
+      },
+      "training": {
+        "bytes": 4334201,
+        "first_date": "2024-12-30",
+        "last_date": "2025-12-31",
+        "path": "data/training/US500.cash_M5_202412300105_202610162345.csv",
+        "row_count": 70306,
+        "sha256": "7940ffbc5b3041061a51c6267ab969f5bc2559a782d4aa1eba7bdc5dbeda7397"
+      }
+    }
+  },
+  "limitations": [
+    "The audit proves byte identity and ordered partition reconstruction, not feed authenticity, broker calendar validity, or permission to redistribute raw CSV data.",
+    "The raw US100 D1 bar export is absent; the configured pipeline constructs US100 D1 from M1."
+  ],
+  "repository_head": "d0183cd34f5707eaadc5dad8af9ce0abf7d42dd1",
+  "runtime": {
+    "platform": "Linux-5.14.0-687.54.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "python": "3.12.14"
+  },
+  "schema": "aalto.replacement_partition_integrity.v1",
+  "source_identity": {
+    "liquidity_provider": "unknown",
+    "training_use": "user-authorized internal model training",
+    "user_attested_source": "FTMO Demo server, MetaTrader 5"
+  },
+  "summary": {
+    "all_ordered_partitions_reconstruct_source": true,
+    "export_count": 19
+  }
+}

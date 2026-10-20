@@ -1,0 +1,164 @@
+{
+  "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+  "campaign_id": "replacement18_seed50_train2025_test2026_20261018_repair1",
+  "campaign_status": "running",
+  "captured_at_local": "2026-10-18T15:52:13.148194+03:00",
+  "disposition": "Do not select this baseline FSM pair for RQ1 unless the screen source/config is changed and the pair is retrained under a new, independently identified campaign. Do not patch hashed source during the live campaign. Current observation is interim, not a final performance result.",
+  "evidence_role": "interim_screen_viability_diagnostic",
+  "finding": "The baseline entry-FSM pair is structurally unable to create candidates under current source/config semantics. BaselineStrategy inherits context_direction() returning 0; entry_evidence_context() only detects setup for directional context; EntryStateMachine creates candidates only from directional evidence; TradingEnv gates entry actions while FSM is FLAT/CANDIDATE. Both runs currently have zero trades in the 20,000-bar training-prefix monitor.",
+  "limitations": [
+    "Training-prefix evaluation is an interim monitor on 20,000 bars, not the full training split, held-out report period, deterministic checkpoint evaluation, or a final result.",
+    "Both campaign attempts remain running; final disposition belongs in the completed 18-variant reconciliation.",
+    "This finding diagnoses the baseline FSM pair only; it does not establish the viability of the PO3 or distribution FSM pairs.",
+    "No campaign source, attempt, checkpoint, or fingerprint was changed."
+  ],
+  "runs": [
+    {
+      "attempt_provenance": {
+        "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+        "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/attempt_provenance.json",
+        "sha256": "6382be7cdb6b66b1ccd4a7e249fdf88b019f952639c00cdc248175062777b825",
+        "source_hashes": {
+          "quant_rl/envs/entry_state.py": {
+            "current_sha256": "5b8f3258c2d0f14a9a9127f13881a818c99e76cc98b43a5b7c5db36d1600994e",
+            "matches": true,
+            "recorded_sha256": "5b8f3258c2d0f14a9a9127f13881a818c99e76cc98b43a5b7c5db36d1600994e"
+          },
+          "quant_rl/envs/strategies/base.py": {
+            "current_sha256": "037a3823a7f4a517a268b180ad5f676fa7a96fcc99513f5371f8b3fbee7e0275",
+            "matches": true,
+            "recorded_sha256": "037a3823a7f4a517a268b180ad5f676fa7a96fcc99513f5371f8b3fbee7e0275"
+          },
+          "quant_rl/envs/trading_env.py": {
+            "current_sha256": "73798b54bbe10e2b865eb849fc186939deb6b3964bb0ced9cc607ba623eed588",
+            "matches": true,
+            "recorded_sha256": "73798b54bbe10e2b865eb849fc186939deb6b3964bb0ced9cc607ba623eed588"
+          }
+        },
+        "source_hashes_match_current": true
+      },
+      "resolved_config": {
+        "overrides": {
+          "env.entry_state_machine": "true",
+          "env.entry_state_observation": "true",
+          "env.strategy_actions": "true"
+        },
+        "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/resolved_config.json",
+        "seed": 50,
+        "sha256": "12740e84d24ea6f3089a458619cbf23c2ae0857ea43bd8b7b562308bf0c70cdd",
+        "steps": 20000000,
+        "strategy": "baseline",
+        "variant": "ladder_a4b_entry_fsm"
+      },
+      "run_id": "ladder_a4b_entry_fsm__seed50",
+      "train_prefix_monitor": {
+        "last_observation": {
+          "account_currency": "USD",
+          "avg_trade": 0.0,
+          "diversity_text": "TRADE DECISION DIVERSITY\nno strategy opens\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.0,
+          "n_trades": 0.0,
+          "profit_factor": 0.0,
+          "return_pct": 0.0,
+          "reward_mean": 0.0,
+          "role": "training_prefix_monitor",
+          "sharpe": 0.0,
+          "sortino": 0.0,
+          "timestep": 1605632,
+          "total_pnl": 0.0,
+          "turnover": 0.0,
+          "win_rate": 0.0
+        },
+        "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/20261018_145510_410476_rl_train_seed50_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "sha256": "c44b71bb47fba982bbabb8f8cd9812218053bf27499c17d2611847ce2486b25c"
+      }
+    },
+    {
+      "attempt_provenance": {
+        "campaign_fingerprint": "00dd72dbb148ebfaf9a6d7ea1daf6b8d51d1410d7751c0654c0f496172bbe343",
+        "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/attempt_provenance.json",
+        "sha256": "0e58f4668757e7b618762146cc42b326ddd60fe84ea30dfaa73fc42fabe16139",
+        "source_hashes": {
+          "quant_rl/envs/entry_state.py": {
+            "current_sha256": "5b8f3258c2d0f14a9a9127f13881a818c99e76cc98b43a5b7c5db36d1600994e",
+            "matches": true,
+            "recorded_sha256": "5b8f3258c2d0f14a9a9127f13881a818c99e76cc98b43a5b7c5db36d1600994e"
+          },
+          "quant_rl/envs/strategies/base.py": {
+            "current_sha256": "037a3823a7f4a517a268b180ad5f676fa7a96fcc99513f5371f8b3fbee7e0275",
+            "matches": true,
+            "recorded_sha256": "037a3823a7f4a517a268b180ad5f676fa7a96fcc99513f5371f8b3fbee7e0275"
+          },
+          "quant_rl/envs/trading_env.py": {
+            "current_sha256": "73798b54bbe10e2b865eb849fc186939deb6b3964bb0ced9cc607ba623eed588",
+            "matches": true,
+            "recorded_sha256": "73798b54bbe10e2b865eb849fc186939deb6b3964bb0ced9cc607ba623eed588"
+          }
+        },
+        "source_hashes_match_current": true
+      },
+      "resolved_config": {
+        "overrides": {
+          "env.entry_state_machine": "true",
+          "env.entry_state_observation": "false",
+          "env.strategy_actions": "true"
+        },
+        "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/resolved_config.json",
+        "seed": 50,
+        "sha256": "4536da938c214e82b23b4c632864db7df8fb58f687b81fd230e0e7ea63da2ebb",
+        "steps": 20000000,
+        "strategy": "baseline",
+        "variant": "ladder_a4a_entry_fsm_hidden"
+      },
+      "run_id": "ladder_a4a_entry_fsm_hidden__seed50",
+      "train_prefix_monitor": {
+        "last_observation": {
+          "account_currency": "USD",
+          "avg_trade": 0.0,
+          "diversity_text": "TRADE DECISION DIVERSITY\nno strategy opens\n",
+          "evaluated_bars": 20000,
+          "evaluation_split": "training_prefix_monitor",
+          "max_drawdown": 0.0,
+          "n_trades": 0.0,
+          "profit_factor": 0.0,
+          "return_pct": 0.0,
+          "reward_mean": 0.0,
+          "role": "training_prefix_monitor",
+          "sharpe": 0.0,
+          "sortino": 0.0,
+          "timestep": 1703936,
+          "total_pnl": 0.0,
+          "turnover": 0.0,
+          "win_rate": 0.0
+        },
+        "path": "outputs/gpu_campaigns/replacement18_seed50_train2025_test2026_20261018_repair1/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/20261018_145500_650604_rl_train_seed50_tcn/model/dashboard_train_prefix_evaluations.jsonl",
+        "sha256": "d1f697d712d17d94a8098704a308b5c6825a9f153e1a7d5917d9678c98c1efcc"
+      }
+    }
+  ],
+  "schema": "aalto.thesis.p4_interim_structural_viability_diagnostic.v1",
+  "source_chain": [
+    {
+      "effect": "default trade direction is 0 (flat)",
+      "path": "quant_rl/envs/strategies/base.py",
+      "symbol": "TradingStrategy.context_direction"
+    },
+    {
+      "effect": "setup_matches/evidence_detected require context direction in {-1,+1}",
+      "path": "quant_rl/envs/trading_env.py",
+      "symbol": "TradingEnv.entry_evidence_context"
+    },
+    {
+      "effect": "FLAT creates a candidate only when evidence_detected and direction is {-1,+1}",
+      "path": "quant_rl/envs/entry_state.py",
+      "symbol": "EntryStateMachine.observe"
+    },
+    {
+      "effect": "while FSM is FLAT/CANDIDATE, directional policy entries are rejected and decoded to hold",
+      "path": "quant_rl/envs/trading_env.py",
+      "symbol": "TradingEnv.step"
+    }
+  ]
+}
