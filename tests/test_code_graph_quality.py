@@ -48,6 +48,30 @@ def test_config_path_rejects_non_config_text() -> None:
     assert mod._config_path(expr.body, {}) is None
 
 
+def test_graph_status_parses_legacy_text_output(monkeypatch) -> None:
+    outputs = {
+        (str(mod.ROOT / "tools" / "crgraph"), "status"): (
+            "Nodes: 123\n"
+            "Edges: 456\n"
+            "Files: 78\n"
+            "Languages: bash, python\n"
+            "Last updated: 2026-10-20T23:37:30\n"
+            "Built on branch: main\n"
+            "Built at commit: deadbeef\n"
+        ),
+        ("git", "branch", "--show-current"): "main",
+        ("git", "rev-parse", "HEAD"): "deadbeef",
+    }
+    monkeypatch.setattr(mod, "_run", lambda *args: outputs[args])
+    status = mod.graph_status()
+    assert status["nodes"] == 123
+    assert status["edges"] == 456
+    assert status["files"] == 78
+    assert status["languages"] == ["bash", "python"]
+    assert status["built_at_commit"] == "deadbeef"
+    assert status["current_sha"] == "deadbeef"
+
+
 def test_registry_relations_extract_literal_mapping_and_constant() -> None:
     tree = mod.ast.parse(
         'ROOT = Path(".")\n'

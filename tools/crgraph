@@ -17,9 +17,26 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$SCRIPT_DIR"
 
-if ! command -v code-review-graph >/dev/null 2>&1; then
+CRGRAPH_BIN=""
+if [[ -n "${CODE_REVIEW_GRAPH_BIN:-}" && -x "${CODE_REVIEW_GRAPH_BIN}" ]]; then
+  CRGRAPH_BIN="${CODE_REVIEW_GRAPH_BIN}"
+fi
+if [[ -z "$CRGRAPH_BIN" && -n "${THESIS_PYTHON:-}" ]]; then
+  candidate="$(dirname "$THESIS_PYTHON")/code-review-graph"
+  if [[ -x "$candidate" ]]; then
+    CRGRAPH_BIN="$candidate"
+  fi
+fi
+if [[ -z "$CRGRAPH_BIN" ]] && command -v code-review-graph >/dev/null 2>&1; then
+  CRGRAPH_BIN="$(command -v code-review-graph)"
+fi
+if [[ -z "$CRGRAPH_BIN" && -x "$SCRIPT_DIR/.venv/bin/code-review-graph" ]]; then
+  CRGRAPH_BIN="$SCRIPT_DIR/.venv/bin/code-review-graph"
+fi
+
+if [[ -z "$CRGRAPH_BIN" ]]; then
   echo "ERROR: code-review-graph is not installed." >&2
-  echo "  uv tool install code-review-graph" >&2
+  echo "  uv sync --extra dev" >&2
   exit 1
 fi
 
@@ -34,10 +51,10 @@ case "$cmd" in
     exec python3 scripts/dev/code_graph/graph_quality.py check "$@"
     ;;
   build|update|postprocess|embed|watch|status|forget|visualize|wiki|register|unregister|repos|eval|detect-changes|enrich|dead-code|query|impact|search|flows|flow|communities|community|architecture|large-functions|refactor|serve|mcp|daemon)
-    exec code-review-graph "$cmd" "$@"
+    exec "$CRGRAPH_BIN" "$cmd" "$@"
     ;;
   -h|--help|help)
-    exec code-review-graph --help
+    exec "$CRGRAPH_BIN" --help
     ;;
   *)
     echo "Unknown command: $cmd" >&2

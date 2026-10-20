@@ -113,10 +113,44 @@ def git_state() -> dict[str, Any]:
 
 
 def graph_status() -> dict[str, Any]:
-    return cast(
-        dict[str, Any],
-        json.loads(_run(str(ROOT / "tools" / "crgraph"), "status", "--json")),
-    )
+    raw = _run(str(ROOT / "tools" / "crgraph"), "status")
+    if raw.lstrip().startswith("{"):
+        return cast(dict[str, Any], json.loads(raw))
+
+    parsed: dict[str, Any] = {}
+    key_map = {
+        "Nodes": "nodes",
+        "Edges": "edges",
+        "Files": "files",
+        "Languages": "languages",
+        "Last updated": "last_updated",
+        "Built on branch": "built_on_branch",
+        "Built at commit": "built_at_commit",
+    }
+    for line in raw.splitlines():
+        if ":" not in line:
+            continue
+        label, value = line.split(":", 1)
+        key = key_map.get(label.strip())
+        if key is None:
+            continue
+        value = value.strip()
+        if key in {"nodes", "edges", "files"}:
+            parsed[key] = int(value)
+        elif key == "languages":
+            parsed[key] = [item.strip() for item in value.split(",") if item.strip()]
+        else:
+            parsed[key] = value
+
+    missing = {"nodes", "edges", "files"} - parsed.keys()
+    if missing:
+        raise RuntimeError(
+            f"unrecognized code-review-graph status output; missing {sorted(missing)}"
+        )
+
+    parsed["current_branch"] = _run("git", "branch", "--show-current")
+    parsed["current_sha"] = _run("git", "rev-parse", "HEAD")
+    return parsed
 
 
 def connect() -> sqlite3.Connection:
