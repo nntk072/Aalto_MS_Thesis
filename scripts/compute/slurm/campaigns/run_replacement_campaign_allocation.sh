@@ -73,6 +73,7 @@ if [[ ! -s "$OUT_DIR/campaign.json" ]]; then
     tests/test_matrix_campaign_controller.py \
     tests/test_campaign_artifacts.py \
     tests/test_triton_gh200_capacity.py \
+    tests/test_models/test_legacy_checkpoint_migration.py \
     tests/architecture/test_public_imports.py -q
 
   if ((gate_failed == 0)); then

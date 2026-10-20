@@ -334,11 +334,11 @@ def verify_initial_checkpoint_models(
     root_path = str(ROOT)
     if root_path not in sys.path:
         sys.path.insert(0, root_path)
-    from stable_baselines3 import PPO
+    from learning.rl.checkpoint import load_sb3_checkpoint
 
     loaded_steps: dict[str, int] = {}
     for key, path in archived.items():
-        model = PPO.load(path, device="cpu")
+        model = load_sb3_checkpoint(path, device="cpu")
         actual_steps = int(model.num_timesteps)
         expected_steps = int(lineage[key]["source_num_timesteps"])
         if actual_steps != expected_steps:

@@ -12,13 +12,45 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.save_util import json_to_data
 
 
-def load_sb3_checkpoint(path: Path, *, legacy_layout_key: str | None = None) -> Any:
+def _install_pre_reorganization_checkpoint_modules() -> None:
+    """Expose moved class modules while reading checkpoints saved before the package move."""
+    import importlib
+    import sys
+    from types import ModuleType
+
+    legacy_packages = ("quant_rl", "quant_rl.models")
+    for name in legacy_packages:
+        module = sys.modules.get(name)
+        if module is None:
+            module = ModuleType(name)
+            module.__path__ = []
+            sys.modules[name] = module
+        parent_name, _, attribute = name.rpartition(".")
+        if parent_name:
+            setattr(sys.modules[parent_name], attribute, module)
+
+    moved_modules = {
+        "quant_rl.models.encoder": "models.encoders.tcn",
+        "quant_rl.models.ppo_policy": "learning.rl.ppo",
+        "quant_rl.models.rollout_buffer": "learning.rl.rollout_buffer",
+    }
+    for legacy_name, current_name in moved_modules.items():
+        module = importlib.import_module(current_name)
+        sys.modules[legacy_name] = module
+        parent_name, _, attribute = legacy_name.rpartition(".")
+        setattr(sys.modules[parent_name], attribute, module)
+
+
+def load_sb3_checkpoint(
+    path: Path, *, legacy_layout_key: str | None = None, device: Any = "auto"
+) -> Any:
     """Load an SB3 checkpoint with only the explicitly selected legacy migration."""
+    _install_pre_reorganization_checkpoint_modules()
     from learning.rl.ppo import LegacyClampedStdMultiInputPolicy
     from models.encoders import LegacyTCNEncoderV1, TCNEncoder
 
     if legacy_layout_key != "legacy4_no_exit_v1":
-        return PPO.load(path)
+        return PPO.load(path, device=device)
     with ZipFile(path) as archive:
         if "data" not in archive.namelist():
             raise ValueError(f"legacy checkpoint has no SB3 data record: {path}")
@@ -47,6 +79,7 @@ def load_sb3_checkpoint(path: Path, *, legacy_layout_key: str | None = None) -> 
 
 def load_sb3_training_checkpoint(path: Path, *, env: Any, device: Any) -> Any:
     """Resume an SB3 training checkpoint on the caller's prepared environment."""
+    _install_pre_reorganization_checkpoint_modules()
     return PPO.load(path, env=env, device=device)
 
 

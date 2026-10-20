@@ -1,5 +1,7 @@
 """Explicitly load the archived 4D policy and add its structural-exit action."""
 
+import importlib
+
 import gymnasium as gym
 import numpy as np
 import numpy.typing as npt
@@ -9,6 +11,7 @@ from stable_baselines3 import PPO
 from decisioning.actions import build_action_schema
 from evaluation.reanalysis.runner import load_checkpoint
 from learning.rl.agent import LegacyFourToFiveActionAdapter, validate_model_action_schema
+from learning.rl.checkpoint import _install_pre_reorganization_checkpoint_modules
 from learning.rl.ppo import LegacyClampedStdMultiInputPolicy
 from models.encoders import LegacyTCNEncoderV1
 
@@ -74,3 +77,19 @@ def test_legacy4_checkpoint_loads_and_adapter_appends_structural_exit(tmp_path):
     action, _ = LegacyFourToFiveActionAdapter(loaded).predict(obs, deterministic=True)
     assert action.shape == (5,)
     assert action[-1] == -1.0
+
+
+def test_pre_reorganization_checkpoint_modules_resolve_to_current_classes():
+    _install_pre_reorganization_checkpoint_modules()
+
+    legacy_encoder = importlib.import_module("quant_rl.models.encoder")
+    legacy_policy = importlib.import_module("quant_rl.models.ppo_policy")
+    legacy_buffer = importlib.import_module("quant_rl.models.rollout_buffer")
+
+    from learning.rl.ppo import ClampedStdMultiInputPolicy
+    from learning.rl.rollout_buffer import DeviceDictRolloutBuffer
+    from models.encoders import TCNEncoder
+
+    assert getattr(legacy_encoder, "TCNEncoder") is TCNEncoder
+    assert getattr(legacy_policy, "ClampedStdMultiInputPolicy") is ClampedStdMultiInputPolicy
+    assert getattr(legacy_buffer, "DeviceDictRolloutBuffer") is DeviceDictRolloutBuffer
