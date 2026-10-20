@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts/matrix/campaign_controller.py"
+MODULE_PATH = Path(__file__).resolve().parents[1] / "experiments/campaigns/execution.py"
 SPEC = importlib.util.spec_from_file_location("campaign_controller", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 controller = importlib.util.module_from_spec(SPEC)
@@ -21,7 +21,7 @@ SPEC.loader.exec_module(controller)
 
 def test_worker_command_binds_one_gpu_from_shared_allocation() -> None:
     command = controller.worker_command(
-        ["bash", "scripts/train/train_one_variant.sh"],
+        ["bash", "scripts/research/frozen-launches/train_one_variant.sh"],
         node="gpuarm2",
         gpu_type="gh200",
         cpus=7,
@@ -391,10 +391,10 @@ def test_failed_attempt_artifacts_are_hashed_and_remain_terminal_on_resume(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = tmp_path / "repo"
-    (root / "quant_rl" / "config").mkdir(parents=True)
+    (root / "config" / "base").mkdir(parents=True)
     (root / "config" / "campaigns").mkdir(parents=True)
     (root / "scripts").mkdir()
-    (root / "quant_rl" / "config" / "default.yaml").write_text(
+    (root / "config" / "base" / "default.yaml").write_text(
         "data:\n  split:\n    train_end: '2025-12-31'\n    test_start: '2026-01-01'\n"
         "  raw_dir: data\n  m1_files: {}\n  tick_files: {}\n",
         encoding="utf-8",
@@ -402,12 +402,14 @@ def test_failed_attempt_artifacts_are_hashed_and_remain_terminal_on_resume(
     (root / "config" / "experiments.yaml").write_text(
         "variants:\n  - name: test_variant\n", encoding="utf-8"
     )
-    (root / "scripts" / "variant_list.txt").write_text("test_variant\n", encoding="utf-8")
+    (root / "config" / "campaigns" / "variant_list.txt").write_text(
+        "test_variant\n", encoding="utf-8"
+    )
     spec_path = root / "config" / "campaigns" / "test.yaml"
     spec_path.write_text(
         "schema_version: 1\n"
         "campaign_id: test_failed_attempt_resume\n"
-        "variant_file: scripts/variant_list.txt\n"
+        "variant_file: config/campaigns/variant_list.txt\n"
         "variants: [test_variant]\n"
         "seeds: [7]\n"
         "timesteps: 2\n"
@@ -542,15 +544,15 @@ def test_campaign_source_files_include_untracked_runtime_modules(tmp_path: Path)
     root = tmp_path / "repo"
     root.mkdir()
     subprocess.run(["git", "init", "-q", str(root)], check=True)
-    tracked = root / "quant_rl" / "tracked.py"
-    untracked = root / "quant_rl" / "runtime_module.py"
+    tracked = root / "configuration" / "tracked.py"
+    untracked = root / "configuration" / "runtime_module.py"
     documentation = root / "docs" / "mutable_status.md"
     tracked.parent.mkdir()
     tracked.write_text("VALUE = 1\n", encoding="utf-8")
     untracked.write_text("VALUE = 2\n", encoding="utf-8")
     documentation.parent.mkdir()
     documentation.write_text("status updates do not alter runtime identity\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(root), "add", "quant_rl/tracked.py"], check=True)
+    subprocess.run(["git", "-C", str(root), "add", "configuration/tracked.py"], check=True)
 
     sources = controller.campaign_source_files(root)
 

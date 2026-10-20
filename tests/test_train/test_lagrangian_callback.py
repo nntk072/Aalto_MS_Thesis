@@ -12,12 +12,10 @@ from gymnasium import spaces
 from omegaconf import OmegaConf
 from stable_baselines3 import PPO
 
-from quant_rl.config import load_config
-from quant_rl.train.callbacks import LagrangianRiskCallback
-from quant_rl.train.train_rl import (
-    _build_lagrangian_callback,
-    _validate_q5_resume_state,
-)
+from configuration import load_config
+from training.callbacks.core import LagrangianRiskCallback
+from training.setup.callbacks import _build_lagrangian_callback
+from training.setup.models import _validate_q5_resume_state
 
 
 class _Logger:

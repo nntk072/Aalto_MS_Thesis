@@ -5,9 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from quant_rl.envs.observation import closed_window, run_starts
-from quant_rl.envs.strategies import PO3IFVGStrategy
-from quant_rl.envs.trading_env import TradingEnv
+from simulation.environment.env import TradingEnv
+from simulation.environment.observations import closed_window, run_starts
+from trading.strategies import PO3IFVGStrategy
 
 
 def test_closed_m5_window_ends_on_the_candle_that_closed_at_1035() -> None:

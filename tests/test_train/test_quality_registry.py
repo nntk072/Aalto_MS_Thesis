@@ -8,15 +8,15 @@ from types import SimpleNamespace
 import pytest
 from omegaconf import OmegaConf
 
-from quant_rl.config import load_config
-from quant_rl.train.quality_registry import (
+from configuration import load_config
+from training.configuration.quality import (
     apply_quality_variant,
     get_quality_variant,
     load_quality_registry,
     quality_variant_resource_contract,
     validate_quality_resource_shape,
 )
-from quant_rl.train.train_rl import _log_effective_ppo
+from training.setup.models import _log_effective_ppo
 
 
 def test_quality_registry_is_separate_and_staged() -> None:
@@ -55,7 +55,7 @@ stages:
 """,
         encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="does not exist in quant_rl/config/default.yaml"):
+    with pytest.raises(ValueError, match="does not exist in config/base/default.yaml"):
         load_quality_registry(registry_path)
 
 
@@ -152,7 +152,7 @@ stages:
 def test_q2_training_log_records_effective_rollout_and_update_geometry(caplog) -> None:
     cfg = load_config(["env.n_envs=16", "ppo.batch_size=64", "ppo.n_epochs=3", "ppo.n_steps=128"])
     model = SimpleNamespace(n_steps=8, n_envs=16, ent_coef=0.01)
-    caplog.set_level(logging.INFO, logger="quant_rl.train.train_rl")
+    caplog.set_level(logging.INFO, logger="training.setup.models")
 
     _log_effective_ppo(model, cfg)
 

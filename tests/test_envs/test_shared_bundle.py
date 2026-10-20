@@ -17,7 +17,7 @@ from tests.test_envs.test_trading_env_golden_traces import (
 
 def test_observation_schema_bump_changes_default_bundle_identity() -> None:
     """A new observation tensor layout must not reuse v2 bundles."""
-    from quant_rl.envs.shared_bundle import BUNDLE_VERSION, bundle_key
+    from simulation.environment.shared_bundle import BUNDLE_VERSION, bundle_key
 
     arrays, config = _fixture_bundle_inputs()
     sources = {"bars": {"size": len(arrays["bar_time_ns"])}}
@@ -47,7 +47,7 @@ def _fixture_bundle_inputs() -> tuple[dict[str, np.ndarray[Any, Any]], dict[str,
 
 def _concurrent_build(cache_dir: str, result_queue: Any) -> None:
     """Build one identical bundle in a child process."""
-    from quant_rl.envs.shared_bundle import build_bundle
+    from simulation.environment.shared_bundle import build_bundle
 
     arrays, config = _fixture_bundle_inputs()
     result_queue.put(
@@ -64,7 +64,7 @@ def _concurrent_build(cache_dir: str, result_queue: Any) -> None:
 
 def test_bundle_round_trip_matches_source(tmp_path: Path) -> None:
     """Every saved array reloads byte-for-byte equal to its input."""
-    from quant_rl.envs.shared_bundle import build_bundle, load_bundle
+    from simulation.environment.shared_bundle import build_bundle, load_bundle
 
     arrays, config = _fixture_bundle_inputs()
     bundle_path = build_bundle(
@@ -87,7 +87,7 @@ def test_bundle_round_trip_matches_source(tmp_path: Path) -> None:
 
 def test_build_is_idempotent(tmp_path: Path) -> None:
     """A second build reuses the completed directory without rewriting files."""
-    from quant_rl.envs.shared_bundle import build_bundle
+    from simulation.environment.shared_bundle import build_bundle
 
     arrays, config = _fixture_bundle_inputs()
     first = build_bundle(
@@ -110,7 +110,7 @@ def test_build_is_idempotent(tmp_path: Path) -> None:
 
 def test_reuse_only_validates_and_reuses_existing_bundle(tmp_path: Path) -> None:
     """Reuse-only mode checks identity and data without writing bundle files."""
-    from quant_rl.envs.shared_bundle import build_bundle
+    from simulation.environment.shared_bundle import build_bundle
 
     arrays, config = _fixture_bundle_inputs()
     sources = {"bars": {"size": 32}}
@@ -147,7 +147,7 @@ def test_reuse_only_validates_and_reuses_existing_bundle(tmp_path: Path) -> None
 
 def test_reuse_only_fails_when_bundle_is_missing(tmp_path: Path) -> None:
     """Reuse-only mode never silently builds a missing bundle."""
-    from quant_rl.envs.shared_bundle import build_bundle
+    from simulation.environment.shared_bundle import build_bundle
 
     arrays, config = _fixture_bundle_inputs()
     with pytest.raises(FileNotFoundError, match="required reusable bundle"):
@@ -162,7 +162,7 @@ def test_reuse_only_fails_when_bundle_is_missing(tmp_path: Path) -> None:
 
 def test_build_is_atomic_on_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A failed array write leaves neither a final bundle nor temporary files."""
-    import quant_rl.envs.shared_bundle as shared_bundle
+    import simulation.environment.shared_bundle as shared_bundle
 
     arrays, config = _fixture_bundle_inputs()
     key = shared_bundle.bundle_key(config, {"bars": {"size": 32}})
@@ -210,7 +210,7 @@ def test_concurrent_builds_produce_one_bundle(tmp_path: Path) -> None:
 
 def test_key_uses_observation_relevant_config_only() -> None:
     """Observation settings affect the key while logging settings do not."""
-    from quant_rl.envs.shared_bundle import bundle_key
+    from simulation.environment.shared_bundle import bundle_key
 
     _, config = _fixture_bundle_inputs()
     source_fingerprints = {"bars": {"size": 32}}
@@ -227,7 +227,7 @@ def test_key_uses_observation_relevant_config_only() -> None:
 
 def test_bundle_arrays_are_read_only(tmp_path: Path) -> None:
     """Every mmap loaded from the bundle is read-only."""
-    from quant_rl.envs.shared_bundle import build_bundle, load_bundle
+    from simulation.environment.shared_bundle import build_bundle, load_bundle
 
     arrays, config = _fixture_bundle_inputs()
     bundle_path = build_bundle(

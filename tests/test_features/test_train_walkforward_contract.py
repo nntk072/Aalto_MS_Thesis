@@ -1,7 +1,8 @@
-"""Source contract for walk-forward feature inputs, without launching training.
+"""Source contracts for retained walk-forward feature inputs.
 
-The feature builder's numerical fold-isolation tests live in
-test_feature_cache_and_fit_scope.py; this test covers the training call site.
+Numerical fold-isolation coverage lives in test_feature_cache_and_fit_scope.py.
+These tests protect the training composition boundary and the dedicated
+walk-forward runtime after the runner decomposition.
 """
 
 from __future__ import annotations
@@ -11,25 +12,34 @@ import os
 import unittest
 from pathlib import Path
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 TRAIN_MODULE = Path(
     os.environ.get(
         "AALTO_WF_TRAIN_SOURCE",
-        str(Path(__file__).resolve().parents[2] / "quant_rl/train/train_rl.py"),
+        str(_REPO_ROOT / "training/runner/training.py"),
+    )
+)
+WALKFORWARD_MODULE = Path(
+    os.environ.get(
+        "AALTO_WF_RUNTIME_SOURCE",
+        str(_REPO_ROOT / "training/runner/walkforward_runtime.py"),
     )
 )
 
 
+def _named_calls(module: Path, name: str) -> list[ast.Call]:
+    tree = ast.parse(module.read_text(encoding="utf-8"))
+    return [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == name
+    ]
+
+
 class TestWalkForwardSourceContract(unittest.TestCase):
-    def test_walk_forward_uses_retained_train_scoped_sources(self) -> None:
-        tree = ast.parse(TRAIN_MODULE.read_text(encoding="utf-8"))
-        fold_calls = [
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "build_walkforward_fold_features"
-        ]
-        self.assertEqual(len(fold_calls), 1, "Expected one training-driver fold call")
+    def test_walk_forward_runtime_uses_retained_train_scoped_sources(self) -> None:
+        fold_calls = _named_calls(WALKFORWARD_MODULE, "build_walkforward_fold_features")
+        self.assertEqual(len(fold_calls), 1, "Expected one walk-forward fold feature call")
         call = fold_calls[0]
         self.assertGreaterEqual(len(call.args), 2)
         assert isinstance(call.args[0], ast.Name)
@@ -37,49 +47,25 @@ class TestWalkForwardSourceContract(unittest.TestCase):
         self.assertEqual(
             (call.args[0].id, call.args[1].id),
             ("train_bars", "train_sec"),
-            "Fold features must not use deleted full-history or OOS data frames",
+            "Fold features must use the retained training-scope market sources",
         )
 
-    def test_train_scoped_inputs_survive_parent_cleanup(self) -> None:
-        tree = ast.parse(TRAIN_MODULE.read_text(encoding="utf-8"))
-        calls = [
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "build_walkforward_fold_features"
-        ]
-        self.assertEqual(len(calls), 1)
-        call = calls[0]
-        parents: dict[ast.AST, ast.AST] = {}
-        for parent in ast.walk(tree):
-            for child in ast.iter_child_nodes(parent):
-                parents[child] = parent
-        deleted_before: set[str] = set()
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Delete) or node.lineno >= call.lineno:
-                continue
-            for target in node.targets:
-                if not isinstance(target, ast.Name):
-                    continue
-                deleted_before.add(target.id)
-                if target.id == "train_bars":
-                    ancestors: list[ast.AST] = []
-                    cursor: ast.AST = node
-                    while cursor in parents:
-                        cursor = parents[cursor]
-                        ancestors.append(cursor)
-                    self.assertTrue(
-                        any(
-                            isinstance(parent, ast.If)
-                            and "not args.walk_forward" in ast.unparse(parent.test)
-                            for parent in ancestors
-                        ),
-                        "train_bars may only be deleted when walk-forward is disabled",
-                    )
-        self.assertNotIn("train_sec", deleted_before)
-        self.assertIn("primary_m1", deleted_before)
-        self.assertIn("secondary_m1", deleted_before)
+    def test_training_composition_passes_retained_sources_to_walk_forward(self) -> None:
+        calls = _named_calls(TRAIN_MODULE, "run_walk_forward_validation")
+        self.assertEqual(len(calls), 1, "Expected one training composition call")
+        keywords = {kw.arg: kw.value for kw in calls[0].keywords if kw.arg is not None}
+
+        for keyword, attr in (("train_bars", "train_bars"), ("train_sec", "train_sec")):
+            value = keywords.get(keyword)
+            self.assertIsInstance(value, ast.Attribute)
+            assert isinstance(value, ast.Attribute)
+            self.assertIsInstance(value.value, ast.Name)
+            assert isinstance(value.value, ast.Name)
+            self.assertEqual(
+                (value.value.id, value.attr),
+                ("prep", attr),
+                f"{keyword} must remain owned by prepared training state until walk-forward",
+            )
 
 
 if __name__ == "__main__":

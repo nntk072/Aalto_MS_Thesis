@@ -8,7 +8,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from omegaconf import DictConfig, OmegaConf
-from scripts.matrix import rebuild_named_prebuilt_feature_caches as cache_builder
+
+from experiments.campaigns import named_cache_rebuild as cache_builder
 
 
 @pytest.mark.unit
@@ -68,13 +69,28 @@ def test_resolved_config_record_hashes_effective_merged_configuration() -> None:
 
 
 @pytest.mark.unit
-def test_loaded_source_hashes_include_cache_builder() -> None:
+def test_loaded_source_hashes_include_migrated_project_packages_only() -> None:
+    import configuration.paths as configuration_paths
+    import features.pipeline.builder as feature_builder
+    import training.configuration.variant_resolution as variant_resolution
+
     sources = cache_builder._loaded_project_source_hashes()
-    relative_path = Path(cache_builder.__file__).resolve().relative_to(cache_builder.ROOT.resolve())
-    assert relative_path.as_posix() in sources
-    assert sources[relative_path.as_posix()] == cache_builder.sha256_file(
-        Path(cache_builder.__file__).resolve()
+    expected_modules = (
+        cache_builder,
+        configuration_paths,
+        feature_builder,
+        variant_resolution,
     )
+    for module in expected_modules:
+        module_file = module.__file__
+        assert module_file is not None
+        module_path = Path(module_file).resolve()
+        relative_path = module_path.relative_to(cache_builder.ROOT.resolve()).as_posix()
+        assert relative_path in sources
+        assert sources[relative_path] == cache_builder.sha256_file(module_path)
+
+    assert all(not path.startswith("quant_rl/") for path in sources)
+    assert all("site-packages/" not in path for path in sources)
 
 
 @pytest.mark.unit

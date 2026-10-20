@@ -3,7 +3,7 @@
 import itertools
 import unittest
 
-from quant_rl.action_schema import build_action_schema
+from simulation.contracts.actions import build_action_schema
 
 
 class ActionSchemaContractTest(unittest.TestCase):

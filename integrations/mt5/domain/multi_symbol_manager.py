@@ -1,0 +1,212 @@
+from typing import Any
+
+import MetaTrader5 as mt5
+from loguru import logger
+
+from integrations.mt5.domain.data_sources.mt5_data import MT5Data
+from integrations.mt5.domain.mt5_connection import ensure_mt5_logged_in
+from integrations.mt5.domain.volatility_analyzer import VolatilityAnalyzer
+
+
+class MultiSymbolManager:
+    """
+    Manages multiple symbol data sources and their configurations.
+    Handles symbol selection, data fetching, and volatility analysis.
+    """
+
+    def __init__(
+        self,
+        login: str,
+        server: str,
+        password: str,
+        terminal_path: str,
+        symbols: list[str],
+        timeframe: int = mt5.TIMEFRAME_H1,
+    ):
+        """
+        Initialize Multi-Symbol Manager.
+
+        Args:
+            login: MT5 account login
+            server: MT5 server name
+            password: MT5 account password
+            terminal_path: Path to MT5 terminal executable
+            symbols: List of symbols to manage
+            timeframe: MT5 timeframe for data
+        """
+        self.login = login
+        self.server = server
+        self.password = password
+        self.terminal_path = terminal_path
+        self.symbols = symbols
+        self.timeframe = timeframe
+
+        # Initialize/login once per process (safe to call multiple times)
+        ensure_mt5_logged_in(
+            login=login,
+            password=password,
+            server=server,
+            terminal_path=terminal_path,
+        )
+
+        # Initialize data sources for each symbol
+        self.data_sources: dict[str, MT5Data] = {}
+        self.volatility_metrics: dict[str, dict[str, Any]] = {}
+
+        self._initialize_data_sources()
+
+    def _initialize_data_sources(self) -> None:
+        """Initialize data sources for all symbols."""
+        for symbol in self.symbols:
+            try:
+                # Select symbol in MT5
+                if not mt5.symbol_select(symbol, True):
+                    logger.warning(f"Symbol {symbol} not available, skipping")
+                    continue
+
+                # Create data source
+                data_source = MT5Data(symbol, self.timeframe)
+
+                self.data_sources[symbol] = data_source
+                logger.info(f"Initialized data source for {symbol}")
+
+            except Exception as e:
+                logger.error(f"Error initializing data source for {symbol}: {e}")
+
+    def get_data_source(self, symbol: str) -> MT5Data | None:
+        """
+        Get data source for a symbol.
+
+        Args:
+            symbol: Trading symbol
+
+        Returns:
+            MT5Data instance or None if not found
+        """
+        return self.data_sources.get(symbol)
+
+    def get_all_data_sources(self) -> dict[str, MT5Data]:
+        """
+        Get all data sources.
+
+        Returns:
+            Dictionary mapping symbol names to MT5Data instances
+        """
+        return self.data_sources.copy()
+
+    def update_volatility_metrics(self, analyzer: VolatilityAnalyzer) -> None:
+        """
+        Update volatility metrics for all symbols.
+
+        Args:
+            analyzer: VolatilityAnalyzer instance
+        """
+        for symbol in self.symbols:
+            try:
+                metrics = analyzer.calculate_volatility_metrics(symbol, self.timeframe)
+                if metrics:
+                    self.volatility_metrics[symbol] = metrics
+            except Exception as e:
+                logger.error(f"Error updating volatility metrics for {symbol}: {e}")
+
+    def get_volatility_metrics(self, symbol: str) -> dict[str, Any] | None:
+        """
+        Get volatility metrics for a symbol.
+
+        Args:
+            symbol: Trading symbol
+
+        Returns:
+            Dictionary with volatility metrics or None
+        """
+        return self.volatility_metrics.get(symbol)
+
+    def get_all_volatility_metrics(self) -> dict[str, dict[str, Any]]:
+        """
+        Get volatility metrics for all symbols.
+
+        Returns:
+            Dictionary mapping symbol names to volatility metrics
+        """
+        return self.volatility_metrics.copy()
+
+    def add_symbol(self, symbol: str) -> bool:
+        """
+        Add a new symbol to the manager.
+
+        Args:
+            symbol: Trading symbol to add
+
+        Returns:
+            True if successfully added, False otherwise
+        """
+        if symbol in self.data_sources:
+            logger.warning(f"Symbol {symbol} already exists")
+            return True
+
+        try:
+            # Select symbol in MT5
+            if not mt5.symbol_select(symbol, True):
+                logger.error(f"Symbol {symbol} not available")
+                return False
+
+            # Create data source
+            data_source = MT5Data(symbol, self.timeframe)
+
+            self.data_sources[symbol] = data_source
+            self.symbols.append(symbol)
+            logger.info(f"Added symbol {symbol}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error adding symbol {symbol}: {e}")
+            return False
+
+    def remove_symbol(self, symbol: str) -> bool:
+        """
+        Remove a symbol from the manager.
+
+        Args:
+            symbol: Trading symbol to remove
+
+        Returns:
+            True if successfully removed, False otherwise
+        """
+        if symbol not in self.data_sources:
+            logger.warning(f"Symbol {symbol} not found")
+            return False
+
+        try:
+            del self.data_sources[symbol]
+            if symbol in self.volatility_metrics:
+                del self.volatility_metrics[symbol]
+            if symbol in self.symbols:
+                self.symbols.remove(symbol)
+            logger.info(f"Removed symbol {symbol}")
+            return True
+        except Exception as e:
+            logger.error(f"Error removing symbol {symbol}: {e}")
+            return False
+
+    def refresh_data(self) -> None:
+        """Refresh data for all symbols."""
+        for symbol, data_source in self.data_sources.items():
+            try:
+                # Data will be refreshed when get_data() is called
+                # This is just a placeholder for future optimization
+                pass
+            except Exception as e:
+                logger.error(f"Error refreshing data for {symbol}: {e}")
+
+    def get_active_symbols(self) -> list[str]:
+        """
+        Get list of active (available) symbols.
+
+        Returns:
+            List of symbol names that are available and initialized
+        """
+        return list(self.data_sources.keys())
+
+    def __del__(self) -> None:
+        """Cleanup MT5 connection."""
+        mt5.shutdown()

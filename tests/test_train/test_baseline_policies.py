@@ -1,4 +1,4 @@
-"""Tests for the baseline strategy runner (``quant_rl.train.run_baselines``).
+"""Tests for the baseline strategy runner (``training.runner.baselines``).
 
 Specifically covers the new ``_make_indexed_policy`` and the real indicator
 precomputation that the EMA / RSI baselines now use instead of the legacy
@@ -17,7 +17,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from quant_rl.train.run_baselines import _make_indexed_policy
+from training.runner.baselines import _make_indexed_policy
 
 
 def _make_bars(n: int = 60, trend: float = 0.5) -> pd.DataFrame:

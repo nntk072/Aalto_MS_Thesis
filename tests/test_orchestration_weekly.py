@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from quant_rl.orchestration.weekly import BatchSpec, WeeklyOrchestrator
+from experiments.orchestration.weekly import BatchSpec, WeeklyOrchestrator
 
 
 def test_weekly_layout_and_reports(tmp_path: Path) -> None:

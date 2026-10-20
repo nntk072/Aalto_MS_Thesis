@@ -5,7 +5,7 @@ Applies to this repo's pytest setup (`tests/`).
 ## Coverage target: 80% minimum
 
 ```bash
-pytest --cov=quant_rl --cov-report=term-missing -q
+./tools/check unit
 ```
 
 Test types required for features:
@@ -40,5 +40,5 @@ def test_trading_env_episode_loop(): ...
 
 ## Relations
 
-- Activates: any new feature, bug fix, or change to `quant_rl/`, `backtest/`, or env logic.
+- Activates: any new feature, bug fix, or change to `features/`, `trading/`, `simulation/`, or environment logic.
 - Enforced at commit by [git-commit-rules.md](git-commit-rules.md); orchestrated by [development-workflow.md](development-workflow.md); test runs follow [token-efficient-shell.md](token-efficient-shell.md).

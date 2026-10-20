@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-set -Eeuo pipefail
-REPO="${TRITON_REPO:-/scratch/work/nguyenl37/Aalto_MS_Thesis}"
-exec python "$REPO/scripts/triton/campaign_worker_dispatch.py" --srun-shim "$@"

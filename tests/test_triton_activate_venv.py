@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-ACTIVATE_SCRIPT = REPO_ROOT / "scripts" / "triton" / "activate_venv.sh"
+ACTIVATE_SCRIPT = REPO_ROOT / "scripts" / "compute" / "slurm" / "activate_venv.sh"
 
 
 def _write_fake_venv(root: Path, name: str) -> Path:
@@ -23,7 +23,7 @@ def _write_fake_venv(root: Path, name: str) -> Path:
 
 def _run_activation(tmp_path: Path, partition: str, *, include_mi210: bool = True):
     repo = tmp_path / "repo"
-    (repo / "scripts" / "triton").mkdir(parents=True)
+    (repo / "scripts" / "compute" / "slurm").mkdir(parents=True)
     x86 = _write_fake_venv(tmp_path, "x86-test-venv")
     mi210 = (
         _write_fake_venv(tmp_path, "mi210-test-venv")
@@ -82,4 +82,4 @@ def test_gpu_amd_missing_environment_reports_rocm_setup(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "MI210 ROCm venv not found" in result.stderr
-    assert "setup_venv_mi210.sh" in result.stderr
+    assert "tools/setup-venv-mi210" in result.stderr

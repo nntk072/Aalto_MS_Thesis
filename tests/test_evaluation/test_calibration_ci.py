@@ -5,13 +5,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from quant_rl.evaluation import (
+from evaluation import (
     bootstrap_ci,
     calibration_report,
     plot_reliability_diagram,
     sharpe_stat,
 )
-from quant_rl.evaluation.bootstrap_ci import metrics_with_ci, paired_metric_difference_ci
+from evaluation.metrics.bootstrap import metrics_with_ci, paired_metric_difference_ci
 
 
 def test_ci_includes_opening_capital_for_first_bar_loss():

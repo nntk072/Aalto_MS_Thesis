@@ -7,7 +7,7 @@ import math
 import numpy as np
 import pytest
 
-from quant_rl.evaluation.distributions import (
+from evaluation.metrics.distributions import (
     compute_distribution_metrics,
 )
 

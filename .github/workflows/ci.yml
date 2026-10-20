@@ -1,349 +1,111 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  UV_FROZEN: "1"
+  THESIS_CHECK_NO_SYNC: "1"
 
 jobs:
-  # ============================================================
-  # Phase 1: Environment — verify tools, deps, and images
-  # ============================================================
-  build-dev-image:
+  dependency-lock:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: ./tools/check deps
 
-      - name: Create dummy zscaler.crt for CI (not needed in CI, but Dockerfile expects it)
-        run: touch zscaler.crt
-
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /var/lib/docker
-          key: docker-${{ runner.os }}-${{ hashFiles('docker-compose.yml', 'Dockerfile') }}
-          restore-keys: docker-${{ runner.os }}-
-
-      - name: Build dev image
-        run: docker compose build dev
-
-  check-docker-tools:
+  quality:
+    needs: dependency-lock
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev
+      - run: ./tools/check quality
 
-      - name: Verify Docker is available
-        run: docker info
-
-      - name: Verify docker compose
-        run: docker compose version
-
-  check-python-requirements:
+  architecture:
+    needs: dependency-lock
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev
+      - run: ./tools/check architecture
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Verify lockfile and pin files are in sync
-        run: make deps-check
-
-  check-uv:
+  contracts:
+    needs: dependency-lock
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev
+      - run: ./tools/check contracts
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Sync dependencies
-        run: uv sync --extra dev
-
-  check-venv:
+  unit:
+    needs: dependency-lock
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev
+      - run: ./tools/check unit
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Create .venv and sync
-        run: uv sync --extra dev
-
-  # ============================================================
-  # Phase 2: Build — formatting, typechecking, packaging
-  # ============================================================
-  check-docs:
-    needs:
-      - check-uv
-      - check-python-requirements
+  build-smoke:
+    needs: dependency-lock
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev
+      - run: ./tools/check build
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+  integration:
+    needs: [architecture, contracts, unit]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev
+      - run: ./tools/check integration
 
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
+  parity:
+    needs: [architecture, contracts, unit]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev
+      - run: ./tools/check parity
 
-      - name: Sync dependencies
-        run: uv sync --extra dev
+  training-smoke:
+    needs: [integration, parity, build-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev
+      - run: ./tools/check training-smoke
 
-      - name: Check markdown files
+  ci-success:
+    if: always()
+    needs: [dependency-lock, quality, architecture, contracts, unit, build-smoke, integration, parity, training-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all semantic gates
+        env:
+          NEEDS: ${{ toJSON(needs) }}
         run: |
-          for f in *.md; do
-            if [ -f "$f" ]; then
-              echo "==> Checking $f"
-              wc -l "$f"
-            fi
-          done
-
-  code-formatting:
-    needs:
-      - check-uv
-      - check-python-requirements
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Sync dependencies
-        run: uv sync --extra dev
-
-      - name: Ruff format check
-        run: uv run ruff format --check .
-
-      - name: Ruff lint check
-        run: uv run ruff check .
-
-      - name: mypy
-        run: uv run mypy .
-
-  json-check:
-    needs: check-uv
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Validate JSON files
-        run: |
-          found=0
-          while IFS= read -r -d '' f; do
-            echo "==> Validating $f"
-            python -m json.tool "$f" > /dev/null
-            found=1
-          done < <(find . -name '*.json' -not -path './.venv/*' -not -path './.cache/*' -not -path './node_modules/*' -print0)
-          if [ "$found" -eq 0 ]; then
-            echo "No JSON files found to validate."
-          fi
-
-  markdown-formatting:
-    needs: check-uv
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Check markdown formatting
-        run: |
-          for f in *.md; do
-            if [ -f "$f" ]; then
-              echo "==> Checking $f"
-              if command -v mdformat >/dev/null 2>&1; then
-                mdformat --check "$f"
-              else
-                echo "mdformat not available, skipping format check for $f"
-              fi
-            fi
-          done
-
-  docker-release-build:
-    needs: build-dev-image
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Create dummy zscaler.crt for CI
-        run: touch zscaler.crt
-
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /var/lib/docker
-          key: docker-${{ runner.os }}-${{ hashFiles('docker-compose.yml', 'Dockerfile') }}
-          restore-keys: docker-${{ runner.os }}-
-
-      - name: Build runtime image
-        run: docker compose build base
-
-  uv-build:
-    needs:
-      - check-uv
-      - check-python-requirements
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Sync dependencies
-        run: uv sync --extra dev
-
-      - name: Build package
-        run: uv build
-
-  venv-build:
-    needs:
-      - check-uv
-      - check-python-requirements
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Create .venv and install package
-        run: |
-          uv venv --python 3.12
-          uv sync --extra dev
-          uv pip install -e .
-
-  # ============================================================
-  # Phase 3: Unit Tests
-  # ============================================================
-  ut-venv:
-    needs:
-      - uv-build
-      - venv-build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Create .venv and sync
-        run: uv sync --extra dev
-
-      - name: Run tests (venv)
-        run: uv run pytest tests/ -v
-
-  ut-docker:
-    needs:
-      - docker-release-build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Create dummy zscaler.crt for CI
-        run: touch zscaler.crt
-
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /var/lib/docker
-          key: docker-${{ runner.os }}-${{ hashFiles('docker-compose.yml', 'Dockerfile') }}
-          restore-keys: docker-${{ runner.os }}-
-
-      - name: Run tests in Docker
-        run: docker compose run --rm test
-
-  ut-uv:
-    needs:
-      - uv-build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: uv-${{ runner.os }}-
-
-      - name: Sync dependencies
-        run: uv sync --extra dev
-
-      - name: Run tests (uv)
-        run: uv run pytest tests/ -v
+          python - <<'PY'
+          import json, os, sys
+          needs = json.loads(os.environ["NEEDS"])
+          failed = {name: value["result"] for name, value in needs.items() if value["result"] != "success"}
+          if failed:
+              print(f"Required CI jobs failed or were skipped: {failed}", file=sys.stderr)
+              raise SystemExit(1)
+          print("All required CI gates passed")
+          PY

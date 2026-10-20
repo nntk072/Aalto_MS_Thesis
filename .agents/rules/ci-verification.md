@@ -31,7 +31,7 @@ path-scoped commands.
 
 | Forbidden at commit/push | Required instead |
 |--------------------------|------------------|
-| `uv run mypy quant_rl/...` or `mypy <touched files>` | `uv run mypy .` |
+| `uv run mypy <touched package>` or `mypy <touched files>` | `uv run mypy .` |
 | `uv run ruff check <touched paths>` only | `uv run ruff check .` |
 | `uv run ruff format --check <touched paths>` only | `uv run ruff format --check .` |
 
@@ -46,7 +46,7 @@ Only **pytest** stays scoped at commit time.
 - Prefer tests that cover the modules you touched (same package / mirror path under
   `tests/`, plus any smoke tests you added).
 - Use graph/`tests_for` when available; otherwise grep or path convention
-  (`quant_rl/foo.py` → `tests/**/test_*foo*`).
+  (`features/foo.py` → `tests/**/test_*foo*`).
 - Cap to a small set (typically 1–few files). Do **not** expand to the whole tree
   “to be safe.”
 - Run `pytest tests/ -v` only when the user explicitly asks, or when you are the

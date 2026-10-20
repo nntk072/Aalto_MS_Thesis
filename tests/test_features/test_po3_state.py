@@ -9,9 +9,9 @@ import pandas as pd
 import pytest
 from omegaconf import DictConfig, OmegaConf
 
-from quant_rl.features.build import build_features
-from quant_rl.features.po3_ifvg_state import build_po3_ifvg_state
-from quant_rl.features.po3_state import (
+from features import build_features
+from features.po3.ifvg_state import build_po3_ifvg_state
+from features.po3.state import (
     align_ifvg_zone_timeframes,
     build_distribution_after_ifvg,
     build_ifvg_zone_features,
@@ -352,7 +352,7 @@ class TestBuildFeaturesIntegration:
     ]
 
     def _cfg(self, flag: bool) -> DictConfig:
-        base = cast(DictConfig, OmegaConf.load("quant_rl/config/default.yaml"))
+        base = cast(DictConfig, OmegaConf.load("config/base/default.yaml"))
         cfg = cast(DictConfig, OmegaConf.merge(base, OmegaConf.create({"features": {}})))
         cfg.features.include_strategy_state = flag
         cfg.features.htf_timeframes = []

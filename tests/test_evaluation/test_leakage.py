@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from quant_rl.evaluation.leakage import label_shuffle_score, time_shift_feature_scores
+from evaluation.metrics.leakage import label_shuffle_score, time_shift_feature_scores
 
 
 def test_label_shuffle_detects_independence() -> None:

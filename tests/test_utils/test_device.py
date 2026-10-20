@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from omegaconf import OmegaConf
 
-from quant_rl.utils.device import (
+from compute.environment.device import (
     _GiB,
     configure_cuda,
     get_device,
@@ -203,7 +203,7 @@ def test_scale_training_cfg_cpu_keeps_n_envs(monkeypatch: pytest.MonkeyPatch) ->
     """CPU path must not inflate n_envs when RAM is plentiful."""
     import torch
 
-    from quant_rl.utils import device as device_mod
+    from compute.environment import device as device_mod
 
     monkeypatch.setattr(device_mod, "_read_meminfo", lambda: (256 * _GiB, 200 * _GiB))
     cfg = OmegaConf.create(
@@ -224,7 +224,7 @@ def test_scale_training_cfg_preserves_exact_quality_geometry(
 ) -> None:
     import torch
 
-    from quant_rl.utils import device as device_mod
+    from compute.environment import device as device_mod
 
     monkeypatch.setattr(device_mod, "_read_meminfo", lambda: (256 * _GiB, 200 * _GiB))
     cfg = OmegaConf.create(
@@ -245,7 +245,7 @@ def test_scale_training_cfg_exact_geometry_rejects_explicit_env_cap(
 ) -> None:
     import torch
 
-    from quant_rl.utils import device as device_mod
+    from compute.environment import device as device_mod
 
     monkeypatch.setattr(device_mod, "_read_meminfo", lambda: (256 * _GiB, 200 * _GiB))
     monkeypatch.setenv("QUANT_RL_MAX_N_ENVS", "8")
@@ -263,7 +263,7 @@ def test_scale_training_cfg_uses_bundle_worker_budget(monkeypatch: pytest.Monkey
     """Bundle mode passes the measured per-worker allowance into RAM scaling."""
     import torch
 
-    from quant_rl.utils import device as device_mod
+    from compute.environment import device as device_mod
 
     observed: dict[str, int | None] = {}
     original = device_mod.suggest_n_envs
@@ -289,8 +289,8 @@ def test_enable_extractor_autocast_skips_transformer() -> None:
     pytest.importorskip("torch")
     from gymnasium import spaces
 
-    from quant_rl.models.encoder import TransformerEncoder
-    from quant_rl.utils.device import enable_extractor_autocast
+    from compute.environment.device import enable_extractor_autocast
+    from models.encoders.core import TransformerEncoder
 
     observation_space = spaces.Dict(
         {

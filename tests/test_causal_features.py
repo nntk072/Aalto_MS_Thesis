@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import torch
 
-from quant_rl.features.indicators import ema_features, macd, returns, rsi
+from features.technical.indicators import ema_features, macd, returns, rsi
 
 
 def test_rsi_causal(m1_bars):
@@ -70,7 +70,7 @@ def _make_obs(B: int, T: int, F: int) -> dict[str, torch.Tensor]:
 
 
 def test_tcn_encoder_output_shape(dict_obs_space):
-    from quant_rl.models.encoder import TCNEncoder
+    from models.encoders.core import TCNEncoder
 
     T, F = 10, 8
     model = TCNEncoder(
@@ -88,7 +88,7 @@ def test_tcn_encoder_output_shape(dict_obs_space):
 
 
 def test_transformer_encoder_output_shape(dict_obs_space):
-    from quant_rl.models.encoder import TransformerEncoder
+    from models.encoders.core import TransformerEncoder
 
     T, F = 10, 8
     model = TransformerEncoder(
@@ -107,7 +107,7 @@ def test_transformer_encoder_output_shape(dict_obs_space):
 
 
 def test_tcn_encoder_batch_size_1(dict_obs_space):
-    from quant_rl.models.encoder import TCNEncoder
+    from models.encoders.core import TCNEncoder
 
     model = TCNEncoder(
         dict_obs_space, seq_len=10, n_features=8, latent_dim=16, channels=(8,), dropout=0.0
@@ -119,7 +119,7 @@ def test_tcn_encoder_batch_size_1(dict_obs_space):
 
 def test_transformer_causal_mask_consistency(dict_obs_space):
     """Output for position t must not change when future bars are appended."""
-    from quant_rl.models.encoder import TransformerEncoder
+    from models.encoders.core import TransformerEncoder
 
     T, F = 10, 8
     model = TransformerEncoder(

@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.train.callbacks import EpisodeEquityCallback
-from quant_rl.train.equity_gate import assess_train_equity, decide_early_abort, equity_slope
+from training.callbacks.core import EpisodeEquityCallback
+from training.callbacks.equity import assess_train_equity, decide_early_abort, equity_slope
 
 
 @pytest.mark.unit

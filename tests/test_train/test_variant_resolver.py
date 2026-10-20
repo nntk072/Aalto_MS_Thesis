@@ -1,4 +1,4 @@
-"""Tests for quant_rl.train.variant_resolver and the variant launcher.
+"""Tests for training.configuration.variant_resolution and the variant launcher.
 
 Plain Python (PyYAML only). Runs under pytest, or directly: python -m tests.test_train.test_variant_resolver
 """
@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from quant_rl.train.variant_resolver import (
+from training.configuration.variant_resolution import (
     PREBUILT_FEATURE_CACHES,
     PROJECT_ROOT,
     VariantError,
@@ -23,7 +23,7 @@ from quant_rl.train.variant_resolver import (
     train_args,
 )
 
-LAUNCHER = PROJECT_ROOT / "scripts" / "train" / "train_one_variant.sh"
+LAUNCHER = PROJECT_ROOT / "scripts" / "research" / "frozen-launches" / "train_one_variant.sh"
 
 
 def _all_names() -> list[str]:
@@ -60,7 +60,9 @@ def test_every_variant_resolves_and_declares_reward_mode() -> None:
 def test_all_18_thesis_variants_build_features_from_the_active_split() -> None:
     campaign_names = [
         line.strip()
-        for line in (PROJECT_ROOT / "scripts" / "variant_list.txt").read_text().splitlines()
+        for line in (PROJECT_ROOT / "config" / "campaigns" / "variant_list.txt")
+        .read_text()
+        .splitlines()
         if line.strip()
     ]
     assert len(campaign_names) == len(set(campaign_names)) == 18
@@ -206,7 +208,7 @@ def test_manifest_cli_writes_resolved_config() -> None:
         [
             sys.executable,
             "-m",
-            "quant_rl.train.variant_resolver",
+            "training.configuration.variant_resolution",
             "manifest",
             "ladder_a1_sl_dist",
             "--seed",

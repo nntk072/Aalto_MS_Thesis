@@ -19,16 +19,16 @@ Based on the debug/standardization plan (v4). Plan item IDs are in brackets.
 | File | Change |
 |---|---|
 | `quant_rl/train/variant_resolver.py` (new) | Single source of truth. Resolves a variant into base config, `--strategy`, algo, arch, steps, seeds, and explicit overrides. Refuses undeclared `reward_mode`, unknown strategy/algo/arch, and `use_vae=1` without a VAE path. Writes `resolved_config.json` per run. Pure Python + PyYAML. [A1, A4] |
-| `scripts/train/train_one_variant.sh` | Rewritten as a thin wrapper around the resolver. Runs one seed at a time; markers and output dirs are keyed `<variant>__seed<N>`; no resume branch; `DRY_RUN=1` prints the exact commands; `VAE_PATH` required for VAE variants. [A4, B1, B2, B4] |
-| `scripts/matrix/run_18variant_matrix.sh` | Repo path is script-relative; `STEPS` defaults to the YAML value; skip check uses the seed-keyed marker; resume lookup removed. [B1, B2, B4] |
+| `scripts/research/frozen-launches/train_one_variant.sh` | Rewritten as a thin wrapper around the resolver. Runs one seed at a time; markers and output dirs are keyed `<variant>__seed<N>`; no resume branch; `DRY_RUN=1` prints the exact commands; `VAE_PATH` required for VAE variants. [A4, B1, B2, B4] |
+| `scripts/compute/slurm/campaigns/run_18variant_matrix.sh` | Repo path is script-relative; `STEPS` defaults to the YAML value; skip check uses the seed-keyed marker; resume lookup removed. [B1, B2, B4] |
 | `config/experiments.yaml` | Every variant declares `reward_mode` explicitly, using the effective value from before this change (no behavior change). Comments kept. |
 | `quant_rl/train/ablation_utils.py` | `merge_variant_cfg` pins `strategy.name=baseline` for baseline rungs, so the legacy `--variant` path agrees with the resolver. [A1] |
 | `quant_rl/features/build.py` | Cache digest covers every OHLCV/spread value and the full train mask. [B3] |
 | `quant_rl/envs/env_bundle_builder.py` | Bundle input signature includes a digest of stored bar values. [E3] |
 | `quant_rl/envs/trading_env.py` | `reward_mode='pnl'` with `use_sweep_reward=True` raises at construction. [E5] |
-| `scripts/bench/measure_ppo_throughput.py`, `run_fps_probe.sh` | `--variant` option uses that variant's base config, overrides, algo, arch. Wrapper requires `BUNDLE_DIR`; no hard-coded hash. [E6] |
-| `scripts/matrix/ablation_runner.py` | Prints a warning: it bypasses the resolver and shares one features CSV. [A5] |
-| `scripts/eval/report_ablations.py` | Docstring path corrected. [B6] |
+| `scripts/research/benchmarks/measure_ppo_throughput.py`, `run_fps_probe.sh` | `--variant` option uses that variant's base config, overrides, algo, arch. Wrapper requires `BUNDLE_DIR`; no hard-coded hash. [E6] |
+| `experiments/variants/runner.py` | Prints a warning: it bypasses the resolver and shares one features CSV. [A5] |
+| `scripts/research/thesis/evaluation/report_ablations.py` | Docstring path corrected. [B6] |
 | `baseline/A3_*`, `baseline/runbook_*` | "SUPERSEDED" banner. [B5] |
 | `tests/test_train/test_variant_resolver.py` | 12 tests. Runs without OmegaConf or torch. **All 12 pass** in the sandbox. |
 | `tests/test_train/test_variant_overrides_match_legacy.py` | Parametrized over all 29 variants: resolver overrides must reproduce the legacy `merge_variant_cfg` config, except `strategy.name` for baseline rungs. **Not run here** (needs OmegaConf). |
@@ -52,7 +52,7 @@ Based on the debug/standardization plan (v4). Plan item IDs are in brackets.
 
 ## Decisions still needed from the owner
 
-1. **Baseline ladder rungs: `reward_mode`.** They currently declare `dsr`, while PO3 and distribution rungs declare `pnl`. The table (`python -m quant_rl.train.variant_resolver table`) shows this confound. Either align them or accept it as a documented reference.
+1. **Baseline ladder rungs: `reward_mode`.** They currently declare `dsr`, while PO3 and distribution rungs declare `pnl`. The table (`python -m training.train.variant_resolver table`) shows this confound. Either align them or accept it as a documented reference.
 2. **Baseline ladder rungs: PD context.** Off for baseline rungs, on for PO3 and distribution rungs.
 3. **Ladder reference.** Should `ladder_a0_flat` be a pure baseline (default features, no strategy actions) rather than full-PO3 with `BaselineStrategy`?
 4. **Final steps and seeds.** 100k with 5 seeds, or 20M with 1 seed?
@@ -62,11 +62,11 @@ Based on the debug/standardization plan (v4). Plan item IDs are in brackets.
 
 ```bash
 # inspect every variant's effective settings
-PYTHONPATH=. python -m quant_rl.train.variant_resolver table
-PYTHONPATH=. python -m quant_rl.train.variant_resolver meta ladder_a2_tp
+PYTHONPATH=. python -m training.train.variant_resolver table
+PYTHONPATH=. python -m training.train.variant_resolver meta ladder_a2_tp
 
 # dry run (no training, no markers)
-DRY_RUN=1 VARIANT=ladder_a2_tp scripts/train/train_one_variant.sh
+DRY_RUN=1 VARIANT=ladder_a2_tp scripts/research/frozen-launches/train_one_variant.sh
 
 # tests that run without the training stack
 PYTHONPATH=. python tests/test_train/test_variant_resolver.py

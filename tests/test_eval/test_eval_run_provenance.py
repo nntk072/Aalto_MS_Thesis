@@ -8,8 +8,9 @@ import pandas as pd
 import pytest
 from omegaconf import OmegaConf
 
-from quant_rl.eval import eval_run, reanalysis_provenance
-from quant_rl.eval.reanalysis_provenance import (
+from evaluation.reanalysis import provenance as reanalysis_provenance
+from evaluation.reanalysis import runner as eval_run
+from evaluation.reanalysis.provenance import (
     _evaluation_dataset_records,
     _feature_build_scope,
     _load_exact_source_feature_cache,
@@ -19,8 +20,8 @@ from quant_rl.eval.reanalysis_provenance import (
     _validate_reanalysis_feature_cache,
     _validate_reanalysis_request,
 )
-from quant_rl.eval.run_manifest import file_sha256
-from quant_rl.features.build import feature_cache_path
+from evaluation.reporting.run_manifest import file_sha256
+from features import feature_cache_path
 
 
 def test_checkpoint_reanalysis_defaults_to_deterministic_actions() -> None:

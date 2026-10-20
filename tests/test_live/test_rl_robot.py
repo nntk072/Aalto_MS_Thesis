@@ -2,7 +2,7 @@
 
 Runs without MT5 or SB3: the bridge/robot are exercised with a stub model,
 a stub data source, and a recording trader. ``MetaTrader5`` (Windows-only)
-is stubbed in ``sys.modules`` so the ``mt5_trading`` imports resolve.
+is stubbed in ``sys.modules`` so the ``integrations.mt5`` imports resolve.
 """
 
 from __future__ import annotations
@@ -13,9 +13,9 @@ from typing import Any, cast
 
 import numpy as np
 import pandas as pd
-from mt5_trading.adapters import Trader, TradingData
 
-from quant_rl.observation_schema import OBSERVATION_SCHEMA_V1, build_observation_schema
+from integrations.mt5.adapters import Trader, TradingData
+from simulation.contracts.observations import OBSERVATION_SCHEMA_V1, build_observation_schema
 
 # --- headless MetaTrader5 stub (Windows-only package, absent on Linux) -----
 # Additive: several sibling test modules install their own partial stub; always
@@ -153,12 +153,11 @@ def _make_robot(
     paper_trading: bool = False,
     secondary_bars: pd.DataFrame | None = None,
 ):
-    from mt5_trading.robot.rl_robot import RLRobot
-
-    from quant_rl.live.rl_strategy import RLStrategyAdapter
+    from integrations.mt5.robot.rl_robot import RLRobot
+    from live.runtime.strategy import RLStrategyAdapter
 
     bars = _make_bars()
-    adapter = RLStrategyAdapter(model=_StubModel(), config_path="quant_rl/config/default.yaml")
+    adapter = RLStrategyAdapter(model=_StubModel(), config_path="config/base/default.yaml")
     secondary_data = (
         _StubData(secondary_bars, symbol="US500.cash") if secondary_bars is not None else None
     )
@@ -199,11 +198,10 @@ def test_paper_mode_never_places_orders() -> None:
 
 
 def test_robot_class_defaults_to_paper_trading() -> None:
-    from mt5_trading.robot.rl_robot import RLRobot
+    from integrations.mt5.robot.rl_robot import RLRobot
+    from live.runtime.strategy import RLStrategyAdapter
 
-    from quant_rl.live.rl_strategy import RLStrategyAdapter
-
-    adapter = RLStrategyAdapter(model=_StubModel(), config_path="quant_rl/config/default.yaml")
+    adapter = RLStrategyAdapter(model=_StubModel(), config_path="config/base/default.yaml")
     robot = RLRobot(
         adapter=adapter,
         data_source=_StubData(_make_bars()),
@@ -241,13 +239,12 @@ def test_robot_feed_secondary_bars_for_smt() -> None:
 def test_too_few_bars_yields_no_signal() -> None:
     """With insufficient history the bridge returns NONE and the robot
     neither opens nor closes anything."""
-    from mt5_trading.robot.rl_robot import RLRobot
-
-    from quant_rl.live.rl_strategy import RLStrategyAdapter
+    from integrations.mt5.robot.rl_robot import RLRobot
+    from live.runtime.strategy import RLStrategyAdapter
 
     tiny = _make_bars(n=5)
     trader = RecordingTrader()
-    adapter = RLStrategyAdapter(model=_StubModel(), config_path="quant_rl/config/default.yaml")
+    adapter = RLStrategyAdapter(model=_StubModel(), config_path="config/base/default.yaml")
     robot = RLRobot(
         adapter=adapter,
         data_source=_StubData(tiny),
@@ -275,7 +272,7 @@ def test_live_risk_overrides_align_with_ftmo_block() -> None:
     import live_trading_rl  # noqa: PLC0415
     from omegaconf import OmegaConf
 
-    cfg = OmegaConf.load("quant_rl/config/default.yaml")
+    cfg = OmegaConf.load("config/base/default.yaml")
     risk = live_trading_rl.load_risk_overrides(cfg)
 
     assert risk["risk_per_symbol"] == 0.01

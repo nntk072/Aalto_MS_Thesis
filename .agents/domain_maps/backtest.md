@@ -4,36 +4,36 @@
 
 | File | Role |
 |------|------|
-| `quant_rl/backtest/engine.py` | Event-driven backtest engine |
-| `quant_rl/backtest/broker.py` | Broker: position open/close, fill logic |
-| `quant_rl/backtest/account.py` | Account state tracking |
-| `quant_rl/backtest/costs.py` | Cost model (spread, slippage, commission) |
-| `quant_rl/backtest/guardrails.py` | FTMO guardrails (daily loss, max drawdown) |
-| `quant_rl/backtest/risk.py` | Risk calculations (SL/TP, position sizing) |
-| `quant_rl/backtest/cross_validation/` | Engine cross-validation against backtrader |
+| `simulation/backtest/engine.py` | Event-driven backtest engine |
+| `trading/execution/broker.py` | Broker: position open/close, fill logic |
+| `trading/account/state.py` | Account state tracking |
+| `trading/execution/costs.py` | Cost model (spread, slippage, commission) |
+| `trading/risk/guardrails.py` | FTMO guardrails (daily loss, max drawdown) |
+| `trading/risk/sizing.py` | Risk calculations (SL/TP, position sizing) |
+| `simulation/backtest/cross_validation/` | Engine cross-validation against backtrader |
 
 ## Key Symbols
 
 | Symbol | File | Purpose |
 |--------|------|---------|
-| `run_backtest()` | `engine.py` | Main backtest entry point |
-| `Broker` | `broker.py` | Position management, fill execution |
-| `Position` | `broker.py` | Position data container |
-| `AccountState` | `account.py` | Account equity, balance, margin |
-| `CostModel` | `costs.py` | Spread, slippage, commission model |
-| `FTMOGuardrails` | `guardrails.py` | FTMO rule enforcement |
-| `compute_sl_tp_from_structure()` | `risk.py` | Structure-aware SL/TP |
-| `resolve_tp_target()` | `risk.py` | TP target resolution |
+| `run_backtest()` | `simulation/backtest/engine.py` | Main backtest entry point |
+| `Broker` | `trading/execution/broker.py` | Position management, fill execution |
+| `Position` | `trading/execution/broker.py` | Position data container |
+| `AccountState` | `trading/account/state.py` | Account equity, balance, margin |
+| `CostModel` | `trading/execution/costs.py` | Spread, slippage, commission model |
+| `FTMOGuardrails` | `trading/risk/guardrails.py` | FTMO rule enforcement |
+| `compute_sl_tp_from_structure()` | `trading/risk/sizing.py` | Structure-aware SL/TP |
+| `resolve_tp_target()` | `trading/risk/sizing.py` | TP target resolution |
 
 ## Direct Dependencies
 
-- `quant_rl/data/ticks.py` (optional TickBook for fill pricing)
+- `market_data/loading/ticks.py` (optional TickBook for fill pricing)
 
 ## Consumers (Callers)
 
-- `quant_rl/envs/trading_env.py` (uses engine internally)
-- `quant_rl/train/run_backtest.py` (CLI entry point)
-- `quant_rl/evaluation/runner.py` (evaluation loop)
+- `simulation/environment/env.py` (uses engine internally)
+- `training/runner/backtest.py` (CLI entry point)
+- `evaluation/rollout/runner.py` (evaluation loop)
 
 ## Tests
 
@@ -46,10 +46,10 @@
 
 ## Do NOT Read For Backtest Tasks
 
-- `quant_rl/features/` (feature engineering — separate domain)
-- `quant_rl/models/` (models — separate domain)
-- `quant_rl/train/` (training — separate domain)
-- `mt5_trading/` (live trading — separate domain)
+- `features/` (feature engineering — separate domain)
+- `models/` (models — separate domain)
+- `training/` (training — separate domain)
+- `integrations/mt5/` (live trading — separate domain)
 
 ## Fill-Price Semantics
 

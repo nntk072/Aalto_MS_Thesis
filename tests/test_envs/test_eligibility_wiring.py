@@ -8,10 +8,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.config import load_config
-from quant_rl.data.ticks import TickBook
-from quant_rl.eval.rollout import evaluate_model
-from quant_rl.train import train_rl
+from configuration import load_config
+from evaluation.rollout.model import evaluate_model
+from market_data.loading.ticks import TickBook
+from training.setup import data as training_data
+from training.setup import environments as training_environments
 
 
 def test_strict_eligibility_config_override_propagates_to_env_and_eval(monkeypatch) -> None:
@@ -24,13 +25,13 @@ def test_strict_eligibility_config_override_propagates_to_env_and_eval(monkeypat
         captured.update(kwargs)
         return kwargs
 
-    monkeypatch.setattr(train_rl, "TradingEnv", fake_env)
+    monkeypatch.setattr(training_environments, "TradingEnv", fake_env)
     empty = pd.DataFrame()
-    train_rl.make_env(empty, empty, cfg, algo="ppo", reward="dsr")
+    training_environments.make_env(empty, empty, cfg, algo="ppo", reward="dsr")
     assert captured["strict_research_eligibility"] is True
     assert captured["tick_execution_required"] is True
 
-    eval_kwargs = train_rl._build_eval_common(cfg)[0]
+    eval_kwargs = training_environments._build_eval_common(cfg)[0]
     assert eval_kwargs["strict_research_eligibility"] is True
     assert "strict_research_eligibility" in inspect.signature(evaluate_model).parameters
 
@@ -77,7 +78,7 @@ def test_tick_execution_preflight_reports_train_and_test_gaps() -> None:
         np.array([100.5, 101.5]),
     )
 
-    reports = train_rl._tick_execution_split_coverage(
+    reports = training_data._tick_execution_split_coverage(
         tickbook,
         index,
         train_mask,
@@ -118,7 +119,7 @@ def test_tick_execution_schedule_freezes_observed_decisions_and_next_bar_quotes(
         index=index,
     )
 
-    schedule = train_rl._tick_execution_split_schedule(
+    schedule = training_data._tick_execution_split_schedule(
         index, train_mask, "2026-01-02", session_labels=session_labels
     )
 
@@ -140,7 +141,7 @@ def test_zero_latency_tick_preflight_checks_the_immediate_order_time() -> None:
         np.asarray([100.2]),
     )
 
-    report = train_rl._tick_execution_split_coverage(
+    report = training_data._tick_execution_split_coverage(
         tickbook,
         pd.DatetimeIndex([order_time]),
         pd.Series([True], index=pd.DatetimeIndex([order_time])),
@@ -172,10 +173,12 @@ def test_management_settings_match_training_and_evaluation_environment_kwargs(mo
         ]
     )
     captured = {}
-    monkeypatch.setattr(train_rl, "TradingEnv", lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setattr(
+        training_environments, "TradingEnv", lambda **kwargs: captured.update(kwargs)
+    )
     empty = pd.DataFrame()
-    train_rl.make_env(empty, empty, cfg, algo="ppo", reward="pnl")
-    evaluation_kwargs = train_rl._build_eval_common(cfg)[0]
+    training_environments.make_env(empty, empty, cfg, algo="ppo", reward="pnl")
+    evaluation_kwargs = training_environments._build_eval_common(cfg)[0]
 
     for key, expected in {
         "sl_mode": "trailing",
@@ -203,7 +206,7 @@ def test_eval_environment_uses_campaign_seed_for_randomized_fill_latency() -> No
     cfg = load_config(["execution.randomized_fill_latency_ms=30"])
     args = SimpleNamespace(algo="ppo", reward="dsr", use_vae=False, seed=23)
 
-    evaluation_kwargs = train_rl._build_eval_common(cfg, args=args)[0]
+    evaluation_kwargs = training_environments._build_eval_common(cfg, args=args)[0]
 
     assert evaluation_kwargs["execution_seed"] == 23
 
@@ -231,4 +234,4 @@ def test_idea2_environment_rejects_missing_bias_and_ifvg_gate_inputs() -> None:
     )
     empty_features = pd.DataFrame(index=index)
     with pytest.raises(ValueError, match="po3_distribution_direction|htf_day_bias"):
-        train_rl.make_env(bars, empty_features, cfg, algo="ppo", reward="pnl")
+        training_environments.make_env(bars, empty_features, cfg, algo="ppo", reward="pnl")

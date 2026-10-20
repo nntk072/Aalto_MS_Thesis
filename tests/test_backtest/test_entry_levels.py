@@ -6,18 +6,18 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.backtest.broker import Position
-from quant_rl.backtest.entry_levels import (
+from features.technical.swings import recent_unswept_swing_candidates
+from simulation.environment.env import TradingEnv
+from simulation.environment.market_view import BarView, FeatureRow
+from trading.execution.broker import Position
+from trading.orders.entries import (
     OrderGeometry,
     collapse_levels,
     geometry_summary,
     place_strategy_order,
     select_index,
 )
-from quant_rl.backtest.risk import compute_lots
-from quant_rl.envs.feature_row import BarView, FeatureRow
-from quant_rl.envs.trading_env import TradingEnv
-from quant_rl.features.swings import recent_unswept_swing_candidates
+from trading.risk.sizing import compute_lots
 
 
 class _Menu:
@@ -504,7 +504,7 @@ def test_geometry_summary_blanks_ema_planned_ratio() -> None:
 
 
 def test_confirmed_manipulation_keeps_the_extreme_and_a_far_target() -> None:
-    from quant_rl.envs.strategies import PO3IFVGStrategy
+    from trading.strategies import PO3IFVGStrategy
 
     placed = place_strategy_order(
         PO3IFVGStrategy(enforce_gate=False),
@@ -561,7 +561,7 @@ def test_revised_ifvg_stop_menu_includes_zone_edge_and_observed_excursion(
     expected_edge: float,
     expected_through: float,
 ) -> None:
-    from quant_rl.envs.strategies import PO3IFVGStrategy
+    from trading.strategies import PO3IFVGStrategy
 
     feat_row = _row(
         po3_ifvg_low=zone_low,
@@ -625,7 +625,7 @@ def test_revised_ifvg_stop_menu_includes_zone_edge_and_observed_excursion(
 def test_revised_ifvg_stop_audit_records_minimum_distance_rejections(
     direction: int, zone_low: float, zone_high: float, through: float
 ) -> None:
-    from quant_rl.envs.strategies import PO3IFVGStrategy
+    from trading.strategies import PO3IFVGStrategy
 
     placed = place_strategy_order(
         PO3IFVGStrategy(

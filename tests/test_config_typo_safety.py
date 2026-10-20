@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from quant_rl.config import load_config
+from configuration import load_config
 
 
 def test_typoed_override_raises() -> None:

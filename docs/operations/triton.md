@@ -22,18 +22,19 @@ Connect to `code.triton.aalto.fi` and enter
 and `git rev-parse HEAD` before running experiments. Do not assume SSH shell
 architecture matches allocated GPU node architecture.
 
-Follow [scripts/triton/README.md](../../scripts/triton/README.md) and
+Follow [docs/operations/triton/README.md](../../docs/operations/triton/README.md) and
 [Slurm agent rules](../../.agents/rules/triton-slurm.md) for resource selection.
-Use `bash scripts/triton/status.sh` for a status overview and
-`bash scripts/triton/find_gpu_session.sh` to discover a reusable session.
+Use `bash scripts/compute/slurm/status.sh` for a status overview and
+`bash scripts/compute/slurm/find_gpu_session.sh` to discover a reusable session.
 `attach_or_alloc.sh` and `two_trains_one_h200.sh` can request resources;
 running them requires explicit allocation authorization under repository rules.
 The helper documentation prefers one H200 or GH200 allocation, and requires
 checking `sinfo` rather than assuming a partition is available.
 
-The two architecture-specific environments are `.venv` (aarch64/GH200) and
-`.venv-x86` (x86_64/H200). The setup scripts live under `scripts/setup/`.
-Use `scripts/triton/activate_venv.sh` **inside the correct allocated shell**.
+The architecture-specific environments are `.venv` (ARM64/aarch64, including
+`gpuarm` GH200 nodes) and `.venv-x86` (x86_64 compute nodes such as H100/H200).
+Never use `.venv-x86` on `gpuarm`; the setup scripts live under `tools/`.
+Use `scripts/compute/slurm/activate_venv.sh` **inside the correct allocated shell**.
 Do not use `PAPER_TRADING=false` for HPC tests or any documentation check.
 
 For reproducible experiments, save Slurm job ID, node type, environment,

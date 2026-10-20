@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.features.structure import detect_session_levels, get_session
+from features.technical.structure import detect_session_levels, get_session
 
 
 @pytest.fixture

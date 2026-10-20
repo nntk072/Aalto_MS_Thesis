@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 
 import pytest
-from scripts.triton.resolve_campaign_continuation import resolve_handoff
+
+from compute.slurm.continuation import resolve_handoff
 
 
 def _handoff_fixture(tmp_path: Path) -> tuple[Path, Path, Path]:

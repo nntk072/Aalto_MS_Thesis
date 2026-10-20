@@ -15,11 +15,11 @@ Do not infer node architecture from the SSH gateway.
 | Architecture | Observed example | Project environment | Installation |
 | --- | --- | --- | --- |
 | ARM64 / `aarch64` | `gpuarm1`, NVIDIA GH200 | `.venv` | `uv sync --locked --extra dev` with ARM64 uv |
-| AMD64 / `x86_64` | H100/H200 compute nodes | `.venv-x86` | `scripts/setup/setup_venv_x86.sh` on x86_64 |
+| AMD64 / `x86_64` | H100/H200 compute nodes | `.venv-x86` | `tools/setup-venv-x86` on x86_64 |
 | AMD64 / `x86_64` | V100 (CC 7.0) | `.venv-v100` | Separate environment; torch 2.14.0+cu126, Python 3.12, project lock dependencies excluding its cu130 CUDA packages. Verify `sm_70`, CC `(7, 0)`, and a real CUDA op before use. |
-| AMD64 / `x86_64` | MI210 (`gfx90a`) | `/scratch/work/nguyenl37/.venv-mi210` | `scripts/setup/setup_venv_mi210.sh`; observed Triton ROCm 6.3.1, Python 3.12.14, torch 2.7.1+rocm6.3. Keep separate from the CUDA 13.0 project lock; validate the runtime and a real device operation before use. |
+| AMD64 / `x86_64` | MI210 (`gfx90a`) | `/scratch/work/nguyenl37/.venv-mi210` | `tools/setup-venv-mi210`; observed Triton ROCm 6.3.1, Python 3.12.14, torch 2.7.1+rocm6.3. Keep separate from the CUDA 13.0 project lock; validate the runtime and a real device operation before use. |
 
-Activate with `source scripts/triton/activate_venv.sh` inside the allocation.
+Activate with `source scripts/compute/slurm/activate_venv.sh` inside the allocation.
 The selector uses `.venv-mi210` on x86_64 `gpu-amd` allocations and `.venv-x86`
 on other x86_64 nodes; GH200 uses `.venv`. Inspect `SLURM_JOB_PARTITION`,
 `command -v python`, `python -c 'import sys; print(sys.prefix)'`, and
@@ -87,7 +87,7 @@ For reproducible installs, select the matching interpreter and uv binary,
 inspect `uv.lock`, and use `UV_PROJECT_ENVIRONMENT` for the intended
 absolute environment path. For ARM64, that is `$PWD/.venv`; for x86_64,
 `$PWD/.venv-x86`. On an authorized H100/H200 compute node, run
-`scripts/setup/setup_venv_x86.sh`; it uses the locked command
+`tools/setup-venv-x86`; it uses the locked command
 `UV_PROJECT_ENVIRONMENT="$PWD/.venv-x86" uv sync --locked --extra dev`.
 Do not use a project `.venv` symlink whose target is a different checkout.
 

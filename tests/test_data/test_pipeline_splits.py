@@ -4,7 +4,7 @@ from pathlib import Path
 
 from omegaconf import OmegaConf
 
-from quant_rl.data.pipeline import run_pipeline
+from market_data.loading.pipeline import run_pipeline
 
 
 def _write_m1(path: Path, date: str, time: str, open_price: float) -> None:

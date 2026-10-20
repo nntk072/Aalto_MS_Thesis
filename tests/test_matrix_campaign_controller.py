@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from scripts.matrix.campaign_controller import campaign_data_inputs, sha256_file
+
+from experiments.campaigns.execution import campaign_data_inputs, sha256_file
 
 
 def test_replacement_campaign_pins_the_thesis_split_and_variants() -> None:
@@ -13,10 +14,12 @@ def test_replacement_campaign_pins_the_thesis_split_and_variants() -> None:
             encoding="utf-8"
         )
     )
-    base = yaml.safe_load((root / "quant_rl/config/default.yaml").read_text(encoding="utf-8"))
+    base = yaml.safe_load((root / "config/base/default.yaml").read_text(encoding="utf-8"))
     variants = [
         line.strip()
-        for line in (root / "scripts/variant_list.txt").read_text(encoding="utf-8").splitlines()
+        for line in (root / "config/campaigns/variant_list.txt")
+        .read_text(encoding="utf-8")
+        .splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     ]
 

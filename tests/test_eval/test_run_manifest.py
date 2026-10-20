@@ -17,7 +17,7 @@ from gymnasium import Env, spaces
 from omegaconf import OmegaConf
 from stable_baselines3 import PPO
 
-from quant_rl.eval.run_manifest import (
+from evaluation.reporting.run_manifest import (
     _source_state,
     array_sha256,
     build_evaluation_provenance,
@@ -106,7 +106,7 @@ def test_manifest_requires_complete_action_and_observation_schemas(
 def test_evaluation_provenance_records_source_and_runtime(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    import quant_rl.eval.run_manifest as run_manifest
+    import evaluation.reporting.run_manifest as run_manifest
 
     monkeypatch.setattr(
         run_manifest,
@@ -135,7 +135,7 @@ def test_evaluation_provenance_records_source_and_runtime(
 def test_runtime_provenance_captures_python_hash_seed_at_startup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import quant_rl.eval.run_manifest as run_manifest
+    import evaluation.reporting.run_manifest as run_manifest
 
     monkeypatch.setattr(run_manifest, "_PYTHONHASHSEED_ENV_AT_STARTUP", "173")
     monkeypatch.setenv("PYTHONHASHSEED", "999")
@@ -157,7 +157,7 @@ def test_runtime_provenance_reads_hash_seed_from_interpreter_startup(
         [
             sys.executable,
             "-c",
-            "import json; from quant_rl.eval.run_manifest import "
+            "import json; from evaluation.reporting.run_manifest import "
             "_PYTHONHASHSEED_ENV_AT_STARTUP; "
             "print(json.dumps(_PYTHONHASHSEED_ENV_AT_STARTUP))",
         ],

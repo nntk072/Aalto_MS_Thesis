@@ -9,7 +9,7 @@ import pytest
 
 matplotlib.use("Agg")
 
-from quant_rl.eval.training_plots import (
+from evaluation.plotting.training_plots import (
     plot_entropy_explvar,
     plot_kl_clip,
     plot_learning_curve,

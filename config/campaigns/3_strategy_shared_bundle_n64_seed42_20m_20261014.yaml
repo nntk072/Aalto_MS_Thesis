@@ -1,6 +1,6 @@
 schema_version: 1
 campaign_id: ladder3_shared_bundle_n64_seed42_20m_20261014
-variant_file: scripts/variant_list_3_strategy_20261014.txt
+variant_file: config/campaigns/variant_list_3_strategy_20261014.txt
 
 # Resource-sizing continuation of the three strategy runs. This is a distinct
 # campaign because both the environment backend and vector width changed.

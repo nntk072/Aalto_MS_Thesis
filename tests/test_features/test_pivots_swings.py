@@ -6,13 +6,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.features.structure import (
+from features.technical.structure import (
     detect_pivots,
     detect_swings,
     structure_levels,
     swing_features,
 )
-from quant_rl.features.swings import (
+from features.technical.swings import (
     classify_structure,
     recent_unswept_swing_candidates,
     retained_swing_levels,

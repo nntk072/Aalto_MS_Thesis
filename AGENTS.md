@@ -15,8 +15,8 @@ campaign safety constraints.
 
 ```bash
 uv sync                              # install deps
-python scripts/data/prepare_data.py       # raw CSV → parquet → features
-python -m quant_rl.train.train_rl --mvp   # smoke test (30 days)
+python market_data/commands/prepare.py       # raw CSV → parquet → features
+thesis-train train --mvp   # smoke test (30 days)
 
 # Local (implementation): scoped checks only
 uv run ruff format --check <touched paths>
@@ -58,15 +58,15 @@ data → features → envs → models → train → evaluation
 
 | Domain | Entry File | Role |
 |--------|-----------|------|
-| data | `quant_rl/data/pipeline.py` | load → resample → clean → session → split |
-| features | `quant_rl/features/build.py` | indicators + SMT + structure + PO3 → matrix |
-| envs | `quant_rl/envs/trading_env.py` | Gymnasium env (obs, act, reward) |
-| backtest | `quant_rl/backtest/engine.py` | event-driven engine (fill, SL/TP, guardrails) |
-| models | `quant_rl/models/agent.py` | encoder + PPO/SAC wiring |
-| train | `quant_rl/train/train_rl.py` | full training loop |
-| evaluation | `quant_rl/evaluation/runner.py` | metrics, walk-forward, bootstrap CIs |
-| eval | `quant_rl/eval/rollout.py` | rollout, plots, export, `eval_run` |
-| live | `quant_rl/live/rl_strategy.py` | MT5 bridge |
+| data | `market_data/loading/pipeline.py` | load → resample → clean → session → split |
+| features | `features/pipeline/builder.py` | indicators + SMT + structure + PO3 → matrix |
+| envs | `simulation/environment/env.py` | Gymnasium env (obs, act, reward) |
+| backtest | `simulation/backtest/engine.py` | event-driven engine (fill, SL/TP, guardrails) |
+| models | `models/factory/agent.py` | encoder + PPO/SAC wiring |
+| train | `training/runner/training.py` | full training loop |
+| evaluation | `evaluation/rollout/runner.py` | metrics, walk-forward, bootstrap CIs |
+| eval | `evaluation/rollout/model.py` | rollout, plots, export, `eval_run` |
+| live | `live/runtime/strategy.py` | MT5 bridge |
 | orchestra | `orchestra/pipeline.py` | multi-model task pipeline + CI verification |
 
 Full architecture map: `.agents/architecture.md`
@@ -83,7 +83,7 @@ Domain-level context: `.agents/domain_maps/*.md`
    Legacy overlapping stepper is `purged_walk_forward_legacy` (deprecated).
 4. **Session labels are eligibility flags** — never drop bars from feature
    dataset based on session. `filter_session` is mask-only.
-5. **Config is single source of truth** — `quant_rl/config/default.yaml`.
+5. **Config is single source of truth** — `config/base/default.yaml`.
    All YAML keys are read via `cfg.<path>`. Adding a feature flag? Add YAML key first.
 6. **Cache versioning** — `FEATURE_CACHE_VERSION` plus **content hash**
    (`feature_cache_path` / `.hash` sidecar). Hand-bump alone is not enough.
@@ -157,7 +157,7 @@ use the full-tree Mypy gate even when staging the executable on node-local stora
 ## Triton (Aalto HPC)
 
 GPU training on Triton: see [`.agents/rules/triton-slurm.md`](.agents/rules/triton-slurm.md).
-Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh`, `attach_or_alloc.sh`).
+Helpers: [`scripts/compute/slurm/`](scripts/compute/slurm/) (`status.sh`, `find_gpu_session.sh`, `attach_or_alloc.sh`).
 
 - **Reuse first:** if a GPU tmux/`srun` already exists, run train/eval/tests
   there (`tmux send-keys`).
@@ -216,7 +216,7 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
 - **Never `scancel`** when a train finishes or for any other reason; keep the
   GPU bash + tmux allocation available for subsequent work.
 - Login SSH for `ls` / `squeue` / `sinfo` / `tmux capture-pane` / inspect-only
-  `scripts/triton/*.sh`; never `srun` for those checks.
+  `scripts/compute/slurm/*.sh`; never `srun` for those checks.
 - **Short-step monitor hard gate:** any job/step under 120 seconds counts as
   short, including child steps inside a long allocation. Create zero new short
   Slurm jobs/steps. Before launch/resume, inspect the full job/step topology,
@@ -239,7 +239,7 @@ Helpers: [`scripts/triton/`](scripts/triton/) (`status.sh`, `find_gpu_session.sh
   does not change the separate 60-second maximum for waiting on a new allocation.
 - **Campaign status updates:** when asked for campaign status, or when a
   meaningful campaign transition/blocker occurs, run
-  `scripts/triton/report_campaign_status.py` and include its generated report
+  `experiments/campaigns/status.py` and include its generated report
   without manually rebuilding the tables. It reports all variants in ladder
   order (`a0`, `a1`, `a2`, `a3`, then `a4a`, `a4b`); follow
   `.agents/rules/triton-slurm.md`.

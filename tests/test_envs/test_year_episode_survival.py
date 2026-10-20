@@ -9,10 +9,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.backtest.account import AccountState
-from quant_rl.data.session import add_session_id, add_session_labels
-from quant_rl.envs.trading_env import TradingEnv
-from quant_rl.train.train_rl import _max_episode_steps, _training_episodic
+from market_data.transforms.sessions import add_session_id, add_session_labels
+from simulation.environment.env import TradingEnv
+from trading.account.state import AccountState
+from training.setup.environments import _max_episode_steps, _training_episodic
 
 
 def _ohlc(idx: pd.DatetimeIndex, close: np.ndarray[Any, Any]) -> pd.DataFrame:

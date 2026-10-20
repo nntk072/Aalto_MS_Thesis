@@ -9,14 +9,14 @@ import pandas as pd
 import pytest
 from omegaconf import DictConfig, OmegaConf
 
-from quant_rl.data.session import add_session_labels
-from quant_rl.features.build import OBS_RAW_PRICE_COLUMNS, build_features
-from quant_rl.features.liquidity import detect_bos, detect_mss
-from quant_rl.features.pd_context import (
+from features import OBS_RAW_PRICE_COLUMNS, build_features
+from features.context.liquidity import detect_bos, detect_mss
+from features.context.premium_discount import (
     PD_CONTEXT_FEATURE_COLUMNS,
     build_pd_context_features,
 )
-from quant_rl.features.structure import structure_levels
+from features.technical.structure import structure_levels
+from market_data.transforms.sessions import add_session_labels
 
 
 def _index_dates(idx: pd.Index) -> np.ndarray[Any, Any]:
@@ -236,14 +236,14 @@ class TestBuildFeaturesPdContext:
 
 class TestConfigYaml:
     def test_po3_ifvg_enables_pd_context(self) -> None:
-        from quant_rl.config import load_config
+        from configuration import load_config
 
         cfg = load_config(config_path="config/2_po3_ifvg.yaml")
         assert cfg.features.include_pd_context is True
         assert cfg.features.structure.enabled is True
 
     def test_features_pd_context_yaml(self) -> None:
-        from quant_rl.config import load_config
+        from configuration import load_config
 
         cfg = load_config(config_path="config/features/pd_context.yaml")
         assert cfg.features.include_pd_context is True

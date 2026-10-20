@@ -1,6 +1,6 @@
 schema_version: 1
 campaign_id: ladder3_prebuilt_cache_seed42_20m_20261014
-variant_file: scripts/variant_list_3_strategy_20261014.txt
+variant_file: config/campaigns/variant_list_3_strategy_20261014.txt
 
 # Restart of the exploratory 3-strategy run using the named, prebuilt feature
 # caches. Reward modes still differ, so results are not a matched comparison.

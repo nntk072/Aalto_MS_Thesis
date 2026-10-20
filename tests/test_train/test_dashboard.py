@@ -8,10 +8,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.action_schema import build_action_schema
-from quant_rl.envs.reward import REWARD_PART_KEYS, DSRReward, PnLReward
-from quant_rl.evaluation.metrics import calculate_metrics
-from quant_rl.train.dashboard import (
+from evaluation.metrics import calculate_metrics
+from simulation.contracts.actions import build_action_schema
+from simulation.environment.rewards import REWARD_PART_KEYS, DSRReward, PnLReward
+from training.callbacks.dashboard import (
     TrainingDashboardCallback,
     action_stats,
     close_shares,
@@ -310,7 +310,7 @@ def test_prior_direction_coordinate_uses_schema_names_not_action_width(monkeypat
             self.rollout_buffer = None
 
     monkeypatch.setattr(
-        "quant_rl.train.dashboard.active_prior_names",
+        "training.callbacks.dashboard.active_prior_names",
         lambda _frame, _thresholds: {"direction"},
     )
     cb = TrainingDashboardCallback(total_timesteps=100_000, log_every=50_000)
@@ -461,7 +461,7 @@ def test_format_diversity_table() -> None:
     """The diversity table is a DIVERSITY box with --- borders."""
     import pandas as pd
 
-    from quant_rl.eval.decision_diversity import DiversityThresholds, format_diversity_table
+    from evaluation.metrics.decision_diversity import DiversityThresholds, format_diversity_table
 
     trades = pd.DataFrame(
         {

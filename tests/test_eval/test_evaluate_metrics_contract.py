@@ -1,7 +1,7 @@
 """Contract test: ``evaluate_model`` output → ``calculate_metrics`` input.
 
-The two modules live in different subpackages (``quant_rl.eval`` and
-``quant_rl.evaluation``), were migrated separately, and have changed
+The two modules live in different subpackages (``evaluation.plotting`` and
+``evaluation``), were migrated separately, and have changed
 column names and index types at least once. A silent shape mismatch would
 not be caught until a real training run tries to plot metrics, by which
 point the run is already long and the operator has lost time.
@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.evaluation import calculate_metrics
+from evaluation import calculate_metrics
 
 pytestmark = pytest.mark.slow
 
@@ -80,13 +80,13 @@ def test_evaluate_model_output_satisfies_metrics_contract() -> None:
     pytest.importorskip("stable_baselines3")
     from stable_baselines3 import PPO
 
-    from quant_rl.eval.rollout import evaluate_model
+    from evaluation.rollout.model import evaluate_model
 
     bars = _make_synthetic_bars()
     features = _make_features(bars)
 
     # Train a tiny PPO to get a non-trivial policy.
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.env import TradingEnv
 
     train_env = TradingEnv(bars=bars, features=features, obs_window=10, max_episode_steps=64)
     model = PPO(

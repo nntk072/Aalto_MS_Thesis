@@ -12,9 +12,9 @@ import pandas as pd
 import pytest
 from omegaconf import OmegaConf
 
-from quant_rl.data.resample import resample
-from quant_rl.features.build import build_features
-from quant_rl.features.indicators import build_indicators
+from features import build_features
+from features.technical.indicators import build_indicators
+from market_data.transforms.resample import resample
 
 HTF_TFS = ["M5", "M10", "M15", "H1"]
 
@@ -89,7 +89,7 @@ def test_build_features_uses_supplied_native_timeframe_bars(m1_bars, feat_cfg) -
 
 def test_align_timeframes_completed_bar():
     """M1 during a forming H1 bar must not see that H1's final OHLC."""
-    from quant_rl.data.align import align_timeframes
+    from market_data.transforms.align import align_timeframes
 
     idx = pd.date_range("2025-01-06 16:00", periods=120, freq="1min", tz="Etc/GMT-3")
     close = np.arange(120, dtype=float)
@@ -112,7 +112,7 @@ def test_align_timeframes_completed_bar():
 
 
 def test_align_timeframes_uses_explicit_close_times_for_short_final_bar() -> None:
-    from quant_rl.data.align import align_timeframes
+    from market_data.transforms.align import align_timeframes
 
     tz = "Etc/GMT-3"
     m1_idx = pd.date_range("2025-01-06 16:32", periods=4, freq="1min", tz=tz)
@@ -140,7 +140,7 @@ def test_align_timeframes_uses_explicit_close_times_for_short_final_bar() -> Non
 
 def test_htf_alignment_causal_open_time(m1_bars, feat_cfg):
     """Feature at bar t equals the HTF value from the last completed HTF bar."""
-    from quant_rl.data.align import align_timeframes
+    from market_data.transforms.align import align_timeframes
 
     for tf in HTF_TFS:
         htf = build_indicators(resample(m1_bars, tf), feat_cfg)  # type: ignore[arg-type]

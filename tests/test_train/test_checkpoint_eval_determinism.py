@@ -4,7 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
-from quant_rl.train import callbacks, train_rl
+from training.callbacks import core as callbacks
+from training.setup import environments as training_environments
 
 
 def test_best_checkpoint_callback_uses_deterministic_policy_actions(
@@ -47,10 +48,10 @@ def test_final_split_evaluation_forces_deterministic_actions(monkeypatch: Any) -
         captured.update(kwargs)
         return {"model": model}
 
-    monkeypatch.setattr(train_rl, "evaluate_model", fake_evaluate_model)
+    monkeypatch.setattr(training_environments, "evaluate_model", fake_evaluate_model)
     model = object()
 
-    result = train_rl._evaluate_final_split(model, deterministic=False, bars=None)
+    result = training_environments._evaluate_final_split(model, deterministic=False, bars=None)
 
     assert result == {"model": model}
     assert captured["deterministic"] is True

@@ -7,9 +7,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from quant_rl.envs.entry_state import ENTRY_STATE_DIM, entry_state_one_hot
-from quant_rl.envs.trading_env import TradingEnv
-from quant_rl.observation_schema import (
+from simulation.contracts.observations import (
     OBSERVATION_SCHEMA_V1,
     OBSERVATION_SCHEMA_V2,
     V2_COORDINATES,
@@ -17,6 +15,8 @@ from quant_rl.observation_schema import (
     build_observation_schema,
     validate_observation_schema,
 )
+from simulation.environment.entry_state import ENTRY_STATE_DIM, entry_state_one_hot
+from simulation.environment.env import TradingEnv
 from tests.test_envs.test_account_normalization import _make_bars, _make_features
 
 

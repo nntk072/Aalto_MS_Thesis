@@ -73,4 +73,4 @@ orchestra/
 
 - [AGENTS.md](../AGENTS.md) — agent guide (orchestra section)
 - [docs/operations/RUNNING_COMMANDS.md](../docs/operations/RUNNING_COMMANDS.md) — orchestra commands
-- [docs/architecture.md](../docs/architecture.md) — quant_rl architecture
+- [docs/architecture.md](../docs/architecture.md) — repository architecture

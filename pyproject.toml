@@ -40,7 +40,7 @@ dependencies = [
     "win32-setctime==1.2.0; sys_platform == 'win32'",
     "xyzservices==2025.4.0",
     "yfinance>=0.2.66",
-    # quant-rl additions
+    # thesis RL additions
     "torch>=2.2",
     "gymnasium>=0.29",
     "stable-baselines3>=2.3",
@@ -100,26 +100,41 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-src = ["quant_rl"]
+src = ["configuration", "artifacts", "market_data", "features", "trading", "simulation", "models", "training", "evaluation", "experiments", "live", "integrations", "compute", "orchestra"]
+# Date-stamped thesis audit scripts are historical research snapshots, not active source.
+extend-exclude = ["docs/thesis/*.py"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "UP"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["quant_rl"]
+known-first-party = ["configuration", "artifacts", "market_data", "features", "trading", "simulation", "models", "training", "evaluation", "experiments", "live", "integrations", "compute", "orchestra"]
 
 [tool.mypy]
 python_version = "3.12"
 files = [
-    "quant_rl",
-    "mt5_trading",
+    "configuration",
+    "artifacts",
+    "market_data",
+    "features",
+    "trading",
+    "simulation",
+    "models",
+    "training",
+    "evaluation",
+    "experiments",
+    "live",
+    "integrations",
+    "compute",
+    "orchestra",
     "scripts",
     "tests",
     "demo_trading.py",
     "live_trading.py",
+    "live_trading_rl.py",
 ]
 strict = true
-exclude = "^outputs/"
+exclude = "^outputs/|^docs/thesis/.*\\.py$"
 show_error_codes = true
 warn_unused_ignores = true
 warn_return_any = true
@@ -149,42 +164,64 @@ disallow_incomplete_defs = false
 # ...) in the pinned version; calling them is intentional.
 [[tool.mypy.overrides]]
 module = [
-    "quant_rl.eval.plots",
-    "quant_rl.eval.plots_interactive",
-    "quant_rl.eval.plot_series",
-    "quant_rl.eval.chart_overlays",
-    "quant_rl.eval.trade_plots",
-    "quant_rl.eval.trade_diagnostics",
-    "quant_rl.eval.replot_orders",
+    "evaluation.plotting.plots",
+    "evaluation.plotting.plots_interactive",
+    "evaluation.plotting.plot_series",
+    "evaluation.plotting.chart_overlays",
+    "evaluation.plotting.trade_plots",
+    "evaluation.metrics.trade_diagnostics",
+    "evaluation.plotting.replot_orders",
     "tests.test_plots_export",
     "tests.test_training_plots",
     "tests.test_eval.*",
 ]
 disallow_untyped_calls = false
 
-# Legacy scaffold kept for reference (superseded by quant_rl + live_trading_rl):
-# resolved via sys.path hacks and untyped; check loosely, not not at all.
+# Root compatibility entry points remain loosely typed while reusable logic lives in packages.
 [[tool.mypy.overrides]]
-module = ["backtest.*", "strategies.*", "utils.*", "demo_trading", "live_trading"]
+module = ["demo_trading", "live_trading"]
 ignore_missing_imports = true
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 
 # Cross-validation backtrader strategies: backtrader types are not well-annotated
 [[tool.mypy.overrides]]
-module = "quant_rl.backtest.cross_validation.*"
+module = "simulation.backtest.cross_validation.*"
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 ignore_missing_imports = true
 disallow_untyped_calls = false
 disallow_subclassing_any = false
 
+[[tool.mypy.overrides]]
+module = [
+    "simulation.environment.market_access",
+    "simulation.environment.risk_runtime",
+    "simulation.environment.execution_runtime",
+    "simulation.environment.entry_runtime",
+    "simulation.environment.diagnostics_runtime",
+    "simulation.environment.episode_runtime",
+    "simulation.environment.position_runtime",
+    "simulation.environment.observation_runtime",
+]
+disable_error_code = ["attr-defined", "has-type"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build]
+exclude = [
+    "/.venv*",
+]
+
 [tool.hatch.build.targets.wheel]
-packages = ["quant_rl", "orchestra"]
+packages = ["configuration", "artifacts", "market_data", "features", "trading", "simulation", "models", "training", "evaluation", "experiments", "live", "integrations", "compute", "orchestra"]
 
 [project.scripts]
 orchestra = "orchestra.cli:main"
+thesis-data = "market_data.cli:main"
+thesis-train = "training.cli:main"
+thesis-evaluate = "evaluation.cli:main"
+thesis-campaign = "experiments.cli:main"
+thesis-compute = "compute.cli:main"

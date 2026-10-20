@@ -13,11 +13,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from quant_rl.envs.strategies import PO3IFVGStrategy
-from quant_rl.envs.trading_env import (
+from simulation.environment.env import (
     _REJECTION_COUNTERS,
     TradingEnv,
 )
+from trading.strategies import PO3IFVGStrategy
 
 
 def _bars(n: int = 20, spread_pts: float | None = None) -> pd.DataFrame:
@@ -107,7 +107,7 @@ def _policy_env(
 
 def test_registry_covers_every_counter() -> None:
     """Each rejected_* bucket in _empty_entry_diag has exactly one reason key."""
-    from quant_rl.envs.trading_env import _empty_entry_diag
+    from simulation.environment.env import _empty_entry_diag
 
     buckets = {k for k in _empty_entry_diag(entry_state_machine=True) if k.startswith("rejected_")}
     assert set(_REJECTION_COUNTERS.values()) == buckets
@@ -182,7 +182,7 @@ def test_gate_rejection_counts_and_names_the_reason() -> None:
 
 
 def test_rr_window_prefers_in_range_targets() -> None:
-    from quant_rl.backtest.entry_levels import _target_menu
+    from trading.orders.entries import _target_menu
 
     row = pd.Series(
         {
@@ -213,7 +213,7 @@ def test_rr_window_prefers_in_range_targets() -> None:
 
 
 def test_rr_window_falls_back_when_nothing_qualifies() -> None:
-    from quant_rl.backtest.entry_levels import _target_menu
+    from trading.orders.entries import _target_menu
 
     row = pd.Series({"last_swing_high": 101.0, "asian_high": 110.0})
     menu = _target_menu(
@@ -229,7 +229,7 @@ def test_rr_window_falls_back_when_nothing_qualifies() -> None:
 
 
 def test_stop_buffer_honors_config() -> None:
-    from quant_rl.backtest.entry_levels import stop_buffer
+    from trading.orders.entries import stop_buffer
 
     # 0.0 is exact; an explicit buffer wins over any ATR heuristic.
     assert stop_buffer(0.0) == 0.0
@@ -282,9 +282,9 @@ def test_config_slippage_reaches_sl_tp_fills() -> None:
     """
     from omegaconf import OmegaConf
 
-    from quant_rl.backtest.costs import CostModel
-    from quant_rl.config import load_config
-    from quant_rl.train.train_rl import _cost_model
+    from configuration import load_config
+    from trading.execution.costs import CostModel
+    from training.setup.environments import _cost_model
 
     cfg = load_config([])
     assert float(cfg.costs.slippage_points) == 5.0

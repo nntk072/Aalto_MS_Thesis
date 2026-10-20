@@ -7,7 +7,9 @@ from typing import Any
 import pandas as pd
 import pytest
 
-SCRIPT = Path(__file__).resolve().parents[2] / "scripts/research/audit_replacement_m1_quality.py"
+SCRIPT = (
+    Path(__file__).resolve().parents[2] / "scripts/research/audits/audit_replacement_m1_quality.py"
+)
 SPEC = importlib.util.spec_from_file_location("replacement_m1_quality_audit", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 AUDIT = importlib.util.module_from_spec(SPEC)

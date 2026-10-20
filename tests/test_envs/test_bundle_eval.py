@@ -15,10 +15,10 @@ def test_evaluate_model_accepts_bundle_environment(tmp_path: Path) -> None:
     """Final evaluations can walk a bundle env without retaining source frames."""
     import pandas as pd
 
-    from quant_rl.envs.env_bundle_builder import build_env_bundle
-    from quant_rl.envs.strategies import BaselineStrategy
-    from quant_rl.envs.trading_env import TradingEnv
-    from quant_rl.eval.rollout import evaluate_model
+    from evaluation.rollout.model import evaluate_model
+    from simulation.environment.bundles import build_env_bundle
+    from simulation.environment.env import TradingEnv
+    from trading.strategies import BaselineStrategy
 
     class HoldModel:
         @staticmethod

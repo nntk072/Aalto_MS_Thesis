@@ -10,15 +10,15 @@ import torch
 from gymnasium import spaces
 from stable_baselines3 import PPO
 
-from quant_rl.action_schema import build_action_schema
-from quant_rl.envs.tp_decoders import decode_tp_mode
-from quant_rl.models.encoder import TCNEncoder
-from quant_rl.models.hybrid_actor import (
+from models.encoders.core import TCNEncoder
+from models.policies.hybrid import (
     HybridActorHeads,
     HybridBoxDistribution,
     HybridClampedStdMultiInputPolicy,
     _encoded_centers,
 )
+from simulation.contracts.actions import build_action_schema
+from simulation.environment.target_decoding import decode_tp_mode
 
 
 def test_hybrid_mode_centers_match_existing_box_decoders() -> None:

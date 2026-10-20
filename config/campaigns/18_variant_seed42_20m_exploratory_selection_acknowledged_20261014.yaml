@@ -1,6 +1,6 @@
 schema_version: 1
 campaign_id: ladder18_seed42_20m_exploratory_selection_acknowledged_18way_20261014
-variant_file: scripts/variant_list.txt
+variant_file: config/campaigns/variant_list.txt
 variants:
   - ladder_a0_flat
   - ladder_a1_sl

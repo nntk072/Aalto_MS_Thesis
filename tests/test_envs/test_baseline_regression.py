@@ -16,11 +16,11 @@ import pandas as pd
 import pytest
 from gymnasium.spaces import Box, Discrete
 
-from quant_rl.action_schema import build_discrete_trading_action_schema
-from quant_rl.envs.reward import DSRReward
-from quant_rl.envs.strategies import BaselineStrategy
-from quant_rl.envs.sweep_reward import CompositeReward
-from quant_rl.envs.trading_env import TradingEnv
+from simulation.contracts.actions import build_discrete_trading_action_schema
+from simulation.environment.env import TradingEnv
+from simulation.environment.rewards import DSRReward
+from simulation.environment.sweep_reward import CompositeReward
+from trading.strategies import BaselineStrategy
 
 
 class _ValidateEntryKwargs(TypedDict, total=False):

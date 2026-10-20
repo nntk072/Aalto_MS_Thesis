@@ -7,7 +7,7 @@ The full feature development process that happens before git operations: researc
 0. **Research & reuse first** (mandatory before new code)
    - Search GitHub (`gh search code`) and package registries (PyPI) for existing implementations before writing utilities.
    - Prefer a battle-tested library over a hand-rolled solution when it meets the requirement.
-   - Check this repo first: many indicators/rewards/env pieces already exist under `quant_rl/` and `backtest/`.
+   - Check this repo first: many indicators/rewards/environment pieces already exist under `features/`, `simulation/`, and `trading/`.
 
 1. **Plan before execute**
    - For complex features: write a short plan (goal, phases, risks, affected modules) before coding.

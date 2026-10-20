@@ -4,7 +4,7 @@ Master Roadmap Stage 3: report_g3 must read BOTH
   - ``metrics.json`` (``in_sample`` / ``out_of_sample`` blocks) written by
     ``scripts/train_rl.py``, and
   - the flat ``training_log.json`` written by the canonical
-    ``quant_rl/train/train_rl.py`` (where the ``test_*`` keys *are* the
+    ``training/runner/training.py`` (where the ``test_*`` keys *are* the
     out-of-sample block).
 
 Uses tiny synthetic JSON fixtures — no training, fast.
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from scripts.eval.report_g3 import main as report_g3_main
+from scripts.research.thesis.evaluation.report_g3 import main as report_g3_main
 
 FLAT_LOG = {
     "seed": 42,

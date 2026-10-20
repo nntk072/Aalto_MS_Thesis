@@ -7,7 +7,7 @@ import torch
 from gymnasium import spaces
 from stable_baselines3.common.buffers import DictRolloutBuffer
 
-from quant_rl.models.rollout_buffer import DeviceDictRolloutBuffer, install_single_copy_add
+from models.policies.rollout_buffer import DeviceDictRolloutBuffer, install_single_copy_add
 
 
 def _space() -> spaces.Dict:

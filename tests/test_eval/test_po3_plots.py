@@ -13,9 +13,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.eval.plots_interactive import plot_fvg_signals_interactive
-from quant_rl.eval.po3_plots import plot_fvg_signals
-from quant_rl.features.po3_config import detect_fvg, detect_po3_entries
+from evaluation.plotting.plots_interactive import plot_fvg_signals_interactive
+from evaluation.plotting.po3_plots import plot_fvg_signals
+from features.po3.config import detect_fvg, detect_po3_entries
 
 
 @pytest.fixture()
@@ -111,7 +111,7 @@ def test_candle_body_width_matches_bar_spacing(signal_bars: pd.DataFrame) -> Non
     """Candle bodies must be on the order of bar spacing, not ~0.7 date-days."""
     from matplotlib.patches import Rectangle
 
-    from quant_rl.eval.po3_plots import _draw_candles, _resample_ohlc
+    from evaluation.plotting.po3_plots import _draw_candles, _resample_ohlc
 
     ohlcv = _resample_ohlc(signal_bars, "1min")
     import matplotlib.pyplot as plt
@@ -130,7 +130,7 @@ def test_entry_markers_at_candle_close(signal_bars: pd.DataFrame) -> None:
     """Long/short markers sit on the candle close, not wick ± pad or price×1.004."""
     import matplotlib.pyplot as plt
 
-    from quant_rl.eval.po3_plots import _draw_entries, _resample_ohlc
+    from evaluation.plotting.po3_plots import _draw_entries, _resample_ohlc
 
     ohlcv = _resample_ohlc(signal_bars, "1min")
     signals = pd.DataFrame(0, index=signal_bars.index, columns=["entry_long", "entry_short"])

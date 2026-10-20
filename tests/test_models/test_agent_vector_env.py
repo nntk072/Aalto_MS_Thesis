@@ -11,8 +11,8 @@ from omegaconf import OmegaConf
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
-from quant_rl.envs.sharded_vec_env import ShardedBundleVecEnv
-from quant_rl.models.agent import _build_vector_env
+from models.factory.agent import _build_vector_env
+from simulation.environment.vectorized import ShardedBundleVecEnv
 
 
 def _make_cartpole() -> gym.Env[Any, Any]:

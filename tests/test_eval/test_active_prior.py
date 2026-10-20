@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from quant_rl.eval.decision_diversity import (
+from evaluation.metrics.decision_diversity import (
     active_prior_names,
     candidate_rank,
     risk_mean_collapsed,

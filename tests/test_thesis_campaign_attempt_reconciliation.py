@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from scripts.thesis.reconcile_campaign_attempts import reconcile_campaign
+from scripts.research.thesis.evidence.reconcile_campaign_attempts import reconcile_campaign
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:

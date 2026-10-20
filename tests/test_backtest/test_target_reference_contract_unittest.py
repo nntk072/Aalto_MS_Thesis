@@ -7,7 +7,7 @@ from typing import Any
 
 import pandas as pd
 
-from quant_rl.backtest.entry_levels import OrderGeometry, place_strategy_order
+from trading.orders.entries import OrderGeometry, place_strategy_order
 
 
 class _Stops:

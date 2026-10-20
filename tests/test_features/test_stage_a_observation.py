@@ -7,15 +7,15 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from quant_rl.envs.trading_env import TradingEnv
-from quant_rl.features.build import (
+from features import (
     attach_reachable_r,
     ensure_london_atr_distances,
     select_obs_columns,
 )
-from quant_rl.features.indicators import ny_session_clock
-from quant_rl.live.rl_strategy import RLStrategyAdapter
-from quant_rl.observation_schema import OBSERVATION_SCHEMA_V1, build_observation_schema
+from features.technical.indicators import ny_session_clock
+from live.runtime.strategy import RLStrategyAdapter
+from simulation.contracts.observations import OBSERVATION_SCHEMA_V1, build_observation_schema
+from simulation.environment.env import TradingEnv
 
 
 class _StubModel:
@@ -107,7 +107,7 @@ def test_train_live_observation_parity() -> None:
     env.account.update_equity(-250.0)
     env_obs = env._get_observation()
 
-    adapter = RLStrategyAdapter(model=_StubModel(), config_path="quant_rl/config/default.yaml")
+    adapter = RLStrategyAdapter(model=_StubModel(), config_path="config/base/default.yaml")
     adapter._features = features
     adapter._bars = bars
     adapter.obs_window = 10

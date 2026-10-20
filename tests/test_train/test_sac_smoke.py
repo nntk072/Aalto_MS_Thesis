@@ -23,7 +23,7 @@ import pandas as pd
 import pytest
 from omegaconf import OmegaConf
 
-from quant_rl.models.agent import build_agent
+from models.factory.agent import build_agent
 
 pytestmark = pytest.mark.slow
 
@@ -95,7 +95,7 @@ def test_sac_smoke_learns_a_few_steps(sac_cfg: Any, arch: str) -> None:
     pytest.importorskip("torch")
     pytest.importorskip("stable_baselines3")
 
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.env import TradingEnv
 
     bars = _make_bars()
     features = _make_features(bars)
@@ -128,7 +128,7 @@ def test_sac_rejects_discrete_action_space() -> None:
     pytest.importorskip("torch")
     pytest.importorskip("stable_baselines3")
 
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.env import TradingEnv
 
     bars = _make_bars()
     features = _make_features(bars)

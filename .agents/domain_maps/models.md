@@ -4,11 +4,11 @@
 
 | File | Role |
 |------|------|
-| `quant_rl/models/agent.py` | Agent wiring: encoder + PPO/SAC construction |
-| `quant_rl/models/encoder.py` | TCN/GRU/Transformer encoder implementations |
-| `quant_rl/models/vae.py` | Variational autoencoder (standalone training only) |
-| `quant_rl/models/base.py` | Base classes for models |
-| `quant_rl/models/auxiliary.py` | Auxiliary prediction head |
+| `models/factory/agent.py` | Agent wiring: encoder + PPO/SAC construction |
+| `models/encoders/core.py` | TCN/GRU/Transformer encoder implementations |
+| `models/auxiliary/vae.py` | Variational autoencoder (standalone training only) |
+| `models/base.py` | Base classes for models |
+| `models/auxiliary/heads.py` | Auxiliary prediction head |
 
 ## Key Symbols
 
@@ -24,14 +24,14 @@
 
 ## Direct Dependencies
 
-- `quant_rl/envs/trading_env.py` (observation space inference — `build_agent` reads `env.observation_space`)
+- `simulation/environment/env.py` (observation space inference — `build_agent` reads `env.observation_space`)
 
 ## Consumers (Callers)
 
-- `quant_rl/train/train_rl.py` (calls `build_agent`)
-- `scripts/train/compare_encoders.py` (encoder comparison)
-- `quant_rl/train/auxiliary_training.py` (auxiliary head training)
-- `quant_rl/live/rl_strategy.py` (model loading for live)
+- `training/runner/training.py` (calls `build_agent`)
+- `scripts/research/benchmarks/compare_encoders.py` (encoder comparison)
+- `training/callbacks/auxiliary.py` (auxiliary head training)
+- `live/runtime/strategy.py` (model loading for live)
 
 ## Tests
 
@@ -44,10 +44,10 @@
 
 ## Do NOT Read For Model Tasks
 
-- `quant_rl/features/` (features — separate domain)
-- `quant_rl/backtest/` (backtest — separate domain)
-- `quant_rl/train/` (training — orchestrates, doesn't implement models)
-- `mt5_trading/` (live trading — separate domain)
+- `features/` (features — separate domain)
+- `simulation/backtest/` (backtest — separate domain)
+- `training/` (training — orchestrates, doesn't implement models)
+- `integrations/mt5/` (live trading — separate domain)
 
 ## Agent Construction
 
@@ -68,7 +68,7 @@ obs["account"] : float32  [batch, 6]      (normalised account state vector)
 When `entry_state_observation` and the entry-state machine are both enabled,
 four one-hot entry-state values are appended to the account vector. Strategy
 overlay actions use the flag-derived `overlay-action-v2` schema from
-`quant_rl/action_schema.py`; their width and coordinate meanings depend on the
+`simulation/contracts/actions.py`; their width and coordinate meanings depend on the
 enabled direction, stop mode, TP mode, multi-TP, and simplex flags. Persist and
 validate those flags and the schema version with checkpoints. Width alone is
 not sufficient to recover coordinate meanings.
@@ -79,5 +79,5 @@ The `legacy4_no_exit_v1` migration is a narrowly scoped exception for the
 archived 4D TCN policy: it restores that checkpoint's original encoder and
 policy, then appends the structural-exit coordinate required by the current
 5D base overlay schema. It does not infer missing run configuration or apply
-to other action layouts. See `quant_rl/models/agent.py` and
-`quant_rl/eval/eval_run.py`.
+to other action layouts. See `models/factory/agent.py` and
+`evaluation/reanalysis/runner.py`.

@@ -10,7 +10,7 @@ parameters:
   arch:
     values: [gru, transformer]
   use_vae:
-    # NOTE: quant_rl/train/train_rl.py raises NotImplementedError for
+    # NOTE: thesis-train train raises NotImplementedError for
     # --use-vae until the VAE pipeline exists (Master Roadmap Stage 6).
     # Keep this at 0 until then; set to 1 once VAE lands.
     value: 0
@@ -27,9 +27,10 @@ parameters:
   steps:
     value: 200000
 command:
-  - python
-  - -m
-  - quant_rl.train.train_rl
+  - uv
+  - run
+  - thesis-train
+  - train
   - --algo
   - ${parameters.algo}
   - --arch
@@ -41,7 +42,7 @@ command:
   - --seed
   - 42
   # Config-override dotlists — note `learning_rate`, not the swept `lr`
-  # alias; the typo-safety guard in quant_rl.config.load_config will raise
+  # alias; the typo-safety guard in configuration.load_config will raise
   # on anything else instead of silently training at the default LR.
   - ${parameters.algo}.learning_rate=${parameters.lr}
   - ${parameters.algo}.ent_coef=${parameters.entropy_coef}

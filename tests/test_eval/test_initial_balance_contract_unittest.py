@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from quant_rl.eval.eval_diagnostics import write_bootstrap_cis
+from evaluation.reporting.diagnostics import write_bootstrap_cis
 
 
 class InitialBalanceBootstrapTest(unittest.TestCase):

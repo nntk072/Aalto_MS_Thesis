@@ -1,0 +1,553 @@
+# Canonical default configuration
+# All monetary values in account currency (USD).  Prices in points unless noted.
+
+data:
+  raw_dir: "data"                      # relative to project root
+  cache_dir: "cache/train_test_2025_2026" # independent per-split raw caches
+  prebuilt_feature_cache: null          # optional named cache path; content hash is verified
+  session_schedule_file: "config/ny_session_schedule.csv"
+  tz: "Etc/GMT-3"                      # fixed-offset carrier for server wall-clock labels
+  timestamp_clock: "ftmo_mt5_us_dst"    # FTMO MT4/5: GMT+2 standard / GMT+3 US DST
+  bar_timestamp_convention: "open"      # bar export timestamp marks the interval open
+  require_native_timeframes: true        # missing native bars fail unless explicitly derived
+  symbols: ["US100.cash", "US500.cash"]
+  primary: "US100.cash"
+  secondary: "US500.cash"              # used only for SMT divergence
+  timeframes: ["M1", "M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]
+  derived_timeframes:
+    US100.cash: ["D1"] # no supplied US100 D1 export; derive only this explicit fallback from M1
+  split:
+    train_start: "2024-12-30"          # first date used for policy training
+    train_end: "2025-12-31"            # inclusive: in-sample ≤ this date
+    test_start: "2026-01-01"           # inclusive: out-of-sample ≥ this date
+  # Independent raw inputs and caches. Earlier raw rows are retained for
+  # causal feature warmup; policy training starts on 2024-12-30.
+  datasets:
+    training:
+      raw_dir: "data/training"
+      m1_files:
+        US100.cash: "US100.cash_M1_202412300105_202610162349.csv"
+        US500.cash: "US500.cash_M1_202412300105_202610162349.csv"
+      timeframe_files:
+        M3:
+          US100.cash: "US100.cash_M3_202412300103_202610162348.csv"
+          US500.cash: "US500.cash_M3_202412300103_202610162348.csv"
+        M5:
+          US100.cash: "US100.cash_M5_202412300105_202610162345.csv"
+          US500.cash: "US500.cash_M5_202412300105_202610162345.csv"
+        M10:
+          US100.cash: "US100.cash_M10_202412300100_202610162340.csv"
+          US500.cash: "US500.cash_M10_202412300100_202610162340.csv"
+        M15:
+          US100.cash: "US100.cash_M15_202412300100_202610162345.csv"
+          US500.cash: "US500.cash_M15_202412300100_202610162345.csv"
+        M30:
+          US100.cash: "US100.cash_M30_202412300100_202610162330.csv"
+          US500.cash: "US500.cash_M30_202412300100_202610162330.csv"
+        H1:
+          US100.cash: "US100.cash_H1_202412300100_202610162300.csv"
+          US500.cash: "US500.cash_H1_202412300100_202610162300.csv"
+        H4:
+          US100.cash: "US100.cash_H4_202412300000_202610162000.csv"
+          US500.cash: "US500.cash_H4_202412300000_202610162000.csv"
+        D1:
+          US500.cash: "US500.cash_D1_202412300000_202610160000.csv"
+      tick_files:
+        US100.cash: "US100.cash_202412300105_202610162349.csv"
+        US500.cash: "US500.cash_202412300105_202610162349.csv"
+    testing:
+      raw_dir: "data/testing"
+      m1_files:
+        US100.cash: "US100.cash_M1_202412300105_202610162349.csv"
+        US500.cash: "US500.cash_M1_202412300105_202610162349.csv"
+      timeframe_files:
+        M3:
+          US100.cash: "US100.cash_M3_202412300103_202610162348.csv"
+          US500.cash: "US500.cash_M3_202412300103_202610162348.csv"
+        M5:
+          US100.cash: "US100.cash_M5_202412300105_202610162345.csv"
+          US500.cash: "US500.cash_M5_202412300105_202610162345.csv"
+        M10:
+          US100.cash: "US100.cash_M10_202412300100_202610162340.csv"
+          US500.cash: "US500.cash_M10_202412300100_202610162340.csv"
+        M15:
+          US100.cash: "US100.cash_M15_202412300100_202610162345.csv"
+          US500.cash: "US500.cash_M15_202412300100_202610162345.csv"
+        M30:
+          US100.cash: "US100.cash_M30_202412300100_202610162330.csv"
+          US500.cash: "US500.cash_M30_202412300100_202610162330.csv"
+        H1:
+          US100.cash: "US100.cash_H1_202412300100_202610162300.csv"
+          US500.cash: "US500.cash_H1_202412300100_202610162300.csv"
+        H4:
+          US100.cash: "US100.cash_H4_202412300000_202610162000.csv"
+          US500.cash: "US500.cash_H4_202412300000_202610162000.csv"
+        D1:
+          US500.cash: "US500.cash_D1_202412300000_202610160000.csv"
+      tick_files:
+        US100.cash: "US100.cash_202412300105_202610162349.csv"
+        US500.cash: "US500.cash_202412300105_202610162349.csv"
+
+session:
+  tz: "Etc/GMT-3"                      # wall-clock labels; not an absolute-timezone rule
+  start: "16:30"                       # NY open proxy
+  end:   "23:00"                       # NY close proxy
+  # Session times are FTMO server wall time; CT feature conversion uses timestamp_clock.
+  dst_flag: true
+
+account:
+  initial_balance: 100000.0
+  currency: "USD"
+  leverage: 50
+  margin_pct: 0.02                     # 2 % margin requirement
+  contract_size: 1.0
+
+# Annualized M1 statistics use 252 trading sessions/year and 390 NY-session
+# minute bars/session. This convention is recorded with every run's metrics.
+evaluation:
+  periods_per_year: 98280
+  annualization_convention: "252 sessions/year x 390 NY-session M1 bars/session"
+
+costs:
+  # spread in price units (same unit as bar close prices)
+  spread_us100: 0.6
+  spread_us500: 1.53
+  # Adverse slippage applied to stop/target fills, in PRICE POINTS (not ticks).
+  # ~5 points keeps the `risk.min_sl_points` floor at its 2x sizing margin, so
+  # keep min_sl_points >= 2 * slippage_points.
+  slippage_points: 5.0
+  commission_per_lot: 0.0
+  # minimum price increment for converting the CSV integer spread column
+  # to price units (e.g. 0.01 for US100 quoted to 2 d.p.)
+  point_size: 0.01
+  # set false to disable tick lookup and always use bar-spread fallback
+  use_tick_execution: true
+
+execution:
+  # Fill on the tick that crosses SL or TP. 0 = that tick, not a later one.
+  # A prop-firm stop fills at the level or worse; a later tick can bounce back.
+  fill_delay_ms: 0
+  # Direct/legacy runs default to no additional random latency.
+  # The thesis variant resolver forces 30 ms (seeded uniform in [0, 30)).
+  randomized_fill_latency_ms: 30.0
+  max_tick_quote_wait_ms: 60000
+
+trading_policy:
+  mode: "legacy"
+  repeated_payout:
+    operating_balance: 100000.0
+    payout_target_balance: 110000.0
+    account_floor_equity: 90000.0
+    daily_loss_limit: 5000.0
+    trailing_dd_limit: 0.0
+    payout_trigger: "realized_balance_flat"
+    continue_after_payout: true
+    agent_risk_min_frac: 0.0
+    agent_risk_max_frac: 0.009
+    # Backward-compatible override aliases; null means use the canonical key above.
+    min_agent_risk_frac: null
+    max_agent_risk_frac: null
+    risk_floor: 0.0
+    # Additional fixed reserve. Entry spread is already present in the actual
+    # fill-to-stop distance; sizing also reserves modeled stop slippage and
+    # round-trip commission from the active CostModel.
+    reserve_cost_buffer_usd: 0.0
+    execution_reserve_usd: null
+    enforce_remaining_daily_capacity: true
+    enforce_remaining_account_capacity: true
+    repeated_eval: true
+
+ftmo:
+  # Hard daily loss (5% of $100k): force-close + block the rest of that session.
+  daily_loss_limit: 5000.0
+  # Soft brick (2% of $100k): no new entries + reward pressure; not a hard fail.
+  soft_daily_loss_limit: 2000.0
+  # Soft year-loss shaping: reward pressure from this floor toward max_loss_limit.
+  soft_max_loss_limit: 5000.0
+  max_loss_limit: 10000.0              # FTMO max loss from initial (eval train/test)
+  # PPO-only year-fail: $7k from peak (7% of $100k). Eval does not use this —
+  # reported training/ and testing/ follow FTMO $10k from initial + $5k daily.
+  trailing_dd_limit: 0.07
+  soft_trailing_dd_limit: 0.0
+  risk_per_trade_limit: 1000.0         # per-trade risk kill-switch
+  profit_target: 10000.0               # not enforced in env, only reported
+
+# LIVE/paper execution risk for integrations.mt5's RiskManager (used by
+# live_trading_rl.py / integrations.mt5.robot.rl_robot). These are intentionally a
+# percentage-of-balance sizing model, NOT the FTMO dollar kill-switches in
+# `ftmo:` above: training/eval enforce ftmo.daily_loss_limit /
+# max_loss_limit / risk_per_trade_limit via FTMOGuardrails, while MT5 sizing
+# works from balance fractions. Scaling here is chosen so that on the default
+# $100k account, risk_per_symbol (1%) ≈ ftmo.risk_per_trade_limit ($1000) —
+# keep that ratio aligned if you change account size, and never change one
+# without the other.
+live_risk_overrides:
+  risk_per_symbol: 0.01          # 1% of balance ≈ $1000 on a $100k account
+  max_total_risk: 0.02           # broker-stop risk across open positions; unknown stops block entries
+  default_lot_size: 0.1          # fallback if risk-based sizing fails
+  stop_loss_pips: 50.0           # distance used for sizing and attached broker-side stop
+  interval_minutes: 1            # M1 policy cadence for live_trading_rl.py
+
+features:
+  window: 60                           # look-back bars fed to encoder
+  ema_periods: [9, 13, 21, 50, 200]
+  rsi_period: 14
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  atr_period: 14
+  adx_period: 14
+  bb_period: 20
+  bb_std: 2.0
+  stoch_k: 14
+  stoch_d: 3
+  vwap_session: true                   # tick-count VWAP (CFD <VOL> is unused)
+  return_horizons: [1, 5, 15, 30]
+  realized_vol_period: 20
+  smt_swing_period: 5                  # bars for swing high/low detection
+  smt_corr_window: 20
+  zscore_window: 252                   # rolling train-only normalisation window
+  # Higher timeframes whose own indicator blocks are causally aligned onto
+  # the M1 spine (Chain A). Each listed TF gets the same build_indicators()
+  # call as M1, forward-filled with {TF}_{indicator} column names.
+  htf_timeframes: ["M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]
+  # Chain B/F opt-in feature blocks (all off by default; enabled by the
+  # per-variant config files in config/features_*_mtf.yaml).
+  include_po3: false            # PO3 time-of-day phase tag (accum/manip/distrib)
+  include_fvg_ifvg: false       # per-TF FVG zone features (in-zone flag + ATR dist)
+  include_po3_full: false       # full HTF FVG -> LTF IFVG -> entry-trigger pipeline
+  include_strategy_state: false # Idea 1: sweeps + PO3 manip/distrib state + IFVG zones
+  po3_reference_mode: "m1_legacy" # Revised overlays opt into confirmed HTF pivots
+  po3_reference_timeframes: ["M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]
+  po3_phase_mode: "legacy" # legacy or reclaim_then_ifvg
+  include_pd_context: false     # session-routed Asia/London/prev-day-week PD context + LTF BOS/MSS
+  po3_htf: "M15"                # HTF for the full PO3 pipeline
+  po3_ltf: "M5"                 # primary (LTF) for the full PO3 pipeline
+  # MTF expansion (mtf_feature_expansion_plan.md §§4-5). Each block is an
+  # opt-in nested mapping {enabled, timeframes}: off by default so the base
+  # matrix is unchanged; the FVG full-ladder fix (§4.5) rides on the
+  # existing include_fvg_ifvg flag with fvg_timeframes defaulting to
+  # ["M1"] + htf_timeframes (M1_fvg_* included).
+  smt: {enabled: false, timeframes: ["M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]}
+  structure:
+    enabled: false
+    timeframes: ["M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]
+    swing_candidate_count: 1 # 1 preserves latest-only; 2/3 selects recent unswept swings
+    candidate_price_increment: null # defaults to costs.point_size
+  liquidity: {enabled: false, timeframes: ["M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]}
+  po3_state_mtf: {enabled: false, timeframes: ["M1", "M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]}
+  # IFVG confirmations can be merged from any supported resample timeframe;
+  # every source is exposed only after its candle closes.
+  ifvg_mtf: {enabled: false, timeframes: ["M3", "M5", "M10", "M15", "M30", "H1", "H4", "D1"]}
+  # CT-anchored session levels (additive to the legacy broker-tz levels in
+  # structure.detect_session_levels; new columns carry a _ct suffix).
+  # Windows are resolved per bar in `tz` via tz-aware conversion, so US DST
+  # transitions are handled by the tz database (features/session_ohlc.py).
+  include_session_ohlc: false   # session OHLC + prior-period H/L + quadrants + vwap
+  sessions:
+    tz: "America/Chicago"       # CT — DST-aware session clock
+    asian: {start: "19:00", end: "23:00"}
+    london: {start: "02:00", end: "05:00"}
+    ny: {start: "08:30", end: "15:00"}
+    week_start: "MON"           # ISO weeks are Monday-based; kept explicit
+    quadrant_ranges: ["yesterday", "lastweek"]  # ranges that get q_* levels
+
+env:
+  obs_window: 60                       # T in [T, F] obs
+  observation_schema_version: account-state-v1 # account-state-v2 is an opt-in new lineage
+  observation_age_scale_bars: 60       # v2 position-age normalization scale
+  data_source: frames                   # frames remains default until bundle gates pass
+  n_envs: 8                           # train_rl RAM-caps this (powers of two); 1 = DummyVecEnv
+  vector_backend: subproc             # subproc, serial, or sharded_bundle
+  vector_shards: 0                    # 0 = min(8, n_envs); envs remain independent
+  action_type: "discrete"              # "discrete" | "continuous"
+  # null = full train-split year (last NY bar truncates; FTMO fail terminates).
+  max_episode_steps: null
+  reward_dsr_eta: 0.01                 # differential Sharpe damping
+  strategy_actions: false              # Idea 1/2 trader Box[-1,1]^5 [intensity, stop, risk, target, exit]
+  entry_state_machine: false           # A4 persistent opportunity lifecycle
+  candidate_max_age_bars: 5            # last valid candidate age, in bars
+  arm_requires_retest: false           # require a current directional gap retest to arm
+  entry_state_observation: true        # false supports the A4a hidden-state ablation
+  strict_research_eligibility: false   # opt-in: fail on missing gate inputs or no eligible NY bars
+  # Overlay: intensity does not gate entry (0 = follow context_direction).
+  # A positive band lets PPO park at "never trade"; seed-50 20M did that at 0.1.
+  entry_intensity_threshold: 0.0
+  reward_mode: dsr                     # dsr | rr | pnl | equity_delta_r; default stays dsr
+  # "rr" scores the agent on cumulative realized R instead of Sharpe or dollar PnL.
+  # Only meaningful with `fixed_risk_usd`: under fractional sizing the same edge
+  # yields different dollar PnL as equity drifts, so the reward would partly pay
+  # for position size rather than for decisions.
+  fixed_risk_usd: 0                   # >0 = every trade risks exactly this many
+                                      # dollars, so 1R is a fixed known amount
+  # How the per-trade dollar risk is chosen.
+  #   fixed   -> always `fixed_risk_usd`, independent of equity and of the
+  #              agent's risk_frac. Makes 1R a constant and the cumulative-R
+  #              reward a clean objective.
+  #   dynamic -> live equity x agent's risk_frac, plus the max_loss_per_trade_usd
+  #              cap. Risk drifts as the account compounds.
+  risk_mode: dynamic                 # "fixed" | "dynamic"
+  # EMA-21 exit. It was chosen on 92% of trades in the first 20M run, which
+  # collapsed exits onto one non-structural mode and left the structural target
+  # head untrained. false forces every exit onto a structural level >= 1R away.
+  allow_ema_exit: true               # false = structural targets only
+  allow_agent_sl_mode: true           # true = 6-D/7-D action with SL mode dim
+  sl_mode_defer_threshold: 0.1        # |u_sl - 0.5| below this defers to state machine
+  allow_agent_tp_mode: false          # opt-in TP mode dim
+  tp_mode_defer_threshold: 0.1        # agent veto threshold
+  allow_multi_tp: false               # opt-in multi-TP levels
+  allow_simplex: true                 # disable z1/z2 for 9-D multi-TP
+  tp_breakeven_alpha: 0.5             # alpha for breakeven TP: TP = entry + alpha * R
+  # Training behavior, not an FTMO kill. 0 = off. 0.10 = flatten at 10% from peak.
+  peak_trailing_dd_limit: 0.0
+  max_entries_per_session: 0
+  # First NY minutes are the open manipulation. 0 disables the blackout.
+  open_manipulation_bars: 10
+  entry_cooldown_bars: 15
+  sl_buffer_pts: 0.0                   # structural stop buffer (0 = exact)
+  block_overnight: true                # force-close positions at last NY bar (no gap hold)
+  eod_risk:
+    # Intraday adverse-excursion cut, in account currency. This is a floor,
+    # not the primary risk boundary: with `respect_planned_risk` the guard
+    # never fires closer than the trade's own loss at its structural stop, so
+    # a position sized to risk $1,000 is not flattened at $500 before the
+    # setup can play out. 20M seed-50 runs showed ~80% of test losses coming
+    # from this guard on positions whose stops were never touched.
+    max_loss_usd: 1100.0
+    respect_planned_risk: true
+    planned_risk_mult: 1.1
+    max_age_hours: 8
+    stale_bars: 60
+    progress_threshold_atr: 0.25
+    # Breakeven management: once favorable excursion reaches this many stop
+    # distances, the stop moves to entry +/- `breakeven_buffer_pts`. 0 = off.
+    breakeven_trigger_r: 1.0
+    breakeven_buffer_pts: 2.0
+  # Opt-in signed direction control. false keeps the 5-D overlay
+  # [intensity, stop, risk, target, exit] where context_direction owns the
+  # side. true gives a 6-D box with signed conviction first and exit mode last.
+  agent_direction_control: false
+  # Conviction band (distance from the neutral 0.5) below which the agent
+  # defers to the heuristic side. Only used with agent_direction_control.
+  direction_override_threshold: 0.0
+
+ppo:
+  actor_arch: shared                # shared | semantic_heads; opt-in Q4A treatment
+  policy_distribution: clamped_diagonal_gaussian  # hybrid_v1 is an opt-in Q4B treatment
+  semantic_head_width: 64
+  n_steps: 2048
+  batch_size: 512
+  n_epochs: 15
+  rollout_buffer_on_device: true  # stage each completed PPO rollout on the learner device
+  learning_rate: 3.0e-4
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  # Box overlay only. Discrete Idea 3 keeps ent_coef. Caps std in [e^min, e^max].
+  ent_coef_continuous: 0.001
+  log_std_init: 0.0
+  log_std_min: -0.7
+  log_std_max: 0.0
+  # Quadratic pull on the exit mean, and the direction mean of the 6-D box.
+  # Zero disables it. This is not an environment reward and does not change ent_coef.
+  mode_prior_coef: 0.001
+  checkpoint_freq: 1000000
+  total_timesteps: 20000000
+
+# Optional research-only primal-dual PPO objective. The environment's hard
+# account guardrails remain active independently of this learned penalty.
+constrained_rl:
+  enabled: false
+  episode_cost_budget: 1.0
+  dual_learning_rate: 0.1
+  lambda_initial: 0.0
+  lambda_max: 100.0
+
+# Runtime provenance for staged quality experiments. The requested shape is
+# recorded before hardware-aware scaling and compared with the effective shape.
+quality_execution:
+  requested_n_envs: null
+  effective_n_envs: null
+  exact_n_envs: false
+
+sac:
+  learning_rate: 3.0e-4
+  buffer_size: 100000
+  batch_size: 512
+  tau: 0.005
+  gamma: 0.99
+  train_freq: 1
+  gradient_steps: 1
+  ent_coef: 0.01
+  learning_starts: 500
+
+encoder:
+  windows:
+    m5: 24                    # closed M5 bars when agent.arch is mtf
+    m15: 16
+    h1: 12
+
+agent:
+  type: "ppo"                 # "ppo" | "sac"
+  arch: "tcn"                 # "tcn" | "lite_tcn" | "gru" | "transformer" | "mtf"
+  lite_tcn:
+    channels: 96
+    dilations: [1, 4, 10]
+    kernel_size: 3
+    dropout: 0.1
+    latent_dim: 128
+  head_arch:
+    tcn: [256, 128]
+    lite_tcn: [128, 64]
+    gru: [256, 128]
+    transformer: [256, 128]
+    mtf: [256, 128]
+  use_narrative: false        # true to condition on the VAE narrative embedding
+
+device: "auto"
+
+quality_diagnostics:
+  enabled: false                    # per-rollout action/funnel/reward report, no policy effect
+
+output:
+  report_profile: "full"             # full or campaign_fast (skip optional order PNG and HTML)
+  dir: "outputs"                    # base directory for run artifacts
+  save_plots: true                  # save static PNG figures
+  save_html: false                  # save interactive plotly HTML (slow: ~1h per split)
+  save_csv: true                    # save equity.csv + trades.csv
+  max_order_charts: 0               # fast default; set >0 to render per-trade price charts
+  dpi: 150                          # PNG resolution
+  candle_tf: "15min"                # resample TF for candlestick chart
+  price_plot_max_points: 3000       # max candles in price+orders chart
+  trade_chart_show_mae_mfe: true    # show MAE/MFE lines on per-trade charts
+  trade_chart_show_sl_tp: true      # show SL/TP lines on per-trade charts
+
+backtest:
+  validation:
+    max_loss_per_trade_usd: 100.0      # safety cap in USD; structure SL is primary
+    take_profit_per_trade_usd: null    # per-trade structure TP replaces global USD TP
+    include_costs_in_trade_risk: true
+    validation_mode: false             # set true to relax global FTMO limits for viz testing
+
+risk:
+  min_lot: 0.01
+  max_lot: 100.0
+  default_risk_frac: 0.01              # 1% equity fallback for baselines
+  sl_mode: fixed                       # fixed | breakeven | trailing
+  tp_mode: fixed                       # fixed | breakeven | trailing
+  tp_reference: structural             # anchor for TP distance ratios
+  min_sl_atr_mult: 0.5                 # reject/tighten stops inside noise
+  # Absolute minimum |entry - SL| in price points. Sized as ~2x the worst
+  # expected fill slippage (costs.slippage_points), so a 5-point slip still
+  # leaves the stop meaningful rather than whipsawing on the fill itself.
+  min_sl_points: 10.0
+  swing_buffer_pts: 1.0
+  rr_ratio_default: 2.0
+
+training:
+  mode: "full"           # "full" = all data / "mvp" = M1-only minimal slice
+  # Traverse each training split chronologically through its end after a risk
+  # breach; risk_terminated is available only for an explicit legacy replay.
+  episode_mode: "full_split"
+  use_m1_only: false     # true = skip SMT/secondary features (M1 primary only)
+  primary_only: false    # true = ignore secondary symbol entirely
+  max_days: null         # null = all data; integer = last N calendar days for training
+  total_timesteps_mvp: 8192   # short timestep count used in mvp mode
+  # Stop before total_timesteps only for non-finite state by default.
+  # Profitability and trade counts remain reported metrics, not stop conditions.
+  early_abort:
+    enabled: true
+    min_timesteps: 5000000
+    window: 4
+    stop_on_nonfinite: true
+    stop_on_no_trades: false
+    stop_on_equity_gate: false
+  # Terminal block during learn(). Eval is a short deterministic train prefix.
+  dashboard:
+    enabled: true
+    eval_every: 100000
+    eval_bars: 20000
+    log_every: 100000
+    # Warning shares are printed only. The prior floors gate the training loss.
+    # Neither enters the environment reward.
+    diversity:
+      sl_top_share: 0.80
+      tp_top_share: 0.80
+      rr_p75: 1.25
+      ema_lo: 0.02
+      ema_hi: 0.98
+      action_std: 0.05
+      min_prior_trades: 50
+      min_prior_sl_choices: 30
+      min_prior_tp_choices: 30
+      min_prior_direction_choices: 30
+      rank_edge: 0.05
+      direction_min_share: 0.90
+      min_prior_risk_steps: 1000
+      # u <= 0.05 is risk_frac <= 0.0005 on range [0, 0.01], the hold floor.
+      risk_u_max: 0.05
+  # One JSON line per PPO update, plus an incident on exceptions, non-finite
+  # numbers, and registered checks. enabled: false leaves training unchanged.
+  debug:
+    enabled: true
+    ring_size: 5
+    ev_floor: 0.2
+    ev_windows: 5
+    std_min: 0.497
+    std_max: 1.0
+    part_vs_pnl: 10.0
+    corr_floor: 0.3
+    corr_windows: 3
+
+# Chain E Step 0 — auxiliary return-prediction head (opt-in).
+auxiliary:
+  aux_weight: 0.0        # 0.0 = disabled (control); 0.1 = treatment arm
+  prediction_horizon: 5  # bars ahead for the per-bar-return target
+  lr: 0.0001             # auxiliary optimizer lr (head + encoder)
+  grad_steps: 4          # gradient steps per rollout
+# Idea 1 / Idea 2 strategy semantics (Agent.md §10). All keys default to
+# the Idea 1 (PO3 + IFVG) values; config/3_distribution.yaml overrides.
+strategy:
+  name: "po3_ifvg"              # "baseline" | "po3_ifvg" | "distribution"
+  manipulation_filter: "against"  # "against" | "follow"
+  session:
+    timezone: "Etc/GMT-3"
+  liquidity:
+    swing_period: 5
+    require_reclaim: true
+    max_age_bars: 120
+  po3:
+    require_manipulation_sweep: true
+    require_distribution_confirmation: true
+  ifvg:
+    enabled: true
+    max_age_bars: 50
+    require_price_retest: true
+    close_through_threshold: 0.5
+    require_opposing_fvg: false
+  risk:
+    sl_mode: "fixed"            # "fixed" | "breakeven" | "trailing"
+    tp_mode: "fixed"            # "fixed" | "breakeven" | "trailing"
+    tp_reference: "structural"  # anchor for TP distance ratios
+    sl_buffer_pts: 1.0
+    risk_frac_range: [0.0, 0.01]
+    rr_range: [1.5, 5.0]
+  tp:
+    mode: "agent"
+    allowed_targets:
+      - "rr"
+      - "buyside_liquidity"
+      - "sellside_liquidity"
+      - "previous_day_high_low"
+    invalid_target_policy: "rr_fallback"
+  entry:
+    mode: "legacy"             # legacy | confirmed_first_eligible | confirmed_retest | preconfirmation_exploratory
+    enforce_gate: false         # false = diagnostic; true = hard gate
+  reward:
+    entry_bonus: 0.01
+    manipulation_penalty: 0.02
+    invalid_ifvg_penalty: 0.01
+    distribution_bonus: 0.005
+    strategy_weight: 0.01
+  batch_windows: 256     # supervised windows sampled per rollout

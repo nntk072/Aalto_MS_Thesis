@@ -16,12 +16,12 @@ from tests.test_envs.test_trading_env_golden_traces import _make_deterministic_b
 
 def test_worker_factory_matches_default_make_env(tmp_path: Path) -> None:
     """The compact spec factory retains the current training env defaults."""
-    from quant_rl.config import load_config
-    from quant_rl.envs.env_bundle_builder import build_env_bundle
-    from quant_rl.envs.env_spec import EnvSpec
-    from quant_rl.envs.strategies import BaselineStrategy
-    from quant_rl.envs.worker import make_bundle_env
-    from quant_rl.train.train_rl import make_env
+    from configuration import load_config
+    from simulation.environment.bundles import build_env_bundle
+    from simulation.environment.spec import EnvSpec
+    from simulation.environment.worker import make_bundle_env
+    from trading.strategies import BaselineStrategy
+    from training.setup.environments import make_env
 
     bars = _make_deterministic_bars(n=96)
     features = _make_features(bars)
@@ -68,10 +68,10 @@ def test_worker_factory_matches_default_make_env(tmp_path: Path) -> None:
 
 def test_bundle_worker_forwards_tick_execution_contract(monkeypatch, tmp_path: Path) -> None:
     """Shared-bundle workers receive the same strict tick fill settings."""
-    from quant_rl.config import load_config
-    from quant_rl.envs.env_spec import EnvSpec
-    from quant_rl.envs.trading_env import TradingEnv
-    from quant_rl.envs.worker import make_bundle_env
+    from configuration import load_config
+    from simulation.environment.env import TradingEnv
+    from simulation.environment.spec import EnvSpec
+    from simulation.environment.worker import make_bundle_env
 
     cfg = load_config()
     cfg.costs.use_tick_execution = True
@@ -104,11 +104,11 @@ def test_bundle_worker_forwards_tick_execution_contract(monkeypatch, tmp_path: P
 
 def test_evaluation_worker_disables_training_trailing_guardrails(tmp_path: Path) -> None:
     """Evaluation keeps daily/max-loss gates but disables trailing kill-switches."""
-    from quant_rl.config import load_config
-    from quant_rl.envs.env_bundle_builder import build_env_bundle
-    from quant_rl.envs.env_spec import EnvSpec
-    from quant_rl.envs.strategies import BaselineStrategy
-    from quant_rl.envs.worker import make_bundle_env
+    from configuration import load_config
+    from simulation.environment.bundles import build_env_bundle
+    from simulation.environment.spec import EnvSpec
+    from simulation.environment.worker import make_bundle_env
+    from trading.strategies import BaselineStrategy
 
     bars = _make_deterministic_bars(n=96)
     features = _make_features(bars)
@@ -160,7 +160,7 @@ def test_worker_import_does_not_load_torch_or_sb3() -> None:
         [
             sys.executable,
             "-c",
-            "import quant_rl.envs.worker, sys; "
+            "import simulation.environment.worker, sys; "
             "assert 'torch' not in sys.modules; "
             "assert 'stable_baselines3' not in sys.modules",
         ],
@@ -173,12 +173,12 @@ def test_worker_import_does_not_load_torch_or_sb3() -> None:
 
 def test_worker_factory_matches_strategy_actions(tmp_path: Path) -> None:
     """The strategy-action risk ranges and strategy flags survive serialization."""
-    from quant_rl.config import load_config
-    from quant_rl.envs.env_bundle_builder import build_env_bundle
-    from quant_rl.envs.env_spec import EnvSpec
-    from quant_rl.envs.strategies import BaselineStrategy
-    from quant_rl.envs.worker import make_bundle_env
-    from quant_rl.train.train_rl import make_env
+    from configuration import load_config
+    from simulation.environment.bundles import build_env_bundle
+    from simulation.environment.spec import EnvSpec
+    from simulation.environment.worker import make_bundle_env
+    from trading.strategies import BaselineStrategy
+    from training.setup.environments import make_env
 
     bars = _make_deterministic_bars(n=96)
     features = _make_features(bars)
@@ -218,10 +218,10 @@ def test_worker_factory_matches_strategy_actions(tmp_path: Path) -> None:
 @pytest.mark.parametrize("name", ["po3_ifvg", "distribution", "unrecognized"])
 def test_worker_recreates_named_strategy(name: str) -> None:
     """Each strategy name reconstructs its existing class and reward type."""
-    from quant_rl.envs.distribution_reward import DistributionReward
-    from quant_rl.envs.po3_reward import PO3Reward
-    from quant_rl.envs.strategies import BaselineStrategy, DistributionStrategy, PO3IFVGStrategy
-    from quant_rl.envs.worker import _strategy
+    from simulation.environment.distribution_reward import DistributionReward
+    from simulation.environment.po3_reward import PO3Reward
+    from simulation.environment.worker import _strategy
+    from trading.strategies import BaselineStrategy, DistributionStrategy, PO3IFVGStrategy
 
     strategy, reward, weight = _strategy(
         {
@@ -249,7 +249,7 @@ def test_worker_recreates_named_strategy(name: str) -> None:
 
 def test_env_spec_pickle_is_small(tmp_path: Path) -> None:
     """The worker payload contains only a bundle path and scalar config."""
-    from quant_rl.envs.env_spec import EnvSpec
+    from simulation.environment.spec import EnvSpec
 
     spec = EnvSpec.from_cfg(
         {"env": {"obs_window": 60}, "account": {"initial_balance": 100_000}},

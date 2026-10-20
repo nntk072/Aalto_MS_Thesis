@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from quant_rl.evaluation.matched_comparison import compare_matched_returns
+from evaluation.metrics.matched_comparison import compare_matched_returns
 
 
 def _contract() -> dict[str, Any]:

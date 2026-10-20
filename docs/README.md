@@ -20,7 +20,7 @@
 | [../README.md](../README.md) | Project overview and quick start |
 | [../AGENTS.md](../AGENTS.md) | Agent guide for coding assistants |
 | [../orchestra/README.md](../orchestra/README.md) | Multi-model CLI pipeline |
-| [../quant_rl/README.md](../quant_rl/README.md) | Package layout and model contract |
+| [architecture/repository_packages.md](architecture/repository_packages.md) | Package layout and public command surface |
 | [../.agents/architecture.md](../.agents/architecture.md) | Agent architecture map |
 | [../.agents/domain_maps/](../.agents/domain_maps/) | Per-domain context for agents |
 

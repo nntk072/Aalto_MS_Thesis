@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from quant_rl.envs.reward import DSRReward
+from simulation.environment.rewards import DSRReward
 
 
 def test_breach_returns_strong_terminal():
@@ -19,7 +19,7 @@ def test_eval_breach_keeps_the_report_penalty():
 
 
 def test_soft_band_charges_once_on_entry():
-    from quant_rl.envs.reward import PnLReward
+    from simulation.environment.rewards import PnLReward
 
     r = PnLReward()
     first = r(

@@ -63,18 +63,21 @@ learns position sizing, entry timing, and stop-loss/take-profit placement.
 
 ## Key Components
 
-| Module | Purpose |
+| Package | Purpose |
 |--------|---------|
-| `quant_rl/data/` | Load and resample M1 → M5/M15/M30/H1/H4/D1 OHLCV bars |
-| `quant_rl/features/` | Feature engineering: indicators, structure, PO3/FVG/IFVG, liquidity |
-| `quant_rl/envs/` | Gymnasium trading environment with structure-aware SL/TP and strategy overlays |
-| `quant_rl/models/` | SB3 PPO/SAC agent with TCN/Transformer/GRU encoders |
-| `quant_rl/backtest/` | Event-driven backtest engine with realistic costs |
-| `quant_rl/evaluation/` | Metrics, walk-forward splits, bootstrap CIs, episode runner |
-| `quant_rl/eval/` | Rollout, plots, export, `eval_run` checkpoint re-evaluation |
-| `quant_rl/train/` | Training scripts, baselines, callbacks |
-| `quant_rl/live/` | `RLStrategyAdapter` — MT5 live bridge |
-| `mt5_trading/` | Broker I/O: robots, risk manager, rule-based strategies |
+| `configuration/` | OmegaConf loading, merge, validation, hashing, and repository paths |
+| `market_data/` | Dataset discovery, bar/tick loading, cleaning, resampling, sessions, splits, and cache identity |
+| `features/` | Causal technical/context/PO3 feature construction and feature-cache semantics |
+| `trading/` | Broker-neutral account, policy, execution, order, position, risk, and strategy contracts |
+| `simulation/` | Gymnasium environment runtime plus event-driven backtesting |
+| `models/` | SB3 PPO/SAC policies, encoders, auxiliary models, and agent factory |
+| `training/` | Training configuration, setup services, callbacks, runners, and training artifacts |
+| `evaluation/` | Rollout, metrics, reanalysis, reporting, provenance, and plotting |
+| `experiments/` | Variant and campaign orchestration, checkpoint lineage, and campaign reporting |
+| `live/` | Broker-neutral live/paper runtime |
+| `integrations/mt5/` | MetaTrader 5 adapters, broker domain objects, robots, and risk integration |
+| `compute/` | Slurm/Triton resource, continuation, resume, and worker-dispatch mechanics |
+| `artifacts/` | Cross-cutting artifact identity, manifests, layout, registry, atomic writes, retention, and promotion |
 | `orchestra/` | Multi-model task pipeline (triage → plan → implement → verify) |
 
 ---
@@ -93,8 +96,8 @@ The project uses **arch-matching virtualenvs** on Triton (shared NFS):
 
 | Architecture | Host | Venv | Setup |
 |--------------|------|------|-------|
-| **aarch64** | GH200 GPU nodes | `.venv` | `uv sync` or `scripts/setup/setup_venv.sh` |
-| **x86_64** | H200, local, CI | `.venv-x86` | `scripts/setup/setup_venv_x86.sh` |
+| **aarch64** | GH200 GPU nodes | `.venv` | `uv sync` or `tools/setup-venv` |
+| **x86_64** | H200, local, CI | `.venv-x86` | `tools/setup-venv-x86` |
 
 Do not cross-activate (sourcing the wrong-arch venv gives "Exec format error").
 
@@ -103,8 +106,8 @@ git clone https://github.com/nntk072/Aalto_MS_Thesis.git
 cd Aalto_MS_Thesis
 
 # x86_64 (local, H200, CI)
-scripts/setup/setup_venv_x86.sh
-source scripts/triton/activate_venv.sh
+tools/setup-venv-x86
+source scripts/compute/slurm/activate_venv.sh
 
 # aarch64 (GH200) — run on an aarch64 node
 uv sync
@@ -119,14 +122,14 @@ source .venv/bin/activate
 
 ```bash
 cd Aalto_MS_Thesis
-scripts/setup/setup_venv.sh          # auto-detects arch (.venv or .venv-x86)
-source scripts/triton/activate_venv.sh
+tools/setup-venv          # auto-detects arch (.venv or .venv-x86)
+source scripts/compute/slurm/activate_venv.sh
 ```
 
 ### Prepare data
 
 ```bash
-python scripts/data/prepare_data.py
+uv run thesis-data prepare
 ```
 
 ### Run tests
@@ -138,25 +141,25 @@ uv run pytest tests/ -v
 ### Train RL agent — MVP (~1 minute)
 
 ```bash
-uv run python -m quant_rl.train.train_rl --mvp --seed=42
+uv run thesis-train train --mvp --seed=42
 
 # Strategy overlay (Idea 1: PO3 + IFVG)
-uv run python -m quant_rl.train.train_rl --mvp --strategy po3_ifvg --seed=42
+uv run thesis-train train --mvp --strategy po3_ifvg --seed=42
 
 # SAC + GRU encoder
-uv run python -m quant_rl.train.train_rl --mvp --algo sac --arch gru --seed=42
+uv run thesis-train train --mvp --algo sac --arch gru --seed=42
 ```
 
 ### Evaluate a trained checkpoint
 
 ```bash
-uv run python -m quant_rl.eval.eval_run --run outputs/<run_dir>
+uv run thesis-evaluate reanalyze --run outputs/<run_dir> --output outputs/reanalysis/<name>
 ```
 
 ### MACD baseline
 
 ```bash
-uv run python -m quant_rl.train.run_baselines --strategy macd --no-save
+uv run thesis-train baselines --strategy macd --no-save
 ```
 
 ### Demo trading (rule-based crossover, not the RL pipeline)
@@ -181,51 +184,42 @@ See [docs/operations/RUNNING_COMMANDS.md](docs/operations/RUNNING_COMMANDS.md) f
 
 ## Project Structure
 
-```
+```text
 Aalto_MS_Thesis/
-├── quant_rl/                    # Core library
-│   ├── data/                    # Data loading, resampling, split, ticks
-│   ├── features/                # Feature engineering
-│   │   ├── build.py             # Feature pipeline entry point
-│   │   ├── indicators.py        # Technical indicators (RSI, MACD, etc.)
-│   │   ├── structure.py         # Session/liquidity level detection
-│   │   ├── swings.py            # Fractal pivots and ATR-filtered swings
-│   │   ├── liquidity.py         # Liquidity sweeps and BOS
-│   │   ├── po3_config.py        # PO3/FVG/IFVG detection + zone builder
-│   │   ├── po3_state.py         # PO3 manipulation/distribution state
-│   │   ├── smt.py               # SMT divergence detection
-│   │   ├── session_ohlc.py      # CT-anchored session OHLC levels
-│   │   └── normalize.py         # Feature normalization
-│   ├── envs/                    # Gymnasium environments
-│   │   ├── trading_env.py       # Main RL trading environment
-│   │   ├── reward.py            # Differential Sharpe Ratio reward
-│   │   ├── sweep_reward.py      # Sweep confirmation reward
-│   │   ├── po3_reward.py        # PO3 alignment reward
-│   │   ├── distribution_reward.py
-│   │   └── strategies/          # Baseline, PO3IFVG, Distribution
-│   ├── models/                  # RL model architectures
-│   ├── backtest/                # Event-driven backtest engine
-│   ├── evaluation/              # Metrics, walk-forward, bootstrap CIs
-│   ├── eval/                    # Rollout, plots, export, eval_run
-│   ├── train/                   # train_rl, run_backtest, run_baselines
-│   ├── live/                    # RLStrategyAdapter (MT5 bridge)
-│   ├── config/                  # OmegaConf default.yaml
-│   └── utils/                   # Device helpers
-├── mt5_trading/                 # MT5 broker I/O and rule-based robots
-├── orchestra/                   # Multi-model CLI pipeline
-├── config/                      # Strategy and feature variant YAMLs
-├── scripts/                     # prepare_data, compare_encoders, report_g3, …
-├── tests/                       # Test suite (pytest)
-├── data/                        # Raw M1 CSV data (gitignored)
-└── docs/                        # Documentation (architecture, config, operations)
-    └── operations/              # Running commands and deployment
+├── configuration/              # Config loading, merging, schemas, paths
+├── artifacts/                  # Shared artifact lifecycle primitives
+├── market_data/                # Bars/ticks, transforms, splits, cache identity
+├── features/                   # Context, technical, PO3, causal pipeline
+├── trading/                    # Account, execution, orders, policy, risk, strategies
+├── simulation/                 # TradingEnv runtime and backtest engine
+├── models/                     # Encoders, policies, auxiliary models, agent factory
+├── training/                   # Training setup, callbacks, runners, artifacts
+├── evaluation/                 # Rollout, metrics, reanalysis, reporting, plotting
+├── experiments/                # Variants and campaign orchestration
+├── live/                       # Broker-neutral paper/live runtime
+├── integrations/mt5/           # MT5-specific adapters and robots
+├── compute/                    # Slurm/Triton compute mechanics
+├── orchestra/                  # Multi-model engineering pipeline
+├── config/                     # Declarative YAML assets only
+├── scripts/
+│   ├── compute/slurm/          # Thin platform wrappers
+│   ├── research/               # Audits, benchmarks, thesis evidence, frozen launches
+│   └── maintenance/            # Explicit rebuild/migration wrappers
+├── tools/                      # Canonical engineering/check commands
+├── tests/                      # Unit, integration, parity, architecture tests
+├── data/                       # Raw/derived dataset storage
+├── cache/                      # Disposable reproducible caches
+├── outputs/                    # Run/campaign/evaluation artifacts
+├── logs/                       # Non-artifact operational logs
+├── baseline/                   # Explicitly promoted baseline evidence
+└── docs/                       # Architecture, reproducibility, operations, thesis evidence
 ```
 
 ---
 
 ## PO3 / FVG / IFVG Detection
 
-Located in `quant_rl/features/po3_config.py` — the single source of truth for all PO3 signal rules.
+Located in `features/po3/config.py` — the single source of truth for all PO3 signal rules.
 
 ### Detection Functions
 
@@ -242,7 +236,7 @@ Located in `quant_rl/features/po3_config.py` — the single source of truth for 
 ### Session Tagging
 
 ```python
-from quant_rl.data.session import get_session
+from market_data.transforms.sessions import get_session
 
 session = get_session(timestamp)  # "asia" | "london" | "ny" | "closed"
 ```
@@ -257,7 +251,7 @@ NY 16:30–23:00 (inclusive).
 Built on **Stable-Baselines3** with custom sequence encoders.
 
 ```python
-from quant_rl.models.agent import build_agent
+from models import build_agent
 
 model = build_agent(env, cfg)  # PPO + TCN (default)
 model = build_agent(env, cfg, arch="transformer", algo="sac")
@@ -274,7 +268,7 @@ model.learn(total_timesteps=1_000_000)
 
 Observation: `Dict[seq: (60, F), account: (5,)]`
 Action: Discrete `{0=hold, 1-9=long, 10-18=short, 19=exit}` or Continuous `Box(-1,1)`.
-Strategy mode (`--strategy po3_ifvg|distribution`): 4-D `Box [direction, risk, rr, tp]`.
+Strategy mode uses a versioned, flag-derived continuous action schema; with all current direction, multi-TP, SL/TP-mode, simplex-fraction, and exit controls enabled it is 12-D.
 
 ---
 
@@ -283,7 +277,7 @@ Strategy mode (`--strategy po3_ifvg|distribution`): 4-D `Box [direction, risk, r
 Event-driven backtest engine with realistic execution:
 
 ```bash
-uv run python -m quant_rl.train.run_backtest
+uv run thesis-train backtest
 ```
 
 Features structure-aware SL/TP, Differential Sharpe Ratio reward, configurable costs, and drawdown guardrails.
@@ -295,7 +289,7 @@ Features structure-aware SL/TP, Differential Sharpe Ratio reward, configurable c
 Cross-validate the custom event-driven backtest engine against `backtrader`:
 
 ```bash
-uv run python -m quant_rl.backtest.cross_validation.run
+uv run python -m simulation.backtest.cross_validation.run
 ```
 
 See `tests/test_backtest/test_engine_cross_validation.py` for unit tests.
@@ -307,7 +301,7 @@ See `tests/test_backtest/test_engine_cross_validation.py` for unit tests.
 ### Static Charts (matplotlib)
 
 ```python
-from quant_rl.eval.po3_plots import plot_fvg_signals
+from evaluation.plotting.po3_plots import plot_fvg_signals
 
 fig = plot_fvg_signals(bars, signals, out_path="chart.png")
 ```
@@ -315,7 +309,7 @@ fig = plot_fvg_signals(bars, signals, out_path="chart.png")
 ### Interactive Charts (Plotly)
 
 ```python
-from quant_rl.eval.plots_interactive import plot_fvg_signals_interactive
+from evaluation.plotting.plots_interactive import plot_fvg_signals_interactive
 
 plot_fvg_signals_interactive(bars, signals, out_path="chart.html")
 ```
@@ -350,7 +344,7 @@ Standard merge bar (mirrors `.github/workflows/ci.yml` and `orchestra/ci_gate.py
 ## Known Limitations / Future Work
 
 - **VAE feature extractor:** optional via `--use-vae --vae-path <checkpoint.pth>`
-  (train the VAE first with `scripts/train/train_vae.py`). Default training path leaves VAE off.
+  (train the VAE first with `training/runner/vae.py`). Default training path leaves VAE off.
 - **Rule-based live baseline (`live_trading.py`):** uses simplified guardrail criteria compared to the full RL promotion protocol.
 - **Multi-timeframe alignment:** some higher-timeframe feature alignment edge cases may benefit from additional validation.
 

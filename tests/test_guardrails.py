@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from quant_rl.backtest.account import AccountState
-from quant_rl.backtest.guardrails import FTMOGuardrails
+from trading.account.state import AccountState
+from trading.risk.guardrails import FTMOGuardrails
 
 
 def _make(daily_loss: float = 0.0, max_dd: float = 0.0) -> AccountState:

@@ -7,7 +7,7 @@ import pytest
 
 SCRIPT = (
     Path(__file__).resolve().parents[2]
-    / "scripts/research/audit_replacement_partition_integrity.py"
+    / "scripts/research/audits/audit_replacement_partition_integrity.py"
 )
 SPEC = importlib.util.spec_from_file_location("replacement_partition_integrity", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None

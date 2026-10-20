@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.eval.trade_metrics import compute_trade_metrics
+from evaluation.metrics.trades import compute_trade_metrics
 
 
 @pytest.fixture()

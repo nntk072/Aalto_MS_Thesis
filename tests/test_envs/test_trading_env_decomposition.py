@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.envs.feature_row import FeatureRow
-from quant_rl.envs.trading_env import TradingEnv
+from simulation.environment.env import TradingEnv
+from trading.strategies.types import FeatureRow
 
 
 def _make_simple_env(
@@ -174,7 +174,7 @@ class TestDecodeActionStrategy:
     """Tests for trader-like strategy (5-D Box [-1,1]^5) action decoding."""
 
     def _make_strategy_env(self, *, ctx: int = 1) -> TradingEnv:
-        from quant_rl.envs.strategies.base import TradingStrategy
+        from trading.strategies.base import TradingStrategy
 
         class _CtxStrategy(TradingStrategy):
             name = "ctx_test"

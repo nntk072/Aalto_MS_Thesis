@@ -19,9 +19,9 @@ import pandas as pd
 import pytest
 from gymnasium.spaces import Box
 
-from quant_rl.backtest.broker import Position
-from quant_rl.envs.strategies import PO3IFVGStrategy
-from quant_rl.envs.trading_env import TradingEnv
+from simulation.environment.env import TradingEnv
+from trading.execution.broker import Position
+from trading.strategies import PO3IFVGStrategy
 
 
 def _bars(n: int = 60) -> pd.DataFrame:

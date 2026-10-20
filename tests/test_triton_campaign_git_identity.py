@@ -61,7 +61,7 @@ def test_campaign_resume_shim_scopes_recorded_sha_to_controller(tmp_path: Path) 
         }
     )
 
-    script = Path(__file__).parents[1] / "scripts/triton/campaign_git_identity.sh"
+    script = Path(__file__).parents[1] / "scripts/compute/slurm/campaign_git_identity.sh"
     result = _run(
         [
             "bash",

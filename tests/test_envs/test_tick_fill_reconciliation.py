@@ -7,12 +7,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.backtest.account import AccountState
-from quant_rl.backtest.broker import Broker
-from quant_rl.backtest.costs import CostModel
-from quant_rl.data.ticks import TickBook, TickExecutionUnavailable
-from quant_rl.envs.feature_row import BarView
-from quant_rl.envs.trading_env import TradingEnv
+from market_data.loading.ticks import TickBook, TickExecutionUnavailable
+from simulation.environment.env import TradingEnv
+from simulation.environment.market_view import BarView
+from trading.account.state import AccountState
+from trading.execution.broker import Broker
+from trading.execution.costs import CostModel
 
 
 def test_tick_quote_sides_match_buy_ask_and_sell_bid_for_entries_and_exits() -> None:

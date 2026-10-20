@@ -1,12 +1,12 @@
 # Configuration Reference
 
 All runtime configuration flows through OmegaConf YAML files. The base is
-`quant_rl/config/default.yaml`; variant files under `config/` are merged over
+`config/base/default.yaml`; variant files under `config/` are merged over
 it at CLI time.
 
 ---
 
-## Base config (`quant_rl/config/default.yaml`)
+## Base config (`config/base/default.yaml`)
 
 | Section | Key paths | Purpose |
 |---------|-----------|---------|
@@ -92,7 +92,7 @@ changing the strategy overlay.
 Example:
 
 ```bash
-uv run python -m quant_rl.train.train_rl --mvp \
+uv run thesis-train train --mvp \
     --config config/features/full_po3_mtf.yaml --seed=42
 ```
 
@@ -102,8 +102,8 @@ uv run python -m quant_rl.train.train_rl --mvp \
 
 | Constant | File | Current value | Busts |
 |----------|------|---------------|-------|
-| `BAR_CACHE_VERSION` | `quant_rl/data/pipeline.py` | `v2-full-day` | Stale bar parquet caches |
-| `FEATURE_CACHE_VERSION` | `quant_rl/features/build.py` | `v21-causal-prior-ny-session` | Stale feature parquet caches |
+| `BAR_CACHE_VERSION` | `market_data/loading/pipeline.py` | `v2-full-day` | Stale bar parquet caches |
+| `FEATURE_CACHE_VERSION` | `features/pipeline/builder.py` | `v21-causal-prior-ny-session` | Stale feature parquet caches |
 | Content hash | `feature_cache_content_hash()` | 16-hex digest of version + features cfg + tz keys + data identity + optional `train_mask` | Flag flip or data change must miss cache |
 
 **Rule:** bump the relevant constant whenever feature semantics or output
@@ -124,7 +124,7 @@ cache/{symbol}_features_{FEATURE_CACHE_VERSION}_{content_hash}.parquet.hash
 
 ## How configs compose
 
-1. `quant_rl/config/default.yaml` is always the base.
+1. `config/base/default.yaml` is always the base.
 2. `--config path/to/variant.yaml` merges over the base (OmegaConf).
 3. `--strategy po3_ifvg|distribution` additionally merges the strategy YAML
    from `_STRATEGY_CONFIGS` in `train_rl.py`.
@@ -132,7 +132,7 @@ cache/{symbol}_features_{FEATURE_CACHE_VERSION}_{content_hash}.parquet.hash
 
 ```bash
 # Base + feature variant + CLI override
-uv run python -m quant_rl.train.train_rl --mvp \
+uv run thesis-train train --mvp \
     --config config/features/full_po3_mtf.yaml \
     --strategy po3_ifvg \
     env.obs_window=30
@@ -161,4 +161,4 @@ train/live parity.
 
 ## Current action-vector and TP contract
 
-See [implementation-verified research reference](research_reference.md#action-space-layout-current-implementation) for the dimension formula, ordering, and opt-in TP/SL behavior. The base config sets `env.strategy_actions: false` and `env.action_type: "discrete"`, so the default action space is `Discrete(20)`. If `env.strategy_actions: true`, `allow_agent_sl_mode: true`, and direction control, TP mode and multi-TP are disabled, the overlay has six Box dimensions. With baseline continuous actions, the action space is a one-dimensional Box. See `quant_rl/envs/trading_env.py`.
+See [implementation-verified research reference](research_reference.md#action-space-layout-current-implementation) for the dimension formula, ordering, and opt-in TP/SL behavior. The base config sets `env.strategy_actions: false` and `env.action_type: "discrete"`, so the default action space is `Discrete(20)`. If `env.strategy_actions: true`, `allow_agent_sl_mode: true`, and direction control, TP mode and multi-TP are disabled, the overlay has six Box dimensions. With baseline continuous actions, the action space is a one-dimensional Box. See `simulation/environment/env.py`.

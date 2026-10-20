@@ -4,14 +4,14 @@
 
 | File | Role |
 |------|------|
-| `quant_rl/data/pipeline.py` | End-to-end pipeline orchestrator; owns `BAR_CACHE_VERSION` |
-| `quant_rl/data/loader.py` | Load raw CSV bars |
-| `quant_rl/data/resample.py` | Resample M1 → higher timeframes |
-| `quant_rl/data/clean.py` | Clean bars (dedup, sort, validate) |
-| `quant_rl/data/session.py` | Session labels, NY mask, `get_session()` |
-| `quant_rl/data/split.py` | Train/test date-based split |
-| `quant_rl/data/align.py` | Align HTF features to M1 spine |
-| `quant_rl/data/ticks.py` | TickBook for accurate fill pricing |
+| `market_data/loading/pipeline.py` | End-to-end pipeline orchestrator; owns `BAR_CACHE_VERSION` |
+| `market_data/loading/bars.py` | Load raw CSV bars |
+| `market_data/transforms/resample.py` | Resample M1 → higher timeframes |
+| `market_data/transforms/cleaning.py` | Clean bars (dedup, sort, validate) |
+| `market_data/transforms/sessions.py` | Session labels, NY mask, `get_session()` |
+| `market_data/splits/definitions.py` | Train/test date-based split |
+| `market_data/transforms/align.py` | Align HTF features to M1 spine |
+| `market_data/loading/ticks.py` | TickBook for accurate fill pricing |
 
 ## Key Symbols
 
@@ -34,14 +34,14 @@
 
 ## Direct Dependencies
 
-- `quant_rl/config/__init__.py` (OmegaConf config)
+- `configuration/loader.py` (OmegaConf config)
 - `pandas`, `omegaconf`
 
 ## Consumers (Callers)
 
-- `quant_rl/features/build.py` (uses pipeline output)
-- `quant_rl/train/train_rl.py` (uses split + pipeline)
-- `quant_rl/train/run_backtest.py` (uses pipeline)
+- `features/pipeline/builder.py` (uses pipeline output)
+- `training/runner/training.py` (uses split + pipeline)
+- `training/runner/backtest.py` (uses pipeline)
 
 ## Tests
 
@@ -54,12 +54,12 @@
 
 ## Do NOT Read For Data Tasks
 
-- `quant_rl/features/` (downstream — read only if feature logic affects data)
-- `quant_rl/envs/` (environment — separate domain)
-- `quant_rl/models/` (models — separate domain)
-- `quant_rl/backtest/` (backtest — separate domain)
-- `quant_rl/train/` (training — separate domain)
-- `mt5_trading/` (live trading — separate domain)
+- `features/` (downstream — read only if feature logic affects data)
+- `simulation/environment/` (environment — separate domain)
+- `models/` (models — separate domain)
+- `simulation/backtest/` (backtest — separate domain)
+- `training/` (training — separate domain)
+- `integrations/mt5/` (live trading — separate domain)
 
 ## Critical Invariants
 

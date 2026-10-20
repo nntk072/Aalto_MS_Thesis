@@ -26,8 +26,9 @@ for _name, _value in {
         setattr(_mt5, _name, _value)
 
 import MetaTrader5 as mt5  # noqa: E402
-from mt5_trading.domain.signal import Signal  # noqa: E402
-from mt5_trading.robot.multi_symbol_robot import MultiSymbolRobot  # noqa: E402
+
+from integrations.mt5.domain.signal import Signal  # noqa: E402
+from integrations.mt5.robot.multi_symbol_robot import MultiSymbolRobot  # noqa: E402
 
 
 class _Trader:

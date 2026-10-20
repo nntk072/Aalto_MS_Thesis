@@ -16,7 +16,7 @@ class TestSACAgentIntegration:
         """Build a continuous-action env and an SAC agent wired to it."""
         from omegaconf import OmegaConf
 
-        from quant_rl.models.agent import build_agent
+        from models.factory.agent import build_agent
         from tests.test_models.test_sac_agent import make_env
 
         cfg = OmegaConf.create(
@@ -63,7 +63,7 @@ class TestSACAgentIntegration:
 
     def test_sweep_reward_receives_time_decay(self) -> None:
         """CompositeReward accepts minutes_since_open for the decay penalty."""
-        from quant_rl.envs.sweep_reward import CompositeReward, SweepConfirmationReward
+        from simulation.environment.sweep_reward import CompositeReward, SweepConfirmationReward
 
         composite = CompositeReward(
             sweep_reward=SweepConfirmationReward(alpha=0.1, beta=0.01, hold_bars=1),
@@ -120,7 +120,7 @@ class TestSACAgentIntegration:
         """AuxiliaryLoss consumes encoder latents of the documented size."""
         import torch
 
-        from quant_rl.models.auxiliary import AuxiliaryLoss, ReturnPredictionHead
+        from models.auxiliary.heads import AuxiliaryLoss, ReturnPredictionHead
 
         latent_dim, account_dim = 128, 6
         features_dim = latent_dim + account_dim

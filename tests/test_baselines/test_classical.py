@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.baselines import (
+from trading.baselines import (
     BaseStrategy,
     BuyAndHoldStrategy,
     EMAMACDRSIStrategy,

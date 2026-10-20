@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from quant_rl.train.train_rl import _RUN_LOG_NAME, _attach_run_log
+from training.artifacts.logging import _RUN_LOG_NAME, _attach_run_log
 
 
 @pytest.fixture

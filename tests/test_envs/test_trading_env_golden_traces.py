@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.envs.trading_env import TradingEnv
+from simulation.environment.env import TradingEnv
 
 
 def _make_deterministic_bars(n: int = 120) -> pd.DataFrame:

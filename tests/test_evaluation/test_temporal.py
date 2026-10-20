@@ -7,7 +7,7 @@ import math
 import pandas as pd
 import pytest
 
-from quant_rl.evaluation import (
+from evaluation import (
     conditional_pnl_distributions,
     holding_time_distribution,
     sweep_delay_distribution,

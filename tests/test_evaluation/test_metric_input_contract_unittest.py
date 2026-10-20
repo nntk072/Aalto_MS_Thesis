@@ -4,7 +4,7 @@ import unittest
 
 import pandas as pd
 
-from quant_rl.evaluation.metrics import calculate_metrics, compute_metrics
+from evaluation.metrics import calculate_metrics, compute_metrics
 
 
 class MetricInputContractTest(unittest.TestCase):

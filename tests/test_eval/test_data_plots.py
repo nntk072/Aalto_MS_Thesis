@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from quant_rl.eval.data_plots import plot_session_profile, write_data_eda
+from evaluation.plotting.data_plots import plot_session_profile, write_data_eda
 
 
 def _ny_bars(n: int = 500, *, volume: bool = True, tickvol: bool = False) -> pd.DataFrame:
@@ -127,7 +127,7 @@ def test_write_data_eda_po3_by_day(tmp_path):
 
 def test_slice_calendar_day_includes_off_session_bars():
     """PO3 day charts use the full broker day, not NY-only."""
-    from quant_rl.eval.data_plots import _slice_calendar_day, _slice_ny_day
+    from evaluation.plotting.data_plots import _slice_calendar_day, _slice_ny_day
 
     idx = pd.date_range("2025-01-02 00:00", periods=24 * 60, freq="1min", tz="Etc/GMT-3")
     close = 20000.0 + np.arange(len(idx), dtype=float)

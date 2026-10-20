@@ -7,9 +7,8 @@ import pytest
 omegaconf = pytest.importorskip("omegaconf")
 from omegaconf import DictConfig, OmegaConf  # noqa: E402
 
-from quant_rl.config import apply_overrides, load_config  # noqa: E402
-from quant_rl.train.ablation_utils import load_variant_config, merge_variant_cfg  # noqa: E402
-from quant_rl.train.variant_resolver import (  # noqa: E402
+from configuration import apply_overrides, load_config  # noqa: E402
+from training.configuration.variant_resolution import (  # noqa: E402
     DEFAULT_BASE,
     FULL_PO3_BASE,
     PREBUILT_FEATURE_CACHES,
@@ -17,6 +16,7 @@ from quant_rl.train.variant_resolver import (  # noqa: E402
     load_experiments,
     resolve_variant,
 )
+from training.configuration.variants import load_variant_config, merge_variant_cfg  # noqa: E402
 
 STEPS = 100_000
 # Launcher overrides the old script applied for full-PO3 variants (ftmo trailing

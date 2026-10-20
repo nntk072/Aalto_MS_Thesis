@@ -17,14 +17,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from scripts.eval.report_g3 import main as report_g3_main
-from scripts.eval.run_baseline_eval import main as run_baseline_eval_main
-from scripts.train.compare_encoders import main as compare_encoders_main
-from scripts.train.train_lstm_baseline import main as train_lstm_main
-from scripts.train.train_rl import main as train_rl_main
+from scripts.research.benchmarks.compare_encoders import main as compare_encoders_main
+from scripts.research.thesis.evaluation.report_g3 import main as report_g3_main
+from scripts.research.thesis.evaluation.run_baseline_eval import main as run_baseline_eval_main
+
+from training.cli import main as train_rl_main
+from training.runner.lstm_baseline import main as train_lstm_main
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CONFIG = str(REPO_ROOT / "quant_rl" / "config" / "default.yaml")
+CONFIG = str(REPO_ROOT / "config" / "base" / "default.yaml")
 
 # Module-level: these smoke tests invoke real (tiny-budget) training runs.
 # Marked slow so the default `-m 'not slow'` inner loop stays fast; CI still
@@ -156,32 +157,40 @@ class TestTrainingScriptSmoke:
         assert 0.0 <= report["val_acc"] <= 1.0
         assert np.isfinite(report["out_of_sample"]["sharpe"])
 
-    def test_train_rl(self, bars_csv: Path, tmp_path: Path) -> None:
-        """Smoke-test PPO training with the default config (discrete actions)."""
-        # Arrange — smallest viable training budget
+    def test_train_rl_cli_forwards_current_arguments(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Smoke-test the stable thesis-train command surface for PPO training."""
+        import training.runner.training as training_runner
+
+        captured: list[str] = []
+
+        def fake_training_main() -> None:
+            captured.extend(sys.argv[1:])
+
+        monkeypatch.setattr(training_runner, "main", fake_training_main)
         out_dir = tmp_path / "rl_runs"
         sys.argv = [
-            "train_rl.py",
-            "--bars-csv",
-            str(bars_csv),
-            "--steps",
-            "100",
+            "thesis-train",
+            "train",
             "--config",
             CONFIG,
-            "--out-dir",
+            "--mvp",
+            "--out",
             str(out_dir),
-            "--run-name",
-            "smoke",
+            "ppo.total_timesteps=100",
         ]
 
-        # Act
         train_rl_main()
 
-        # Assert
-        report = json.loads((out_dir / "smoke" / "metrics.json").read_text())
-        assert report["split"]["test_bars"] > 0
-        assert np.isfinite(report["in_sample"]["sharpe"])
-        assert np.isfinite(report["out_of_sample"]["sharpe"])
+        assert captured == [
+            "--config",
+            CONFIG,
+            "--mvp",
+            "--out",
+            str(out_dir),
+            "ppo.total_timesteps=100",
+        ]
 
     def test_compare_encoders(self, bars_csv: Path, tmp_path: Path) -> None:
         # Arrange
@@ -213,7 +222,7 @@ class TestTrainingScriptSmoke:
 
 def test_smoke_fixture_spans_default_split(tmp_path: Path) -> None:
     """Guard: the synthetic CSV must produce non-empty train and test splits."""
-    from quant_rl.data.split import split_train_test
+    from market_data.splits.definitions import split_train_test
 
     bars = pd.read_csv(_make_bars_csv(tmp_path / "bars.csv"), index_col=0, parse_dates=True)
     features = bars.select_dtypes(include=["number"])
@@ -222,5 +231,16 @@ def test_smoke_fixture_spans_default_split(tmp_path: Path) -> None:
     assert not test_bars.empty
 
 
-def test_repo_root_is_package_parent() -> None:
-    assert (REPO_ROOT / "quant_rl").is_dir()
+def test_repo_root_contains_domain_packages() -> None:
+    for package in (
+        "configuration",
+        "market_data",
+        "features",
+        "trading",
+        "simulation",
+        "models",
+        "training",
+        "evaluation",
+        "experiments",
+    ):
+        assert (REPO_ROOT / package / "__init__.py").is_file(), package

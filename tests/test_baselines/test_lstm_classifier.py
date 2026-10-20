@@ -8,12 +8,12 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-from quant_rl.baselines import (
+from features import build_features
+from trading.baselines import (
     LSTMStrategy,
     LSTMSweepClassifier,
     build_sweep_dataset,
 )
-from quant_rl.features.build import build_features
 
 # Real torch training inside these tests: minutes on CPU. Tagged slow so the
 # `-m 'not slow'` inner loop stays fast; CI runs the full suite.

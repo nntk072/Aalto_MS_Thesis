@@ -1,20 +1,100 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Run all local checks: ruff, mypy, pytest.
-# Mirrors the CI build phase for local verification.
-SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$SCRIPT_DIR"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+GATE="${1:-fast}"
+PYTHON_BIN="${THESIS_PYTHON:-}"
 
-uv sync --extra dev
+run_module() {
+  if [[ -n "$PYTHON_BIN" ]]; then
+    "$PYTHON_BIN" -m "$@"
+  else
+    uv run "$@"
+  fi
+}
 
-echo "==> ruff check"
-uv run ruff check .
+sync_dev() {
+  if [[ "${THESIS_CHECK_NO_SYNC:-0}" != "1" ]]; then
+    uv sync --extra dev
+  fi
+}
 
-echo "==> ruff format --check"
-uv run ruff format --check .
+run_deps() {
+  if [[ -n "$PYTHON_BIN" ]]; then
+    UV_PYTHON="$PYTHON_BIN" UV_PROJECT_ENVIRONMENT="$(dirname "$(dirname "$PYTHON_BIN")")" make deps-check
+  else
+    make deps-check
+  fi
+}
+run_quality() {
+  sync_dev
+  run_module ruff format --check configuration artifacts market_data features trading simulation models training evaluation experiments live integrations compute orchestra tests
+  run_module ruff check configuration artifacts market_data features trading simulation models training evaluation experiments live integrations compute orchestra tests
+  run_module mypy
+}
+run_architecture() { sync_dev; run_module pytest -q tests/architecture; }
+run_contracts() {
+  sync_dev
+  run_module pytest -q \
+    tests/test_config_typo_safety.py \
+    tests/test_action_schema_contract.py \
+    tests/test_campaign_artifacts.py \
+    tests/test_envs/test_observation_schema.py \
+    tests/test_features/test_cache_hash_full_column.py \
+    tests/test_features/test_feature_cache_and_fit_scope.py
+}
+run_unit() { sync_dev; run_module pytest -q -m "not slow and not integration" tests; }
+run_build() {
+  sync_dev
+  rm -rf dist
+  if [[ -n "$PYTHON_BIN" ]]; then
+    uv build --python "$PYTHON_BIN"
+  else
+    uv build
+  fi
+  smoke='import importlib; [importlib.import_module(name) for name in ("configuration","artifacts","market_data","features","trading","simulation","models","training","evaluation","experiments","live","integrations","compute","orchestra","market_data.cli","training.cli","evaluation.cli","experiments.cli","compute.cli")]; print("build-import-smoke-ok")'
+  if [[ -n "$PYTHON_BIN" ]]; then
+    "$PYTHON_BIN" -c "$smoke"
+  else
+    uv run python -c "$smoke"
+  fi
+}
+run_integration() { sync_dev; run_module pytest -q tests/test_integration; }
+run_parity() {
+  sync_dev
+  run_module pytest -q \
+    tests/test_backtest/test_broker_fill_accounting_unittest.py \
+    tests/test_backtest/test_broker_quote_parity_unittest.py \
+    tests/test_backtest/test_engine_execution_contract_unittest.py \
+    tests/test_envs/test_bundle_env_equivalence.py \
+    tests/test_envs/test_trading_env_golden_traces.py \
+    tests/test_envs/test_tick_fill_reconciliation.py
+}
+run_training_smoke() {
+  sync_dev
+  run_module pytest -q tests/test_train/test_training_smoke.py tests/test_train/test_sac_smoke.py
+}
+run_gpu() {
+  if [[ -x scripts/compute/slurm/run_current_tree_gpu_ci.sh ]]; then
+    exec scripts/compute/slurm/run_current_tree_gpu_ci.sh
+  else
+    echo "No Triton GPU gate wrapper found" >&2
+    exit 2
+  fi
+}
 
-echo "==> mypy"
-uv run mypy quant_rl
-
-echo "==> pytest"
-uv run pytest tests/ -v
+case "$GATE" in
+  deps) run_deps ;;
+  quality) run_quality ;;
+  architecture) run_architecture ;;
+  contracts) run_contracts ;;
+  unit) run_unit ;;
+  build) run_build ;;
+  integration) run_integration ;;
+  parity) run_parity ;;
+  training-smoke) run_training_smoke ;;
+  fast) run_deps; run_architecture; run_contracts ;;
+  full) run_deps; run_quality; run_architecture; run_contracts; run_unit; run_build; run_integration; run_parity; run_training_smoke ;;
+  gpu|triton) run_gpu ;;
+  *) echo "usage: $0 {deps|quality|architecture|contracts|unit|build|integration|parity|training-smoke|fast|full|gpu|triton}" >&2; exit 2 ;;
+esac

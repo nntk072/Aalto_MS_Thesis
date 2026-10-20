@@ -5,7 +5,7 @@ from pathlib import Path
 import gymnasium as gym
 import numpy as np
 from omegaconf import OmegaConf
-from scripts.bench.measure_ppo_throughput import (
+from scripts.research.benchmarks.measure_ppo_throughput import (
     _apply_profile_overrides,
     _json_default,
     _prepare_bundle,

@@ -5,8 +5,8 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from quant_rl.envs.po3_reward import PO3Reward
-from quant_rl.envs.strategies.po3_ifvg import PO3IFVGStrategy
+from simulation.environment.po3_reward import PO3Reward
+from trading.strategies.po3_ifvg import PO3IFVGStrategy
 
 
 def test_sell_side_sweep_sets_the_long() -> None:

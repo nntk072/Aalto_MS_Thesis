@@ -7,7 +7,8 @@ import json
 from pathlib import Path
 
 import pytest
-from scripts.triton.prepare_campaign_resume import prepare_campaign_resume
+
+from compute.slurm.resume import prepare_campaign_resume
 
 
 def _campaign_fixture(root: Path) -> tuple[Path, bytes]:
@@ -46,7 +47,7 @@ def _campaign_fixture(root: Path) -> tuple[Path, bytes]:
         log.parent.mkdir(parents=True, exist_ok=True)
         log.write_text(
             "FileExistsError: [Errno 17] File exists: 'cache'\n"
-            "quant_rl/data/pipeline.py run_pipeline\n"
+            "market_data/loading/pipeline.py run_pipeline\n"
         )
         jobs.append(
             {

@@ -20,9 +20,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.baselines import BaseStrategy, BuyAndHoldStrategy
-from quant_rl.envs.trading_env import TradingEnv
-from quant_rl.evaluation import PerformanceMetrics, run_episode
+from evaluation import PerformanceMetrics, run_episode
+from simulation.environment.env import TradingEnv
+from trading.baselines import BaseStrategy, BuyAndHoldStrategy
 
 OBS_WINDOW = 60
 

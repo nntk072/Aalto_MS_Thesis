@@ -4,9 +4,9 @@ from copy import deepcopy
 from typing import Any
 
 import pytest
-from scripts.thesis.analyze_paired_seed_results import analyze_paired_seed_metrics
+from scripts.research.thesis.evidence.analyze_paired_seed_results import analyze_paired_seed_metrics
 
-from quant_rl.evaluation.matched_comparison import MATCH_FIELDS
+from evaluation.metrics.matched_comparison import MATCH_FIELDS
 
 
 def _payload() -> dict[str, Any]:

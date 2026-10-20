@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from scripts.matrix.audit_campaign_source_fidelity import build_audit, render_markdown
+from scripts.research.campaigns.audit_campaign_source_fidelity import build_audit, render_markdown
 
 
 def _sha256(value: bytes) -> str:

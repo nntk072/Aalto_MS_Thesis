@@ -7,8 +7,8 @@ from typing import cast
 import numpy as np
 import pandas as pd
 
-from quant_rl.data.session import add_session_labels
-from quant_rl.features.pd_context import build_pd_context_features
+from features.context.premium_discount import build_pd_context_features
+from market_data.transforms.sessions import add_session_labels
 
 
 def _bars(n: int = 3 * 24 * 60) -> pd.DataFrame:

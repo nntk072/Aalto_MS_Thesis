@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from quant_rl.backtest.risk import compute_lots
+from trading.risk.sizing import compute_lots
 
 
 class _Account:
@@ -34,7 +34,7 @@ def _env_stub(risk_mode: str, fixed_risk_usd: float, equity: float, **kw: object
     ``account.equity`` and the lot/contract knobs, so binding the real unbound
     methods onto this stub exercises production code rather than a copy.
     """
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.env import TradingEnv
 
     stub = type("_SizingStub", (), {})()
     stub.risk_mode = risk_mode
@@ -214,7 +214,7 @@ def _eod_env(**kwargs: object):
     """
     import pandas as pd
 
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.env import TradingEnv
 
     n = 200
     dates = pd.date_range("2020-06-01 08:00", periods=n, freq="1min")
@@ -308,8 +308,8 @@ def _strategy_env(**kwargs: object):
     """Env with the strategy overlay on, so the exit-mode head is decoded."""
     import pandas as pd
 
-    from quant_rl.envs.strategies import PO3IFVGStrategy
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.env import TradingEnv
+    from trading.strategies import PO3IFVGStrategy
 
     n = 200
     dates = pd.date_range("2020-06-01 08:00", periods=n, freq="1min")

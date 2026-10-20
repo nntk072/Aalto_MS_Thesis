@@ -9,12 +9,12 @@ import pytest
 from gymnasium import spaces
 from stable_baselines3 import PPO
 
-from quant_rl.action_schema import build_action_schema, build_discrete_trading_action_schema
-from quant_rl.models.agent import (
+from models.factory.agent import (
     bind_discrete_action_schema,
     validate_model_action_schema,
     validate_model_discrete_action_schema,
 )
+from simulation.contracts.actions import build_action_schema, build_discrete_trading_action_schema
 
 
 class _TinyEnv(gym.Env[npt.NDArray[np.float32], npt.NDArray[np.float32]]):

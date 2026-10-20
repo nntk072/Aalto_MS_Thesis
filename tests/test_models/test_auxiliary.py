@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from quant_rl.models.auxiliary import (
+from models.auxiliary.heads import (
     AuxiliaryLoss,
     CumulativeReturnPredictor,
     EntropyBonus,

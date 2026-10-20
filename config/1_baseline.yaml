@@ -1,5 +1,5 @@
 # Baseline strategy (Idea 3) — explicit config for symmetry with Idea 1/2.
-# Not auto-merged: baseline semantics are the default in quant_rl/config/default.yaml.
+# Not auto-merged: baseline semantics are the default in config/base/default.yaml.
 # The wrapper passes --strategy baseline for baseline variants.
 env:
   strategy_actions: false

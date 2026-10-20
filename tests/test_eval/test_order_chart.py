@@ -15,16 +15,14 @@ import pandas as pd
 import pytest
 from matplotlib.figure import Figure
 
-from quant_rl.backtest.tp_reach import max_tp_distance, rr_reaches
-from quant_rl.envs.strategies.po3_ifvg import PO3IFVGStrategy
-from quant_rl.envs.trading_env import TradingEnv
-from quant_rl.eval.chart_levels import (
+from evaluation.metrics.trades import TradeChartMetrics, compute_trade_metrics
+from evaluation.plotting.chart_levels import (
     at_sample_extreme,
     deviation_levels,
     isolated_spike_mask,
     ohlc_ok_mask,
 )
-from quant_rl.eval.chart_overlays import (
+from evaluation.plotting.chart_overlays import (
     OverlayEvents,
     SmtSegment,
     SweepLine,
@@ -32,12 +30,16 @@ from quant_rl.eval.chart_overlays import (
     build_overlay_events,
     draw_overlays_mpl,
 )
-from quant_rl.eval.order_chart import draw_order_levels_mpl, order_levels
-from quant_rl.eval.overlay_events import _swing_origins
-from quant_rl.eval.plots import plot_per_trade_orders
-from quant_rl.eval.plots_interactive import plot_per_trade_orders as plot_per_trade_orders_html
-from quant_rl.eval.trade_metrics import TradeChartMetrics, compute_trade_metrics
-from quant_rl.features.structure import structure_levels
+from evaluation.plotting.order_chart import draw_order_levels_mpl, order_levels
+from evaluation.plotting.overlay_events import _swing_origins
+from evaluation.plotting.plots import plot_per_trade_orders
+from evaluation.plotting.plots_interactive import (
+    plot_per_trade_orders as plot_per_trade_orders_html,
+)
+from features.technical.structure import structure_levels
+from simulation.environment.env import TradingEnv
+from trading.positions.tp_reach import max_tp_distance, rr_reaches
+from trading.strategies.po3_ifvg import PO3IFVGStrategy
 
 
 def test_clip_cuts_smt_that_runs_months_past_the_trade() -> None:
@@ -342,8 +344,8 @@ def test_ny_trade_window_ignores_earlier_pivots() -> None:
     )
     flat = pd.Series(close, index=idx)
     overlays = {key: flat.copy() for key in ("ema50", "macd", "signal", "histogram", "rsi", "vwap")}
-    from quant_rl.eval.chart_indicators import break_overlay_gaps
-    from quant_rl.eval.order_window import prepare_order_chart
+    from evaluation.plotting.chart_indicators import break_overlay_gaps
+    from evaluation.plotting.order_window import prepare_order_chart
 
     prepared = prepare_order_chart(
         bars,

@@ -16,17 +16,18 @@ import MetaTrader5 as mt5
 import yaml
 from dotenv import load_dotenv
 from loguru import logger
-from mt5_trading.domain import MT5Trader
-from mt5_trading.domain.data_sources.mt5_data import MT5Data
-from mt5_trading.domain.multi_symbol_manager import MultiSymbolManager
-from mt5_trading.domain.risk_manager import RiskManager
-from mt5_trading.domain.strategies.combined_strategy import CombinedStrategy
-from mt5_trading.domain.strategies.cross_over_strategy import CrossOverStrategy
-from mt5_trading.domain.strategies.smc_strategy import SMCStrategy
-from mt5_trading.domain.strategies.trend_breakout_strategy import TrendBreakoutStrategy
-from mt5_trading.domain.volatility_analyzer import VolatilityAnalyzer
-from mt5_trading.logging_config import configure_logging
-from mt5_trading.robot.multi_symbol_robot import MultiSymbolRobot
+
+from integrations.mt5.domain import MT5Trader
+from integrations.mt5.domain.data_sources.mt5_data import MT5Data
+from integrations.mt5.domain.multi_symbol_manager import MultiSymbolManager
+from integrations.mt5.domain.risk_manager import RiskManager
+from integrations.mt5.domain.strategies.combined_strategy import CombinedStrategy
+from integrations.mt5.domain.strategies.cross_over_strategy import CrossOverStrategy
+from integrations.mt5.domain.strategies.smc_strategy import SMCStrategy
+from integrations.mt5.domain.strategies.trend_breakout_strategy import TrendBreakoutStrategy
+from integrations.mt5.domain.volatility_analyzer import VolatilityAnalyzer
+from integrations.mt5.logging_config import configure_logging
+from integrations.mt5.robot.multi_symbol_robot import MultiSymbolRobot
 
 load_dotenv()
 configure_logging()

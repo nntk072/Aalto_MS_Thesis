@@ -11,10 +11,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from quant_rl.config import load_config
-from quant_rl.envs.strategies import PO3IFVGStrategy
-from quant_rl.envs.trading_env import TradingEnv
-from quant_rl.features.build import build_features
+from configuration import load_config
+from features import build_features
+from simulation.environment.env import TradingEnv
+from trading.strategies import PO3IFVGStrategy
 
 
 def _sample_bars(n: int = 400) -> pd.DataFrame:

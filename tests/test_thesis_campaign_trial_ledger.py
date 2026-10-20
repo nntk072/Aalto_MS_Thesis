@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.thesis.build_campaign_trial_ledger import build_trial_ledger
+from scripts.research.thesis.evidence.build_campaign_trial_ledger import build_trial_ledger
 
 
 def _campaign(tmp_path: Path, *, attempts: int = 2) -> Path:

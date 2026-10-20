@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from quant_rl.data.split import get_split_config, split_bars, split_train_test
+from market_data.splits.definitions import get_split_config, split_bars, split_train_test
 
 
 def _make_bars(start: str, end: str, freq: str = "1D", tz: str = "Etc/GMT-3") -> pd.DataFrame:

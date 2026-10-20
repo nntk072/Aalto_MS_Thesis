@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.backtest.costs import CostModel
-from quant_rl.backtest.engine import _sl_tp_fill_quote, run_backtest
-from quant_rl.data.ticks import TickBook, TickExecutionUnavailable
+from market_data.loading.ticks import TickBook, TickExecutionUnavailable
+from simulation.backtest.engine import _sl_tp_fill_quote, run_backtest
+from trading.execution.costs import CostModel
 
 
 def _bars(index: pd.DatetimeIndex) -> pd.DataFrame:

@@ -7,7 +7,7 @@ import statistics
 from pathlib import Path
 
 import pytest
-from scripts.matrix.analyze_campaign_runtime_scaling import (
+from scripts.research.campaigns.analyze_campaign_runtime_scaling import (
     build_runtime_screen,
     render_markdown,
 )

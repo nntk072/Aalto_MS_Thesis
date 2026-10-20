@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.features.po3_ifvg_state import build_po3_ifvg_state
+from features.po3.ifvg_state import build_po3_ifvg_state
 
 
 def _inputs(direction: int = 1) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:

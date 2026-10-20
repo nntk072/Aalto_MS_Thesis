@@ -7,7 +7,7 @@ set -euo pipefail
 #   ./tools/ruffen --format # also run ruff format
 #
 # Accepts optional paths to limit scope:
-#   ./tools/ruffen quant_rl/data/
+#   ./tools/ruffen market_data/
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$SCRIPT_DIR"
@@ -25,7 +25,7 @@ for arg in "$@"; do
 done
 
 if [ ${#PATHS[@]} -eq 0 ]; then
-  PATHS=(quant_rl tests)
+  PATHS=(configuration artifacts market_data features trading simulation models training evaluation experiments live integrations compute orchestra tests)
 fi
 
 echo "==> ruff check ${PATHS[*]}"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from quant_rl.evaluation.walkforward import (
+from market_data.splits.walkforward import (
     WFSplit,
     purged_walk_forward,
     purged_walk_forward_legacy,

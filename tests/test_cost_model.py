@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from quant_rl.backtest.account import AccountState
-from quant_rl.backtest.broker import Broker
-from quant_rl.backtest.costs import CostModel
+from trading.account.state import AccountState
+from trading.execution.broker import Broker
+from trading.execution.costs import CostModel
 
 
 def test_fill_price_buy_is_ask():

@@ -10,14 +10,14 @@ import pandas as pd
 import pytest
 from gymnasium import spaces
 
-from quant_rl.envs.entry_state import (
+from simulation.environment.entry_state import (
     ENTRY_STATES,
     EntryEvidence,
     EntryStateMachine,
     entry_state_one_hot,
 )
-from quant_rl.envs.strategies import BaselineStrategy, PO3IFVGStrategy
-from quant_rl.envs.trading_env import TradingEnv
+from simulation.environment.env import TradingEnv
+from trading.strategies import BaselineStrategy, PO3IFVGStrategy
 
 
 def _evidence(

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from scripts.thesis.compare_deterministic_reanalysis import (
+from scripts.research.thesis.evidence.compare_deterministic_reanalysis import (
     IDENTITY_FIELDS,
     NUMERICAL_ARTIFACTS,
     SPLITS,

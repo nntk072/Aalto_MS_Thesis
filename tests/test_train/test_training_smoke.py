@@ -24,8 +24,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.config import load_config
-from quant_rl.train.train_rl import _eval_guardrail_kwargs, _guardrail_kwargs
+from configuration import load_config
+from training.setup.environments import _eval_guardrail_kwargs, _guardrail_kwargs
 
 pytestmark = pytest.mark.slow
 
@@ -75,7 +75,7 @@ def _make_synthetic_features(bars: pd.DataFrame, seed: int = 7) -> pd.DataFrame:
 @pytest.fixture
 def synthetic_env():
     """Build a TradingEnv + a matching bars/features split for PPO smoke."""
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.env import TradingEnv
 
     bars = _make_synthetic_bars()
     features = _make_synthetic_features(bars)
@@ -129,7 +129,7 @@ def test_ppo_smoke_runs_and_takes_gradient_steps(synthetic_env, arch: str) -> No
     extractor_cls: type[Any]
     extractor_kwargs: dict[str, Any]
     if arch == "transformer":
-        from quant_rl.models.encoder import TransformerEncoder
+        from models.encoders.core import TransformerEncoder
 
         extractor_cls = TransformerEncoder
         extractor_kwargs = dict(
@@ -143,7 +143,7 @@ def test_ppo_smoke_runs_and_takes_gradient_steps(synthetic_env, arch: str) -> No
             dropout=0.1,
         )
     elif arch == "gru":
-        from quant_rl.models.encoder import GRUEncoder
+        from models.encoders.core import GRUEncoder
 
         extractor_cls = GRUEncoder
         extractor_kwargs = dict(
@@ -155,7 +155,7 @@ def test_ppo_smoke_runs_and_takes_gradient_steps(synthetic_env, arch: str) -> No
             dropout=0.1,
         )
     else:
-        from quant_rl.models.encoder import TCNEncoder
+        from models.encoders.core import TCNEncoder
 
         extractor_cls = TCNEncoder
         extractor_kwargs = dict(
@@ -212,7 +212,7 @@ def test_ppo_smoke_with_sweep_reward() -> None:
 
     from stable_baselines3 import PPO
 
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.env import TradingEnv
 
     bars = _make_synthetic_bars()
     features = _make_synthetic_features(bars)

@@ -10,8 +10,8 @@ import backtrader as bt
 import pandas as pd
 import pytest
 
-from quant_rl.backtest.costs import CostModel
-from quant_rl.backtest.engine import run_backtest
+from simulation.backtest.engine import run_backtest
+from trading.execution.costs import CostModel
 
 
 class _SignalFeed(bt.feeds.PandasData):  # type: ignore[misc]

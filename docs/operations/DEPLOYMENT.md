@@ -18,7 +18,7 @@ call made under the pressure of "the backtest looked good."
   train/live feature parity; SMT/secondary-symbol data is wired iff the run
   was trained with it.
 - **Live risk sizing** comes from `live_risk_overrides:` in
-  `quant_rl/config/default.yaml`. These are intentionally a
+  `config/base/default.yaml`. These are intentionally a
   percentage-of-balance model (MT5 sizing), aligned with the `ftmo:` dollar
   kill-switches enforced by `FTMOGuardrails` during training/eval
   (`risk_per_symbol` 1% ≈ `risk_per_trade_limit` $1000 on a $100k account).
@@ -46,7 +46,7 @@ the gating criteria are:
 
 - Minimum paper trial length: ≥ 10 trading days of continuous paper execution
 - Trade count: ≥ 20 closed paper trades across all selected symbols
-- Guardrails: Zero breach of `quant_rl/backtest/guardrails.py` logic (daily loss
+- Guardrails: Zero breach of `trading/risk/guardrails.py` logic (daily loss
   limit, max drawdown limit, risk per trade limit) during paper trading
 - Ops: No data-feed gaps > 5 minutes during the trial
 

@@ -8,7 +8,7 @@ You are a **planning agent** in a multi-model coding orchestra. You produce stru
 ## Repository Context
 - Working directory: {{workspace}}
 - Project type: Python RL trading system
-- Key directories: mt5_trading/, quant_rl/, tests/, scripts/
+- Key directories: integrations/, live/, trading/, simulation/, training/, evaluation/, tests/, scripts/
 - Build system: uv + pyproject.toml (see Makefile for targets)
 - Implementation checks: scoped ruff + pytest on touched paths only
 - Full CI gate: commit/push and Orchestra phase 9 (`orchestra/ci_gate.py`) — implementers must not run it

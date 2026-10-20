@@ -7,8 +7,8 @@ commands. Agent-specific commit checks belong to
 Additional command discovery (read-only, check the actual CLI help):
 
 ```bash
-uv run python scripts/train/compare_encoders.py --help
-uv run python scripts/eval/report_g3.py --help
+uv run python scripts/research/benchmarks/compare_encoders.py --help
+uv run python scripts/research/thesis/evaluation/report_g3.py --help
 ```
 Command catalog for research, evaluation, and live sessions. For architecture
 and config details see [architecture.md](../architecture.md) and
@@ -22,14 +22,14 @@ Arch-matching venvs (Triton shared NFS):
 
 ```bash
 cd Aalto_MS_Thesis
-scripts/setup/setup_venv.sh                    # aarch64 -> .venv, x86_64 -> .venv-x86
-source scripts/triton/activate_venv.sh   # use inside GPU shell on Triton
+tools/setup-venv                    # aarch64 -> .venv, x86_64 -> .venv-x86
+source scripts/compute/slurm/activate_venv.sh   # use inside GPU shell on Triton
 ```
 
 | Arch | Venv | One-time setup |
 |------|------|----------------|
 | aarch64 (GH200) | `.venv` | `uv sync` on aarch64 node |
-| x86_64 (H200, local) | `.venv-x86` | `scripts/setup/setup_venv_x86.sh` |
+| x86_64 (H200, local) | `.venv-x86` | `tools/setup-venv-x86` |
 
 ---
 
@@ -52,11 +52,11 @@ Local shortcut (not the merge bar): `pytest -m "not slow"`
 
 ```bash
 # Raw CSV → parquet bar cache → feature cache
-python scripts/data/prepare_data.py
+python market_data/commands/prepare.py
 
 # Force rebuild (ignore cache)
-python scripts/data/prepare_data.py --force
-# or: uv run python -m quant_rl.train.train_rl --force
+python market_data/commands/prepare.py --force
+# or: uv run thesis-train train --force
 ```
 
 ---
@@ -84,14 +84,14 @@ uv run pytest tests/test_risk.py tests/test_macd_baseline.py -v
 
 ```bash
 # MACD crossover (quick, no charts)
-uv run python -m quant_rl.train.run_baselines --strategy macd --no-save
+uv run thesis-train baselines --strategy macd --no-save
 
 # Full run with per-trade charts
-uv run python -m quant_rl.train.run_baselines --strategy macd
+uv run thesis-train baselines --strategy macd
 
 # Other baselines
-uv run python -m quant_rl.train.run_baselines --strategy ema
-uv run python -m quant_rl.train.run_baselines --strategy rsi
+uv run thesis-train baselines --strategy ema
+uv run thesis-train baselines --strategy rsi
 ```
 
 MACD rules: EMA12/26 MACD + SMA9 signal + EMA50 trend filter. Long when
@@ -102,8 +102,8 @@ MACD rules: EMA12/26 MACD + SMA9 signal + EMA50 trend filter. Long when
 ## Random-policy backtest
 
 ```bash
-uv run python -m quant_rl.train.run_backtest --no-save
-uv run python -m quant_rl.train.run_backtest --seed=42
+uv run thesis-train backtest --no-save
+uv run thesis-train backtest --seed=42
 ```
 
 ---
@@ -112,38 +112,38 @@ uv run python -m quant_rl.train.run_backtest --seed=42
 
 ```bash
 # MVP smoke test (~8k timesteps, 30 days)
-uv run python -m quant_rl.train.train_rl --mvp --seed=42
+uv run thesis-train train --mvp --seed=42
 
 # Full training (500k timesteps)
-uv run python -m quant_rl.train.train_rl --seed=42
+uv run thesis-train train --seed=42
 
 # Algorithm / encoder / reward
-uv run python -m quant_rl.train.train_rl --mvp --algo sac --arch gru --reward sweep --seed=42
+uv run thesis-train train --mvp --algo sac --arch gru --reward sweep --seed=42
 
 # Strategy overlay (Idea 1: PO3 + IFVG, Idea 2: distribution)
-uv run python -m quant_rl.train.train_rl --mvp --strategy po3_ifvg --seed=42
-uv run python -m quant_rl.train.train_rl --mvp --strategy distribution --seed=42
+uv run thesis-train train --mvp --strategy po3_ifvg --seed=42
+uv run thesis-train train --mvp --strategy distribution --seed=42
 
-# Optional frozen VAE narrative latent (train checkpoint first via scripts/train/train_vae.py)
-uv run python -m quant_rl.train.train_rl --mvp --use-vae \
+# Optional frozen VAE narrative latent (train checkpoint first via training/runner/vae.py)
+uv run thesis-train train --mvp --use-vae \
     --vae-path output/vae/vae_best.pth --vae-config config/vae.yaml --seed=42
 
 # Feature variant config (MTF expansion)
-uv run python -m quant_rl.train.train_rl --mvp \
+uv run thesis-train train --mvp \
     --config config/features/full_po3_mtf.yaml --seed=42
 
 # Purged walk-forward validation
-uv run python -m quant_rl.train.train_rl --walk-forward --wf-splits 5 \
+uv run thesis-train train --walk-forward --wf-splits 5 \
     --purge-bars 60 --embargo-bars 20 --seed=42
 
 # Weights & Biases logging
-uv run python -m quant_rl.train.train_rl --mvp --wandb
+uv run thesis-train train --mvp --wandb
 ```
 
 ### Config overrides (OmegaConf key=value)
 
 ```bash
-uv run python -m quant_rl.train.train_rl --mvp \
+uv run thesis-train train --mvp \
     account.initial_balance=100000.0 \
     env.obs_window=30 \
     training.total_timesteps_mvp=4096
@@ -155,10 +155,10 @@ uv run python -m quant_rl.train.train_rl --mvp \
 
 ```bash
 # Re-evaluate an existing trained run (no retraining)
-uv run python -m quant_rl.eval.eval_run --run outputs/<run_dir>
+uv run thesis-evaluate reanalyze --run outputs/<run_dir>
 
 # With a specific checkpoint
-uv run python -m quant_rl.eval.eval_run --run outputs/<run_dir> \
+uv run thesis-evaluate reanalyze --run outputs/<run_dir> \
     --checkpoint model/ppo_ckpt_328350_steps.zip
 
 # View latest metrics
@@ -171,7 +171,7 @@ cat "$LATEST/test/metrics.json"
 ## Engine cross-validation
 
 ```bash
-uv run python -m quant_rl.backtest.cross_validation.run
+uv run python -m simulation.backtest.cross_validation.run
 ```
 
 ---
@@ -179,7 +179,7 @@ uv run python -m quant_rl.backtest.cross_validation.run
 ## Encoder comparison
 
 ```bash
-uv run python scripts/train/compare_encoders.py
+uv run python scripts/research/benchmarks/compare_encoders.py
 ```
 
 ---
@@ -194,18 +194,18 @@ includes `oos_role: final_report_only` unless
 ```bash
 # Declarative variant matrix (algo / arch / VAE / PD-context / strategy).
 # Features CSV must match the variant flags (e.g. include_pd_context).
-uv run python scripts/matrix/ablation_runner.py \
+uv run thesis-campaign variants \
     --bars-csv data/us100_2025.csv \
     --features-csv data/us100_feat.csv \
     --experiments config/experiments.yaml \
     --steps 8192 --seeds 42 \
     --variants ablation_baseline_unconditional ablation_pd_context
 
-uv run python scripts/eval/report_ablations.py --ablations-dir results/ablations
+uv run python scripts/research/thesis/evaluation/report_ablations.py --ablations-dir results/ablations
 
 # Cost-sensitivity grid on a saved SB3 zip (CostModel spread_points + slippage).
 # --cost-multipliers scales both (TI-7); default 0.5 1 2 3.
-uv run python scripts/eval/test_oos.py \
+uv run python scripts/research/thesis/evaluation/test_oos.py \
     --model-path outputs/<run>/model/ppo_final.zip \
     --bars-csv data/us100_2025.csv \
     --features-csv data/us100_feat.csv \
@@ -216,7 +216,7 @@ uv run python scripts/eval/test_oos.py \
     --out results/oos_report.json
 
 # Leak detectors (label-shuffle + time-shift)
-uv run python scripts/utility/leak_detectors.py \
+uv run python scripts/research/audits/leak_detectors.py \
     --features-csv data/us100_feat.csv \
     --target-col ret_1 --feature-col rsi \
     --out results/leak_detectors.json
@@ -224,19 +224,19 @@ uv run python scripts/utility/leak_detectors.py \
 # Thin orchestration (ablation smoke → walk-forward → optional OOS)
 BARS_CSV=data/us100_2025.csv STEPS=8192 SEEDS=42 \
   MODEL_PATH=outputs/<run>/model/ppo_final.zip \
-  bash scripts/matrix/run_18variant_matrix.sh
+  bash scripts/compute/slurm/campaigns/run_18variant_matrix.sh
 ```
 
-Do **not** use the retired `quant_rl/validation/` package or
+Do **not** use the retired validation package or
 `scripts/run_walk_forward.py` from old feature branches — walk-forward lives on
-`python -m quant_rl.train.train_rl --walk-forward`.
+`thesis-train train --walk-forward`.
 
 ---
 
 ## Run-report gate (G3)
 
 ```bash
-uv run python scripts/eval/report_g3.py --runs-dir outputs --sharpe-threshold 1.0
+uv run python scripts/research/thesis/evaluation/report_g3.py --runs-dir outputs --sharpe-threshold 1.0
 ```
 
 ---
@@ -283,11 +283,11 @@ See [orchestra/README.md](../../orchestra/README.md).
 
 ```bash
 # Rebuild feature cache
-uv run python -m quant_rl.train.run_backtest --force
+uv run thesis-train backtest --force
 rm -rf cache/*.parquet
 
 # Reduce MVP memory / time
-uv run python -m quant_rl.train.train_rl --mvp env.obs_window=30 \
+uv run thesis-train train --mvp env.obs_window=30 \
     training.total_timesteps_mvp=4096
 ```
 

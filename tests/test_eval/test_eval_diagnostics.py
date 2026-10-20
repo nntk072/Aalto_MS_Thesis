@@ -7,7 +7,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from quant_rl.eval.eval_diagnostics import write_bootstrap_cis, write_calibration_artifacts
+from evaluation.reporting.diagnostics import write_bootstrap_cis, write_calibration_artifacts
 
 
 def _synthetic_split(n: int = 200):

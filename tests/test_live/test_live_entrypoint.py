@@ -68,7 +68,7 @@ def test_secondary_symbol_defaults_true_without_training_block() -> None:
 # --- load_risk_overrides: live risk parity ---------------------------------
 def test_load_risk_overrides_reads_repo_default_yaml() -> None:
     """The repo default.yaml block must round-trip into the RiskManager dict."""
-    cfg = OmegaConf.load("quant_rl/config/default.yaml")
+    cfg = OmegaConf.load("config/base/default.yaml")
     risk = live_trading_rl.load_risk_overrides(cfg)
     block = cfg.live_risk_overrides
     assert risk["risk_per_symbol"] == float(block.risk_per_symbol)

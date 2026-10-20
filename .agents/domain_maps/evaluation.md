@@ -1,49 +1,49 @@
 # Evaluation Domain
 
-Two packages: `quant_rl/evaluation/` (metrics, walk-forward, reporting) and
-`quant_rl/eval/` (rollout, plots, export, `eval_run`).
+One canonical `evaluation/` package owns rollout, metrics, reanalysis, reporting, and plotting.
+Purged walk-forward split construction lives in `market_data/splits/walkforward.py`.
 
 ## Primary Files
 
 | File | Role |
 |------|------|
-| `quant_rl/evaluation/runner.py` | Policy-agnostic episode runner |
-| `quant_rl/evaluation/metrics.py` | Performance metrics (Sharpe, drawdown, etc.) |
-| `quant_rl/evaluation/calibration.py` | Calibration analysis |
-| `quant_rl/evaluation/bootstrap_ci.py` | Bootstrap confidence intervals |
-| `quant_rl/evaluation/report.py` | Multi-seed report generation |
-| `quant_rl/evaluation/walkforward.py` | Purged + embargoed walk-forward splits |
-| `quant_rl/evaluation/matched_comparison.py` | Timestamp-paired treatment/control intervals with fail-closed provenance |
-| `quant_rl/eval/run_manifest.py` | Per-trial dataset, source, config, cache and checkpoint provenance |
-| `quant_rl/eval/rollout.py` | RL model evaluation through TradingEnv |
-| `quant_rl/eval/export.py` | Run artifact saving |
-| `quant_rl/eval/eval_run.py` | Re-evaluate existing checkpoint (no retraining) |
-| `quant_rl/eval/trade_metrics.py` | Trade-level metrics |
-| `quant_rl/eval/plots.py` | Static matplotlib plots |
-| `quant_rl/eval/plots_interactive.py` | Interactive plotly plots |
-| `quant_rl/eval/trade_plots.py` | Per-trade plots |
-| `quant_rl/eval/po3_plots.py` | PO3-specific plots |
+| `evaluation/rollout/runner.py` | Policy-agnostic episode runner |
+| `evaluation/metrics/performance.py` | Performance metrics (Sharpe, drawdown, etc.) |
+| `evaluation/metrics/calibration.py` | Calibration analysis |
+| `evaluation/metrics/bootstrap.py` | Bootstrap confidence intervals |
+| `evaluation/reporting/summary.py` | Multi-seed report generation |
+| `market_data/splits/walkforward.py` | Purged + embargoed walk-forward splits |
+| `evaluation/metrics/matched_comparison.py` | Timestamp-paired treatment/control intervals with fail-closed provenance |
+| `evaluation/reporting/run_manifest.py` | Per-trial dataset, source, config, cache and checkpoint provenance |
+| `evaluation/rollout/model.py` | RL model evaluation through TradingEnv |
+| `evaluation/reporting/export.py` | Run artifact saving |
+| `evaluation/reanalysis/runner.py` | Re-evaluate existing checkpoint (no retraining) |
+| `evaluation/metrics/trades.py` | Trade-level metrics |
+| `evaluation/plotting/plots.py` | Static matplotlib plots |
+| `evaluation/plotting/plots_interactive.py` | Interactive plotly plots |
+| `evaluation/plotting/trade_plots.py` | Per-trade plots |
+| `evaluation/plotting/po3_plots.py` | PO3-specific plots |
 
 ## Key Symbols
 
 | Symbol | File | Purpose |
 |--------|------|---------|
-| `run_episode()` | `evaluation/runner.py` | Run one full episode, return metrics |
-| `calculate_metrics()` | `evaluation/metrics.py` | Compute performance metrics |
-| `purged_walk_forward()` | `evaluation/walkforward.py` | Purged + embargoed WF splits |
-| `evaluate_model()` | `eval/rollout.py` | Walk RL model through TradingEnv |
-| `save_run()` | `eval/export.py` | Save run artifacts to disk |
+| `run_episode()` | `evaluation/rollout/runner.py` | Run one full episode, return metrics |
+| `calculate_metrics()` | `evaluation/metrics/performance.py` | Compute performance metrics |
+| `purged_walk_forward()` | `market_data/splits/walkforward.py` | Purged + embargoed WF splits |
+| `evaluate_model()` | `evaluation/rollout/model.py` | Walk RL model through TradingEnv |
+| `save_run()` | `evaluation/reporting/export.py` | Save run artifacts to disk |
 
 ## Direct Dependencies
 
-- `quant_rl/envs/trading_env.py` (evaluation environment)
-- `quant_rl/backtest/costs.py` (cost model for evaluation)
-- `quant_rl/models/agent.py` (model loading for evaluation)
+- `simulation/environment/env.py` (evaluation environment)
+- `trading/execution/costs.py` (cost model for evaluation)
+- `models/factory/agent.py` (model loading for evaluation)
 
 ## Consumers (Callers)
 
-- `quant_rl/train/train_rl.py` (evaluates after training)
-- `scripts/eval/report_g3.py` (report generation)
+- `training/runner/training.py` (evaluates after training)
+- `scripts/research/thesis/evaluation/report_g3.py` (report generation)
 
 ## Tests
 
@@ -64,9 +64,9 @@ Two packages: `quant_rl/evaluation/` (metrics, walk-forward, reporting) and
 
 ## Do NOT Read For Evaluation Tasks
 
-- `quant_rl/features/indicators.py` (feature implementation detail)
-- `quant_rl/models/encoder.py` (encoder detail — only if model loading fails)
-- `mt5_trading/` (live trading — separate domain)
+- `features/technical/indicators.py` (feature implementation detail)
+- `models/encoders/core.py` (encoder detail — only if model loading fails)
+- `integrations/mt5/` (live trading — separate domain)
 
 ## Critical Invariants
 

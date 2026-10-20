@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.backtest.risk import (
+from trading.risk.sizing import (
     compute_lots,
     compute_sl_tp_from_structure,
     compute_sl_tp_long,

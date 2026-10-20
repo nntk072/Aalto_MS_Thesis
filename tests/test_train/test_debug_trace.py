@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from quant_rl.train.debug_trace import FlightRecorder
+from training.callbacks.debug_trace import FlightRecorder
 
 pytestmark = pytest.mark.unit
 

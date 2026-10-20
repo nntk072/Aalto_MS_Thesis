@@ -1,6 +1,6 @@
 schema_version: 1
 campaign_id: ladder18_seed50_20m_full_split_n64_cpumask_v2_20261016
-variant_file: scripts/variant_list.txt
+variant_file: config/campaigns/variant_list.txt
 variants:
   - ladder_a0_flat
   - ladder_a1_sl

@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 from omegaconf import OmegaConf
 
-from quant_rl.features.build import build_features
+from features import build_features
 
 
 def _bars(n: int = 900) -> pd.DataFrame:

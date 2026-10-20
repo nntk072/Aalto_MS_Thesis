@@ -8,14 +8,14 @@ import numpy as np
 import torch
 from gymnasium import spaces
 
-from quant_rl.models.agent import encoder_for
-from quant_rl.models.encoder import (
+from models.encoders.core import (
     GRUEncoder,
     LiteTCNEncoder,
     MTFEncoder,
     TCNEncoder,
     TransformerEncoder,
 )
+from models.factory.agent import encoder_for
 
 
 class TestTCNEncoder:

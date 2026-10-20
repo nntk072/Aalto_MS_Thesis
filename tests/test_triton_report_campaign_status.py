@@ -4,7 +4,7 @@ import datetime as dt
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from scripts.triton.report_campaign_status import (
+from experiments.campaigns.status import (
     elapsed_for_job,
     estimate_remaining_seconds,
     recent_fps,

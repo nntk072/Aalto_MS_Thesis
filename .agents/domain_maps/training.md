@@ -4,24 +4,24 @@
 
 | File | Role |
 |------|------|
-| `quant_rl/train/train_rl.py` | Full RL training pipeline; `_STRATEGY_CONFIGS` registry |
-| `quant_rl/train/run_backtest.py` | Backtest runner entry point |
-| `quant_rl/train/run_baselines.py` | Baseline strategy runner |
-| `quant_rl/train/callbacks.py` | Best checkpoint eval callback |
-| `quant_rl/train/auxiliary_training.py` | Auxiliary prediction head training |
+| `training/runner/training.py` | Full RL training pipeline; `_STRATEGY_CONFIGS` registry |
+| `training/runner/backtest.py` | Backtest runner entry point |
+| `training/runner/baselines.py` | Baseline strategy runner |
+| `training/callbacks/core.py` | Best checkpoint eval callback |
+| `training/callbacks/auxiliary.py` | Auxiliary prediction head training |
 
 ## Key Symbols
 
 | Symbol | File | Purpose |
 |--------|------|---------|
-| `main()` | `train_rl.py` | Full training pipeline entry |
-| `make_env()` | `train_rl.py` | Create TradingEnv for training |
-| `_strategy_from_cfg()` | `train_rl.py` | Build (strategy, reward, weight) from config |
-| `_STRATEGY_CONFIGS` | `train_rl.py` | Maps `--strategy` to variant YAML |
-| `BestCheckpointEvalCallback` | `callbacks.py` | Eval-based checkpoint saving |
-| `AuxiliaryTrainerCallback` | `auxiliary_training.py` | Auxiliary head training callback |
+| `main()` | `training/runner/training.py` | Full training pipeline entry |
+| `make_env()` | `training/runner/training.py` | Create TradingEnv for training |
+| `_strategy_from_cfg()` | `training/runner/training.py` | Build (strategy, reward, weight) from config |
+| `_STRATEGY_CONFIGS` | `training/runner/training.py` | Maps `--strategy` to variant YAML |
+| `BestCheckpointEvalCallback` | `training/callbacks/core.py` | Eval-based checkpoint saving |
+| `AuxiliaryTrainerCallback` | `training/callbacks/auxiliary.py` | Auxiliary head training callback |
 
-## CLI flags (`train_rl.py`)
+## CLI flags (`training/runner/training.py`)
 
 | Flag | Purpose |
 |------|---------|
@@ -39,15 +39,15 @@
 ## Direct Dependencies
 
 - ALL domains above (data, features, envs, backtest, models)
-- `quant_rl/config/` (training config)
-- `quant_rl/eval/rollout.py` (model evaluation)
-- `quant_rl/evaluation/metrics.py` (performance metrics)
-- `quant_rl/eval/export.py` (run artifact saving)
+- `config/` (training config)
+- `evaluation/rollout/model.py` (model evaluation)
+- `evaluation/metrics/performance.py` (performance metrics)
+- `evaluation/reporting/export.py` (run artifact saving)
 
 ## Consumers (Callers)
 
-- `scripts/train_rl.py` (CLI wrapper)
-- `scripts/train/compare_encoders.py` (encoder comparison)
+- `thesis-train` console entry point (`training/cli.py`)
+- `scripts/research/benchmarks/compare_encoders.py` (encoder comparison)
 
 ## Tests
 
@@ -88,9 +88,9 @@ implied by the documentation.
 ## Config Overrides
 
 ```bash
-uv run python -m quant_rl.train.train_rl --mvp --seed=42
-uv run python -m quant_rl.train.train_rl --algo sac --arch gru
-uv run python -m quant_rl.train.train_rl --strategy po3_ifvg
-uv run python -m quant_rl.train.train_rl --config config/features/full_po3_mtf.yaml
-uv run python -m quant_rl.train.train_rl --walk-forward --wf-splits 5 --purge-bars 60
+uv run thesis-train train --mvp --seed=42
+uv run thesis-train train --algo sac --arch gru
+uv run thesis-train train --strategy po3_ifvg
+uv run thesis-train train --config config/features/full_po3_mtf.yaml
+uv run thesis-train train --walk-forward --wf-splits 5 --purge-bars 60
 ```

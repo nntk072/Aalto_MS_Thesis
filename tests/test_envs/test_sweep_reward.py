@@ -2,7 +2,7 @@
 
 import pytest
 
-from quant_rl.envs.sweep_reward import CompositeReward, SweepConfirmationReward
+from simulation.environment.sweep_reward import CompositeReward, SweepConfirmationReward
 
 
 class TestSweepConfirmationReward:

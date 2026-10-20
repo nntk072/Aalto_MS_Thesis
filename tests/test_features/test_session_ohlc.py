@@ -1,5 +1,5 @@
 """Tests for CT-anchored session OHLC levels, prior-period high/low,
-range quadrants and raw VWAP level (quant_rl.features.session_ohlc).
+range quadrants and raw VWAP level (features.context.session_levels).
 
 The session windows are defined in America/Chicago wall-clock time. Native
 fixed-offset tests preserve legacy behavior; the FTMO server-clock regression
@@ -15,8 +15,7 @@ import pandas as pd
 import pytest
 from omegaconf import DictConfig, OmegaConf
 
-from quant_rl.features.indicators import vwap_from_session, vwap_level
-from quant_rl.features.session_ohlc import (
+from features.context.session_levels import (
     prev_ny_high_low,
     previous_labeled_session_ohlc,
     prior_period_high_low,
@@ -24,6 +23,7 @@ from quant_rl.features.session_ohlc import (
     session_mask,
     session_ohlc,
 )
+from features.technical.indicators import vwap_from_session, vwap_level
 
 DATA_TZ = "Etc/GMT-3"
 SESSION_TZ = "America/Chicago"
@@ -584,7 +584,7 @@ def _dst_week_m1_bars() -> pd.DataFrame:
 @pytest.mark.integration
 def test_build_features_session_ohlc_additive() -> None:
     """include_session_ohlc=true adds exactly the new level columns, stays numeric."""
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     bars = _dst_week_m1_bars()
     cfg_base = OmegaConf.create(_sess_base_cfg())
@@ -657,7 +657,7 @@ def test_build_features_session_ohlc_additive() -> None:
 @pytest.mark.integration
 def test_build_features_uses_ftmo_clock_model_for_ct_sessions() -> None:
     """The resolved config must carry FTMO clock correction into the CT block."""
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     idx = pd.DatetimeIndex(
         [
@@ -713,7 +713,7 @@ def test_build_features_uses_ftmo_clock_model_for_ct_sessions() -> None:
 @pytest.mark.integration
 def test_ftmo_ct_session_features_are_prefix_invariant_across_dst() -> None:
     """Future bars cannot alter assembled CT session features before a cutoff."""
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     ny_instants = pd.date_range(
         "2026-03-05 00:00", periods=8 * 1440, freq="1min", tz="America/New_York"
@@ -774,7 +774,7 @@ def test_ftmo_ct_session_features_are_prefix_invariant_across_dst() -> None:
 @pytest.mark.integration
 def test_default_config_carries_sessions_block() -> None:
     """default.yaml ships the sessions block, flag off by default."""
-    cfg = OmegaConf.load("quant_rl/config/default.yaml")
+    cfg = OmegaConf.load("config/base/default.yaml")
     assert cfg.data.timestamp_clock == "ftmo_mt5_us_dst"
     assert cfg.features.include_session_ohlc is False
     assert cfg.features.sessions.tz == "America/Chicago"

@@ -64,8 +64,8 @@ def test_best_checkpoint_saves_when_reward_improves(tmp_path: Path) -> None:
     pytest.importorskip("stable_baselines3")
     from stable_baselines3 import PPO
 
-    from quant_rl.envs.trading_env import TradingEnv
-    from quant_rl.train.callbacks import BestCheckpointEvalCallback
+    from simulation.environment.env import TradingEnv
+    from training.callbacks.core import BestCheckpointEvalCallback
 
     bars = _bars()
     features = _features(bars)
@@ -123,8 +123,8 @@ def test_best_checkpoint_keeps_strictly_better_model(tmp_path: Path) -> None:
     pytest.importorskip("stable_baselines3")
     from stable_baselines3 import PPO
 
-    from quant_rl.envs.trading_env import TradingEnv
-    from quant_rl.train.callbacks import BestCheckpointEvalCallback
+    from simulation.environment.env import TradingEnv
+    from training.callbacks.core import BestCheckpointEvalCallback
 
     bars = _bars()
     features = _features(bars)

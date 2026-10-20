@@ -13,9 +13,9 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from scripts.matrix import audit_campaign_checkpoint_loads
+from scripts.research.campaigns import audit_campaign_checkpoint_loads
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts/matrix/campaign_controller.py"
+MODULE_PATH = Path(__file__).resolve().parents[1] / "experiments/campaigns/execution.py"
 SPEC = importlib.util.spec_from_file_location("campaign_controller", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 controller = importlib.util.module_from_spec(SPEC)
@@ -23,7 +23,7 @@ SPEC.loader.exec_module(controller)
 
 
 def test_checkpoint_map_cli_loads_controller_from_its_own_worktree(tmp_path: Path) -> None:
-    script = MODULE_PATH.with_name("build_campaign_checkpoint_map.py")
+    script = Path(__file__).resolve().parents[1] / "experiments/campaigns/checkpoints.py"
     result = subprocess.run(
         [sys.executable, str(script), "--help"],
         cwd=tmp_path,

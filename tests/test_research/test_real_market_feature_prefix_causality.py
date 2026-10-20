@@ -7,7 +7,7 @@ from omegaconf import OmegaConf
 
 SCRIPT = (
     Path(__file__).resolve().parents[2]
-    / "scripts/matrix/audit_real_market_feature_prefix_causality.py"
+    / "scripts/research/campaigns/audit_real_market_feature_prefix_causality.py"
 )
 SPEC = importlib.util.spec_from_file_location("real_market_feature_prefix_causality", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None

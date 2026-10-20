@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
-from scripts.thesis.verify_result_manifest import validate_result_manifest
+from scripts.research.thesis.evidence.verify_result_manifest import validate_result_manifest
 
 
 def _artifact(path: str, content: bytes) -> dict[str, str]:
@@ -256,7 +256,7 @@ def test_result_manifest_cli_reports_pass_and_hash_failure(tmp_path: Path) -> No
     )
     command = [
         sys.executable,
-        str(repo / "scripts/thesis/verify_result_manifest.py"),
+        str(repo / "scripts/research/thesis/evidence/verify_result_manifest.py"),
         str(manifest_path),
         "--repo-root",
         str(tmp_path),

@@ -11,10 +11,10 @@ import torch
 from gymnasium import spaces
 from stable_baselines3 import PPO
 
-from quant_rl.action_schema import build_discrete_trading_action_schema
-from quant_rl.config import load_config
-from quant_rl.models.agent import build_agent, validate_model_architecture
-from quant_rl.models.encoder import LiteTCNEncoder
+from configuration import load_config
+from models.encoders.core import LiteTCNEncoder
+from models.factory.agent import build_agent, validate_model_architecture
+from simulation.contracts.actions import build_discrete_trading_action_schema
 
 FloatArray = npt.NDArray[np.float32]
 

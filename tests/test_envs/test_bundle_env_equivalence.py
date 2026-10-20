@@ -22,9 +22,9 @@ def test_bundle_env_step_trace_matches_frames(
     tmp_path: Path, strategy_actions: bool, action_pattern: str
 ) -> None:
     """The same seeded actions produce exactly the same observations and trace."""
-    from quant_rl.envs.env_bundle_builder import build_env_bundle
-    from quant_rl.envs.strategies import BaselineStrategy
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.bundles import build_env_bundle
+    from simulation.environment.env import TradingEnv
+    from trading.strategies import BaselineStrategy
 
     bars = _make_deterministic_bars(n=120)
     features = _make_features(bars)
@@ -107,9 +107,9 @@ def test_bundle_env_step_trace_matches_frames(
 
 def test_bundle_env_without_session_id_matches_frames(tmp_path: Path) -> None:
     """Missing source session IDs retain the legacy absolute-window behavior."""
-    from quant_rl.envs.env_bundle_builder import build_env_bundle
-    from quant_rl.envs.strategies import BaselineStrategy
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.bundles import build_env_bundle
+    from simulation.environment.env import TradingEnv
+    from trading.strategies import BaselineStrategy
 
     bars = _make_deterministic_bars(n=96).drop(columns="session_id")
     features = _make_features(bars)
@@ -143,9 +143,9 @@ def test_bundle_env_without_session_id_matches_frames(tmp_path: Path) -> None:
 
 def test_account_state_v2_bundle_observation_matches_frames(tmp_path: Path) -> None:
     """Versioned account coordinates remain identical on the shared-bundle path."""
-    from quant_rl.envs.env_bundle_builder import build_env_bundle
-    from quant_rl.envs.strategies import BaselineStrategy
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.bundles import build_env_bundle
+    from simulation.environment.env import TradingEnv
+    from trading.strategies import BaselineStrategy
 
     bars = _make_deterministic_bars(n=96)
     features = _make_features(bars)
@@ -184,10 +184,10 @@ def test_entry_fsm_transitions_match_frames_and_bundle(
     tmp_path: Path, entry_state_observation: bool
 ) -> None:
     """FSM transitions and optional policy visibility agree on both data paths."""
-    from quant_rl.envs.env_bundle_builder import build_env_bundle
-    from quant_rl.envs.strategies import PO3IFVGStrategy
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.bundles import build_env_bundle
+    from simulation.environment.env import TradingEnv
     from tests.test_envs.test_entry_state_machine import _market_fixture
+    from trading.strategies import PO3IFVGStrategy
 
     bars, features = _market_fixture()
     strategy = PO3IFVGStrategy(enforce_gate=True)
@@ -255,10 +255,10 @@ def test_entry_fsm_transitions_match_frames_and_bundle(
 
 def test_bundle_env_uses_read_only_ndarray_views(tmp_path: Path) -> None:
     """The hot path uses plain ndarray views backed by shared read-only mmaps."""
-    from quant_rl.envs.env_bundle_builder import build_env_bundle
-    from quant_rl.envs.shared_bundle import load_bundle
-    from quant_rl.envs.strategies import BaselineStrategy
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.bundles import build_env_bundle
+    from simulation.environment.env import TradingEnv
+    from simulation.environment.shared_bundle import load_bundle
+    from trading.strategies import BaselineStrategy
 
     bars = _make_deterministic_bars(n=64)
     features = _make_features(bars)
@@ -332,9 +332,9 @@ def _assert_same_trade_log(left: list[dict[str, Any]], right: list[dict[str, Any
 
 
 def test_equity_times_and_trade_log_match_frames_and_bundle(tmp_path: Path) -> None:
-    from quant_rl.envs.env_bundle_builder import build_env_bundle
-    from quant_rl.envs.strategies import BaselineStrategy
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.bundles import build_env_bundle
+    from simulation.environment.env import TradingEnv
+    from trading.strategies import BaselineStrategy
 
     bars = _make_deterministic_bars(n=120)
     features = _make_features(bars)
@@ -381,12 +381,12 @@ def test_equity_times_and_trade_log_match_frames_and_bundle(tmp_path: Path) -> N
 
 def test_bundle_worker_preserves_strict_eligibility_and_simplex_flags(tmp_path: Path) -> None:
     """Worker reconstruction keeps configuration that changes research behavior."""
-    from quant_rl.config import load_config
-    from quant_rl.envs.env_bundle_builder import build_env_bundle
-    from quant_rl.envs.env_spec import EnvSpec
-    from quant_rl.envs.strategies import BaselineStrategy
-    from quant_rl.envs.worker import make_bundle_env
-    from quant_rl.train.train_rl import make_env
+    from configuration import load_config
+    from simulation.environment.bundles import build_env_bundle
+    from simulation.environment.spec import EnvSpec
+    from simulation.environment.worker import make_bundle_env
+    from trading.strategies import BaselineStrategy
+    from training.setup.environments import make_env
 
     bars = _make_deterministic_bars(n=120)
     features = _make_features(bars)
@@ -445,9 +445,9 @@ def test_bundle_worker_preserves_strict_eligibility_and_simplex_flags(tmp_path: 
 
 
 def test_legacy_sequence_columns_match_between_frame_and_bundle(tmp_path: Path) -> None:
-    from quant_rl.envs.env_bundle_builder import build_env_bundle
-    from quant_rl.envs.strategies import BaselineStrategy
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.bundles import build_env_bundle
+    from simulation.environment.env import TradingEnv
+    from trading.strategies import BaselineStrategy
 
     bars = _make_deterministic_bars(n=120)
     features = _make_features(bars)

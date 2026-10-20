@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from quant_rl.data.activity import activity_series, tick_counts_from_index
-from quant_rl.features.indicators import vwap_level
+from features.technical.indicators import vwap_level
+from market_data.transforms.activity import activity_series, tick_counts_from_index
 
 
 def test_activity_ignores_zero_volume_uses_tickvol() -> None:

@@ -1,4 +1,4 @@
-"""Unit tests for quant_rl.evaluation.report and evaluation.walkforward."""
+"""Unit tests for evaluation.reporting.summary and market_data.splits.walkforward."""
 
 from __future__ import annotations
 
@@ -7,15 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from quant_rl.evaluation import PerformanceMetrics, compute_metrics
-from quant_rl.evaluation.report import (
+from evaluation import PerformanceMetrics, compute_metrics
+from evaluation.reporting.summary import (
     aggregate_seeds,
     build_comparison_table,
     build_run_report,
     build_summary_table,
     save_metrics_json,
 )
-from quant_rl.evaluation.walkforward import purged_walk_forward
+from market_data.splits.walkforward import purged_walk_forward
 
 
 def _metrics(total_pnl: float, n_trades: int) -> PerformanceMetrics:

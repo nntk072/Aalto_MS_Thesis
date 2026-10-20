@@ -3,7 +3,7 @@
 Runs headless (no MT5, no SB3 weights): the bridge is exercised with a
 stub model and a stub data source matching the duck-typed interface the
 live robot loop expects. ``MetaTrader5`` (a Windows-only package) is
-stubbed in conftest so the ``mt5_trading.domain.signal`` import works.
+stubbed in conftest so the ``integrations.mt5.domain.signal`` import works.
 """
 
 from __future__ import annotations
@@ -15,9 +15,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from mt5_trading.adapters.data import TradingData
 
-from quant_rl.observation_schema import OBSERVATION_SCHEMA_V1, build_observation_schema
+from integrations.mt5.adapters.data import TradingData
+from simulation.contracts.observations import OBSERVATION_SCHEMA_V1, build_observation_schema
 
 # --- headless MetaTrader5 stub (Windows-only package, absent on Linux) -----
 if "MetaTrader5" not in sys.modules:
@@ -59,7 +59,7 @@ def trending_bars() -> pd.DataFrame:
 
 
 def _make_env(bars: pd.DataFrame, latency: int):
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.env import TradingEnv
 
     # Swing levels below/above the uptrend's entry prices so long entries
     # compute structure SL/TP. Without them the env now rejects entries
@@ -179,9 +179,9 @@ class _StubData(TradingData):
 
 def test_rl_bridge_observation_contract(trending_bars):
     """Bridge builds the same dict obs contract as the env (T, F) + (5,)."""
-    from quant_rl.live.rl_strategy import RLStrategyAdapter
+    from live.runtime.strategy import RLStrategyAdapter
 
-    adapter = RLStrategyAdapter(model=_StubModel(), config_path="quant_rl/config/default.yaml")
+    adapter = RLStrategyAdapter(model=_StubModel(), config_path="config/base/default.yaml")
     adapter.update_bars(trending_bars)
     obs = adapter.build_observation({"equity": 100_000.0})
     assert set(obs) == {"seq", "seq_mask", "account"}
@@ -194,9 +194,9 @@ def test_rl_bridge_observation_contract(trending_bars):
 
 def test_rl_bridge_maps_actions_to_signals(trending_bars):
     """as_strategy maps action>0 → BUY, 0 → HOLD via the duck-typed source."""
-    from quant_rl.live.rl_strategy import RLStrategyAdapter
+    from live.runtime.strategy import RLStrategyAdapter
 
-    adapter = RLStrategyAdapter(model=_StubModel(), config_path="quant_rl/config/default.yaml")
+    adapter = RLStrategyAdapter(model=_StubModel(), config_path="config/base/default.yaml")
     strategy = adapter.as_strategy(_StubData(trending_bars))
     symbol, sig = strategy.signal()
     assert symbol == "US100.cash"
@@ -205,9 +205,9 @@ def test_rl_bridge_maps_actions_to_signals(trending_bars):
 
 def test_rl_bridge_too_few_bars_no_signal(trending_bars):
     """Bridge returns NONE when there isn't enough history."""
-    from quant_rl.live.rl_strategy import RLStrategyAdapter
+    from live.runtime.strategy import RLStrategyAdapter
 
-    adapter = RLStrategyAdapter(model=_StubModel(), config_path="quant_rl/config/default.yaml")
+    adapter = RLStrategyAdapter(model=_StubModel(), config_path="config/base/default.yaml")
     strategy = adapter.as_strategy(_StubData(trending_bars.iloc[:5]))
     _, sig = strategy.signal()
     assert sig.value == "none"

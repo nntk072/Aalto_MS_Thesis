@@ -4,17 +4,17 @@
 
 | File | Role |
 |------|------|
-| `quant_rl/features/build.py` | Full feature pipeline orchestrator; owns `FEATURE_CACHE_VERSION` |
-| `quant_rl/features/indicators.py` | Technical indicators (EMA, RSI, MACD, ATR, etc.) |
-| `quant_rl/features/smt.py` | SMT divergence between US100/US500 |
-| `quant_rl/features/structure.py` | Structure levels, session levels; wraps swings for SL/TP |
-| `quant_rl/features/swings.py` | Fractal pivots and ATR-filtered zigzag swings |
-| `quant_rl/features/liquidity.py` | Liquidity sweeps and BOS detection |
-| `quant_rl/features/po3_config.py` | PO3 FVG zone detection and configuration |
-| `quant_rl/features/po3_state.py` | PO3 manipulation/distribution state, IFVG zones |
-| `quant_rl/features/normalize.py` | Rolling z-score normalization with legacy masked-window and frozen-fold modes |
-| `quant_rl/features/session_ohlc.py` | CT-anchored session OHLC, prior period H/L, quadrants |
-| `quant_rl/data/align.py` | HTF → M1 alignment (used by features) |
+| `features/pipeline/builder.py` | Full feature pipeline orchestrator; owns `FEATURE_CACHE_VERSION` |
+| `features/technical/indicators.py` | Technical indicators (EMA, RSI, MACD, ATR, etc.) |
+| `features/context/smt.py` | SMT divergence between US100/US500 |
+| `features/technical/structure.py` | Structure levels, session levels; wraps swings for SL/TP |
+| `features/technical/swings.py` | Fractal pivots and ATR-filtered zigzag swings |
+| `features/context/liquidity.py` | Liquidity sweeps and BOS detection |
+| `features/po3/config.py` | PO3 FVG zone detection and configuration |
+| `features/po3/state.py` | PO3 manipulation/distribution state, IFVG zones |
+| `features/pipeline/normalization.py` | Rolling z-score normalization with legacy masked-window and frozen-fold modes |
+| `features/context/session_levels.py` | CT-anchored session OHLC, prior period H/L, quadrants |
+| `market_data/transforms/align.py` | HTF → M1 alignment (used by features) |
 
 ## Key Symbols
 
@@ -41,16 +41,16 @@
 
 ## Direct Dependencies
 
-- `quant_rl/data/pipeline.py` (input data)
-- `quant_rl/data/resample.py` (HTF resampling)
-- `quant_rl/data/align.py` (HTF alignment)
-- `quant_rl/config/__init__.py` (feature config)
+- `market_data/loading/pipeline.py` (input data)
+- `market_data/transforms/resample.py` (HTF resampling)
+- `market_data/transforms/align.py` (HTF alignment)
+- `configuration/loader.py` (feature config)
 
 ## Consumers (Callers)
 
-- `quant_rl/envs/trading_env.py` (consumes feature matrix)
-- `quant_rl/train/train_rl.py` (triggers feature build)
-- `quant_rl/live/rl_strategy.py` (rebuilds features for live obs)
+- `simulation/environment/env.py` (consumes feature matrix)
+- `training/runner/training.py` (triggers feature build)
+- `live/runtime/strategy.py` (rebuilds features for live obs)
 
 ## Tests
 
@@ -69,11 +69,11 @@
 
 ## Do NOT Read For Feature Tasks
 
-- `quant_rl/envs/trading_env.py` (env consumes features but doesn't create them)
-- `quant_rl/models/` (models consume features but don't create them)
-- `quant_rl/backtest/` (backtest engine — separate domain)
-- `quant_rl/train/` (training — orchestrates, doesn't implement features)
-- `mt5_trading/` (live trading — separate domain)
+- `simulation/environment/env.py` (env consumes features but doesn't create them)
+- `models/` (models consume features but don't create them)
+- `simulation/backtest/` (backtest engine — separate domain)
+- `training/` (training — orchestrates, doesn't implement features)
+- `integrations/mt5/` (live trading — separate domain)
 
 ## Critical Invariants
 

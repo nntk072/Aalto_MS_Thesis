@@ -6,9 +6,9 @@ from typing import Any, cast
 import numpy as np
 import pytest
 
-from quant_rl.envs.trading_env import TradingEnv
-from quant_rl.evaluation.bootstrap_ci import metrics_with_ci
-from quant_rl.models.ppo_policy import mode_index
+from evaluation.metrics.bootstrap import metrics_with_ci
+from models.policies.ppo import mode_index
+from simulation.environment.env import TradingEnv
 
 
 @pytest.mark.parametrize(

@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.features.po3_config import (
+from features.po3.config import (
     EntryConfig,
     FVGConfig,
     IFVGConfig,
@@ -813,8 +813,8 @@ class TestMTFCausality:
 
     def test_explicit_close_alignment_does_not_add_a_second_delay(self, causal_m5_bars) -> None:
         """Native timeframe signals first appear at their explicit close time."""
-        from quant_rl.data.align import timeframe_close_times
-        from quant_rl.data.resample import resample
+        from market_data.transforms.align import timeframe_close_times
+        from market_data.transforms.resample import resample
 
         m5_bars = resample(causal_m5_bars, "M5")
         m5_closes = timeframe_close_times(m5_bars, "M5")

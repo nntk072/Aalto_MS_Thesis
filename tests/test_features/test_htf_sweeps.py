@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-import quant_rl.features.htf_sweeps as htf_sweeps
+import features.technical.htf_sweeps as htf_sweeps
 
 
 def _bars(index: pd.DatetimeIndex, *, lows: list[float] | None = None) -> pd.DataFrame:

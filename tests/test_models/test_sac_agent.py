@@ -8,12 +8,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.models.agent import build_agent
+from models.factory.agent import build_agent
 
 
 def make_env(continuous: bool = True, n_bars: int = 120) -> Any:
     """Create a small TradingEnv for agent tests."""
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.env import TradingEnv
 
     rng = np.random.default_rng(42)
     dates = pd.date_range("2020-01-01", periods=n_bars, freq="1min")
@@ -108,7 +108,7 @@ class TestSACAgentAct:
         """model.predict returns actions within [-1, 1]."""
         from omegaconf import OmegaConf
 
-        from quant_rl.models.agent import build_agent
+        from models.factory.agent import build_agent
 
         cfg = OmegaConf.create({"env": {"obs_window": 10}, "sac": {}, "ppo": {"batch_size": 32}})
         env = make_env(continuous=True)
@@ -129,7 +129,7 @@ class TestSACAgentAct:
         """Encoder features should differ when observations differ."""
         from gymnasium import spaces
 
-        from quant_rl.models.encoder import TCNEncoder
+        from models.encoders.core import TCNEncoder
 
         observation_space = spaces.Dict(
             {

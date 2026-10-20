@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
-from scripts.research.audit_tick_cache_timeline import audit_caches
+from scripts.research.audits.audit_tick_cache_timeline import audit_caches
 
 
 def test_tick_cache_audit_reports_intervals_and_identical_logical_data(tmp_path: Path) -> None:

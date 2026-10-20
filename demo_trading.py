@@ -19,10 +19,11 @@ import time
 import MetaTrader5 as mt5
 from dotenv import load_dotenv
 from loguru import logger
-from mt5_trading.domain import CrossOverStrategy, MT5Data, MT5Trader
-from mt5_trading.domain.mt5_connection import ensure_mt5_logged_in
-from mt5_trading.logging_config import configure_logging
-from mt5_trading.robot.cross_over_robot import CrossOverRobot
+
+from integrations.mt5.domain import CrossOverStrategy, MT5Data, MT5Trader
+from integrations.mt5.domain.mt5_connection import ensure_mt5_logged_in
+from integrations.mt5.logging_config import configure_logging
+from integrations.mt5.robot.cross_over_robot import CrossOverRobot
 
 load_dotenv()
 configure_logging()

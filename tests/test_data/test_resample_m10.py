@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from quant_rl.data.resample import build_all_timeframes, resample
+from market_data.transforms.resample import build_all_timeframes, resample
 
 
 def test_m10_resample_aggregates_ten_left_closed_m1_bars() -> None:

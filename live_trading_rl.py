@@ -41,15 +41,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from mt5_trading.robot.rl_robot import RLRobot
+    from integrations.mt5.robot.rl_robot import RLRobot
 
 from dotenv import load_dotenv
 from loguru import logger
 
 load_dotenv()
-from mt5_trading.logging_config import configure_logging  # noqa: E402
+from integrations.mt5.logging_config import configure_logging  # noqa: E402
 
-DEFAULT_CONFIG = Path("quant_rl/config/default.yaml")
+DEFAULT_CONFIG = Path("config/base/default.yaml")
 
 
 def load_model(model_path: Path) -> Any:
@@ -114,7 +114,7 @@ def load_risk_overrides(cfg: Any) -> dict[str, float]:
 
     These are the *live sizing* parameters (percentage-of-balance model), not
     the FTMO dollar kill-switches used in training/eval — see the comment on
-    ``live_risk_overrides:`` in ``quant_rl/config/default.yaml`` for why the
+    ``live_risk_overrides:`` in ``config/base/default.yaml`` for why the
     two models differ and how they are kept aligned. Any key missing from the
     run's config falls back to the repo default *with an explicit warning*, so
     a config that silently drops the block can't quietly change live risk.
@@ -149,7 +149,7 @@ def parse_args() -> argparse.Namespace:
         "--config",
         default=os.environ.get("RL_CONFIG_PATH"),
         help="Run config.yaml to drive features/risk (default: the run's saved config.yaml, "
-        "falling back to quant_rl/config/default.yaml).",
+        "falling back to config/base/default.yaml).",
     )
     parser.add_argument(
         "--symbol",
@@ -180,13 +180,13 @@ def build_robot(model_path: Path, run_config: Path, args: argparse.Namespace) ->
     """Construct the fully-wired ``RLRobot`` from env/CLI config."""
     try:
         import MetaTrader5 as mt5  # noqa: F401  (used via mt5.* below)
-        from mt5_trading.domain.data_sources.mt5_data import MT5Data
-        from mt5_trading.domain.mt5_connection import ensure_mt5_logged_in
-        from mt5_trading.domain.risk_manager import RiskManager
-        from mt5_trading.domain.trader import MT5Trader
-        from mt5_trading.robot.rl_robot import RLRobot
 
-        from quant_rl.live.rl_strategy import RLStrategyAdapter
+        from integrations.mt5.domain.data_sources.mt5_data import MT5Data
+        from integrations.mt5.domain.mt5_connection import ensure_mt5_logged_in
+        from integrations.mt5.domain.risk_manager import RiskManager
+        from integrations.mt5.domain.trader import MT5Trader
+        from integrations.mt5.robot.rl_robot import RLRobot
+        from live.runtime.strategy import RLStrategyAdapter
     except ModuleNotFoundError as exc:
         if getattr(exc, "name", "") == "MetaTrader5":
             raise SystemExit(

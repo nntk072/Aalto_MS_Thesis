@@ -13,8 +13,8 @@ from tests.test_envs.test_trading_env_golden_traces import _make_deterministic_b
 
 def test_bundle_key_separates_different_input_slices(tmp_path: Path) -> None:
     """A shorter evaluation prefix cannot reuse the full training bundle."""
-    from quant_rl.envs.env_bundle_builder import build_env_bundle
-    from quant_rl.envs.strategies import BaselineStrategy
+    from simulation.environment.bundles import build_env_bundle
+    from trading.strategies import BaselineStrategy
 
     bars = _make_deterministic_bars(n=64)
     features = _make_features(bars)
@@ -45,7 +45,7 @@ def test_bundle_key_separates_different_input_slices(tmp_path: Path) -> None:
 
 
 def test_bundle_source_identity_hashes_native_timeframe_files(tmp_path: Path) -> None:
-    from quant_rl.envs.env_bundle_builder import _bundle_source_fingerprints
+    from simulation.environment.bundles import _bundle_source_fingerprints
 
     training = tmp_path / "training"
     testing = tmp_path / "testing"
@@ -85,12 +85,12 @@ def test_bundle_source_identity_hashes_native_timeframe_files(tmp_path: Path) ->
 
 def test_bundled_observation_matrix_matches_frames_path(tmp_path: Path) -> None:
     """The bundle observation matrix is byte-identical to the frame conversion."""
-    from quant_rl.config import load_config
-    from quant_rl.data.ticks import TickBook
-    from quant_rl.envs.env_bundle_builder import build_env_bundle
-    from quant_rl.envs.shared_bundle import load_bundle
-    from quant_rl.envs.strategies import BaselineStrategy
-    from quant_rl.features.build import attach_reachable_r, select_obs_columns
+    from configuration import load_config
+    from features import attach_reachable_r, select_obs_columns
+    from market_data.loading.ticks import TickBook
+    from simulation.environment.bundles import build_env_bundle
+    from simulation.environment.shared_bundle import load_bundle
+    from trading.strategies import BaselineStrategy
 
     bars = _make_deterministic_bars(n=64)
     bars["session"] = np.where(np.arange(len(bars)) % 2, "ny", "off")
@@ -149,8 +149,8 @@ def test_bundled_observation_matrix_matches_frames_path(tmp_path: Path) -> None:
 
 def test_bundle_stores_volume_and_export_includes_it(tmp_path: Path) -> None:
     """Volume and tickvol survive the bundle round trip for chart exports."""
-    from quant_rl.envs.env_bundle_builder import bars_for_export, build_env_bundle
-    from quant_rl.envs.strategies import BaselineStrategy
+    from simulation.environment.bundles import bars_for_export, build_env_bundle
+    from trading.strategies import BaselineStrategy
 
     bars = _make_deterministic_bars(n=64)
     features = _make_features(bars)

@@ -9,9 +9,9 @@ import pandas as pd
 import pytest
 from gymnasium.spaces import Box, Discrete
 
-from quant_rl.envs.po3_reward import PO3Reward
-from quant_rl.envs.strategies import BaselineStrategy, DistributionStrategy, PO3IFVGStrategy
-from quant_rl.envs.trading_env import TradingEnv
+from simulation.environment.env import TradingEnv
+from simulation.environment.po3_reward import PO3Reward
+from trading.strategies import BaselineStrategy, DistributionStrategy, PO3IFVGStrategy
 
 
 def _bars(n: int = 200, session_ids: np.ndarray[Any, Any] | None = None) -> pd.DataFrame:
@@ -732,7 +732,7 @@ def test_close_targets_inside_the_stop_leave_no_order() -> None:
 
 
 def test_a_later_reclaim_does_not_unlock_the_earlier_bar() -> None:
-    from quant_rl.features.po3_state import build_po3_state
+    from features.po3.state import build_po3_state
 
     idx = pd.date_range("2020-01-02 16:30", periods=8, freq="1min")
     bars = pd.DataFrame(

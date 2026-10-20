@@ -15,18 +15,13 @@ import numpy as np
 import pytest
 import torch
 
-from quant_rl.evaluation.metrics import PerformanceMetrics
-from quant_rl.train.train_rl import (
-    _action_space_width,
-    _build_training_log,
-    _cost_model,
-    _initialize_value_head,
-    _load_merged_config,
-    _setup_rngs,
-    _training_episodic,
-    _write_evaluation_artifacts,
-    parse_train_args,
-)
+from evaluation.metrics import PerformanceMetrics
+from training.artifacts.manifests import _action_space_width, _build_training_log
+from training.artifacts.metrics import _write_evaluation_artifacts
+from training.configuration.cli import _load_merged_config, parse_train_args
+from training.runner.seed import _setup_rngs
+from training.setup.environments import _cost_model, _training_episodic
+from training.setup.models import _initialize_value_head
 
 
 def test_training_episode_mode_defaults_to_full_split() -> None:
@@ -304,7 +299,7 @@ class TestCostModel:
     """Tests for _cost_model() YAML wiring (SL Phase 0.5)."""
 
     def test_cost_model_matches_default_yaml(self) -> None:
-        from quant_rl.config import load_config
+        from configuration import load_config
 
         cfg = load_config([])
         model = _cost_model(cfg)

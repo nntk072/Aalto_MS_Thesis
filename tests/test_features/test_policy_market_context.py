@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from quant_rl.data.ticks import TickBook
-from quant_rl.features.policy_market_context import build_policy_market_context
+from features.context.policy_market import build_policy_market_context
+from market_data.loading.ticks import TickBook
 
 
 def _book(index: pd.DatetimeIndex, seconds: list[int]) -> TickBook:

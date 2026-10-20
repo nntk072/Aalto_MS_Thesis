@@ -8,9 +8,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.data.session import add_session_id, add_session_labels
-from quant_rl.data.ticks import TickBook, TickExecutionUnavailable
-from quant_rl.envs.trading_env import TradingEnv
+from market_data.loading.ticks import TickBook, TickExecutionUnavailable
+from market_data.transforms.sessions import add_session_id, add_session_labels
+from simulation.environment.env import TradingEnv
 
 
 def _ohlc_index(idx: pd.DatetimeIndex, close: np.ndarray[Any, Any]) -> pd.DataFrame:
@@ -333,7 +333,7 @@ def test_ftmo_daily_reset_on_ny_jump() -> None:
 
 @pytest.mark.unit
 def test_engine_force_closes_last_ny_bar() -> None:
-    from quant_rl.backtest.engine import run_backtest
+    from simulation.backtest.engine import run_backtest
 
     bars, features = _two_session_frame()
     opened = {"done": False}
@@ -361,7 +361,7 @@ def test_engine_force_closes_last_ny_bar() -> None:
 @pytest.mark.unit
 def test_step_uses_feature_row_not_series() -> None:
     """Hot-path step must not construct pd.Series for feature rows."""
-    from quant_rl.envs.feature_row import FeatureRow
+    from simulation.environment.market_view import FeatureRow
 
     env = _make_env(block_overnight=True)
     env.reset()
@@ -407,7 +407,7 @@ def test_minutes_per_step_is_read_from_the_index() -> None:
     reward, so an assumed 5 minutes on an M1 feed made that term five times
     too large and let it dominate the PnL component.
     """
-    from quant_rl.envs.trading_env import _minutes_per_step
+    from simulation.environment.env import _minutes_per_step
 
     m1 = pd.date_range("2025-01-06 16:30", periods=10, freq="1min", tz="Etc/GMT-3")
     m5 = pd.date_range("2025-01-06 16:30", periods=10, freq="5min", tz="Etc/GMT-3")
@@ -417,7 +417,7 @@ def test_minutes_per_step_is_read_from_the_index() -> None:
 
 @pytest.mark.unit
 def test_minutes_per_step_falls_back_on_degenerate_index() -> None:
-    from quant_rl.envs.trading_env import _minutes_per_step
+    from simulation.environment.env import _minutes_per_step
 
     single = pd.date_range("2025-01-06 16:30", periods=1, freq="1min", tz="Etc/GMT-3")
     assert _minutes_per_step(single) == pytest.approx(1.0)
@@ -439,7 +439,7 @@ def test_ny_session_start_defaults_to_the_first_tradable_bar() -> None:
 @pytest.mark.unit
 def test_sweep_reward_receives_real_elapsed_minutes() -> None:
     """Ten M1 steps into the session must report about ten minutes, not fifty."""
-    from quant_rl.envs.sweep_reward import CompositeReward
+    from simulation.environment.sweep_reward import CompositeReward
 
     env = _make_env(block_overnight=True, use_sweep_reward=True)
     assert isinstance(env.reward_fn, CompositeReward)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from quant_rl.models.vae import VAE, VAEDecoder, VAEEncoder
+from models.auxiliary.vae import VAE, VAEDecoder, VAEEncoder
 
 
 class TestVAEEncoder:

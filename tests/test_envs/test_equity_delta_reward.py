@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from quant_rl.envs.reward import EquityDeltaReward
+from simulation.environment.rewards import EquityDeltaReward
 
 
 def test_equity_delta_reward_telescopes_to_total_equity_change() -> None:

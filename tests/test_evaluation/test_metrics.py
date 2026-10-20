@@ -1,4 +1,4 @@
-"""Unit tests for quant_rl.evaluation.metrics (hand-computed fixtures)."""
+"""Unit tests for evaluation.metrics (hand-computed fixtures)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from quant_rl.evaluation.metrics import (
+from evaluation.metrics import (
     PerformanceMetrics,
     calculate_metrics,
     compute_metrics,
@@ -243,7 +243,7 @@ class TestCalculateMetricsAdapter:
     def test_m1_annualisation_default_is_preserved(self) -> None:
         # The adapter keeps the legacy 252*390 default so migrated runners
         # produce the same annualised numbers as before the unification.
-        from quant_rl.evaluation.metrics import LEGACY_M1_PERIODS_PER_YEAR
+        from evaluation.metrics import LEGACY_M1_PERIODS_PER_YEAR
 
         assert LEGACY_M1_PERIODS_PER_YEAR == 252 * 390
 

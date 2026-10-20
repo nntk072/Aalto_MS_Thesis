@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from quant_rl.envs.trading_env import TradingEnv
+from simulation.environment.env import TradingEnv
 
 
 def _make_bars(n: int = 200, seed: int = 7) -> pd.DataFrame:

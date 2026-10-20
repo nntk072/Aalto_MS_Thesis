@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.data.ticks import TickBook
-from quant_rl.envs.feature_row import BarView
+from market_data.loading.ticks import TickBook
+from simulation.environment.market_view import BarView
 from tests.test_envs.test_ny_steps_eod import _make_env
 
 

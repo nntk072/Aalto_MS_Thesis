@@ -6,11 +6,11 @@ import numpy.typing as npt
 from gymnasium import spaces
 from stable_baselines3 import PPO
 
-from quant_rl.action_schema import build_action_schema
-from quant_rl.eval.eval_run import _load_checkpoint
-from quant_rl.models.agent import LegacyFourToFiveActionAdapter, validate_model_action_schema
-from quant_rl.models.encoder import LegacyTCNEncoderV1
-from quant_rl.models.ppo_policy import LegacyClampedStdMultiInputPolicy
+from evaluation.reanalysis.runner import _load_checkpoint
+from models.encoders.core import LegacyTCNEncoderV1
+from models.factory.agent import LegacyFourToFiveActionAdapter, validate_model_action_schema
+from models.policies.ppo import LegacyClampedStdMultiInputPolicy
+from simulation.contracts.actions import build_action_schema
 
 
 class _LegacyObservationEnv(gym.Env[dict[str, npt.NDArray[np.float32]], npt.NDArray[np.float32]]):

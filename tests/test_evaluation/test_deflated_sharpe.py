@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from quant_rl.evaluation.deflated_sharpe import (
+from evaluation.metrics.deflated_sharpe import (
     deflated_sharpe_probability,
     expected_maximum_sharpe,
     return_moments,

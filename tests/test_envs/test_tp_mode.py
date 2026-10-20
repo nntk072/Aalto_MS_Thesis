@@ -10,16 +10,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.backtest.broker import Position
-from quant_rl.envs.feature_row import BarView
-from quant_rl.envs.tp_decoders import (
+from simulation.environment.env import TradingEnv
+from simulation.environment.market_view import BarView
+from simulation.environment.target_decoding import (
     DISABLED,
     decode_tp_fractions,
     decode_tp_mode,
     decode_tp_selections,
     validate_tp_levels,
 )
-from quant_rl.envs.trading_env import TradingEnv
+from trading.execution.broker import Position
 
 
 class TestSimplexDecoder:
@@ -1129,7 +1129,7 @@ class TestTPExecution:
         assert len({row["fill_id"] for row in fills}) == 3
 
     def test_single_target_tick_log_uses_delayed_fill_time(self) -> None:
-        from quant_rl.data.ticks import TickBook
+        from market_data.loading.ticks import TickBook
 
         env = _make_tp_env(fill_delay_ms=5_000)
         env.reset(seed=42)
@@ -1181,7 +1181,7 @@ class TestTPExecution:
         assert fill[0]["position_complete"] is True
 
     def test_tick_tp1_is_partial_and_then_stop_closes_remainder(self) -> None:
-        from quant_rl.data.ticks import TickBook
+        from market_data.loading.ticks import TickBook
 
         env = _make_tp_env()
         env.reset(seed=42)
@@ -1209,7 +1209,7 @@ class TestTPExecution:
         assert env.position is None
 
     def test_tick_crosses_multiple_targets_in_one_minute(self) -> None:
-        from quant_rl.data.ticks import TickBook
+        from market_data.loading.ticks import TickBook
 
         env = _make_tp_env()
         env.reset(seed=42)

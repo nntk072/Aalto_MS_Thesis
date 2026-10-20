@@ -1,96 +1,72 @@
 # Architecture Map — Aalto_MS_Thesis
 
-> Historical agent navigation snapshot. The authoritative architecture is
-> [docs/architecture.md](../docs/architecture.md). Consult the
-> [domain maps](domain_maps/) and current source for module responsibilities.
+> Agent navigation map. The authoritative narrative is [docs/architecture.md](../docs/architecture.md).
 
 ## Dependency Graph
 
-```
-raw CSV
-   ↓
-data/loader.py → data/resample.py → data/clean.py → data/session.py
-                                                      ↓
-                                                data/pipeline.py (caches parquet)
-                                                      ↓
-                                                data/split.py (train/test split)
-                                                      ↓
-                    features/build.py ← features/{indicators, smt, structure, swings,
-                                                      liquidity, po3_*, session_ohlc, normalize}.py
-                                                      ↓
-                                                features/ matrix (parquet cache)
-                                                      ↓
-            envs/trading_env.py ← backtest/{engine, broker, account, costs, guardrails, risk}.py
-                                        ↓
-                                  models/agent.py ← models/{encoder, vae, base, auxiliary}.py
-                                        ↓
-                                    train/train_rl.py ← config + eval/rollout + evaluation/metrics
-                                        ↓
-                                    outputs/ (equity CSV, plots, models)
+```text
+config/ + raw market data
+        ↓
+configuration/ → market_data/ → features/
+                              ↓
+                    simulation/environment/
+                    ↙          ↓          ↘
+              trading/      models/    simulation/backtest/
+                    ↘          ↓          ↙
+                         training/
+                             ↓
+                         evaluation/
+                             ↓
+                    artifacts/ + outputs/
+
+integrations/mt5/ → live/          experiments/ → compute/
+orchestra/ → repository/CI orchestration
 ```
 
-## Data Flow
+## Root Package Ownership
 
+| Package | Owns |
+|---|---|
+| `configuration/` | config loading, overrides, repository paths |
+| `market_data/` | ingestion, transforms, splits, data caches |
+| `features/` | technical/context/PO3 features and feature-cache identity |
+| `trading/` | account, execution, orders, risk, strategies, baselines |
+| `simulation/` | Gym environment contracts/runtime and event-driven backtest |
+| `models/` | encoders, policies, agent factory, auxiliary models |
+| `training/` | setup, callbacks, runners, training artifacts |
+| `evaluation/` | rollout, metrics, reanalysis, reporting, plotting |
+| `experiments/` | variant/campaign orchestration and provenance |
+| `live/` | broker-neutral live runtime |
+| `integrations/mt5/` | MetaTrader-specific adapters and domain integration |
+| `compute/` | cluster/environment/Slurm implementation |
+| `orchestra/` | engineering workflow orchestration |
+
+## Stable Commands
+
+```text
+orchestra
+thesis-data
+thesis-train
+thesis-evaluate
+thesis-campaign
+thesis-compute
 ```
-US100.cash_M1_*.csv ──→ load_bars() ──→ resample(M5/M15/H1) ──→ clean()
-                                                              ↓
-US500.cash_M1_*.csv ──→ load_bars() ──→ smt_divergence() ←─────┘
-                                ↓
-                        add_session_labels() → add_session_id()
-                                ↓
-                        run_pipeline() → {symbol}_{tf}_{BAR_CACHE_VERSION}.parquet
-                                ↓
-                        split_train_test() → train/test split at 2025-12-31
-                                ↓
-                        build_features() → {symbol}_features_{FEATURE_CACHE_VERSION}.parquet
-                                ↓
-                        TradingEnv(bars, features) → obs dict → model → action → reward
-```
 
-## Domain Boundaries
-
-| Domain | Files | Incoming From | Outgoing To |
-|--------|-------|---------------|-------------|
-| data | `data/*.py` | raw CSV | features, train |
-| features | `features/*.py`, `data/align.py` | data | envs, train |
-| envs | `envs/*.py` | features, backtest, models | train, evaluation |
-| backtest | `backtest/*.py` | (none) | envs |
-| models | `models/*.py` | envs | train, live |
-| train | `train/*.py` | all above | evaluation, eval |
-| evaluation | `evaluation/*.py` | envs, models | outputs |
-| eval | `eval/*.py` | envs, models | outputs |
-| live | `live/*.py`, `mt5_trading/` | models | MT5 |
-| orchestra | `orchestra/*.py` | (none) | CI verification |
+Use package APIs or these command surfaces from scripts. `scripts/` contains thin research, maintenance, and compute wrappers rather than reusable library logic.
 
 ## Cache Versioning
 
-| Constant | File | Current value | Purpose |
-|----------|------|---------------|---------|
-| `BAR_CACHE_VERSION` | `data/pipeline.py` | `v2-full-day` | Busts stale bar parquet caches |
-| `FEATURE_CACHE_VERSION` | `features/build.py` | `v8-full-day-completed-htf-swings` | Busts stale feature caches |
+| Constant | File | Current value |
+|---|---|---|
+| `BAR_CACHE_VERSION` | `market_data/loading/pipeline.py` | `v3-native-timeframes` |
+| `FEATURE_CACHE_VERSION` | `features/pipeline/cache.py` | `v24-native-source-timeframes` |
 
-**Rule**: Bump when output schema changes. Use `--force` or delete stale parquet when
-changing opt-in feature flags without a version bump.
+Cache identity must remain causal and include fit scope/configuration inputs that affect generated content.
 
-## Config Hierarchy
+## Core Scientific Invariants
 
-```
-quant_rl/config/default.yaml     ← base config (all defaults)
-    ↓ override (--config or --strategy)
-config/2_po3_ifvg.yaml           ← PO3 + IFVG strategy overlay
-config/3_distribution.yaml       ← Distribution strategy overlay
-config/features/*.yaml           ← MTF feature expansion variants
-```
-
-All config read via `cfg.<path>` in code. Adding a feature flag? Add YAML key first.
-See [docs/config.md](../docs/config.md).
-
-## Temporal Boundaries
-
-| Boundary | Rule |
-|----------|------|
-| Train/test split | `train_end: "2025-12-31"`, `test_start: "2026-01-01"` (locked) |
-| Walk-forward purge | `purge_bars: 60` |
-| Walk-forward embargo | `embargo_bars: 20` |
-| NY session | `[16:30, 23:00]` broker-tz (eligibility only) |
-| Feature warmup | `dropna(how="all")` removes leading NaNs |
+1. Train-only normalization and causal feature construction.
+2. Locked OOS separation plus purged/embargoed walk-forward where configured.
+3. Training, evaluation, and backtest execution/risk semantics remain aligned.
+4. Checkpoint, seed, dataset, config, cache, and source provenance remain reproducible.
+5. Live broker integrations stay outside simulation/training domain ownership.

@@ -4,9 +4,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.backtest.costs import COST_US100
-from quant_rl.backtest.engine import run_backtest
-from quant_rl.baselines.rule_based import macd_ema50_baseline
+from simulation.backtest.engine import run_backtest
+from trading.baselines.rule_based import macd_ema50_baseline
+from trading.execution.costs import COST_US100
 
 
 @pytest.fixture
@@ -117,7 +117,7 @@ def test_macd_baseline_no_auto_flip(sample_bars):
 
 def test_macd_baseline_respects_ema50_filter(sample_bars):
     """Test that long entries generally occur when close > EMA50 and short entries when close < EMA50."""
-    from quant_rl.features.indicators import _ema
+    from features.technical.indicators import _ema
 
     close = sample_bars["close"]
     ema50 = _ema(close, 50)
@@ -139,8 +139,8 @@ def test_macd_baseline_respects_ema50_filter(sample_bars):
 
 def test_macd_sma_signal(sample_bars):
     """Test that signal line uses SMA(9), not EMA."""
-    from quant_rl.baselines.rule_based import _sma
-    from quant_rl.features.indicators import _ema
+    from features.technical.indicators import _ema
+    from trading.baselines.rule_based import _sma
 
     close = sample_bars["close"]
     fast_ema = _ema(close, 12)
@@ -157,7 +157,7 @@ def test_macd_sma_signal(sample_bars):
 
 def test_macd_backtest_alignment(sample_bars):
     """Test that MACD backtest entries align with precomputed actions."""
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     # Build minimal features
     features = build_features(sample_bars, cfg=None)
@@ -247,8 +247,8 @@ def test_broker_rejects_invalid_direction():
     This guards against the bug where the engine's exit_action (e.g. 2)
     reached open_position() and created a bogus direction=2 position.
     """
-    from quant_rl.backtest.account import AccountState
-    from quant_rl.backtest.broker import Broker
+    from trading.account.state import AccountState
+    from trading.execution.broker import Broker
 
     broker = Broker(cost_model=COST_US100)
     acc = AccountState(initial_balance=100_000.0)
@@ -271,7 +271,7 @@ def test_engine_exit_action_while_flat_is_noop(sample_bars):
     engine while there is no open position must never reach
     broker.open_position and must never appear as a trade_log "open" row.
     """
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     features = build_features(sample_bars, cfg=None)
 
@@ -299,7 +299,7 @@ def test_engine_open_direction_always_valid(sample_bars):
     Guards against the direction=2 bug observed in trades.csv, using the
     real MACD action stream end-to-end through the engine.
     """
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     features = build_features(sample_bars, cfg=None)
     actions = macd_ema50_baseline(sample_bars)
@@ -334,7 +334,7 @@ def test_engine_fills_within_bar_range(sample_bars):
     """Regression: every logged open/close fill price must be within the
     executing bar's [low, high] range (guards against tick-outlier fills
     landing far from any visible candle)."""
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     features = build_features(sample_bars, cfg=None)
     actions = macd_ema50_baseline(sample_bars)

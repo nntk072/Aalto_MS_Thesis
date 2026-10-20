@@ -109,14 +109,14 @@ docker-build-test-gpu:
 ## Build all Docker images.
 docker-build-all: docker-build docker-build-dev docker-build-test
 
-## Run the full pipeline (lint -> typecheck -> test -> baseline).
+## Run the canonical full validation gate in the dev container.
 docker-pipeline:
-	scripts/docker/pipeline.sh
+	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) run --rm dev ./tools/check full
 
-## Run parallel batch jobs. Usage: make docker-parallel SERVICE=<service> ARGS="--symbol EURUSD --symbol GBPUSD"
+## Run a supported Compose service. Usage: make docker-parallel SERVICE=<service> ARGS="..."
 docker-parallel:
 	@if [ -z "$(SERVICE)" ]; then echo "Usage: make docker-parallel SERVICE=<service> ARGS=\"...\""; exit 1; fi
-	scripts/docker/parallel-run.sh $(SERVICE) $(ARGS)
+	$(DOCKER_COMPOSE) -f $(DOCKER_FILE) run --rm $(SERVICE) $(ARGS)
 
 ## Run tests in Docker.
 docker-test:

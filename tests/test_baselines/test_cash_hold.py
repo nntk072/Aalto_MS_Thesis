@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from quant_rl.baselines.cash_hold import fit_hold_lots, simulate_hold, swap_usd_per_lot
+from trading.baselines.cash_hold import fit_hold_lots, simulate_hold, swap_usd_per_lot
 
 
 def _bars(rows: list[tuple[str, float, float]]) -> pd.DataFrame:

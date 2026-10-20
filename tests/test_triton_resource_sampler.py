@@ -6,8 +6,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-from scripts.triton import sample_campaign_resources
-from scripts.triton.sample_campaign_resources import allocation_cgroup_file, cgroup_file
+from compute.slurm import resources as sample_campaign_resources
+from compute.slurm.resources import allocation_cgroup_file, cgroup_file
 
 
 def test_cgroup_file_follows_nested_v2_process_cgroup(tmp_path: Path) -> None:
@@ -81,7 +81,7 @@ def test_process_stat_cpu_usec_parses_user_and_system_time() -> None:
 
 def test_gpu_sample_preserves_each_device(monkeypatch) -> None:
     monkeypatch.setattr(
-        "scripts.triton.sample_campaign_resources.subprocess.run",
+        "compute.slurm.resources.subprocess.run",
         lambda *args, **kwargs: SimpleNamespace(stdout="86, 44167\n81, 43583\n"),
     )
 
@@ -89,9 +89,7 @@ def test_gpu_sample_preserves_each_device(monkeypatch) -> None:
 
 
 def test_active_roots_selects_remote_workers_for_this_node(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(
-        "scripts.triton.sample_campaign_resources.socket.gethostname", lambda: "gpuarm2.int"
-    )
+    monkeypatch.setattr("compute.slurm.resources.socket.gethostname", lambda: "gpuarm2.int")
     first = tmp_path / "gpuarm1.json"
     second = tmp_path / "gpuarm2.json"
     first.write_text(json.dumps({"hostname": "gpuarm1", "pid": 101}))
@@ -134,9 +132,7 @@ def test_sampler_csv_records_cpu_time_and_memory_scope(tmp_path: Path, monkeypat
     monkeypatch.setattr(sample_campaign_resources, "read_process_table", lambda: {})
     monkeypatch.setattr(sample_campaign_resources, "process_io_bytes", lambda _pids: (1, 2, 3, 4))
     monkeypatch.setattr(sample_campaign_resources, "gpu_sample", lambda: ([75], [1234]))
-    monkeypatch.setattr(
-        "scripts.triton.sample_campaign_resources.os.getloadavg", lambda: (1.0, 0.5, 0.2)
-    )
+    monkeypatch.setattr("compute.slurm.resources.os.getloadavg", lambda: (1.0, 0.5, 0.2))
     monkeypatch.setattr(sample_campaign_resources, "pss_bytes", lambda _pids: 5678)
     monkeypatch.setattr(
         sample_campaign_resources,

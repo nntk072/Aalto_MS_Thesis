@@ -1,6 +1,6 @@
 schema_version: 1
 campaign_id: ladder18_shared_bundle_n64_seed42_100k_resource_probe_20261014
-variant_file: scripts/variant_list.txt
+variant_file: config/campaigns/variant_list.txt
 variants:
   - ladder_a0_flat
   - ladder_a1_sl

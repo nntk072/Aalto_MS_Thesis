@@ -5,9 +5,9 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from quant_rl.envs.distribution_reward import DistributionReward
-from quant_rl.envs.strategies.distribution import DistributionStrategy
-from quant_rl.envs.trading_env import _previous_session_audit
+from simulation.environment.distribution_reward import DistributionReward
+from simulation.environment.env import _previous_session_audit
+from trading.strategies.distribution import DistributionStrategy
 
 
 def reward() -> DistributionReward:

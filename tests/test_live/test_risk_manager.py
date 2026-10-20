@@ -23,7 +23,8 @@ if not hasattr(_mt5_stub, "ORDER_TYPE_SELL"):
     setattr(_mt5_stub, "ORDER_TYPE_SELL", 1)
 
 import MetaTrader5 as mt5  # noqa: E402
-from mt5_trading.domain.risk_manager import RiskManager  # noqa: E402
+
+from integrations.mt5.domain.risk_manager import RiskManager  # noqa: E402
 
 
 @pytest.fixture

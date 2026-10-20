@@ -5,9 +5,9 @@ from typing import Any
 
 import pytest
 
-from quant_rl.backtest.broker import Position
-from quant_rl.envs.trading_env import TradingEnv
-from quant_rl.evaluation.runner import run_episode
+from evaluation.rollout.runner import run_episode
+from simulation.environment.env import TradingEnv
+from trading.execution.broker import Position
 
 
 def test_partial_fills_accumulate_once_and_complete_only_at_final_fill() -> None:

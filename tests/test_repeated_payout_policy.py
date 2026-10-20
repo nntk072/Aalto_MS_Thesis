@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from quant_rl.backtest.account import AccountState
-from quant_rl.backtest.broker import Position
-from quant_rl.backtest.guardrails import FTMOGuardrails
-from quant_rl.config import load_config
-from quant_rl.envs.trading_env import TradingEnv
-from quant_rl.trading_policy import TradingPolicyConfig, resolve_trading_policy
-from quant_rl.train.train_rl import _build_eval_common, _training_episodic
+from configuration import load_config
+from simulation.environment.env import TradingEnv
+from trading.account.state import AccountState
+from trading.execution.broker import Position
+from trading.policy.config import TradingPolicyConfig, resolve_trading_policy
+from trading.risk.guardrails import FTMOGuardrails
+from training.setup.environments import _build_eval_common, _training_episodic
 
 
 def test_repeated_policy_config_resolves_without_changing_default() -> None:
@@ -160,15 +160,15 @@ def test_repeated_training_and_eval_use_v3_schema_and_single_cycle_training() ->
 def test_repeated_policy_direct_and_bundle_worker_parity(tmp_path) -> None:
     import numpy as np
 
-    from quant_rl.envs.env_bundle_builder import build_env_bundle
-    from quant_rl.envs.env_spec import EnvSpec
-    from quant_rl.envs.strategies import BaselineStrategy
-    from quant_rl.envs.worker import make_bundle_env
-    from quant_rl.train.train_rl import make_env
+    from simulation.environment.bundles import build_env_bundle
+    from simulation.environment.spec import EnvSpec
+    from simulation.environment.worker import make_bundle_env
     from tests.test_envs.test_trading_env_golden_traces import (
         _make_deterministic_bars,
         _make_features,
     )
+    from trading.strategies import BaselineStrategy
+    from training.setup.environments import make_env
 
     bars = _make_deterministic_bars(n=96)
     features = _make_features(bars)
@@ -215,11 +215,11 @@ def test_repeated_policy_direct_and_bundle_worker_parity(tmp_path) -> None:
 
 
 def test_repeated_policy_rejects_discrete_risk_layout() -> None:
-    from quant_rl.train.train_rl import make_env
     from tests.test_envs.test_trading_env_golden_traces import (
         _make_deterministic_bars,
         _make_features,
     )
+    from training.setup.environments import make_env
 
     bars = _make_deterministic_bars(n=96)
     features = _make_features(bars)

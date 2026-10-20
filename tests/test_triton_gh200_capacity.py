@@ -3,7 +3,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts/triton/check_gh200_capacity.py"
+MODULE_PATH = Path(__file__).resolve().parents[1] / "compute/slurm/capacity.py"
 SPEC = importlib.util.spec_from_file_location("check_gh200_capacity", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 capacity = importlib.util.module_from_spec(SPEC)

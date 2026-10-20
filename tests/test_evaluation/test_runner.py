@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from quant_rl.evaluation import run_episode
+from evaluation import run_episode
 
 
 class _FakeEnv:

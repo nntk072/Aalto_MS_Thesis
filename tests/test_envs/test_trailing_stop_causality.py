@@ -7,9 +7,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.backtest.broker import Position
-from quant_rl.envs.trading_env import TradingEnv
-from quant_rl.features.structure import structure_levels
+from features.technical.structure import structure_levels
+from simulation.environment.env import TradingEnv
+from trading.execution.broker import Position
 
 
 @pytest.mark.parametrize(

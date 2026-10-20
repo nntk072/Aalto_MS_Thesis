@@ -1,6 +1,6 @@
 schema_version: 1
 campaign_id: replacement18_seed50_train2025_test2026_current_mtf_20261019
-variant_file: scripts/variant_list.txt
+variant_file: config/campaigns/variant_list.txt
 variants:
   - ladder_a0_flat
   - ladder_a1_sl

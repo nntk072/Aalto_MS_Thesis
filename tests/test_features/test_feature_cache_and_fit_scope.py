@@ -9,13 +9,13 @@ import numpy as np
 import pandas as pd
 from omegaconf import OmegaConf
 
-from quant_rl.features.build import (
+from features import (
     build_features,
     build_walkforward_fold_features,
     feature_cache_content_hash,
     feature_cache_path,
 )
-from quant_rl.features.normalize import rolling_zscore
+from features.pipeline.normalization import rolling_zscore
 
 
 def _bars(n: int = 400) -> pd.DataFrame:

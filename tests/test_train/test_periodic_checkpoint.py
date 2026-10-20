@@ -7,8 +7,8 @@ from typing import Any
 
 from omegaconf import OmegaConf
 
-from quant_rl.train.callbacks import PeriodicCheckpointCallback
-from quant_rl.train.train_rl import _periodic_checkpoint_callback
+from training.callbacks.core import PeriodicCheckpointCallback
+from training.setup.callbacks import _periodic_checkpoint_callback
 
 
 class _FakeModel:

@@ -7,8 +7,8 @@ set -euo pipefail
 # Usage:
 #   ./tools/shell                              # interactive bash in dev-gpu
 #   ./tools/shell --cpu                        # interactive bash in dev (CPU)
-#   ./tools/shell python -c "import quant_rl"  # run a single command in dev-gpu
-#   ./tools/shell --cpu python -c "import quant_rl"  # run in dev (CPU)
+#   ./tools/shell python -c "import trading"  # run a single command in dev-gpu
+#   ./tools/shell --cpu python -c "import trading"  # run in dev (CPU)
 
 # Check if user is in the docker group
 if ! groups | grep -qw docker; then

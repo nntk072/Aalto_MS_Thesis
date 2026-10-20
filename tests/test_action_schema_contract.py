@@ -6,8 +6,8 @@ from typing import Any
 import numpy as np
 import pytest
 
-from quant_rl.action_schema import build_action_schema
-from quant_rl.envs.trading_env import TradingEnv, _decision_from_action
+from simulation.contracts.actions import build_action_schema
+from simulation.environment.env import TradingEnv, _decision_from_action
 
 
 @pytest.mark.parametrize(
@@ -49,9 +49,9 @@ def test_eval_common_preserves_multi_tp_without_simplex() -> None:
     """A 9-D config must survive the train/eval configuration boundary."""
     from omegaconf import OmegaConf
 
-    from quant_rl.train.train_rl import _build_eval_common
+    from training.setup.environments import _build_eval_common
 
-    cfg = OmegaConf.load("quant_rl/config/default.yaml")
+    cfg = OmegaConf.load("config/base/default.yaml")
     cfg.env.strategy_actions = True
     cfg.env.allow_multi_tp = True
     cfg.env.allow_agent_tp_mode = True

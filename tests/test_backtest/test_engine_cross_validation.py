@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from quant_rl.backtest.cross_validation.run import compare_results
+from simulation.backtest.cross_validation.run import compare_results
 
 
 @pytest.fixture
@@ -47,12 +47,12 @@ class TestEngineCrossValidation:
 
     def test_backtrader_engine_import(self):
         """Test that we can import the backtrader engine function."""
-        from quant_rl.backtest.cross_validation.run import run_backtrader_engine
+        from simulation.backtest.cross_validation.run import run_backtrader_engine
 
         assert callable(run_backtrader_engine)
 
     def test_both_engines_execute_shared_crossover_actions(self, synthetic_data):
-        from quant_rl.backtest.cross_validation.run import (
+        from simulation.backtest.cross_validation.run import (
             run_backtrader_engine,
             run_custom_engine,
         )

@@ -19,9 +19,9 @@ import pandas as pd
 import pytest
 from omegaconf import OmegaConf
 
-from quant_rl.eval.export import _fill_events, _position_summaries, save_run
-from quant_rl.evaluation import PerformanceMetrics, calculate_metrics
-from quant_rl.evaluation.report import (
+from evaluation import PerformanceMetrics, calculate_metrics
+from evaluation.reporting.export import _fill_events, _position_summaries, save_run
+from evaluation.reporting.summary import (
     build_comparison_table,
     build_summary_table,
     save_metrics_json,
@@ -169,7 +169,7 @@ def test_pair_trades_includes_tp_close():
     order's entry price/volume with a completely different order's exit
     price and PnL on the chart.
     """
-    from quant_rl.eval.plots import _pair_trades
+    from evaluation.plotting.plots import _pair_trades
 
     idx = pd.date_range("2025-01-02 17:00", periods=4, freq="1min")
     trades = pd.DataFrame(
@@ -222,7 +222,7 @@ def test_pair_trades_includes_tp_close():
 def test_pair_trades_unclosed_open_is_dropped():
     """An open with no following close (e.g. still open at end of log) must
     not be paired with a later, unrelated close."""
-    from quant_rl.eval.plots import _pair_trades
+    from evaluation.plotting.plots import _pair_trades
 
     idx = pd.date_range("2025-01-02 17:00", periods=2, freq="1min")
     trades = pd.DataFrame(
@@ -235,7 +235,7 @@ def test_pair_trades_unclosed_open_is_dropped():
 
 def test_extract_window_eod_close_excludes_next_session():
     """Context after an NY eod_close must not pull the next session's bars."""
-    from quant_rl.eval.plots import _extract_window
+    from evaluation.plotting.plots import _extract_window
 
     # Full-day spine: NY session day1, overnight/gap, then next NY open.
     day1 = pd.date_range("2024-12-30 16:30", "2024-12-30 23:00", freq="1min")
@@ -264,7 +264,7 @@ def test_extract_window_eod_close_excludes_next_session():
 
 def test_extract_window_pre_entry_stays_in_session():
     """Pre-entry context must not reach into the prior calendar day's NY bars."""
-    from quant_rl.eval.plots import _extract_window
+    from evaluation.plotting.plots import _extract_window
 
     day0 = pd.date_range("2024-12-29 16:30", "2024-12-29 23:00", freq="1min")
     day1 = pd.date_range("2024-12-30 16:30", "2024-12-30 18:00", freq="1min")
@@ -287,7 +287,7 @@ def test_extract_window_keeps_post_exit_context_mid_session():
     it, so the exit marker does not sit on the axis edge. Only the overnight
     gap is dropped.
     """
-    from quant_rl.eval.plots import _extract_window
+    from evaluation.plotting.plots import _extract_window
 
     day1 = pd.date_range("2024-12-30 16:30", "2024-12-30 23:00", freq="1min")
     overnight = pd.date_range("2024-12-30 23:01", "2024-12-31 16:29", freq="1min")
@@ -310,7 +310,7 @@ def test_extract_window_keeps_post_exit_context_mid_session():
 
 def test_extract_window_keeps_exit_bar_when_trade_runs_past_session():
     """An overnight-hold exit is after the NY close; the window must keep it."""
-    from quant_rl.eval.plots import _extract_window
+    from evaluation.plotting.plots import _extract_window
 
     day1 = pd.date_range("2024-12-30 16:30", "2024-12-30 23:00", freq="1min")
     overnight = pd.date_range("2024-12-30 23:01", "2024-12-31 16:29", freq="1min")
@@ -329,7 +329,7 @@ def test_extract_window_keeps_exit_bar_when_trade_runs_past_session():
 
 
 def test_close_time_label_includes_date_across_days():
-    from quant_rl.eval.plots import _close_time_label
+    from evaluation.plotting.plots import _close_time_label
 
     assert (
         _close_time_label(pd.Timestamp("2024-12-30 18:00"), pd.Timestamp("2024-12-30 23:00"))
@@ -343,7 +343,7 @@ def test_close_time_label_includes_date_across_days():
 
 def test_plot_price_with_orders_includes_tp_close(synthetic_bars, tmp_path):
     """Overview charts must mark tp_close exits (not only stop/eod/close)."""
-    from quant_rl.eval.plots import plot_price_with_orders
+    from evaluation.plotting.plots import plot_price_with_orders
 
     idx = synthetic_bars.index
     trades = pd.DataFrame(
@@ -376,7 +376,7 @@ def test_plot_price_with_orders_includes_tp_close(synthetic_bars, tmp_path):
 
 
 def test_plot_equity_curve(synthetic_equity, tmp_path):
-    from quant_rl.eval.plots import plot_equity_curve
+    from evaluation.plotting.plots import plot_equity_curve
 
     breach_events = [
         {
@@ -399,7 +399,7 @@ def test_plot_equity_curve(synthetic_equity, tmp_path):
 
 
 def test_plot_drawdown(synthetic_equity, tmp_path):
-    from quant_rl.eval.plots import plot_drawdown
+    from evaluation.plotting.plots import plot_drawdown
 
     fig = plot_drawdown(synthetic_equity, out_path=tmp_path / "drawdown.png")
     assert (tmp_path / "drawdown.png").stat().st_size > 0
@@ -407,14 +407,14 @@ def test_plot_drawdown(synthetic_equity, tmp_path):
 
 
 def test_plot_trade_pnl_hist(synthetic_trades, tmp_path):
-    from quant_rl.eval.plots import plot_trade_pnl_hist
+    from evaluation.plotting.plots import plot_trade_pnl_hist
 
     plot_trade_pnl_hist(synthetic_trades, out_path=tmp_path / "pnl_hist.png")
     assert (tmp_path / "pnl_hist.png").stat().st_size > 0
 
 
 def test_plot_returns_dist(synthetic_equity, tmp_path):
-    from quant_rl.eval.plots import plot_returns_dist
+    from evaluation.plotting.plots import plot_returns_dist
 
     # scipy may not be available; function should not crash
     try:
@@ -425,7 +425,7 @@ def test_plot_returns_dist(synthetic_equity, tmp_path):
 
 
 def test_plot_monthly_heatmap(synthetic_equity, tmp_path):
-    from quant_rl.eval.plots import plot_monthly_returns_heatmap
+    from evaluation.plotting.plots import plot_monthly_returns_heatmap
 
     # Use longer series so monthly resampling has data
     idx = pd.date_range("2024-01-02", periods=3000, freq="1min")
@@ -439,7 +439,7 @@ def test_plot_monthly_heatmap(synthetic_equity, tmp_path):
 
 def test_plot_per_trade_orders_mt5_style(synthetic_bars, synthetic_trades, tmp_path):
     """Test MT5-style per-trade order charts with MAE/MFE/SL/TP overlays."""
-    from quant_rl.eval.plots import plot_per_trade_orders
+    from evaluation.plotting.plots import plot_per_trade_orders
 
     orders_dir = tmp_path / "orders"
     plot_per_trade_orders(
@@ -468,7 +468,7 @@ def test_plot_per_trade_orders_png_datetime_axis_and_info(
     synthetic_bars, synthetic_trades, tmp_path
 ):
     """Verify PNG charts have datetime x-axis and trade info box."""
-    from quant_rl.eval.plots import plot_per_trade_orders
+    from evaluation.plotting.plots import plot_per_trade_orders
 
     orders_dir = tmp_path / "orders"
     plot_per_trade_orders(
@@ -502,10 +502,10 @@ def test_macd_backtest_fills_within_bar_and_charts_render(tmp_path):
     render per-trade PNG charts from those trades without error (guards
     Bug 3: full-history indicator overlays must slice cleanly per trade).
     """
-    from quant_rl.backtest.engine import run_backtest
-    from quant_rl.baselines.rule_based import macd_ema50_baseline
-    from quant_rl.eval.plots import plot_per_trade_orders
-    from quant_rl.features.build import build_features
+    from evaluation.plotting.plots import plot_per_trade_orders
+    from features import build_features
+    from simulation.backtest.engine import run_backtest
+    from trading.baselines.rule_based import macd_ema50_baseline
 
     rng = np.random.default_rng(7)
     idx = pd.date_range("2025-02-01 00:00", periods=400, freq="1min")
@@ -576,7 +576,7 @@ def test_macd_backtest_fills_within_bar_and_charts_render(tmp_path):
 
 
 def test_plot_baseline_comparison(synthetic_equity, tmp_path):
-    from quant_rl.eval.plots import plot_baseline_comparison
+    from evaluation.plotting.plots import plot_baseline_comparison
 
     eq2 = synthetic_equity * 1.05
     plot_baseline_comparison({"A": synthetic_equity, "B": eq2}, out_path=tmp_path / "compare.png")
@@ -590,7 +590,7 @@ def test_plot_baseline_comparison(synthetic_equity, tmp_path):
 
 def test_interactive_equity(synthetic_equity, tmp_path):
     pytest.importorskip("plotly")
-    from quant_rl.eval.plots_interactive import plot_equity_curve
+    from evaluation.plotting.plots_interactive import plot_equity_curve
 
     plot_equity_curve(synthetic_equity, out_path=tmp_path / "equity.html")
     assert (tmp_path / "equity.html").stat().st_size > 0
@@ -598,7 +598,7 @@ def test_interactive_equity(synthetic_equity, tmp_path):
 
 def test_interactive_drawdown(synthetic_equity, tmp_path):
     pytest.importorskip("plotly")
-    from quant_rl.eval.plots_interactive import plot_drawdown
+    from evaluation.plotting.plots_interactive import plot_drawdown
 
     plot_drawdown(synthetic_equity, out_path=tmp_path / "drawdown.html")
     assert (tmp_path / "drawdown.html").stat().st_size > 0
@@ -607,7 +607,7 @@ def test_interactive_drawdown(synthetic_equity, tmp_path):
 def test_interactive_per_trade_orders_mt5_style(synthetic_bars, synthetic_trades, tmp_path):
     """Test MT5-style interactive HTML per-trade order charts."""
     pytest.importorskip("plotly")
-    from quant_rl.eval.plots_interactive import plot_per_trade_orders
+    from evaluation.plotting.plots_interactive import plot_per_trade_orders
 
     orders_dir = tmp_path / "orders"
     plot_per_trade_orders(
@@ -994,7 +994,7 @@ def test_export_records_declared_action_coordinate_schema(tmp_path, synthetic_re
 def test_campaign_fast_skips_optional_order_rendering(
     tmp_path, synthetic_result, synthetic_bars, monkeypatch
 ):
-    from quant_rl.eval import plots
+    from evaluation.plotting import plots
 
     invoked = []
 

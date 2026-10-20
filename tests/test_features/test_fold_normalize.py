@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from quant_rl.features.normalize import rolling_zscore
+from features.pipeline.normalization import rolling_zscore
 
 
 def test_frozen_fold_does_not_drift_over_validation_rows() -> None:

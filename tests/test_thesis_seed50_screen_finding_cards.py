@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from scripts.thesis import build_seed50_screen_finding_cards as cards
+from scripts.research.thesis.evidence import build_seed50_screen_finding_cards as cards
 
 
 def _fixture_inputs(tmp_path: Path) -> tuple[Path, Path]:

@@ -8,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 import pytest
-from scripts.thesis.verify_numerical_report import (
+from scripts.research.thesis.evidence.verify_numerical_report import (
     _PARITY_COMPARISONS,
     _backend_parity_audit_errors,
     _deleted_dirty_source_record,
@@ -19,15 +19,15 @@ from scripts.thesis.verify_numerical_report import (
     verify_split,
 )
 
-from quant_rl.eval.export import save_run
-from quant_rl.evaluation import calculate_metrics
+from evaluation import calculate_metrics
+from evaluation.reporting.export import save_run
 
 
 def test_deleted_dirty_source_provenance_uses_the_recorded_git_blob(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        "scripts.thesis.verify_numerical_report.subprocess.run",
+        "scripts.research.thesis.evidence.verify_numerical_report.subprocess.run",
         lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, "b" * 40 + "\n", ""),
     )
 
@@ -49,7 +49,7 @@ def test_deleted_dirty_source_provenance_uses_the_recorded_git_blob(
     )
     assert _deleted_dirty_source_record({"path": "../outside.csv"}, "a" * 40) is None
     monkeypatch.setattr(
-        "scripts.thesis.verify_numerical_report.subprocess.run",
+        "scripts.research.thesis.evidence.verify_numerical_report.subprocess.run",
         lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, "c" * 40 + "\n", ""),
     )
     records = _deleted_source_records(

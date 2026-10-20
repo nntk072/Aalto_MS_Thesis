@@ -7,8 +7,8 @@ import pandas as pd
 import pytest
 from gymnasium.spaces import Box
 
-from quant_rl.envs.strategies import PO3IFVGStrategy
-from quant_rl.envs.trading_env import TradingEnv
+from simulation.environment.env import TradingEnv
+from trading.strategies import PO3IFVGStrategy
 
 
 def _bars(n: int = 120) -> pd.DataFrame:

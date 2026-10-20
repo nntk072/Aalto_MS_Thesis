@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 from omegaconf import DictConfig, OmegaConf
 
-from quant_rl.features.build import (
+from features import (
     FEATURE_CACHE_VERSION,
     build_features,
     select_legacy_obs_columns,
@@ -51,7 +51,7 @@ def deterministic_bars() -> pd.DataFrame:
 
 
 def _default_cfg() -> dict[str, Any]:
-    """Minimal default config matching quant_rl/config/default.yaml features block."""
+    """Minimal default config matching config/base/default.yaml features block."""
     return {
         "features": {
             "ema_periods": [9, 13, 21, 50, 200],
@@ -209,7 +209,7 @@ class TestBuildFeaturesPipeline:
         assert "M5_sweep_high_pivot_time_ns" not in legacy_observed.columns
 
     def test_final_mtf_swing_profile_merges_with_default_config(self) -> None:
-        base = OmegaConf.load("quant_rl/config/default.yaml")
+        base = OmegaConf.load("config/base/default.yaml")
         overlay = OmegaConf.load("config/features/pd_context_mtf_swing_candidates.yaml")
 
         merged = OmegaConf.merge(base, overlay)

@@ -1,4 +1,4 @@
-"""Tests for quant_rl.eval.rollout.evaluate_model (RL model walk-forward eval).
+"""Tests for evaluation.rollout.model.evaluate_model (RL model walk-forward eval).
 
 Regression coverage for the bug where RL runs reported ``equity == 100k``
 for every case with zero trades executed: the evaluation step used a
@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.eval.rollout import evaluate_model
+from evaluation.rollout.model import evaluate_model
 
 
 class _ScriptedModel:
@@ -240,8 +240,8 @@ def test_evaluate_model_does_not_mark_step_capped_rollout_as_full_survival():
 
 def test_evaluate_model_uses_requested_observation_schema(monkeypatch):
     """Training and evaluation must construct the same account observation."""
-    from quant_rl.envs.trading_env import TradingEnv as OriginalTradingEnv
-    from quant_rl.observation_schema import OBSERVATION_SCHEMA_V2, V2_COORDINATES
+    from simulation.contracts.observations import OBSERVATION_SCHEMA_V2, V2_COORDINATES
+    from simulation.environment.env import TradingEnv as OriginalTradingEnv
 
     env_kwargs = {}
 
@@ -249,7 +249,7 @@ def test_evaluate_model_uses_requested_observation_schema(monkeypatch):
         env_kwargs.update(kwargs)
         return OriginalTradingEnv(**kwargs)
 
-    monkeypatch.setattr("quant_rl.eval.rollout.TradingEnv", _capture_env_kwargs)
+    monkeypatch.setattr("evaluation.rollout.model.TradingEnv", _capture_env_kwargs)
 
     class _SchemaCheckingModel(_ScriptedModel):
         def predict(self, obs, deterministic: bool = True):

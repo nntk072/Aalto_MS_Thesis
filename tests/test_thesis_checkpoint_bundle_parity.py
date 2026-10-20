@@ -5,8 +5,11 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 from omegaconf import OmegaConf
-from scripts.thesis import audit_checkpoint_frame_bundle_parity as parity
-from scripts.thesis.audit_checkpoint_frame_bundle_parity import compare_results, select_split
+from scripts.research.thesis.evidence import audit_checkpoint_frame_bundle_parity as parity
+from scripts.research.thesis.evidence.audit_checkpoint_frame_bundle_parity import (
+    compare_results,
+    select_split,
+)
 
 
 def _result() -> dict[str, object]:

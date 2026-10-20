@@ -9,11 +9,10 @@ import time
 from pathlib import Path
 
 import pytest
-from scripts.triton.campaign_worker_dispatch import _host_key, _parse_srun
 
-DISPATCHER = (
-    Path(__file__).resolve().parents[1] / "scripts" / "triton" / "campaign_worker_dispatch.py"
-)
+from compute.slurm.worker_dispatch import _host_key, _parse_srun
+
+DISPATCHER = Path(__file__).resolve().parents[1] / "compute" / "slurm" / "worker_dispatch.py"
 
 
 def test_parse_campaign_worker_command() -> None:
@@ -31,12 +30,12 @@ def test_parse_campaign_worker_command() -> None:
             "/scratch/work/nguyenl37/Aalto_MS_Thesis",
             "--export=ALL",
             "/venv/bin/python",
-            "/repo/scripts/matrix/verify_worker_cpu_affinity.py",
+            "/repo/scripts/compute/slurm/verify_worker_cpu_affinity.py",
             "--expected-cpus",
             "5,6",
             "--",
             "bash",
-            "/repo/scripts/train/train_one_variant.sh",
+            "/repo/scripts/research/frozen-launches/train_one_variant.sh",
         ]
     )
 
@@ -45,12 +44,12 @@ def test_parse_campaign_worker_command() -> None:
         "cwd": "/scratch/work/nguyenl37/Aalto_MS_Thesis",
         "argv": [
             "/venv/bin/python",
-            "/repo/scripts/matrix/verify_worker_cpu_affinity.py",
+            "/repo/scripts/compute/slurm/verify_worker_cpu_affinity.py",
             "--expected-cpus",
             "5,6",
             "--",
             "bash",
-            "/repo/scripts/train/train_one_variant.sh",
+            "/repo/scripts/research/frozen-launches/train_one_variant.sh",
         ],
         "cpu_ids": [5, 6],
         "gpu_count": 1,
@@ -70,7 +69,7 @@ def test_parse_campaign_resource_sampler_without_gpu() -> None:
             "/repo",
             "--export=ALL",
             "/venv/bin/python",
-            "/repo/scripts/triton/sample_campaign_resources.py",
+            "/repo/compute/slurm/resources.py",
             "--campaign",
             "/repo/campaign.json",
             "--out",

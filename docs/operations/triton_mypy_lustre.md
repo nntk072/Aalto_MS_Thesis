@@ -24,7 +24,7 @@ Run on the allocated compute node, not based on the SSH login node's architectur
 | `aarch64` | GH200 / gpuarm | `.venv` |
 | `x86_64` | H100/H200 / gpu | `.venv-x86` |
 
-`source scripts/triton/activate_venv.sh` selects the matching environment.
+`source scripts/compute/slurm/activate_venv.sh` selects the matching environment.
 Avoid sourcing `.venv` on the x86_64 login node. Never share local staging
 files between different architectures, users, or compute nodes.
 
@@ -35,7 +35,7 @@ From the *existing* allocated compute shell:
 ```bash
 cd /scratch/work/nguyenl37/Aalto_MS_Thesis
 uname -m
-source scripts/triton/activate_venv.sh
+source scripts/compute/slurm/activate_venv.sh
 command -v mypy
 timeout 30 mypy --version
 echo "version_exit=$?"  # 124 means timeout
@@ -56,7 +56,7 @@ changing the project's lockfile, source, or production settings.
 
 ```bash
 cd /scratch/work/nguyenl37/Aalto_MS_Thesis
-source scripts/triton/activate_venv.sh
+source scripts/compute/slurm/activate_venv.sh
 ENV_DIR="$(dirname "$(dirname "$(command -v python)")")"
 STAGE="$(mktemp -d "/tmp/triton-mypy-${USER}-XXXXXX")"
 mkdir -p "$STAGE/sitepkgs" "$STAGE/cache"

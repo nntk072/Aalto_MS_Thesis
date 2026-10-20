@@ -34,7 +34,7 @@ This page documents the **framework**: the pipeline stages, the contracts
 between them, and the invariants that hold across every configuration.
 *What* a particular strategy trades - the PO3/IFVG chain of Idea 1 or the
 distribution chain of Idea 2 - is documented in the modules that own it
-(`quant_rl/envs/strategies/` plus `config/2_po3_ifvg.yaml` /
+(`trading/strategies/` plus `config/2_po3_ifvg.yaml` /
 `config/3_distribution.yaml`) and is linked rather than duplicated here
 as a tutorial. [Adding a strategy](#adding-a-strategy) describes how a new
 one is plugged in.
@@ -52,7 +52,7 @@ How-to material lives elsewhere and is not repeated:
 **M1 spine**
    One-minute bars are the only true source data. Every higher timeframe is
    resampled from the M1 files named under `data.m1_files` in
-   `quant_rl/config/default.yaml`; separately downloaded higher-TF CSVs are
+   `config/base/default.yaml`; separately downloaded higher-TF CSVs are
    ignored (see [Disclaimers](#disclaimers)).
 
 **HTF / LTF**
@@ -80,7 +80,7 @@ How-to material lives elsewhere and is not repeated:
    bar `t`, where the structural stop reference sits, and which
    take-profit targets are candidates. The environment owns all *mechanics*:
    fills, lot sizing, account state, costs, guardrails and logging
-   (`quant_rl/envs/strategies/__init__.py`).
+   (`trading/strategies/__init__.py`).
 
 **Observation `seq` / `account`**
    The environment's observation is a dictionary: `seq` is the normalised
@@ -105,10 +105,10 @@ How-to material lives elsewhere and is not repeated:
 **Liquidity sweep vs BOS**
    A sweep is a push through a prior swing level followed by a reclaim; a
    break of structure is a confirmed close beyond a swing level. Both are
-   detected causally in `quant_rl/features/liquidity.py`.
+   detected causally in `features/context/liquidity.py`.
 
 **Manipulation vs distribution phase**
-   The two PO3 stages tracked in `quant_rl/features/po3_state.py`:
+   The two PO3 stages tracked in `features/po3/state.py`:
    the manipulation sweep that runs against the eventual direction, and the
    distribution leg that follows it.
 
@@ -116,7 +116,7 @@ How-to material lives elsewhere and is not repeated:
    Training/evaluation enforce the *dollar* kill-switches of the `ftmo:`
    block via guardrails; live MT5 sizing uses the *percentage-of-balance*
    block `live_risk_overrides:`. The two must stay aligned
-   (`quant_rl/config/default.yaml`).
+   (`config/base/default.yaml`).
 
 **Paper vs live**
    `PAPER_TRADING=true` (the default) logs every signal and intended order
@@ -131,9 +131,9 @@ How-to material lives elsewhere and is not repeated:
   fill pricing when `costs.use_tick_execution` is on.
 - **The feature cache is versioned.** Feature pipelines are cached as
   parquet keyed by `FEATURE_CACHE_VERSION` (currently
-  `v21-causal-prior-ny-session` in `quant_rl/features/build.py`).
+  `v21-causal-prior-ny-session` in `features/pipeline/builder.py`).
   Bar caches use `BAR_CACHE_VERSION` (`v2-full-day` in
-  `quant_rl/data/pipeline.py`). Feature content hashes also include resolved
+  `market_data/loading/pipeline.py`). Feature content hashes also include resolved
   feature settings and data identity. A semantic change must bump the relevant
   version; stale caches are otherwise silently reused.
 - **Opt-in feature blocks are config-driven.** Overlay columns
@@ -152,7 +152,7 @@ How-to material lives elsewhere and is not repeated:
   balance) encode the same risk appetite for different units; changing
   one without the other silently diverges training from live sizing.
 - **Strategy registration is config-time only.** A strategy is selected
-  through `_STRATEGY_CONFIGS` in `quant_rl/train/train_rl.py` and the
+  through `_STRATEGY_CONFIGS` in `training/runner/training.py` and the
   merged YAML; there is no runtime plugin loader.
 - **The overlay is strict (see [Overlay invariant](#overlay-invariant)).** With
   `env.strategy_actions=false` (default), the environment keeps the
@@ -172,14 +172,14 @@ How-to material lives elsewhere and is not repeated:
 
 PR #3 added the strategy machinery as a **strict overlay**. When
 `env.strategy_actions=false` (default / Idea 3 baseline),
-`quant_rl/envs/trading_env.py` must keep:
+`simulation/environment/env.py` must keep:
 
 - the legacy discrete (`Discrete(20)`) or 1-D continuous action space,
 - the DSR (or sweep) reward with no alignment component,
 - swing-level SL/TP, not structural strategy stops,
 - the full observation column set.
 
-`_strategy_from_cfg` in `quant_rl/train/train_rl.py` returns
+`_strategy_from_cfg` in `training/runner/training.py` returns
 `(BaselineStrategy(), None, 0.0)` unless a variant config enables
 `strategy_actions`; only then does it return
 `(PO3IFVGStrategy, PO3Reward, weight)` or
@@ -188,9 +188,9 @@ locked by `tests/test_envs/test_baseline_regression.py`.
 
 ## Scope
 
-- `quant_rl/` owns research: data, features, environment, backtest
+- Root domain packages own research code: `market_data/`, `features/`, `trading/`, `simulation/`, `models/`, `training/`, and `evaluation/`
   primitives, training and evaluation.
-- `mt5_trading/` owns broker I/O only. The environment never places MT5
+- `integrations.mt5/` owns broker I/O only. The environment never places MT5
   orders; the live path never retrains.
 - Feature detectors never look ahead (see [Causal-only rule](#causal-only-rule)).
 - Strategy objects own semantics only; fills, lots and logging stay in
@@ -198,7 +198,7 @@ locked by `tests/test_envs/test_baseline_regression.py`.
 
 ## End-to-end procedure
 
-Research pipeline, one configuration run (`quant_rl/train/train_rl.py`):
+Research pipeline, one configuration run (`training/runner/training.py`):
 
 ```mermaid
 sequenceDiagram
@@ -228,13 +228,13 @@ when `features.include_strategy_state` is enabled by a variant config
 (`config/2_po3_ifvg.yaml`, `config/3_distribution.yaml`).
 
 Live loop, one bar (`live_trading_rl.py` driving
-`mt5_trading/robot/rl_robot.py`):
+`integrations.mt5/robot/rl_robot.py`):
 
 ```mermaid
 sequenceDiagram
     participant MT5 as MT5 terminal
-    participant R as RLRobot (mt5_trading/robot/rl_robot.py)
-    participant SA as RLStrategyAdapter (quant_rl/live/rl_strategy.py)
+    participant R as RLRobot (integrations.mt5/robot/rl_robot.py)
+    participant SA as RLStrategyAdapter (live/runtime/strategy.py)
     participant RM as RiskManager
     participant TR as Trader
     MT5->>R: new M1 bar
@@ -272,64 +272,64 @@ flowchart LR
   agent --> live
 ```
 
-**Data** — `quant_rl/data/pipeline.py` (`run_pipeline`) ingests the true
+**Data** — `market_data/loading/pipeline.py` (`run_pipeline`) ingests the true
 M1 files, resamples every higher timeframe from them, and hands feature
-frames to `quant_rl/data/split.py` (`split_train_test`), which applies the
+frames to `market_data/splits/definitions.py` (`split_train_test`), which applies the
 locked in-sample/OOS dates. Tick files are consulted by the backtest for
 fill pricing only.
 
-**Features** — `quant_rl/features/build.py` (`build_features`) is the
+**Features** — `features/pipeline/builder.py` (`build_features`) is the
 single entry point. It owns `FEATURE_CACHE_VERSION` and the opt-in
 `include_strategy_state` block that appends the overlay columns from
-`quant_rl/features/liquidity.py` (`detect_liquidity_sweeps`,
-`detect_bos`) and `quant_rl/features/po3_state.py` (`build_po3_state`,
+`features/context/liquidity.py` (`detect_liquidity_sweeps`,
+`detect_bos`) and `features/po3/state.py` (`build_po3_state`,
 `build_ifvg_zone_features`).
 
-**Environment and strategies** — `quant_rl/envs/trading_env.py`
+**Environment and strategies** — `simulation/environment/env.py`
 (`TradingEnv`) hosts the gym interface, mechanics and composite reward.
-`quant_rl/envs/strategies/` holds the semantics objects
+`trading/strategies/` holds the semantics objects
 (`TradingStrategy`, `BaselineStrategy`, `PO3IFVGStrategy`,
 `DistributionStrategy`).
 
-**Alignment rewards** — `quant_rl/envs/po3_reward.py` (`PO3Reward`),
-`quant_rl/envs/distribution_reward.py` (`DistributionReward`) and
-`quant_rl/envs/sweep_reward.py` (`SweepConfirmationReward`,
+**Alignment rewards** — `simulation/environment/po3_reward.py` (`PO3Reward`),
+`simulation/environment/distribution_reward.py` (`DistributionReward`) and
+`simulation/environment/sweep_reward.py` (`SweepConfirmationReward`,
 `CompositeReward`). `CompositeReward` filters strategy-reward keyword
 inputs through each component's `required_inputs`.
 
-**Backtest primitives** — `quant_rl/backtest/engine.py` plus the account,
-broker, costs and guardrails modules; `quant_rl/backtest/risk.py`
+**Backtest primitives** — `simulation/backtest/engine.py` plus the account,
+broker, costs and guardrails modules; `trading/risk/sizing.py`
 provides the structural risk helpers `compute_sl_tp_from_structure`
 (`sl_mode: exact` when `buffer_pts=0.0`, `buffered` with a positive
 buffer) and `resolve_tp_target` (`rr`, liquidity and
 previous-day-high/low targets with `rr_fallback` for invalid ones).
 
-**Models** — `quant_rl/models/agent.py` (`build_agent`) assembles the
+**Models** — `models/factory/agent.py` (`build_agent`) assembles the
 PPO/SAC agent with its sequence encoder; optional VAE latents are frozen
 when present.
 
-**Training** — `quant_rl/train/train_rl.py` wires everything: `_STRATEGY_CONFIGS`
+**Training** — `training/runner/training.py` wires everything: `_STRATEGY_CONFIGS`
 maps strategy names to variant YAMLs, `_strategy_from_cfg` builds
 `(strategy, strategy_reward, weight)`, and the merged config drives
 `make_env`, `build_agent` and learning.
 
-**Evaluation** — `quant_rl/evaluation/` holds the canonical metrics stack
+**Evaluation** — `evaluation/` holds the canonical metrics stack
 (`calculate_metrics`, `purged_walk_forward`, bootstrap CIs, calibration,
-`run_episode`, distributional extras). `quant_rl/eval/` owns rollout
+`run_episode`, distributional extras). `evaluation/` owns rollout
 (`evaluate_model`), plot export, and `eval_run` checkpoint re-evaluation.
 Thesis ablation / OOS cost harnesses live as scripts only:
-`scripts/matrix/ablation_runner.py` (+ `config/experiments.yaml`),
-`scripts/eval/test_oos.py`, `scripts/eval/report_ablations.py`. There is no parallel
-`quant_rl/validation/` package. Checkpoints, trades and plots land under
+`experiments/variants/runner.py` (+ `config/experiments.yaml`),
+`scripts/research/thesis/evaluation/test_oos.py`, `scripts/research/thesis/evaluation/report_ablations.py`. There is no parallel
+retired validation package. Checkpoints, trades and plots land under
 `outputs/`.
 
 **Live** — `live_trading_rl.py` loads a checkpoint and runs
-`quant_rl/live/rl_strategy.py` (`RLStrategyAdapter`) inside
-`mt5_trading/robot/rl_robot.py` (`RLRobot`), which sizes through
+`live/runtime/strategy.py` (`RLStrategyAdapter`) inside
+`integrations.mt5/robot/rl_robot.py` (`RLRobot`), which sizes through
 `RiskManager` and executes through a `Trader` — or only logs, when
 `PAPER_TRADING` is on.
 
-**Config** — `quant_rl/config/default.yaml` is the base; variant YAMLs
+**Config** — `config/base/default.yaml` is the base; variant YAMLs
 under `config/` are merged over it. A variant is opt-in end to end: it
 must flip `features.include_strategy_state`, `env.strategy_actions` and
 declare the `strategy:` block (see the two example files).
@@ -337,8 +337,8 @@ declare the `strategy:` block (see the two example files).
 ### Core contracts
 
 Packages map 1:1 to directories. The cross-tree boundary is live:
-`RLStrategyAdapter` (in `quant_rl/live/`) bridges the trained model into
-`mt5_trading/`, which knows nothing about RL training.
+`RLStrategyAdapter` (in `live/`) bridges the trained model into
+`integrations.mt5/`, which knows nothing about RL training.
 
 ```mermaid
 classDiagram
@@ -400,16 +400,16 @@ classDiagram
 
 | Package | Entry point | Role |
 |---------|-------------|------|
-| `quant_rl/data/` | `run_pipeline`, `split_train_test` | M1 ingest, resample, cache, split |
-| `quant_rl/features/` | `build_features` | Feature matrix + `FEATURE_CACHE_VERSION` |
-| `quant_rl/envs/` | `TradingEnv` | Gym interface, mechanics, rewards |
-| `quant_rl/backtest/` | `engine`, `broker`, `guardrails` | Fills, costs, FTMO kill-switches |
-| `quant_rl/models/` | `build_agent` | PPO/SAC + encoder wiring |
-| `quant_rl/train/` | `train_rl` | Pipeline orchestration |
-| `quant_rl/evaluation/` | `calculate_metrics`, `purged_walk_forward` | Metrics and reporting |
-| `quant_rl/eval/` | `evaluate_model`, `eval_run` | Rollout and artifact export |
-| `quant_rl/live/` | `RLStrategyAdapter` | Live observation bridge |
-| `mt5_trading/` | `RLRobot`, `RiskManager` | Broker I/O only |
+| `market_data/` | `run_pipeline`, `split_train_test` | M1 ingest, resample, cache, split |
+| `features/` | `build_features` | Feature matrix + `FEATURE_CACHE_VERSION` |
+| `simulation/environment/` | `TradingEnv` | Gym interface, mechanics, rewards |
+| `simulation/backtest/` | `engine`, `broker`, `guardrails` | Fills, costs, FTMO kill-switches |
+| `models/` | `build_agent` | PPO/SAC + encoder wiring |
+| `training/` | `train_rl` | Pipeline orchestration |
+| `evaluation/` | `calculate_metrics`, `purged_walk_forward` | Metrics and reporting |
+| `evaluation/` | `evaluate_model`, `eval_run` | Rollout and artifact export |
+| `live/` | `RLStrategyAdapter` | Live observation bridge |
+| `integrations.mt5/` | `RLRobot`, `RiskManager` | Broker I/O only |
 
 ## Lifecycle of one cycle
 
@@ -483,13 +483,13 @@ One `TradingEnv` step:
 
 ### Training, evaluation and walk-forward
 
-`train_rl.py` merges `quant_rl/config/default.yaml` with the variant
+`train_rl.py` merges `config/base/default.yaml` with the variant
 YAML selected from `_STRATEGY_CONFIGS`, builds the environment via
 `make_env` and `_strategy_from_cfg`, the agent via `build_agent`, and
 trains. `BestCheckpointEvalCallback` checkpoints during training;
-`quant_rl/eval/rollout.py` (`evaluate_model`) replays checkpoints on the
-locked OOS window; `quant_rl/evaluation/` computes metrics, bootstrap CIs,
-and walk-forward reports; `quant_rl/eval/export.py` writes artifacts to
+`evaluation/rollout/model.py` (`evaluate_model`) replays checkpoints on the
+locked OOS window; `evaluation/` computes metrics, bootstrap CIs,
+and walk-forward reports; `evaluation/reporting/export.py` writes artifacts to
 `outputs/`. Feature caches use `FEATURE_CACHE_VERSION` plus the resolved
 feature/data content hash; inspect the effective cache path when comparing
 variants.
@@ -508,7 +508,7 @@ secondary symbol is wired only when the checkpoint was trained with it.
 ## Budgets and constraints
 
 1. **The OOS split is locked.** `data.split.train_end: "2025-12-31"` /
-   `test_start: "2026-01-01"` in `quant_rl/config/default.yaml`. Idea 1/2
+   `test_start: "2026-01-01"` in `config/base/default.yaml`. Idea 1/2
    must not redefine the split, the cost model, or the baseline action
    space.
 2. **FTMO dollar limits are hard kill-switches in training/eval.**
@@ -555,10 +555,10 @@ is the mode used live.
 ## Adding a strategy
 
 A strategy is a semantics object, a config file, and a registry entry.
-Implement `TradingStrategy` (`quant_rl/envs/strategies/base.py`):
+Implement `TradingStrategy` (`trading/strategies/base.py`):
 
 ```python
-from quant_rl.envs.strategies.base import TradingStrategy
+from trading.strategies.base import TradingStrategy
 
 
 class MyStrategy(TradingStrategy):
@@ -606,11 +606,11 @@ Then:
    (name, gates, risk ranges, TP targets, reward weights). Copy the
     shape of `config/2_po3_ifvg.yaml`.
 2. Register the name in `_STRATEGY_CONFIGS` in
-   `quant_rl/train/train_rl.py` and handle it in `_strategy_from_cfg`.
+   `training/runner/training.py` and handle it in `_strategy_from_cfg`.
 3. Add contract tests mirroring
    `tests/test_envs/test_baseline_regression.py` (overlay safety) and
    `tests/test_envs/test_strategy_env.py` (env wiring).
-4. Run `scripts/utility/verify_strategy_features.py` to confirm every
+4. Run `scripts/research/strategy_checks/verify_strategy_features.py` to confirm every
    `required_features` / `raw_columns` name exists in the produced
    feature matrix.
 
@@ -620,7 +620,7 @@ Then:
   [Causal-only rule](#causal-only-rule).
 - **Required columns present.** A missing column fails loudly at env
   construction, not silently mid-episode; keep
-  `scripts/utility/verify_strategy_features.py` green.
+  `scripts/research/strategy_checks/verify_strategy_features.py` green.
 - **Overlay-safe.** With `strategy_actions=false` the strategy is never
   constructed; baseline behaviour is untouched.
 - **Repeatable across bars.** `validate_entry` / `sl_reference` /
@@ -640,13 +640,13 @@ Then:
 - [`RUNNING_COMMANDS.md`](operations/RUNNING_COMMANDS.md) — command reference.
 - [`DEPLOYMENT.md`](operations/DEPLOYMENT.md) — paper-to-live promotion
   protocol.
-- [`quant_rl/config/default.yaml`](../quant_rl/config/default.yaml) —
+- [`config/base/default.yaml`](../config/base/default.yaml) —
   base configuration (split dates, FTMO limits, live risk overrides).
-- Strategy semantics: [`quant_rl/envs/strategies/`](../quant_rl/envs/strategies/),
+- Strategy semantics: [`trading/strategies/`](../trading/strategies/),
   [`config/2_po3_ifvg.yaml`](../config/2_po3_ifvg.yaml),
   [`config/3_distribution.yaml`](../config/3_distribution.yaml).
 - Feature diagnostics:
-  [`scripts/utility/verify_strategy_features.py`](../scripts/utility/verify_strategy_features.py).
+  [`scripts/research/strategy_checks/verify_strategy_features.py`](../scripts/research/strategy_checks/verify_strategy_features.py).
 
 Contract tests:
 
@@ -678,10 +678,10 @@ Contract tests:
 
 > Agent navigation: the [legacy architecture map](../.agents/architecture.md)
 > documents historical module boundaries. The current core data flow is
-> `quant_rl/data/` (M1 ingestion, alignment, splits) →
-> `quant_rl/features/` (indicators, PO3) →
-> `quant_rl/envs/` and `quant_rl/backtest/` (observations, execution,
-> position/risk mechanics) → `quant_rl/models/` and `quant_rl/train/`
-> (policy and training) → `quant_rl/evaluation/` and `quant_rl/eval/`
+> `market_data/` (M1 ingestion, alignment, splits) →
+> `features/` (indicators, PO3) →
+> `simulation/environment/` and `simulation/backtest/` (observations, execution,
+> position/risk mechanics) → `models/` and `training/`
+> (policy and training) → `evaluation/` and `evaluation/`
 > (evaluation). Agents should use the [domain maps](../.agents/domain_maps/)
 > for file discovery and verify the actual implementation.

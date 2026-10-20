@@ -15,7 +15,7 @@ import pandas as pd
 import pytest
 from omegaconf import DictConfig, OmegaConf
 
-from quant_rl.features.build import (
+from features import (
     build_fvg_zone_features,
     build_po3_phase_features,
 )
@@ -153,7 +153,7 @@ def _base_cfg() -> dict[str, Any]:
 
 
 def test_variant_flags_additive(m1_bars):
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     cfg_base = OmegaConf.create(_base_cfg())
     base = build_features(m1_bars, cfg=cfg_base)
@@ -191,7 +191,7 @@ def _mtf_secondary(m1_bars: pd.DataFrame) -> pd.DataFrame:
 
 def test_mtf_blocks_off_by_default(m1_bars):
     """New MTF blocks must not change the base matrix unless enabled (plan §5)."""
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     base = build_features(
         m1_bars, secondary=_mtf_secondary(m1_bars), cfg=OmegaConf.create(_base_cfg())
@@ -205,7 +205,7 @@ def test_mtf_blocks_off_by_default(m1_bars):
 
 def test_smt_mtf_additive_and_causal(m1_bars):
     """SMT MTF (§4.1): per-TF divergence columns, causal under truncation."""
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     sec = _mtf_secondary(m1_bars)
     base = build_features(m1_bars, secondary=sec, cfg=OmegaConf.create(_base_cfg()))
@@ -222,7 +222,7 @@ def test_smt_mtf_additive_and_causal(m1_bars):
 
 def test_structure_bos_mtf_additive_and_causal(m1_bars):
     """Structure/BOS MTF (§4.2): TF swings + close-through BOS + ATR distances."""
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     base = build_features(m1_bars, cfg=OmegaConf.create(_base_cfg()))
     timeframes = ["M5", "M10", "M15", "M30", "H1", "H4", "D1"]
@@ -251,7 +251,7 @@ def test_structure_bos_mtf_additive_and_causal(m1_bars):
 
 def test_liquidity_sweep_mtf_additive_and_causal(m1_bars):
     """Sweep MTF (§4.3): true per-TF sweeps on resampled OHLC, causal."""
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     base = build_features(m1_bars, cfg=OmegaConf.create(_base_cfg()))
     cfg = _mtf_cfg(liquidity={"enabled": True, "timeframes": ["M5", "M10"]})
@@ -269,7 +269,7 @@ def test_liquidity_sweep_mtf_additive_and_causal(m1_bars):
 
 def test_po3_state_mtf_behind_flag(m1_bars):
     """PO3 state MTF (§4.4): per-TF state machines, causal, off by default."""
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     cfg_on = _mtf_cfg(
         include_strategy_state=True,
@@ -292,7 +292,7 @@ def test_po3_state_mtf_behind_flag(m1_bars):
 
 def test_ifvg_mtf_behind_flag(m1_bars):
     """IFVG zones from M5/M15/H1 align causally and stay opt-in by default."""
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     cfg_on = _mtf_cfg(
         include_strategy_state=True,
@@ -319,7 +319,7 @@ def test_ifvg_mtf_behind_flag(m1_bars):
 
 def test_variant_config_files_merge():
     """The variant YAMLs enable their feature blocks over the native MTF defaults."""
-    base = OmegaConf.load("quant_rl/config/default.yaml")
+    base = OmegaConf.load("config/base/default.yaml")
     variants = [
         ("config/features/technical_mtf.yaml", False, False),
         ("config/features/po3_mtf.yaml", True, False),
@@ -343,7 +343,7 @@ def test_variant_config_files_merge():
 
 def test_idea_overlays_enable_synchronized_mtf_ifvg():
     """The revised Idea variants consume native M3-D1 IFVGs on the M1 PO3 clock."""
-    base = OmegaConf.load("quant_rl/config/default.yaml")
+    base = OmegaConf.load("config/base/default.yaml")
     expected_ids = {
         "config/2_po3_ifvg.yaml": "po3_confirmed_ifvg_htf_mtf_v1",
         "config/3_distribution.yaml": "distribution_prev_session_pd_mtf_v1",
@@ -376,7 +376,7 @@ def test_idea_overlays_enable_synchronized_mtf_ifvg():
 
 def test_po3_full_flag_additive(m1_bars):
     """include_po3_full=true adds the full PO3 entry-trigger columns on top of base."""
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     cfg_base = OmegaConf.create(_base_cfg())
     base = build_features(m1_bars, cfg=cfg_base)
@@ -402,7 +402,7 @@ def test_po3_full_no_lookahead_on_entries(m1_bars):
     loop uses each bar's own close once), so truncation must not alter past
     entry columns.
     """
-    from quant_rl.features.build import build_features
+    from features import build_features
 
     cfg = OmegaConf.merge(
         OmegaConf.create(_base_cfg()), OmegaConf.create({"features": {"include_po3_full": True}})
@@ -421,7 +421,7 @@ def test_po3_full_no_lookahead_on_entries(m1_bars):
 
 def test_combined_config_merges_all_blocks():
     """config/features/full_po3_mtf.yaml enables all three additive blocks."""
-    base = OmegaConf.load("quant_rl/config/default.yaml")
+    base = OmegaConf.load("config/base/default.yaml")
     merged = OmegaConf.merge(base, OmegaConf.load("config/features/full_po3_mtf.yaml"))
     assert merged.features.include_po3 is True
     assert merged.features.include_fvg_ifvg is True

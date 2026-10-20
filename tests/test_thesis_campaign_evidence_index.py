@@ -6,7 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from scripts.thesis.build_campaign_evidence_index import (
+from scripts.research.thesis.evidence.build_campaign_evidence_index import (
     build_campaign_evidence_index,
     write_index,
 )

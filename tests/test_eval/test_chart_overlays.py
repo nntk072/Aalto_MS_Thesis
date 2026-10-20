@@ -10,9 +10,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.eval.chart_indicators import compute_chart_overlays_full
-from quant_rl.eval.chart_overlays import OverlayEvents, build_overlay_events, compute_vwap_for_chart
-from quant_rl.eval.plot_series import (
+from evaluation.plotting.chart_indicators import compute_chart_overlays_full
+from evaluation.plotting.chart_overlays import (
+    OverlayEvents,
+    build_overlay_events,
+    compute_vwap_for_chart,
+)
+from evaluation.plotting.plot_series import (
     daily_drawdown_pct,
     daily_drawdown_usd,
     daily_loss_limit_series,
@@ -21,14 +25,14 @@ from quant_rl.eval.plot_series import (
     max_drawdown_pct,
     session_start_equity,
 )
-from quant_rl.eval.plots import (
+from evaluation.plotting.plots import (
     plot_daily_pnl,
     plot_drawdown,
     plot_equity_curve,
     plot_per_trade_orders,
 )
-from quant_rl.features.liquidity import detect_liquidity_sweeps
-from quant_rl.features.structure import structure_levels
+from features.context.liquidity import detect_liquidity_sweeps
+from features.technical.structure import structure_levels
 
 
 def _ohlc(n: int = 80, start: str = "2026-03-02 16:30", seed: int = 1) -> pd.DataFrame:

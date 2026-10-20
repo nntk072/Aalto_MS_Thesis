@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.features.liquidity import detect_bos, detect_liquidity_sweeps
-from quant_rl.features.structure import structure_levels
+from features.context.liquidity import detect_bos, detect_liquidity_sweeps
+from features.technical.structure import structure_levels
 
 
 def make_bars(rows: list[tuple[float, float, float]]) -> pd.DataFrame:

@@ -10,7 +10,7 @@ matplotlib.use("Agg")
 
 import pytest
 
-from quant_rl.eval.distribution_plots import plot_pnl_box_by_regime, plot_pnl_histogram
+from evaluation.plotting.distribution_plots import plot_pnl_box_by_regime, plot_pnl_histogram
 
 
 @pytest.fixture()

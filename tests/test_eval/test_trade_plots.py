@@ -9,13 +9,13 @@ matplotlib.use("Agg")
 import pandas as pd
 import pytest
 
-from quant_rl.eval.trade_diagnostics import (
+from evaluation.metrics.trade_diagnostics import (
     closed_trades_table,
     mae_mfe_table,
     rolling_win_rate,
     weekday_hour_pnl,
 )
-from quant_rl.eval.trade_plots import (
+from evaluation.plotting.trade_plots import (
     plot_hold_time_pnl,
     plot_mae_mfe,
     plot_rolling_winrate,
@@ -131,7 +131,7 @@ def test_plot_mae_mfe_and_winrate_smoke(tmp_path) -> None:
 
 def test_interactive_hold_time(tmp_path) -> None:
     pytest.importorskip("plotly")
-    from quant_rl.eval.trade_plots import plot_hold_time_pnl_html
+    from evaluation.plotting.trade_plots import plot_hold_time_pnl_html
 
     plot_hold_time_pnl_html(closed_trades_table(_trades()), out_path=tmp_path / "h.html")
     assert (tmp_path / "h.html").stat().st_size > 0

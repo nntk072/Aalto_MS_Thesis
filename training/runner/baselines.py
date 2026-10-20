@@ -1,0 +1,333 @@
+"""Run backtester with baseline strategies (MACD, EMA, RSI, etc.).
+
+These baselines use structure-aware SL/TP sizing to validate engine and charts
+before RL training. Helps verify hold times and lot sizes are realistic.
+
+Usage
+-----
+    cd Aalto_MS_Thesis
+    python -m training.runner.baselines --strategy macd
+    python -m training.runner.baselines --strategy ema --seed 42
+"""
+
+from __future__ import annotations
+
+import sys
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+import argparse
+import logging
+
+import numpy as np
+import pandas as pd
+
+from configuration import load_config
+from evaluation import PerformanceMetrics, calculate_metrics
+from evaluation.reporting.export import save_run
+from features import FEATURE_CACHE_VERSION, build_features
+from market_data.loading.pipeline import build_tick_books, run_pipeline
+from market_data.loading.ticks import TickBook
+from market_data.splits.definitions import (
+    get_split_config,
+    get_train_start_config,
+    split_bars,
+    split_train_test,
+)
+from simulation.backtest.engine import run_backtest
+from trading.baselines.rule_based import ema_crossover, macd_ema50_baseline, rsi_mean_reversion
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger(__name__)
+
+
+def _macd_policy(obs: np.ndarray[Any, Any]) -> int:
+    """Placeholder - will be replaced by precomputed policy in main()."""
+    return 0
+
+
+def _make_indexed_policy(
+    actions_series: pd.Series, obs_window: int
+) -> Callable[[np.ndarray[Any, Any]], int]:
+    """Build a stateful policy that returns the precomputed action for the
+    current absolute bar index.
+
+    Mirrors ``_create_macd_policy``: starts at ``obs_window`` because the
+    engine drives ``policy(obs)`` with ``obs = feat_array[i - obs_window : i]``,
+    so the first call corresponds to absolute bar index ``obs_window``.
+    """
+
+    state = {"i": obs_window}
+
+    def policy(obs: np.ndarray[Any, Any]) -> int:
+        i = state["i"]
+        if i < len(actions_series):
+            action = int(actions_series.iloc[i])
+        else:
+            action = 0
+        state["i"] += 1
+        return action
+
+    return policy
+
+
+def _ema_policy(obs: np.ndarray[Any, Any]) -> int:
+    """Placehodler — replaced by a real indexed policy in main().
+
+    Kept as a module-level no-op so the ``STRATEGIES`` registry below can
+    import cleanly; the actual EMA crossover is wired in main() via
+    :func:`ema_crossover` and :func:`_make_indexed_policy`.
+    """
+    return 0
+
+
+def _rsi_policy(obs: np.ndarray[Any, Any]) -> int:
+    """Placeholder — replaced by a real indexed policy in main().
+
+    Kept as a module-level no-op so the ``STRATEGIES`` registry below can
+    import cleanly; the actual RSI mean-reversion is wired in main() via
+    :func:`rsi_mean_reversion` and :func:`_make_indexed_policy`.
+    """
+    return 0
+
+
+STRATEGIES = {
+    "macd": _macd_policy,
+    "ema": _ema_policy,
+    "rsi": _rsi_policy,
+}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run baseline strategy backtests.")
+    parser.add_argument(
+        "--strategy",
+        choices=list(STRATEGIES.keys()),
+        default="macd",
+        help="Baseline strategy to use",
+    )
+    parser.add_argument("overrides", nargs="*", help="Config overrides (OmegaConf syntax)")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--force", action="store_true", help="Force data pipeline rerun")
+    parser.add_argument("--no-save", action="store_true", help="Skip saving artifacts")
+    parser.add_argument("--out", default="outputs", help="Base output directory")
+    parser.add_argument(
+        "--use-structure-sl-tp",
+        action="store_true",
+        help="Use structure-aware SL/TP instead of fixed USD stops",
+    )
+    args = parser.parse_args()
+
+    np.random.seed(args.seed)
+
+    cfg = load_config(args.overrides)
+    data = run_pipeline(cfg, force=args.force)
+
+    primary_sym = cfg.data.primary
+    secondary_sym = cfg.data.secondary
+    primary_m1 = data[primary_sym]["M1"]
+    secondary_m1 = data.get(secondary_sym, {}).get("M1")
+
+    cache_dir = Path(cfg.data.cache_dir)
+    feat_cache = cache_dir / f"{primary_sym}_features_{FEATURE_CACHE_VERSION}.parquet"
+    features = build_features(primary_m1, secondary=secondary_m1, cfg=cfg, cache_path=feat_cache)
+
+    # Date-based train / test split
+    train_end, test_start = get_split_config(cfg)
+    train_start = get_train_start_config(cfg)
+    train_bars, test_bars, train_feat, test_feat = split_train_test(
+        primary_m1, features, train_end, test_start, train_start
+    )
+    train_sec = test_sec = None
+    if secondary_m1 is not None and not secondary_m1.empty:
+        train_sec, test_sec = split_bars(secondary_m1, train_end, test_start, train_start)
+    log.info(
+        "Split: train=%d bars (≤%s)  test=%d bars (≥%s)",
+        len(train_bars),
+        train_end,
+        len(test_bars),
+        test_start,
+    )
+
+    # Tick books
+    tick_books = build_tick_books(cfg, force=args.force)
+    primary_ticks = tick_books.get(cfg.data.primary)
+    train_ticks = (
+        primary_ticks.slice(
+            pd.Timestamp("2000-01-01", tz=cfg.data.tz),
+            pd.Timestamp(train_end + " 23:59:59", tz=cfg.data.tz),
+        )
+        if primary_ticks is not None
+        else None
+    )
+    test_ticks = (
+        primary_ticks.slice(
+            pd.Timestamp(test_start + " 00:00:00", tz=cfg.data.tz),
+            pd.Timestamp("2099-01-01", tz=cfg.data.tz),
+        )
+        if primary_ticks is not None
+        else None
+    )
+
+    max_loss_per_trade = None
+    risk_frac = 0.01
+    rr_ratio = 2.0
+    swing_buffer = 1.0
+    try:
+        max_loss_per_trade = cfg.backtest.validation.max_loss_per_trade_usd
+        risk_frac = cfg.risk.default_risk_frac
+        rr_ratio = cfg.risk.rr_ratio_default
+        swing_buffer = cfg.risk.swing_buffer_pts
+    except Exception:
+        pass
+
+    # For MACD baseline: precompute actions and create special policy
+    macd_train_actions = None
+    macd_test_actions = None
+    ema_train_actions = None
+    ema_test_actions = None
+    rsi_train_actions = None
+    rsi_test_actions = None
+
+    if args.strategy == "macd":
+        # Precompute MACD actions (returns series with +1, -1, 0, 2)
+        macd_train_actions = macd_ema50_baseline(train_bars)
+        macd_test_actions = macd_ema50_baseline(test_bars)
+
+        # Disable SL/TP for MACD baseline
+        max_loss_per_trade = None
+
+        log.info("MACD baseline: computed precomputed actions for train & test splits")
+    elif args.strategy == "ema":
+        # Real EMA crossover: 9 vs 21 on close.
+        ema_train_actions = ema_crossover(train_bars, fast=9, slow=21)
+        ema_test_actions = ema_crossover(test_bars, fast=9, slow=21)
+        log.info("EMA baseline: computed precomputed actions for train & test splits")
+    elif args.strategy == "rsi":
+        # Real RSI mean-reversion: <30 long, >70 short, neutral=flat.
+        rsi_train_actions = rsi_mean_reversion(train_bars, period=14)
+        rsi_test_actions = rsi_mean_reversion(test_bars, period=14)
+        log.info("RSI baseline: computed precomputed actions for train & test splits")
+
+    def _create_macd_policy(
+        actions_series: pd.Series | None, obs_window: int
+    ) -> Callable[[np.ndarray[Any, Any]], int]:
+        """Create a policy that returns precomputed action for each bar.
+
+        Critical: Start at obs_window so engine bar i maps to actions_series.iloc[i],
+        not to actions_series.iloc[i - obs_window]. This ensures MACD crosses align
+        with the bars where they actually occur.
+        """
+        state = {"i": obs_window}
+        series = actions_series if actions_series is not None else pd.Series(dtype=float)
+
+        def policy(obs: np.ndarray[Any, Any]) -> int:
+            action = 0
+            if state["i"] < len(series):
+                action = int(series.iloc[state["i"]])
+            state["i"] += 1
+            return action
+
+        return policy
+
+    policy = STRATEGIES[args.strategy]
+
+    # Precomputed policies per strategy
+    train_precomputed_policy = None
+    test_precomputed_policy = None
+    if args.strategy == "macd":
+        obs_window = cfg.env.obs_window if hasattr(cfg.env, "obs_window") else 60
+        assert macd_train_actions is not None and macd_test_actions is not None
+        train_precomputed_policy = _create_macd_policy(macd_train_actions, obs_window)
+        test_precomputed_policy = _create_macd_policy(macd_test_actions, obs_window)
+    elif args.strategy == "ema":
+        obs_window = cfg.env.obs_window if hasattr(cfg.env, "obs_window") else 60
+        assert ema_train_actions is not None and ema_test_actions is not None
+        train_precomputed_policy = _make_indexed_policy(ema_train_actions, obs_window)
+        test_precomputed_policy = _make_indexed_policy(ema_test_actions, obs_window)
+    elif args.strategy == "rsi":
+        obs_window = cfg.env.obs_window if hasattr(cfg.env, "obs_window") else 60
+        assert rsi_train_actions is not None and rsi_test_actions is not None
+        train_precomputed_policy = _make_indexed_policy(rsi_train_actions, obs_window)
+        test_precomputed_policy = _make_indexed_policy(rsi_test_actions, obs_window)
+
+    def _run(
+        bars: pd.DataFrame,
+        feats: pd.DataFrame,
+        ticks: TickBook | None,
+        label: str,
+        indexed_policy: Callable[[np.ndarray[Any, Any]], int] | None = None,
+    ) -> tuple[dict[str, Any], PerformanceMetrics]:
+        log.info("Running backtest [%s] strategy=%s …", label, args.strategy)
+
+        # Use the precomputed policy if we built one (macd/ema/rsi), else
+        # fall back to the generic STRATEGIES entry. This is the spot where
+        # the placeholders are overridden with real indicator logic.
+        if indexed_policy is not None:
+            run_policy = indexed_policy
+        else:
+            run_policy = policy
+
+        result = run_backtest(
+            bars=bars,
+            features=feats,
+            policy=run_policy,
+            obs_window=cfg.env.obs_window,
+            initial_balance=cfg.account.initial_balance,
+            max_loss_per_trade_usd=max_loss_per_trade,
+            tickbook=ticks,
+            tick_execution_required=bool(cfg.costs.use_tick_execution),
+            randomized_fill_latency_ms=float(cfg.execution.get("randomized_fill_latency_ms", 0.0)),
+            max_tick_quote_wait_ms=int(cfg.execution.get("max_tick_quote_wait_ms", 60_000)),
+            use_structure_sl_tp=False,
+            risk_frac=risk_frac,
+            rr_ratio=rr_ratio,
+            swing_buffer_pts=swing_buffer,
+            contract_size=cfg.account.contract_size,
+            hold_on_zero=(args.strategy == "macd"),
+            exit_action=2 if args.strategy == "macd" else None,
+        )
+        result["initial_balance"] = cfg.account.initial_balance
+        m = calculate_metrics(
+            result["equity"],
+            trades=result["trades"],
+            n_sessions=result.get("n_sessions", 1),
+            n_breach_sessions=result.get("n_breach_sessions", 0),
+        )
+        log.info(
+            "[%s] Sharpe=%.3f  MaxDD=%.2f%%  Trades=%d  Return=%.2f%%",
+            label,
+            m.sharpe,
+            m.max_drawdown * 100,
+            m.n_trades,
+            m.total_return_pct,
+        )
+        return result, m
+
+    train_result, train_m = _run(
+        train_bars, train_feat, train_ticks, "training", train_precomputed_policy
+    )
+    test_result, test_m = _run(test_bars, test_feat, test_ticks, "testing", test_precomputed_policy)
+
+    if not args.no_save:
+        run_dir = save_run(
+            out_dir=args.out,
+            name=f"baseline_{args.strategy}_seed{args.seed}",
+            train_result=train_result,
+            train_metrics=train_m,
+            train_bars=train_bars,
+            test_result=test_result,
+            test_metrics=test_m,
+            test_bars=test_bars,
+            train_secondary=train_sec,
+            test_secondary=test_sec,
+            cfg=cfg,
+        )
+        log.info("Artifacts saved to %s", run_dir)
+
+
+if __name__ == "__main__":
+    main()

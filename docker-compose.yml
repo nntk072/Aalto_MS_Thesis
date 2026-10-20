@@ -111,17 +111,18 @@ services:
 
   prepare-data:
     extends: base
-    command: ["scripts/prepare_data.py"]
+    command: ["-m", "market_data.cli", "prepare"]
 
   discover-symbols:
     extends: base
-    command: ["scripts/discover_symbols.py"]
+    command: ["-m", "market_data.cli", "discover"]
 
   baseline-macd:
     extends: base
     command:
       - -m
-      - quant_rl.train.run_baselines
+      - training.cli
+      - baselines
       - --strategy
       - macd
 
@@ -129,13 +130,15 @@ services:
     extends: base
     command:
       - -m
-      - quant_rl.train.train_rl
+      - training.cli
+      - train
 
   backtest:
     extends: base
     command:
       - -m
-      - quant_rl.train.run_backtest
+      - training.cli
+      - backtest
 
   lint:
     extends: dev
@@ -143,7 +146,20 @@ services:
       - -m
       - ruff
       - check
-      - quant_rl
+      - configuration
+      - artifacts
+      - market_data
+      - features
+      - trading
+      - simulation
+      - models
+      - training
+      - evaluation
+      - experiments
+      - live
+      - integrations
+      - compute
+      - orchestra
 
   typecheck:
     extends: dev

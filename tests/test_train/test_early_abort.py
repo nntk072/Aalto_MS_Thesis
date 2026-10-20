@@ -13,7 +13,7 @@ pytestmark = pytest.mark.unit
 
 def test_callback_returns_false_when_the_window_fails() -> None:
     pytest.importorskip("stable_baselines3")
-    from quant_rl.train.callbacks import EarlyAbortCallback
+    from training.callbacks.core import EarlyAbortCallback
 
     cb = EarlyAbortCallback(min_timesteps=100, window=2, stop_on_equity_gate=True)
     cb.model = cast(
@@ -39,7 +39,7 @@ def test_callback_returns_false_when_the_window_fails() -> None:
 
 def test_callback_stops_on_a_nonfinite_rollout_metric() -> None:
     pytest.importorskip("stable_baselines3")
-    from quant_rl.train.callbacks import EarlyAbortCallback
+    from training.callbacks.core import EarlyAbortCallback
 
     cb = EarlyAbortCallback(min_timesteps=5_000_000, window=4)
     cb.model = cast(
@@ -57,7 +57,7 @@ def test_callback_stops_on_a_nonfinite_rollout_metric() -> None:
 
 def test_zero_return_explained_variance_does_not_abort() -> None:
     pytest.importorskip("stable_baselines3")
-    from quant_rl.train.callbacks import EarlyAbortCallback
+    from training.callbacks.core import EarlyAbortCallback
 
     cb = EarlyAbortCallback(min_timesteps=5_000_000, window=4)
     cb.model = cast(

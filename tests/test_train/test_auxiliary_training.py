@@ -14,8 +14,8 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-from quant_rl.config import load_config
-from quant_rl.train.auxiliary_training import (
+from configuration import load_config
+from training.callbacks.auxiliary import (
     AuxiliaryTrainerCallback,
     build_supervised_windows,
 )
@@ -126,7 +126,7 @@ def test_callback_co_trains_with_ppo(synthetic):
 
     head = cb.head
     optimizer = torch.optim.Adam(list(head.parameters()), lr=1e-3)
-    from quant_rl.models.auxiliary import AuxiliaryLoss
+    from models.auxiliary.heads import AuxiliaryLoss
 
     loss_fn = AuxiliaryLoss(head, aux_weight=0.1)
     obs_t = torch.zeros(4, 4, device=model.policy.device)  # CartPole Box(4,) obs
@@ -154,8 +154,8 @@ def test_callback_co_trains_with_ppo_on_trading_env():
     pytest.importorskip("torch")
     import pandas as pd
 
-    from quant_rl.envs.trading_env import TradingEnv
-    from quant_rl.models.agent import build_agent
+    from models.factory.agent import build_agent
+    from simulation.environment.env import TradingEnv
 
     rng = np.random.default_rng(7)
     n_bars = 300

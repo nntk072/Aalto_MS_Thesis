@@ -3,7 +3,7 @@
 import unittest
 from typing import Any, cast
 
-from quant_rl.eval.reward_attribution import RewardAttribution
+from evaluation.metrics.reward_attribution import RewardAttribution
 
 
 class RewardAttributionTest(unittest.TestCase):

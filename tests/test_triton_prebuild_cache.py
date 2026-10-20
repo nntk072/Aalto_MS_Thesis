@@ -7,10 +7,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from omegaconf import OmegaConf
-from scripts.triton import prebuild_campaign_bar_cache
 
-from quant_rl.data.pipeline import BAR_CACHE_VERSION
-from quant_rl.data.ticks import TICK_CACHE_VERSION
+from market_data.commands import prebuild_campaign_cache as prebuild_campaign_bar_cache
+from market_data.loading.pipeline import BAR_CACHE_VERSION
+from market_data.loading.ticks import TICK_CACHE_VERSION
 
 
 def test_prebuild_campaign_bar_cache_builds_all_configured_files(

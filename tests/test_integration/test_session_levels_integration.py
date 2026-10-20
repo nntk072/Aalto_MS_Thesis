@@ -5,9 +5,9 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from quant_rl.features.build import build_features
-from quant_rl.features.indicators import atr, volume_spike
-from quant_rl.features.structure import detect_session_levels
+from features import build_features
+from features.technical.indicators import atr, volume_spike
+from features.technical.structure import detect_session_levels
 
 
 class TestSessionLevelsIntegration:

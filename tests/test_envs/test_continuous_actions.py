@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from gymnasium.spaces import Box, Discrete
 
-from quant_rl.envs.trading_env import TradingEnv
+from simulation.environment.env import TradingEnv
 
 
 @pytest.fixture

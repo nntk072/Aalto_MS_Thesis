@@ -70,7 +70,7 @@ def test_same_seed_yields_identical_ppo_rollout() -> None:
     pytest.importorskip("stable_baselines3")
     from stable_baselines3 import PPO
 
-    from quant_rl.envs.trading_env import TradingEnv
+    from simulation.environment.env import TradingEnv
 
     bars = _make_bars()
     features = _make_features(bars)

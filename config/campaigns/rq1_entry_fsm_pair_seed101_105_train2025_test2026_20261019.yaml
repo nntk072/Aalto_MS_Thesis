@@ -1,6 +1,6 @@
 schema_version: 1
 campaign_id: rq1_entry_fsm_pair_seed101_105_train2025_test2026_20261019
-variant_file: scripts/variant_list_rq1_entry_fsm.txt
+variant_file: config/campaigns/variant_list_rq1_entry_fsm.txt
 variants:
   - ladder_a4b_entry_fsm
   - ladder_a4a_entry_fsm_hidden

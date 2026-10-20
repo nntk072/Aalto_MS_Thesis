@@ -29,29 +29,29 @@ Merge CI bar (GitHub / Orchestra phase 9) still runs `pytest tests/ -v`.
 ## Data Pipeline
 
 ```bash
-python scripts/data/prepare_data.py             # raw CSV → parquet → features
-python scripts/data/prepare_data.py --force     # ignore cache, reprocess
+python market_data/commands/prepare.py             # raw CSV → parquet → features
+python market_data/commands/prepare.py --force     # ignore cache, reprocess
 ```
 
 ## Training
 
 ```bash
-uv run python -m quant_rl.train.train_rl --mvp              # MVP smoke test (30 days)
-uv run python -m quant_rl.train.train_rl                    # full training run
-uv run python -m quant_rl.train.train_rl --algo sac --arch gru
-uv run python -m quant_rl.train.train_rl --strategy po3_ifvg  # Idea 1 overlay
-uv run python -m quant_rl.train.train_rl --config config/features/full_po3_mtf.yaml
-uv run python -m quant_rl.train.train_rl --walk-forward --wf-splits 5 --purge-bars 60
-uv run python -m quant_rl.train.run_backtest                # random policy backtest
-uv run python -m quant_rl.train.run_baselines                 # baseline strategies
-uv run python scripts/train/compare_encoders.py                     # encoder comparison
+uv run thesis-train train --mvp              # MVP smoke test (30 days)
+uv run thesis-train train                    # full training run
+uv run thesis-train train --algo sac --arch gru
+uv run thesis-train train --strategy po3_ifvg  # Idea 1 overlay
+uv run thesis-train train --config config/features/full_po3_mtf.yaml
+uv run thesis-train train --walk-forward --wf-splits 5 --purge-bars 60
+uv run thesis-train backtest                # random policy backtest
+uv run thesis-train baselines                 # baseline strategies
+uv run python scripts/research/benchmarks/compare_encoders.py                     # encoder comparison
 ```
 
 ## Evaluation
 
 ```bash
-uv run python -m quant_rl.eval.eval_run --run outputs/<run_dir>
-uv run python scripts/eval/report_g3.py --runs-dir outputs
+uv run thesis-evaluate reanalyze --run outputs/<run_dir>
+uv run python scripts/research/thesis/evaluation/report_g3.py --runs-dir outputs
 ```
 
 ## Testing
@@ -64,7 +64,7 @@ pytest -m integration                        # integration tests only
 pytest tests/test_features/                  # feature tests only
 pytest tests/test_envs/                      # env tests only
 pytest tests/test_orchestra/                 # orchestra tests
-pytest --cov=quant_rl --cov-report=term-missing -q
+./tools/check unit
 ```
 
 ## Linting & Type Checking
@@ -105,6 +105,6 @@ make deps-check
 ## Config Overrides
 
 ```bash
-python scripts/data/prepare_data.py data.cache_dir=my_cache env.obs_window=30
-uv run python -m quant_rl.train.train_rl training.max_days=60
+python market_data/commands/prepare.py data.cache_dir=my_cache env.obs_window=30
+uv run thesis-train train training.max_days=60
 ```

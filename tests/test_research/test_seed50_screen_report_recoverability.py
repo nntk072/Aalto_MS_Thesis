@@ -5,8 +5,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-import scripts.research.audit_seed50_screen_report_recoverability as audit
-from scripts.research.audit_seed50_screen_report_recoverability import (
+import scripts.research.audits.audit_seed50_screen_report_recoverability as audit
+from scripts.research.audits.audit_seed50_screen_report_recoverability import (
     mainplan_checkpoints,
 )
 
@@ -34,7 +34,7 @@ def test_mainplan_checkpoint_inventory_handles_nested_run_directories(
 def test_source_state_records_head_and_dirty_paths() -> None:
     responses = iter(("abc123\n", " M tracked.py\n?? untracked.py\n"))
     with patch(
-        "scripts.research.audit_seed50_screen_report_recoverability.subprocess.check_output",
+        "scripts.research.audits.audit_seed50_screen_report_recoverability.subprocess.check_output",
         side_effect=responses,
     ):
         state = audit.source_state()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from quant_rl.envs.po3_reward import PO3Reward
+from simulation.environment.po3_reward import PO3Reward
 
 
 def reward() -> PO3Reward:

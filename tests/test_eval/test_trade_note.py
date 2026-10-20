@@ -6,7 +6,7 @@ import math
 
 import pytest
 
-from quant_rl.eval.trade_note import (
+from evaluation.reporting.trade_note import (
     OPTION_CAP,
     build_trade_note,
     entry_reason,

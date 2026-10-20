@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from quant_rl.features.build import feature_cache_content_hash
+from features import feature_cache_content_hash
 
 
 def _bars(n: int = 500) -> pd.DataFrame:

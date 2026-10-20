@@ -1,6 +1,6 @@
 schema_version: 1
 campaign_id: ladder3_strategy_seed42_20m_exploratory_selection_acknowledged_20261014
-variant_file: scripts/variant_list_3_strategy_20261014.txt
+variant_file: config/campaigns/variant_list_3_strategy_20261014.txt
 
 # One A0 rung per strategy. This small run is an exploratory execution check;
 # reward modes differ by the frozen variant definitions, so it is not a matched

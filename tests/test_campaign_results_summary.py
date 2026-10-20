@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from scripts.matrix.summarize_campaign_results import (
+
+from experiments.campaigns.reporting import (
     _pnl_reconciliation,
     _write_summary_outputs,
     build_summary,
@@ -179,7 +180,7 @@ def test_pnl_reconciliation_exposes_saved_equity_mismatch(tmp_path: Path) -> Non
 
 
 def test_episode_coverage_reports_missing_and_legacy_telemetry(tmp_path: Path) -> None:
-    from scripts.matrix.summarize_campaign_results import _episode_coverage
+    from experiments.campaigns.reporting import _episode_coverage
 
     assert _episode_coverage(None)["status"] == "missing"
     legacy = tmp_path / "legacy.csv"
@@ -191,7 +192,7 @@ def test_episode_coverage_reports_missing_and_legacy_telemetry(tmp_path: Path) -
 
 
 def test_episode_coverage_exposes_unknown_and_invalid_rows(tmp_path: Path) -> None:
-    from scripts.matrix.summarize_campaign_results import _episode_coverage
+    from experiments.campaigns.reporting import _episode_coverage
 
     path = tmp_path / "episodes.csv"
     path.write_text(

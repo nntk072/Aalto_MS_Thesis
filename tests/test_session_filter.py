@@ -7,9 +7,9 @@ import inspect
 import pandas as pd
 import pytest
 
-from quant_rl.data.pipeline import BAR_CACHE_VERSION, _cache_path, run_pipeline
-from quant_rl.data.resample import resample
-from quant_rl.data.session import (
+from market_data.loading.pipeline import BAR_CACHE_VERSION, _cache_path, run_pipeline
+from market_data.transforms.resample import resample
+from market_data.transforms.sessions import (
     add_session_id,
     add_session_labels,
     filter_session,

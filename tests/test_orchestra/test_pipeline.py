@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+
 from orchestra.models import Model
 from orchestra.pipeline import Pipeline
 from orchestra.state import Phase, TaskState, list_tasks

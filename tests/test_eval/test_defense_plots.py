@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from quant_rl.eval.defense_plots import (
+from evaluation.plotting.defense_plots import (
     plot_activity_24h,
     plot_coverage_with_gaps,
     plot_event_rates,
@@ -15,7 +15,7 @@ from quant_rl.eval.defense_plots import (
     plot_pca_ifvg,
     plot_spread_regime,
 )
-from quant_rl.eval.po3_plots import plot_annotated_ny_session
+from evaluation.plotting.po3_plots import plot_annotated_ny_session
 
 
 def _bars(n: int = 400) -> pd.DataFrame:

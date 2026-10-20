@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from quant_rl.data.loader import load_bars
+from market_data.loading.bars import load_bars
 
 
 def test_load_bars_accepts_date_only_daily_export(tmp_path: Path) -> None:

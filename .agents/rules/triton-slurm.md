@@ -2,7 +2,7 @@
 
 Aalto Triton cluster. **Canonical workdir:** `/scratch/work/nguyenl37/Aalto_MS_Thesis`.
 
-Helper scripts: [`scripts/triton/`](../../scripts/triton/) (`status.sh`, `find_gpu_session.sh`, `attach_or_alloc.sh`).
+Helper scripts: [`scripts/compute/slurm/`](../../scripts/compute/slurm/) (`status.sh`, `find_gpu_session.sh`, `attach_or_alloc.sh`).
 
 ## WorkDir
 
@@ -69,7 +69,7 @@ templates for future launches.
 
 Validation job `21019023` is another launch-control incident: it exited after
 49 seconds because a mutating `ruff format` command included
-`quant_rl/config/default.yaml`. Ruff reformatted four Python files before
+`config/base/default.yaml`. Ruff reformatted four Python files before
 rejecting the YAML input; lint, Mypy, and pytest never ran. Preserve its log and
 the resulting source changes. GPU validation launchers must use
 `ruff format --check .` for the gate, and any corrective formatter invocation
@@ -97,7 +97,7 @@ and diagnose the launcher. Do not cancel the allocation. Never attempt to evade 
 keeping a short command alive artificially; use a genuine persistent task or
 run the command inside an existing shell.
 
-When an interactive GPU shell sources `scripts/triton/activate_venv.sh`, note
+When an interactive GPU shell sources `scripts/compute/slurm/activate_venv.sh`, note
 that the helper enables Bash `errexit`. A nonzero nested `srun --overlap` can
 therefore terminate the interactive shell and release its parent allocation.
 For a long worker step whose failure should leave the allocation available for
@@ -108,7 +108,7 @@ automatically; inspect the trace and step topology first.
 
 ### Default workflow (no new job)
 
-1. `bash scripts/triton/status.sh` (or `find_gpu_session.sh`) on login and
+1. `bash scripts/compute/slurm/status.sh` (or `find_gpu_session.sh`) on login and
    inspect `squeue` for the user's actual allocation.
 2. If a GPU tmux/`srun` allocation already exists, reuse it for the work;
    don't create another `srun` for a small task that fits there. Run required
@@ -128,7 +128,7 @@ automatically; inspect the trace and step topology first.
 
 ### Requires explicit user confirmation in-chat
 
-- `bash scripts/triton/attach_or_alloc.sh` when it would start a new alloc.
+- `bash scripts/compute/slurm/attach_or_alloc.sh` when it would start a new alloc.
 - Extra GPU jobs for “quick” pytest / ruff / mypy / CUDA smoke when no
   reusable shell exists (prefer asking for one long alloc, or login-only
   x86-safe tools).
@@ -146,7 +146,7 @@ automatically; inspect the trace and step topology first.
 - **Campaign worker dispatch:** `campaign_controller.py --worker-nodes ...`
   constructs one `srun --overlap` command per worker. It is allowed only when
   the allocation starts one persistent `campaign_worker_dispatch.py --manager`
-  on each node and prepends `scripts/triton/campaign_worker_bin` to `PATH`, so
+  on each node and prepends `scripts/compute/slurm/worker_bin` to `PATH`, so
   each worker request is handled as a direct child process rather than a Slurm
   step. The GH200 supervisor must pass through
   `campaign_srun_gh200_guard.sh`; direct controller invocation without the
@@ -325,7 +325,7 @@ Pick **1 or 2** GPUs from the job, not from habit. Login (`login4`: 40 CPUs,
 
 This 512 GB guidance is for the default `env.data_source: frames` path. The
 opt-in shared bundle path was measured separately on a GH200 (2026-10-09) with
-`scripts/bench/measure_shared_ppo_memory.py`: TCN PPO at `n_envs=64` processed
+`scripts/research/benchmarks/measure_shared_ppo_memory.py`: TCN PPO at `n_envs=64` processed
 10,240 steps over five iterations at about **3,811 FPS**, with PyTorch peak
 allocated/reserved VRAM of **261/302 MiB**. A sampled two-trainer run used about
 **2.2 GiB total** in `nvidia-smi` (about 1.09 GiB per process). An 18-trainer
@@ -337,7 +337,7 @@ present the 18-trainer projection as a direct measurement.
 | Job | GPUs | Typical request | Why |
 |-----|------|-----------------|-----|
 | One model (one TCN / GRU / Transformer, 20M) | **1** | Example GH200: `--gpus=gh200:1 --mem=512G --cpus-per-task=48 --time=12:00:00` | GH200 example only; size CPU/RAM/time for the chosen family, partition, and measured workload. |
-| Six-run matrix (overlay then baseline, three archs) | **2 GH200** | `--gpus=gh200:2 --mem=900G --cpus-per-task=128 --time=6:00:00` | Historical GH200 shape only. The GH200 campaign cap does not set V100/A100/H100/H200/B300 caps. Check [current matrix scripts](../../scripts/matrix/) before use. |
+| Six-run matrix (overlay then baseline, three archs) | **2 GH200** | `--gpus=gh200:2 --mem=900G --cpus-per-task=128 --time=6:00:00` | Historical GH200 shape only. The GH200 campaign cap does not set V100/A100/H100/H200/B300 caps. Check [current matrix scripts](../../scripts/compute/slurm/campaigns/) before use. |
 | 18-trainer full-split screen (campaign-specific) | **2 total, one per node** | GH200: `--nodes=2 --ntasks=2 --cpus-per-task=48 --gpus-per-node=gh200:1 --mem=512G --time=6:00:00` | Current active allocation shape: 18 workers across two nodes (9/node), 5 CPUs/worker, `n_envs=64`, shared bundle. Keep this distinct from two GPUs on one node; recheck cgroup memory and controller placement before reuse. |
 | V100 throughput probe (2026-10-16 user-authorized) | **1 V100, 2 trainers** | Actual probe: `gpu35`, `--gres=gpu:v100:1 --mem=192G --cpus-per-task=16 --time=4:00:00` | One V100 shared by two matched throughput workers. Benchmark-only; not thesis evidence or a validated general V100 cap. |
 
@@ -347,8 +347,8 @@ V100 environment only after its CUDA kernels and real GPU operation pass the
 preflight below. The six-run matrix's two-GH200 shape remains specific to that
 campaign.
 
-Setup x86 env once on an x86 node: `scripts/setup/setup_venv_x86.sh`. Inside any GPU
-shell: `source scripts/triton/activate_venv.sh` (picks `.venv` or `.venv-x86`).
+Setup x86 env once on an x86 node: `tools/setup-venv-x86`. Inside any GPU
+shell: `source scripts/compute/slurm/activate_venv.sh` (picks `.venv` or `.venv-x86`).
 
 ### Time / mem / CPUs
 
@@ -383,7 +383,7 @@ NVIDIA fallback, environment compatibility, and allocation-approval rules
 above.
 
 Idea 1 (`po3_ifvg`) and Idea 2 (`distribution`) at `n_envs=64` share **one**
-H200. Run `bash scripts/triton/two_trains_one_h200.sh` after the user says to
+H200. Run `bash scripts/compute/slurm/two_trains_one_h200.sh` after the user says to
 allocate. Do not probe other sizes first.
 
 | Knob | Value | Do not try first |
@@ -421,7 +421,7 @@ approval requirement take precedence. Do not reproduce an old allocation shape
 without a fresh forecast and approval.
 
 The unified matrix launcher is
-[`scripts/matrix/run_18variant_matrix.sh`](../../scripts/matrix/run_18variant_matrix.sh).
+[`scripts/compute/slurm/campaigns/run_18variant_matrix.sh`](../../scripts/compute/slurm/campaigns/run_18variant_matrix.sh).
 Select the GPU family with `GPU_KIND=gh200|h100|h200` and the allocation shape
 with `MODE=1|2|3|4`:
 
@@ -433,12 +433,12 @@ with `MODE=1|2|3|4`:
 | 4 | 1 GPU on each of 2 nodes, 6h, 600G per node | 2 per node | 32 |
 
 The ordered subset can be selected with a whitespace-separated `VARIANTS`
-value; when omitted, all entries in `scripts/variant_list.txt` are used.
+value; when omitted, all entries in `config/campaigns/variant_list.txt` are used.
 The tmux entrypoint passes these options through:
 
 ```bash
 MODE=2 GPU_KIND=gh200 OUT_DIR=outputs/gpu_matrix_18_mode2 \
-  bash scripts/matrix/run_18variant_matrix_gh200_tmux.sh
+  bash scripts/compute/slurm/campaigns/run_18variant_matrix_gh200_tmux.sh
 ```
 
 Each run keeps logs under `<OUT_DIR>/logs/`: `all.log` contains the combined
@@ -495,11 +495,11 @@ shape or the one-minute alternative-selection rule above:
 
 When the user asks for campaign status, or when a meaningful campaign
 transition, failure, recovery, or resource blocker occurs, generate the report
-with `scripts/triton/report_campaign_status.py` instead of composing its tables
+with `experiments/campaigns/status.py` instead of composing its tables
 from memory. For example:
 
 ```bash
-python3 scripts/triton/report_campaign_status.py \
+python3 experiments/campaigns/status.py \
   outputs/gpu_campaigns/<campaign-id> --job-id <slurm-job-id> \
   --supervisor <persistent-tmux-session>
 ```
@@ -577,10 +577,10 @@ allocate extra Slurm steps merely to diagnose startup latency.
 ## Login node vs GPU
 
 Login-node SSH: `ls`, `cat`, `tmux capture-pane`, `squeue`, `sinfo`, edits,
-`grep`, log tails, inspect-only `scripts/triton/*.sh`.
+`grep`, log tails, inspect-only `scripts/compute/slurm/*.sh`.
 
 Never `source` the wrong-arch venv on login (`.venv` is aarch64-only). Use
-`scripts/triton/activate_venv.sh` only inside the GPU bash.
+`scripts/compute/slurm/activate_venv.sh` only inside the GPU bash.
 
 Use a suitable existing GPU-node allocation for thesis computation whenever the
 workload can use a GPU. Training, evaluation, feature construction, and similar
@@ -593,7 +593,7 @@ is only the launch/monitor shell. Preserve logs and outputs on scratch.
 
 ## Train + eval
 
-- `quant_rl.train.train_rl` already runs train **and** eval in one process.
+- `training.runner.training` already runs train **and** eval in one process.
 - Prefer one invocation inside an existing (or user-approved) GPU shell.
 - After train finishes, leave the GPU bash / tmux window running.
 

@@ -4,7 +4,7 @@ set -euo pipefail
 #
 # Usage:
 #   ./tools/rtk git status
-#   ./tools/rtk ls quant_rl/
+#   ./tools/rtk ls trading/
 #   ./tools/rtk grep "pattern" tests/
 #   ./tools/rtk docker ps
 #   ./tools/rtk gain

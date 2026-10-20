@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from scripts.matrix import audit_real_market_bundle_parity as audit
+from scripts.research.campaigns import audit_real_market_bundle_parity as audit
 
 
 def test_raw_input_hashes_use_configured_files_without_campaign_outputs(
@@ -56,17 +56,17 @@ def test_raw_input_hashes_fail_closed_when_configured_file_is_missing(
 
 def test_audit_source_inventory_includes_project_code_and_configs(tmp_path: Path) -> None:
     expected = (
+        "config/campaigns/variant_list.txt",
         "config/strategies/po3.yaml",
-        "quant_rl/envs/strategies/po3.py",
-        "quant_rl/features/build.py",
-        "scripts/matrix/audit_real_market_bundle_parity.py",
-        "scripts/variant_list.txt",
+        "features/pipeline/builder.py",
+        "scripts/research/campaigns/audit_real_market_bundle_parity.py",
+        "trading/strategies/po3_ifvg.py",
     )
     for relative in expected:
         path = tmp_path / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("tracked input\n", encoding="utf-8")
-    (tmp_path / "quant_rl" / "ignored.txt").write_text("not code/config\n", encoding="utf-8")
+    (tmp_path / "features" / "ignored.txt").write_text("not code/config\n", encoding="utf-8")
 
     result = audit._audit_source_paths(tmp_path)
 

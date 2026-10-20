@@ -9,8 +9,8 @@ import pandas as pd
 import pytest
 from omegaconf import OmegaConf
 
-from quant_rl.data.pipeline import build_tick_books
-from quant_rl.data.ticks import (
+from market_data.loading.pipeline import build_tick_books
+from market_data.loading.ticks import (
     TICK_CACHE_VERSION,
     TickBook,
     TickExecutionUnavailable,
