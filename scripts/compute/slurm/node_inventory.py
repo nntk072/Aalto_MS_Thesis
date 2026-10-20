@@ -277,16 +277,34 @@ def format_table(headers: list[str], rows: list[list[str]]) -> str:
 
 
 def print_pending_gpu_jobs(partitions: set[str], *, show_examples: bool) -> None:
-    raw = run(["squeue", "-h", "-t", "PD", "-o", "%P|%i|%u|%b|%C|%m|%R"])
+    payload = json.loads(run(["squeue", "--json", "-t", "PENDING"]))
     grouped: dict[str, list[list[str]]] = {}
-    for line in raw.splitlines():
-        parts = line.split("|", 6)
-        if len(parts) != 7:
+    for job in payload.get("jobs", []):
+        partition = str(job.get("partition", ""))
+        requested = ""
+        for key in ("tres_per_job", "tres_per_node", "tres_per_task"):
+            requested = str(job.get(key, ""))
+            if gpu_tres(requested):
+                break
+        if not requested or not gpu_tres(requested):
+            requested = str(job.get("tres_req_str", ""))
+        if partition not in partitions or "gres/gpu" not in requested.lower():
             continue
-        partition, job_id, user, tres, cpus, memory, reason = parts
-        if partition not in partitions or "gpu" not in tres.lower():
-            continue
-        grouped.setdefault(partition, []).append([job_id, user, tres, cpus, memory, reason])
+        cpus_data = job.get("cpus_per_task", {})
+        cpus = str(cpus_data.get("number", "?")) if isinstance(cpus_data, dict) else "?"
+        memory_match = re.search(r"(?:^|,)mem=([^,]+)", str(job.get("tres_req_str", "")))
+        memory = memory_match.group(1) if memory_match else "?"
+        grouped.setdefault(partition, []).append(
+            [
+                str(job.get("job_id", "?")),
+                str(job.get("user_name", "?")),
+                str(job.get("name", "?")),
+                requested,
+                cpus,
+                memory,
+                str(job.get("state_reason", "")) or "-",
+            ]
+        )
 
     print("\nPending GPU requests in the listed GPU partitions:")
     if not grouped:
@@ -298,7 +316,7 @@ def print_pending_gpu_jobs(partitions: set[str], *, show_examples: bool) -> None
             continue
         print(f"  {partition}: {len(jobs)} pending")
         for job in jobs[:8]:
-            print("    job={} user={} gpu={} cpu={} mem={} reason={}".format(*job))
+            print("    job={} user={} name={} gpu={} cpu={} mem={} reason={}".format(*job))
         if len(jobs) > 8:
             print(f"    ... plus {len(jobs) - 8} more")
 
@@ -439,9 +457,43 @@ def main() -> int:
         print("No scheduled GPU release time could be derived from running GPU jobs.")
 
     try:
-        user_jobs = run(["squeue", "-u", run(["id", "-un"]).strip(), "-o", "%i|%P|%T|%N|%b|%C|%m"])
-        print("\nYour Slurm jobs:")
-        print("\n".join(f"  {line}" for line in user_jobs.splitlines()) or "  none")
+        user_jobs = run(
+            [
+                "squeue",
+                "-u",
+                run(["id", "-un"]).strip(),
+                "-h",
+                "-o",
+                "%i|%P|%j|%T|%N|%b|%C|%m|%M|%R",
+            ]
+        )
+        print("\nYour Slurm jobs (including the current allocation/check):")
+        job_rows = [line.split("|", 9) for line in user_jobs.splitlines()]
+        if job_rows:
+            print(
+                format_table(
+                    [
+                        "JOBID",
+                        "PARTITION",
+                        "NAME",
+                        "STATE",
+                        "NODE",
+                        "GPU REQUEST",
+                        "CPUS",
+                        "MEMORY",
+                        "ELAPSED",
+                        "REASON",
+                    ],
+                    job_rows,
+                )
+            )
+        else:
+            print("  none")
+        if any(len(row) > 3 and row[3] == "RUNNING" for row in job_rows):
+            print(
+                "  RUNNING means Slurm assigned these resources; the job name and queue do not "
+                "show live GPU utilization or the child command inside an interactive shell."
+            )
 
         if args.node:
             assigned = run(
