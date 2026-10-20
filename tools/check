@@ -33,6 +33,12 @@ run_quality() {
   run_module mypy .
 }
 run_architecture() { sync_dev; run_module pytest -q tests/architecture; }
+run_graph_quality() {
+  sync_dev
+  run_module pytest -q tests/test_code_graph_quality.py
+  ./tools/crgraph build
+  ./tools/crgraph verify-critical --min-resolution 0.80 --min-critical-resolution 0.70
+}
 run_contracts() {
   sync_dev
   run_module pytest -q \
@@ -110,6 +116,7 @@ case "$GATE" in
   deps) run_deps ;;
   quality) run_quality ;;
   architecture) run_architecture ;;
+  graph-quality) run_graph_quality ;;
   contracts) run_contracts ;;
   unit) run_unit ;;
   build) run_build ;;
@@ -117,7 +124,7 @@ case "$GATE" in
   parity) run_parity ;;
   training-smoke) run_training_smoke ;;
   fast) run_deps; run_architecture; run_contracts ;;
-  full) run_deps; run_quality; run_architecture; run_contracts; run_unit; run_build; run_integration; run_parity; run_training_smoke ;;
+  full) run_deps; run_quality; run_architecture; run_graph_quality; run_contracts; run_unit; run_build; run_integration; run_parity; run_training_smoke ;;
   gpu|triton) run_gpu ;;
-  *) echo "usage: $0 {deps|quality|architecture|contracts|unit|build|integration|parity|training-smoke|fast|full|gpu|triton}" >&2; exit 2 ;;
+  *) echo "usage: $0 {deps|quality|architecture|graph-quality|contracts|unit|build|integration|parity|training-smoke|fast|full|gpu|triton}" >&2; exit 2 ;;
 esac

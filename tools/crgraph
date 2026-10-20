@@ -11,6 +11,8 @@ set -euo pipefail
 #   ./tools/crgraph flows      # list execution flows
 #   ./tools/crgraph wiki       # generate markdown wiki
 #   ./tools/crgraph watch      # watch for changes and auto-update
+#   ./tools/crgraph quality    # repository-owned graph/config quality report
+#   ./tools/crgraph verify-critical  # invariant checks for source/config/critical symbols
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$SCRIPT_DIR"
@@ -25,6 +27,12 @@ cmd="${1:-update}"
 shift || true
 
 case "$cmd" in
+  quality)
+    exec python3 scripts/dev/code_graph/graph_quality.py report --label final "$@"
+    ;;
+  verify-critical)
+    exec python3 scripts/dev/code_graph/graph_quality.py check "$@"
+    ;;
   build|update|postprocess|embed|watch|status|forget|visualize|wiki|register|unregister|repos|eval|detect-changes|enrich|dead-code|query|impact|search|flows|flow|communities|community|architecture|large-functions|refactor|serve|mcp|daemon)
     exec code-review-graph "$cmd" "$@"
     ;;
