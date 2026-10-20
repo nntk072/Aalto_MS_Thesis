@@ -8,7 +8,7 @@ The trained encoder is then frozen and used as a feature extractor for the
 RL agent's observation space.
 
 Usage:
-    python scripts/train_vae.py [--config config/vae.yaml]
+    thesis-train vae [--config config/vae.yaml]
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ import yaml
 from torch.utils.data import DataLoader, Dataset, Subset, random_split
 
 # Add project root to path before importing VAE
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from compute.environment.device import get_device  # noqa: E402
 from models.auxiliary.vae import VAE  # noqa: E402
 

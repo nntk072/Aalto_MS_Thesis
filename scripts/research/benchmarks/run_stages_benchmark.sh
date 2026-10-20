@@ -22,7 +22,7 @@ mkdir -p "$LOG_DIR"
 RAM_FILES=(
   "models/factory/agent.py"
   "training/runner/training.py"
-  "simulation/envs/trading_env.py"  # Stage 1: lazy VAE import
+  "simulation/environment/env.py"  # Stage 1: lazy VAE import
 )
 
 # === Worker Process Monitoring ===

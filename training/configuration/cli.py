@@ -84,7 +84,7 @@ def parse_train_args() -> argparse.Namespace:
     parser.add_argument(
         "--vae-path",
         default=None,
-        help="Path to a trained VAE state_dict (.pth from scripts/train_vae.py)",
+        help="Path to a trained VAE state_dict (.pth from thesis-train vae)",
     )
     parser.add_argument(
         "--vae-config",

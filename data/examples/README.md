@@ -32,7 +32,7 @@ filename records the sample's actual final timestamp, not the full source end.
 
 Any higher-timeframe CSV files in this directory other than the M1 source
 (`US100.cash_M1_*`, `US500.cash_M1_*`) are mislabeled duplicates of finer
-timeframes and are NOT used by the pipeline. `quant_rl/data/` resamples
+timeframes and are NOT used by the pipeline. `market_data/` resamples
 every timeframe (M5/M15/M30/H1/H4/D1) from the true M1 source. Do not load
 the other CSVs directly.
 
@@ -40,7 +40,7 @@ Files present locally (all ignored by git):
 
 | File group | Role |
 |---|---|
-| `US100.cash_M1_*`, `US500.cash_M1_*` | **The only bar files the pipeline reads** (`data.m1_files` in `quant_rl/config/default.yaml`). Every other timeframe is *resampled from M1 in code*. |
+| `US100.cash_M1_*`, `US500.cash_M1_*` | **The only bar files the pipeline reads** (`data.m1_files` in `config/base/default.yaml`). Every other timeframe is *resampled from M1 in code*. |
 | `*_M5/M15/M30/H1/H4/Daily_*` | MT5 exports of the same data at higher timeframes — kept for reference/spot-checks, **not read by the pipeline** (they are known duplicates of what resampling produces). |
 | `US100.cash_2025…_2026….csv` (no TF tag) | Real tick data (`<BID> <ASK> <LAST> <VOLUME> <FLAGS>`) used by `data.tick_files` for accurate fill pricing (spread/slippage) in backtests. |
 
@@ -76,8 +76,8 @@ MT5 tab-separated export, **no quoting**, header row included:
 
 ## How the pipeline consumes it
 
-1. `quant_rl/data/pipeline.py` reads **only** the `data.m1_files` CSVs from
-   `data.raw_dir` (`data:` block in `quant_rl/config/default.yaml`).
+1. `market_data/loading/pipeline.py` reads **only** the `data.m1_files` CSVs from
+   `data.raw_dir` (`data:` block in `config/base/default.yaml`).
 2. Bars are parsed in broker tz (`Etc/GMT-3`), resampled to all
    `data.timeframes`, features computed, and cached to parquet in
    `data.cache_dir` (`cache/`, also gitignored).

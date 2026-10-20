@@ -1,5 +1,5 @@
 # VAE Configuration
-# This configuration file is used by scripts/train_vae.py for training
+# This configuration file is used by `thesis-train vae` for training
 # the Variational Autoencoder on pre-NY session data.
 
 # Data configuration
