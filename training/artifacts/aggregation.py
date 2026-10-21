@@ -10,6 +10,8 @@ from typing import Any
 import numpy as np
 from omegaconf import OmegaConf
 
+from training.artifacts.manifests import _entry_funnel_by_split
+
 
 def _save_seed_artifacts(
     seed_dir: Path,
@@ -63,8 +65,6 @@ def _aggregate_seed_results(
     run_dir: Path,
 ) -> dict[str, Any]:
     """Aggregate per-seed results into a multi-seed training_log.json."""
-    from training.configuration.variants import compute_tier1_funnel
-
     ok_seeds = [r for r in seed_results if r["test_m"].n_trades > 0]
     n_seeds_ok = len(ok_seeds)
 
@@ -118,11 +118,10 @@ def _aggregate_seed_results(
     aggregated["timesteps_completed"] = seed_results[-1]["model_num_timesteps"]
 
     first = seed_results[0]
-    funnel = compute_tier1_funnel(
-        first["test_result"].get("entry_diag"),
-        first["test_result"].get("entry_state_diagnostics"),
+    aggregated["entry_funnel_seed"] = int(first["seed"])
+    aggregated["entry_funnel_by_split"] = _entry_funnel_by_split(
+        first.get("train_result"), first.get("test_result")
     )
-    aggregated.update(funnel)
 
     aggregated["oos_role"] = (
         "selection_acknowledged"

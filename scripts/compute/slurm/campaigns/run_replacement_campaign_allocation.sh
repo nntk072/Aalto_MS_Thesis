@@ -169,8 +169,14 @@ resume_args=()
 if [[ -s "$OUT_DIR/campaign.json" ]]; then
   resume_args+=(--resume)
 fi
+if [[ -n "${CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON:-}" ]]; then
+  resume_args+=(
+    --resume-fingerprint-override-reason
+    "$CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON"
+  )
+fi
 initial_checkpoint_args=()
-if [[ -n "${CAMPAIGN_INITIAL_CHECKPOINTS:-}" ]]; then
+if [[ -n "${CAMPAIGN_INITIAL_CHECKPOINTS:-}" && ! -s "$OUT_DIR/campaign.json" ]]; then
   initial_checkpoints="$CAMPAIGN_INITIAL_CHECKPOINTS"
   if [[ "$initial_checkpoints" != /* ]]; then
     initial_checkpoints="$REPO/$initial_checkpoints"

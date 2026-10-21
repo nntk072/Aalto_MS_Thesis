@@ -270,6 +270,39 @@ class TestBuildTrainingLog:
         )
         assert log["test_breaches"] == 0
 
+    def test_entry_funnels_keep_training_and_test_diagnostics_separate(self) -> None:
+        test_m = type(
+            "Metrics",
+            (),
+            {"sharpe": 0.0, "max_drawdown": 0.0, "n_trades": 0, "total_return_pct": 0.0},
+        )()
+        log = _build_training_log(
+            seed=50,
+            mvp=False,
+            algo="ppo",
+            arch="tcn",
+            reward="dsr",
+            timesteps=20_000_000,
+            train_bars=100,
+            test_bars=50,
+            test_m=test_m,
+            train_result={
+                "entry_diag": {"opened": 3, "rejected_gate": 7},
+                "entry_state_diagnostics": {"candidate_created": 11, "entered": 3},
+            },
+            test_result={
+                "entry_diag": {"opened": 5, "rejected_gate": 13},
+                "entry_state_diagnostics": {"candidate_created": 22, "entered": 5},
+            },
+        )
+
+        funnels = log["entry_funnel_by_split"]
+        assert funnels["train"]["entry_opened"] == 3
+        assert funnels["train"]["candidate_created"] == 11
+        assert funnels["test"]["entry_opened"] == 5
+        assert funnels["test"]["candidate_created"] == 22
+        assert "entry_opened" not in log
+
 
 class TestLoadMergedConfig:
     """Tests for load_merged_config() override ordering (SL Phase 0.1)."""

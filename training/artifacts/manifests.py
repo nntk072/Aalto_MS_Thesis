@@ -10,6 +10,22 @@ from omegaconf import OmegaConf
 from evaluation.reporting.run_manifest import build_sequence_feature_schema
 
 
+def _entry_funnel_by_split(
+    train_result: dict[str, Any] | None, test_result: dict[str, Any] | None
+) -> dict[str, dict[str, Any]]:
+    """Build separately labeled train and report-only test entry funnels."""
+    from training.configuration.variants import compute_tier1_funnel
+
+    result: dict[str, dict[str, Any]] = {}
+    for split, split_result in (("train", train_result), ("test", test_result)):
+        split_result = split_result or {}
+        result[split] = compute_tier1_funnel(
+            split_result.get("entry_diag"),
+            split_result.get("entry_state_diagnostics"),
+        )
+    return result
+
+
 def _build_training_log(
     *,
     seed: int,
@@ -22,10 +38,9 @@ def _build_training_log(
     test_bars: int,
     test_m: Any,
     test_result: dict[str, Any],
+    train_result: dict[str, Any] | None = None,
     strategy: str = "baseline",
     strategy_actions: bool = False,
-    entry_diag: dict[str, Any] | None = None,
-    entry_state_diagnostics: dict[str, Any] | None = None,
     action_space_width: int | None = None,
     observation_account_dim: int | None = None,
     observation_space_shapes: dict[str, list[int]] | None = None,
@@ -35,9 +50,6 @@ def _build_training_log(
     oos_role: str = "final_report_only",
 ) -> dict[str, Any]:
     """Build the training_log.json dict from run results."""
-    from training.configuration.variants import compute_tier1_funnel
-
-    funnel = compute_tier1_funnel(entry_diag, entry_state_diagnostics)
     log_dict: dict[str, Any] = {
         "seed": seed,
         "mvp": mvp,
@@ -65,7 +77,7 @@ def _build_training_log(
         ),
         "timestamp": datetime.now().isoformat(),
     }
-    log_dict.update(funnel)
+    log_dict["entry_funnel_by_split"] = _entry_funnel_by_split(train_result, test_result)
     if action_space_width is not None:
         log_dict["action_space_width"] = action_space_width
     if observation_account_dim is not None:

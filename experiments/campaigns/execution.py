@@ -183,6 +183,13 @@ def main() -> int:
     )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument(
+        "--resume-fingerprint-override-reason",
+        help=(
+            "explicitly continue an existing campaign when its current identity fingerprint "
+            "differs; the original fingerprint remains the artifact/checkpoint lineage"
+        ),
+    )
     parser.add_argument("--benchmark", action="store_true")
     parser.add_argument(
         "--fast-reports",
@@ -394,12 +401,103 @@ def main() -> int:
     fingerprint = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
     if initial_checkpoints:
         verify_initial_checkpoint_models(archived_bootstrap, initial_checkpoints)
+    effective_identity = identity
+    fingerprint_override: dict[str, Any] | None = None
     if manifest_path.exists():
         manifest = read_manifest(manifest_path)
         if not args.resume:
             raise RuntimeError("campaign exists: use --resume")
         if manifest["fingerprint"] != fingerprint:
-            raise RuntimeError("resume fingerprint mismatch")
+            reason = (args.resume_fingerprint_override_reason or "").strip()
+            if not reason:
+                raise RuntimeError("resume fingerprint mismatch")
+            if len(reason) < 12:
+                raise ValueError(
+                    "resume fingerprint override reason must be at least 12 characters"
+                )
+            canonical_fingerprint = str(manifest.get("fingerprint", ""))
+            canonical_identity: dict[str, Any] | None = None
+            for item in manifest.get("jobs", []):
+                attempts = int(item.get("attempts", 0))
+                for attempt in range(attempts, 0, -1):
+                    provenance_path = (
+                        out
+                        / "runs"
+                        / "attempts"
+                        / str(item.get("key", ""))
+                        / f"attempt{attempt}"
+                        / "attempt_provenance.json"
+                    )
+                    try:
+                        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+                    except (OSError, ValueError):
+                        continue
+                    candidate = provenance.get("identity") if isinstance(provenance, dict) else None
+                    if (
+                        isinstance(provenance, dict)
+                        and provenance.get("campaign_fingerprint") == canonical_fingerprint
+                        and isinstance(candidate, dict)
+                        and hashlib.sha256(
+                            json.dumps(candidate, sort_keys=True).encode()
+                        ).hexdigest()
+                        == canonical_fingerprint
+                    ):
+                        canonical_identity = candidate
+                        break
+                if canonical_identity is not None:
+                    break
+            if canonical_identity is None:
+                raise RuntimeError(
+                    "cannot override resume fingerprint: no attempt contains the original "
+                    "fingerprint identity"
+                )
+            if manifest.get("initial_checkpoint_lineage", {}) != canonical_identity.get(
+                "initial_checkpoint_lineage", {}
+            ):
+                raise RuntimeError(
+                    "cannot override resume fingerprint: original checkpoint lineage does "
+                    "not match the campaign manifest"
+                )
+            required_matches = {
+                "jobs": [job["key"] for job in jobs],
+                "steps": args.timesteps,
+                "data_source": args.data_source,
+                "n_envs": args.n_envs,
+                "fast_reports": args.fast_reports,
+                "evaluation": evaluation,
+            }
+            changed_required = [
+                name
+                for name, value in required_matches.items()
+                if canonical_identity.get(name) != value
+            ]
+            if changed_required:
+                raise RuntimeError(
+                    "resume fingerprint override rejected; continuation-critical identity "
+                    f"changed: {', '.join(changed_required)}"
+                )
+            effective_identity = identity
+            identity = canonical_identity
+            fingerprint_override = {
+                "reason": reason,
+                "canonical_fingerprint": canonical_fingerprint,
+                "effective_fingerprint": fingerprint,
+                "effective_identity": effective_identity,
+                "continuation_critical_fields_verified": sorted(required_matches),
+                "canonical_checkpoint_lineage_sha256": hashlib.sha256(
+                    json.dumps(
+                        canonical_identity.get("initial_checkpoint_lineage", {}), sort_keys=True
+                    ).encode()
+                ).hexdigest(),
+                "effective_checkpoint_lineage_sha256": hashlib.sha256(
+                    json.dumps(
+                        effective_identity.get("initial_checkpoint_lineage", {}), sort_keys=True
+                    ).encode()
+                ).hexdigest(),
+                "training_evidence_status": "exploratory_after_fingerprint_override",
+                "recorded_at": utc(),
+            }
+            fingerprint = canonical_fingerprint
         if manifest.get("initial_checkpoint_lineage", {}) != identity["initial_checkpoint_lineage"]:
             raise RuntimeError("resume initial checkpoint lineage mismatch")
         snapshot_record = manifest.get("source_snapshot")
@@ -420,6 +518,28 @@ def main() -> int:
             raise RuntimeError("resume data-source mismatch")
         if manifest.get("n_envs") != args.n_envs:
             raise RuntimeError("resume n-envs mismatch")
+        if fingerprint_override is not None:
+            manifest.setdefault("resume_fingerprint_overrides", []).append(
+                {
+                    key: value
+                    for key, value in fingerprint_override.items()
+                    if key != "effective_identity"
+                }
+            )
+            override_path = (
+                out
+                / "reports"
+                / f"resume_fingerprint_override_{fingerprint_override['effective_fingerprint']}.json"
+            )
+            atomic_json(override_path, fingerprint_override)
+            record(
+                out / "reports" / "resume_fingerprint_overrides.jsonl",
+                {
+                    key: value
+                    for key, value in fingerprint_override.items()
+                    if key != "effective_identity"
+                },
+            )
         manifest.pop("stopping", None)
         jobs = manifest["jobs"]
         for item in jobs:
