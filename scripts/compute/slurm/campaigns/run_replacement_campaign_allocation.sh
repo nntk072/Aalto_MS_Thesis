@@ -6,6 +6,8 @@ set -Eeuo pipefail
 REPO="${TRITON_REPO:-/scratch/work/nguyenl37/Aalto_MS_Thesis}"
 SPEC="${CAMPAIGN_SPEC:-config/campaigns/replacement18_seed50_train2025_test2026_current_mtf_20261019.yaml}"
 CAMPAIGN_ID="${CAMPAIGN_ID:-replacement18_seed50_train2025_test2026_current_mtf_20261019}"
+WORKERS="${CAMPAIGN_WORKERS:-18}"
+WORKER_CPUS="${CAMPAIGN_WORKER_CPUS:-5}"
 OUT_DIR="$REPO/outputs/gpu_campaigns/$CAMPAIGN_ID"
 QUEUE="$OUT_DIR/worker_queue"
 JOB_ID="${SLURM_JOB_ID:?}"
@@ -70,6 +72,7 @@ if [[ ! -s "$OUT_DIR/campaign.json" ]]; then
     tests/test_envs/test_baseline_regression.py \
     tests/test_envs/test_bundle_env_equivalence.py \
     tests/test_envs/test_strategy_env.py \
+    tests/test_train/test_train_rl_decomposition.py \
     tests/test_matrix_campaign_controller.py \
     tests/test_campaign_artifacts.py \
     tests/test_triton_gh200_capacity.py \
@@ -194,10 +197,10 @@ timeout --signal=TERM --kill-after=2m 20700s \
   --campaign-spec "$REPO/$SPEC" \
   "${resume_args[@]}" \
   "${initial_checkpoint_args[@]}" \
-  --workers 18 \
+  --workers "$WORKERS" \
   --n-envs 64 \
   --worker-nodes "${SLURM_JOB_NODELIST:?}" \
-  --worker-cpus 5 \
+  --worker-cpus "$WORKER_CPUS" \
   --worker-gpu-type gh200 \
   --worker-gpus-per-node 1 \
   --fast-reports \

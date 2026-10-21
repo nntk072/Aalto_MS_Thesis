@@ -5,6 +5,10 @@ set -Eeuo pipefail
 REPO="${TRITON_REPO:-/scratch/work/nguyenl37/Aalto_MS_Thesis}"
 SPEC="${CAMPAIGN_SPEC:-config/campaigns/rq1_entry_fsm_pair_seed101_105_train2025_test2026_20261019.yaml}"
 CAMPAIGN_ID="${CAMPAIGN_ID:-rq1_entry_fsm_pair_seed101_105_train2025_test2026_20261019}"
+WORKERS="${CAMPAIGN_WORKERS:-2}"
+WORKER_CPUS="${CAMPAIGN_WORKER_CPUS:-47}"
+JOB_NAME="${CAMPAIGN_SLURM_JOB_NAME:-thesis-rq1}"
+ALLOCATION_SCRIPT="${CAMPAIGN_ALLOCATION_SCRIPT:-scripts/compute/slurm/campaigns/run_rq1_pair_allocation.sh}"
 OUT_DIR="$REPO/outputs/gpu_campaigns/$CAMPAIGN_ID"
 LOG="$OUT_DIR/logs/allocation_supervisor.log"
 NODES=(gpuarm1 gpuarm2)
@@ -108,10 +112,10 @@ while true; do
     --nodes=2 --nodelist=gpuarm1,gpuarm2 \
     --ntasks=2 --ntasks-per-node=1 \
     --cpus-per-task=48 --gpus-per-node=gh200:1 --mem=512G \
-    --time=06:00:00 --job-name=thesis-rq1 \
-    --export=ALL,TRITON_REPO="$REPO",CAMPAIGN_SPEC="$SPEC",CAMPAIGN_ID="$CAMPAIGN_ID",RQ1_WORKERS=2 \
+    --time=06:00:00 --job-name="$JOB_NAME" \
+    --export=ALL,TRITON_REPO="$REPO",CAMPAIGN_SPEC="$SPEC",CAMPAIGN_ID="$CAMPAIGN_ID",RQ1_WORKERS="$WORKERS",CAMPAIGN_WORKERS="$WORKERS",CAMPAIGN_WORKER_CPUS="$WORKER_CPUS" \
     --chdir="$REPO" \
-    bash "$REPO/scripts/compute/slurm/campaigns/run_rq1_pair_allocation.sh"
+    bash "$REPO/$ALLOCATION_SCRIPT"
   rc=$?
   set -e
   echo "$(date --iso-8601=seconds) allocation returned exit=$rc"
