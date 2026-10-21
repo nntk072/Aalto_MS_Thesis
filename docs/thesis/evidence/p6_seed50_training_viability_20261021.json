@@ -1,0 +1,213 @@
+{
+  "campaign": {
+    "data_source": "bundle",
+    "fingerprint": "3ca5c8e0cd3df51b29a5cdcb8f3d1c0f602a6c6721bf5aed3f6986a851b769b7",
+    "git_sha": "77fa156a260a383f20d2ca8488a65c3fba21e182",
+    "id": "p6_entry_fsm_viability_seed50_train2025_20261021_scratch1",
+    "initial_checkpoint_lineage": {},
+    "manifest": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/campaign.json",
+    "manifest_sha256": "df4ae5c024e0e44e5673cbd53b644b2ef3c6d5a523cee1c831a653540f62ca71",
+    "n_envs": 64,
+    "requested_steps_per_arm": 20000000,
+    "resume_fingerprint_overrides": [],
+    "runtime": {
+      "gpu": "NVIDIA GH200 144G HBM3e, GPU-404813aa-6b38-6245-ed8d-3ed4af1952a7, 580.173.02",
+      "machine": "aarch64",
+      "packages": {
+        "gymnasium": "1.3.0",
+        "numpy": "2.2.6",
+        "omegaconf": "2.3.1",
+        "pandas": "2.3.2",
+        "pyyaml": "6.0.3",
+        "stable-baselines3": "2.9.0",
+        "torch": "2.14.0+cu130"
+      },
+      "platform": "Linux-5.14.0-687.57.1.el9_8.aarch64-aarch64-with-glibc2.34",
+      "python": "3.12.15"
+    },
+    "slurm_exit_code": "0:0",
+    "slurm_job_id": "21103722",
+    "slurm_terminal_state": "COMPLETED",
+    "source_snapshot": {
+      "file_count": 538,
+      "manifest_sha256": "14dbfedb88fffc0a6550f46ca041ef605b914409ec0c178ff0074cb63d220c9b",
+      "path": "source_snapshot.zip",
+      "sha256": "4f96de9f173a59e04c5ae9049749c3401b8717e61faa687f251a06eced4ab159"
+    },
+    "training_and_schedule_input_sha256": {
+      "calendar:config/ny_session_schedule.csv": "7e9f5def3385185905f7265f946a0835ccb43c53f1351c057aa23f00480e6cbc",
+      "training:data/training/US100.cash_202412300105_202610162349.csv": "631dbc13f17e6a974429cd00c87e9019b4f2c8f459fa9109e799c02863df5b23",
+      "training:data/training/US100.cash_H1_202412300100_202610162300.csv": "693e9b3df53e522b16c63f1d9ab9c7e29f0c29555f066b3a90554b34a9dd7c0b",
+      "training:data/training/US100.cash_H4_202412300000_202610162000.csv": "83855aed1db0517f43b76ef2e3484908e43d9744d955abb8c828aad699a1e2af",
+      "training:data/training/US100.cash_M10_202412300100_202610162340.csv": "a13bdee2606d3bed19e301196fc29e426d97fdf05373fee83a734181004ade53",
+      "training:data/training/US100.cash_M15_202412300100_202610162345.csv": "1eb96fafbdbcfa140e50d6430e7fdfbd891dcad22eae597771678c0ed607c6cd",
+      "training:data/training/US100.cash_M1_202412300105_202610162349.csv": "c0ad7d79a8769fa93323e630fd27ff73de32eac3882c252994d0a426b93137e0",
+      "training:data/training/US100.cash_M30_202412300100_202610162330.csv": "256a8fb8c959a61f2fada196163ba8da0edf94de67146d175fbdab9eba75c5d7",
+      "training:data/training/US100.cash_M3_202412300103_202610162348.csv": "217c2f8bfdd1ff30938868f81d3fb682f8919bc703171cb29f88ddc6a6bab461",
+      "training:data/training/US100.cash_M5_202412300105_202610162345.csv": "07e162ade037e3da909bce02041e0f4ce6e2e85d417c5e3fab9bfeaacc94a7ec",
+      "training:data/training/US500.cash_202412300105_202610162349.csv": "36e59a0d20c06bf008c81d5d3126c48b5cc2dd06f7fdd92428e068760415e1b3",
+      "training:data/training/US500.cash_D1_202412300000_202610160000.csv": "8eccb7d28f99e403df36adbd76097df388187f110e0c19544487dde7b8ceb990",
+      "training:data/training/US500.cash_H1_202412300100_202610162300.csv": "bb19f7ef3f8fdf3729b34b91379a3ccef0822d83e73e30b22b9cddbbe785051e",
+      "training:data/training/US500.cash_H4_202412300000_202610162000.csv": "d34786fb2fd9f5514298d66756f51b08ac7d3a77b846f133c7e278f4f046235c",
+      "training:data/training/US500.cash_M10_202412300100_202610162340.csv": "3326e4e0063ca941d90bf7041b8a53cddcc2e971f47d0cdadb7f8e117ca8ce0a",
+      "training:data/training/US500.cash_M15_202412300100_202610162345.csv": "a7785b7005bf7dd8dc1e68c202cd7c10a5a0b2eeebc87fa18021b111a42a4b04",
+      "training:data/training/US500.cash_M1_202412300105_202610162349.csv": "8ee4ef65d952974dadb3ba0f5e39536060a1563665dd5ad509404355b888d41e",
+      "training:data/training/US500.cash_M30_202412300100_202610162330.csv": "afcf8b1928c3a6a740f6cb15de21a50430a8ef114c157789bfd5fed245649e65",
+      "training:data/training/US500.cash_M3_202412300103_202610162348.csv": "076fbc56d648817308174cd1e5c0487fb6da96a9ea4c727dcb2e4565fa0ac684",
+      "training:data/training/US500.cash_M5_202412300105_202610162345.csv": "7940ffbc5b3041061a51c6267ab969f5bc2559a782d4aa1eba7bdc5dbeda7397"
+    },
+    "worker_count": 2,
+    "worker_gpu_type": "gh200",
+    "worker_nodes": [
+      "gpuarm1",
+      "gpuarm2"
+    ]
+  },
+  "classification": "training_only_exploratory_viability_pilot",
+  "criteria": {
+    "both_arms_completed_requested_training_budget": true,
+    "both_arms_have_nonzero_fully_reconciled_training_reward": true,
+    "both_arms_passed_unchanged_risk_gate": true,
+    "both_arms_showed_entry_lifecycle_progression": true
+  },
+  "decision_data_role": "2025 in-sample training only; no report-only evaluation values are used in this gate.",
+  "gate_interpretation": "Both fresh seed-50 arms met the predeclared minimum training-viability criteria. This is not a paired-seed RQ1 estimate or a profitability claim.",
+  "gate_result": "PASS",
+  "limitations": [
+    "One matched seed establishes minimum viability only; it does not estimate the state-visibility effect.",
+    "Both cumulative DSR reward sums are negative despite positive in-sample PnL; the gate requires nonzero, fully reconciled reward, not positive cumulative reward.",
+    "The previously inspected 2026 interval remains exposed and report-only.",
+    "Strict tick execution selected raw tick quotes; the configured extra 5-point slippage was not applied during P6 training.",
+    "The campaign logger last displayed 19,955,712 during rollout; the final run manifests and in-sample evaluation records 20,004,864 completed training timesteps for each arm."
+  ],
+  "report_id": "p6_seed50_training_viability_20261021",
+  "schema_version": 1,
+  "variants": [
+    {
+      "arm": "treatment_hidden_entry_state",
+      "completed_training_steps": 20004864,
+      "lifecycle": {
+        "armed_visits": 3780,
+        "candidate_created": 4577,
+        "candidate_visits": 4577,
+        "closed": 7,
+        "entered": 7,
+        "entry_state_machine_enabled": true,
+        "opened": 7,
+        "position_visits": 7
+      },
+      "provenance": {
+        "attempt_provenance": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/attempt_provenance.json",
+        "attempt_provenance_sha256": "a749b32fbdbcf1c660915d65057ff08e26d02f8fa5e316f77fdd994c5aaf4a3f",
+        "checkpoint": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/20261021_075711_936628_rl_train_seed50_tcn/model/ppo_final.zip",
+        "checkpoint_sha256": "326c477a6af3d1b7d8a31982a1b9803068342eb668a86d469b58fbf8b0eda1db",
+        "effective_run_config": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/20261021_075711_936628_rl_train_seed50_tcn/config.yaml",
+        "effective_run_config_sha256": "2641d60660fbca759b2c1731f701f039d0510c73582ac6eb78f7d374b4566af6",
+        "resolved_config": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/resolved_config.json",
+        "resolved_config_sha256": "4536da938c214e82b23b4c632864db7df8fb58f687b81fd230e0e7ea63da2ebb",
+        "resume_checkpoint": null,
+        "resume_from_attempt": null,
+        "run_manifest": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/20261021_075711_936628_rl_train_seed50_tcn/run_manifest.json",
+        "run_manifest_sha256": "f8a50cb02d23bccd285849f3b09e634f96d8c5867bffd125ca197b8c5d2429c8",
+        "slurm_job_id": "21103722",
+        "training_diagnostics": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/20261021_075711_936628_rl_train_seed50_tcn/training/evaluation_diagnostics.json",
+        "training_diagnostics_sha256": "0eed40944c631e1f8a8115ecb6df83d44433c5cdbca3f07505f5e090e598e138",
+        "training_evaluation": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/20261021_075711_936628_rl_train_seed50_tcn/evaluations/train_in_sample.json",
+        "training_evaluation_sha256": "2fe475eae8dd6821f9fc4428054f7f1d9301cb833134ee4a6063952074f6ed39",
+        "training_metrics": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4a_entry_fsm_hidden__seed50/attempt1/ladder_a4a_entry_fsm_hidden__seed50/20261021_075711_936628_rl_train_seed50_tcn/training/metrics.json",
+        "training_metrics_sha256": "f12625904e838a254c7785bb6ce93475de3d7b25da2aedb7daf30f32e963eb5d",
+        "worker_gpu_id": 0,
+        "worker_node": "gpuarm2"
+      },
+      "requested_steps": 20000000,
+      "risk_gate": {
+        "breach_events": 0,
+        "fail_time": null,
+        "full_year_survival": true,
+        "max_drawdown_fraction": 0.017019531727064496,
+        "passed": true
+      },
+      "seed": 50,
+      "tick_execution_evidence": {
+        "fill_quote_source_event_count": 14,
+        "fill_quote_sources": {
+          "tick": 14
+        }
+      },
+      "training_metrics": {
+        "net_pnl": 4579.8568065528525,
+        "return_pct": 4.579856806552852,
+        "reward_reconciliation_error": 0.0,
+        "reward_reported_steps": 99492,
+        "reward_sum": -5.681909062271007,
+        "reward_unattributed_sum": 0.0,
+        "reward_unreported_steps": 0,
+        "trades": 7
+      },
+      "variant": "ladder_a4a_entry_fsm_hidden"
+    },
+    {
+      "arm": "control_visible_entry_state",
+      "completed_training_steps": 20004864,
+      "lifecycle": {
+        "armed_visits": 3736,
+        "candidate_created": 4530,
+        "candidate_visits": 4530,
+        "closed": 7,
+        "entered": 7,
+        "entry_state_machine_enabled": true,
+        "opened": 7,
+        "position_visits": 7
+      },
+      "provenance": {
+        "attempt_provenance": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/attempt_provenance.json",
+        "attempt_provenance_sha256": "6aff7f63f54a0593a59c0247e25dc82b7d5af21fa83f429c1b85673330d58294",
+        "checkpoint": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/20261021_075648_446787_rl_train_seed50_tcn/model/ppo_final.zip",
+        "checkpoint_sha256": "0e9e50efd2e6414e132eb5dd983af6ea9b947376e58af92dbad721f722b1af37",
+        "effective_run_config": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/20261021_075648_446787_rl_train_seed50_tcn/config.yaml",
+        "effective_run_config_sha256": "2d652bab03741d2b13067b371eb4a0f5e06539e41359579f7790cd2332526b88",
+        "resolved_config": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/resolved_config.json",
+        "resolved_config_sha256": "12740e84d24ea6f3089a458619cbf23c2ae0857ea43bd8b7b562308bf0c70cdd",
+        "resume_checkpoint": null,
+        "resume_from_attempt": null,
+        "run_manifest": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/20261021_075648_446787_rl_train_seed50_tcn/run_manifest.json",
+        "run_manifest_sha256": "f0d3fd2dc356d590a915402c7ca75296ecbcdf991ce656b9d5329733fc8cf7a0",
+        "slurm_job_id": "21103722",
+        "training_diagnostics": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/20261021_075648_446787_rl_train_seed50_tcn/training/evaluation_diagnostics.json",
+        "training_diagnostics_sha256": "d5508b90cbb66c201ec60e12cdef4633976c6c7bfa3ceb74cb2c0f8cd51d46d8",
+        "training_evaluation": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/20261021_075648_446787_rl_train_seed50_tcn/evaluations/train_in_sample.json",
+        "training_evaluation_sha256": "763ef13da5ae51eac47ae967d7b43b5d6d1a1c139d72371a107140e5a1587788",
+        "training_metrics": "outputs/gpu_campaigns/p6_entry_fsm_viability_seed50_train2025_20261021_scratch1/runs/attempts/ladder_a4b_entry_fsm__seed50/attempt1/ladder_a4b_entry_fsm__seed50/20261021_075648_446787_rl_train_seed50_tcn/training/metrics.json",
+        "training_metrics_sha256": "6ea1c8e01bfc036aace6372f5a298994ac4d6b3289733d88b3874d5fd1a5728b",
+        "worker_gpu_id": 0,
+        "worker_node": "gpuarm1"
+      },
+      "requested_steps": 20000000,
+      "risk_gate": {
+        "breach_events": 0,
+        "fail_time": null,
+        "full_year_survival": true,
+        "max_drawdown_fraction": 0.02758188974908471,
+        "passed": true
+      },
+      "seed": 50,
+      "tick_execution_evidence": {
+        "fill_quote_source_event_count": 14,
+        "fill_quote_sources": {
+          "tick": 14
+        }
+      },
+      "training_metrics": {
+        "net_pnl": 6349.801628537258,
+        "return_pct": 6.349801628537258,
+        "reward_reconciliation_error": 0.0,
+        "reward_reported_steps": 99492,
+        "reward_sum": -4.01816208851687,
+        "reward_unattributed_sum": 0.0,
+        "reward_unreported_steps": 0,
+        "trades": 7
+      },
+      "variant": "ladder_a4b_entry_fsm"
+    }
+  ]
+}
