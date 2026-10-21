@@ -31,7 +31,7 @@ The selected-pair runs use the US100 cash-index feed. The active split contains 
 
 All supplied observations remain in their chronological partition, including bars from short sessions. The session schedule is a date-level input known before the first observation of each date. The policy is not expected to infer a scheduled early close from that day’s price path. Training and testing use separate inputs and caches.
 
-M1 is the only policy timestep. Supplied M3, M5, M10, M15, M30, H1, H4, and D1 bars are retained for multi-timeframe feature construction and aligned to the M1 decision index only after their source bars close; they do not create additional policy decision timelines. The date-level session schedule marks a known early close from the first bar of that date. Bid/ask tick data drive simulated execution. The declared fill protocol draws a seeded arrival delay from the configured 0–30 millisecond interval and uses the first eligible bid/ask tick at or after order arrival. This is a reproducible simulator assumption; it does not model queue position, market impact, or all broker execution effects.
+M1 is the only policy timestep. Supplied M3, M5, M10, M15, M30, H1, H4, and D1 bars are retained for multi-timeframe feature construction and aligned to the M1 decision index only after their source bars close; they do not create additional policy decision timelines. The date-level session schedule marks a known early close from the first bar of that date. Bid/ask tick data drive simulated execution. The declared fill protocol draws a seeded arrival delay from the configured 0–30 millisecond interval and uses the first eligible bid/ask tick at or after order arrival. The configuration also declares 5.0 points of slippage, but the strict tick-fill path currently executes at the selected raw bid/ask and does not apply this extra slippage. Thus the P6 run tests viability under tick quotes and randomized latency, not under the configured extra slippage. This is a reproducible simulator assumption; it does not model queue position, market impact, or all broker execution effects.
 
 ## 3. Policy and intervention
 
@@ -102,7 +102,7 @@ The P4 corrective iteration is terminal. Its three training risk-gate failures a
 
 ## 7. Limitations
 
-The available 2026 interval is exposed and cannot establish untouched out-of-sample performance. The simulator’s tick-based fill rule is an explicit latency approximation, not a claim about real execution. The data feed, contract details, and external redistribution rights are not independently established by the training campaign. Model results apply to the saved configurations, supplied data, and simulator rules evaluated here; they do not establish live trading performance.
+The available 2026 interval is exposed and cannot establish untouched out-of-sample performance. Tick fills use observed bid/ask with randomized latency; the additional 5.0-point slippage declared in the saved configuration is not applied to the active strict tick-fill path. The selected-pair evaluation cost stress must apply and document its 5.0-point baseline and 10.0-point stress explicitly; no such result is available yet. The simulator is not a claim about queue position, market impact, all broker execution effects, or live trading performance. The data feed and contract details also limit transfer to other markets.
 
 ## 8. Submission checklist
 
