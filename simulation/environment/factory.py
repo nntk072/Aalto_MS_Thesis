@@ -168,6 +168,7 @@ def build_eval_common(
     env_vae: Any | None = None,
     pre_ny_by_date: dict[Any, Any] | None = None,
     arch: str | None = None,
+    tick_fill_slippage_points: float = 0.0,
 ) -> tuple[dict[str, Any], Any, Any, float, bool]:
     """Kwargs shared by the in-loop dashboard slice and the final eval."""
     strategy, strategy_reward, strategy_weight = strategy_from_cfg(cfg)
@@ -228,6 +229,7 @@ def build_eval_common(
         "direction_override_threshold": float(cfg.env.get("direction_override_threshold", 0.0)),
         "fill_delay_ms": fill_delay_ms(cfg),
         "randomized_fill_latency_ms": randomized_fill_latency_ms(cfg),
+        "tick_fill_slippage_points": float(tick_fill_slippage_points),
         "tick_execution_required": tick_execution_required(cfg),
         "max_tick_quote_wait_ms": max_tick_quote_wait_ms(cfg),
         "execution_seed": (
@@ -414,6 +416,7 @@ def make_env(
         fill_delay_ms=fill_delay_ms(cfg),
         randomized_fill_latency_ms=randomized_fill_latency_ms(cfg),
         max_tick_quote_wait_ms=max_tick_quote_wait_ms(cfg),
+        tick_fill_slippage_points=0.0,
         use_vae=use_vae,
         vae=vae,
         pre_ny_by_date=pre_ny_by_date,

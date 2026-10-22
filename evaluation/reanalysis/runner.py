@@ -289,9 +289,17 @@ def main() -> None:
 
     # Eval CLI does not expose training --algo / --reward flags; PPO replay
     # uses the configuration's saved environment defaults.
+    if args.tick_fill_slippage_points < 0:
+        raise ValueError("--tick-fill-slippage-points cannot be negative")
     eval_common, eval_strategy, _, _, _ = build_eval_common(
-        cfg, args=None, env_vae=None, pre_ny_by_date=None
+        cfg,
+        args=None,
+        env_vae=None,
+        pre_ny_by_date=None,
+        tick_fill_slippage_points=args.tick_fill_slippage_points,
     )
+    if args.tick_fill_slippage_points and not eval_common["tick_execution_required"]:
+        raise ValueError("tick-fill slippage override requires tick execution in the saved config")
     execution_seed = resolve_execution_seed(args.seed, source_manifest)
     if eval_common["randomized_fill_latency_ms"] > 0 and execution_seed is None:
         raise ValueError(
@@ -519,6 +527,7 @@ def main() -> None:
             "eval_policy_action_mode": policy_action_mode,
             "eval_seed": args.seed,
             "eval_execution_seed": execution_seed,
+            "eval_tick_fill_slippage_points": args.tick_fill_slippage_points,
             "sequence_feature_schema": expected_sequence_schema,
             "sequence_feature_schema_disposition": sequence_schema_disposition,
         }
@@ -594,6 +603,16 @@ def main() -> None:
         },
         "policy_action_mode": policy_action_mode,
         "execution_seed": execution_seed,
+        "execution_cost_override": {
+            "configured_cost_model_slippage_points": float(
+                eval_common["cost_model"].slippage_points
+            ),
+            "effective_tick_fill_slippage_points": float(args.tick_fill_slippage_points),
+            "applies_to": "executed_tick_side_only",
+            "position_sizing_cost_model_unchanged": True,
+            "trigger_quote_unchanged": True,
+            "opposite_quote_side_unchanged": True,
+        },
         "reanalysis_timestamp": datetime.now().isoformat(),
         "validity_note": "Historical inspected holdout; not pristine OOS evidence.",
     }

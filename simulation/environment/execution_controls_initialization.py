@@ -15,18 +15,24 @@ class ExecutionControlsInitializationMixin(RuntimeMixinBase):
         fill_delay_ms: int,
         randomized_fill_latency_ms: float,
         max_tick_quote_wait_ms: int,
+        tick_fill_slippage_points: float,
     ) -> None:
         self._tickbook = tickbook
         self.tick_execution_required = bool(tick_execution_required)
         self.fill_delay_ms = int(fill_delay_ms)
         self.randomized_fill_latency_ms = float(randomized_fill_latency_ms)
         self.max_tick_quote_wait_ms = int(max_tick_quote_wait_ms)
+        self.tick_fill_slippage_points = float(tick_fill_slippage_points)
         if self.randomized_fill_latency_ms < 0:
             raise ValueError("randomized_fill_latency_ms cannot be negative")
         if self.randomized_fill_latency_ms > 30.0:
             raise ValueError("randomized_fill_latency_ms must be at most 30ms exclusive")
         if self.max_tick_quote_wait_ms <= 0:
             raise ValueError("max_tick_quote_wait_ms must be positive")
+        if self.tick_fill_slippage_points < 0:
+            raise ValueError("tick_fill_slippage_points cannot be negative")
+        if self.tick_fill_slippage_points and not self.tick_execution_required:
+            raise ValueError("tick_fill_slippage_points requires tick execution")
         if (
             self.tick_execution_required or self.randomized_fill_latency_ms > 0
         ) and tickbook is None:

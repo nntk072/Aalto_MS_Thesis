@@ -26,10 +26,12 @@ MATCH_FIELDS = (
     "evaluation_end",
 )
 
-# A matched intervention may change exactly one of these declared design
-# dimensions. Dataset, split, costs, execution, budget, seed, capital, model
-# settings and evaluation window must remain identical.
-INTERVENTION_FIELDS = frozenset({"features_sha256", "reward_sha256", "environment_sha256"})
+# A matched intervention may change exactly one declared design dimension.
+# Dataset, split, reward, execution, budget, seed, capital, model settings and
+# evaluation window remain identical for a cost sensitivity comparison.
+INTERVENTION_FIELDS = frozenset(
+    {"features_sha256", "reward_sha256", "environment_sha256", "costs_sha256"}
+)
 
 
 def compare_matched_returns(

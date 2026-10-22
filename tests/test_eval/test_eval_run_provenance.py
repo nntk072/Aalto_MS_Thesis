@@ -36,6 +36,13 @@ def test_checkpoint_reanalysis_defaults_to_deterministic_actions() -> None:
     assert sampled_args.seed == 42
 
 
+def test_checkpoint_reanalysis_parses_tick_fill_slippage_override() -> None:
+    args = eval_run.build_reanalysis_parser().parse_args(
+        ["--run", "source", "--output", "out", "--tick-fill-slippage-points", "10"]
+    )
+    assert args.tick_fill_slippage_points == 10.0
+
+
 def test_train_only_screen_is_explicit_opt_in() -> None:
     default_args = eval_run.build_reanalysis_parser().parse_args(
         ["--run", "source", "--output", "out"]

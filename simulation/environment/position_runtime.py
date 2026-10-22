@@ -392,8 +392,8 @@ class PositionRuntimeMixin(RuntimeMixinBase):
             quote, execution_meta = self._resolve_randomized_tick_quote(order_time)
             fill_bid, fill_ask = quote.bid, quote.ask
             fill_time = quote.tick_time
-        pnl, fill_price = self.broker.close_position(
-            self.account, self.position, (fill_bid, fill_ask)
+        pnl, fill_price = self._close_at_quote(
+            self.position, (fill_bid, fill_ask), tick_fill=bool(execution_meta)
         )
         record = {
             "type": "eod_close",

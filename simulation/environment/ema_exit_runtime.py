@@ -65,7 +65,7 @@ class EmaExitRuntimeMixin(RuntimeMixinBase):
             fill_quote = self._bar_quote(bar)
             fill_time = log_time + pd.Timedelta(minutes=self._minutes_per_step)
             execution_meta = {}
-        pnl, fill_price = self.broker.close_position(self.account, pos, fill_quote)
+        pnl, fill_price = self._close_at_quote(pos, fill_quote, tick_fill=bool(execution_meta))
         record = {
             "type": "close",
             "pnl": pnl,

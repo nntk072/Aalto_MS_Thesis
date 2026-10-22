@@ -61,7 +61,7 @@ class ProtectiveLevelRuntimeMixin(RuntimeMixinBase):
         tick_hit = None if has_tick_slots else self._tick_exit_quote(log_time)
         if tick_hit is not None:
             kind, quote, fill_time, execution_meta = tick_hit
-            pnl, fill_price = self.broker.close_position(self.account, self.position, quote)
+            pnl, fill_price = self._close_at_quote(self.position, quote, tick_fill=True)
             record = {
                 "type": "stop_close" if kind == "sl" else "tp_close",
                 "pnl": pnl,
@@ -209,12 +209,7 @@ class ProtectiveLevelRuntimeMixin(RuntimeMixinBase):
                             close_size = pos.size
 
                     quote = self._sl_tp_fill_quote(int(pos.direction), float(slot_px))
-                    pnl, fill_price = self.broker.close_position(
-                        self.account,
-                        pos,
-                        quote,
-                        size=close_size,
-                    )
+                    pnl, fill_price = self._close_at_quote(pos, quote, size=close_size)
                     pos.tp_hit_mask |= hit_mask_bit
                     setattr(pos, f"tp{slot_num}_price", None)
                     record = {
@@ -270,8 +265,7 @@ class ProtectiveLevelRuntimeMixin(RuntimeMixinBase):
 
             if tp_hit:
                 assert self.position.tp_price is not None
-                pnl, fill_price = self.broker.close_position(
-                    self.account,
+                pnl, fill_price = self._close_at_quote(
                     self.position,
                     self._sl_tp_fill_quote(
                         int(self.position.direction), float(self.position.tp_price)
@@ -362,7 +356,7 @@ class ProtectiveLevelRuntimeMixin(RuntimeMixinBase):
                         "fill_quote_source": "tick",
                     }
                 remaining = pos.size
-                pnl, fill_price = self.broker.close_position(self.account, pos, (bid, ask))
+                pnl, fill_price = self._close_at_quote(pos, (bid, ask), tick_fill=True)
                 record = {
                     "type": "stop_close",
                     "pnl": pnl,
@@ -453,8 +447,8 @@ class ProtectiveLevelRuntimeMixin(RuntimeMixinBase):
                     if close_size <= 0:
                         close_size = pos.size
 
-                pnl, fill_price = self.broker.close_position(
-                    self.account, pos, (bid, ask), size=close_size
+                pnl, fill_price = self._close_at_quote(
+                    pos, (bid, ask), size=close_size, tick_fill=True
                 )
                 pos.tp_hit_mask |= bit
                 setattr(pos, f"tp{slot_num}_price", None)

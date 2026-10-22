@@ -183,9 +183,25 @@ class MatchedComparisonTest(unittest.TestCase):
                 values,
                 contract,
                 contract,
-                intervention_field="costs_sha256",
+                intervention_field="execution_sha256",
                 n_boot=20,
             )
+
+    def test_cost_sensitivity_is_a_supported_intervention(self):
+        times = pd.date_range("2025-01-01", periods=3, freq="h")
+        control_values = pd.Series([0.01, -0.01, 0.02], index=times)
+        treatment_values = pd.Series([0.0, -0.02, 0.01], index=times)
+        control = _contract_for(control_values)
+        treatment = control | {"costs_sha256": "stress-costs"}
+        result = compare_matched_returns(
+            treatment_values,
+            control_values,
+            treatment,
+            control,
+            intervention_field="costs_sha256",
+            n_boot=20,
+        )
+        self.assertAlmostEqual(result.estimate, -0.01)
 
     def test_declared_evaluation_period_must_cover_return_index(self):
         times = pd.date_range("2025-01-01", periods=3, freq="h")

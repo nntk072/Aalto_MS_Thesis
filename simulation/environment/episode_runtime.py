@@ -265,7 +265,11 @@ class EpisodeRuntimeMixin(RuntimeMixinBase):
                 execution = self._active_step_execution["quote"]
                 eod_quote = (execution.bid, execution.ask)
                 eod_fill_time = execution.tick_time
-            pnl, fill_price = self.broker.close_position(self.account, self.position, eod_quote)
+            pnl, fill_price = self._close_at_quote(
+                self.position,
+                eod_quote,
+                tick_fill=bool(execution_meta) or self._active_step_execution is not None,
+            )
             record = {
                 "type": "eod_close",
                 "pnl": pnl,

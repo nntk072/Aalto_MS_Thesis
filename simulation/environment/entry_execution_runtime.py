@@ -64,8 +64,10 @@ class EntryExecutionRuntimeMixin(RuntimeMixinBase):
         execution_meta: dict[str, Any],
     ) -> None:
         if self.position is not None and self.position.direction != discrete_action:
-            pnl, fill_price = self.broker.close_position(
-                self.account, self.position, (fill_bid, fill_ask)
+            pnl, fill_price = self._close_at_quote(
+                self.position,
+                (fill_bid, fill_ask),
+                tick_fill=bool(execution_meta),
             )
             record = {
                 "type": "close",
@@ -227,8 +229,14 @@ class EntryExecutionRuntimeMixin(RuntimeMixinBase):
             elif discrete_action == -1 and fill_ask >= sl_price:
                 sl_already_hit = True
         if not sl_already_hit:
-            self.position = self.broker.open_position(
-                self.account, (fill_bid, fill_ask), lots, discrete_action
+            self.position = self._open_at_quote(
+                (fill_bid, fill_ask),
+                lots,
+                discrete_action,
+                tick_fill=(
+                    bool(getattr(self, "tick_execution_required", False))
+                    or float(getattr(self, "randomized_fill_latency_ms", 0.0)) > 0.0
+                ),
             )
         else:
             self.position = None

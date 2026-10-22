@@ -57,8 +57,10 @@ class StepActionExecutionMixin(RuntimeMixinBase):
                         )
                         action_fill_bid, action_fill_ask = quote.bid, quote.ask
                         action_fill_time = quote.tick_time
-                    pnl, fill_price = self.broker.close_position(
-                        self.account, self.position, (action_fill_bid, action_fill_ask)
+                    pnl, fill_price = self._close_at_quote(
+                        self.position,
+                        (action_fill_bid, action_fill_ask),
+                        tick_fill=bool(execution_meta),
                     )
                     record = {
                         "type": "close",

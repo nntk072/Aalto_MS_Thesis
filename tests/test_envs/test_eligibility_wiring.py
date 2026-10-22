@@ -41,6 +41,15 @@ def test_legacy_default_remains_permissive() -> None:
     assert load_config().env.strict_research_eligibility is False
 
 
+def test_evaluation_tick_fill_slippage_override_does_not_change_cost_model() -> None:
+    cfg = load_config()
+    eval_kwargs = training_environments.build_eval_common(cfg, tick_fill_slippage_points=10.0)[0]
+    assert eval_kwargs["tick_fill_slippage_points"] == 10.0
+    assert eval_kwargs["tick_execution_required"] is True
+    assert eval_kwargs["cost_model"].slippage_points == cfg.costs.slippage_points
+    assert "tick_fill_slippage_points" in inspect.signature(evaluate_model).parameters
+
+
 def test_tick_execution_preflight_reports_train_and_test_gaps() -> None:
     index = pd.DatetimeIndex(
         [

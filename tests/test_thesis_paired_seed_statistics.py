@@ -45,8 +45,10 @@ def _payload() -> dict[str, Any]:
     return {
         "schema": "aalto.paired_seed_metrics.v1",
         "comparison_id": "rq1-control-v-treatment",
+        "evidence_role": "matched_confirmation",
         "intervention_field": "features_sha256",
         "metrics": ["net_return_pct", "trade_count"],
+        "expected_seeds": [11, 12, 13, 14, 15],
         "pairs": pairs,
     }
 
@@ -67,8 +69,23 @@ def test_paired_seed_analysis_keeps_pairs_and_is_reproducible() -> None:
     assert result["sign_flip_p_value"] == 0.0625
     assert result["sign_flip_method"] == "exact two-sided paired sign-flip"
     assert [row["seed"] for row in result["seed_level_values"]] == [11, 12, 13, 14, 15]
+    assert result["paired_student_t_degrees_freedom"] == 4
+    assert result["paired_student_t_ci_95pct"] == pytest.approx([1.0367568, 4.9632432])
     assert result["paired_seed_bootstrap_ci_95pct"][0] <= 3.0
     assert result["paired_seed_bootstrap_ci_95pct"][1] >= 3.0
+
+
+def test_paired_seed_analysis_accepts_costs_as_the_declared_intervention() -> None:
+    payload = _payload()
+    payload["intervention_field"] = "costs_sha256"
+    for pair in payload["pairs"]:
+        shared_features = pair["control"]["provenance"]["features_sha256"]
+        pair["treatment"]["provenance"]["features_sha256"] = shared_features
+        pair["treatment"]["provenance"]["costs_sha256"] = "e" * 64
+
+    result = analyze_paired_seed_metrics(payload, rng_seed=9, bootstrap_draws=500)
+    assert result["n_pairs"] == 5
+    assert result["intervention_field"] == "costs_sha256"
 
 
 def test_paired_seed_analysis_rejects_mismatched_match_fields() -> None:
@@ -99,3 +116,25 @@ def test_paired_seed_analysis_requires_five_pairs_and_full_identity() -> None:
     del payload["pairs"][0]["control"]["provenance"][MATCH_FIELDS[0]]
     with pytest.raises(ValueError, match="missing match provenance"):
         analyze_paired_seed_metrics(payload)
+
+
+def test_paired_seed_analysis_requires_the_declared_seed_ids() -> None:
+    payload = _payload()
+    payload["expected_seeds"] = [101, 102, 103, 104, 105]
+    with pytest.raises(ValueError, match="do not match expected_seeds"):
+        analyze_paired_seed_metrics(payload)
+
+
+def test_exposed_report_only_results_cannot_be_confirmatory() -> None:
+    payload = _payload()
+    payload["evaluation_exposure"] = "exposed_report_only"
+    with pytest.raises(ValueError, match="cannot be confirmatory"):
+        analyze_paired_seed_metrics(payload)
+
+    payload["evidence_role"] = "matched_exploratory"
+    for pair in payload["pairs"]:
+        pair["control"]["evidence_role"] = "matched_exploratory"
+        pair["treatment"]["evidence_role"] = "matched_exploratory"
+    result = analyze_paired_seed_metrics(payload, bootstrap_draws=100)
+    assert result["evidence_role"] == "matched_exploratory"
+    assert result["evaluation_exposure"] == "exposed_report_only"

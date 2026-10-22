@@ -15,6 +15,42 @@ from trading.execution.broker import Broker
 from trading.execution.costs import CostModel
 
 
+@pytest.mark.parametrize(
+    ("slippage", "direction", "opening", "expected"),
+    [
+        (5.0, 1, True, (99.0, 106.0)),
+        (5.0, -1, True, (94.0, 101.0)),
+        (5.0, 1, False, (94.0, 101.0)),
+        (5.0, -1, False, (99.0, 106.0)),
+        (10.0, 1, True, (99.0, 111.0)),
+        (10.0, -1, True, (89.0, 101.0)),
+        (10.0, 1, False, (89.0, 101.0)),
+        (10.0, -1, False, (99.0, 111.0)),
+    ],
+)
+def test_adverse_tick_slippage_changes_only_executed_side(
+    slippage: float, direction: int, opening: bool, expected: tuple[float, float]
+) -> None:
+    env = TradingEnv.__new__(TradingEnv)
+    env.tick_fill_slippage_points = slippage
+    assert env._adverse_tick_fill_quote((99.0, 101.0), direction, opening=opening) == expected
+
+
+@pytest.mark.parametrize(("direction", "slippage"), [(1, 5.0), (-1, 5.0), (1, 10.0), (-1, 10.0)])
+def test_tick_fill_slippage_worsens_entry_and_exit_exactly_once(
+    direction: int, slippage: float
+) -> None:
+    env = TradingEnv.__new__(TradingEnv)
+    env.tick_fill_slippage_points = slippage
+    env.account = AccountState(initial_balance=100_000.0)
+    env.broker = Broker(cost_model=CostModel(spread_points=0.0, commission_per_lot=0.0))
+    position = env._open_at_quote((100.0, 100.0), 1.0, direction, tick_fill=True)
+    assert position is not None
+    assert position.entry_price == pytest.approx(100.0 + slippage * direction)
+    _, exit_price = env._close_at_quote(position, (100.0, 100.0), tick_fill=True)
+    assert exit_price == pytest.approx(100.0 - slippage * direction)
+
+
 def test_tick_quote_sides_match_buy_ask_and_sell_bid_for_entries_and_exits() -> None:
     quote = (99.0, 101.0)
     broker = Broker(cost_model=CostModel(spread_points=0.0, commission_per_lot=0.0))
@@ -96,6 +132,8 @@ def test_tick_tp_partial_then_stop_reconciles_commissions_and_reward(direction: 
     )
     env._stamp_exit = MethodType(TradingEnv._stamp_exit, env)
     env._note_close = MethodType(TradingEnv._note_close, env)
+    env._adverse_tick_fill_quote = MethodType(TradingEnv._adverse_tick_fill_quote, env)
+    env._close_at_quote = MethodType(TradingEnv._close_at_quote, env)
 
     assert TradingEnv._check_multi_tp_ticks(env, start, 0)
     assert env.position is None
@@ -144,6 +182,8 @@ def test_tick_crosses_three_tp_slots_once_with_exact_remaining_quantity() -> Non
     )
     env._stamp_exit = MethodType(TradingEnv._stamp_exit, env)
     env._note_close = MethodType(TradingEnv._note_close, env)
+    env._adverse_tick_fill_quote = MethodType(TradingEnv._adverse_tick_fill_quote, env)
+    env._close_at_quote = MethodType(TradingEnv._close_at_quote, env)
 
     assert TradingEnv._check_multi_tp_ticks(env, start, 0)
     assert env.position is None
@@ -197,7 +237,14 @@ def test_tick_and_bar_match_for_identical_unambiguous_target_crossings() -> None
             _tick_exit_quote=lambda at: None,
             _maybe_ema_exit=lambda bar, idx, log_time: None,
         )
-        for method in ("_stamp_exit", "_note_close", "_sl_tp_fill_quote", "_check_multi_tp_ticks"):
+        for method in (
+            "_stamp_exit",
+            "_note_close",
+            "_sl_tp_fill_quote",
+            "_check_multi_tp_ticks",
+            "_adverse_tick_fill_quote",
+            "_close_at_quote",
+        ):
             setattr(env, method, MethodType(getattr(TradingEnv, method), env))
         return env
 

@@ -102,6 +102,12 @@ def build_reanalysis_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--tick-fill-slippage-points",
+        type=float,
+        default=0.0,
+        help="Evaluation-only adverse price adjustment on the executed tick side.",
+    )
+    parser.add_argument(
         "--force", action="store_true", help="Force the data pipeline to rebuild caches"
     )
     parser.add_argument(

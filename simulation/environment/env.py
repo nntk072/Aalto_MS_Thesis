@@ -112,6 +112,7 @@ class TradingEnv(
         fill_delay_ms: int = 0,
         randomized_fill_latency_ms: float = 0.0,
         max_tick_quote_wait_ms: int = 60_000,
+        tick_fill_slippage_points: float = 0.0,
         agent_direction_control: bool = False,
         direction_override_threshold: float = 0.0,
         risk_floor: float = 0.0005,
@@ -201,6 +202,7 @@ class TradingEnv(
             fill_delay_ms,
             randomized_fill_latency_ms,
             max_tick_quote_wait_ms,
+            tick_fill_slippage_points,
         )
         resolved_strategy_actions = self._initialize_reward_runtime(
             trader_actions,

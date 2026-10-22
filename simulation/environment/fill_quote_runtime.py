@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import numpy as np
 
 from trading.execution.quotes import quote_from_bar_price
@@ -11,6 +13,52 @@ from .mixin_base import RuntimeMixinBase
 
 
 class FillQuoteRuntimeMixin(RuntimeMixinBase):
+    def _adverse_tick_fill_quote(
+        self, quote: tuple[float, float], direction: int, *, opening: bool
+    ) -> tuple[float, float]:
+        """Worsen only the transacted bid/ask side after selecting a tick."""
+        bid, ask = map(float, quote)
+        slippage = float(getattr(self, "tick_fill_slippage_points", 0.0))
+        if opening:
+            if direction == 1:
+                ask += slippage
+            else:
+                bid -= slippage
+        elif direction == 1:
+            bid -= slippage
+        else:
+            ask += slippage
+        return bid, ask
+
+    def _close_at_quote(
+        self,
+        position: Any,
+        quote: tuple[float, float],
+        *,
+        size: float | None = None,
+        tick_fill: bool = False,
+    ) -> tuple[float, float]:
+        """Close at a selected quote, applying evaluation stress once at execution."""
+        if tick_fill:
+            quote = self._adverse_tick_fill_quote(quote, int(position.direction), opening=False)
+        return cast(
+            tuple[float, float],
+            self.broker.close_position(self.account, position, quote, size=size),
+        )
+
+    def _open_at_quote(
+        self,
+        quote: tuple[float, float],
+        lots: float,
+        direction: int,
+        *,
+        tick_fill: bool = False,
+    ) -> Any:
+        """Open at a selected quote, applying evaluation stress once at execution."""
+        if tick_fill:
+            quote = self._adverse_tick_fill_quote(quote, direction, opening=True)
+        return self.broker.open_position(self.account, quote, lots, direction)
+
     def _sl_tp_fill_quote(self, direction: int, hit_price: float) -> tuple[float, float]:
         """Bid/ask that closes at *hit_price*, worsened only by adverse slippage.
 
