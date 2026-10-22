@@ -5,21 +5,18 @@
 ## Dependency Graph
 
 ```text
-config/ + raw market data
-        ↓
-configuration/ → market_data/ → features/
-                              ↓
-                    simulation/environment/
-                    ↙          ↓          ↘
-              trading/      models/    simulation/backtest/
-                    ↘          ↓          ↙
-                         training/
-                             ↓
-                         evaluation/
-                             ↓
-                    artifacts/ + outputs/
+configuration/ → market_data/ → features/ → simulation/
+                                             ↑       ↓
+                               trading/ ──────┘  learning/ ← models/
+                                      decisioning/ ─┘
+                                                  ↓
+                                         training/ → evaluation/
+                                              ↑          ↓
+                                      experiments/   artifacts/
+                                           ↑
+                                        compute/
 
-integrations/mt5/ → live/          experiments/ → compute/
+live/ → integrations/mt5/
 orchestra/ → repository/CI orchestration
 ```
 
@@ -32,10 +29,13 @@ orchestra/ → repository/CI orchestration
 | `features/` | technical/context/PO3 features and feature-cache identity |
 | `trading/` | account, execution, orders, risk, strategies, baselines |
 | `simulation/` | Gym environment contracts/runtime and event-driven backtest |
-| `models/` | encoders, policies, agent factory, auxiliary models |
+| `decisioning/` | versioned observation/action schemas and backend-neutral inference contract |
+| `models/` | reusable encoders, policies, and auxiliary neural components |
+| `learning/` | PPO/SAC fitting backends, rollout adapters, and checkpoint loading |
 | `training/` | setup, callbacks, runners, training artifacts |
 | `evaluation/` | rollout, metrics, reanalysis, reporting, plotting |
 | `experiments/` | variant/campaign orchestration and provenance |
+| `artifacts/` | shared artifact identity, manifests, storage, and lifecycle mechanics |
 | `live/` | broker-neutral live runtime |
 | `integrations/mt5/` | MetaTrader-specific adapters and domain integration |
 | `compute/` | cluster/environment/Slurm implementation |
@@ -52,7 +52,7 @@ thesis-campaign
 thesis-compute
 ```
 
-Use package APIs or these command surfaces from scripts. `scripts/` contains thin research, maintenance, and compute wrappers rather than reusable library logic.
+Use package APIs or these command surfaces. `scripts/` includes command entry points plus thesis-specific evidence builders and audits; some existing scripts hold substantial logic and are not general-purpose APIs. Put new shared behavior in its owning package, and keep new CLI wrappers thin.
 
 ## Cache Versioning
 

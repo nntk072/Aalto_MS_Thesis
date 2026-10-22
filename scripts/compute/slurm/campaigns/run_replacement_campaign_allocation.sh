@@ -15,6 +15,17 @@ DONE="$OUT_DIR/allocation_controller.exit.$JOB_ID"
 GATE_DIR="$OUT_DIR/reports/pretraining_gate_$JOB_ID"
 GATE_STATUS="$GATE_DIR/status"
 GATE_CONTINUE="$GATE_DIR/continue"
+OVERRIDE_REASON_FILE="$OUT_DIR/reports/resume_fingerprint_override_reason.txt"
+if [[ -z "${CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON:-}" && -s "$OVERRIDE_REASON_FILE" ]]; then
+  CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON="$(<"$OVERRIDE_REASON_FILE")"
+fi
+if [[ -n "${CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON:-}" ]]; then
+  if ((${#CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON} < 12)); then
+    echo "fingerprint override reason must be at least 12 characters" >&2
+    exit 2
+  fi
+  export CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON
+fi
 
 cd "$REPO"
 mkdir -p "$OUT_DIR/logs" "$OUT_DIR/reports"
@@ -177,6 +188,7 @@ if [[ -n "${CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON:-}" ]]; then
     --resume-fingerprint-override-reason
     "$CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON"
   )
+  echo "campaign fingerprint override enabled; resulting training evidence is exploratory"
 fi
 initial_checkpoint_args=()
 if [[ -n "${CAMPAIGN_INITIAL_CHECKPOINTS:-}" && ! -s "$OUT_DIR/campaign.json" ]]; then

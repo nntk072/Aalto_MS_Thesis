@@ -46,7 +46,7 @@ source "$venv/bin/activate"
 # A resumed campaign keeps the recorded Git identity only while its own source
 # hashes still match. This lets documentation-only commits coexist with an
 # active campaign without weakening the controller's source-hash fingerprint.
-if [[ -n "${CAMPAIGN_ID:-}" ]]; then
+if [[ -n "${CAMPAIGN_ID:-}" && -z "${CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON:-}" ]]; then
   # shellcheck source=/dev/null
   source "$REPO/scripts/compute/slurm/campaign_git_identity.sh"
 fi

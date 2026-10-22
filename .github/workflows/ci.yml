@@ -19,6 +19,22 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: ./tools/check deps
 
+  security-deps:
+    needs: dependency-lock
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: ./tools/check security-deps
+
+  security-secrets:
+    needs: dependency-lock
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: ./tools/check security-secrets
+
   quality:
     needs: dependency-lock
     runs-on: ubuntu-latest
@@ -106,7 +122,7 @@ jobs:
 
   ci-success:
     if: always()
-    needs: [dependency-lock, quality, architecture, graph-quality, contracts, unit, build-smoke, integration, parity, training-smoke]
+    needs: [dependency-lock, security-deps, security-secrets, quality, architecture, graph-quality, contracts, unit, build-smoke, integration, parity, training-smoke]
     runs-on: ubuntu-latest
     steps:
       - name: Require all semantic gates

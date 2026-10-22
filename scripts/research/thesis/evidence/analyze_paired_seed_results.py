@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import itertools
 import json
+import math
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,87 @@ BOOTSTRAP_DRAWS = 10_000
 EXACT_SIGN_FLIP_MAX_PAIRS = 15
 MONTE_CARLO_SIGN_FLIP_DRAWS = 100_000
 MIN_PAIRED_SEEDS = 5
+EVIDENCE_ROLES = frozenset({"matched_confirmation", "matched_exploratory", "robustness"})
+
+
+def _beta_continued_fraction(a: float, b: float, x: float) -> float:
+    """Evaluate the incomplete-beta continued fraction (Numerical Recipes form)."""
+    max_iterations = 200
+    epsilon = 3.0e-14
+    minimum = 1.0e-300
+    qab = a + b
+    qap = a + 1.0
+    qam = a - 1.0
+    c = 1.0
+    d = 1.0 - qab * x / qap
+    if abs(d) < minimum:
+        d = minimum
+    d = 1.0 / d
+    result = d
+    for iteration in range(1, max_iterations + 1):
+        m2 = 2 * iteration
+        aa = iteration * (b - iteration) * x / ((qam + m2) * (a + m2))
+        d = 1.0 + aa * d
+        if abs(d) < minimum:
+            d = minimum
+        c = 1.0 + aa / c
+        if abs(c) < minimum:
+            c = minimum
+        d = 1.0 / d
+        result *= d * c
+        aa = -(a + iteration) * (qab + iteration) * x / ((a + m2) * (qap + m2))
+        d = 1.0 + aa * d
+        if abs(d) < minimum:
+            d = minimum
+        c = 1.0 + aa / c
+        if abs(c) < minimum:
+            c = minimum
+        d = 1.0 / d
+        delta = d * c
+        result *= delta
+        if abs(delta - 1.0) <= epsilon:
+            return result
+    raise ArithmeticError("incomplete-beta continued fraction did not converge")
+
+
+def _regularized_incomplete_beta(x: float, a: float, b: float) -> float:
+    if x <= 0.0:
+        return 0.0
+    if x >= 1.0:
+        return 1.0
+    factor = math.exp(
+        math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b) + a * math.log(x) + b * math.log1p(-x)
+    )
+    if x < (a + 1.0) / (a + b + 2.0):
+        return factor * _beta_continued_fraction(a, b, x) / a
+    return 1.0 - factor * _beta_continued_fraction(b, a, 1.0 - x) / b
+
+
+def _student_t_cdf(value: float, degrees_freedom: int) -> float:
+    if degrees_freedom <= 0:
+        raise ValueError("Student-t degrees of freedom must be positive")
+    if value == 0.0:
+        return 0.5
+    x = degrees_freedom / (degrees_freedom + value * value)
+    tail = 0.5 * _regularized_incomplete_beta(x, degrees_freedom / 2.0, 0.5)
+    return 1.0 - tail if value > 0.0 else tail
+
+
+def _student_t_critical_value(probability: float, degrees_freedom: int) -> float:
+    """Invert the Student-t CDF without an undeclared SciPy dependency."""
+    if not 0.5 < probability < 1.0:
+        raise ValueError("Student-t quantile probability must be between 0.5 and 1")
+    low = 0.0
+    high = 1.0
+    while _student_t_cdf(high, degrees_freedom) < probability:
+        high *= 2.0
+    for _ in range(80):
+        midpoint = (low + high) / 2.0
+        if _student_t_cdf(midpoint, degrees_freedom) < probability:
+            low = midpoint
+        else:
+            high = midpoint
+    return (low + high) / 2.0
 
 
 def _finite_number(value: Any, *, field: str) -> float:
@@ -54,6 +136,21 @@ def _validate_pair_input(
     intervention = payload.get("intervention_field")
     if intervention not in INTERVENTION_FIELDS:
         raise ValueError(f"unsupported intervention_field: {intervention!r}")
+    evidence_role = payload.get("evidence_role")
+    if evidence_role is not None and evidence_role not in EVIDENCE_ROLES:
+        raise ValueError(f"unsupported evidence_role: {evidence_role!r}")
+    if (
+        payload.get("evaluation_exposure") == "exposed_report_only"
+        and evidence_role != "matched_exploratory"
+    ):
+        raise ValueError("exposed report-only results cannot be confirmatory evidence")
+    expected_seeds = payload.get("expected_seeds")
+    if expected_seeds is not None and (
+        not isinstance(expected_seeds, list)
+        or any(isinstance(seed, bool) or not isinstance(seed, int) for seed in expected_seeds)
+        or len(expected_seeds) != len(set(expected_seeds))
+    ):
+        raise ValueError("expected_seeds must be a list of unique integer seed IDs")
     metrics = payload.get("metrics")
     if (
         not isinstance(metrics, list)
@@ -68,6 +165,7 @@ def _validate_pair_input(
 
     seen_seeds: set[int] = set()
     seen_run_ids: set[str] = set()
+    seen_roles: set[str] = set()
     treatment_values: dict[str, list[float]] = {name: [] for name in metrics}
     control_values: dict[str, list[float]] = {name: [] for name in metrics}
     seeds: list[int] = []
@@ -90,8 +188,12 @@ def _validate_pair_input(
             seen_run_ids.add(run_id)
             if arm.get("status") != "succeeded":
                 raise ValueError(f"run {run_id} is not succeeded")
-            if arm.get("evidence_role") not in {"matched_confirmation", "robustness"}:
-                raise ValueError(f"run {run_id} is not confirmatory-pair or robustness evidence")
+            arm_role = arm.get("evidence_role")
+            if arm_role not in EVIDENCE_ROLES:
+                raise ValueError(f"run {run_id} has an unsupported evidence role")
+            seen_roles.add(arm_role)
+            if evidence_role is not None and arm_role != evidence_role:
+                raise ValueError(f"run {run_id} evidence role does not match the comparison")
             provenance = arm.get("provenance")
             if not isinstance(provenance, dict):
                 raise ValueError(f"run {run_id} is missing provenance")
@@ -144,6 +246,10 @@ def _validate_pair_input(
     treatments = {
         metric: np.asarray(treatment_values[metric], dtype=np.float64) for metric in metrics
     }
+    if expected_seeds is not None and seeds != expected_seeds:
+        raise ValueError(f"completed seed IDs do not match expected_seeds: {seeds}")
+    if len(seen_roles) != 1:
+        raise ValueError("all paired runs must use the same evidence role")
     return comparison_id, intervention, seeds, controls, treatments
 
 
@@ -188,6 +294,11 @@ def analyze_paired_seed_metrics(
     for metric, treatment in treatments.items():
         control = controls[metric]
         values = treatment - control
+        degrees_freedom = len(values) - 1
+        sample_sd = float(values.std(ddof=1))
+        standard_error = sample_sd / float(np.sqrt(len(values)))
+        critical_value = _student_t_critical_value(0.975, degrees_freedom)
+        mean_difference = float(values.mean())
         sample_indices = rng.integers(0, len(values), size=(bootstrap_draws, len(values)))
         bootstrap_means = values[sample_indices].mean(axis=1)
         p_value, p_method = _sign_flip_p_value(values, rng_seed=rng_seed)
@@ -206,9 +317,16 @@ def analyze_paired_seed_metrics(
                     seeds, control, treatment, values, strict=True
                 )
             ],
-            "mean_treatment_minus_control": float(values.mean()),
+            "mean_treatment_minus_control": mean_difference,
             "median_treatment_minus_control": float(np.median(values)),
-            "sd_of_paired_differences": float(values.std(ddof=1)),
+            "sd_of_paired_differences": sample_sd,
+            "paired_student_t_degrees_freedom": degrees_freedom,
+            "paired_student_t_critical_value_95pct": critical_value,
+            "paired_student_t_standard_error": standard_error,
+            "paired_student_t_ci_95pct": [
+                mean_difference - critical_value * standard_error,
+                mean_difference + critical_value * standard_error,
+            ],
             "min_paired_difference": float(values.min()),
             "max_paired_difference": float(values.max()),
             "paired_seed_bootstrap_ci_95pct": [
@@ -239,6 +357,10 @@ def analyze_paired_seed_metrics(
         "schema": "aalto.paired_seed_statistics.v1",
         "comparison_id": comparison_id,
         "intervention_field": intervention,
+        "evidence_role": payload.get("evidence_role")
+        or payload["pairs"][0]["control"]["evidence_role"],
+        "evaluation_exposure": payload.get("evaluation_exposure"),
+        "expected_seeds": payload.get("expected_seeds"),
         "created_at_utc": datetime.now(UTC).isoformat(),
         "n_pairs": len(seeds),
         "pair_lineage": pair_lineage,

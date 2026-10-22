@@ -1,7 +1,8 @@
 # Aalto MS Thesis — Quantitative RL Trading System
 
-**Reinforcement learning trading agent** with multi-timeframe PO3/IFVG signal detection,
-built on cleaned US100 (Nasdaq-100) M1 data and trained with Stable-Baselines3 PPO/SAC.
+**Reinforcement-learning trading system** with multi-timeframe market features and
+PO3/IFVG strategy components. Configured runs can use US100 price bars, optional US500
+context, native or derived timeframes, and bid/ask tick execution data.
 
 This repository implements the full pipeline: data ingestion → multi-timeframe feature
 engineering → PO3 (Power of Three) / FVG / IFVG signal detection → backtesting →
@@ -70,7 +71,9 @@ learns position sizing, entry timing, and stop-loss/take-profit placement.
 | `features/` | Causal technical/context/PO3 feature construction and feature-cache semantics |
 | `trading/` | Broker-neutral account, policy, execution, order, position, risk, and strategy contracts |
 | `simulation/` | Gymnasium environment runtime plus event-driven backtesting |
-| `models/` | SB3 PPO/SAC policies, encoders, auxiliary models, and agent factory |
+| `models/` | Reusable encoders, policy networks, auxiliary models, and model factories |
+| `learning/` | PPO/SAC backends, learner contracts, callbacks, and checkpoint loading |
+| `decisioning/` | Versioned observation/action contracts and policy adapters |
 | `training/` | Training configuration, setup services, callbacks, runners, and training artifacts |
 | `evaluation/` | Rollout, metrics, reanalysis, reporting, provenance, and plotting |
 | `experiments/` | Variant and campaign orchestration, checkpoint lineage, and campaign reporting |
@@ -135,8 +138,12 @@ uv run thesis-data prepare
 ### Run tests
 
 ```bash
-uv run pytest tests/ -v
+uv run pytest tests/test_features/test_po3_state.py -q
+uv run pytest tests/test_envs/test_entry_state_machine.py -q
 ```
+
+Run the relevant test files for the change. GitHub CI and Orchestra coordinate
+the broader verification gates.
 
 ### Train RL agent — MVP (~1 minute)
 
@@ -192,7 +199,9 @@ Aalto_MS_Thesis/
 ├── features/                   # Context, technical, PO3, causal pipeline
 ├── trading/                    # Account, execution, orders, policy, risk, strategies
 ├── simulation/                 # TradingEnv runtime and backtest engine
-├── models/                     # Encoders, policies, auxiliary models, agent factory
+├── models/                     # Reusable encoders, policy networks, auxiliary models
+├── learning/                   # PPO/SAC learning backends and checkpoint services
+├── decisioning/                # Observation/action contracts and policy adapters
 ├── training/                   # Training setup, callbacks, runners, artifacts
 ├── evaluation/                 # Rollout, metrics, reanalysis, reporting, plotting
 ├── experiments/                # Variants and campaign orchestration
@@ -243,6 +252,10 @@ session = get_session(timestamp)  # "asia" | "london" | "ny" | "closed"
 
 Session boundaries (broker tz `Etc/GMT-3`, UTC+3): Asia 01:05–09:00, London 09:00–16:30,
 NY 16:30–23:00 (inclusive).
+
+These are fixed clock labels. The configured [date-level NY close schedule](config/ny_session_schedule.csv)
+separately marks known shortened sessions from that date's first bar; shortened-session bars
+remain in the chronological dataset and feature history.
 
 ---
 
@@ -319,12 +332,14 @@ plot_fvg_signals_interactive(bars, signals, out_path="chart.html")
 ## Testing
 
 ```bash
-uv run pytest tests/ -v                         # Full suite (CI merge bar)
-uv run pytest tests/test_features/ -v           # PO3 + structure
-uv run pytest tests/test_envs/ -v               # Environment + strategies
-uv run pytest tests/test_integration/ -v        # End-to-end smoke tests
-pytest -m "not slow"                            # Local shortcut only
+uv run pytest tests/test_features/test_po3_state.py -q
+uv run pytest tests/test_envs/test_entry_state_machine.py -q
+uv run pytest tests/test_integration/test_strategy_integration.py -q
 ```
+
+Keep local runs scoped to the affected behavior. GitHub CI and Orchestra run
+the broader verification gates; agent commit checks follow the scoped-test rule in
+[`AGENTS.md`](AGENTS.md).
 
 ---
 
@@ -337,7 +352,7 @@ Standard merge bar (mirrors `.github/workflows/ci.yml` and `orchestra/ci_gate.py
 | Formatting | `uv run ruff format --check .` |
 | Linting | `uv run ruff check .` |
 | Type checking | `uv run mypy .` |
-| Tests | `uv run pytest tests/ -v` |
+| Tests | Broader verification gates in CI; scoped relevant test paths locally |
 
 ---
 

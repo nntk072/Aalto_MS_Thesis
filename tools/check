@@ -26,6 +26,20 @@ run_deps() {
     make deps-check
   fi
 }
+run_security_deps() {
+  if [[ -n "$PYTHON_BIN" ]]; then
+    "$PYTHON_BIN" scripts/dev/security/dependency_audit.py
+  else
+    python3 scripts/dev/security/dependency_audit.py
+  fi
+}
+run_security_secrets() {
+  if [[ -n "$PYTHON_BIN" ]]; then
+    "$PYTHON_BIN" scripts/dev/security/secret_scan.py
+  else
+    python3 scripts/dev/security/secret_scan.py
+  fi
+}
 run_quality() {
   sync_dev
   run_module ruff format --check .
@@ -114,6 +128,8 @@ run_gpu() {
 
 case "$GATE" in
   deps) run_deps ;;
+  security-deps) run_security_deps ;;
+  security-secrets) run_security_secrets ;;
   quality) run_quality ;;
   architecture) run_architecture ;;
   graph-quality) run_graph_quality ;;
@@ -124,7 +140,7 @@ case "$GATE" in
   parity) run_parity ;;
   training-smoke) run_training_smoke ;;
   fast) run_deps; run_architecture; run_contracts ;;
-  full) run_deps; run_quality; run_architecture; run_graph_quality; run_contracts; run_unit; run_build; run_integration; run_parity; run_training_smoke ;;
+  full) run_deps; run_security_deps; run_security_secrets; run_quality; run_architecture; run_graph_quality; run_contracts; run_unit; run_build; run_integration; run_parity; run_training_smoke ;;
   gpu|triton) run_gpu ;;
-  *) echo "usage: $0 {deps|quality|architecture|graph-quality|contracts|unit|build|integration|parity|training-smoke|fast|full|gpu|triton}" >&2; exit 2 ;;
+  *) echo "usage: $0 {deps|security-deps|security-secrets|quality|architecture|graph-quality|contracts|unit|build|integration|parity|training-smoke|fast|full|gpu|triton}" >&2; exit 2 ;;
 esac

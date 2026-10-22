@@ -59,7 +59,7 @@ def test_no_tier2_probe_function() -> None:
 def test_vibe_auth_reads_dotenv(tmp_path, monkeypatch) -> None:
     vibe_dir = tmp_path / ".vibe"
     vibe_dir.mkdir()
-    (vibe_dir / ".env").write_text('MISTRAL_API_KEY="test-key"\n')
+    (vibe_dir / ".env").write_text('MISTRAL_API_KEY="test-key"\n')  # pragma: allowlist secret
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
     from orchestra.health import vibe_mistral_auth_ok

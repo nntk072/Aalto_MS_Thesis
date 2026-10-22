@@ -51,26 +51,38 @@ orchestra run "task"      # full pipeline
 ## Architecture
 
 ```
-market_data → features → training → learning backends → models
-      │          │            │              │
-      └──────→ trading ←→ simulation ←── decisioning
-                             │                 │
-                         evaluation         live → integrations
-compute supplies device/scheduler capabilities to workflows
+configuration → market_data → features → simulation
+                                      ↙      ↑
+                         decisioning → learning ← models
+                                         ↓
+                              training → evaluation → artifacts
+                                   ↑          ↑
+                             experiments ─────┘
+                                  ↑
+                               compute
+live → integrations/mt5
 ```
 
 | Domain | Entry File | Role |
 |--------|-----------|------|
+| configuration | `configuration/loader.py` | load, merge, and validate run configuration |
 | data | `market_data/loading/pipeline.py` | load → resample → clean → session → split |
 | features | `features/pipeline/builder.py` | indicators + SMT + structure + PO3 → matrix |
-| envs | `simulation/environment/env.py` | Gymnasium env (obs, act, reward) |
+| trading | `trading/` | broker-neutral account, execution, order, risk, and strategy contracts |
+| decisioning | `decisioning/contracts.py` | versioned observation/action schemas and inference-provider contract |
+| envs | `simulation/environment/env.py` | Gymnasium environment transitions, observations, and reward |
 | backtest | `simulation/backtest/engine.py` | event-driven engine (fill, SL/TP, guardrails) |
-| models | `models/encoders/` | reusable neural architectures; PPO/SAC wiring is in `learning/rl/agent.py` |
-| train | `training/runner/training.py` | full training loop |
-| evaluation | `evaluation/rollout/runner.py` | metrics, walk-forward, bootstrap CIs |
-| eval | `evaluation/rollout/model.py` | rollout, plots, export, `eval_run` |
-| live | `live/runtime/strategy.py` | MT5 bridge |
-| orchestra | `orchestra/pipeline.py` | multi-model task pipeline + CI verification |
+| models | `models/encoders/` | reusable neural architectures and model components |
+| learning | `learning/rl/agent.py` | PPO/SAC construction, learner backends, and checkpoint loading |
+| train | `training/runner/training.py` | compose data, features, simulation, and learning into runs |
+| evaluation | `evaluation/rollout/runner.py` | backend-neutral episode rollout |
+| reports | `evaluation/rollout/model.py` | model/provider evaluation, metrics, plots, and export |
+| experiments | `experiments/campaigns/execution.py` | variant and campaign lifecycle, resume, and provenance |
+| artifacts | `artifacts/` | shared identities, manifests, atomic storage, and registry |
+| compute | `compute/` | device capabilities, resource profiles, and Slurm adapters |
+| live | `live/runtime/strategy.py` | broker-neutral live and paper strategy runtime |
+| broker integration | `integrations/mt5/` | MetaTrader-specific data, broker, robot, and risk adapters |
+| orchestra | `orchestra/cli.py` | repository task orchestration and CI workflow |
 
 Full architecture map: `.agents/architecture.md`
 Domain-level context: `.agents/domain_maps/*.md`

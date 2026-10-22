@@ -3,18 +3,23 @@
     "fingerprint": "b8001ab6430bb2e23d5e044b1dba7bfe2b407323c5d1e13065f459db335701cb",
     "id": "replacement18_seed50_train2025_test2026_current_mtf_20261019"
   },
-  "claim_limit": "This freeze establishes the selected structural comparison and protocol only. It is not a final RQ1 result; inferential evidence requires the declared paired seeds, selected-pair evaluation, uncertainty, and cost-stress analysis.",
+  "claim_limit": "This freeze establishes the selected structural comparison and protocol only. It is not a final RQ1 result. The 2026 interval was previously inspected and can support exploratory report-only paired estimates, not a fresh confirmatory out-of-sample claim.",
   "created_local_date": "2026-10-19",
+  "amendment": {
+    "local_date": "2026-10-20",
+    "reason": "The evaluation interval is exposed, so the paired seed set and estimates must not be described as confirmatory out-of-sample evidence. No completed P7 evaluation result was present when this amendment was recorded.",
+    "supersedes_file_sha256": "3dd33be7b0bbc90bbee7aedb43373de2f3a4b707b3a8bbe611a8966cc0c4c5e1"
+  },
   "frozen_runtime": {
     "algorithm_architecture_reward": "Use the pair-specific saved effective configs; the only declared pair difference is env.entry_state_observation.",
-    "confirmatory_seed_set": [
+    "declared_paired_seed_set": [
       101,
       102,
       103,
       104,
       105
     ],
-    "seed_set_rationale": "Fresh paired seeds, declared before confirmatory outcomes and distinct from the seed-50 selection screen.",
+    "seed_set_rationale": "Paired seeds distinct from the seed-50 selection screen; estimates on the previously inspected 2026 interval are exploratory and report-only.",
     "data_source": "bundle",
     "evaluation": {
       "locked_oos_exposure": "previously_inspected_holdout",
@@ -137,6 +142,21 @@
     "test_results_used": false
   },
   "selection_outcome_disclosure": "Both training-only reports completed the 2025 split with zero trades and zero return. These observed outcomes were not used to choose the pair and do not establish a useful or successful trading policy. No 2026 test split was evaluated in the selection reports.",
+  "paired_analysis_plan": {
+    "primary_outcome": "total_return_pct",
+    "formula": "100 * total_pnl / initial_balance",
+    "evaluation_interval": "configured 2026-01-01 through 2026-10-16 report-only split; use all supplied bars in the interval",
+    "paired_difference": "hidden-treatment return minus visible-control return, in percentage points, for each identical seed",
+    "aggregation": "report all five paired differences and their arithmetic mean",
+    "seed_level_uncertainty": "two-sided 95% Student-t interval across the five paired differences (df=4); describes training-seed variability conditional on this fixed market interval, not market-year uncertainty",
+    "zero_trade_rule": "A completed full-interval no-trade run contributes its evaluator-reported 0% return and remains in the paired estimate.",
+    "incomplete_pair_rule": "Do not replace a declared seed. If any seed lacks a valid completed pair, report the five-pair analysis as incomplete and do not publish a complete aggregate estimate.",
+    "secondary_diagnostics": [
+      "trade and fill counts",
+      "full-period survival"
+    ],
+    "within_path_bootstrap_role": "Not the primary uncertainty estimate and not a substitute for seed-level uncertainty."
+  },
   "selection_rule": "Choose the first preflight-ordered pair with complete requested-budget runs, verified checkpoint/config/run-manifest identity, matched training inputs, and provenance-valid training-only reports. Do not use activity, survival, return, or any test result to select the pair.",
-  "status": "frozen_for_confirmatory_training"
+  "status": "frozen_for_exploratory_paired_evaluation_after_p6_viability"
 }

@@ -115,7 +115,7 @@ def load_vae_from_checkpoint(
         kernel_size=int(cfg.get("kernel_size", 3)),
         stride=int(cfg.get("stride", 2)),
     )
-    state = torch.load(path, map_location="cpu")
+    state = torch.load(path, map_location="cpu", weights_only=True)
     model.load_state_dict(state)
     model.eval()
     return model

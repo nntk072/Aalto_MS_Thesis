@@ -3,14 +3,15 @@
 set -Eeuo pipefail
 
 REPO="${TRITON_REPO:-/scratch/work/nguyenl37/Aalto_MS_Thesis}"
-SPEC="${CAMPAIGN_SPEC:-config/campaigns/rq1_entry_fsm_pair_seed101_105_train2025_test2026_20261019.yaml}"
-CAMPAIGN_ID="${CAMPAIGN_ID:-rq1_entry_fsm_pair_seed101_105_train2025_test2026_20261019}"
+SPEC="${CAMPAIGN_SPEC:-config/campaigns/rq1_entry_fsm_pair_seed101_105_train2025_test2026_20261021_scratch1.yaml}"
+CAMPAIGN_ID="${CAMPAIGN_ID:-rq1_entry_fsm_pair_seed101_105_train2025_test2026_20261021_scratch1}"
 WORKERS="${CAMPAIGN_WORKERS:-2}"
 WORKER_CPUS="${CAMPAIGN_WORKER_CPUS:-47}"
 JOB_NAME="${CAMPAIGN_SLURM_JOB_NAME:-thesis-rq1}"
 ALLOCATION_SCRIPT="${CAMPAIGN_ALLOCATION_SCRIPT:-scripts/compute/slurm/campaigns/run_rq1_pair_allocation.sh}"
 OUT_DIR="$REPO/outputs/gpu_campaigns/$CAMPAIGN_ID"
 LOG="$OUT_DIR/logs/allocation_supervisor.log"
+OVERRIDE_REASON_FILE="$OUT_DIR/reports/resume_fingerprint_override_reason.txt"
 NODES=(gpuarm1 gpuarm2)
 # Any failed allocation after diagnosis is an early-exit gate: stop and inspect.
 NO_PROGRESS_LIMIT=1
@@ -22,6 +23,16 @@ fi
 
 cd "$REPO"
 mkdir -p "$OUT_DIR/logs"
+if [[ -z "${CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON:-}" && -s "$OVERRIDE_REASON_FILE" ]]; then
+  CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON="$(<"$OVERRIDE_REASON_FILE")"
+fi
+if [[ -n "${CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON:-}" ]]; then
+  if ((${#CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON} < 12)); then
+    echo "fingerprint override reason must be at least 12 characters" >&2
+    exit 2
+  fi
+  export CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON
+fi
 exec >>"$LOG" 2>&1
 exec 9>"$OUT_DIR/.allocation_supervisor.lock"
 if ! flock -n 9; then
@@ -29,6 +40,9 @@ if ! flock -n 9; then
   exit 2
 fi
 echo "$(date --iso-8601=seconds) supervisor start campaign=$CAMPAIGN_ID host=$(hostname -s)"
+if [[ -n "${CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON:-}" ]]; then
+  echo "$(date --iso-8601=seconds) fingerprint override reason loaded; continued evidence will be exploratory"
+fi
 
 campaign_state() {
   local manifest="$OUT_DIR/campaign.json"

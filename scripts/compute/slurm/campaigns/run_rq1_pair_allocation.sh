@@ -10,6 +10,17 @@ OUT_DIR="$REPO/outputs/gpu_campaigns/$CAMPAIGN_ID"
 QUEUE="$OUT_DIR/worker_queue"
 JOB_ID="${SLURM_JOB_ID:?must run inside an existing Slurm allocation}"
 DONE="$OUT_DIR/allocation_controller.exit.$JOB_ID"
+OVERRIDE_REASON_FILE="$OUT_DIR/reports/resume_fingerprint_override_reason.txt"
+if [[ -z "${CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON:-}" && -s "$OVERRIDE_REASON_FILE" ]]; then
+  CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON="$(<"$OVERRIDE_REASON_FILE")"
+fi
+if [[ -n "${CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON:-}" ]]; then
+  if ((${#CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON} < 12)); then
+    echo "fingerprint override reason must be at least 12 characters" >&2
+    exit 2
+  fi
+  export CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON
+fi
 
 cd "$REPO"
 mkdir -p "$OUT_DIR/logs" "$OUT_DIR/reports"
@@ -83,18 +94,42 @@ while true; do
 done
 echo "worker managers ready on all nodes: ${ALLOCATED_NODES[*]}"
 
-python "$REPO/scripts/maintenance/migrations/migrate_preflight_campaign.py" \
-  --campaign-id "$CAMPAIGN_ID" \
-  --campaign-spec "$REPO/$SPEC" \
-  --expected-fingerprint aa1a343608c41a8b9a596eb410c1648bbd22d6bf8484186ce02fc35d7c80e4ba \
-  --workers "$WORKERS" \
-  --worker-cpus 47 \
-  --worker-gpu-type gh200 \
-  --worker-gpus-per-node 1 \
-  --fast-reports
+if [[ ! -s "$OUT_DIR/campaign.json" ]]; then
+  echo "campaign manifest is missing before resume validation: $OUT_DIR/campaign.json" >&2
+  exit 2
+fi
+attempt_count="$(python3 - "$OUT_DIR/campaign.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    campaign = json.load(stream)
+print(sum(int(job.get("attempts", 0)) for job in campaign.get("jobs", [])))
+PY
+)"
+if [[ "$attempt_count" == "0" ]]; then
+  python "$REPO/scripts/maintenance/migrations/migrate_preflight_campaign.py" \
+    --campaign-id "$CAMPAIGN_ID" \
+    --campaign-spec "$REPO/$SPEC" \
+    --expected-fingerprint aa1a343608c41a8b9a596eb410c1648bbd22d6bf8484186ce02fc35d7c80e4ba \
+    --workers "$WORKERS" \
+    --worker-cpus 47 \
+    --worker-gpu-type gh200 \
+    --worker-gpus-per-node 1 \
+    --fast-reports
+else
+  echo "skipping one-time preflight migration after $attempt_count trainer attempt(s); campaign controller will enforce resume identity"
+fi
 
 resume_args=()
 [[ -s "$OUT_DIR/campaign.json" ]] && resume_args+=(--resume)
+if [[ -n "${CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON:-}" ]]; then
+  resume_args+=(
+    --resume-fingerprint-override-reason
+    "$CAMPAIGN_RESUME_FINGERPRINT_OVERRIDE_REASON"
+  )
+  echo "campaign fingerprint override enabled; resulting training evidence is exploratory"
+fi
 set +e
 timeout --signal=TERM --kill-after=2m 20700s \
   python "$REPO/experiments/campaigns/execution.py" \

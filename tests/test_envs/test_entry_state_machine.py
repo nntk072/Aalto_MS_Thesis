@@ -164,7 +164,7 @@ def _market_fixture(execution_direction: int = 0) -> tuple[pd.DataFrame, pd.Data
     return bars, features
 
 
-def test_baseline_fsm_uses_causal_sweep_as_candidate_and_arms_next_bar() -> None:
+def test_baseline_fsm_uses_causal_sweep_candidate_through_entry() -> None:
     bars, features = _market_fixture()
     env = TradingEnv(
         bars,
@@ -172,20 +172,26 @@ def test_baseline_fsm_uses_causal_sweep_as_candidate_and_arms_next_bar() -> None
         obs_window=10,
         strategy=BaselineStrategy(),
         strategy_actions=True,
+        agent_direction_control=True,
         entry_state_machine=True,
         candidate_max_age_bars=5,
         entry_state_observation=True,
+        allow_agent_sl_mode=True,
+        allow_agent_tp_mode=True,
+        allow_multi_tp=True,
+        allow_simplex=True,
         open_manipulation_bars=0,
-        entry_cooldown_bars=0,
+        entry_cooldown_bars=15,
         min_sl_atr_mult=0.0,
         min_sl_points=0.0,
-        allow_agent_sl_mode=False,
-        allow_ema_exit=False,
     )
     env.reset()
     action_shape = env.action_space.shape
     assert action_shape is not None
     action = np.zeros(action_shape, dtype=np.float32)
+    action[0] = 1.0  # Confirm the stored long candidate.
+    action[1] = 1.0  # Request entry with the intensity dimension.
+    action[-1] = -1.0  # Use structural exits; the fixture has no EMA-21 data.
 
     env.step(action)  # bar 10: the low sweep creates a long candidate
     assert env.entry_state_machine is not None
@@ -196,6 +202,19 @@ def test_baseline_fsm_uses_causal_sweep_as_candidate_and_arms_next_bar() -> None
 
     env.step(action)  # bar 11: the stored setup advances to ARMED
     assert str(env.entry_state_machine.state) == "ARMED"
+
+    _, _, _, _, entry_info = env.step(action)  # bar 12: trigger the stored long candidate
+    assert str(env.entry_state_machine.state) == "IN_POSITION", (
+        f"entry_info={entry_info['entry_funnel']}, "
+        f"rejection={entry_info['entry_rejection_reason']}, "
+        f"triggers={env.entry_state_machine.trigger_requested}, "
+        f"refused={env.entry_state_machine.trigger_refused}"
+    )
+    assert env.entry_state_machine.entered == 1
+    assert env.position is not None
+    assert env.position.direction == 1
+    assert env.position.entry_origin_bar == 10
+    assert env.position.entry_setup_types == ("sweep",)
 
 
 @pytest.mark.parametrize("execution_direction", [0, -1])

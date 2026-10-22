@@ -1,698 +1,129 @@
-# Quantitative RL Trading System: Architecture
+# Repository Architecture
 
-- [Introduction](#introduction)
-- [Terminology](#terminology)
-- [Disclaimers](#disclaimers)
-- [Scope](#scope)
-- [End-to-end procedure](#end-to-end-procedure)
-- [Architecture](#architecture)
-- [Lifecycle of one cycle](#lifecycle-of-one-cycle)
-  - [Data and cache](#data-and-cache)
-  - [Feature chains and strategy state](#feature-chains-and-strategy-state)
-  - [Environment step](#environment-step)
-  - [Training, evaluation and walk-forward](#training-evaluation-and-walk-forward)
-  - [Live: paper first, then promote](#live-paper-first-then-promote)
-- [Budgets and constraints](#budgets-and-constraints)
-- [Causal-only rule](#causal-only-rule)
-- [Adding a strategy](#adding-a-strategy)
-- [References](#references)
+This page describes the current root-package layout. Reusable implementation
+lives in the domain packages below; `scripts/` provides research, maintenance,
+and compute entry points. There is no active `quant_rl/` package. The checkpoint
+loader retains narrow legacy module aliases for old saved models, and dated
+audit scripts can retain their original imports; neither defines current
+application entry points. Use the current package paths when adding code or
+fixing imports.
 
-> **Terminology:** The historical "Idea 1/2/3" labels refer to specific
-> strategy variants in earlier experiments. Actual behavior is selected by
-> merged configuration and the `--strategy` / `--variant` options. See
-> [research reference](research_reference.md) and
-> [reproducibility](reproducibility.md) before interpreting results.
+For repository-wide agent rules and scientific invariants, see
+[`AGENTS.md`](../AGENTS.md) and [`.agents/architecture.md`](../.agents/architecture.md).
+The [research reference](research_reference.md) documents concrete action,
+data, reward, and risk contracts; the [thesis validation protocol](thesis/validation_protocol.md)
+defines the calendar roles for thesis evaluation.
 
-## Introduction
-
-This describes how the repository turns raw M1 price files into a trained
-reinforcement-learning agent and, optionally, a live trading robot: the data
-pipeline, the feature builders, the `TradingEnv` contract, the backtest
-engine, the training and evaluation entry points, and the live bridge.
-
-This page documents the **framework**: the pipeline stages, the contracts
-between them, and the invariants that hold across every configuration.
-*What* a particular strategy trades - the PO3/IFVG chain of Idea 1 or the
-distribution chain of Idea 2 - is documented in the modules that own it
-(`trading/strategies/` plus `config/2_po3_ifvg.yaml` /
-`config/3_distribution.yaml`) and is linked rather than duplicated here
-as a tutorial. [Adding a strategy](#adding-a-strategy) describes how a new
-one is plugged in.
-
-How-to material lives elsewhere and is not repeated:
-
-- [`README.md`](../README.md) — installation, quick start, project layout.
-- [`config.md`](config.md) — YAML config catalog and cache versioning.
-- [`RUNNING_COMMANDS.md`](operations/RUNNING_COMMANDS.md) — every command a typical
-  research or evaluation session needs.
-- [`DEPLOYMENT.md`](operations/DEPLOYMENT.md) — the paper-to-live promotion protocol.
-
-## Terminology
-
-**M1 spine**
-   One-minute bars are the only true source data. Every higher timeframe is
-   resampled from the M1 files named under `data.m1_files` in
-   `config/base/default.yaml`; separately downloaded higher-TF CSVs are
-   ignored (see [Disclaimers](#disclaimers)).
-
-**HTF / LTF**
-   Higher timeframe (M15 FVG zones) and lower timeframe (M5 confirmations)
-   in the multi-timeframe signal stack.
-
-**OOS split**
-   The locked train/out-of-sample boundary in `data.split`:
-   in-sample is `train_end` inclusive, out-of-sample starts at
-   `test_start`. Ideas may not move these dates (see
-   [Budgets and constraints](#budgets-and-constraints)).
-
-**Causal feature**
-   A feature column whose value at bar `t` is computed only from
-   information available at decision time `t`. See
-   [Causal-only rule](#causal-only-rule).
-
-**Overlay vs baseline**
-   The strategy machinery added on top of the baseline (Idea 3)
-   configuration. Baseline behaviour is the reference; Idea 1/2 are strict
-   opt-in overlays (see [Overlay invariant](#overlay-invariant)).
-
-**`TradingStrategy` vs `TradingEnv`**
-   A strategy object owns *semantics only*: whether an entry is valid at
-   bar `t`, where the structural stop reference sits, and which
-   take-profit targets are candidates. The environment owns all *mechanics*:
-   fills, lot sizing, account state, costs, guardrails and logging
-   (`trading/strategies/__init__.py`).
-
-**Observation `seq` / `account`**
-   The environment's observation is a dictionary: `seq` is the normalised
-   60-bar feature window (plus optional VAE latent `vae_z`), `account` is
-   the scalar account state. Raw price-level columns requested by a
-   strategy (`raw_columns`) are kept for execution but excluded from the
-   normalised sequence.
-
-**Discrete vs strategy action space**
-   Legacy spaces: `Discrete(20)` (`0` hold, `1-9` enter-long variants,
-   `10-18` enter-short variants, `19` exit) or a 1-D `Box(-1, 1)` for
-   proportional sizing. Strategy mode replaces these with one 4-D
-   `Box` `[direction, risk, rr, tp]` (see [Environment step](#environment-step)).
-
-**DSR vs sweep vs entry-event rewards**
-   Three reward layers combined by `CompositeReward`: the economic
-   Differential Sharpe Ratio (`DSRReward`), an optional
-   `SweepConfirmationReward`, and an optional strategy *alignment* reward
-   (`PO3Reward` / `DistributionReward`) that fires on entry transitions
-   only.
-
-**Liquidity sweep vs BOS**
-   A sweep is a push through a prior swing level followed by a reclaim; a
-   break of structure is a confirmed close beyond a swing level. Both are
-   detected causally in `features/context/liquidity.py`.
-
-**Manipulation vs distribution phase**
-   The two PO3 stages tracked in `features/po3/state.py`:
-   the manipulation sweep that runs against the eventual direction, and the
-   distribution leg that follows it.
-
-**FTMO limits vs `live_risk_overrides`**
-   Training/evaluation enforce the *dollar* kill-switches of the `ftmo:`
-   block via guardrails; live MT5 sizing uses the *percentage-of-balance*
-   block `live_risk_overrides:`. The two must stay aligned
-   (`config/base/default.yaml`).
-
-**Paper vs live**
-   `PAPER_TRADING=true` (the default) logs every signal and intended order
-   without placing anything; `PAPER_TRADING=false` routes orders to the
-   broker.
-
-## Disclaimers
-
-- **Higher-TF CSVs are ignored.** All timeframes are resampled from the
-  true M1 files named in `data.m1_files`; a separately downloaded M5/H1
-  file is never read. Tick files (`data.tick_files`) are used only for
-  fill pricing when `costs.use_tick_execution` is on.
-- **The feature cache is versioned.** Feature pipelines are cached as
-  parquet keyed by `FEATURE_CACHE_VERSION` (currently
-  `v21-causal-prior-ny-session` in `features/pipeline/builder.py`).
-  Bar caches use `BAR_CACHE_VERSION` (`v2-full-day` in
-  `market_data/loading/pipeline.py`). Feature content hashes also include resolved
-  feature settings and data identity. A semantic change must bump the relevant
-  version; stale caches are otherwise silently reused.
-- **Opt-in feature blocks are config-driven.** Overlay columns
-  (`include_strategy_state`, `include_session_ohlc`, MTF expansion flags)
-  are toggled by variant YAMLs under `config/`. The resolved flags contribute
-  to each cache's content hash, so different feature configurations use
-  different cache paths.
-- **OOS dates are locked in `default.yaml`.** `data.split.train_end` /
-  `test_start` are the single source of truth for the split; variant
-  configs must not override them.
-- **`PAPER_TRADING` defaults to true.** The live entry point
-  (`live_trading_rl.py`) logs signals only unless paper mode is
-  explicitly disabled.
-- **Training dollar caps and live percentage sizing must stay aligned.**
-  `ftmo:` (dollar kill-switches) and `live_risk_overrides:` (% of
-  balance) encode the same risk appetite for different units; changing
-  one without the other silently diverges training from live sizing.
-- **Strategy registration is config-time only.** A strategy is selected
-  through `_STRATEGY_CONFIGS` in `training/runner/training.py` and the
-  merged YAML; there is no runtime plugin loader.
-- **The overlay is strict (see [Overlay invariant](#overlay-invariant)).** With
-  `env.strategy_actions=false` (default), the environment keeps the
-  legacy discrete or 1-D continuous action space, the DSR (or sweep)
-  reward, swing-level SL/TP and the full observation column set —
-  bit-for-bit baseline behaviour, locked by
-  `tests/test_envs/test_baseline_regression.py`. Idea 1/2 are *not* a
-  replacement of Idea 3; they activate only when a variant YAML sets
-  `strategy_actions: true` and `features.include_strategy_state: true`.
-- **Alignment rewards fire on entry transitions only, and stay small.**
-  `PO3Reward` / `DistributionReward` return `0.0` unless the position
-  changed this step, and their configured weights (`strategy_weight:
-  0.1`) are an order of magnitude below the economic reward — they shape
-  *where* entries happen, never dominate PnL.
-
-### Overlay invariant
-
-PR #3 added the strategy machinery as a **strict overlay**. When
-`env.strategy_actions=false` (default / Idea 3 baseline),
-`simulation/environment/env.py` must keep:
-
-- the legacy discrete (`Discrete(20)`) or 1-D continuous action space,
-- the DSR (or sweep) reward with no alignment component,
-- swing-level SL/TP, not structural strategy stops,
-- the full observation column set.
-
-`_strategy_from_cfg` in `training/runner/training.py` returns
-`(BaselineStrategy(), None, 0.0)` unless a variant config enables
-`strategy_actions`; only then does it return
-`(PO3IFVGStrategy, PO3Reward, weight)` or
-`(DistributionStrategy, DistributionReward, weight)`. The invariant is
-locked by `tests/test_envs/test_baseline_regression.py`.
-
-## Scope
-
-- Root domain packages own research code: `market_data/`, `features/`, `trading/`, `simulation/`, `models/`, `training/`, and `evaluation/`
-  primitives, training and evaluation.
-- `integrations.mt5/` owns broker I/O only. The environment never places MT5
-  orders; the live path never retrains.
-- Feature detectors never look ahead (see [Causal-only rule](#causal-only-rule)).
-- Strategy objects own semantics only; fills, lots and logging stay in
-  the environment.
-
-## End-to-end procedure
-
-Research pipeline, one configuration run (`training/runner/training.py`):
-
-```mermaid
-sequenceDiagram
-    participant P as run_pipeline (market_data/loading/pipeline.py)
-    participant B as build_features (features/pipeline/builder.py)
-    participant L as liquidity / po3_state
-    participant S as split_train_test (market_data/splits/definitions.py)
-    participant E as SimulationTransition / TradingEnv
-    participant ST as _strategy_from_cfg (training/runner/training.py)
-    participant A as build_agent (learning/rl/agent.py)
-    participant D as DecisionProvider (decisioning/contracts.py)
-    participant V as evaluate_provider (evaluation/rollout/model.py)
-    P->>B: true M1 CSVs (data.m1_files)
-    B->>L: only when include_strategy_state
-    L-->>B: sweep / BOS / PO3 / IFVG columns
-    B-->>P: feature frames (versioned parquet cache)
-    P->>S: dataset and feature frames
-    S-->>E: in-sample / OOS inputs (locked dates)
-    ST-->>E: strategy + alignment reward (or baseline)
-    E-->>A: Gym adapter observation space
-    A-->>D: model artifact / provider adapter
-    D-->>V: semantic decisions
-    V-->>V: metrics, trades, plots -> outputs/
-```
-
-The optional feature stage is the overlay: `detect_liquidity_sweeps`,
-`detect_bos`, `build_po3_state` and `build_ifvg_zone_features` run only
-when `features.include_strategy_state` is enabled by a variant config
-(`config/2_po3_ifvg.yaml`, `config/3_distribution.yaml`).
-
-Live loop, one bar (`live_trading_rl.py` driving
-`integrations.mt5/robot/rl_robot.py`):
-
-```mermaid
-sequenceDiagram
-    participant MT5 as MT5 terminal
-    participant R as RLRobot (integrations.mt5/robot/rl_robot.py)
-    participant SA as RLStrategyAdapter (live/runtime/strategy.py)
-    participant RM as RiskManager
-    participant TR as Trader
-    MT5->>R: new M1 bar
-    R->>SA: bar -> model observation
-    SA-->>R: signal (direction, sizing intent)
-    R->>RM: position sizing (live_risk_overrides)
-    R->>TR: open/close via Trader, or paper log when PAPER_TRADING
-```
-
-## Architecture
+## End-to-end flow
 
 ```mermaid
 flowchart LR
-  data[data_pipeline]
-  feat[features_build]
-  liq[liquidity_po3_state]
-  env[TradingEnv]
-  strat[TradingStrategy]
-  reward[alignment_reward]
-  engine[backtest_engine]
-  risk[structural_risk]
-  agent[build_agent]
-  eval[evaluation]
-  live[mt5_RLRobot]
-  data --> feat
-  feat --> liq
-  feat --> env
-  liq --> env
-  strat --> env
-  reward --> env
-  engine --> env
-  risk --> env
-  env --> agent
-  agent --> eval
-  agent --> live
+  C[configuration/] --> D[market_data/]
+  D --> F[features/]
+  F --> S[simulation/]
+  T[trading/] --> S
+  S --> L[learning/]
+  M[models/] --> L
+  Q[decisioning/] --> L
+  L --> TR[training/]
+  TR --> A[artifacts/]
+  TR --> E[evaluation/]
+  E --> A
+  X[experiments/] --> TR
+  X --> E
+  CP[compute/] --> X
+  LR[live/] --> MT[integrations/mt5/]
+  M --> LR
+  Q --> LR
 ```
 
-**Data** — `market_data/loading/pipeline.py` (`run_pipeline`) ingests the true
-M1 files, resamples every higher timeframe from them, and hands feature
-frames to `market_data/splits/definitions.py` (`split_train_test`), which applies the
-locked in-sample/OOS dates. Tick files are consulted by the backtest for
-fill pricing only.
-
-**Features** — `features/pipeline/builder.py` (`build_features`) is the
-single entry point. It owns `FEATURE_CACHE_VERSION` and the opt-in
-`include_strategy_state` block that appends the overlay columns from
-`features/context/liquidity.py` (`detect_liquidity_sweeps`,
-`detect_bos`) and `features/po3/state.py` (`build_po3_state`,
-`build_ifvg_zone_features`).
-
-**Environment and strategies** — `simulation/environment/env.py`
-(`TradingEnv`) hosts the gym interface, mechanics and composite reward.
-`trading/strategies/` holds the semantics objects
-(`TradingStrategy`, `BaselineStrategy`, `PO3IFVGStrategy`,
-`DistributionStrategy`).
-
-**Alignment rewards** — `simulation/environment/po3_reward.py` (`PO3Reward`),
-`simulation/environment/distribution_reward.py` (`DistributionReward`) and
-`simulation/environment/sweep_reward.py` (`SweepConfirmationReward`,
-`CompositeReward`). `CompositeReward` filters strategy-reward keyword
-inputs through each component's `required_inputs`.
-
-**Backtest primitives** — `simulation/backtest/engine.py` plus the account,
-broker, costs and guardrails modules; `trading/risk/sizing.py`
-provides the structural risk helpers `compute_sl_tp_from_structure`
-(`sl_mode: exact` when `buffer_pts=0.0`, `buffered` with a positive
-buffer) and `resolve_tp_target` (`rr`, liquidity and
-previous-day-high/low targets with `rr_fallback` for invalid ones).
-
-**Models and learning** — `models/encoders/` and `models/auxiliary/` hold
-reusable neural architectures. `learning/rl/agent.py` assembles the PPO/SAC
-backend and vector environment. `learning/supervised/` contains a small
-reference classifier that uses the same `Learner` and `DecisionProvider`
-contracts without importing Gymnasium or SB3. Optional VAE latents are frozen
-when used by the RL backend.
-
-**Training** — `training/runner/training.py` wires everything: `_STRATEGY_CONFIGS`
-maps strategy names to variant YAMLs, `_strategy_from_cfg` builds
-`(strategy, strategy_reward, weight)`, and the merged config drives
-`make_env`, `learning/rl/agent.py::build_agent` and the selected learner.
-
-**Evaluation** — `evaluation/` holds the canonical metrics stack
-(`calculate_metrics`, `purged_walk_forward`, bootstrap CIs, calibration,
-`run_episode`, distributional extras). `evaluation/` owns rollout
-(`evaluate_provider`), plot export, and provider-based `eval_run` checkpoint
-re-evaluation. `evaluate_model` remains the compatibility entry point for
-older callers that pass a model directly.
-Thesis ablation / OOS cost harnesses live as scripts only:
-`experiments/variants/runner.py` (+ `config/experiments.yaml`),
-`scripts/research/thesis/evaluation/test_oos.py`, `scripts/research/thesis/evaluation/report_ablations.py`. There is no parallel
-retired validation package. Checkpoints, trades and plots land under
-`outputs/`.
-
-**Live** — `live_trading_rl.py` loads a checkpoint and runs
-`live/runtime/strategy.py` (`RLStrategyAdapter`) inside
-`integrations.mt5/robot/rl_robot.py` (`RLRobot`), which sizes through
-`RiskManager` and executes through a `Trader` — or only logs, when
-`PAPER_TRADING` is on.
-
-**Config** — `config/base/default.yaml` is the base; variant YAMLs
-under `config/` are merged over it. A variant is opt-in end to end: it
-must flip `features.include_strategy_state`, `env.strategy_actions` and
-declare the `strategy:` block (see the two example files).
-
-### Core contracts
-
-Packages map 1:1 to directories. The cross-tree boundary is live:
-`RLStrategyAdapter` (in `live/`) bridges the trained model into
-`integrations.mt5/`, which knows nothing about RL training.
-
-```mermaid
-classDiagram
-    direction TB
-
-    class TradingEnv {
-        +strategy: TradingStrategy
-        +reward_fn: DSRReward | CompositeReward
-        +strategy_actions: bool
-        +step(action)
-        +reset()
-    }
-
-    class TradingStrategy {
-        <<abstract>>
-        +required_features
-        +raw_columns
-        +validate_entry()*
-        +sl_reference()*
-        +target_candidates()*
-    }
-
-    class BaselineStrategy
-    class PO3IFVGStrategy
-    class DistributionStrategy
-
-    class CompositeReward {
-        +DSRReward
-        +SweepConfirmationReward
-        +strategy_reward
-        +strategy_weight
-    }
-
-    class Broker
-    class FTMOGuardrails
-    class build_agent {
-        +build_agent(env, cfg)
-    }
-
-    class RLStrategyAdapter {
-        +build_observation()
-        +predict_signal()
-    }
-
-    class RLRobot {
-        +trade()
-    }
-
-    TradingStrategy <|-- BaselineStrategy
-    TradingStrategy <|-- PO3IFVGStrategy
-    TradingStrategy <|-- DistributionStrategy
-    TradingEnv *-- TradingStrategy
-    TradingEnv *-- CompositeReward
-    TradingEnv --> Broker
-    TradingEnv --> FTMOGuardrails
-    build_agent --> TradingEnv
-    RLRobot --> RLStrategyAdapter
-```
-
-| Package | Entry point | Role |
-|---------|-------------|------|
-| `market_data/` | `run_pipeline`, `split_train_test` | M1 ingest, resample, cache, split |
-| `features/` | `build_features` | Feature matrix + `FEATURE_CACHE_VERSION` |
-| `simulation/` | `SimulationTransition`, `TradingEnv` | Native transitions and Gym adapter |
-| `simulation/backtest/` | `engine`, `broker`, `guardrails` | Fills, costs, FTMO kill-switches |
-| `models/` | encoders, factory | Reusable model architectures |
-| `learning/rl/` | `build_agent` | PPO/SAC and vector-environment wiring |
-| `learning/supervised/` | `ReferenceTorchLearner` | Optional supervised backend reference |
-| `decisioning/` | `DecisionProvider` | Versioned model input and semantic action boundary |
-| `training/` | `train_rl` | Pipeline orchestration |
-| `evaluation/` | `calculate_metrics`, `purged_walk_forward` | Metrics and reporting |
-| `evaluation/` | `evaluate_model`, `eval_run` | Rollout and artifact export |
-| `live/` | `RLStrategyAdapter` | Live observation bridge |
-| `integrations.mt5/` | `RLRobot`, `RiskManager` | Broker I/O only |
-
-## Lifecycle of one cycle
-
-### Data and cache
-
-`run_pipeline` reads only the M1 files named in `data.m1_files` and the
-tick files in `data.tick_files`. Higher timeframes are resampled from
-M1; sessions are evaluated in `session.tz` (`Etc/GMT-3`, NY-open proxy
-`16:30`–`23:00`, with a DST flag caveat). Feature frames are cached as
-parquet under a version key so identical configurations skip
-recomputation; the key changes whenever the feature schema changes.
-
-### Feature chains and strategy state
-
-`build_features` always builds the base technical indicator block on the
-M1 spine and causally aligns per-TF indicators listed in
-`features.htf_timeframes`. Opt-in blocks (all off in `default.yaml`) add
-columns when their flags are enabled by a variant config:
-
-| Flag / block | Adds |
-|--------------|------|
-| `include_po3` | PO3 time-of-day phase tag |
-| `include_fvg_ifvg` | Per-TF FVG zone features |
-| `include_po3_full` | Full HTF-FVG → LTF-IFVG → entry-trigger pipeline |
-| `include_strategy_state` | Sweeps, BOS, PO3 state, IFVG zones (Idea 1/2 overlay) |
-| `include_session_ohlc` | CT-anchored session OHLC, prior-period H/L, quadrants |
-| `smt` / `structure` / `liquidity` / `po3_state_mtf` / `ifvg_mtf` | MTF expansion per `config/features_*_mtf.yaml` |
-
-When `include_strategy_state` is on, the overlay detectors are:
-
-- `detect_liquidity_sweeps` / `detect_bos` (`features/liquidity.py`)
-- `build_po3_state` / `build_ifvg_zone_features` (`features/po3_state.py`)
-
-Swing detection lives in `features/swings.py` (`detect_pivots`,
-`detect_swings`); `structure.py` wraps it for SL/TP pricing.
-
-Overlay columns are consumed two ways: strategy classes read them per
-bar (`required_features` plus execution-side `raw_columns`), and the
-alignment rewards read their boolean flags at entry transitions.
-
-### Environment step
-
-One `TradingEnv` step:
-
-1. **Observation** — `seq`: the normalised 60-bar feature window
-   (`obs_window: 60`), plus `account` scalars, plus an optional frozen
-   `vae_z` latent.
-2. **Action** — legacy mode: `Discrete(20)` or 1-D `Box(-1, 1)`
-   proportional sizing. Strategy mode (`env.strategy_actions=true`): one
-   4-D `Box` — `action[0]` direction/entry intensity (`|x| < 0.25`
-   holds), `action[1]` risk selector mapped into `risk_frac_range`,
-   `action[2]` RR selector mapped into `rr_range`, `action[3]`
-   TP-target selector over `tp.allowed_targets`.
-3. **Strategy gate** — the strategy's `validate_entry` decides whether
-   the chosen entry is valid at this bar. `entry.enforce_gate` defaults
-   to `false`: the gate is then diagnostic (invalid entries are logged
-   and scored, not blocked); `true` makes it a hard veto. Which mode a
-   checkpoint was trained under must be recorded and reused live.
-4. **Structural SL/TP** — `sl_reference` feeds
-   `compute_sl_tp_from_structure` (exact or buffered stop), and
-   `target_candidates` feeds `resolve_tp_target`; invalid targets fall
-   back per `invalid_target_policy` (`rr_fallback`).
-5. **Reward** — `CompositeReward` combines `DSRReward` (economic),
-   `SweepConfirmationReward` (optional) and the strategy alignment
-   reward (optional, entry transitions only, weight
-   `strategy.reward.strategy_weight`). Each alignment component
-   receives only the keywords in its `required_inputs`.
-6. **Guardrails** — `FTMOGuardrails` enforces the `ftmo:` dollar limits
-   (daily loss, max loss, per-trade risk) inside training/evaluation
-   episodes.
-
-### Training, evaluation and walk-forward
-
-`thesis-train train` merges `config/base/default.yaml` with the variant
-YAML selected from `_STRATEGY_CONFIGS`, builds the environment via
-`make_env` and `_strategy_from_cfg`, the agent via `learning/rl/agent.py`, and
-trains through `Learner.fit()`. `BestCheckpointEvalCallback` checkpoints during training;
-`evaluation/rollout/model.py` (`evaluate_provider`) replays checkpoints on the
-locked OOS window; `evaluation/` computes metrics, bootstrap CIs,
-and walk-forward reports; `evaluation/reporting/export.py` writes artifacts to
-`outputs/`. Feature caches use `FEATURE_CACHE_VERSION` plus the resolved
-feature/data content hash; inspect the effective cache path when comparing
-variants.
-
-### Live: paper first, then promote
-
-`live_trading_rl.py` loads a trained checkpoint, wraps it in the SB3
-`DecisionProvider` adapter at the composition root, and supplies that provider
-to `RLStrategyAdapter`, which converts each MT5 M1 bar into the same
-observation the environment produced during training. `RLRobot.trade()`
-derives the signal, sizes it via `RiskManager` (percent-of-balance under
-`live_risk_overrides:`), and either places orders through `Trader` or
-only logs them. Promotion from paper to live follows
-`docs/operations/DEPLOYMENT.md`; a live adapter must be paper-first, and an SMT
-secondary symbol is wired only when the checkpoint was trained with it.
-
-## Budgets and constraints
-
-1. **The OOS split is locked.** `data.split.train_end: "2025-12-31"` /
-   `test_start: "2026-01-01"` in `config/base/default.yaml`. Idea 1/2
-   must not redefine the split, the cost model, or the baseline action
-   space.
-2. **FTMO dollar limits are hard kill-switches in training/eval.**
-   `daily_loss_limit` (5000), `max_loss_limit` (10000) and
-   `risk_per_trade_limit` (1000) are enforced by `FTMOGuardrails`;
-   `profit_target` is reported only.
-3. **Live sizing is percent-of-balance.** `live_risk_overrides:` —
-   `risk_per_symbol` 1%, aggregate open risk `max_total_risk` 2%,
-   `default_lot_size` fallback, `stop_loss_pips` for sizing. Keep the
-   ratio aligned with `ftmo:` for the configured account size.
-4. **Observation window is 60 bars** (`obs_window: 60`); episodes cap at
-   `max_episode_steps: 1000`. Checkpoints and live adapters must agree
-   with these.
-5. **The overlay stays an overlay.** With `strategy_actions=false`
-   everything is bit-for-bit baseline ([Overlay
-   invariant](#overlay-invariant)); variant configs activate Idea 1/2
-   only through their own YAMLs.
-6. **Alignment rewards stay secondary.** Entry-transition only, and
-   `strategy_weight` (0.1 in both shipped variants) small relative to
-   the economic reward.
-
-## Causal-only rule
-
-Every feature detector uses only information available at decision time
-`t`:
-
-- Sweep and BOS detections reference swing levels *confirmed* before the
-  decision bar; the level used at `t` is shifted by one bar so the
-  confirming close of the swing is never inside the same bar's decision.
-- The PO3 HTF/LTF mapping is shifted one period in the v4 feature
-  generation: an M15 value mapped to an M1 decision bar comes from a
-  completed M15 bar only.
-
-Adding future bars must never change historical feature values. This is
-the same discipline as the NRT-only rule it mirrors: a feature that
-repaints is a bug, and the causal tests under `tests/test_features/`
-exist to catch it.
-
-Live mirrors training: the SMT divergence secondary symbol
-(`data.secondary`, `US500.cash`) participates only if the checkpoint was
-trained with it, and the `enforce_gate` mode recorded at training time
-is the mode used live.
-
-## Adding a strategy
-
-A strategy is a semantics object, a config file, and a registry entry.
-Implement `TradingStrategy` (`trading/strategies/base.py`):
-
-```python
-from trading.strategies.base import TradingStrategy
-
-
-class MyStrategy(TradingStrategy):
-    name = "my_strategy"
-
-    #: Feature columns that must exist in the feature matrix.
-    required_features = ("my_sweep_flag", "my_zone_level")
-    #: Raw price columns kept for execution, excluded from the
-    #: normalised sequence observation.
-    raw_columns = ("my_zone_level_raw",)
-
-    def validate_entry(self, *, direction: int, row: pd.Series) -> bool:
-        """Whether an entry in ``direction`` is allowed at this bar."""
-
-    def sl_reference(self, *, direction: int, row: pd.Series) -> float | None:
-        """Structural SL reference price, or None if unavailable."""
-
-    def target_candidates(self, *, direction: int, row: pd.Series) -> dict[str, float]:
-        """Named TP candidate levels for the TP-target resolver."""
-```
-
-Optionally add an entry-event alignment reward next to
-`PO3Reward` / `DistributionReward`, declaring the keywords it consumes:
-
-```python
-class MyReward:
-    required_inputs = ("position_changed", "direction", "my_sweep_flag")
-
-    def reset(self) -> None: ...
-
-    def __call__(self, *, position_changed: bool, direction: int, my_sweep_flag: bool) -> float:
-        if not position_changed or direction == 0:
-            return 0.0
-        ...
-```
-
-`CompositeReward` passes only the declared `required_inputs` to the
-component, so a reward can never silently read the wrong column.
-
-Then:
-
-1. Add a YAML under `config/` merged over `default.yaml`, flipping
-   `features.include_strategy_state: true` and
-   `env.strategy_actions: true` and declaring the `strategy:` block
-   (name, gates, risk ranges, TP targets, reward weights). Copy the
-    shape of `config/2_po3_ifvg.yaml`.
-2. Register the name in `_STRATEGY_CONFIGS` in
-   `training/runner/training.py` and handle it in `_strategy_from_cfg`.
-3. Add contract tests mirroring
-   `tests/test_envs/test_baseline_regression.py` (overlay safety) and
-   `tests/test_envs/test_strategy_env.py` (env wiring).
-4. Run `scripts/research/strategy_checks/verify_strategy_features.py` to confirm every
-   `required_features` / `raw_columns` name exists in the produced
-   feature matrix.
-
-**Must guarantee**
-
-- **Causal features.** Every column in `required_features` obeys the
-  [Causal-only rule](#causal-only-rule).
-- **Required columns present.** A missing column fails loudly at env
-  construction, not silently mid-episode; keep
-  `scripts/research/strategy_checks/verify_strategy_features.py` green.
-- **Overlay-safe.** With `strategy_actions=false` the strategy is never
-  constructed; baseline behaviour is untouched.
-- **Repeatable across bars.** `validate_entry` / `sl_reference` /
-  `target_candidates` answer from the feature row of the decision bar
-  only — no hidden per-episode state that changes past answers.
-- **Gate mode documented.** State explicitly whether `entry.enforce_gate`
-  is diagnostic (default) or a hard veto for this strategy, and keep
-  training and live modes identical.
-- **Paper first.** Any live adapter ships paper-mode only until it
-  passes the promotion criteria in `docs/operations/DEPLOYMENT.md`.
-
-## References
-
-- [`README.md`](../README.md) — installation, quick start, project
-  structure.
-- [`config.md`](config.md) — YAML config catalog and cache versioning.
-- [`RUNNING_COMMANDS.md`](operations/RUNNING_COMMANDS.md) — command reference.
-- [`DEPLOYMENT.md`](operations/DEPLOYMENT.md) — paper-to-live promotion
-  protocol.
-- [`config/base/default.yaml`](../config/base/default.yaml) —
-  base configuration (split dates, FTMO limits, live risk overrides).
-- Strategy semantics: [`trading/strategies/`](../trading/strategies/),
-  [`config/2_po3_ifvg.yaml`](../config/2_po3_ifvg.yaml),
-  [`config/3_distribution.yaml`](../config/3_distribution.yaml).
-- Feature diagnostics:
-  [`scripts/research/strategy_checks/verify_strategy_features.py`](../scripts/research/strategy_checks/verify_strategy_features.py).
-
-Contract tests:
-
-- [`tests/test_envs/test_baseline_regression.py`](../tests/test_envs/test_baseline_regression.py)
-  — overlay invariant.
-- [`tests/test_envs/test_strategy_env.py`](../tests/test_envs/test_strategy_env.py)
-  — strategy-mode env wiring.
-- [`tests/test_envs/test_po3_reward.py`](../tests/test_envs/test_po3_reward.py)
-  and
-  [`tests/test_envs/test_distribution_reward.py`](../tests/test_envs/test_distribution_reward.py)
-  — alignment rewards.
-- [`tests/test_features/test_liquidity.py`](../tests/test_features/test_liquidity.py)
-  and
-  [`tests/test_features/test_po3_state.py`](../tests/test_features/test_po3_state.py)
-  — causal detectors.
-- [`tests/test_integration/test_strategy_integration.py`](../tests/test_integration/test_strategy_integration.py)
-  — features-to-env integration.
-- [`tests/test_risk.py`](../tests/test_risk.py) — structural risk
-  helpers.
-- [`tests/test_backtest/test_engine_cross_validation.py`](../tests/test_backtest/test_engine_cross_validation.py)
-  — engine validation.
-- [`tests/test_live/`](../tests/test_live/) — live bridge and entry
-  point.
-
-
-
-
-
-
-> Agent navigation: the [legacy architecture map](../.agents/architecture.md)
-> documents historical module boundaries. The current core data flow is
-> `market_data/` (M1 ingestion, alignment, splits) →
-> `features/` (indicators, PO3) →
-> `simulation/environment/` and `simulation/backtest/` (observations, execution,
-> position/risk mechanics) → `models/` and `training/`
-> (policy and training) → `evaluation/` and `evaluation/`
-> (evaluation). Agents should use the [domain maps](../.agents/domain_maps/)
-> for file discovery and verify the actual implementation.
+Training and evaluation use the simulation contracts and broker-neutral
+trading domain. The MT5 integration is a separate live boundary; it does not
+own training or simulation behavior. Campaign orchestration coordinates
+training, evaluation, provenance, and compute resources without replacing
+their domain implementations.
+
+## Package ownership
+
+| Package | Responsibility | Common entry points |
+|---|---|---|
+| `configuration/` | Load, merge, validate, hash, and locate configuration | Configuration services |
+| `market_data/` | Load bars and ticks; clean, align, transform, split, and cache inputs | `market_data/loading/pipeline.py`, `market_data/splits/` |
+| `features/` | Build causal feature matrices and their cache identity | `features/pipeline/builder.py`, `features/pipeline/cache.py` |
+| `trading/` | Broker-neutral account, order, position, cost, risk, and strategy domain | `trading/execution/`, `trading/risk/`, `trading/strategies/` |
+| `simulation/` | Environment transitions, Gymnasium environment, and event-driven backtest | `simulation/contracts/`, `simulation/environment/env.py`, `simulation/backtest/` |
+| `models/` | Neural encoders, policies, model factories, and runtime helpers | `models/encoders/`, `models/factory/`, `models/runtime/` |
+| `learning/` | Learning backends, PPO/SAC setup, checkpoint loading, and learner contracts | `learning/rl/`, `learning/contracts.py` |
+| `decisioning/` | Versioned observation and semantic action contracts and model adapters | `decisioning/contracts.py`, `decisioning/observations.py` |
+| `training/` | Training setup, execution, callbacks, and run reporting | `training/cli.py`, `training/runner/` |
+| `evaluation/` | Rollouts, metrics, reanalysis, provenance validation, reporting, and plots | `evaluation/cli.py`, `evaluation/rollout/`, `evaluation/reanalysis/` |
+| `experiments/` | Variant and campaign definitions, orchestration, lineage, and status | `experiments/cli.py`, `experiments/variants/`, `experiments/campaigns/` |
+| `artifacts/` | Shared artifact identity, manifests, layout, atomic storage, registry, and promotion | `artifacts/` |
+| `compute/` | Device/environment capabilities and Slurm resource, resume, and worker dispatch | `compute/cli.py`, `compute/slurm/` |
+| `live/` | Broker-neutral live and paper strategy runtime | `live/runtime/strategy.py` |
+| `integrations/mt5/` | MetaTrader-specific data, broker, robot, and risk adapters | `integrations/mt5/` |
+| `orchestra/` | Multi-model repository task orchestration and CI workflow | `orchestra/cli.py` |
+
+`models/` contains reusable architectures. `learning/` contains backend and
+optimization mechanics. `training/` composes configuration, data, features,
+simulation, and learning into runs. `evaluation/` reloads saved runs through
+the supported rollout/reporting interfaces. `experiments/` coordinates
+multiple runs and records their lineage.
+
+## Data and timeframe boundaries
+
+`market_data/loading/pipeline.py` loads configured datasets and can consume
+configured native timeframe files or derive configured timeframes. It also
+handles tick inputs, session labels, and cache identity. Do not assume that all
+timeframes are derived from M1 or that configured timeframe files are ignored;
+the active source and derivation rules come from the resolved dataset
+configuration.
+
+`features/pipeline/builder.py` builds the feature matrix. It accepts primary
+and optional secondary series, train scope, and configured timeframe bars.
+Feature alignment, normalization, and cache identity are implemented under
+`features/pipeline/`. Strategies and simulation consume the resulting features;
+session eligibility is represented as state/masks rather than deleting market
+bars.
+
+Thesis date boundaries and the exposed 2026 interval are specified in
+[`thesis/validation_protocol.md`](thesis/validation_protocol.md) and the
+operational [master execution plan](thesis/master_project_execution_plan.md).
+Do not infer a new data split from a cache name or historical document.
+
+## Commands
+
+The supported installed command surfaces are registered in `pyproject.toml`:
+
+| Command | Implementation | Purpose |
+|---|---|---|
+| `thesis-data` | `market_data.cli:main` | Dataset preparation and inspection |
+| `thesis-train` | `training.cli:main` | Training workflows |
+| `thesis-evaluate` | `evaluation.cli:main` | Evaluation workflows |
+| `thesis-campaign` | `experiments.cli:main` | Variant and campaign operations |
+| `thesis-compute` | `compute.cli:main` | Compute capability and scheduler workflows |
+| `orchestra` | `orchestra.cli:main` | Repository task and verification orchestration |
+
+Use package APIs for reusable logic. Keep scripts thin; put shared behavior in
+the owning domain package.
+
+## Scientific and execution invariants
+
+- Features must be causal. Higher-timeframe values are aligned only after
+  their source bars close.
+- Fit normalization on training data only and preserve the fitted statistics
+  for later partitions.
+- Keep calendar partitions chronological; use purged, non-overlapping
+  walk-forward folds where configured.
+- Keep all supplied market bars, including bars from shortened sessions;
+  session eligibility must not remove observations from the feature dataset.
+- Include configuration, source, data, feature/cache, checkpoint, seed, and
+  runtime identities in evidence used to support a result.
+- Keep simulation/training execution and risk semantics aligned. Keep
+  broker-specific behavior inside `integrations/`.
+- Follow `.agents/rules/triton-slurm.md` for allocations, campaign continuity,
+  and worker dispatch. Never cancel a job with `scancel`.
+
+These are navigation-level summaries. The source implementation, resolved
+configuration, and current thesis plan are authoritative when they differ from
+older examples or historical research notes.
