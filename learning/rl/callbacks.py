@@ -450,15 +450,23 @@ if _SB3_AVAILABLE:
             self.best_end_equity: float = -np.inf
             # Kept in sync with ``best_end_equity`` so older callers still read a score.
             self.best_mean_reward: float = -np.inf
+            self.best_n_trades = 0
+            self.best_checkpoint_status = "NO_ACTIVE_CHECKPOINT"
+            self.consecutive_inactive_viability_evals = 0
+            self.viability_failure_reason: str | None = None
 
         def _on_step(self) -> bool:
             # ``num_timesteps`` is the SB3-standard global step counter.
             if self._eval_freq > 0 and self.num_timesteps % self._eval_freq == 0:
                 self._run_eval()
+            if self.viability_failure_reason is not None:
+                return False
             return True
 
         def _run_eval(self) -> None:
             end_equities: list[float] = []
+            completed_trades = 0
+            survival_valid = True
             for _ in range(self._n_eval_episodes):
                 env = self._eval_env_factory()
                 obs, _ = env.reset()
@@ -466,11 +474,46 @@ if _SB3_AVAILABLE:
                 while not (done or truncated):
                     action, _ = self.model.predict(obs, deterministic=True)
                     obs, _reward, done, truncated, _ = env.step(action)
-                end_equities.append(float(env.account.equity))
+                equity = float(env.account.equity)
+                end_equities.append(equity)
+                trade_log = getattr(env, "trade_log", ())
+                closing_types = {
+                    "close",
+                    "eod_close",
+                    "forced_close",
+                    "stop_close",
+                    "tp_close",
+                }
+                completed_trades += sum(
+                    1 for trade in trade_log if trade.get("type") in closing_types
+                )
+                survival_valid = survival_valid and not bool(getattr(env, "breach_events", ()))
             end_equity = float(np.mean(end_equities))
+            if completed_trades < 1 or not survival_valid or not np.isfinite(end_equity):
+                self.best_checkpoint_status = "NO_ACTIVE_CHECKPOINT"
+                if completed_trades < 1 and survival_valid and np.isfinite(end_equity):
+                    if self.num_timesteps >= 5_000_000:
+                        self.consecutive_inactive_viability_evals += 1
+                else:
+                    self.consecutive_inactive_viability_evals = 0
+                if (
+                    self.num_timesteps >= 10_000_000
+                    and self.consecutive_inactive_viability_evals >= 2
+                ):
+                    self.viability_failure_reason = "FAIL_POLICY_COLLAPSE: deterministic prefix has zero trades at consecutive 5M checkpoints"
+                if self.verbose:
+                    print(
+                        "[BestCheckpointEval] ineligible "
+                        f"trades={completed_trades} survival_valid={survival_valid} "
+                        f"end_equity_finite={np.isfinite(end_equity)}"
+                    )
+                return
+            self.consecutive_inactive_viability_evals = 0
+            self.best_checkpoint_status = "ACTIVE_CHECKPOINT_AVAILABLE"
             if end_equity > self.best_end_equity:
                 self.best_end_equity = end_equity
                 self.best_mean_reward = end_equity
+                self.best_n_trades = completed_trades
                 save_ppo_checkpoint(self.model, self._best_model_path)
                 if self.verbose:
                     print(

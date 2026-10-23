@@ -112,6 +112,16 @@ def _aggregate_seed_results(
     aggregated["train_end_equity"] = float(seed_results[-1]["train_gate"]["end_equity"])
     aggregated["train_equity_slope"] = float(seed_results[-1]["train_gate"]["slope"])
     aggregated["train_equity_reason"] = str(seed_results[-1]["train_gate"]["reason"])
+    aggregated["train_activity_status_by_seed"] = {
+        str(result["seed"]): str(result["train_activity_gate"]["status"]) for result in seed_results
+    }
+    aggregated["train_activity_ok_by_seed"] = {
+        str(result["seed"]): bool(result["train_activity_gate"]["ok"]) for result in seed_results
+    }
+    aggregated["train_n_trades_by_seed"] = {
+        str(result["seed"]): int(result["train_activity_gate"]["n_trades"])
+        for result in seed_results
+    }
 
     abort_reasons = [r["abort_reason"] for r in seed_results if r["abort_reason"]]
     aggregated["early_abort_reason"] = abort_reasons[0] if abort_reasons else ""

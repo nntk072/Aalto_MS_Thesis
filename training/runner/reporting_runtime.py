@@ -7,6 +7,7 @@ from typing import Any
 
 from training.artifacts.aggregation import _aggregate_seed_results
 from training.artifacts.manifests import _build_training_log
+from training.callbacks.activity import classify_zero_trade_cause
 
 
 def finalize_training_run(
@@ -77,6 +78,83 @@ def finalize_training_run(
         training_log["early_abort_reason"] = single["abort_reason"] or ""
         training_log["timesteps_completed"] = single["model_num_timesteps"]
 
+    inactive_seeds = [
+        int(result["seed"])
+        for result in seed_results
+        if not bool(result["train_activity_gate"]["ok"])
+    ]
+    failed_survival_seeds = [
+        int(result["seed"]) for result in seed_results if not bool(result["train_gate"]["ok"])
+    ]
+    aborts = {
+        str(result["seed"]): str(result["abort_reason"])
+        for result in seed_results
+        if result["abort_reason"]
+    }
+    training_admissible = not (inactive_seeds or failed_survival_seeds or aborts)
+    if failed_survival_seeds:
+        overall_status = "FAIL_SURVIVAL"
+    elif inactive_seeds:
+        overall_status = "FAIL_INACTIVE"
+    elif any("nonfinite" in reason.lower() for reason in aborts.values()):
+        overall_status = "FAIL_NUMERICAL"
+    elif aborts:
+        overall_status = "FAIL_EARLY_ABORT"
+    else:
+        overall_status = "PASS_ACTIVE"
+    training_log["train_activity_ok"] = not inactive_seeds
+    training_log["train_survival_ok"] = not failed_survival_seeds
+    training_log["train_activity_ok_by_seed"] = {
+        str(result["seed"]): bool(result["train_activity_gate"]["ok"]) for result in seed_results
+    }
+    training_log["train_survival_ok_by_seed"] = {
+        str(result["seed"]): bool(result["train_gate"]["ok"]) for result in seed_results
+    }
+    training_log["train_activity_status_by_seed"] = {
+        str(result["seed"]): str(result["train_activity_gate"]["status"]) for result in seed_results
+    }
+    training_log["train_activity_status"] = (
+        "INACTIVE"
+        if inactive_seeds
+        else (
+            "ACTIVE_SPARSE"
+            if any(
+                result["train_activity_gate"]["status"] == "ACTIVE_SPARSE"
+                for result in seed_results
+            )
+            else "ACTIVE"
+        )
+    )
+    training_log["train_n_trades"] = {
+        str(result["seed"]): int(result["train_activity_gate"]["n_trades"])
+        for result in seed_results
+    }
+    training_log["best_checkpoint_status_by_seed"] = {
+        str(result["seed"]): str(result.get("best_checkpoint_status", "NO_ACTIVE_CHECKPOINT"))
+        for result in seed_results
+    }
+    training_log["best_checkpoint_n_trades_by_seed"] = {
+        str(result["seed"]): int(result.get("best_checkpoint_n_trades", 0))
+        for result in seed_results
+    }
+    training_log["zero_trade_diagnosis_by_seed"] = {
+        str(result["seed"]): classify_zero_trade_cause(
+            int(result["train_activity_gate"]["n_trades"]),
+            result.get("train_result", {}).get("entry_state_diagnostics"),
+            result.get("train_result", {}).get("entry_diag"),
+        )
+        for result in seed_results
+    }
+    if len(seed_results) == 1:
+        training_log["zero_trade_diagnosis"] = training_log["zero_trade_diagnosis_by_seed"][
+            str(seed_results[0]["seed"])
+        ]
+    training_log["inactive_seeds"] = inactive_seeds
+    training_log["failed_survival_seeds"] = failed_survival_seeds
+    training_log["early_abort_reasons_by_seed"] = aborts
+    training_log["training_admissible"] = training_admissible
+    training_log["overall_status"] = overall_status
+
     sequence_schemas = [
         result["sequence_feature_schema"]
         for result in seed_results
@@ -107,10 +185,14 @@ def finalize_training_run(
         json.dumps(training_log["feature_columns"], separators=(",", ":")).encode()
     ).hexdigest()
     (run_dir / "training_log.json").write_text(json.dumps(training_log, indent=2))
-    if not seed_results[-1]["train_gate"]["ok"]:
+    if failed_survival_seeds:
+        raise SystemExit(f"TRAIN_SURVIVAL_FAILED: seeds={failed_survival_seeds}")
+    if inactive_seeds:
         raise SystemExit(
-            f"TRAIN_SURVIVAL_FAILED: train-year risk gate failed ({seed_results[-1]['train_gate']['reason']})"
+            f"TRAIN_ACTIVITY_FAILED: zero deterministic train trades; seeds={inactive_seeds}"
         )
+    if aborts:
+        raise SystemExit(f"TRAIN_EARLY_ABORT: {aborts}")
 
     if args.wandb:
         try:

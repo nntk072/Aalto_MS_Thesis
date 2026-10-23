@@ -104,7 +104,12 @@ def test_later_invalidation_does_not_rewrite_prior_trigger_request() -> None:
     assert requested.direction == 1
 
 
-def _market_fixture(execution_direction: int = 0) -> tuple[pd.DataFrame, pd.DataFrame]:
+def _market_fixture(
+    execution_direction: int = 0,
+    *,
+    candidate_direction: int = 1,
+    manipulation_active: bool = False,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     n = 40
     index = pd.date_range("2025-01-06 16:30", periods=n, freq="1min", tz="Etc/GMT-3")
     close = np.full(n, 100.0)
@@ -122,12 +127,16 @@ def _market_fixture(execution_direction: int = 0) -> tuple[pd.DataFrame, pd.Data
         index=index,
     )
     sweep_low = np.zeros(n)
-    sweep_low[10] = 1.0
     sweep_high = np.zeros(n)
+    if candidate_direction == 1:
+        sweep_low[10] = 1.0
+    else:
+        sweep_high[10] = 1.0
     if execution_direction == -1:
         sweep_high[12] = 1.0
-    retest = np.zeros(n)
-    retest[11] = 1.0
+    retest_bull = np.zeros(n)
+    retest_bear = np.zeros(n)
+    (retest_bull if candidate_direction == 1 else retest_bear)[11] = 1.0
     features = pd.DataFrame(
         {
             "asian_high": np.full(n, 90.0),
@@ -141,18 +150,18 @@ def _market_fixture(execution_direction: int = 0) -> tuple[pd.DataFrame, pd.Data
             "sweep_high_level": np.full(n, 110.0),
             "po3_manipulation_low": np.full(n, 95.0),
             "po3_manipulation_high": np.full(n, 105.0),
-            "po3_manipulation_end": np.ones(n),
-            "po3_manipulation_active": np.zeros(n),
+            "po3_manipulation_end": np.zeros(n) if manipulation_active else np.ones(n),
+            "po3_manipulation_active": np.ones(n) if manipulation_active else np.zeros(n),
             "po3_distribution": np.zeros(n),
             "po3_distribution_direction": np.zeros(n),
             "ifvg_bull_low": np.full(n, 98.0),
             "ifvg_bull_high": np.full(n, 99.0),
-            "ifvg_bull_active": np.ones(n),
-            "ifvg_retest_bull": retest,
+            "ifvg_bull_active": np.ones(n) if candidate_direction == 1 else np.zeros(n),
+            "ifvg_retest_bull": retest_bull,
             "ifvg_bear_low": np.full(n, 101.0),
             "ifvg_bear_high": np.full(n, 102.0),
-            "ifvg_bear_active": np.zeros(n),
-            "ifvg_retest_bear": np.zeros(n),
+            "ifvg_bear_active": np.ones(n) if candidate_direction == -1 else np.zeros(n),
+            "ifvg_retest_bear": retest_bear,
             "last_swing_high": np.full(n, 105.0),
             "last_swing_low": np.full(n, 95.0),
             "prev_day_high": np.full(n, 108.0),
@@ -164,8 +173,15 @@ def _market_fixture(execution_direction: int = 0) -> tuple[pd.DataFrame, pd.Data
     return bars, features
 
 
-def test_baseline_fsm_uses_causal_sweep_candidate_through_entry() -> None:
-    bars, features = _market_fixture()
+@pytest.mark.parametrize("candidate_direction", [1, -1])
+@pytest.mark.parametrize("manipulation_active", [False, True])
+def test_baseline_fsm_uses_causal_sweep_candidate_through_entry(
+    candidate_direction: int, manipulation_active: bool
+) -> None:
+    bars, features = _market_fixture(
+        candidate_direction=candidate_direction,
+        manipulation_active=manipulation_active,
+    )
     env = TradingEnv(
         bars,
         features,
@@ -189,7 +205,7 @@ def test_baseline_fsm_uses_causal_sweep_candidate_through_entry() -> None:
     action_shape = env.action_space.shape
     assert action_shape is not None
     action = np.zeros(action_shape, dtype=np.float32)
-    action[0] = 1.0  # Confirm the stored long candidate.
+    action[0] = float(candidate_direction)  # Confirm the stored candidate.
     action[1] = 1.0  # Request entry with the intensity dimension.
     action[-1] = -1.0  # Use structural exits; the fixture has no EMA-21 data.
 
@@ -197,7 +213,7 @@ def test_baseline_fsm_uses_causal_sweep_candidate_through_entry() -> None:
     assert env.entry_state_machine is not None
     assert env.entry_state_machine.state == "CANDIDATE"
     assert env.entry_state_machine.candidate is not None
-    assert env.entry_state_machine.candidate.direction == 1
+    assert env.entry_state_machine.candidate.direction == candidate_direction
     assert env.entry_state_machine.candidate.setup_types == ("sweep",)
 
     env.step(action)  # bar 11: the stored setup advances to ARMED
@@ -212,7 +228,7 @@ def test_baseline_fsm_uses_causal_sweep_candidate_through_entry() -> None:
     )
     assert env.entry_state_machine.entered == 1
     assert env.position is not None
-    assert env.position.direction == 1
+    assert env.position.direction == candidate_direction
     assert env.position.entry_origin_bar == 10
     assert env.position.entry_setup_types == ("sweep",)
 

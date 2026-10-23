@@ -55,6 +55,7 @@ from training.artifacts.manifests import (
     _training_protocol_manifest,
 )
 from training.artifacts.metrics import _write_evaluation_artifacts
+from training.callbacks.activity import assess_train_activity
 from training.callbacks.dashboard import TrainingDashboardCallback, ppo_log_interval
 from training.callbacks.debug_trace import install_flight_recorder
 from training.callbacks.equity import assess_train_equity
@@ -363,12 +364,13 @@ class SeedRunner:
                 arch=args.arch,
             )
 
-        best_eval_freq = max(1, timesteps)  # once at the end
+        best_eval_freq = max(1, min(5_000_000, timesteps))
         best_cb = BestCheckpointEvalCallback(
             eval_env_factory=best_eval_factory,
             eval_freq=best_eval_freq,
             best_model_path=seed_model_dir / "ppo_best",
         )
+        self.best_checkpoint_callback = best_cb
         callbacks.append(best_cb)
 
         progress_log = seed_model_dir / "training_log.csv"
@@ -502,6 +504,8 @@ class SeedRunner:
         phase_timings_seconds["ppo_learn"] = time.perf_counter() - phase_started
         log.info("PHASE_TIMING ppo_learn_seconds=%.3f", phase_timings_seconds["ppo_learn"])
         abort_reason = abort_cb.reason if abort_cb is not None else None
+        if best_cb.viability_failure_reason is not None:
+            abort_reason = best_cb.viability_failure_reason
         if abort_reason:
             (seed_dir / "early_abort.json").write_text(
                 json.dumps(
@@ -681,9 +685,23 @@ class SeedRunner:
             initial=float(cfg.account.initial_balance),
             breached=not bool(train_result.get("survived_full_year", False)),
         )
+        train_activity_gate = assess_train_activity(int(train_m.n_trades))
         (seed_dir / "train_equity_gate.json").write_text(json.dumps(train_gate, indent=2))
+        (seed_dir / "train_activity_gate.json").write_text(
+            json.dumps(train_activity_gate, indent=2)
+        )
         if not train_gate["ok"]:
-            log.error("TRAIN_SURVIVAL_FAILED %s", train_gate)
+            log.error("TRAIN_SURVIVAL_GATE FAIL %s", train_gate)
+        else:
+            log.info("TRAIN_SURVIVAL_GATE PASS")
+        if not train_activity_gate["ok"]:
+            log.error("TRAIN_ACTIVITY_GATE FAIL %s", train_activity_gate)
+        else:
+            log.info(
+                "TRAIN_ACTIVITY_GATE PASS trades=%d status=%s",
+                train_m.n_trades,
+                train_activity_gate["status"],
+            )
         log.info(
             "[train/in-sample] NetPnL=%.2f %s  Return=%.2f%%  "
             "MaxDD=%.2f%%  Sharpe=%.3f  ProfitFactor=%.3f  WinRate=%.1f%%  Trades=%d  "
@@ -718,6 +736,7 @@ class SeedRunner:
             train_metrics=train_m,
             test_metrics=test_m,
             train_gate=train_gate,
+            train_activity_gate=train_activity_gate,
             account_currency=str(cfg.account.currency),
         )
         log.info(
@@ -728,12 +747,14 @@ class SeedRunner:
         self.train_result = train_result
         self.train_m = train_m
         self.train_gate = train_gate
+        self.train_activity_gate = train_activity_gate
         return EvaluatedSeedRun(
             train_result=train_result,
             test_result=test_result,
             train_metrics=train_m,
             test_metrics=test_m,
             train_gate=train_gate,
+            train_activity_gate=train_activity_gate,
         )
 
     def write_artifacts(self) -> PersistedSeedRun:
@@ -938,6 +959,8 @@ class SeedRunner:
         train_result = self.train_result
         train_m = self.train_m
         train_gate = self.train_gate
+        train_activity_gate = self.train_activity_gate
+        best_checkpoint_callback = self.best_checkpoint_callback
         abort_reason = self.abort_reason
         sequence_feature_schema = self.sequence_feature_schema
         phase_timings_seconds = self.phase_timings_seconds
@@ -976,6 +999,9 @@ class SeedRunner:
             "train_result": train_result,
             "test_result": test_result,
             "train_gate": train_gate,
+            "train_activity_gate": train_activity_gate,
+            "best_checkpoint_status": best_checkpoint_callback.best_checkpoint_status,
+            "best_checkpoint_n_trades": best_checkpoint_callback.best_n_trades,
             "abort_reason": abort_reason,
             "model_num_timesteps": int(model.num_timesteps),
             "entry_diag": entry_diag,

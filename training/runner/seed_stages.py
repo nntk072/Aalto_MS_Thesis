@@ -39,6 +39,7 @@ class EvaluatedSeedRun:
     train_metrics: Any
     test_metrics: Any
     train_gate: dict[str, Any]
+    train_activity_gate: dict[str, Any]
 
 
 @dataclass(slots=True)

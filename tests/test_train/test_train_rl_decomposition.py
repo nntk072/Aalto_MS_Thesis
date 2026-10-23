@@ -18,6 +18,7 @@ import torch
 from evaluation.metrics import PerformanceMetrics
 from training.artifacts.manifests import _action_space_width, _build_training_log
 from training.artifacts.metrics import _write_evaluation_artifacts
+from training.callbacks.activity import assess_train_activity
 from training.configuration.cli import load_merged_config, parse_train_args
 from training.runner.seed import _setup_rngs
 from training.setup.environments import _training_episodic, cost_model
@@ -100,6 +101,7 @@ def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path
         train_metrics=train_metrics,
         test_metrics=test_metrics,
         train_gate={"ok": False, "reason": "peak_trailing_dd"},
+        train_activity_gate=assess_train_activity(train_metrics.n_trades),
         account_currency="USD",
     )
 
@@ -112,6 +114,8 @@ def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path
     assert train["policy_action_mode"] == "deterministic"
     assert train["metrics"]["total_pnl"] == -1000.0
     assert train["equity_gate"]["ok"] is False
+    assert train["activity_gate"]["status"] == "ACTIVE"
+    assert train["zero_trade_diagnosis"] is None
     assert test["role"] == "report_only_test_evaluation"
     assert test["policy_action_mode"] == "deterministic"
     assert test["metrics"]["total_pnl"] == -6760.0
@@ -122,6 +126,7 @@ def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path
     assert test["episode_end_reason"] == "max_episode_steps"
     assert "| Test (report-only; previously inspected) | -6.76% | -6760.00 USD |" in summary
     assert "Both final replays use deterministic policy actions." in summary
+    assert json.loads((evaluation_dir / "summary.json").read_text())["training_admissible"] is False
 
 
 def test_resuming_preserves_loaded_value_head_while_fresh_runs_zero_it() -> None:

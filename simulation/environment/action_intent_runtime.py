@@ -93,7 +93,10 @@ class ActionIntentRuntimeMixin(RuntimeMixinBase):
 
         if self.strategy_actions:
             discrete_action, risk_frac = self._lock_unconfirmed_side(
-                discrete_action, feat_row, risk_frac
+                discrete_action,
+                feat_row,
+                risk_frac,
+                entry_candidate=entry_candidate,
             )
 
         if self.block_overnight and discrete_action != 0 and fill_idx < self._n_bars:

@@ -9,7 +9,7 @@ from simulation.environment.diagnostics import new_debug_window, summarize_windo
 from trading.strategies import BaselineStrategy
 
 from .entry_diagnostics import _REJECTION_COUNTERS
-from .entry_state import EntryEvidence, immutable_setup_levels
+from .entry_state import EntryCandidate, EntryEvidence, immutable_setup_levels
 from .market_view import FeatureRow
 from .mixin_base import RuntimeMixinBase
 
@@ -179,6 +179,8 @@ class DiagnosticsRuntimeMixin(RuntimeMixinBase):
         discrete_action: int,
         feat_row: FeatureRow | pd.Series,
         risk_frac: float,
+        *,
+        entry_candidate: EntryCandidate | None = None,
     ) -> tuple[int, float]:
         """During an open manipulation, keep only the side the strategy already offers.
 
@@ -190,6 +192,12 @@ class DiagnosticsRuntimeMixin(RuntimeMixinBase):
         from trading.orders.entries import manipulation_state
 
         if manipulation_state(feat_row) != "against":
+            return discrete_action, risk_frac
+        if (
+            isinstance(self.strategy, BaselineStrategy)
+            and entry_candidate is not None
+            and discrete_action == entry_candidate.direction
+        ):
             return discrete_action, risk_frac
         ctx = int(self.strategy.context_direction(feat_row))
         if discrete_action == ctx:

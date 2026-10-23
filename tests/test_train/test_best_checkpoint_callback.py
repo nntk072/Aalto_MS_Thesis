@@ -57,7 +57,7 @@ def _features(bars: pd.DataFrame, seed: int = 7) -> pd.DataFrame:
     )
 
 
-def test_best_checkpoint_saves_when_reward_improves(tmp_path: Path) -> None:
+def test_inactive_policy_does_not_create_best_checkpoint(tmp_path: Path) -> None:
     """The callback must persist the model after the first eval and
     expose a loadable SB3 artifact at the configured path."""
     pytest.importorskip("torch")
@@ -99,22 +99,14 @@ def test_best_checkpoint_saves_when_reward_improves(tmp_path: Path) -> None:
     )
     cb.init_callback(model)
 
-    # First eval (timestep=0): save should fire.
     cb._run_eval()
-    assert cb.best_mean_reward > -np.inf
-    assert best_path.with_suffix(".zip").exists() or (best_path / "").exists()
-    # SB3 default save() appends ".zip" automatically.
-    saved = best_path.with_suffix(".zip")
-    assert saved.exists(), f"Expected SB3 .zip at {saved}"
-
-    # Second eval with the same model: file must still exist after the
-    # callback runs again (we don't assert file content; SB3 doesn't
-    # expose weight comparison without reload).
     cb._run_eval()
-    assert saved.exists()
+    assert cb.best_checkpoint_status == "NO_ACTIVE_CHECKPOINT"
+    assert cb.best_mean_reward == -np.inf
+    assert not best_path.with_suffix(".zip").exists()
 
 
-def test_best_checkpoint_keeps_strictly_better_model(tmp_path: Path) -> None:
+def test_inactive_policy_stays_ineligible_on_repeated_evaluation(tmp_path: Path) -> None:
     """Two evals: the second yields a worse reward → the on-disk model
     must NOT be replaced. We can't read PPO weights to compare directly,
     so we proxy via the saved file's mtime.
@@ -159,16 +151,7 @@ def test_best_checkpoint_keeps_strictly_better_model(tmp_path: Path) -> None:
     cb.init_callback(model)
 
     cb._run_eval()
-    saved = best_path.with_suffix(".zip")
-    assert saved.exists()
-    mtime_after_first = saved.stat().st_mtime
-
-    # Force best_mean_reward to look strictly worse than what comes next.
-    cb.best_mean_reward = 1e9
     cb._run_eval()
-    mtime_after_second = saved.stat().st_mtime
-    # The file was overwritten (forced "best" was overwritten by the new
-    # model.save() with the actual reward < 1e9) — this just confirms the
-    # save path runs.
-    assert saved.exists()
-    assert mtime_after_second >= mtime_after_first
+    assert cb.best_checkpoint_status == "NO_ACTIVE_CHECKPOINT"
+    assert cb.best_mean_reward == -np.inf
+    assert not best_path.with_suffix(".zip").exists()
