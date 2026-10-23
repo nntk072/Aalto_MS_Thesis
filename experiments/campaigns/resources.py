@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import os
 import pathlib
 import subprocess
@@ -91,6 +92,27 @@ def cpu_mask_for_slot(cpu_ids: list[int], slot: int, cpus: int) -> tuple[str, li
         raise ValueError(f"CPU slot {slot} needs {cpus} CPUs but only {len(selected)} remain")
     mask = sum(1 << cpu for cpu in selected)
     return f"0x{mask:x}", selected
+
+
+def worker_node_cpu_ids(queue_root: pathlib.Path, job_id: str, node: str) -> list[int]:
+    """Read the CPU set advertised by the persistent manager on one worker node."""
+    ready = queue_root / job_id / node.split(".", maxsplit=1)[0] / "ready"
+    try:
+        metadata = json.loads(ready.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise RuntimeError(f"worker manager CPU metadata is unavailable for {node}: {exc}") from exc
+    node_key = node.split(".", maxsplit=1)[0]
+    if metadata.get("node") != node_key or str(metadata.get("job_id")) != job_id:
+        raise RuntimeError(f"worker manager CPU metadata identity mismatch for {node}")
+    cpu_ids = metadata.get("cpu_ids")
+    if (
+        not isinstance(cpu_ids, list)
+        or not cpu_ids
+        or any(not isinstance(cpu, int) or cpu < 0 for cpu in cpu_ids)
+        or len(set(cpu_ids)) != len(cpu_ids)
+    ):
+        raise RuntimeError(f"worker manager advertised an invalid CPU set for {node}")
+    return sorted(cpu_ids)
 
 
 def expand_slurm_hosts(node_list: str) -> list[str]:

@@ -109,6 +109,33 @@ def test_worker_cpu_masks_are_disjoint_and_reject_oversubscription() -> None:
         controller.cpu_mask_for_slot(cpu_ids, 9, 5)
 
 
+def test_worker_node_cpu_metadata_uses_node_local_cpu_ids(tmp_path: Path) -> None:
+    queue_root = tmp_path / "worker_queue"
+    ready = queue_root / "job-123" / "gpuarm2" / "ready"
+    ready.parent.mkdir(parents=True)
+    ready.write_text(
+        json.dumps({"node": "gpuarm2", "job_id": "job-123", "cpu_ids": list(range(48))})
+    )
+
+    cpu_ids = controller.worker_node_cpu_ids(queue_root, "job-123", "gpuarm2.int.triton.aalto.fi")
+
+    assert cpu_ids == list(range(48))
+    assert controller.cpu_mask_for_slot(cpu_ids, 0, 47)[1] == list(range(47))
+    assert controller.cpu_mask_for_slot(cpu_ids, 47, 1)[1] == [47]
+
+
+def test_worker_node_cpu_metadata_rejects_allocation_identity_mismatch(tmp_path: Path) -> None:
+    queue_root = tmp_path / "worker_queue"
+    ready = queue_root / "job-123" / "gpuarm2" / "ready"
+    ready.parent.mkdir(parents=True)
+    ready.write_text(
+        json.dumps({"node": "gpuarm1", "job_id": "job-123", "cpu_ids": list(range(48))})
+    )
+
+    with pytest.raises(RuntimeError, match="identity mismatch"):
+        controller.worker_node_cpu_ids(queue_root, "job-123", "gpuarm2")
+
+
 def test_resource_sampler_does_not_reserve_a_gpu() -> None:
     command = controller.worker_command(
         ["python", "sample.py"],

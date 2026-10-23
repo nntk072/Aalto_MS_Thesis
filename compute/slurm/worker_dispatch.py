@@ -249,11 +249,18 @@ def _manager() -> int:
     completed.mkdir(parents=True, exist_ok=True)
     results.mkdir(parents=True, exist_ok=True)
     ready.parent.mkdir(parents=True, exist_ok=True)
-    ready.touch()
+    ready_metadata = {
+        "node": _host_key(node_value),
+        "job_id": job_id,
+        "cpu_ids": sorted(os.sched_getaffinity(0)),
+    }
+    ready_tmp = ready.with_suffix(".tmp")
+    ready_tmp.write_text(json.dumps(ready_metadata), encoding="utf-8")
+    os.replace(ready_tmp, ready)
     print(
         "CAMPAIGN_NODE_MANAGER ready"
         f" host={_host_key(node_value)} job={job_id}"
-        f" cpu_affinity={sorted(os.sched_getaffinity(0))}"
+        f" cpu_affinity={ready_metadata['cpu_ids']}"
         f" cuda_visible_devices={os.environ.get('CUDA_VISIBLE_DEVICES', 'unset')}",
         flush=True,
     )

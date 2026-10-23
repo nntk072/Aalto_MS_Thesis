@@ -20,7 +20,7 @@ import socket
 import subprocess
 import sys
 import time
-from typing import Any, TextIO, cast
+from typing import Any, TextIO
 
 from experiments.campaigns.artifact_validation import (
     hash_run_artifacts as hash_run_artifacts,
@@ -70,6 +70,9 @@ from experiments.campaigns.resources import (
 )
 from experiments.campaigns.resources import (
     worker_command as worker_command,
+)
+from experiments.campaigns.resources import (
+    worker_node_cpu_ids as worker_node_cpu_ids,
 )
 from experiments.campaigns.runtime_metadata import (
     runtime_metadata as runtime_metadata,
@@ -147,6 +150,7 @@ __all__ = [
     "verify_initial_checkpoint_models",
     "verify_run_artifacts",
     "worker_command",
+    "worker_node_cpu_ids",
     "write_campaign_source_snapshot",
 ]
 
@@ -315,16 +319,24 @@ def main() -> int:
         raise RuntimeError("must run inside an existing Slurm compute allocation")
     resources = available_resources()
     cpus = resources["cpu_affinity"]
-    cpu_ids = cast(list[int], resources["cpu_ids"])
     workers_per_node = math.ceil(args.workers / len(worker_nodes)) if worker_nodes else args.workers
     envs_per_cpu = 12 if args.data_source == "bundle" else 2
     if workers_per_node * args.n_envs > cpus * envs_per_cpu:
         raise RuntimeError(f"requested vector environments exceed {envs_per_cpu} per available CPU")
-    if worker_nodes and workers_per_node * args.worker_cpus > cpus:
-        raise RuntimeError(
-            f"worker CPU request needs {workers_per_node * args.worker_cpus} CPUs per node; "
-            f"controller sees {cpus}"
-        )
+    worker_node_cpu_sets: dict[str, list[int]] = {}
+    if worker_nodes:
+        queue_root = pathlib.Path(os.environ["CAMPAIGN_WORKER_QUEUE"])
+        allocation_job_id = os.environ["SLURM_JOB_ID"]
+        worker_node_cpu_sets = {
+            node: worker_node_cpu_ids(queue_root, allocation_job_id, node) for node in worker_nodes
+        }
+        for node, node_cpu_ids in worker_node_cpu_sets.items():
+            needed = workers_per_node * args.worker_cpus + 1  # one CPU for the sampler
+            if needed > len(node_cpu_ids):
+                raise RuntimeError(
+                    f"worker CPU request needs {needed} CPUs on {node} including sampler; "
+                    f"manager exposes {len(node_cpu_ids)}"
+                )
     available_mem = resources["memory_limit_bytes"]
     # Frames estimates are conservative historical PSS values. The bundle
     # n_envs=64 estimate is calibrated from the live three-worker GH200 pilot:
@@ -637,7 +649,7 @@ def main() -> int:
                 "a", encoding="utf-8"
             )
             sampler_cpu_mask, sampler_cpu_ids = cpu_mask_for_slot(
-                cpu_ids, workers_per_node * args.worker_cpus, 1
+                worker_node_cpu_sets[node], workers_per_node * args.worker_cpus, 1
             )
             sampler_cmd = worker_command(
                 [
@@ -701,7 +713,7 @@ def main() -> int:
             }
             worker_node = min(worker_nodes, key=lambda node: node_load[node])
             worker_cpu_mask, worker_cpu_ids = cpu_mask_for_slot(
-                cpu_ids, node_load[worker_node], args.worker_cpus
+                worker_node_cpu_sets[worker_node], node_load[worker_node], args.worker_cpus
             )
             job["worker_node"] = worker_node
             job["worker_cpu_mask"] = worker_cpu_mask

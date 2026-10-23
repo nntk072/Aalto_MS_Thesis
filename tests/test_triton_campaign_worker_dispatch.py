@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -135,6 +136,12 @@ def test_persistent_manager_dispatches_worker_with_affinity_and_gpu_binding(
             while not ready.exists() and time.monotonic() < deadline:
                 time.sleep(0.02)
             assert ready.exists()
+            ready_metadata = json.loads(ready.read_text())
+            assert ready_metadata == {
+                "node": node,
+                "job_id": job_id,
+                "cpu_ids": sorted(os.sched_getaffinity(0)),
+            }
 
             cpu_id = min(os.sched_getaffinity(0))
             worker_log = tmp_path / "worker.log"
