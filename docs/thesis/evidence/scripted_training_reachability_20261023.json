@@ -1,0 +1,170 @@
+{
+  "mechanical_gate": "at least one scripted opened and closed trade per variant",
+  "schema_version": "scripted_training_reachability_v1",
+  "seed": 50,
+  "status": "PASS",
+  "test_split_evaluated": false,
+  "training_split_only": true,
+  "variants": [
+    {
+      "action_schema": {
+        "coordinates": [
+          "direction",
+          "intensity",
+          "stop",
+          "risk",
+          "tp1_sel",
+          "tp2_sel",
+          "tp3_sel",
+          "sl_mode",
+          "tp_mode",
+          "z1",
+          "z2",
+          "exit"
+        ],
+        "has_direction": true,
+        "has_multi_tp": true,
+        "has_simplex": true,
+        "has_sl_mode": true,
+        "has_tp_mode": true,
+        "key": "12",
+        "version": "overlay-action-v2",
+        "width": 12
+      },
+      "armed": 48,
+      "breach_count": 0,
+      "candidate_created": 4442,
+      "closed": 48,
+      "completed_trade_log_records": 48,
+      "effective_config_sha256": "bb9140acb835fd78b638947cf6f61939d4e8ffc1fcc6f60b0a479b7045d3d33b",
+      "entry_state_diagnostics": {
+        "arm_to_trigger_rate": 1.0,
+        "armed_bars": 48,
+        "candidate_created": 4442,
+        "candidate_expired": 7,
+        "candidate_invalidated": 4386,
+        "closed": 48,
+        "entered": 48,
+        "entry_state_machine": true,
+        "entry_state_share": {
+          "ARMED": 0.036797,
+          "CANDIDATE": 0.044647,
+          "FLAT": 0.0,
+          "IN_POSITION": 0.000482
+        },
+        "entry_state_visits": {
+          "ARMED": 3661,
+          "CANDIDATE": 4442,
+          "FLAT": 0,
+          "IN_POSITION": 48
+        },
+        "trigger_refusal_rate": 0.998017,
+        "trigger_refused": 24154,
+        "trigger_requested": 24202
+      },
+      "opened": 48,
+      "scripted_action_by_coordinate": {
+        "direction": 0.0,
+        "exit": 1.0,
+        "intensity": 1.0,
+        "risk": 0.0,
+        "sl_mode": -1.0,
+        "stop": 0.0,
+        "tp1_sel": 0.0,
+        "tp2_sel": 0.0,
+        "tp3_sel": 0.0,
+        "tp_mode": -1.0,
+        "z1": 0.0,
+        "z2": 0.0
+      },
+      "status": "PASS",
+      "steps": 99492,
+      "train_end": "2025-12-31 23:49:00+03:00",
+      "train_rows": 351432,
+      "train_start": "2024-12-30 01:05:00+03:00",
+      "trigger_refused": 24154,
+      "trigger_requested": 24202,
+      "variant": "ladder_a4b_entry_fsm"
+    },
+    {
+      "action_schema": {
+        "coordinates": [
+          "direction",
+          "intensity",
+          "stop",
+          "risk",
+          "tp1_sel",
+          "tp2_sel",
+          "tp3_sel",
+          "sl_mode",
+          "tp_mode",
+          "z1",
+          "z2",
+          "exit"
+        ],
+        "has_direction": true,
+        "has_multi_tp": true,
+        "has_simplex": true,
+        "has_sl_mode": true,
+        "has_tp_mode": true,
+        "key": "12",
+        "version": "overlay-action-v2",
+        "width": 12
+      },
+      "armed": 48,
+      "breach_count": 0,
+      "candidate_created": 4442,
+      "closed": 48,
+      "completed_trade_log_records": 48,
+      "effective_config_sha256": "426b715e50db406de775d71f8f457c7f73c3829596b397de82c52c3e9a0c902b",
+      "entry_state_diagnostics": {
+        "arm_to_trigger_rate": 1.0,
+        "armed_bars": 48,
+        "candidate_created": 4442,
+        "candidate_expired": 7,
+        "candidate_invalidated": 4386,
+        "closed": 48,
+        "entered": 48,
+        "entry_state_machine": true,
+        "entry_state_share": {
+          "ARMED": 0.036797,
+          "CANDIDATE": 0.044647,
+          "FLAT": 0.0,
+          "IN_POSITION": 0.000482
+        },
+        "entry_state_visits": {
+          "ARMED": 3661,
+          "CANDIDATE": 4442,
+          "FLAT": 0,
+          "IN_POSITION": 48
+        },
+        "trigger_refusal_rate": 0.998017,
+        "trigger_refused": 24154,
+        "trigger_requested": 24202
+      },
+      "opened": 48,
+      "scripted_action_by_coordinate": {
+        "direction": 0.0,
+        "exit": 1.0,
+        "intensity": 1.0,
+        "risk": 0.0,
+        "sl_mode": -1.0,
+        "stop": 0.0,
+        "tp1_sel": 0.0,
+        "tp2_sel": 0.0,
+        "tp3_sel": 0.0,
+        "tp_mode": -1.0,
+        "z1": 0.0,
+        "z2": 0.0
+      },
+      "status": "PASS",
+      "steps": 99492,
+      "train_end": "2025-12-31 23:49:00+03:00",
+      "train_rows": 351432,
+      "train_start": "2024-12-30 01:05:00+03:00",
+      "trigger_refused": 24154,
+      "trigger_requested": 24202,
+      "variant": "ladder_a4a_entry_fsm_hidden"
+    }
+  ]
+}
