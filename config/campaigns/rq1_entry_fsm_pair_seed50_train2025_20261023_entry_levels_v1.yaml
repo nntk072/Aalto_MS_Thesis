@@ -5,7 +5,7 @@ variants:
   - ladder_a4b_entry_fsm
   - ladder_a4a_entry_fsm_hidden
 seeds: [50]
-timesteps: 20000000
+timesteps: 2000000
 data_source: bundle
 python_hash_seed: 0
 split:
