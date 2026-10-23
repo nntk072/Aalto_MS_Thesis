@@ -26,6 +26,7 @@ import numpy as np
 import pandas as pd
 
 from market_data.loading.bars import iter_ticks_chunks
+from market_data.transforms.price_grid import price_grid_identity, quantize_prices
 
 log = logging.getLogger(__name__)
 TICK_CACHE_VERSION = "v3-validated-full-day"
@@ -509,6 +510,7 @@ def build_tick_book(
     cache_path: str | Path | None = None,
     force: bool = False,
     chunksize: int = 2_000_000,
+    price_grid_increment: float | None = None,
 ) -> TickBook:
     """Load an MT5 tick CSV, optionally session-filter, forward-fill, build a TickBook.
 
@@ -533,9 +535,22 @@ def build_tick_book(
     full file size multiplied by pandas' usual 3-5x parsing overhead.
     """
     path = Path(path)
+    cache_identity_path: Path | None = None
+    expected_cache_identity = price_grid_identity(price_grid_increment)
     if cache_path:
         cache_path = Path(cache_path)
-        if cache_path.exists() and not force:
+        cache_identity_path = Path(f"{cache_path}.price_grid_identity")
+        cached_identity = (
+            cache_identity_path.read_text(encoding="utf-8").strip()
+            if cache_identity_path.is_file()
+            else None
+        )
+        cache_transform_matches = (
+            cached_identity == expected_cache_identity
+            if cached_identity is not None or price_grid_increment is not None
+            else True
+        )
+        if cache_path.exists() and not force and cache_transform_matches:
             log.info("Loading tick cache: %s", cache_path)
             df = pd.read_parquet(cache_path)
             return TickBook(
@@ -608,6 +623,10 @@ def build_tick_book(
         valid = np.isfinite(bid) & np.isfinite(ask) & (bid > 0.0) & (ask >= bid)
         if len(bid):
             last_bid, last_ask = float(bid[-1]), float(ask[-1])
+        if price_grid_increment is not None:
+            bid = quantize_prices(bid, price_grid_increment).astype(np.float32, copy=False)
+            ask = quantize_prices(ask, price_grid_increment).astype(np.float32, copy=False)
+
         if not valid.all():
             bid, ask, ts_ns = bid[valid], ask[valid], ts_ns[valid]
 
@@ -640,6 +659,8 @@ def build_tick_book(
     if cache_path:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         pd.DataFrame({"ts_ns": ts_ns, "bid": bid, "ask": ask}).to_parquet(cache_path, index=False)
+        if cache_identity_path is not None:
+            cache_identity_path.write_text(expected_cache_identity + "\n", encoding="utf-8")
         log.info("Tick cache written: %s (%d ticks)", cache_path, len(ts_ns))
 
     return TickBook(ts_ns, bid, ask)

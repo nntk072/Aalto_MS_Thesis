@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -93,6 +94,24 @@ def _fmt(value: Any) -> str:
     return str(value)
 
 
+def _data_price_grid_overrides(variant: dict[str, Any]) -> list[str]:
+    """Emit data-only overrides for a discretized market-data experiment."""
+    if "price_grid_increment" not in variant:
+        return []
+    increment = float(variant["price_grid_increment"])
+    cache_dir = str(variant.get("price_grid_cache_dir", "")).strip()
+    if not math.isfinite(increment) or increment <= 0.0 or not cache_dir:
+        raise VariantError(
+            "price-grid variants require a positive increment and an isolated cache directory"
+        )
+    return [
+        "data.price_discretization.enabled=true",
+        f"data.price_discretization.increment={increment:.12g}",
+        "data.price_discretization.rounding=nearest_half_away_from_zero",
+        f"data.cache_dir={cache_dir}",
+    ]
+
+
 def resolve_variant(
     name: str,
     *,
@@ -157,6 +176,7 @@ def resolve_variant(
     for key in LADDER_FLAGS:
         if key in matches[0]:
             overrides.append(f"env.{key}={_fmt(matches[0][key])}")
+    overrides.extend(_data_price_grid_overrides(matches[0]))
     # strategy_actions implies full_po3, which already sets include_strategy_state.
     if strategy == "baseline":
         overrides.append("strategy.name=baseline")

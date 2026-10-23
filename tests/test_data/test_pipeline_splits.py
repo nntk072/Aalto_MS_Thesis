@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from omegaconf import OmegaConf
 
 from market_data.loading.pipeline import run_pipeline
@@ -111,6 +112,56 @@ def test_pipeline_can_load_only_training_dataset(tmp_path: Path) -> None:
     assert not (
         tmp_path / "cache" / "testing" / f"{symbol}_M1_v3-native-timeframes.parquet"
     ).exists()
+
+
+def test_pipeline_applies_same_price_grid_to_training_and_testing(tmp_path: Path) -> None:
+    symbol = "US100.cash"
+    names = {symbol: f"{symbol}_M1.csv"}
+    for split, date in (("training", "2025.12.31"), ("testing", "2026.01.01")):
+        path = tmp_path / split / names[symbol]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "<DATE>\t<TIME>\t<OPEN>\t<HIGH>\t<LOW>\t<CLOSE>\t<TICKVOL>\t<VOL>\t<SPREAD>\n"
+            f"{date}\t12:00:00\t25633.68\t25633.99\t25633.61\t25633.68\t10\t0\t60\n",
+            encoding="utf-8",
+        )
+        with path.open("a", encoding="utf-8") as stream:
+            stream.write(f"{date}\t12:01:00\t25633.68\t25633.99\t25633.61\t25633.68\t10\t0\t60\n")
+
+    cfg = OmegaConf.create(
+        {
+            "data": {
+                "cache_dir": str(tmp_path / "cache"),
+                "tz": "Etc/GMT-3",
+                "symbols": [symbol],
+                "timeframes": ["M1"],
+                "price_discretization": {
+                    "enabled": True,
+                    "increment": 0.25,
+                    "rounding": "nearest_half_away_from_zero",
+                },
+                "datasets": {
+                    split: {"raw_dir": str(tmp_path / split), "m1_files": names}
+                    for split in ("training", "testing")
+                },
+            },
+            "session": {"end": "23:00"},
+        }
+    )
+
+    frames = run_pipeline(cfg)
+
+    combined = frames[symbol]["M1"]
+    assert combined["close"].tolist() == pytest.approx([25633.75] * 4)
+    assert combined["high"].tolist() == pytest.approx([25634.0] * 4)
+    assert combined["low"].tolist() == pytest.approx([25633.5] * 4)
+    for split in ("training", "testing"):
+        identity = (
+            tmp_path / "cache" / split / f"{symbol}_M1_v3-native-timeframes.parquet.source.sha256"
+        ).read_text(encoding="utf-8")
+        assert "price-grid:nearest_half_away_from_zero:0.25" in identity
+        raw_text = (tmp_path / split / names[symbol]).read_text(encoding="utf-8")
+        assert "25633.68" in raw_text
 
 
 def test_pipeline_loads_native_timeframe_files_into_separate_split_caches(

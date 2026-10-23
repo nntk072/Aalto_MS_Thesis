@@ -21,6 +21,7 @@ from market_data.loading.ticks import (
     resolve_tick_exit,
     tick_execution_coverage,
 )
+from market_data.transforms.price_grid import tick_cache_filename
 
 
 def _make_book() -> TickBook:
@@ -456,6 +457,81 @@ def _write_tick_csv(path: Path, rows: list[tuple[str, str, float, float]]) -> No
     for date, time, bid, ask in rows:
         lines.append(f"{date}\t{time}\t{bid}\t{ask}\t0\t0\t0")
     path.write_text("\n".join(lines) + "\n")
+
+
+def test_build_tick_book_quantizes_executable_bid_ask(tmp_path: Path) -> None:
+    csv_path = tmp_path / "grid_ticks.csv"
+    _write_tick_csv(
+        csv_path,
+        [("2025.01.06", "16:30:00.000", 25633.68, 25633.99)],
+    )
+
+    book = build_tick_book(
+        csv_path,
+        session_start=None,
+        session_end=None,
+        chunksize=1,
+        price_grid_increment=0.25,
+    )
+
+    quote = book.quote_at(pd.Timestamp("2025-01-06 16:30:00", tz="Etc/GMT-3"))
+    assert quote == pytest.approx((25633.75, 25634.0))
+
+
+def test_tick_cache_identity_prevents_grid_quotes_from_leaking_to_raw_mode(tmp_path: Path) -> None:
+    csv_path = tmp_path / "grid_identity_ticks.csv"
+    _write_tick_csv(
+        csv_path,
+        [("2025.01.06", "16:30:00.000", 25633.68, 25633.99)],
+    )
+    cache_path = tmp_path / "tick_cache.parquet"
+
+    quantized = build_tick_book(
+        csv_path,
+        cache_path=cache_path,
+        price_grid_increment=0.25,
+    )
+    raw = build_tick_book(csv_path, cache_path=cache_path)
+
+    quantized_quote = quantized.quote_at(pd.Timestamp("2025-01-06 16:30:00", tz="Etc/GMT-3"))
+    raw_quote = raw.quote_at(pd.Timestamp("2025-01-06 16:30:00", tz="Etc/GMT-3"))
+    assert quantized_quote == pytest.approx((25633.75, 25634.0))
+    assert raw_quote == pytest.approx((25633.68, 25633.99))
+
+
+def test_build_tick_books_uses_grid_specific_cache_and_quotes(tmp_path: Path) -> None:
+    symbol = "US100.cash"
+    csv_path = tmp_path / f"{symbol}.csv"
+    _write_tick_csv(
+        csv_path,
+        [("2025.01.06", "16:30:00.000", 25633.68, 25633.99)],
+    )
+    cache_dir = tmp_path / "cache"
+    cfg = OmegaConf.create(
+        {
+            "costs": {"use_tick_execution": True},
+            "data": {
+                "raw_dir": str(tmp_path),
+                "cache_dir": str(cache_dir),
+                "tick_files": {symbol: csv_path.name},
+                "symbols": [symbol],
+                "tz": "Etc/GMT-3",
+                "price_discretization": {
+                    "enabled": True,
+                    "increment": 0.25,
+                    "rounding": "nearest_half_away_from_zero",
+                },
+            },
+        }
+    )
+
+    books = build_tick_books(cfg)
+
+    assert (cache_dir / tick_cache_filename(symbol, 0.25, TICK_CACHE_VERSION)).is_file()
+    book = books[symbol]
+    assert book is not None
+    quote = book.quote_at(pd.Timestamp("2025-01-06 16:30:00", tz="Etc/GMT-3"))
+    assert quote == pytest.approx((25633.75, 25634.0))
 
 
 def test_build_tick_books_bypasses_legacy_tick_cache(tmp_path: Path):

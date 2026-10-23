@@ -4,6 +4,10 @@
 data:
   raw_dir: "data"                      # relative to project root
   cache_dir: "cache/train_test_2025_2026" # independent per-split raw caches
+  price_discretization:
+    enabled: false                      # optional experiment; raw source files stay unchanged
+    increment: 0.25                     # .00/.25/.50/.75 price grid when enabled
+    rounding: "nearest_half_away_from_zero"
   prebuilt_feature_cache: null          # optional named cache path; content hash is verified
   session_schedule_file: "config/ny_session_schedule.csv"
   tz: "Etc/GMT-3"                      # fixed-offset carrier for server wall-clock labels

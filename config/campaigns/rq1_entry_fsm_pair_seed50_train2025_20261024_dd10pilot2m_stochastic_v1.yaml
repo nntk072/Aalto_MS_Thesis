@@ -1,9 +1,9 @@
 schema_version: 1
 campaign_id: rq1_entry_fsm_pair_seed50_train2025_20261024_dd10pilot2m_stochastic_v1
-variant_file: config/campaigns/variant_list_rq1_entry_fsm.txt
+variant_file: config/campaigns/variant_list_rq1_entry_fsm_qgrid025.txt
 variants:
-  - ladder_a4b_entry_fsm
-  - ladder_a4a_entry_fsm_hidden
+  - ladder_a4b_entry_fsm_qgrid025
+  - ladder_a4a_entry_fsm_hidden_qgrid025
 seeds: [50]
 timesteps: 2000000
 data_source: bundle

@@ -47,7 +47,7 @@ def _overrides_by_key(resolved: dict[str, list[str]]) -> dict[str, str]:
 
 def test_every_variant_resolves_and_declares_reward_mode() -> None:
     names = _all_names()
-    assert len(names) == len(set(names)) == 29
+    assert len(names) == len(set(names)) == 31
     for name in names:
         resolved = resolve_variant(
             name, vae_path="placeholder.pth"
@@ -160,9 +160,61 @@ def test_selected_entry_fsm_pair_shares_peak_drawdown_behavior() -> None:
     assert treatment["env.entry_state_observation"] == "false"
 
 
+def test_quarter_grid_pair_preserves_policy_and_shares_data_transform() -> None:
+    continuous = {
+        name: value
+        for name, value in _overrides_by_key(resolve_variant("ladder_a4b_entry_fsm")).items()
+        if not name.startswith("data.")
+    }
+    quantized_control = _overrides_by_key(resolve_variant("ladder_a4b_entry_fsm_qgrid025"))
+    quantized_treatment = _overrides_by_key(resolve_variant("ladder_a4a_entry_fsm_hidden_qgrid025"))
+
+    control_policy = {
+        key: value for key, value in quantized_control.items() if not key.startswith("data.")
+    }
+    treatment_policy = {
+        key: value for key, value in quantized_treatment.items() if not key.startswith("data.")
+    }
+    assert control_policy == continuous
+    assert treatment_policy == {
+        **continuous,
+        "env.entry_state_observation": "false",
+    }
+    assert quantized_control["data.price_discretization.enabled"] == "true"
+    assert quantized_treatment["data.price_discretization.increment"] == "0.25"
+    assert quantized_control["data.cache_dir"] == quantized_treatment["data.cache_dir"]
+    assert quantized_control["data.cache_dir"].endswith("qgrid025_v1")
+
+
+def test_quarter_grid_campaign_uses_the_matched_pair_and_locked_split() -> None:
+    campaign = yaml.safe_load(
+        (
+            PROJECT_ROOT
+            / "config/campaigns/rq1_entry_fsm_pair_seed50_train2025_20261024_dd10pilot2m_stochastic_v1.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    variant_file = PROJECT_ROOT / str(campaign["variant_file"])
+    listed = [line.strip() for line in variant_file.read_text(encoding="utf-8").splitlines()]
+
+    assert (
+        campaign["variants"]
+        == listed
+        == [
+            "ladder_a4b_entry_fsm_qgrid025",
+            "ladder_a4a_entry_fsm_hidden_qgrid025",
+        ]
+    )
+    assert campaign["timesteps"] == 2_000_000
+    assert campaign["split"] == {
+        "train_start": "2024-12-30",
+        "train_end": "2025-12-31",
+        "test_start": "2026-01-01",
+    }
+
+
 def test_consistency_table_covers_all_variants() -> None:
     rows = consistency_table(_all_names())
-    assert len(rows) == 29
+    assert len(rows) == 31
     by_name = {r["variant"]: r for r in rows}
     # The confound this module makes visible: baseline-named rungs and PO3 rungs
     # differ in reward mode and PD context.

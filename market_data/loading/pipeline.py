@@ -24,6 +24,12 @@ from omegaconf import DictConfig
 from market_data.loading.bars import load_bars
 from market_data.loading.ticks import TICK_CACHE_VERSION, TickBook, build_tick_book
 from market_data.transforms.cleaning import clean
+from market_data.transforms.price_grid import (
+    configured_price_grid_increment,
+    price_grid_identity,
+    quantize_bar_prices,
+    tick_cache_filename,
+)
 from market_data.transforms.resample import resample
 from market_data.transforms.sessions import add_session_id, add_session_labels
 
@@ -68,6 +74,8 @@ def run_pipeline(
     require_native_timeframes = bool(cfg.data.get("require_native_timeframes", False))
     derived_timeframes = cfg.data.get("derived_timeframes", {})
     timestamp_convention = str(cfg.data.get("bar_timestamp_convention", "open")).lower()
+    grid_increment = configured_price_grid_increment(cfg)
+    grid_identity = f":{price_grid_identity(grid_increment)}" if grid_increment is not None else ""
     if timestamp_convention != "open":
         raise ValueError(
             "timeframe close alignment currently requires open-stamped bars; "
@@ -103,7 +111,7 @@ def run_pipeline(
         for symbol in cfg.data.symbols:
             configured_m1 = timeframe_files.get("M1", {}).get(symbol)
             m1_path = root / str(configured_m1 or m1_files[symbol])
-            m1_raw = load_bars(m1_path)
+            m1_raw = quantize_bar_prices(load_bars(m1_path), grid_increment)
             source_hashes = {m1_path: _source_sha256(m1_path)}
 
             def input_hash(path: Path) -> str:
@@ -120,14 +128,14 @@ def run_pipeline(
                 native_file = timeframe_files.get(tf, {}).get(symbol)
                 if tf == "M1":
                     source_path = m1_path
-                    source_identity = f"native:{input_hash(source_path)}"
+                    source_identity = f"native:{input_hash(source_path)}{grid_identity}"
                 elif native_file:
                     source_path = root / str(native_file)
                     if not source_path.is_file():
                         raise FileNotFoundError(
                             f"configured native {tf} source for {symbol} is missing: {source_path}"
                         )
-                    source_identity = f"native:{input_hash(source_path)}"
+                    source_identity = f"native:{input_hash(source_path)}{grid_identity}"
                 else:
                     allowed_derived = [
                         str(value).upper() for value in derived_timeframes.get(symbol, [])
@@ -138,7 +146,9 @@ def run_pipeline(
                             "declare an intentional M1-derived timeframe explicitly to proceed"
                         )
                     source_path = m1_path
-                    source_identity = f"derived-from-M1:{input_hash(source_path)}:{tf}"
+                    source_identity = (
+                        f"derived-from-M1:{input_hash(source_path)}:{tf}{grid_identity}"
+                    )
                 identity_path = Path(f"{cp}.source.sha256")
                 cached_identity = (
                     identity_path.read_text(encoding="utf-8").strip()
@@ -151,7 +161,7 @@ def run_pipeline(
                     if tf == "M1":
                         df = m1_full.copy()
                     elif native_file:
-                        tf_raw = load_bars(source_path)
+                        tf_raw = quantize_bar_prices(load_bars(source_path), grid_increment)
                         tf_clean = clean(tf_raw, tz=tz)
                         df = add_session_labels(tf_clean, tz=tz, ny_end=ny_end)
                         df = add_session_id(df)
@@ -242,6 +252,7 @@ def build_tick_books(
             )
         ]
 
+    grid_increment = configured_price_grid_increment(cfg)
     for sym in selected_symbols:
         books: list[TickBook] = []
         for dataset_name, raw_dir, tick_files in tick_sources:
@@ -254,7 +265,11 @@ def build_tick_books(
                 log.warning("Tick file not found: %s", tick_path)
                 continue
             cache_scope = str(dataset_name) if configured_sets else ""
-            cache_p = cache_dir / cache_scope / f"{sym}_ticks_{TICK_CACHE_VERSION}.parquet"
+            cache_p = (
+                cache_dir
+                / cache_scope
+                / tick_cache_filename(sym, grid_increment, TICK_CACHE_VERSION)
+            )
             cache_p.parent.mkdir(parents=True, exist_ok=True)
             try:
                 book = build_tick_book(
@@ -264,6 +279,7 @@ def build_tick_books(
                     session_end=None,
                     cache_path=cache_p,
                     force=force,
+                    price_grid_increment=grid_increment,
                 )
                 if book is not None and len(book) > 0:
                     books.append(book)

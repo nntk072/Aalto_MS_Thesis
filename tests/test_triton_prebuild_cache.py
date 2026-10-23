@@ -28,7 +28,8 @@ def test_prebuild_campaign_bar_cache_builds_all_configured_files(
             }
         }
     )
-    monkeypatch.setattr(prebuild_campaign_bar_cache, "load_config", lambda: cfg)
+    monkeypatch.setattr(prebuild_campaign_bar_cache, "load_config", lambda **_kwargs: cfg)
+    monkeypatch.delenv("CAMPAIGN_SPEC", raising=False)
 
     def fake_run_pipeline(
         _cfg: object, *, force: bool = False
@@ -76,7 +77,27 @@ def test_prebuild_campaign_bar_cache_rejects_symlink(tmp_path: Path, monkeypatch
     cfg = OmegaConf.create(
         {"data": {"cache_dir": str(link), "symbols": ["US100.cash"], "timeframes": ["M1"]}}
     )
-    monkeypatch.setattr(prebuild_campaign_bar_cache, "load_config", lambda: cfg)
+    monkeypatch.setattr(prebuild_campaign_bar_cache, "load_config", lambda **_kwargs: cfg)
+    monkeypatch.delenv("CAMPAIGN_SPEC", raising=False)
 
     with pytest.raises(RuntimeError, match="must be a real directory"):
         prebuild_campaign_bar_cache.main()
+
+
+def test_campaign_prebuild_uses_shared_variant_price_grid(tmp_path: Path, monkeypatch) -> None:
+    spec_path = tmp_path / "campaign.yaml"
+    spec_path.write_text(
+        "campaign_id: price-grid-test\n"
+        "timesteps: 2000000\n"
+        "seeds: [50]\n"
+        "variants: [ladder_a4b_entry_fsm_qgrid025, ladder_a4a_entry_fsm_hidden_qgrid025]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CAMPAIGN_SPEC", str(spec_path))
+
+    overrides = prebuild_campaign_bar_cache._campaign_data_overrides()
+
+    assert "data.price_discretization.enabled=true" in overrides
+    assert "data.price_discretization.increment=0.25" in overrides
+    assert "data.price_discretization.rounding=nearest_half_away_from_zero" in overrides
+    assert "data.cache_dir=cache/train_test_2025_2026_qgrid025_v1" in overrides
