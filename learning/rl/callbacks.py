@@ -440,6 +440,8 @@ if _SB3_AVAILABLE:
             best_model_path: str | Path = "best_model",
             n_eval_episodes: int = 1,
             verbose: int = 0,
+            viability_eval_env_factory: Any | None = None,
+            viability_eval_freq: int = 5_000_000,
         ) -> None:
             super().__init__(verbose=verbose)
             self._eval_env_factory = eval_env_factory
@@ -447,6 +449,11 @@ if _SB3_AVAILABLE:
             self._best_model_path = Path(best_model_path)
             self._best_model_path.parent.mkdir(parents=True, exist_ok=True)
             self._n_eval_episodes = int(n_eval_episodes)
+            self._next_eval_at = self._eval_freq
+            self._viability_eval_env_factory = viability_eval_env_factory or eval_env_factory
+            self._viability_eval_freq = int(viability_eval_freq)
+            self._next_viability_eval_at = self._viability_eval_freq
+            self.viability_eval_history: list[dict[str, Any]] = []
             self.best_end_equity: float = -np.inf
             # Kept in sync with ``best_end_equity`` so older callers still read a score.
             self.best_mean_reward: float = -np.inf
@@ -456,9 +463,16 @@ if _SB3_AVAILABLE:
             self.viability_failure_reason: str | None = None
 
         def _on_step(self) -> bool:
-            # ``num_timesteps`` is the SB3-standard global step counter.
-            if self._eval_freq > 0 and self.num_timesteps % self._eval_freq == 0:
+            # Use threshold crossings because vectorized PPO increments by
+            # n_envs and may never land exactly on a requested interval.
+            if self._eval_freq > 0 and self.num_timesteps >= self._next_eval_at:
                 self._run_eval()
+                while self._next_eval_at <= self.num_timesteps:
+                    self._next_eval_at += self._eval_freq
+            if self._viability_eval_freq > 0 and self.num_timesteps >= self._next_viability_eval_at:
+                self._run_viability_eval()
+                while self._next_viability_eval_at <= self.num_timesteps:
+                    self._next_viability_eval_at += self._viability_eval_freq
             if self.viability_failure_reason is not None:
                 return False
             return True
@@ -491,16 +505,6 @@ if _SB3_AVAILABLE:
             end_equity = float(np.mean(end_equities))
             if completed_trades < 1 or not survival_valid or not np.isfinite(end_equity):
                 self.best_checkpoint_status = "NO_ACTIVE_CHECKPOINT"
-                if completed_trades < 1 and survival_valid and np.isfinite(end_equity):
-                    if self.num_timesteps >= 5_000_000:
-                        self.consecutive_inactive_viability_evals += 1
-                else:
-                    self.consecutive_inactive_viability_evals = 0
-                if (
-                    self.num_timesteps >= 10_000_000
-                    and self.consecutive_inactive_viability_evals >= 2
-                ):
-                    self.viability_failure_reason = "FAIL_POLICY_COLLAPSE: deterministic prefix has zero trades at consecutive 5M checkpoints"
                 if self.verbose:
                     print(
                         "[BestCheckpointEval] ineligible "
@@ -508,7 +512,6 @@ if _SB3_AVAILABLE:
                         f"end_equity_finite={np.isfinite(end_equity)}"
                     )
                 return
-            self.consecutive_inactive_viability_evals = 0
             self.best_checkpoint_status = "ACTIVE_CHECKPOINT_AVAILABLE"
             if end_equity > self.best_end_equity:
                 self.best_end_equity = end_equity
@@ -520,6 +523,87 @@ if _SB3_AVAILABLE:
                         f"[BestCheckpointEval] new best end_equity={end_equity:.2f} at "
                         f"timestep={self.num_timesteps} → saved {self._best_model_path}"
                     )
+
+        def _run_viability_eval(self) -> None:
+            """Replay the complete training calendar for deterministic viability."""
+            end_equities: list[float] = []
+            completed_trades = 0
+            survival_valid = True
+            entry_state: dict[str, Any] = {}
+            for _ in range(self._n_eval_episodes):
+                env = self._viability_eval_env_factory()
+                obs, _ = env.reset()
+                done = truncated = False
+                while not (done or truncated):
+                    action, _ = self.model.predict(obs, deterministic=True)
+                    obs, _reward, done, truncated, _ = env.step(action)
+                end_equities.append(float(env.account.equity))
+                trade_log = getattr(env, "trade_log", ())
+                closing_types = {
+                    "close",
+                    "eod_close",
+                    "forced_close",
+                    "stop_close",
+                    "tp_close",
+                }
+                completed_trades += sum(
+                    1 for trade in trade_log if trade.get("type") in closing_types
+                )
+                survival_valid = survival_valid and not bool(getattr(env, "breach_events", ()))
+                state_fn = getattr(env, "entry_state_diagnostics", None)
+                if callable(state_fn):
+                    state = state_fn()
+                    if isinstance(state, dict):
+                        for key, value in state.items():
+                            if isinstance(value, (int, float, np.integer, np.floating)):
+                                entry_state[str(key)] = entry_state.get(str(key), 0) + value
+                            else:
+                                entry_state[str(key)] = value
+            end_equity = float(np.mean(end_equities))
+            finite_equity = bool(np.isfinite(end_equity))
+            row: dict[str, Any] = {
+                "timestep": int(self.num_timesteps),
+                "deterministic_n_trades": int(completed_trades),
+                "candidate_created": int(entry_state.get("candidate_created", 0)),
+                "armed": int(entry_state.get("armed_bars", 0)),
+                "trigger_requested": int(entry_state.get("trigger_requested", 0)),
+                "trigger_refused": int(entry_state.get("trigger_refused", 0)),
+                "opened": int(entry_state.get("entered", 0)),
+                "closed": int(entry_state.get("closed", 0)),
+                "survival_valid": bool(survival_valid),
+                "end_equity_finite": finite_equity,
+                "entry_state_diagnostics": entry_state,
+            }
+            self.viability_eval_history.append(row)
+
+            inactive = completed_trades == 0 and survival_valid and finite_equity
+            self.consecutive_inactive_viability_evals = (
+                self.consecutive_inactive_viability_evals + 1 if inactive else 0
+            )
+            if (
+                inactive
+                and self.num_timesteps >= 5_000_000
+                and bool(entry_state.get("entry_state_machine", False))
+                and int(entry_state.get("candidate_created", 0)) == 0
+            ):
+                self.viability_failure_reason = (
+                    "FAIL_ENTRY_PATH: full training replay created no entry candidates"
+                )
+            elif (
+                self.num_timesteps >= 10_000_000 and self.consecutive_inactive_viability_evals >= 2
+            ):
+                self.viability_failure_reason = (
+                    "FAIL_POLICY_COLLAPSE: full training replay has zero trades "
+                    "at consecutive 5M checkpoints"
+                )
+            if self.verbose:
+                print(
+                    "[TrainingViabilityEval] "
+                    f"step={self.num_timesteps} trades={completed_trades} "
+                    f"survival_valid={survival_valid} "
+                    f"end_equity_finite={finite_equity} "
+                    f"entry_state={entry_state}"
+                )
 
     class ClipLogStdCallback(_Base):
         """Clamp PPO Gaussian ``log_std`` after updates (no-op on Discrete)."""

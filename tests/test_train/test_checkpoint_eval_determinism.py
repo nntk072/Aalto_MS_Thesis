@@ -164,6 +164,98 @@ def test_deterministic_inactivity_stops_only_after_two_five_million_checks(
     assert callback.viability_failure_reason.startswith("FAIL_POLICY_COLLAPSE")
 
 
+def test_full_training_viability_uses_its_own_factory_and_crossed_thresholds(
+    tmp_path: Path,
+) -> None:
+    class FullTrainingEnv:
+        account = SimpleNamespace(equity=100_000.0)
+        trade_log: list[dict[str, Any]] = []
+        breach_events: list[dict[str, Any]] = []
+
+        def reset(self) -> tuple[int, dict[str, Any]]:
+            return 0, {}
+
+        def step(self, _action: int) -> tuple[int, float, bool, bool, dict[str, Any]]:
+            return 1, 0.0, True, False, {}
+
+        def entry_state_diagnostics(self) -> dict[str, Any]:
+            return {
+                "entry_state_machine": True,
+                "candidate_created": 1,
+                "armed_bars": 1,
+            }
+
+    class Model:
+        def predict(self, _obs: int, *, deterministic: bool) -> tuple[int, None]:
+            assert deterministic is True
+            return 0, None
+
+    calls = 0
+
+    def full_training_factory() -> FullTrainingEnv:
+        nonlocal calls
+        calls += 1
+        return FullTrainingEnv()
+
+    callback = callbacks.BestCheckpointEvalCallback(
+        eval_env_factory=FullTrainingEnv,
+        eval_freq=0,
+        best_model_path=tmp_path / "ppo_best",
+        viability_eval_env_factory=full_training_factory,
+        viability_eval_freq=5_000_000,
+    )
+    callback.model = cast(Any, Model())
+
+    callback.num_timesteps = 5_000_007
+    assert callback._on_step() is True
+    assert calls == 1
+    assert callback.consecutive_inactive_viability_evals == 1
+    assert callback.viability_eval_history[0]["timestep"] == 5_000_007
+
+    callback.num_timesteps = 10_000_009
+    assert callback._on_step() is False
+    assert calls == 2
+    assert callback.viability_failure_reason is not None
+    assert callback.viability_failure_reason.startswith("FAIL_POLICY_COLLAPSE")
+
+
+def test_full_training_viability_stops_on_missing_entry_candidates(
+    tmp_path: Path,
+) -> None:
+    class FullTrainingEnv:
+        account = SimpleNamespace(equity=100_000.0)
+        trade_log: list[dict[str, Any]] = []
+        breach_events: list[dict[str, Any]] = []
+
+        def reset(self) -> tuple[int, dict[str, Any]]:
+            return 0, {}
+
+        def step(self, _action: int) -> tuple[int, float, bool, bool, dict[str, Any]]:
+            return 1, 0.0, True, False, {}
+
+        def entry_state_diagnostics(self) -> dict[str, Any]:
+            return {"entry_state_machine": True, "candidate_created": 0}
+
+    class Model:
+        def predict(self, _obs: int, *, deterministic: bool) -> tuple[int, None]:
+            assert deterministic is True
+            return 0, None
+
+    callback = callbacks.BestCheckpointEvalCallback(
+        eval_env_factory=FullTrainingEnv,
+        eval_freq=0,
+        best_model_path=tmp_path / "ppo_best",
+        viability_eval_env_factory=FullTrainingEnv,
+        viability_eval_freq=5_000_000,
+    )
+    callback.model = cast(Any, Model())
+    callback.num_timesteps = 5_000_000
+
+    assert callback._on_step() is False
+    assert callback.viability_failure_reason is not None
+    assert callback.viability_failure_reason.startswith("FAIL_ENTRY_PATH")
+
+
 def test_final_split_evaluation_forces_deterministic_actions(monkeypatch: Any) -> None:
     captured: dict[str, Any] = {}
 

@@ -308,6 +308,7 @@ class SeedRunner:
         best_features = ctx.preparation.run_assets.best_features
         train_bars = ctx.preparation.data.train_bars
         train_feat = ctx.preparation.data.train_feat
+        obs_mmap = ctx.preparation.run_assets.obs_mmap
         bundle_path = ctx.preparation.run_assets.bundle_path
         train_env_spec = ctx.preparation.run_assets.train_env_spec
         cache_dir = ctx.preparation.data.cache_dir
@@ -364,11 +365,32 @@ class SeedRunner:
                 arch=args.arch,
             )
 
+        # Deterministic viability checks cover the complete chronological
+        # training split. Keep the short prefix above for inexpensive checkpoint
+        # ranking and the existing dashboard for frequent stochastic feedback.
+        viability_eval_factory = partial(
+            make_env,
+            train_bars,
+            train_feat,
+            cfg,
+            algo=args.algo,
+            reward=args.reward,
+            episodic=False,
+            use_vae=args.use_vae,
+            vae=env_vae,
+            pre_ny_by_date=pre_ny_by_date,
+            obs_features_mmap=obs_mmap,
+            tickbook=ticks_covering(primary_ticks, train_bars),
+            arch=args.arch,
+        )
+
         best_eval_freq = max(1, min(5_000_000, timesteps))
         best_cb = BestCheckpointEvalCallback(
             eval_env_factory=best_eval_factory,
             eval_freq=best_eval_freq,
             best_model_path=seed_model_dir / "ppo_best",
+            viability_eval_env_factory=viability_eval_factory,
+            viability_eval_freq=5_000_000,
         )
         self.best_checkpoint_callback = best_cb
         callbacks.append(best_cb)
@@ -1002,6 +1024,9 @@ class SeedRunner:
             "train_activity_gate": train_activity_gate,
             "best_checkpoint_status": best_checkpoint_callback.best_checkpoint_status,
             "best_checkpoint_n_trades": best_checkpoint_callback.best_n_trades,
+            "deterministic_viability_evaluations": (
+                best_checkpoint_callback.viability_eval_history
+            ),
             "abort_reason": abort_reason,
             "model_num_timesteps": int(model.num_timesteps),
             "entry_diag": entry_diag,
