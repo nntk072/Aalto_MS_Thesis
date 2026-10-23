@@ -54,11 +54,12 @@ LADDER_FLAGS: tuple[str, ...] = (
     "strategy_actions",
     "arm_requires_retest",
     "candidate_max_age_bars",
+    "peak_trailing_dd_limit",
 )
 
-# Feature/risk regime applied to every variant that uses strategy actions or a
-# strategy (the full PO3 feature stack). Same keys the old launcher applied,
-# minus the ftmo.trailing_dd_limit=0.07 line, which equals the default.
+# Feature regime applied to every variant that uses strategy actions or a
+# strategy (the full PO3 feature stack). Peak-drawdown behavior is a per-variant
+# setting so matched research arms can share it without changing unrelated runs.
 FULL_PO3_OVERRIDES: tuple[str, ...] = (
     "features.include_session_ohlc=true",
     "features.liquidity.enabled=true",
@@ -66,7 +67,6 @@ FULL_PO3_OVERRIDES: tuple[str, ...] = (
     "features.ifvg_mtf.enabled=true",
     "features.include_strategy_state=true",
     "env.open_manipulation_bars=0",
-    "env.peak_trailing_dd_limit=0",
 )
 
 PD_CONTEXT_OVERRIDES: tuple[str, ...] = (

@@ -32,6 +32,7 @@ _LADDER_FLAGS: tuple[str, ...] = (
     "strategy_actions",
     "arm_requires_retest",
     "candidate_max_age_bars",
+    "peak_trailing_dd_limit",
 )
 
 

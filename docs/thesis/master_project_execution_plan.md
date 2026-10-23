@@ -1,7 +1,7 @@
 # Thesis Execution Plan
 
 **Status:** REOPENED after correcting the universal session-level entry gate. The corrected 2M-per-arm pilot completed 2,007,040 steps from scratch, but both arms failed P6 survival. Diagnosis confirms that the reported 10% peak-drawdown threshold is a post-run acceptance gate, not an active evaluation stop: evaluation disables the PPO-only trailing guardrail, the separate peak-drawdown behavior is configured off (`env.peak_trailing_dd_limit=0`), and the hard loss stop is $10,000 from initial equity. The hidden-state arm first peaked at $148,785 and then reached the $90,009 initial-loss floor, producing 39.50% peak-to-trough drawdown. Neither arm had a 50% win rate. Do not start the planned 20M-per-arm run until the pair has been rerun from scratch in a bounded pilot with the drawdown behavior and acceptance gate aligned. P8 remains waived; P10/P11 require refreshed numerical results.
-**Revision:** 2026-10-24 — diagnose corrected 2M drawdowns; keep 20M run gated on aligned risk behavior
+**Revision:** 2026-10-24 — prepare bounded matched pilot with aligned peak-drawdown behavior
 **Objective:** Produce scientifically valid empirical training results, evaluate and iterate, then deliver one defensible, comprehensive Markdown results report.
 **Deliverable:** `docs/thesis/manuscript_draft.md` is the sole requested output. No full thesis, LaTeX, PDF, or faculty-administration artifact is required. The user will handle unrelated faculty administration.
 
@@ -42,7 +42,7 @@ Use the supplied data through 2026-10-16. Train on 2024-12-30–2025-12-31; repo
 | **P3 — Recovery** | Complete for checkpoint restore and deterministic replay. The smoke's risk-gate failure remains visible and is not a viability pass. |
 | **P4 — 18-variant repair screen** | Complete and terminal. Preserve all 18 outcomes, three risk-gate failures, no-update re-evaluation, checkpoint lineage, canonical fingerprint, and exploratory status. |
 | **P5 — Candidate freeze** | Complete. Keep the predeclared pair and its config identities; no exposed 2026 data informed selection. |
-| **P6 — Pair viability** | Reopened; corrected 2M-per-arm seed-50 pilot completed from scratch and failed survival in both arms. Drawdown diagnosis is complete: the 10% peak-drawdown gate is post-run while evaluation applies a $10,000 initial-equity loss stop; `env.peak_trailing_dd_limit=0` in both configs. Next run a bounded, matched from-scratch pilot with the 10% peak-drawdown behavior aligned across both arms. Hold 20M until that pilot passes; do not warm-start old checkpoints. |
+| **P6 — Pair viability** | Reopened; corrected 2M-per-arm seed-50 pilot completed from scratch and failed survival in both arms. The next fresh matched 2M pilot is defined by `config/campaigns/rq1_entry_fsm_pair_seed50_train2025_20261024_dd10pilot2m_v1.yaml`; both arms now use `env.peak_trailing_dd_limit=0.10`. Hold 20M until both arms pass survival; do not warm-start prior checkpoints. |
 | **P7 — Paired results and selected-pair stress** | Reopened, gated on P6. If P6 passes, rerun matched seeds and selected-pair cost stress under the same corrected source/runtime. |
 | **P8 — Independent review** | Waived at the user's direction; no independent reviewer or review disposition is claimed. |
 | **P9 — Freeze results** | Reopened. Existing audit counts and hashes document the old implementation only. Re-freeze after corrected P6/P7 and update all cited artifacts. |

@@ -84,6 +84,9 @@ if [[ ! -s "$OUT_DIR/campaign.json" ]]; then
     tests/test_envs/test_bundle_env_equivalence.py \
     tests/test_envs/test_strategy_env.py \
     tests/test_train/test_train_rl_decomposition.py \
+    tests/test_train/test_equity_gate.py \
+    tests/test_train/test_variant_resolver.py \
+    tests/test_train/test_variant_overrides_match_legacy.py \
     tests/test_matrix_campaign_controller.py \
     tests/test_campaign_artifacts.py \
     tests/test_triton_gh200_capacity.py \

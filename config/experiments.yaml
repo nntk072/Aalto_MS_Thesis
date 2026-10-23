@@ -66,6 +66,7 @@ variants:
     allow_multi_tp: true
     entry_state_machine: true
     entry_state_observation: true
+    peak_trailing_dd_limit: 0.10
 
   - name: ladder_a4a_entry_fsm_hidden
     reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
@@ -77,6 +78,7 @@ variants:
     allow_multi_tp: true
     entry_state_machine: true
     entry_state_observation: false
+    peak_trailing_dd_limit: 0.10
 
   # ===== LADDER x STRATEGY (A4b under each strategy) =====
   - name: ladder_a4b_po3_ifvg

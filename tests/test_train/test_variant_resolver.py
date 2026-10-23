@@ -148,6 +148,16 @@ def test_overrides_come_after_strategy_and_have_no_duplicates() -> None:
     assert "ftmo.trailing_dd_limit" not in keys  # was a no-op at default 0.07
 
 
+def test_selected_entry_fsm_pair_shares_peak_drawdown_behavior() -> None:
+    control = _overrides_by_key(resolve_variant("ladder_a4b_entry_fsm"))
+    treatment = _overrides_by_key(resolve_variant("ladder_a4a_entry_fsm_hidden"))
+
+    assert control["env.peak_trailing_dd_limit"] == "0.1"
+    assert treatment["env.peak_trailing_dd_limit"] == "0.1"
+    assert control["env.entry_state_observation"] == "true"
+    assert treatment["env.entry_state_observation"] == "false"
+
+
 def test_consistency_table_covers_all_variants() -> None:
     rows = consistency_table(_all_names())
     assert len(rows) == 29
