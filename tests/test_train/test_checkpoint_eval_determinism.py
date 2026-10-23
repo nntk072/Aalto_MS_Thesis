@@ -4,6 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+import numpy as np
+
 from learning.rl import callbacks
 from training.setup import environments as training_environments
 
@@ -217,6 +219,76 @@ def test_full_training_viability_uses_its_own_factory_and_crossed_thresholds(
     assert calls == 2
     assert callback.viability_failure_reason is not None
     assert callback.viability_failure_reason.startswith("FAIL_POLICY_COLLAPSE")
+
+
+def test_full_training_viability_records_action_coordinates_and_rejections(
+    tmp_path: Path,
+) -> None:
+    class Schema:
+        def to_dict(self) -> dict[str, Any]:
+            return {"coordinates": ["direction", "risk"]}
+
+    class FullTrainingEnv:
+        action_schema = Schema()
+        account = SimpleNamespace(equity=100_000.0)
+        trade_log: list[dict[str, Any]] = []
+        breach_events: list[dict[str, Any]] = []
+        _entry_diag = {"rejected_gate": 3, "rejected_rr": 1}
+
+        def __init__(self) -> None:
+            self.steps = 0
+            self.closed = False
+
+        def reset(self) -> tuple[int, dict[str, Any]]:
+            self.steps = 0
+            return 0, {}
+
+        def step(self, _action: Any) -> tuple[int, float, bool, bool, dict[str, Any]]:
+            self.steps += 1
+            return self.steps, 0.0, self.steps == 2, False, {}
+
+        def close(self) -> None:
+            self.closed = True
+
+        def entry_state_diagnostics(self) -> dict[str, Any]:
+            return {
+                "entry_state_machine": True,
+                "candidate_created": 1,
+                "armed_bars": 1,
+            }
+
+    class Model:
+        def predict(self, obs: int, *, deterministic: bool) -> tuple[np.ndarray[Any, Any], None]:
+            assert deterministic is True
+            return np.asarray([float(obs), float(1 - obs)], dtype=np.float32), None
+
+    envs: list[FullTrainingEnv] = []
+
+    def factory() -> FullTrainingEnv:
+        env = FullTrainingEnv()
+        envs.append(env)
+        return env
+
+    callback = callbacks.BestCheckpointEvalCallback(
+        eval_env_factory=factory,
+        eval_freq=0,
+        best_model_path=tmp_path / "ppo_best",
+        viability_eval_env_factory=factory,
+        viability_eval_freq=5_000_000,
+    )
+    callback.model = cast(Any, Model())
+    callback.num_timesteps = 5_000_000
+
+    assert callback._on_step() is True
+    row = callback.viability_eval_history[0]
+    assert row["action_coordinate_schema"] == ["direction", "risk"]
+    assert row["action_coordinate_schema_mismatch"] is False
+    assert row["action_coordinate_diagnostics"]["direction"]["n"] == 2
+    assert row["action_coordinate_diagnostics"]["direction"]["mean"] == 0.5
+    assert row["action_coordinate_diagnostics"]["direction"]["std"] == 0.5
+    assert row["action_coordinate_diagnostics"]["risk"]["mean"] == 0.5
+    assert row["entry_funnel_diagnostics"] == {"rejected_gate": 3, "rejected_rr": 1}
+    assert envs[0].closed is True
 
 
 def test_full_training_viability_stops_on_missing_entry_candidates(

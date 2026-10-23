@@ -137,6 +137,10 @@ def finalize_training_run(
         str(result["seed"]): int(result.get("best_checkpoint_n_trades", 0))
         for result in seed_results
     }
+    training_log["deterministic_viability_evaluations_by_seed"] = {
+        str(result["seed"]): result.get("deterministic_viability_evaluations", [])
+        for result in seed_results
+    }
     training_log["zero_trade_diagnosis_by_seed"] = {
         str(result["seed"]): classify_zero_trade_cause(
             int(result["train_activity_gate"]["n_trades"]),

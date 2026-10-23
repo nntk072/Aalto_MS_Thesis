@@ -20,6 +20,7 @@ from training.artifacts.manifests import _action_space_width, _build_training_lo
 from training.artifacts.metrics import _write_evaluation_artifacts
 from training.callbacks.activity import assess_train_activity
 from training.configuration.cli import load_merged_config, parse_train_args
+from training.runner.reporting_runtime import finalize_training_run
 from training.runner.seed import _setup_rngs
 from training.setup.environments import _training_episodic, cost_model
 from training.setup.models import _initialize_value_head
@@ -127,6 +128,76 @@ def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path
     assert "| Test (report-only; previously inspected) | -6.76% | -6760.00 USD |" in summary
     assert "Both final replays use deterministic policy actions." in summary
     assert json.loads((evaluation_dir / "summary.json").read_text())["training_admissible"] is False
+
+
+def test_zero_train_trades_fail_closed_after_a_survival_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import training.runner.reporting_runtime as reporting_runtime
+
+    monkeypatch.setattr(reporting_runtime, "_build_training_log", lambda **_kwargs: {})
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "config.yaml").write_text("effective: true\n")
+    feature_cache = tmp_path / "features.parquet"
+    Path(f"{feature_cache}.hash").write_text("feature-hash\n")
+    result = {
+        "seed": 50,
+        "test_m": object(),
+        "test_result": {},
+        "train_gate": {"ok": True, "end_equity": 100_000.0, "slope": 0.0, "reason": ""},
+        "train_activity_gate": assess_train_activity(0),
+        "train_result": {
+            "entry_state_diagnostics": {"entry_state_machine": True, "candidate_created": 0},
+            "entry_diag": {},
+        },
+        "abort_reason": None,
+        "model_num_timesteps": 20_000_000,
+        "best_checkpoint_status": "NO_ACTIVE_CHECKPOINT",
+        "best_checkpoint_n_trades": 0,
+        "deterministic_viability_evaluations": [
+            {"timestep": 5_000_000, "deterministic_n_trades": 0}
+        ],
+        "phase_timings_seconds": {},
+        "run_manifest": "manifest.json",
+    }
+    cfg = SimpleNamespace(env={}, strategy={})
+    args = SimpleNamespace(
+        strategy="baseline",
+        mvp=False,
+        seed=50,
+        algo="ppo",
+        arch="tcn",
+        reward="dsr",
+        wandb=False,
+        allow_locked_oos_for_selection=False,
+    )
+
+    with pytest.raises(SystemExit, match="TRAIN_ACTIVITY_FAILED"):
+        finalize_training_run(
+            cfg=cfg,
+            args=args,
+            is_multi_seed=False,
+            seed_results=[result],
+            timesteps=20_000_000,
+            train_bar_count=100,
+            test_bar_count=50,
+            run_dir=run_dir,
+            feat_cache=feature_cache,
+            feature_columns=["close"],
+            seeds=[50],
+        )
+
+    training_log = json.loads((run_dir / "training_log.json").read_text())
+    assert training_log["train_survival_ok"] is True
+    assert training_log["train_activity_ok"] is False
+    assert training_log["overall_status"] == "FAIL_INACTIVE"
+    assert training_log["training_admissible"] is False
+    assert training_log["zero_trade_diagnosis"] == "FAIL_ENTRY_PATH"
+    assert (
+        training_log["deterministic_viability_evaluations_by_seed"]["50"]
+        == result["deterministic_viability_evaluations"]
+    )
 
 
 def test_resuming_preserves_loaded_value_head_while_fresh_runs_zero_it() -> None:

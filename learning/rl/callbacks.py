@@ -22,6 +22,63 @@ def save_ppo_checkpoint(model: Any, path: str | Path) -> None:
     save_sb3_checkpoint(model, path)
 
 
+def _action_coordinate_names(env: Any, width: int) -> list[str]:
+    schema = getattr(env, "action_schema", None)
+    to_dict = getattr(schema, "to_dict", None)
+    if callable(to_dict):
+        schema = to_dict()
+    raw_names = schema.get("coordinates", ()) if isinstance(schema, dict) else ()
+    names = [str(name) for name in raw_names] if isinstance(raw_names, (list, tuple)) else []
+    return names if len(names) == width else [f"coordinate_{index}" for index in range(width)]
+
+
+def _record_action_coordinates(
+    totals: dict[str, dict[str, float]], action: Any, names: list[str]
+) -> None:
+    values = np.asarray(action, dtype=np.float64).reshape(-1)
+    if values.size != len(names):
+        return
+    for name, value in zip(names, values, strict=True):
+        item = totals.setdefault(
+            name,
+            {
+                "count": 0.0,
+                "nonfinite_count": 0.0,
+                "sum": 0.0,
+                "sum_squares": 0.0,
+                "min": float("inf"),
+                "max": float("-inf"),
+            },
+        )
+        if not np.isfinite(value):
+            item["nonfinite_count"] += 1.0
+            continue
+        item["count"] += 1.0
+        item["sum"] += float(value)
+        item["sum_squares"] += float(value * value)
+        item["min"] = min(item["min"], float(value))
+        item["max"] = max(item["max"], float(value))
+
+
+def _summarize_action_coordinates(
+    totals: dict[str, dict[str, float]],
+) -> dict[str, dict[str, float | int]]:
+    summary: dict[str, dict[str, float | int]] = {}
+    for name, item in totals.items():
+        count = int(item["count"])
+        mean = item["sum"] / count if count else float("nan")
+        variance = max(item["sum_squares"] / count - mean * mean, 0.0) if count else float("nan")
+        summary[name] = {
+            "n": count,
+            "nonfinite_n": int(item["nonfinite_count"]),
+            "mean": mean,
+            "std": float(np.sqrt(variance)),
+            "min": item["min"] if count else float("nan"),
+            "max": item["max"] if count else float("nan"),
+        }
+    return summary
+
+
 try:
     from stable_baselines3.common.callbacks import BaseCallback as _Base
 
@@ -530,35 +587,58 @@ if _SB3_AVAILABLE:
             completed_trades = 0
             survival_valid = True
             entry_state: dict[str, Any] = {}
+            entry_funnel_diagnostics: dict[str, int] = {}
+            action_coordinate_totals: dict[str, dict[str, float]] = {}
+            action_coordinate_schema: list[str] | None = None
+            action_coordinate_schema_mismatch = False
             for _ in range(self._n_eval_episodes):
                 env = self._viability_eval_env_factory()
-                obs, _ = env.reset()
-                done = truncated = False
-                while not (done or truncated):
-                    action, _ = self.model.predict(obs, deterministic=True)
-                    obs, _reward, done, truncated, _ = env.step(action)
-                end_equities.append(float(env.account.equity))
-                trade_log = getattr(env, "trade_log", ())
-                closing_types = {
-                    "close",
-                    "eod_close",
-                    "forced_close",
-                    "stop_close",
-                    "tp_close",
-                }
-                completed_trades += sum(
-                    1 for trade in trade_log if trade.get("type") in closing_types
-                )
-                survival_valid = survival_valid and not bool(getattr(env, "breach_events", ()))
-                state_fn = getattr(env, "entry_state_diagnostics", None)
-                if callable(state_fn):
-                    state = state_fn()
-                    if isinstance(state, dict):
-                        for key, value in state.items():
-                            if isinstance(value, (int, float, np.integer, np.floating)):
-                                entry_state[str(key)] = entry_state.get(str(key), 0) + value
-                            else:
-                                entry_state[str(key)] = value
+                try:
+                    obs, _ = env.reset()
+                    done = truncated = False
+                    while not (done or truncated):
+                        action, _ = self.model.predict(obs, deterministic=True)
+                        action_values = np.asarray(action).reshape(-1)
+                        names = _action_coordinate_names(env, int(action_values.size))
+                        if action_coordinate_schema is None:
+                            action_coordinate_schema = names
+                        elif names != action_coordinate_schema:
+                            action_coordinate_schema_mismatch = True
+                        _record_action_coordinates(action_coordinate_totals, action, names)
+                        obs, _reward, done, truncated, _ = env.step(action)
+                    end_equities.append(float(env.account.equity))
+                    trade_log = getattr(env, "trade_log", ())
+                    closing_types = {
+                        "close",
+                        "eod_close",
+                        "forced_close",
+                        "stop_close",
+                        "tp_close",
+                    }
+                    completed_trades += sum(
+                        1 for trade in trade_log if trade.get("type") in closing_types
+                    )
+                    survival_valid = survival_valid and not bool(getattr(env, "breach_events", ()))
+                    entry_diag = getattr(env, "_entry_diag", {})
+                    if isinstance(entry_diag, dict):
+                        for key, value in entry_diag.items():
+                            if isinstance(value, (int, np.integer)) and not isinstance(value, bool):
+                                entry_funnel_diagnostics[str(key)] = entry_funnel_diagnostics.get(
+                                    str(key), 0
+                                ) + int(value)
+                    state_fn = getattr(env, "entry_state_diagnostics", None)
+                    if callable(state_fn):
+                        state = state_fn()
+                        if isinstance(state, dict):
+                            for key, value in state.items():
+                                if isinstance(value, (int, float, np.integer, np.floating)):
+                                    entry_state[str(key)] = entry_state.get(str(key), 0) + value
+                                else:
+                                    entry_state[str(key)] = value
+                finally:
+                    close = getattr(env, "close", None)
+                    if callable(close):
+                        close()
             end_equity = float(np.mean(end_equities))
             finite_equity = bool(np.isfinite(end_equity))
             row: dict[str, Any] = {
@@ -570,6 +650,12 @@ if _SB3_AVAILABLE:
                 "trigger_refused": int(entry_state.get("trigger_refused", 0)),
                 "opened": int(entry_state.get("entered", 0)),
                 "closed": int(entry_state.get("closed", 0)),
+                "entry_funnel_diagnostics": entry_funnel_diagnostics,
+                "action_coordinate_schema": action_coordinate_schema or [],
+                "action_coordinate_schema_mismatch": action_coordinate_schema_mismatch,
+                "action_coordinate_diagnostics": _summarize_action_coordinates(
+                    action_coordinate_totals
+                ),
                 "survival_valid": bool(survival_valid),
                 "end_equity_finite": finite_equity,
                 "entry_state_diagnostics": entry_state,
