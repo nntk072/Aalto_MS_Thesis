@@ -99,7 +99,7 @@ class EpisodeRuntimeMixin(RuntimeMixinBase):
             _tp_mode,
             entry_candidate,
         ) = self._prepare_action_intent(
-            action, bar, feat_row, bar_time, session_id, fill_idx, pending_order
+            action, feat_row, bar_time, session_id, fill_idx, pending_order
         )
         done, truncated, session_blocked, peak_dd_block = self._enforce_step_constraints(
             bar,

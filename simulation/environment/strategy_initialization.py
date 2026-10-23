@@ -23,7 +23,6 @@ class StrategyInitializationMixin(RuntimeMixinBase):
         bars: pd.DataFrame | None,
         features: pd.DataFrame | None,
     ) -> None:
-        self._entry_gate_warned: bool = False
         # Strategy semantics (Idea 1/2) vs. legacy behaviour (Idea 3 baseline).
         self.strategy: TradingStrategy = strategy if strategy is not None else BaselineStrategy()
         self.strategy_actions = strategy_actions

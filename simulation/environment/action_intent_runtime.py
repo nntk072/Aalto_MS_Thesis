@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from .entry_state import EntryCandidate
-from .market_view import BarView, FeatureRow
+from .market_view import FeatureRow
 from .mixin_base import RuntimeMixinBase
 
 
@@ -18,7 +18,6 @@ class ActionIntentRuntimeMixin(RuntimeMixinBase):
     def _prepare_action_intent(
         self,
         action: int | float | np.ndarray[Any, Any],
-        bar: BarView,
         feat_row: FeatureRow | pd.Series,
         bar_time: Any,
         session_id: int,
@@ -63,7 +62,7 @@ class ActionIntentRuntimeMixin(RuntimeMixinBase):
             risk_frac = 0.0
             entry_candidate = None
 
-        # Check entry gate for new positions
+        # Apply session and order constraints before strategy validation.
         # Suppress new entries on the last bar of a session (overnight block
         # just closed a position or would have if there was one).
         entering_new_session = self.block_overnight and self._is_ny_session_boundary()
@@ -127,20 +126,20 @@ class ActionIntentRuntimeMixin(RuntimeMixinBase):
                 if self.strategy_actions:
                     self._reject("overnight_boundary")
 
-        # Check entry gate for new positions
+        # A stored, armed candidate has already passed causal setup checks.
+        # Revalidate only fresh actions; session levels are order references,
+        # not a universal breakout rule.
         if discrete_action != 0:  # Only check for long/short entries
-            if entry_machine is not None and entry_state_for_action == "ARMED":
-                gate_ok = self._check_entry_gate(float(bar.close), discrete_action, feat_row)
-                if bool(getattr(self.strategy, "previous_session_pd_gate", False)):
-                    pd_eligible = getattr(self.strategy, "previous_session_pd_eligible")
-                    gate_ok = gate_ok and bool(pd_eligible(feat_row, discrete_action))
-            elif self.strategy_actions:
+            if entry_machine is None or entry_state_for_action != "ARMED":
                 gate_ok = self.strategy.validate_entry(
                     direction=discrete_action,
                     row=feat_row,
                 )
             else:
-                gate_ok = self._check_entry_gate(float(bar.close), discrete_action, feat_row)
+                gate_ok = True
+                if bool(getattr(self.strategy, "previous_session_pd_gate", False)):
+                    pd_eligible = getattr(self.strategy, "previous_session_pd_eligible")
+                    gate_ok = bool(pd_eligible(feat_row, discrete_action))
             if not gate_ok:
                 # Gate not satisfied, force to hold
                 rejected_direction = discrete_action

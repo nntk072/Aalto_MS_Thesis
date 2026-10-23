@@ -16,8 +16,10 @@ from trading.orders.entries import (
     place_strategy_order,
     select_index,
 )
-from trading.orders.targets import collapse_levels
+from trading.orders.stops import stop_menu
+from trading.orders.targets import collapse_levels, target_menu
 from trading.risk.sizing import compute_lots
+from trading.strategies import BaselineStrategy
 
 
 class _Menu:
@@ -114,6 +116,43 @@ def test_latest_only_stop_menu_keeps_legacy_deduplication_without_candidate_sche
     )
 
     assert {name for name, _ in order.sl_menu} == {"legacy_a", "legacy_b"}
+
+
+@pytest.mark.parametrize(
+    ("direction", "expected_stops", "expected_targets"),
+    [
+        (1, {"london_low", "asian_low"}, {"london_high", "asian_high"}),
+        (-1, {"london_high", "asian_high"}, {"london_low", "asian_low"}),
+    ],
+)
+def test_session_extremes_are_structural_order_candidates(
+    direction: int, expected_stops: set[str], expected_targets: set[str]
+) -> None:
+    row = _row(london_low=95.0, asian_low=94.0, london_high=105.0, asian_high=106.0)
+
+    menu, _audit = stop_menu(
+        BaselineStrategy(),
+        direction=direction,
+        entry_price=100.0,
+        row=row,
+        min_dist=1.0,
+        buffer=0.0,
+        manipulation="none",
+        htf=(),
+    )
+
+    stop_names = {part for name, _stop, _distance in menu for part in name.split("|")}
+    assert expected_stops <= stop_names
+    targets = target_menu(
+        direction=direction,
+        entry_price=100.0,
+        row=row,
+        stop_dist=1.0,
+        max_tp_distance=float("nan"),
+        htf=(),
+    )
+    target_levels = {part for name, _target, _distance in targets for part in name.split("|")}
+    assert expected_targets <= target_levels
 
 
 def test_mtf_swing_candidates_require_causal_provenance_and_are_audited() -> None:

@@ -269,7 +269,7 @@ env:
   candidate_max_age_bars: 5            # last valid candidate age, in bars
   arm_requires_retest: false           # require a current directional gap retest to arm
   entry_state_observation: true        # false supports the A4a hidden-state ablation
-  strict_research_eligibility: false   # opt-in: fail on missing gate inputs or no eligible NY bars
+  strict_research_eligibility: false   # opt-in: fail when the training split has no eligible NY bars
   # Overlay: intensity does not gate entry (0 = follow context_direction).
   # A positive band lets PPO park at "never trade"; seed-50 20M did that at 0.1.
   entry_intensity_threshold: 0.0

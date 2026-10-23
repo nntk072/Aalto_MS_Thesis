@@ -301,7 +301,6 @@ class TradingEnv(
         self.episode_step_count = 0
         # Warn-once flag for the entry gate; re-arm per episode so a new
         # feature matrix (possibly missing gate columns) warns again.
-        self._entry_gate_warned = False
 
         # Reset reward function
         self.reward_fn.reset()

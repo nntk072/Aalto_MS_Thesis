@@ -1,6 +1,4 @@
-"""Tests for continuous action space and entry gate."""
-
-import warnings
+"""Tests for continuous action space and strategy entry eligibility."""
 
 import numpy as np
 import pandas as pd
@@ -96,115 +94,31 @@ class TestContinuousActionSpace:
             assert np.isfinite(obs["seq"]).all()
             assert "position" in info
 
-    def test_entry_gate_long_allowed(self, sample_bars: pd.DataFrame) -> None:
-        """Test that long entry is allowed when conditions are met."""
-        # Create features with long conditions met
-        features = pd.DataFrame(index=sample_bars.index)
-        features["london_high"] = 100.0
-        features["london_low"] = 90.0
-        features["asian_high"] = 98.0
-        features["asian_low"] = 92.0
-        features["volume_spike"] = 2.0  # > 1.5
-
-        env = TradingEnv(
-            sample_bars,
-            features,
-            continuous_actions=True,
-            obs_window=10,
+    @pytest.mark.parametrize("direction", [1, -1])
+    @pytest.mark.parametrize("already_beyond", [True, False])
+    def test_session_levels_do_not_gate_entries(
+        self, sample_bars: pd.DataFrame, direction: int, already_beyond: bool
+    ) -> None:
+        """Asian/London levels inform order placement, not entry eligibility."""
+        sample_bars["close"] = 100.0
+        high = 99.0 if direction == 1 and already_beyond else 101.0
+        low = 101.0 if direction == -1 and already_beyond else 99.0
+        features = pd.DataFrame(
+            {
+                "london_high": np.full(len(sample_bars), high),
+                "london_low": np.full(len(sample_bars), low),
+                "asian_high": np.full(len(sample_bars), high),
+                "asian_low": np.full(len(sample_bars), low),
+                "volume_spike": np.full(len(sample_bars), 2.0),
+            },
+            index=sample_bars.index,
         )
+        env = TradingEnv(sample_bars, features, continuous_actions=True, obs_window=10)
         env.reset()
 
-        # Set price above London High
-        sample_bars.loc[sample_bars.index[10], "close"] = 105.0
+        env.step(np.array([0.5 * direction]))
 
-        # Long action should be allowed
-        action = np.array([0.5])
-        obs, _, _, _, info = env.step(action)
-
-        assert env.position is not None or info.get("position") is not None
-
-    def test_entry_gate_long_blocked(self, sample_bars: pd.DataFrame) -> None:
-        """Test that long entry is blocked when conditions are not met."""
-        # Create features with long conditions NOT met
-        features = pd.DataFrame(index=sample_bars.index)
-        features["london_high"] = 100.0
-        features["london_low"] = 90.0
-        features["asian_high"] = 98.0
-        features["asian_low"] = 92.0
-        features["volume_spike"] = 1.0  # < 1.5
-
-        env = TradingEnv(
-            sample_bars,
-            features,
-            continuous_actions=True,
-            obs_window=10,
-        )
-        env.reset()
-
-        # Set price below London High
-        sample_bars.loc[sample_bars.index[10], "close"] = 95.0
-
-        # Long action should be blocked (forced to hold)
-        action = np.array([0.5])
-        obs, _, _, _, _ = env.step(action)
-
-        # Position should be None (no position opened)
-        assert env.position is None
-
-    def test_entry_gate_short_allowed(self, sample_bars: pd.DataFrame) -> None:
-        """Test that short entry is allowed when conditions are met."""
-        # Create features with short conditions met
-        features = pd.DataFrame(index=sample_bars.index)
-        features["london_high"] = 100.0
-        features["london_low"] = 90.0
-        features["asian_high"] = 98.0
-        features["asian_low"] = 92.0
-        features["volume_spike"] = 2.0  # > 1.5
-
-        env = TradingEnv(
-            sample_bars,
-            features,
-            continuous_actions=True,
-            obs_window=10,
-        )
-        env.reset()
-
-        # Set price below London Low
-        sample_bars.loc[sample_bars.index[10], "close"] = 85.0
-
-        # Short action should be allowed
-        action = np.array([-0.5])
-        obs, _, _, _, info = env.step(action)
-
-        assert env.position is not None or info.get("position") is not None
-
-    def test_entry_gate_short_blocked(self, sample_bars: pd.DataFrame) -> None:
-        """Test that short entry is blocked when conditions are not met."""
-        # Create features with short conditions NOT met
-        features = pd.DataFrame(index=sample_bars.index)
-        features["london_high"] = 100.0
-        features["london_low"] = 90.0
-        features["asian_high"] = 98.0
-        features["asian_low"] = 92.0
-        features["volume_spike"] = 1.0  # < 1.5
-
-        env = TradingEnv(
-            sample_bars,
-            features,
-            continuous_actions=True,
-            obs_window=10,
-        )
-        env.reset()
-
-        # Set price above London Low
-        sample_bars.loc[sample_bars.index[10], "close"] = 95.0
-
-        # Short action should be blocked (forced to hold)
-        action = np.array([-0.5])
-        obs, _, _, _, _ = env.step(action)
-
-        # Position should be None (no position opened)
-        assert env.position is None
+        assert env._entry_diag["rejected_gate"] == 0
 
     def test_hold_always_allowed(
         self, sample_bars: pd.DataFrame, sample_features: pd.DataFrame
@@ -246,53 +160,8 @@ class TestContinuousActionSpace:
         obs, _, _, _, info = env.step(action)
 
 
-class TestEntryGateWarningsAndRiskFallback:
-    """Tests for entry-gate missing-feature warnings and the no-naked-position fallback."""
-
-    @pytest.fixture
-    def bare_features(self, sample_bars: pd.DataFrame) -> pd.DataFrame:
-        """Features without any entry-gate or swing-level columns."""
-        features = pd.DataFrame(index=sample_bars.index)
-        features["dummy_feature"] = 0.0
-        return features
-
-    def test_entry_gate_warns_once_on_missing_features(
-        self, sample_bars: pd.DataFrame, bare_features: pd.DataFrame
-    ) -> None:
-        """Missing gate columns must emit exactly one warning, then allow silently."""
-        env = TradingEnv(sample_bars, bare_features, continuous_actions=False, obs_window=10)
-        env.reset()
-        feat_row = env.features.iloc[env.step_idx]
-
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            # Gate falls back to allowing the entry (documented fallback)...
-            assert env._check_entry_gate(100.0, 1, feat_row) is True
-            # ...but warns exactly once...
-            assert len(caught) == 1
-            assert "Entry-gate features" in str(caught[0].message)
-            # ...and does not re-warn on subsequent calls.
-            assert env._check_entry_gate(100.0, -1, feat_row) is True
-            assert len(caught) == 1
-
-    def test_entry_gate_warning_rearms_after_reset(
-        self, sample_bars: pd.DataFrame, bare_features: pd.DataFrame
-    ) -> None:
-        """reset() re-arms the warn-once flag so a new episode warns again."""
-        env = TradingEnv(sample_bars, bare_features, continuous_actions=False, obs_window=10)
-        env.reset()
-        feat_row = env.features.iloc[env.step_idx]
-
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            env._check_entry_gate(100.0, 1, feat_row)
-            assert len(caught) == 1
-
-        env.reset()
-        with warnings.catch_warnings(record=True) as caught2:
-            warnings.simplefilter("always")
-            env._check_entry_gate(100.0, 1, feat_row)
-            assert len(caught2) == 1
+class TestRiskFallback:
+    """Tests for the no-naked-position fallback."""
 
     def test_no_naked_position_without_swing_levels(self, sample_bars: pd.DataFrame) -> None:
         """Entry without swing levels must be rejected, not opened naked at 1.0 lots.
@@ -300,18 +169,15 @@ class TestEntryGateWarningsAndRiskFallback:
         The old fallback opened lots=1.0 with sl_price=None/tp_price=None when
         no swing levels were available, bypassing the entire risk framework.
         """
-        # Gate columns present (entry passes the gate) but NO swing levels.
-        features = pd.DataFrame(index=sample_bars.index)
-        features["london_high"] = 100.0
-        features["london_low"] = 90.0
-        features["asian_high"] = 98.0
-        features["asian_low"] = 92.0
-        features["volume_spike"] = 2.0  # > 1.5 → gate allows entries
+        # No stop or session-level candidates are available.
+        features = pd.DataFrame(
+            {"dummy_feature": np.zeros(len(sample_bars))}, index=sample_bars.index
+        )
 
         env = TradingEnv(sample_bars, features, continuous_actions=False, obs_window=10)
         env.reset()
 
-        # Price above London High → long gate passes
+        # Entry is allowed; risk geometry still requires a stop.
         sample_bars.loc[sample_bars.index[10], "close"] = 105.0
 
         obs, _, _, _, _ = env.step(1)  # enter_long

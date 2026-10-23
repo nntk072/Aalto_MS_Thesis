@@ -139,6 +139,8 @@ def stop_menu(
                 raw.append((f"{tf_up}_{swing}", level))
     if direction == 1:
         side_names = [
+            "london_low",
+            "asian_low",
             "prev_day_low",
             "ctx_prev_day_low",
             "ctx_prev_week_low",
@@ -147,6 +149,8 @@ def stop_menu(
         ]
     else:
         side_names = [
+            "london_high",
+            "asian_high",
             "prev_day_high",
             "ctx_prev_day_high",
             "ctx_prev_week_high",

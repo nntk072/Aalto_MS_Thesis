@@ -182,6 +182,14 @@ def test_baseline_fsm_uses_causal_sweep_candidate_through_entry(
         candidate_direction=candidate_direction,
         manipulation_active=manipulation_active,
     )
+    # Session highs/lows are structural order levels, not entry restrictions.
+    features["volume_spike"] = 1.0
+    if candidate_direction == 1:
+        features["london_high"] = 101.0
+        features["asian_high"] = 101.0
+    else:
+        features["london_low"] = 99.0
+        features["asian_low"] = 99.0
     env = TradingEnv(
         bars,
         features,

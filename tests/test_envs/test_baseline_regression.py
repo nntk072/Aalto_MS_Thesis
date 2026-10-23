@@ -1,10 +1,10 @@
-"""Phase 5 regression tests: baseline (Idea 3) behaviour preserved bit-for-bit.
+"""Phase 5 regression tests: baseline (Idea 3) behaviour remains explicit.
 
 The strategy machinery was added as a strict *overlay*: when
 ``strategy_actions=False`` (the default / Idea 3 baseline), the environment
-must behave exactly as before — legacy discrete / 1-D action spaces, legacy
-DSR reward, legacy entry gate, legacy swing-level SL/TP, and no columns
-dropped from the observation.
+keeps legacy discrete / 1-D action spaces, legacy DSR reward, swing-level
+SL/TP, and all observation columns. Entry eligibility follows the selected
+strategy and does not add a universal session-level breakout rule.
 """
 
 from __future__ import annotations
@@ -185,24 +185,16 @@ class TestBaselineObservation:
 
 
 # ---------------------------------------------------------------------------
-# 5. Entry gate: legacy path used, not strategy.validate_entry
+# 5. Entry decisions use the configured strategy contract
 # ---------------------------------------------------------------------------
 
 
-class TestBaselineEntryGate:
-    def test_entry_gate_allows_with_sufficient_volume_spike(
-        self, bars: pd.DataFrame, features: pd.DataFrame
-    ) -> None:
-        env = TradingEnv(bars, features, obs_window=20)
-        env.reset()
-        env.step(1)
-
-    def test_baseline_uses_legacy_gate_not_strategy(
+class TestBaselineEntryEligibility:
+    def test_baseline_entry_uses_strategy_validator(
         self, bars: pd.DataFrame, features: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         env = TradingEnv(bars, features, obs_window=20)
         env.reset()
-        feat_row = env.features.iloc[env.step_idx]
         called_strategy = False
         original = BaselineStrategy.validate_entry
 
@@ -212,8 +204,8 @@ class TestBaselineEntryGate:
             return original(self_bs, direction=direction, row=row)
 
         monkeypatch.setattr(BaselineStrategy, "validate_entry", spy)
-        env._check_entry_gate(float(bars["close"].iloc[env.step_idx]), 1, feat_row)
-        assert not called_strategy, "Baseline gate must not call strategy.validate_entry"
+        env.step(1)
+        assert called_strategy, "baseline entries must follow BaselineStrategy.validate_entry"
 
 
 # ---------------------------------------------------------------------------

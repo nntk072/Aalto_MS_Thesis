@@ -126,7 +126,7 @@ fi
 
 SRUN_CMD=$(cat <<EOF
 cd $REPO && \
-srun --partition=$PARTITION --gpus=$GPUS --time=$TIME --mem=$MEM --ntasks=1 --cpus-per-task=$CPUS --pty bash -lc '
+srun --partition=$PARTITION --gpus=$GPUS --time=$TIME --mem=$MEM --ntasks=1 --cpus-per-task=$CPUS --immediate=60 --pty bash -lc '
   echo "=== allocated on \$(hostname) ==="
   nvidia-smi -L 2>/dev/null || true
   uname -m

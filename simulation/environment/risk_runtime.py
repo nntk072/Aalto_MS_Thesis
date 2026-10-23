@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from typing import Any
 
 import numpy as np
@@ -12,80 +11,11 @@ from trading.risk.budget import approve_dynamic_risk
 from trading.risk.execution_reserve import modeled_execution_reserve_usd
 from trading.risk.sizing import compute_lots
 
-from .market_view import FeatureRow
 from .mixin_base import RuntimeMixinBase
 
 
 class RiskRuntimeMixin(RuntimeMixinBase):
     position: Position | None
-
-    def _check_entry_gate(
-        self,
-        price: float,
-        discrete_action: int,
-        feat_row: FeatureRow | pd.Series,
-    ) -> bool:
-        """Check if action is allowed based on multi-liquidity entry gate.
-
-        Entry Gate Rules:
-        - Long: (price > LondonHigh OR price > AsianHigh) AND volume_spike > 1.5
-        - Short: (price < LondonLow OR price < AsianLow) AND volume_spike > 1.5
-        - Exit/Hold: Always allowed
-
-        Parameters
-        ----------
-        price : float
-            Current price
-        discrete_action : int
-            -1 = short, 0 = hold/exit, 1 = long
-        feat_row : pd.Series
-            Feature row with liquidity levels and volume_spike
-
-        Returns
-        -------
-        bool
-            True if action is allowed, False otherwise
-        """
-        if discrete_action == 0:  # Hold or exit
-            return True
-
-        # Check if we have the required features
-        missing = [
-            col
-            for col in ("london_high", "london_low", "asian_high", "asian_low", "volume_spike")
-            if col not in feat_row.index
-        ]
-        if missing:
-            if self.strict_research_eligibility:
-                raise ValueError(
-                    "Strict research eligibility: missing entry gate columns: " + ", ".join(missing)
-                )
-            # Features missing: the gate cannot evaluate, so it would silently
-            # allow every entry. Warn once rather than spamming every step.
-            if not self._entry_gate_warned:
-                warnings.warn(
-                    "Entry-gate features (london/asian levels, volume_spike) missing "
-                    "from feature matrix — gate falls back to allowing all entries. "
-                    "Check that session-liquidity and volume-spike features are enabled.",
-                    stacklevel=2,
-                )
-                self._entry_gate_warned = True
-            return True  # Fallback: allow if features missing
-
-        london_high = float(feat_row["london_high"])
-        london_low = float(feat_row["london_low"])
-        asian_high = float(feat_row["asian_high"])
-        asian_low = float(feat_row["asian_low"])
-        volume_spike = float(feat_row["volume_spike"])
-
-        if discrete_action == 1:  # Long
-            # Long allowed if price > LondonHigh OR price > AsianHigh AND volume_spike > 1.5
-            return (price > london_high or price > asian_high) and volume_spike > 1.5
-        elif discrete_action == -1:  # Short
-            # Short allowed if price < LondonLow OR price < AsianLow AND volume_spike > 1.5
-            return (price < london_low or price < asian_low) and volume_spike > 1.5
-
-        return True
 
     def _check_guardrails(
         self,

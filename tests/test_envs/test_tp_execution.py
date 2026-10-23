@@ -32,7 +32,6 @@ class TestTPExecution:
 
         with (
             mock.patch.object(env, "_decode_action", return_value=(1, 0.01, 2.0, "fixed")),
-            mock.patch.object(env, "_check_entry_gate", return_value=True),
             mock.patch.object(env, "_lock_unconfirmed_side", return_value=(1, 0.01)),
         ):
             env.step(np.zeros(env.action_space.shape, dtype=np.float32))
@@ -82,7 +81,6 @@ class TestTPExecution:
         env._ny_pos = len(env._ny_indices) - 1
         with (
             mock.patch.object(env, "_decode_action", return_value=(1, 0.01, 2.0, "fixed")),
-            mock.patch.object(env, "_check_entry_gate", return_value=True),
             mock.patch.object(env, "_lock_unconfirmed_side", return_value=(1, 0.01)),
         ):
             env.step(np.zeros(env.action_space.shape, dtype=np.float32))
@@ -90,11 +88,6 @@ class TestTPExecution:
         assert env.position is None
         assert not any(row.get("type") == "open" for row in env.trade_log)
         assert env._entry_diag.get("rejected_terminal", 0) == 1
-
-    def test_strict_eligibility_rejects_missing_entry_gate_inputs(self) -> None:
-        env = _make_tp_env(strict_research_eligibility=True)
-        with pytest.raises(ValueError, match="entry.gate|entry gate|Entry.gate"):
-            env._check_entry_gate(100.0, 1, pd.Series({"volume_spike": 2.0}))
 
     def test_strict_eligibility_rejects_missing_ny_session(self) -> None:
         bars = _make_deterministic_bars().copy()
