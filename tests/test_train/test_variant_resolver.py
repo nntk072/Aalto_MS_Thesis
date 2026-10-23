@@ -154,6 +154,8 @@ def test_selected_entry_fsm_pair_shares_peak_drawdown_behavior() -> None:
 
     assert control["env.peak_trailing_dd_limit"] == "0.1"
     assert treatment["env.peak_trailing_dd_limit"] == "0.1"
+    assert control["env.risk_floor"] == "0.0005"
+    assert treatment["env.risk_floor"] == "0.0005"
     assert control["env.entry_state_observation"] == "true"
     assert treatment["env.entry_state_observation"] == "false"
 

@@ -15,12 +15,14 @@ from features.context.policy_market import attach_policy_market_context
 from learning.rl.agent import build_agent
 from market_data.loading.ticks import ticks_covering
 from market_data.splits.walkforward import purged_walk_forward
+from training.runner.seed import _setup_rngs
 from training.setup.data import _publish_obs_memmap
 from training.setup.environments import (
     _evaluate_final_split,
     build_eval_provider,
     eval_guardrail_kwargs,
     fill_delay_ms,
+    final_evaluation_deterministic,
     make_env,
     max_episode_steps,
     max_loss_per_trade,
@@ -54,6 +56,7 @@ def run_walk_forward_validation(
     if not args.walk_forward:
         return
 
+    deterministic_eval = final_evaluation_deterministic(cfg)
     log.info("Running walk-forward validation with %d splits...", args.wf_splits)
     wf_steps = args.wf_steps or timesteps
     wf_results: list[dict[str, float | int | str]] = []
@@ -155,6 +158,7 @@ def run_walk_forward_validation(
             arch=args.arch,
         )
 
+        _setup_rngs(int(seed))
         fold_result = _evaluate_final_split(
             provider,
             bars=fold_test_bars,
@@ -201,7 +205,10 @@ def run_walk_forward_validation(
             tp_breakeven_alpha=float(cfg.env.get("tp_breakeven_alpha", 0.5)),
             tickbook=ticks_covering(primary_ticks, fold_test_bars),
             fill_delay_ms=fill_delay_ms(cfg),
+            deterministic=deterministic_eval,
         )
+        fold_result["policy_action_mode"] = "deterministic" if deterministic_eval else "stochastic"
+        fold_result["action_rng_seed"] = int(seed) if not deterministic_eval else None
         fold_m = calculate_metrics(
             fold_result["equity"],
             trades=fold_result["trades"],
@@ -209,19 +216,21 @@ def run_walk_forward_validation(
             n_breach_sessions=fold_result.get("n_breach_sessions", 0),
             periods_per_year=evaluation_periods_per_year(cfg),
         )
-        wf_results.append(
-            {
-                "fold": split.fold,
-                "train_bars": len(fold_train_bars),
-                "test_bars": len(fold_test_bars),
-                "sharpe": float(fold_m.sharpe),
-                "max_drawdown": float(fold_m.max_drawdown),
-                "total_return_pct": float(fold_m.total_return_pct),
-                "n_trades": fold_m.n_trades,
-                "feature_cache_name": fold_cache.name,
-                "normalization_mode": "frozen_fold",
-            }
-        )
+        fold_record: dict[str, float | int | str] = {
+            "fold": split.fold,
+            "train_bars": len(fold_train_bars),
+            "test_bars": len(fold_test_bars),
+            "sharpe": float(fold_m.sharpe),
+            "max_drawdown": float(fold_m.max_drawdown),
+            "total_return_pct": float(fold_m.total_return_pct),
+            "n_trades": fold_m.n_trades,
+            "feature_cache_name": fold_cache.name,
+            "normalization_mode": "frozen_fold",
+            "policy_action_mode": fold_result["policy_action_mode"],
+        }
+        if not deterministic_eval:
+            fold_record["action_rng_seed"] = int(seed)
+        wf_results.append(fold_record)
 
     wf_sharpes = [float(result["sharpe"]) for result in wf_results]
     wf_summary = {

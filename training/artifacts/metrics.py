@@ -36,7 +36,8 @@ def _write_evaluation_artifacts(
     ) -> dict[str, Any]:
         return {
             "role": role,
-            "policy_action_mode": "deterministic",
+            "policy_action_mode": str(result.get("policy_action_mode", "stochastic")),
+            "action_rng_seed": result.get("action_rng_seed"),
             "seed": int(seed),
             "completed_training_timesteps": int(completed_timesteps),
             "account_currency": str(account_currency),
@@ -123,7 +124,19 @@ def _write_evaluation_artifacts(
         f"Training steps completed: {completed_timesteps:,}",
         "",
         "The dashboard's periodic train-prefix monitor is a progress check. These are the two final replays.",
-        "Both final replays use deterministic policy actions.",
+        (
+            "Policy action mode: "
+            f"train={train_payload['policy_action_mode']}, "
+            f"test={test_payload['policy_action_mode']}; "
+            f"action RNG seeds: train={train_payload['action_rng_seed']}, "
+            f"test={test_payload['action_rng_seed']}."
+        ),
+        (
+            "Both final replays use stochastic policy actions, matching PPO training."
+            if train_payload["policy_action_mode"] == "stochastic"
+            and test_payload["policy_action_mode"] == "stochastic"
+            else "Final replay action mode is recorded separately for each split."
+        ),
         "",
         f"| Evaluation | Return | Net PnL ({account_currency}) | Max drawdown | Sharpe | Profit factor | Win rate | Trades |",
         "|---|---:|---:|---:|---:|---:|---:|---:|",

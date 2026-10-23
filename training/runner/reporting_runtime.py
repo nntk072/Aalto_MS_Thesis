@@ -192,9 +192,7 @@ def finalize_training_run(
     if failed_survival_seeds:
         raise SystemExit(f"TRAIN_SURVIVAL_FAILED: seeds={failed_survival_seeds}")
     if inactive_seeds:
-        raise SystemExit(
-            f"TRAIN_ACTIVITY_FAILED: zero deterministic train trades; seeds={inactive_seeds}"
-        )
+        raise SystemExit(f"TRAIN_ACTIVITY_FAILED: zero train-replay trades; seeds={inactive_seeds}")
     if aborts:
         raise SystemExit(f"TRAIN_EARLY_ABORT: {aborts}")
 

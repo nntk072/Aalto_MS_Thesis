@@ -87,18 +87,28 @@ def build_reanalysis_parser() -> argparse.ArgumentParser:
         default=None,
         help="Render interactive HTML (default: config output.save_html).",
     )
-    parser.add_argument(
+    action_mode = parser.add_mutually_exclusive_group()
+    action_mode.add_argument(
         "--stochastic",
+        dest="stochastic",
         action="store_true",
-        help="Opt in to sampled policy actions; deterministic actions are the default.",
+        default=None,
+        help="Use sampled policy actions; by default, match the source run's final evaluation.",
+    )
+    action_mode.add_argument(
+        "--deterministic",
+        dest="stochastic",
+        action="store_false",
+        default=None,
+        help="Always choose the policy's central action, regardless of the source run mode.",
     )
     parser.add_argument(
         "--seed",
         type=int,
         default=None,
         help=(
-            "Seed NumPy and PyTorch. This makes --stochastic evaluation repeatable; "
-            "without --stochastic, policy actions remain deterministic."
+            "Override the sampled-action RNG seed. When omitted, stochastic reanalysis "
+            "uses the seed recorded by the source run when available."
         ),
     )
     parser.add_argument(

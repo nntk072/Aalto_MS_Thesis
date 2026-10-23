@@ -18,9 +18,9 @@ from experiments.campaigns.source_snapshot import (
 
 
 def validate_campaign_evaluation(value: object) -> dict[str, Any]:
-    """Validate report-only use or explicit selection on exposed historical data."""
-    if not isinstance(value, dict) or value.get("deterministic") is not True:
-        raise ValueError("campaign evaluation must be deterministic")
+    """Validate action mode, report role, and explicit selection on exposed data."""
+    if not isinstance(value, dict) or not isinstance(value.get("deterministic"), bool):
+        raise ValueError("campaign evaluation deterministic must be a boolean")
     allowed = {"locked_oos_role", "deterministic", "locked_oos_exposure", "selection_allowed"}
     if set(value) - allowed:
         raise ValueError("campaign evaluation contains unknown fields")

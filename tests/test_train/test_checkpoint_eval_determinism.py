@@ -328,7 +328,7 @@ def test_full_training_viability_stops_on_missing_entry_candidates(
     assert callback.viability_failure_reason.startswith("FAIL_ENTRY_PATH")
 
 
-def test_final_split_evaluation_forces_deterministic_actions(monkeypatch: Any) -> None:
+def test_final_split_evaluation_preserves_stochastic_action_mode(monkeypatch: Any) -> None:
     captured: dict[str, Any] = {}
 
     def fake_evaluate_model(model: object, **kwargs: Any) -> dict[str, Any]:
@@ -341,4 +341,32 @@ def test_final_split_evaluation_forces_deterministic_actions(monkeypatch: Any) -
     result = training_environments._evaluate_final_split(model, deterministic=False, bars=None)
 
     assert result == {"model": model}
-    assert captured["deterministic"] is True
+    assert captured["deterministic"] is False
+
+
+def test_final_evaluation_mode_uses_campaign_override(monkeypatch: Any) -> None:
+    from omegaconf import OmegaConf
+
+    cfg = OmegaConf.create({"evaluation": {"deterministic": True}})
+    monkeypatch.setenv("QUANT_RL_EVALUATION_DETERMINISTIC", "false")
+
+    assert training_environments.final_evaluation_deterministic(cfg) is False
+
+
+def test_final_evaluation_mode_defaults_to_sampled_policy_actions(monkeypatch: Any) -> None:
+    from omegaconf import OmegaConf
+
+    monkeypatch.delenv("QUANT_RL_EVALUATION_DETERMINISTIC", raising=False)
+
+    assert training_environments.final_evaluation_deterministic(OmegaConf.create({})) is False
+
+
+def test_final_evaluation_mode_preserves_legacy_deterministic_campaigns(
+    monkeypatch: Any,
+) -> None:
+    from omegaconf import OmegaConf
+
+    monkeypatch.delenv("QUANT_RL_EVALUATION_DETERMINISTIC", raising=False)
+
+    cfg = OmegaConf.create({"evaluation": {"deterministic": True}})
+    assert training_environments.final_evaluation_deterministic(cfg) is True

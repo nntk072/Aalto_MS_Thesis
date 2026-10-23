@@ -204,7 +204,7 @@ def main() -> int:
     args = parser.parse_args()
     import yaml
 
-    evaluation: dict[str, Any] = {"locked_oos_role": "unspecified", "deterministic": True}
+    evaluation: dict[str, Any] = {"locked_oos_role": "unspecified", "deterministic": False}
     if args.campaign_spec:
         if any(
             value is not None
@@ -792,6 +792,9 @@ def main() -> int:
             QUANT_RL_FAST_REPORTS="1" if args.fast_reports else "0",
             QUANT_RL_ALLOW_OOS_SELECTION=(
                 "1" if evaluation.get("selection_allowed", False) else "0"
+            ),
+            QUANT_RL_EVALUATION_DETERMINISTIC=(
+                "true" if evaluation.get("deterministic", False) else "false"
             ),
             GPU_ID="0",
             PYTHONUNBUFFERED="1",

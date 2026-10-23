@@ -622,6 +622,17 @@ def test_campaign_evaluation_requires_exposure_before_selection() -> None:
     assert controller.validate_campaign_evaluation(evaluation)["selection_allowed"] is True
 
 
+def test_campaign_evaluation_accepts_sampled_policy_actions() -> None:
+    evaluation = {
+        "locked_oos_role": "final_report_only",
+        "locked_oos_exposure": "previously_inspected_holdout",
+        "selection_allowed": False,
+        "deterministic": False,
+    }
+
+    assert controller.validate_campaign_evaluation(evaluation)["deterministic"] is False
+
+
 def test_campaign_evaluation_rejects_selection_on_unexposed_holdout() -> None:
     evaluation = {
         "locked_oos_role": "selection_acknowledged",

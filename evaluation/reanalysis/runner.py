@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import random
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -84,6 +85,34 @@ def load_checkpoint(path: Path, *, legacy_layout_key: str | None) -> Any:
     return load_sb3_checkpoint(path, legacy_layout_key=legacy_layout_key)
 
 
+def _source_final_evaluation_metadata(run_dir: Path) -> dict[str, Any]:
+    metadata_path = run_dir / "evaluations" / "test_report_only.json"
+    try:
+        value = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def resolve_reanalysis_action_mode(run_dir: Path, requested_stochastic: bool | None) -> bool:
+    """Use an explicit CLI mode or inherit the source run's final test mode."""
+    if requested_stochastic is not None:
+        return requested_stochastic
+    return _source_final_evaluation_metadata(run_dir).get("policy_action_mode") == "stochastic"
+
+
+def resolve_reanalysis_action_seed(
+    run_dir: Path, requested_seed: int | None, *, stochastic: bool
+) -> int | None:
+    """Use an explicit seed or inherit the source run's sampled-action seed."""
+    if requested_seed is not None:
+        return requested_seed
+    if not stochastic:
+        return None
+    value = _source_final_evaluation_metadata(run_dir).get("action_rng_seed")
+    return int(value) if isinstance(value, int) and not isinstance(value, bool) else None
+
+
 def evaluate_checkpoint_split(provider: Any, *, stochastic: bool, **kwargs: Any) -> dict[str, Any]:
     """Replay one final split using the explicitly selected policy action mode."""
     if hasattr(provider, "metadata") and hasattr(provider, "predict"):
@@ -136,27 +165,33 @@ def write_train_only_screen_report(output_dir: Path, report: dict[str, Any]) -> 
 
 def main() -> None:
     args = build_reanalysis_parser().parse_args()
-    if args.train_only_screen and args.stochastic:
+    if args.train_only_screen and args.stochastic is True:
         raise SystemExit("--train-only-screen requires deterministic policy actions")
-
     run_dir = Path(args.run)
     if not run_dir.is_dir():
         raise SystemExit(f"Run directory not found: {run_dir}")
+    stochastic = resolve_reanalysis_action_mode(run_dir, args.stochastic)
+    action_rng_seed = resolve_reanalysis_action_seed(run_dir, args.seed, stochastic=stochastic)
+    if args.train_only_screen and stochastic:
+        raise SystemExit("--train-only-screen requires deterministic policy actions")
     output_dir = Path(args.output)
     _validate_reanalysis_request(run_dir, output_dir, allow_historical=args.allow_historical)
 
-    if args.seed is not None:
-        # Seed all stochastic components in this fresh reanalysis process.
-        np.random.seed(args.seed)
-        seed_sb3(args.seed)
-        log.info("Seeded evaluation RNG: %d", args.seed)
-    elif args.stochastic:
+    if action_rng_seed is not None:
+        log.info("Sampled-action RNG seed: %d", action_rng_seed)
+    elif stochastic:
         log.warning(
-            "Stochastic policy actions enabled without --seed; this evaluation "
+            "Stochastic policy actions enabled without an action RNG seed; this evaluation "
             "will not reproduce a prior sampled-action replay."
         )
-    policy_action_mode = "stochastic" if args.stochastic else "deterministic"
+    policy_action_mode = "stochastic" if stochastic else "deterministic"
     log.info("Policy action mode: %s", policy_action_mode)
+
+    def seed_action_rng() -> None:
+        if action_rng_seed is not None:
+            random.seed(action_rng_seed)
+            np.random.seed(action_rng_seed)
+            seed_sb3(action_rng_seed)
 
     cfg = _load_run_config(run_dir)
     # The run's own snapshot is authoritative for data, split, and risk settings,
@@ -333,9 +368,10 @@ def main() -> None:
 
     train_tickbook = ticks_covering(primary_ticks, train_bars)
     if args.train_only_screen:
+        seed_action_rng()
         train_result, train_m = evaluate_train_split(
             provider,
-            stochastic=args.stochastic,
+            stochastic=stochastic,
             bars=train_bars,
             features=train_feat,
             tickbook=train_tickbook,
@@ -417,7 +453,7 @@ def main() -> None:
                 },
                 "evaluation_protocol": {
                     "policy_action_mode": policy_action_mode,
-                    "seed": args.seed,
+                    "seed": action_rng_seed,
                     "execution_seed": execution_seed,
                     "training_data_source": training_data_source,
                     "evaluation_backend": "frame",
@@ -431,9 +467,10 @@ def main() -> None:
         log.info("Train-only screen written to %s", report_path)
         return
 
+    seed_action_rng()
     test_result = evaluate_checkpoint_split(
         provider,
-        stochastic=args.stochastic,
+        stochastic=stochastic,
         bars=test_bars,
         features=test_feat,
         tickbook=ticks_covering(primary_ticks, test_bars),
@@ -457,9 +494,10 @@ def main() -> None:
         test_m.total_return_pct,
         test_result.get("fail_time"),
     )
+    seed_action_rng()
     train_result, train_m = evaluate_train_split(
         provider,
-        stochastic=args.stochastic,
+        stochastic=stochastic,
         bars=train_bars,
         features=train_feat,
         tickbook=train_tickbook,
@@ -525,7 +563,7 @@ def main() -> None:
             "eval_timestamp": datetime.now().isoformat(),
             "eval_ftmo": True,
             "eval_policy_action_mode": policy_action_mode,
-            "eval_seed": args.seed,
+            "eval_seed": action_rng_seed,
             "eval_execution_seed": execution_seed,
             "eval_tick_fill_slippage_points": args.tick_fill_slippage_points,
             "sequence_feature_schema": expected_sequence_schema,
@@ -586,7 +624,7 @@ def main() -> None:
         "backend_parity_disposition": backend_parity_disposition,
         "train_end": train_end,
         "test_start": test_start,
-        "seed": args.seed,
+        "seed": action_rng_seed,
         "metrics_protocol": {
             "annualization": {
                 "periods_per_year": evaluation_periods_per_year(cfg),

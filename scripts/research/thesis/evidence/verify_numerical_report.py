@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify a deterministic checkpoint report against its exported raw artifacts."""
+"""Verify a checkpoint report against its exported raw artifacts and action-mode provenance."""
 
 from __future__ import annotations
 
@@ -133,6 +133,15 @@ def _same_number(actual: Any, expected: Any) -> bool:
 
 def _is_nonnegative_int(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _policy_action_mode_errors(manifest: dict[str, Any]) -> list[str]:
+    mode = manifest.get("policy_action_mode")
+    if mode not in {"deterministic", "stochastic"}:
+        return ["policy action mode is missing or invalid"]
+    if mode == "stochastic" and not _is_nonnegative_int(manifest.get("seed")):
+        return ["stochastic policy actions are missing a reproducible RNG seed"]
+    return []
 
 
 def _is_finite_number(value: Any) -> bool:
@@ -1051,8 +1060,7 @@ def verify_report_directory(
         errors.append("reanalysis manifest has the wrong artifact role")
     if manifest.get("historical_holdout_inspected") is not True:
         errors.append("historical holdout exposure is not explicitly recorded")
-    if manifest.get("policy_action_mode") != "deterministic":
-        errors.append("policy action mode is not deterministic")
+    errors.extend(_policy_action_mode_errors(manifest))
     errors.extend(_evaluation_provenance_errors(manifest.get("evaluation_provenance")))
     if manifest.get("feature_cache_disposition") not in {
         "verified",
@@ -1212,7 +1220,7 @@ def verify_report_directory(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("run_dir", type=Path, help="Historical deterministic reanalysis directory")
+    parser.add_argument("run_dir", type=Path, help="Historical checkpoint reanalysis directory")
     parser.add_argument(
         "--backend-parity-report",
         action="append",

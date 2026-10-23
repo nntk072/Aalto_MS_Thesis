@@ -49,7 +49,9 @@ def max_loss_per_trade(cfg: Any) -> float:
     if policy.repeated_payout:
         return policy.operating_balance * policy.max_agent_risk_frac
     if bool(cfg.env.get("strategy_actions", False)):
-        return float(cfg.ftmo.risk_per_trade_limit)
+        hard_limit = float(cfg.ftmo.risk_per_trade_limit)
+        sizing_limit = float(cfg.ftmo.get("risk_sizing_limit_usd", hard_limit))
+        return min(hard_limit, sizing_limit)
     return float(cfg.backtest.validation.max_loss_per_trade_usd)
 
 

@@ -99,12 +99,16 @@ def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path
         seed=42,
         completed_timesteps=106_496,
         train_result={
+            "policy_action_mode": "stochastic",
+            "action_rng_seed": 42,
             "n_sessions": 100,
             "days_traded": 80,
             "completed_data_split": True,
             "episode_end_reason": "data_end",
         },
         test_result={
+            "policy_action_mode": "stochastic",
+            "action_rng_seed": 42,
             "n_sessions": 130,
             "days_traded": 32,
             "completed_data_split": False,
@@ -124,13 +128,15 @@ def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path
     summary = (evaluation_dir / "summary.md").read_text()
 
     assert train["role"] == "in_sample_training_evaluation"
-    assert train["policy_action_mode"] == "deterministic"
+    assert train["policy_action_mode"] == "stochastic"
+    assert train["action_rng_seed"] == 42
     assert train["metrics"]["total_pnl"] == -1000.0
     assert train["equity_gate"]["ok"] is False
     assert train["activity_gate"]["status"] == "ACTIVE"
     assert train["zero_trade_diagnosis"] is None
     assert test["role"] == "report_only_test_evaluation"
-    assert test["policy_action_mode"] == "deterministic"
+    assert test["policy_action_mode"] == "stochastic"
+    assert test["action_rng_seed"] == 42
     assert test["metrics"]["total_pnl"] == -6760.0
     assert test["oos_role"].startswith("previously_inspected_holdout")
     assert train["completed_data_split"] is True
@@ -138,7 +144,7 @@ def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path
     assert test["completed_data_split"] is False
     assert test["episode_end_reason"] == "max_episode_steps"
     assert "| Test (report-only; previously inspected) | -6.76% | -6760.00 USD |" in summary
-    assert "Both final replays use deterministic policy actions." in summary
+    assert "Both final replays use stochastic policy actions, matching PPO training." in summary
     assert json.loads((evaluation_dir / "summary.json").read_text())["training_admissible"] is False
 
 

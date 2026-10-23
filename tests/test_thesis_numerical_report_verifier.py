@@ -14,6 +14,7 @@ from scripts.research.thesis.evidence.verify_numerical_report import (
     _deleted_dirty_source_record,
     _deleted_source_records,
     _evaluation_provenance_errors,
+    _policy_action_mode_errors,
     _same_resolved_config,
     _source_manifest_errors,
     verify_split,
@@ -21,6 +22,14 @@ from scripts.research.thesis.evidence.verify_numerical_report import (
 
 from evaluation import calculate_metrics
 from evaluation.reporting.export import save_run
+
+
+def test_numerical_report_verifier_accepts_seeded_stochastic_actions() -> None:
+    assert _policy_action_mode_errors({"policy_action_mode": "stochastic", "seed": 50}) == []
+    assert _policy_action_mode_errors({"policy_action_mode": "stochastic", "seed": None}) == [
+        "stochastic policy actions are missing a reproducible RNG seed"
+    ]
+    assert _policy_action_mode_errors({"policy_action_mode": "deterministic"}) == []
 
 
 def test_deleted_dirty_source_provenance_uses_the_recorded_git_blob(

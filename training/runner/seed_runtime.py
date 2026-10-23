@@ -78,6 +78,7 @@ from training.setup.environments import (
     build_eval_common,
     build_sb3_provider,
     fill_delay_ms,
+    final_evaluation_deterministic,
     make_env,
     strategy_from_cfg,
 )
@@ -106,6 +107,9 @@ class SeedRunner:
         self.fit_result: FitResult | None = None
         self.model_path: Path | None = None
         self.provider: DecisionProvider | None = None
+        self.final_eval_deterministic = final_evaluation_deterministic(
+            context.preparation.configuration.cfg
+        )
 
     @staticmethod
     def _bundle_eval_factory(env_spec: Any) -> Any:
@@ -567,6 +571,7 @@ class SeedRunner:
     def evaluate_test_split(self) -> None:
         ctx = self.context
         cfg = ctx.preparation.configuration.cfg
+        seed = self.seed
         provider = self.provider
         if provider is None:
             raise RuntimeError("decision provider was not created for evaluation")
@@ -603,7 +608,10 @@ class SeedRunner:
         except Exception as exc:
             log.warning("Training progress plots skipped: %s", exc)
 
-        # Final report-only held-out evaluation uses deterministic policy actions.
+        # Final train/test replays use the configured policy action mode. Stochastic
+        # evaluations are reseeded so their sampled trajectories can be reproduced.
+        deterministic_eval = self.final_eval_deterministic
+        _setup_rngs(seed)
         phase_started = time.perf_counter()
         log.info("Evaluating trained model on test set...")
         if test_eval_spec is not None:
@@ -625,8 +633,11 @@ class SeedRunner:
             max_episode_steps=None,
             tickbook=test_ticks,
             env=test_eval_env,
+            deterministic=deterministic_eval,
             **eval_common,
         )
+        test_result["policy_action_mode"] = "deterministic" if deterministic_eval else "stochastic"
+        test_result["action_rng_seed"] = int(seed) if not deterministic_eval else None
         test_result["initial_balance"] = cfg.account.initial_balance
         test_m = calculate_metrics(
             test_result["equity"],
@@ -670,6 +681,7 @@ class SeedRunner:
         ctx = self.context
         cfg = ctx.preparation.configuration.cfg
         seed = self.seed
+        deterministic_eval = self.final_eval_deterministic
         model = self.model
         provider = self.provider
         if provider is None:
@@ -699,6 +711,7 @@ class SeedRunner:
             empty_bars = train_bars
             empty_features = train_feat
             train_ticks = ticks_covering(primary_ticks, train_bars)
+        _setup_rngs(seed)
         train_result = _evaluate_final_split(
             provider,
             bars=empty_bars,
@@ -706,8 +719,11 @@ class SeedRunner:
             max_episode_steps=None,
             tickbook=train_ticks,
             env=train_eval_env,
+            deterministic=deterministic_eval,
             **eval_common,
         )
+        train_result["policy_action_mode"] = "deterministic" if deterministic_eval else "stochastic"
+        train_result["action_rng_seed"] = int(seed) if not deterministic_eval else None
         train_result["initial_balance"] = cfg.account.initial_balance
         train_m = calculate_metrics(
             train_result["equity"],

@@ -8,6 +8,7 @@ import pytest
 from gymnasium.spaces import Box
 
 from simulation.environment.env import TradingEnv
+from trading.execution.costs import CostModel
 from trading.strategies import PO3IFVGStrategy
 
 
@@ -107,6 +108,51 @@ class TestStrategyActionSpace:
         env = TradingEnv(bars, feats, strategy_actions=False, obs_window=10)
         # Baseline (strategy_actions=False) must NOT use the 5-D Box.
         assert env.action_space.shape != (5,)
+
+
+class TestAdaptiveRiskSizing:
+    def test_agent_can_choose_sub_250_dollar_risk(self) -> None:
+        bars = _bars(n=30)
+        feats = _features(bars)
+        env = TradingEnv(
+            bars,
+            feats,
+            strategy_actions=True,
+            strategy=PO3IFVGStrategy(enforce_gate=False),
+            obs_window=5,
+            risk_frac_range=(0.0, 0.01),
+            risk_floor=0.0005,
+            rr_ratio_range=(2.0, 2.0),
+            allow_agent_sl_mode=False,
+        )
+        env.reset()
+        feat_row = env._feature_row_at(env.step_idx)
+        action, risk_frac, _, _ = env._decode_action(
+            np.array([0.9, 0.0, -0.8, 0.0, -1.0], dtype=np.float32), feat_row
+        )
+
+        assert action == 1
+        assert risk_frac == pytest.approx(0.001)  # $100 at the $100k starting balance
+
+    def test_dynamic_budget_includes_modeled_execution_costs(self) -> None:
+        bars = _bars()
+        env = TradingEnv(
+            bars,
+            _features(bars),
+            strategy_actions=True,
+            strategy=PO3IFVGStrategy(enforce_gate=False),
+            initial_balance=100_000.0,
+            risk_frac_range=(0.0, 0.01),
+            max_loss_per_trade_usd=900.0,
+            cost_model=CostModel(slippage_points=2.0, commission_per_lot=1.0),
+        )
+
+        lots = env._compute_lots_for(0.01, 100.0, 90.0)
+        stop_risk = lots * 10.0 * env.contract_size
+        reserve = env._modeled_execution_reserve_usd(lots)
+
+        assert env._last_approved_risk_usd == pytest.approx(900.0)
+        assert stop_risk + reserve == pytest.approx(900.0)
 
 
 class TestPO3EntryModes:

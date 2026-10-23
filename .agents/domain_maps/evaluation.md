@@ -108,7 +108,10 @@ Purged walk-forward split construction lives in `market_data/splits/walkforward.
 1. **Purged walk-forward** — `purge_bars` removed from train end, `embargo_bars` from test start
 2. **Same risk params as training** — `risk_frac_range` and `rr_ratio_range` must match training env
 3. **Episodic=False for RL eval** — guardrail breach blocks new trading for session, not whole rollout
-4. **Deterministic=True** — evaluation uses deterministic policy predictions
+4. **Training/evaluation action mode parity** — final train/test replays use
+   the configured policy action mode; PPO defaults to sampled actions to match
+   training. Record the mode and action RNG seed. Deterministic replay is an
+   explicit sensitivity analysis and remains useful for exact replay checks.
 5. **Matched comparisons** — dataset, split, feature/reward/cost/execution,
    training budget, seed, starting capital, model/environment settings, and
    evaluation window must match; previously inspected OOS remains historical.

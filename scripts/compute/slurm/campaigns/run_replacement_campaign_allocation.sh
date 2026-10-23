@@ -83,12 +83,17 @@ if [[ ! -s "$OUT_DIR/campaign.json" ]]; then
     tests/test_envs/test_baseline_regression.py \
     tests/test_envs/test_bundle_env_equivalence.py \
     tests/test_envs/test_strategy_env.py \
+    tests/test_envs/test_fixed_risk_sizing.py \
+    tests/test_envs/test_trader_actions.py \
     tests/test_train/test_train_rl_decomposition.py \
+    tests/test_train/test_checkpoint_eval_determinism.py \
     tests/test_train/test_equity_gate.py \
     tests/test_train/test_variant_resolver.py \
     tests/test_train/test_variant_overrides_match_legacy.py \
     tests/test_matrix_campaign_controller.py \
     tests/test_campaign_artifacts.py \
+    tests/test_eval/test_eval_run_provenance.py \
+    tests/test_thesis_numerical_report_verifier.py \
     tests/test_triton_gh200_capacity.py \
     tests/test_models/test_legacy_checkpoint_migration.py \
     tests/architecture/test_public_imports.py -q

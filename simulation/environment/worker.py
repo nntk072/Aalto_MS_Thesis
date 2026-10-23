@@ -123,7 +123,9 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
         risk_frac_range = (risk_frac_values[0], risk_frac_values[1])
         rr_ratio_range = tuple(float(x) for x in strategy_risk.get("rr_range", [1.5, 5.0]))
         ftmo = _block(cfg, "ftmo")
-        max_loss = float(ftmo.get("risk_per_trade_limit", 100.0))
+        hard_limit = float(ftmo.get("risk_per_trade_limit", 100.0))
+        sizing_limit = float(ftmo.get("risk_sizing_limit_usd", hard_limit))
+        max_loss = min(hard_limit, sizing_limit)
     else:
         default_risk = float(risk.get("default_risk_frac", 0.01))
         default_rr = float(risk.get("rr_ratio_default", 2.0))

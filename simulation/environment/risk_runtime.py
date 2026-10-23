@@ -246,28 +246,11 @@ class RiskRuntimeMixin(RuntimeMixinBase):
         """
         if bool(getattr(self, "repeated_payout_policy", False)):
             approved_total_risk = self._risk_budget_usd(risk_frac)
-            if approved_total_risk <= 0.0:
-                return 0.0
-            stop_risk_per_lot = abs(float(entry_price) - float(sl_price)) * self.contract_size
-            if stop_risk_per_lot <= 0.0:
-                return 0.0
-            variable_execution_per_lot = self._modeled_execution_reserve_usd(1.0)
-            total_risk_per_lot = stop_risk_per_lot + variable_execution_per_lot
-            stop_budget = (
-                approved_total_risk * stop_risk_per_lot / total_risk_per_lot
-                if total_risk_per_lot > 0.0
-                else 0.0
-            )
-            lots = compute_lots(
-                self._sizing_equity(),
+            lots = self._lots_with_execution_reserve(
+                approved_total_risk,
                 risk_frac,
                 entry_price,
                 sl_price,
-                contract_size=self.contract_size,
-                min_lot=self.min_lot,
-                max_lot=self.max_lot,
-                max_loss_cap=None,
-                risk_usd=stop_budget,
             )
             self._last_execution_reserve_usd = float(
                 self.trading_policy.execution_reserve_usd
@@ -285,7 +268,38 @@ class RiskRuntimeMixin(RuntimeMixinBase):
                 max_loss_cap=None,
                 risk_usd=self._risk_budget_usd(risk_frac),
             )
-        return compute_lots(
+        requested_total_risk = self._risk_budget_usd(risk_frac)
+        approved_total_risk = min(
+            requested_total_risk,
+            max(0.0, float(self.max_loss_per_trade_usd)),
+        )
+        self._last_approved_risk_usd = approved_total_risk
+        lots = self._lots_with_execution_reserve(
+            approved_total_risk,
+            risk_frac,
+            entry_price,
+            sl_price,
+        )
+        self._last_execution_reserve_usd = self._modeled_execution_reserve_usd(lots)
+        return lots
+
+    def _lots_with_execution_reserve(
+        self,
+        total_risk_budget_usd: float,
+        risk_frac: float,
+        entry_price: float,
+        sl_price: float,
+    ) -> float:
+        """Size stop exposure so stop loss plus modeled costs fit the budget."""
+        stop_risk_per_lot = abs(float(entry_price) - float(sl_price)) * self.contract_size
+        if total_risk_budget_usd <= 0.0 or stop_risk_per_lot <= 0.0:
+            return 0.0
+        execution_reserve_per_lot = self._modeled_execution_reserve_usd(1.0)
+        all_in_risk_per_lot = stop_risk_per_lot + execution_reserve_per_lot
+        if all_in_risk_per_lot <= 0.0:
+            return 0.0
+        stop_risk_budget = total_risk_budget_usd * stop_risk_per_lot / all_in_risk_per_lot
+        lots = compute_lots(
             self._sizing_equity(),
             risk_frac,
             entry_price,
@@ -293,8 +307,13 @@ class RiskRuntimeMixin(RuntimeMixinBase):
             contract_size=self.contract_size,
             min_lot=self.min_lot,
             max_lot=self.max_lot,
-            max_loss_cap=self.max_loss_per_trade_usd,
+            max_loss_cap=None,
+            risk_usd=stop_risk_budget,
         )
+        lots_at_budget = total_risk_budget_usd / all_in_risk_per_lot
+        if lots_at_budget < self.min_lot:
+            return 0.0
+        return float(min(lots, lots_at_budget))
 
     def _actual_risk_usd(self, stop_distance: float) -> float:
         """Dollar risk the filled position really carries, in account currency.

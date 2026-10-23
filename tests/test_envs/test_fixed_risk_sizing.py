@@ -12,6 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from trading.execution.costs import CostModel
 from trading.risk.sizing import compute_lots
 
 
@@ -44,7 +45,15 @@ def _env_stub(risk_mode: str, fixed_risk_usd: float, equity: float, **kw: object
     stub.min_lot = kw.get("min_lot", 0.01)
     stub.max_lot = kw.get("max_lot", 100.0)
     stub.max_loss_per_trade_usd = kw.get("max_loss_per_trade_usd", 100.0)
-    for name in ("_sizing_equity", "_risk_budget_usd", "_compute_lots_for", "_actual_risk_usd"):
+    stub.cost_model = kw.get("cost_model", CostModel())
+    for name in (
+        "_sizing_equity",
+        "_risk_budget_usd",
+        "_modeled_execution_reserve_usd",
+        "_lots_with_execution_reserve",
+        "_compute_lots_for",
+        "_actual_risk_usd",
+    ):
         setattr(stub, name, getattr(TradingEnv, name).__get__(stub))
     return stub
 
@@ -132,6 +141,44 @@ def test_dynamic_mode_still_available() -> None:
     assert env._compute_lots_for(0.01, entry, entry - stop) * stop == pytest.approx(100.0)
     # Below the cap: 0.05% of 100k is $50.
     assert env._compute_lots_for(0.0005, entry, entry - stop) * stop == pytest.approx(50.0)
+
+
+def test_dynamic_risk_includes_execution_reserve_under_sizing_cap() -> None:
+    """Stop risk plus modeled slippage and commission stays within $900."""
+    costs = CostModel(slippage_points=2.0, commission_per_lot=1.0)
+    env = _env_stub(
+        "dynamic",
+        0.0,
+        equity=100_000.0,
+        max_loss_per_trade_usd=900.0,
+        cost_model=costs,
+    )
+    lots = env._compute_lots_for(0.01, 100.0, 90.0)
+    stop_risk = lots * 10.0
+    reserve = env._modeled_execution_reserve_usd(lots)
+
+    assert env._last_approved_risk_usd == pytest.approx(900.0)
+    assert stop_risk < 900.0
+    assert reserve > 0.0
+    assert stop_risk + reserve == pytest.approx(900.0)
+
+
+def test_sizing_limit_stays_below_hard_per_trade_guardrail() -> None:
+    from omegaconf import OmegaConf
+
+    from simulation.environment.factory import guardrail_kwargs, max_loss_per_trade
+
+    cfg = OmegaConf.create(
+        {
+            "trading_policy": {"mode": "legacy"},
+            "account": {"initial_balance": 100_000.0},
+            "env": {"strategy_actions": True},
+            "ftmo": {"risk_per_trade_limit": 1_000.0, "risk_sizing_limit_usd": 900.0},
+        }
+    )
+
+    assert max_loss_per_trade(cfg) == pytest.approx(900.0)
+    assert guardrail_kwargs(cfg)["risk_per_trade_limit"] == pytest.approx(1_000.0)
 
 
 def test_risk_budget_reports_mode() -> None:

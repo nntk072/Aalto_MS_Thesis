@@ -55,6 +55,7 @@ LADDER_FLAGS: tuple[str, ...] = (
     "arm_requires_retest",
     "candidate_max_age_bars",
     "peak_trailing_dd_limit",
+    "risk_floor",
 )
 
 # Feature regime applied to every variant that uses strategy actions or a

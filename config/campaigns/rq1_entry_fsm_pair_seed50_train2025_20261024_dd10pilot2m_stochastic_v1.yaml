@@ -1,0 +1,19 @@
+schema_version: 1
+campaign_id: rq1_entry_fsm_pair_seed50_train2025_20261024_dd10pilot2m_stochastic_v1
+variant_file: config/campaigns/variant_list_rq1_entry_fsm.txt
+variants:
+  - ladder_a4b_entry_fsm
+  - ladder_a4a_entry_fsm_hidden
+seeds: [50]
+timesteps: 2000000
+data_source: bundle
+python_hash_seed: 0
+split:
+  train_start: "2024-12-30"
+  train_end: "2025-12-31"
+  test_start: "2026-01-01"
+evaluation:
+  locked_oos_role: final_report_only
+  locked_oos_exposure: previously_inspected_holdout
+  selection_allowed: false
+  deterministic: false

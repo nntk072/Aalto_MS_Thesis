@@ -1,7 +1,7 @@
 """Terminal dashboard for a PPO training run.
 
 Rollout behavior, reward parts, and critic stats print on ``log_every``.
-A short deterministic slice adds return and risk metrics on the same cadence.
+A short sampled-action slice adds return and risk metrics on the same cadence.
 """
 
 from __future__ import annotations

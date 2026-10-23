@@ -105,6 +105,9 @@ account:
 # Annualized M1 statistics use 252 trading sessions/year and 390 NY-session
 # minute bars/session. This convention is recorded with every run's metrics.
 evaluation:
+  # PPO collects sampled actions; use the same policy mode for final train/test replays.
+  # Set true only when a campaign explicitly evaluates deterministic deployment actions.
+  deterministic: false
   periods_per_year: 98280
   annualization_convention: "252 sessions/year x 390 NY-session M1 bars/session"
 
@@ -169,7 +172,8 @@ ftmo:
   # reported training/ and testing/ follow FTMO $10k from initial + $5k daily.
   trailing_dd_limit: 0.07
   soft_trailing_dd_limit: 0.0
-  risk_per_trade_limit: 1000.0         # per-trade risk kill-switch
+  risk_per_trade_limit: 1000.0         # hard per-trade sizing ceiling
+  risk_sizing_limit_usd: 900.0         # stop risk plus modeled execution reserve for strategy-action sizing
   profit_target: 10000.0               # not enforced in env, only reported
 
 # LIVE/paper execution risk for integrations.mt5's RiskManager (used by
@@ -287,6 +291,7 @@ env:
   #   dynamic -> live equity x agent's risk_frac, plus the max_loss_per_trade_usd
   #              cap. Risk drifts as the account compounds.
   risk_mode: dynamic                 # "fixed" | "dynamic"
+  risk_floor: 0.0005                 # near-zero requests become holds; sub-$250 choices stay available
   # EMA-21 exit. It was chosen on 92% of trades in the first 20M run, which
   # collapsed exits onto one non-structural mode and left the structural target
   # head untrained. false forces every exit onto a structural level >= 1R away.
@@ -463,7 +468,7 @@ training:
     stop_on_nonfinite: true
     stop_on_no_trades: false
     stop_on_equity_gate: false
-  # Terminal block during learn(). Eval is a short deterministic train prefix.
+  # Terminal block during learn(). Eval is a short sampled-action train-prefix monitor.
   dashboard:
     enabled: true
     eval_every: 100000

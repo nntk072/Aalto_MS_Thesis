@@ -67,6 +67,7 @@ variants:
     entry_state_machine: true
     entry_state_observation: true
     peak_trailing_dd_limit: 0.10
+    risk_floor: 0.0005
 
   - name: ladder_a4a_entry_fsm_hidden
     reward_mode: dsr   # effective value before the resolver fix; see CHANGES.md
@@ -79,6 +80,7 @@ variants:
     entry_state_machine: true
     entry_state_observation: false
     peak_trailing_dd_limit: 0.10
+    risk_floor: 0.0005
 
   # ===== LADDER x STRATEGY (A4b under each strategy) =====
   - name: ladder_a4b_po3_ifvg

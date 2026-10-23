@@ -24,16 +24,34 @@ from evaluation.reporting.run_manifest import file_sha256
 from features import feature_cache_path
 
 
-def test_checkpoint_reanalysis_defaults_to_deterministic_actions() -> None:
+def test_checkpoint_reanalysis_defaults_to_source_action_mode() -> None:
     default_args = eval_run.build_reanalysis_parser().parse_args(
         ["--run", "source", "--output", "out"]
     )
     sampled_args = eval_run.build_reanalysis_parser().parse_args(
         ["--run", "source", "--output", "out", "--stochastic", "--seed", "42"]
     )
-    assert default_args.stochastic is False
+    deterministic_args = eval_run.build_reanalysis_parser().parse_args(
+        ["--run", "source", "--output", "out", "--deterministic"]
+    )
+    assert default_args.stochastic is None
     assert sampled_args.stochastic is True
+    assert deterministic_args.stochastic is False
     assert sampled_args.seed == 42
+
+
+def test_checkpoint_reanalysis_inherits_sampled_mode_and_seed(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    evaluation_dir = source / "evaluations"
+    evaluation_dir.mkdir(parents=True)
+    (evaluation_dir / "test_report_only.json").write_text(
+        json.dumps({"policy_action_mode": "stochastic", "action_rng_seed": 50}),
+        encoding="utf-8",
+    )
+
+    assert eval_run.resolve_reanalysis_action_mode(source, None) is True
+    assert eval_run.resolve_reanalysis_action_seed(source, None, stochastic=True) == 50
+    assert eval_run.resolve_reanalysis_action_mode(source, False) is False
 
 
 def test_checkpoint_reanalysis_parses_tick_fill_slippage_override() -> None:

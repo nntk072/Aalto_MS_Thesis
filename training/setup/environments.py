@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
+
+from omegaconf import OmegaConf
 
 from decisioning.adapters.sb3 import SB3DecisionProvider
 from decisioning.contracts import DecisionProvider
@@ -33,6 +36,7 @@ __all__ = [
     "eval_guardrail_kwargs",
     "_evaluate_final_split",
     "fill_delay_ms",
+    "final_evaluation_deterministic",
     "guardrail_kwargs",
     "max_episode_steps",
     "max_loss_per_trade",
@@ -67,9 +71,26 @@ def _training_episodic(cfg: Any) -> bool:
 
 
 def _evaluate_final_split(model: Any, **kwargs: Any) -> dict[str, Any]:
-    """Evaluate a reported split with deterministic policy actions."""
-    kwargs["deterministic"] = True
+    """Evaluate a final split using the campaign's declared action mode."""
+    kwargs.setdefault("deterministic", False)
     return evaluate_model(model, **kwargs)
+
+
+def final_evaluation_deterministic(cfg: Any) -> bool:
+    """Resolve the final replay mode, with campaign metadata overriding config defaults."""
+    override = os.environ.get("QUANT_RL_EVALUATION_DETERMINISTIC")
+    if override is not None:
+        normalized = override.strip().lower()
+        if normalized in {"1", "true"}:
+            return True
+        if normalized in {"0", "false"}:
+            return False
+        raise ValueError("QUANT_RL_EVALUATION_DETERMINISTIC must be true or false")
+
+    value = OmegaConf.select(cfg, "evaluation.deterministic", default=False)
+    if not isinstance(value, bool):
+        raise ValueError("evaluation.deterministic must be a boolean")
+    return value
 
 
 def build_sb3_provider(model: Any, input_schema_version: str) -> DecisionProvider:

@@ -1,4 +1,4 @@
-"""Deterministic in-sample activity admissibility for completed training runs."""
+"""In-sample activity admissibility for completed training runs."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ def assess_train_activity(
     minimum_trades: int = 1,
     sparse_warning_below: int = 5,
 ) -> dict[str, object]:
-    """Classify completed deterministic training trades independently of survival."""
+    """Classify completed train-replay trades independently of survival."""
     if isinstance(n_trades, bool) or not isinstance(n_trades, int) or n_trades < 0:
         raise ValueError("n_trades must be a non-negative integer")
     if minimum_trades < 1:
@@ -28,7 +28,7 @@ def assess_train_activity(
         "minimum_trades": minimum_trades,
         "status": status,
         "warning": sparse,
-        "reason": "zero_deterministic_train_trades" if not active else "",
+        "reason": "zero_train_replay_trades" if not active else "",
     }
 
 
@@ -37,7 +37,7 @@ def classify_zero_trade_cause(
     entry_state: dict[str, Any] | None = None,
     entry_diag: dict[str, Any] | None = None,
 ) -> str | None:
-    """Use existing funnel counters to label a zero-trade deterministic replay."""
+    """Use existing funnel counters to label a zero-trade replay."""
     if n_trades > 0:
         return None
     state = entry_state or {}
