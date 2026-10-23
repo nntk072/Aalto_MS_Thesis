@@ -22,6 +22,7 @@ from training.callbacks.activity import assess_train_activity
 from training.configuration.cli import load_merged_config, parse_train_args
 from training.runner.reporting_runtime import finalize_training_run
 from training.runner.seed import _setup_rngs
+from training.runner.seed_runtime import SeedRunner
 from training.setup.environments import _training_episodic, cost_model
 from training.setup.models import _initialize_value_head
 
@@ -32,6 +33,17 @@ def test_training_episode_mode_defaults_to_full_split() -> None:
         _training_episodic(SimpleNamespace(training={"episode_mode": "full_split"}, env={}))
         is False
     )
+
+
+def test_bundle_viability_factory_uses_spec_after_training_frames_are_released() -> None:
+    from simulation.environment.worker import make_bundle_env
+
+    env_spec = SimpleNamespace(bundle_dir="shared/train")
+
+    factory = SeedRunner._bundle_eval_factory(env_spec)
+
+    assert factory.func is make_bundle_env
+    assert factory.args == (env_spec,)
 
 
 def test_training_episode_mode_can_preserve_legacy_risk_terminated_behavior() -> None:

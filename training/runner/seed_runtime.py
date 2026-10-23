@@ -107,6 +107,13 @@ class SeedRunner:
         self.model_path: Path | None = None
         self.provider: DecisionProvider | None = None
 
+    @staticmethod
+    def _bundle_eval_factory(env_spec: Any) -> Any:
+        """Build an evaluation factory from a bundle after source frames are released."""
+        from simulation.environment.worker import make_bundle_env
+
+        return partial(make_bundle_env, env_spec)
+
     def prepare_training(self) -> PreparedSeedRun:
         ctx = self.context
         args = ctx.preparation.configuration.args
@@ -311,6 +318,7 @@ class SeedRunner:
         obs_mmap = ctx.preparation.run_assets.obs_mmap
         bundle_path = ctx.preparation.run_assets.bundle_path
         train_env_spec = ctx.preparation.run_assets.train_env_spec
+        train_eval_spec = ctx.preparation.run_assets.train_eval_spec
         cache_dir = ctx.preparation.data.cache_dir
         feat_cache = ctx.preparation.data.feat_cache
         primary_ticks = ctx.preparation.data.primary_ticks
@@ -368,21 +376,28 @@ class SeedRunner:
         # Deterministic viability checks cover the complete chronological
         # training split. Keep the short prefix above for inexpensive checkpoint
         # ranking and the existing dashboard for frequent stochastic feedback.
-        viability_eval_factory = partial(
-            make_env,
-            train_bars,
-            train_feat,
-            cfg,
-            algo=args.algo,
-            reward=args.reward,
-            episodic=False,
-            use_vae=args.use_vae,
-            vae=env_vae,
-            pre_ny_by_date=pre_ny_by_date,
-            obs_features_mmap=obs_mmap,
-            tickbook=ticks_covering(primary_ticks, train_bars),
-            arch=args.arch,
-        )
+        if train_eval_spec is not None:
+            viability_eval_factory = self._bundle_eval_factory(train_eval_spec)
+        else:
+            if train_bars is None or train_feat is None:
+                raise RuntimeError(
+                    "frame-based viability evaluation requires training bars and features"
+                )
+            viability_eval_factory = partial(
+                make_env,
+                train_bars,
+                train_feat,
+                cfg,
+                algo=args.algo,
+                reward=args.reward,
+                episodic=False,
+                use_vae=args.use_vae,
+                vae=env_vae,
+                pre_ny_by_date=pre_ny_by_date,
+                obs_features_mmap=obs_mmap,
+                tickbook=ticks_covering(primary_ticks, train_bars),
+                arch=args.arch,
+            )
 
         best_eval_freq = max(1, min(5_000_000, timesteps))
         best_cb = BestCheckpointEvalCallback(
