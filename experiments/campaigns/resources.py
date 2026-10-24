@@ -140,14 +140,21 @@ def worker_command(
     cpus: int,
     gpu_count: int = 1,
     gpu_id: int = 0,
+    available_gpu_count: int | None = None,
     cpu_mask: str | None = None,
     expected_cpu_ids: list[int] | None = None,
     step_cpus: int | None = None,
 ) -> list[str]:
-    """Build an allocation-local or explicitly GPU-pinned Slurm worker command."""
+    """Build a worker request with per-worker GPU count and allocation GPU index."""
     if node is None:
         return command
-    if gpu_count < 0 or (gpu_count and not 0 <= gpu_id < gpu_count):
+    visible_gpu_count = gpu_count if available_gpu_count is None else available_gpu_count
+    if (
+        gpu_count < 0
+        or visible_gpu_count < 0
+        or (gpu_count > 0 and visible_gpu_count == 0)
+        or (visible_gpu_count > 0 and not 0 <= gpu_id < visible_gpu_count)
+    ):
         raise ValueError("worker GPU count or binding index is invalid")
     if (cpu_mask is None) != (expected_cpu_ids is None):
         raise ValueError("CPU mask and expected CPU IDs must be provided together")

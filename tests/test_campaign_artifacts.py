@@ -20,13 +20,18 @@ SPEC.loader.exec_module(controller)
 
 
 def test_worker_command_binds_one_gpu_from_shared_allocation() -> None:
+    from compute.slurm.worker_dispatch import _parse_srun
+
     command = controller.worker_command(
         ["bash", "scripts/research/frozen-launches/train_one_variant.sh"],
         node="gpuarm2",
         gpu_type="gh200",
         cpus=7,
-        gpu_count=2,
+        gpu_count=1,
         gpu_id=1,
+        available_gpu_count=2,
+        cpu_mask="0x7f",
+        expected_cpu_ids=list(range(7)),
         step_cpus=48,
     )
 
@@ -37,11 +42,14 @@ def test_worker_command_binds_one_gpu_from_shared_allocation() -> None:
         "--ntasks=1",
         "--nodelist=gpuarm2",
         "--cpus-per-task=48",
-        "--gpus=gh200:2",
+        "--gpus=gh200:1",
         "--gpu-bind=map_gpu:1",
-        "--cpu-bind=cores",
+        "--cpu-bind=mask_cpu:0x7f",
     ]
     assert command[9:11] == ["--chdir", str(controller.ROOT)]
+    parsed = _parse_srun(command[1:])
+    assert parsed["gpu_count"] == 1
+    assert parsed["gpu_id"] == 1
 
 
 def test_worker_command_uses_explicit_cpu_mask_when_provided() -> None:
