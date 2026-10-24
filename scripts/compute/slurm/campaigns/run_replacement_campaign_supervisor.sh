@@ -109,7 +109,13 @@ while true; do
     --job-name=thesis18new \
     --export=ALL,TRITON_REPO="$REPO",CAMPAIGN_SPEC="$SPEC",CAMPAIGN_ID="$CAMPAIGN_ID" \
     --chdir="$REPO" \
-    bash "$REPO/scripts/compute/slurm/campaigns/run_replacement_campaign_allocation.sh"
+    /bin/bash -c '
+      set -euo pipefail
+      allocation_script="$1"
+      printf "allocation shell host=%s bash=%s script=%s\\n" "$(hostname -s)" "$BASH_VERSION" "$allocation_script"
+      /bin/bash -n "$allocation_script"
+      exec /bin/bash "$allocation_script"
+    ' thesis-allocation "$REPO/scripts/compute/slurm/campaigns/run_replacement_campaign_allocation.sh"
   request_status=$?
   set -e
   echo "$(date --iso-8601=seconds) allocation returned exit=$request_status"

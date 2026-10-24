@@ -86,6 +86,10 @@ def test_resolver_matches_legacy_config(name: str) -> None:
     diff = {k for k in set(legacy) | set(new) if legacy.get(k) != new.get(k)}
     expected_diff = set(EXPECTED_DIFF_KEYS)
     resolved = resolve_variant(name, vae_path="placeholder.pth")
+    if name.endswith("_qgrid025"):
+        expected_diff.update({"data.cache_dir", "data.price_discretization.enabled"})
+        assert str(new["data.cache_dir"]).endswith("train_test_2025_2026_qgrid025_v1")
+        assert new["data.price_discretization.enabled"] is True
     if resolved["strategy"] == "baseline":
         assert new["strategy.name"] == "baseline"
         if legacy.get("strategy.name") != new.get("strategy.name"):

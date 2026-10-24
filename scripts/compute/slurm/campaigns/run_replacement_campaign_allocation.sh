@@ -46,8 +46,10 @@ if [[ "${SLURM_PROCID:-0}" != "0" ]]; then
       sleep 10
     done
     [[ ! -e "$GATE_DIR/abort" ]] || exit 1
-    while [[ ! -e "$GATE_CONTINUE" && ! -e "$GATE_DIR/abort" ]]; do sleep 10; done
-    [[ ! -e "$GATE_DIR/abort" ]] || exit 1
+    while [[ ! -e "$GATE_CONTINUE" ]]; do
+      if [[ -e "$GATE_DIR/abort" ]]; then exit 1; fi
+      sleep 10
+    done
   fi
   exec python "$REPO/compute/slurm/worker_dispatch.py" --manager \
     >>"$OUT_DIR/logs/worker_manager_$(hostname -s)_${SLURM_JOB_ID}.log" 2>&1
@@ -90,6 +92,10 @@ if [[ ! -s "$OUT_DIR/campaign.json" ]]; then
     tests/test_train/test_equity_gate.py \
     tests/test_train/test_variant_resolver.py \
     tests/test_train/test_variant_overrides_match_legacy.py \
+    tests/test_data/test_price_grid.py \
+    tests/test_data/test_pipeline_splits.py \
+    tests/test_ticks.py \
+    tests/test_triton_prebuild_cache.py \
     tests/test_matrix_campaign_controller.py \
     tests/test_campaign_artifacts.py \
     tests/test_eval/test_eval_run_provenance.py \
@@ -111,8 +117,10 @@ if [[ ! -s "$OUT_DIR/campaign.json" ]]; then
     rm -f "$GATE_DIR/retry" "$GATE_STATUS"
   done
 
-  while [[ ! -e "$GATE_CONTINUE" && ! -e "$GATE_DIR/abort" ]]; do sleep 10; done
-  [[ ! -e "$GATE_DIR/abort" ]] || exit 1
+  while [[ ! -e "$GATE_CONTINUE" ]]; do
+    if [[ -e "$GATE_DIR/abort" ]]; then exit 1; fi
+    sleep 10
+  done
 fi
 
 python3 - "$DONE" <<'PY'

@@ -173,7 +173,12 @@ def test_sizing_limit_stays_below_hard_per_trade_guardrail() -> None:
             "trading_policy": {"mode": "legacy"},
             "account": {"initial_balance": 100_000.0},
             "env": {"strategy_actions": True},
-            "ftmo": {"risk_per_trade_limit": 1_000.0, "risk_sizing_limit_usd": 900.0},
+            "ftmo": {
+                "daily_loss_limit": 5_000.0,
+                "max_loss_limit": 10_000.0,
+                "risk_per_trade_limit": 1_000.0,
+                "risk_sizing_limit_usd": 900.0,
+            },
         }
     )
 
