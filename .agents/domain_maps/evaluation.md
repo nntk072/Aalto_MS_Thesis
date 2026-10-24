@@ -47,9 +47,13 @@ Purged walk-forward split construction lives in `market_data/splits/walkforward.
 ## Key Symbols
 
 For a reusable thesis campaign report, run
-`uv run python scripts/research/thesis/evaluation/report_variant_details.py --campaign-dir <campaign>`
-on a suitable compute node. It writes `reports/variant_details.md` and JSON beside it,
-renders readable parameter tables, and fails if required figures or image links are unavailable.
+`python scripts/research/thesis/evaluation/report_variant_details.py --campaign-dir <campaign>`
+on a suitable compute node. It writes `reports/project_results_report.md` and JSON,
+plus a standalone Mermaid pipeline diagram. The report explains the saved input/cache identity,
+source revisions, run split, model/training settings, evaluation protocol, trade results,
+and linked plots. It reads manifests and existing run artifacts; it does not train or replay
+the policy. It marks missing metadata as unrecorded and fails if required figures or image
+links are unavailable.
 
 | Symbol | File | Purpose |
 |--------|------|---------|

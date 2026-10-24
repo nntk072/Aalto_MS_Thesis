@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Render compact, per-variant campaign details from saved run artifacts.
+"""Render project-to-result campaign reports from saved run artifacts.
 
 The report is intentionally artifact-driven: it does not load checkpoints, replay
 markets, or infer values that were not saved. It writes JSON for programmatic use
-and Markdown for inspection, keeping large trade tables out of chat context.
+and Markdown for inspection, including data/cache lineage, code architecture,
+model setup, metrics, trade records, and generated figures.
 """
 
 from __future__ import annotations
@@ -17,12 +18,17 @@ import math
 import os
 import re
 import statistics
+import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[4]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 
 def _json(path: Path) -> dict[str, Any] | None:
@@ -823,7 +829,7 @@ def _markdown_metric(detail: dict[str, Any] | None, name: str) -> str:
 
 def _markdown(report: dict[str, Any], campaign_dir: Path, be_tolerance: float) -> str:
     lines = [
-        "# Training and evaluation report",
+        "# Project, training, and evaluation report",
         "",
         f"Campaign: `{report['campaign_id']}`  ",
         f"Campaign fingerprint: `{report.get('fingerprint') or 'Not recorded in campaign manifest'}`  ",
@@ -832,11 +838,22 @@ def _markdown(report: dict[str, Any], campaign_dir: Path, be_tolerance: float) -
         f"Break-even means an explicit break-even exit or absolute net PnL no greater than {_display(be_tolerance)} account-currency units.",
         "Training and testing sections are kept separate; interpretation should follow the saved split configuration.",
         "",
-        "## Variant summary",
-        "",
-        "| Variant | Seed | Run status | Peak-DD policy used in training | Train return | Train max DD | Train trades | Train gate | Test return | Test max DD | Test trades |",
-        "|---|---:|---|---|---:|---:|---:|---|---:|---:|---:|",
     ]
+    project_context = report.get("project_context")
+    if isinstance(project_context, dict):
+        from scripts.research.thesis.evaluation.project_report_markdown import (
+            render_project_context,
+        )
+
+        lines.extend([render_project_context(project_context), ""])
+    lines.extend(
+        [
+            "## Variant summary",
+            "",
+            "| Variant | Seed | Run status | Peak-DD policy used in training | Train return | Train max DD | Train trades | Train gate | Test return | Test max DD | Test trades |",
+            "|---|---:|---|---|---:|---:|---:|---|---:|---:|---:|",
+        ]
+    )
     for variant in report["variants"]:
         splits = variant.get("splits", {})
         train = splits.get("training") if isinstance(splits, dict) else None
@@ -1192,8 +1209,12 @@ def build_report(
     variants.sort(key=variant_order)
     if not variants:
         raise ValueError(f"campaign manifest contains no jobs with reportable keys: {campaign_dir}")
+    from scripts.research.thesis.evaluation.project_report_context import (
+        build_project_context,
+    )
+
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "campaign_id": campaign_dir.name,
         "fingerprint": campaign.get("fingerprint"),
         "campaign_git_sha": campaign.get("git_sha"),
@@ -1202,6 +1223,13 @@ def build_report(
         "be_tolerance_account_currency": be_tolerance,
         "example_split": example_split,
         "variants": variants,
+        "project_context": build_project_context(
+            campaign_dir,
+            campaign,
+            variants,
+            report_dir,
+            _PROJECT_ROOT,
+        ),
     }
 
 
@@ -1862,7 +1890,11 @@ def _validate_markdown_images(markdown: str, report_dir: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--campaign-dir", required=True, type=Path)
-    parser.add_argument("--out-stem", type=Path, help="default: <campaign>/reports/variant_details")
+    parser.add_argument(
+        "--out-stem",
+        type=Path,
+        help="default: <campaign>/reports/project_results_report",
+    )
     parser.add_argument(
         "--be-tolerance",
         type=float,
@@ -1874,10 +1906,20 @@ def main() -> int:
     if args.be_tolerance < 0 or not math.isfinite(args.be_tolerance):
         parser.error("--be-tolerance must be finite and non-negative")
     campaign_dir = args.campaign_dir.resolve()
-    out_stem = args.out_stem or campaign_dir / "reports" / "variant_details"
+    out_stem = args.out_stem or campaign_dir / "reports" / "project_results_report"
     out_stem.parent.mkdir(parents=True, exist_ok=True)
     report_dir = out_stem.parent.resolve()
     report = build_report(campaign_dir, args.be_tolerance, args.example_split, report_dir)
+    diagram_path = out_stem.with_name(f"{out_stem.stem}_pipeline_architecture.mmd")
+    project_context = report.get("project_context")
+    if isinstance(project_context, dict):
+        project_context["pipeline_diagram_file"] = diagram_path.name
+        diagram_path.write_text(
+            str(project_context.get("pipeline_diagram", "")).rstrip() + "\n",
+            encoding="utf-8",
+        )
+        if not diagram_path.is_file() or diagram_path.stat().st_size == 0:
+            raise RuntimeError(f"pipeline architecture diagram is missing or empty: {diagram_path}")
     _plot_training_diagnostics(
         report,
         campaign_dir,
@@ -1899,9 +1941,10 @@ def main() -> int:
         json.dumps(report, indent=2, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8"
     )
     markdown_path.write_text(markdown, encoding="utf-8")
-    print(f"Detailed report created for {len(report['variants'])} variants.")
+    print(f"Project and campaign report created for {len(report['variants'])} variants.")
     print(f"Markdown: {markdown_path}")
     print(f"JSON: {json_path}")
+    print(f"Pipeline diagram: {diagram_path}")
     print(
         "Trade examples: up to five typical winners, losers, and BE trades per selected split and variant."
     )
