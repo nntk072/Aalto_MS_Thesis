@@ -86,22 +86,44 @@ def finalize_training_run(
     failed_survival_seeds = [
         int(result["seed"]) for result in seed_results if not bool(result["train_gate"]["ok"])
     ]
+    policy_fit_miss_seeds = [
+        int(result["seed"])
+        for result in seed_results
+        if _peak_dd_policy_missed(result["train_gate"])
+    ]
+    hard_survival_failure_seeds = [
+        int(result["seed"])
+        for result in seed_results
+        if not bool(result["train_gate"].get("ok"))
+        and not _peak_dd_policy_only_miss(result["train_gate"])
+    ]
     aborts = {
         str(result["seed"]): str(result["abort_reason"])
         for result in seed_results
         if result["abort_reason"]
     }
     training_admissible = not (inactive_seeds or failed_survival_seeds or aborts)
-    if failed_survival_seeds:
-        overall_status = "FAIL_SURVIVAL"
-    elif inactive_seeds:
-        overall_status = "FAIL_INACTIVE"
-    elif any("nonfinite" in reason.lower() for reason in aborts.values()):
+    training_completed_by_seed = {
+        str(result["seed"]): int(result.get("model_num_timesteps", 0)) >= int(timesteps)
+        for result in seed_results
+    }
+    training_completed = (
+        bool(seed_results) and all(training_completed_by_seed.values()) and not aborts
+    )
+    if any("nonfinite" in reason.lower() for reason in aborts.values()):
         overall_status = "FAIL_NUMERICAL"
     elif aborts:
         overall_status = "FAIL_EARLY_ABORT"
+    elif hard_survival_failure_seeds:
+        overall_status = "FAIL_SURVIVAL"
+    elif inactive_seeds:
+        overall_status = "FAIL_INACTIVE"
+    elif policy_fit_miss_seeds and training_completed:
+        overall_status = "COMPLETED_POLICY_MISS_RETRAIN_REQUIRED"
+    elif policy_fit_miss_seeds:
+        overall_status = "INCOMPLETE_POLICY_MISS"
     else:
-        overall_status = "PASS_ACTIVE"
+        overall_status = "PASS_ACTIVE" if training_completed else "INCOMPLETE"
     training_log["train_activity_ok"] = not inactive_seeds
     training_log["train_survival_ok"] = not failed_survival_seeds
     training_log["train_activity_ok_by_seed"] = {
@@ -155,6 +177,31 @@ def finalize_training_run(
         ]
     training_log["inactive_seeds"] = inactive_seeds
     training_log["failed_survival_seeds"] = failed_survival_seeds
+    training_log["hard_survival_failure_seeds"] = hard_survival_failure_seeds
+    training_log["hard_risk_ok_by_seed"] = {
+        str(result["seed"]): bool(
+            result["train_gate"].get(
+                "hard_risk_ok", not result["train_gate"].get("breached", False)
+            )
+        )
+        for result in seed_results
+    }
+    training_log["policy_fit_miss_seeds"] = policy_fit_miss_seeds
+    training_log["policy_fit_status"] = (
+        "MISS"
+        if policy_fit_miss_seeds
+        else (
+            "DISABLED"
+            if all(
+                float(result["train_gate"].get("peak_trailing_dd_limit", 0.0)) <= 0.0
+                for result in seed_results
+            )
+            else "PASS"
+        )
+    )
+    training_log["training_completed_by_seed"] = training_completed_by_seed
+    training_log["training_completed"] = training_completed
+    training_log["retraining_recommended"] = bool(policy_fit_miss_seeds and training_completed)
     training_log["early_abort_reasons_by_seed"] = aborts
     training_log["training_admissible"] = training_admissible
     training_log["overall_status"] = overall_status
@@ -189,8 +236,8 @@ def finalize_training_run(
         json.dumps(training_log["feature_columns"], separators=(",", ":")).encode()
     ).hexdigest()
     (run_dir / "training_log.json").write_text(json.dumps(training_log, indent=2))
-    if failed_survival_seeds:
-        raise SystemExit(f"TRAIN_SURVIVAL_FAILED: seeds={failed_survival_seeds}")
+    if hard_survival_failure_seeds:
+        raise SystemExit(f"TRAIN_SURVIVAL_FAILED: seeds={hard_survival_failure_seeds}")
     if inactive_seeds:
         raise SystemExit(f"TRAIN_ACTIVITY_FAILED: zero train-replay trades; seeds={inactive_seeds}")
     if aborts:
@@ -238,3 +285,20 @@ def finalize_training_run(
         wandb.finish()
 
     return training_log
+
+
+def _peak_dd_policy_missed(gate: dict[str, Any]) -> bool:
+    """Identify policy non-fit even when another hard-risk condition also failed."""
+    reasons = {part.strip() for part in str(gate.get("reason", "")).split(",") if part.strip()}
+    return "peak_trailing_dd" in reasons
+
+
+def _peak_dd_policy_only_miss(gate: dict[str, Any]) -> bool:
+    """Separate a DD-only policy miss from a hard-risk or malformed-gate failure."""
+    reasons = {part.strip() for part in str(gate.get("reason", "")).split(",") if part.strip()}
+    return (
+        not bool(gate.get("ok"))
+        and "peak_trailing_dd" in reasons
+        and not bool(gate.get("breached"))
+        and "max_loss_stopped_trading" not in reasons
+    )

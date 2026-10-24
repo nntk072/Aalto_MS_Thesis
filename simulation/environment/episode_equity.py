@@ -27,15 +27,18 @@ def assess_equity_snapshot(
     breached: bool,
     peak_trailing_dd_limit: float = 0.0,
 ) -> dict[str, Any]:
-    """Evaluate configured survival limits and retain all equity diagnostics."""
+    """Report policy fit and hard-risk survival separately with equity diagnostics."""
     end = float(end_equity)
     start = float(initial)
     drawdown = float(max_peak_trailing_dd)
     drawdown_limit = float(peak_trailing_dd_limit)
+    peak_dd_policy_enabled = drawdown_limit > 0.0
+    peak_dd_policy_ok = not peak_dd_policy_enabled or drawdown <= drawdown_limit
+    hard_risk_ok = not breached
     reasons: list[str] = []
-    if drawdown_limit > 0.0 and drawdown > drawdown_limit:
+    if not peak_dd_policy_ok:
         reasons.append("peak_trailing_dd")
-    if breached:
+    if not hard_risk_ok:
         reasons.append("max_loss_stopped_trading")
     return {
         "ok": not reasons,
@@ -44,6 +47,9 @@ def assess_equity_snapshot(
         "slope": float(slope),
         "max_peak_trailing_dd": drawdown,
         "peak_trailing_dd_limit": drawdown_limit,
+        "peak_dd_policy_enabled": peak_dd_policy_enabled,
+        "peak_dd_policy_ok": peak_dd_policy_ok,
+        "hard_risk_ok": hard_risk_ok,
         "breached": bool(breached),
         "reason": "ok" if not reasons else ",".join(reasons),
     }
@@ -56,11 +62,12 @@ def assess_train_equity(
     breached: bool,
     peak_trailing_dd_limit: float = 0.0,
 ) -> dict[str, Any]:
-    """Return the hard loss-cap survival gate plus PnL/drawdown metrics.
+    """Return policy-fit and hard-risk diagnostics plus PnL/drawdown metrics.
 
-    ``peak_trailing_dd_limit`` activates the same drawdown policy used by the
-    environment. With a zero limit, measured drawdown is report-only. An actual
-    hard loss-cap breach always fails this survival check.
+    ``peak_trailing_dd_limit`` activates the environment's peak-drawdown
+    behavior and reports whether the path fit that policy. With a zero limit,
+    measured drawdown is report-only. A policy miss is a diagnostic, not a
+    reason to stop PPO optimization.
     """
     if equity is None or len(equity) == 0:
         return {
@@ -70,6 +77,9 @@ def assess_train_equity(
             "slope": 0.0,
             "max_peak_trailing_dd": 0.0,
             "peak_trailing_dd_limit": float(peak_trailing_dd_limit),
+            "peak_dd_policy_enabled": float(peak_trailing_dd_limit) > 0.0,
+            "peak_dd_policy_ok": float(peak_trailing_dd_limit) <= 0.0,
+            "hard_risk_ok": not bool(breached),
             "breached": bool(breached),
             "reason": "empty_equity",
         }

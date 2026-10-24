@@ -34,7 +34,7 @@ def test_callback_returns_false_when_the_window_fails() -> None:
     }
     assert cb.on_step() is False
     assert cb.reason is not None
-    assert cb.reason.startswith("equity_gate:")
+    assert cb.reason == "equity_gate:max_loss_stopped_trading"
 
 
 def test_callback_stops_on_a_nonfinite_rollout_metric() -> None:

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from simulation.environment.episode_equity import assess_equity_snapshot
-
 
 def decide_early_abort(
     episodes: list[dict[str, Any]],
@@ -20,9 +18,9 @@ def decide_early_abort(
 ) -> str | None:
     """Return a stop reason, or ``None`` to keep training.
 
-    Non-finite metrics stop immediately. Optional no-trade stops and survival
-    gate stops wait until ``min_timesteps`` and require every episode in the
-    last ``window`` to fail. One episode that passes survival keeps training.
+    Non-finite metrics stop immediately. Optional no-trade stops and hard-risk
+    stops wait until ``min_timesteps`` and require every episode in the last
+    ``window`` to fail. A peak-drawdown policy miss never stops optimization.
     """
     if stop_on_nonfinite and nonfinite:
         return "nonfinite"
@@ -33,25 +31,14 @@ def decide_early_abort(
     recent = episodes[-int(window) :]
     if stop_on_no_trades and all(int(ep.get("n_trades", 0)) == 0 for ep in recent):
         return "no_trades"
-    if stop_on_equity_gate and all(not _episode_passes_gate(ep) for ep in recent):
-        reasons = ",".join(_episode_gate(ep)["reason"] for ep in recent)
-        return f"equity_gate:{reasons}"
+    if stop_on_equity_gate and all(_episode_has_hard_breach(ep) for ep in recent):
+        return "equity_gate:max_loss_stopped_trading"
     return None
 
 
-def _episode_gate(ep: dict[str, Any]) -> dict[str, Any]:
-    return assess_equity_snapshot(
-        end_equity=float(ep.get("end_equity", ep.get("start_equity", 0.0))),
-        initial=float(ep.get("start_equity", 0.0)),
-        slope=float(ep.get("slope", 0.0)),
-        max_peak_trailing_dd=float(ep.get("max_peak_trailing_dd", 0.0)),
-        peak_trailing_dd_limit=float(ep.get("peak_trailing_dd_limit", 0.0)),
-        breached=bool(ep.get("breach_reason") or ep.get("breached")),
-    )
-
-
-def _episode_passes_gate(ep: dict[str, Any]) -> bool:
-    return bool(_episode_gate(ep)["ok"])
+def _episode_has_hard_breach(ep: dict[str, Any]) -> bool:
+    """Detect hard account breaches without using peak-DD fit as a stop."""
+    return bool(ep.get("breach_reason") or ep.get("breached"))
 
 
 __all__ = ["decide_early_abort"]

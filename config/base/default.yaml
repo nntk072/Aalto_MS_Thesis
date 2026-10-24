@@ -471,7 +471,7 @@ training:
     window: 4
     stop_on_nonfinite: true
     stop_on_no_trades: false
-    stop_on_equity_gate: false
+    stop_on_equity_gate: false  # hard-risk breaches only; peak-DD policy never stops PPO
   # Terminal block during learn(). Eval is a short sampled-action train-prefix monitor.
   dashboard:
     enabled: true

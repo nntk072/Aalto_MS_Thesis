@@ -117,7 +117,7 @@ def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path
         },
         train_metrics=train_metrics,
         test_metrics=test_metrics,
-        train_gate={"ok": False, "reason": "max_loss_stopped_trading"},
+        train_gate={"ok": False, "breached": True, "reason": "max_loss_stopped_trading"},
         train_activity_gate=assess_train_activity(train_metrics.n_trades),
         account_currency="USD",
     )
@@ -134,6 +134,7 @@ def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path
     assert train["equity_gate"]["ok"] is False
     assert train["activity_gate"]["status"] == "ACTIVE"
     assert train["zero_trade_diagnosis"] is None
+    assert train["peak_dd_policy_fit"]["status"] == "DISABLED"
     assert test["role"] == "report_only_test_evaluation"
     assert test["policy_action_mode"] == "stochastic"
     assert test["action_rng_seed"] == 42
@@ -145,7 +146,81 @@ def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path
     assert test["episode_end_reason"] == "max_episode_steps"
     assert "| Test (report-only; previously inspected) | -6.76% | -6760.00 USD |" in summary
     assert "Both final replays use stochastic policy actions, matching PPO training." in summary
+    assert "Peak-DD training policy: DISABLED" in summary
+    assert "Hard-risk survival: FAIL" in summary
     assert json.loads((evaluation_dir / "summary.json").read_text())["training_admissible"] is False
+
+
+def test_peak_dd_policy_miss_does_not_fail_completed_training_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import training.runner.reporting_runtime as reporting_runtime
+
+    monkeypatch.setattr(reporting_runtime, "_build_training_log", lambda **_kwargs: {})
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "config.yaml").write_text("effective: true\n")
+    feature_cache = tmp_path / "features.parquet"
+    Path(f"{feature_cache}.hash").write_text("feature-hash\n")
+    result = {
+        "seed": 50,
+        "test_m": object(),
+        "test_result": {},
+        "train_gate": {
+            "ok": False,
+            "end_equity": 102_000.0,
+            "slope": 0.0,
+            "max_peak_trailing_dd": 0.101,
+            "peak_trailing_dd_limit": 0.10,
+            "breached": False,
+            "reason": "peak_trailing_dd",
+        },
+        "train_activity_gate": assess_train_activity(2),
+        "train_result": {
+            "entry_state_diagnostics": {"entry_state_machine": True, "candidate_created": 2},
+            "entry_diag": {},
+        },
+        "abort_reason": None,
+        "model_num_timesteps": 2_007_040,
+        "best_checkpoint_status": "ACTIVE",
+        "best_checkpoint_n_trades": 2,
+        "deterministic_viability_evaluations": [],
+        "phase_timings_seconds": {},
+        "run_manifest": "manifest.json",
+    }
+    cfg = SimpleNamespace(env={}, strategy={})
+    args = SimpleNamespace(
+        strategy="baseline",
+        mvp=False,
+        seed=50,
+        algo="ppo",
+        arch="tcn",
+        reward="dsr",
+        wandb=False,
+        allow_locked_oos_for_selection=False,
+    )
+
+    training_log = finalize_training_run(
+        cfg=cfg,
+        args=args,
+        is_multi_seed=False,
+        seed_results=[result],
+        timesteps=2_000_000,
+        train_bar_count=100,
+        test_bar_count=50,
+        run_dir=run_dir,
+        feat_cache=feature_cache,
+        feature_columns=["close"],
+        seeds=[50],
+    )
+
+    assert training_log["training_completed"] is True
+    assert training_log["training_admissible"] is False
+    assert training_log["overall_status"] == "COMPLETED_POLICY_MISS_RETRAIN_REQUIRED"
+    assert training_log["policy_fit_miss_seeds"] == [50]
+    assert training_log["hard_survival_failure_seeds"] == []
+    assert training_log["hard_risk_ok_by_seed"] == {"50": True}
+    assert training_log["retraining_recommended"] is True
 
 
 def test_zero_train_trades_fail_closed_after_a_survival_pass(

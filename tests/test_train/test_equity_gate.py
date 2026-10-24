@@ -47,7 +47,7 @@ def test_peak_drawdown_over_ten_percent_is_reported_but_not_a_gate() -> None:
 
 
 @pytest.mark.unit
-def test_configured_peak_drawdown_limit_is_a_training_gate() -> None:
+def test_configured_peak_drawdown_limit_reports_policy_miss() -> None:
     eq = pd.Series([100_000.0, 120_000.0, 107_500.0])
     result = assess_train_equity(
         eq,
@@ -57,6 +57,9 @@ def test_configured_peak_drawdown_limit_is_a_training_gate() -> None:
     )
     assert result["ok"] is False
     assert result["reason"] == "peak_trailing_dd"
+    assert result["peak_dd_policy_enabled"] is True
+    assert result["peak_dd_policy_ok"] is False
+    assert result["hard_risk_ok"] is True
     assert result["max_peak_trailing_dd"] == pytest.approx(0.10416666666666667)
     assert result["peak_trailing_dd_limit"] == 0.10
 
@@ -251,7 +254,7 @@ def test_early_abort_does_not_stop_for_peak_drawdown_alone() -> None:
 
 
 @pytest.mark.unit
-def test_early_abort_uses_configured_peak_drawdown_limit() -> None:
+def test_early_abort_does_not_stop_on_configured_peak_drawdown_miss() -> None:
     episodes = [
         {
             "end_equity": 100_000.0,
@@ -270,9 +273,9 @@ def test_early_abort_uses_configured_peak_drawdown_limit() -> None:
         min_timesteps=5_000_000,
         window=4,
         nonfinite=False,
+        stop_on_equity_gate=True,
     )
-    assert reason is not None
-    assert reason.startswith("equity_gate:peak_trailing_dd")
+    assert reason is None
 
 
 @pytest.mark.unit

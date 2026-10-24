@@ -536,7 +536,7 @@ def _split_report(
         "metrics": metrics,
         "peak_trailing_dd_limit": peak_dd_limit,
         "peak_drawdown_policy": (
-            f"Active {peak_dd_limit:.1%} environment ceiling and survival check"
+            f"Active {peak_dd_limit:.1%} environment policy; policy fit is reported separately"
             if peak_dd_limit > 0.0
             else "Disabled; measured peak drawdown is report-only"
         ),
@@ -772,7 +772,7 @@ def _training_report(run_dir: Path, resolved: dict[str, Any] | None) -> dict[str
         "figures": figures,
         "peak_trailing_dd_limit": peak_dd_limit,
         "peak_drawdown_policy": (
-            f"Active {peak_dd_limit:.1%} training environment policy and survival check"
+            f"Active {peak_dd_limit:.1%} training environment policy; fit is reported separately from optimizer completion"
             if peak_dd_limit > 0.0
             else "Disabled during training; measured drawdown is report-only"
         ),

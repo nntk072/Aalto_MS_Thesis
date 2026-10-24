@@ -74,6 +74,19 @@ def _write_evaluation_artifacts(
     )
     train_payload["equity_gate"] = train_gate
     train_payload["activity_gate"] = train_activity_gate
+    peak_dd_limit = float(train_gate.get("peak_trailing_dd_limit", 0.0))
+    peak_dd_observed = float(train_gate.get("max_peak_trailing_dd", 0.0))
+    peak_dd_enabled = peak_dd_limit > 0.0
+    peak_dd_policy_ok = not peak_dd_enabled or peak_dd_observed <= peak_dd_limit
+    hard_risk_ok = bool(train_gate.get("hard_risk_ok", not train_gate.get("breached", False)))
+    peak_dd_policy_fit = {
+        "enabled": peak_dd_enabled,
+        "status": "DISABLED" if not peak_dd_enabled else ("PASS" if peak_dd_policy_ok else "MISS"),
+        "limit": peak_dd_limit,
+        "observed": peak_dd_observed,
+        "retraining_recommended": peak_dd_enabled and not peak_dd_policy_ok,
+    }
+    train_payload["peak_dd_policy_fit"] = peak_dd_policy_fit
     train_payload["zero_trade_diagnosis"] = classify_zero_trade_cause(
         int(train_metrics.n_trades),
         train_result.get("entry_state_diagnostics"),
@@ -97,6 +110,8 @@ def _write_evaluation_artifacts(
         "training_in_sample": train_payload,
         "test_report_only": test_payload,
         "train_equity_gate": train_gate,
+        "peak_dd_policy_fit": peak_dd_policy_fit,
+        "hard_risk_ok": hard_risk_ok,
         "train_activity_gate": train_activity_gate,
         "train_survival_ok": bool(train_gate.get("ok")),
         "train_activity_ok": bool(train_activity_gate.get("ok")),
@@ -143,7 +158,20 @@ def _write_evaluation_artifacts(
         line("Train (in-sample)", train_payload),
         line("Test (report-only; previously inspected)", test_payload),
         "",
-        f"Train equity gate: {'PASS' if train_gate.get('ok') else 'FAIL'}",
+        f"Hard-risk survival: {'PASS' if hard_risk_ok else 'FAIL'}",
+        (
+            "Peak-DD training policy: DISABLED"
+            if not peak_dd_enabled
+            else (
+                f"Peak-DD training policy: {'PASS' if peak_dd_policy_ok else 'MISS'} "
+                f"(observed {peak_dd_observed:.2%}; limit {peak_dd_limit:.2%}). "
+                + (
+                    "Training completed; another training iteration is recommended."
+                    if not peak_dd_policy_ok
+                    else ""
+                )
+            )
+        ),
         f"Train activity gate: {train_activity_gate['status']} "
         f"(trades={train_activity_gate['n_trades']})",
         f"Zero-trade diagnosis: {train_payload['zero_trade_diagnosis'] or 'none'}",

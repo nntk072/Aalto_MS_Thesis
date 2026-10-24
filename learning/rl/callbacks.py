@@ -765,11 +765,12 @@ if _SB3_AVAILABLE:
             return True
 
     class EarlyAbortCallback(_Base):
-        """Stop ``learn()`` when training is invalid or recent episodes fail.
+        """Stop ``learn()`` on invalid metrics or configured hard-risk conditions.
 
         Returning ``False`` from ``_on_step`` is the Stable-Baselines3 stop.
-        Equity and no-trade checks wait until ``min_timesteps``. A non-finite
-        logged metric or episode equity stops immediately.
+        Hard-risk and no-trade checks wait until ``min_timesteps``. A peak-DD
+        policy miss is reported for policy fit and never stops optimization.
+        A non-finite logged metric stops immediately.
         """
 
         def __init__(
