@@ -227,4 +227,4 @@ class TestTradingEnvGoldenTraces:
                 break
 
 
-_GOLDEN_TRACE_HASH = "9b9ba26bcfe60bdc559b09a545fe146cea58b0d1027ac69069e41e0cc1efe583"
+_GOLDEN_TRACE_HASH = "7b418f958402b1589d378fe0974dd45a6bc6d10069aea17a41aa308215d4cccf"

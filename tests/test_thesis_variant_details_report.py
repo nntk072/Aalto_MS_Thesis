@@ -168,6 +168,7 @@ def test_config_results_report_is_concise_and_uses_absolute_figure_links(tmp_pat
                             "peak_trailing_dd_limit": 0.1,
                         },
                     },
+                    "run_summary": {"timesteps_completed": 100},
                     "training_equity_gate": {
                         "ok": False,
                         "max_peak_trailing_dd": 0.101,
@@ -226,7 +227,10 @@ def test_config_results_report_is_concise_and_uses_absolute_figure_links(tmp_pat
 
     assert "# 2M matched-run report: configuration and results" in markdown
     assert "| Entry state visible | No | Not recorded" in markdown
-    assert "FAIL (0.1000 percentage points over)" in markdown
+    assert "COMPLETED" in markdown
+    assert "MISS (0.1000 percentage points over)" in markdown
+    assert "Hard risk" in markdown
+    assert "year-survival gate" not in markdown
     assert "10.10% / 10.00%" in markdown
     assert "previously_inspected_holdout" in markdown
     assert (

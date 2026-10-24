@@ -55,6 +55,47 @@ def test_trade_risk_check():
     assert g.check_trade_risk(1001.0) is True
 
 
+def test_percentage_limits_use_current_equity_and_initial_equity_as_selected() -> None:
+    g = FTMOGuardrails(
+        limit_value_mode="percent_equity",
+        risk_per_trade_limit_pct=0.01,
+        daily_loss_limit_pct=0.05,
+        soft_daily_loss_limit_pct=0.05,
+        max_loss_limit_initial_pct=0.10,
+        soft_max_loss_limit_initial_pct=0.10,
+    )
+    acc = AccountState(initial_balance=100_000.0)
+    acc.equity = 120_000.0
+
+    assert g.risk_per_trade_limit_for(acc) == 1_200.0
+    assert g.daily_limit_for(acc) == 6_000.0
+    assert g.soft_daily_limit_for(acc) == 6_000.0
+    assert g.max_loss_limit_for(acc) == 10_000.0
+    assert g.soft_max_loss_limit_for(acc) == 10_000.0
+    assert not g.check_trade_risk(1_200.0, acc)
+    assert g.check_trade_risk(1_200.01, acc)
+
+    acc.equity = 80_000.0
+    assert g.risk_per_trade_limit_for(acc) == 800.0
+    assert g.daily_limit_for(acc) == 4_000.0
+    assert g.max_loss_limit_for(acc) == 10_000.0
+
+
+def test_percentage_daily_breach_moves_with_current_equity_but_max_loss_does_not() -> None:
+    g = FTMOGuardrails(limit_value_mode="percent_equity")
+    acc = AccountState(initial_balance=100_000.0)
+    acc.equity = 80_000.0
+    acc.daily_loss = 4_000.0
+    assert g.check_daily(acc)
+    acc.daily_loss = 3_999.0
+    assert not g.check_daily(acc)
+
+    acc.equity = 91_000.0
+    assert not g.check_max_drawdown(acc)
+    acc.equity = 90_000.0
+    assert g.check_max_drawdown(acc)
+
+
 def test_soft_daily_does_not_hard_breach():
     g = FTMOGuardrails(daily_loss_limit=5000.0, soft_daily_loss_limit=2000.0)
     acc = _make(daily_loss=2500.0)

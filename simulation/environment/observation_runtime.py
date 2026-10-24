@@ -93,10 +93,10 @@ class ObservationRuntimeMixin(RuntimeMixinBase):
                 trailing_drawdown_pct=trailing_dd,
                 trailing_drawdown_limit=float(self.guardrails.trailing_dd_limit),
                 daily_loss=float(self.account.canonical_daily_loss()),
-                daily_loss_limit=float(self.guardrails.daily_loss_limit),
+                daily_loss_limit=float(self.guardrails.daily_limit_for(self.account)),
                 loss_from_initial=float(self.account.loss_from_initial()),
-                max_loss_limit=float(self.guardrails.max_loss_limit),
-                risk_per_trade_limit=float(self.guardrails.risk_per_trade_limit),
+                max_loss_limit=float(self.guardrails.max_loss_limit_for(self.account)),
+                risk_per_trade_limit=float(self.guardrails.risk_per_trade_limit_for(self.account)),
                 current_price=current_close,
                 entry_price=float(position.entry_price) if position is not None else 0.0,
                 initial_sl_price=(position.sl_initial_price or position.sl_price)

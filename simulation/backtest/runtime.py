@@ -557,7 +557,7 @@ def apply_policy_action(
         else:
             trade_risk = None
 
-        if trade_risk is not None and guardrails.check_trade_risk(trade_risk):
+        if trade_risk is not None and guardrails.check_trade_risk(trade_risk, state.account):
             return
 
         position = broker.open_position(state.account, fq, actual_lots, action)

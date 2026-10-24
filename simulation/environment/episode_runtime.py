@@ -345,11 +345,11 @@ class EpisodeRuntimeMixin(RuntimeMixinBase):
 
         reward_kwargs: dict[str, Any] = {
             "daily_loss": daily_loss,
-            "daily_loss_limit": self.guardrails.daily_loss_limit,
-            "soft_daily_loss_limit": self.guardrails.soft_daily_loss_limit,
+            "daily_loss_limit": self.guardrails.daily_limit_for(self.account),
+            "soft_daily_loss_limit": self.guardrails.soft_daily_limit_for(self.account),
             "loss_from_initial": float(self.account.loss_from_initial()),
-            "soft_max_loss_limit": self.guardrails.soft_max_loss_limit,
-            "max_loss_limit": self.guardrails.max_loss_limit,
+            "soft_max_loss_limit": self.guardrails.soft_max_loss_limit_for(self.account),
+            "max_loss_limit": self.guardrails.max_loss_limit_for(self.account),
             "trailing_dd": float(self.account.trailing_drawdown_pct()),
             "soft_trailing_dd_limit": self.guardrails.soft_trailing_dd_limit,
             "trailing_dd_limit": self.guardrails.trailing_dd_limit,

@@ -29,6 +29,7 @@ from typing import Any
 import yaml
 
 from configuration.paths import repository_root
+from training.configuration.variant_risk_policy import variant_ftmo_overrides
 
 PROJECT_ROOT = repository_root(__file__)
 THESIS_RANDOMIZED_FILL_LATENCY_MS = 30.0
@@ -119,6 +120,7 @@ def resolve_variant(
     steps: int | None = None,
     seeds: list[int] | None = None,
     vae_path: str | None = None,
+    config_overrides: list[str] | None = None,
 ) -> dict[str, Any]:
     """Resolve one variant into a fully explicit, validated configuration."""
     exp = load_experiments(experiments_path)
@@ -177,6 +179,7 @@ def resolve_variant(
         if key in matches[0]:
             overrides.append(f"env.{key}={_fmt(matches[0][key])}")
     overrides.extend(_data_price_grid_overrides(matches[0]))
+    overrides.extend(variant_ftmo_overrides(name, required=experiments_path is None))
     # strategy_actions implies full_po3, which already sets include_strategy_state.
     if strategy == "baseline":
         overrides.append("strategy.name=baseline")
@@ -185,6 +188,11 @@ def resolve_variant(
     prebuilt_cache = PREBUILT_FEATURE_CACHES.get(name)
     if prebuilt_cache is not None:
         overrides.append(f"data.prebuilt_feature_cache={prebuilt_cache}")
+    for item in config_overrides or []:
+        key, separator, value = item.partition("=")
+        if not separator or not key.strip() or not value.strip():
+            raise VariantError(f"invalid campaign config override {item!r}; expected key=value")
+        overrides.append(f"{key.strip()}={value.strip()}")
 
     return {
         "variant": name,
@@ -268,6 +276,12 @@ def _main(argv: list[str] | None = None) -> int:
         p = sub.add_parser(cmd)
         if cmd != "table":
             p.add_argument("variant")
+            p.add_argument(
+                "--config-override",
+                action="append",
+                default=[],
+                help="campaign-scoped config override in key=value form; repeat as needed",
+            )
         p.add_argument("--steps", type=int, default=None)
         p.add_argument("--seeds", default=None, help="comma or space separated")
         p.add_argument("--vae-path", default=None)
@@ -278,7 +292,12 @@ def _main(argv: list[str] | None = None) -> int:
     seeds = None
     if ns.seeds:
         seeds = [int(s) for s in ns.seeds.replace(",", " ").split()]
-    kwargs = {"steps": ns.steps, "seeds": seeds, "vae_path": ns.vae_path}
+    kwargs = {
+        "steps": ns.steps,
+        "seeds": seeds,
+        "vae_path": ns.vae_path,
+        "config_overrides": getattr(ns, "config_override", []),
+    }
 
     if ns.cmd == "table":
         names = [str(v["name"]) for v in load_experiments()["variants"]]

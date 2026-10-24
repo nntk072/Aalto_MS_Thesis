@@ -13,6 +13,7 @@ import yaml
 from omegaconf import DictConfig, OmegaConf
 
 from configuration.paths import repository_root
+from training.configuration.variant_risk_policy import load_variant_ftmo_config
 
 _PROJECT_ROOT = repository_root(__file__)
 _STRATEGY_CONFIGS = {
@@ -92,6 +93,9 @@ def merge_variant_cfg(
     # strategy_actions would otherwise activate (plan A1). Mirrors variant_resolver.
     if strategy == "baseline" and "strategy" in cfg:
         cfg.strategy.name = "baseline"
+    if variant is not None and variant.get("name"):
+        ftmo = load_variant_ftmo_config(str(variant["name"]))
+        cfg = cast(DictConfig, OmegaConf.merge(cfg, {"ftmo": ftmo}))
     return cfg
 
 

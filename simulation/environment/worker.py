@@ -107,6 +107,7 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
     account = _block(cfg, "account")
     strategy_actions = bool(env.get("strategy_actions", False))
     policy = resolve_trading_policy_mapping(cfg)
+    ftmo = _block(cfg, "ftmo")
     strategy, strategy_reward, strategy_weight = _strategy(cfg, strategy_actions)
     if policy.repeated_payout:
         strategy_risk = _block(cfg, "strategy").get("risk", {}) or {}
@@ -122,8 +123,7 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
             raise ValueError("strategy.risk.risk_frac_range must contain two values")
         risk_frac_range = (risk_frac_values[0], risk_frac_values[1])
         rr_ratio_range = tuple(float(x) for x in strategy_risk.get("rr_range", [1.5, 5.0]))
-        ftmo = _block(cfg, "ftmo")
-        hard_limit = float(ftmo.get("risk_per_trade_limit", 100.0))
+        hard_limit = float(ftmo.get("risk_per_trade_limit", 1000.0))
         sizing_limit = float(ftmo.get("risk_sizing_limit_usd", hard_limit))
         max_loss = min(hard_limit, sizing_limit)
     else:
@@ -131,18 +131,23 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
         default_rr = float(risk.get("rr_ratio_default", 2.0))
         risk_frac_range = (default_risk * 0.5, default_risk * 2.0)
         rr_ratio_range = (default_rr * 0.5, default_rr * 1.5)
-        backtest = _block(cfg, "backtest")
-        validation = backtest.get("validation", {}) or {}
-        max_loss = float(validation.get("max_loss_per_trade_usd", 100.0))
-    ftmo = _block(cfg, "ftmo")
-    guardrail_kwargs = {
+        hard_limit = float(ftmo.get("risk_per_trade_limit", 1000.0))
+        sizing_limit = float(ftmo.get("risk_sizing_limit_usd", hard_limit))
+        max_loss = min(hard_limit, sizing_limit)
+    guardrail_kwargs: dict[str, Any] = {
+        "limit_value_mode": str(ftmo.get("limit_value_mode", "fixed_usd")),
         "daily_loss_limit": float(ftmo.get("daily_loss_limit", 5000.0)),
         "max_loss_limit": float(ftmo.get("max_loss_limit", 10000.0)),
-        "risk_per_trade_limit": float(ftmo.get("risk_per_trade_limit", 100.0)),
-        "soft_daily_loss_limit": float(ftmo.get("soft_daily_loss_limit", 2000.0)),
-        "soft_max_loss_limit": float(ftmo.get("soft_max_loss_limit", 5000.0)),
-        "trailing_dd_limit": float(ftmo.get("trailing_dd_limit", 0.07)),
+        "risk_per_trade_limit": float(ftmo.get("risk_per_trade_limit", 1000.0)),
+        "soft_daily_loss_limit": float(ftmo.get("soft_daily_loss_limit", 5000.0)),
+        "soft_max_loss_limit": float(ftmo.get("soft_max_loss_limit", 10000.0)),
+        "trailing_dd_limit": float(ftmo.get("trailing_dd_limit", 0.0)),
         "soft_trailing_dd_limit": float(ftmo.get("soft_trailing_dd_limit", 0.0)),
+        "risk_per_trade_limit_pct": float(ftmo.get("risk_per_trade_limit_pct", 0.01)),
+        "daily_loss_limit_pct": float(ftmo.get("daily_loss_limit_pct", 0.05)),
+        "soft_daily_loss_limit_pct": float(ftmo.get("soft_daily_loss_limit_pct", 0.05)),
+        "max_loss_limit_initial_pct": float(ftmo.get("max_loss_limit_initial_pct", 0.10)),
+        "soft_max_loss_limit_initial_pct": float(ftmo.get("soft_max_loss_limit_initial_pct", 0.10)),
     }
     if policy.repeated_payout:
         guardrail_kwargs.update(
@@ -153,6 +158,12 @@ def make_bundle_env(spec: EnvSpec) -> TradingEnv:
             soft_max_loss_limit=0.0,
             trailing_dd_limit=0.0,
             soft_trailing_dd_limit=0.0,
+            limit_value_mode="fixed_usd",
+            risk_per_trade_limit_pct=0.0,
+            daily_loss_limit_pct=0.0,
+            soft_daily_loss_limit_pct=0.0,
+            max_loss_limit_initial_pct=0.0,
+            soft_max_loss_limit_initial_pct=0.0,
         )
     if spec.evaluation:
         # Match train_rl.eval_guardrail_kwargs: evaluation reports apply the

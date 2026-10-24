@@ -75,6 +75,25 @@ strategy:
   # ... gates, risk ranges, TP targets, reward weights
 ```
 
+## Per-variant risk policy
+
+Every experiment registered in `config/experiments.yaml` has a corresponding
+`config/variants/<variant-name>.yaml` file. That file keeps the hard limits
+visible beside the variant and provides two selectable value modes:
+
+```yaml
+ftmo:
+  limit_value_mode: fixed_usd # or percent_equity
+```
+
+`fixed_usd` uses $1,000 per trade idea, $5,000 daily loss, and $10,000 maximum
+loss from initial equity. In `percent_equity` mode, the 1% per-trade and 5%
+daily limits use current equity; the 10% maximum-loss limit uses initial
+equity. The soft daily and maximum-loss limits match their hard thresholds.
+Both modes keep the separate $900 sizing ceiling and leave peak trailing
+drawdown disabled. Values are merged into the resolved run config for both
+direct variant training and campaign workers.
+
 ---
 
 ## Feature variant configs

@@ -60,6 +60,10 @@ RESOLVE_OPTS=()
 [[ -n "$STEPS" ]] && RESOLVE_OPTS+=(--steps "$STEPS")
 [[ -n "$SEEDS" ]] && RESOLVE_OPTS+=(--seeds "$SEEDS")
 [[ -n "$VAE_PATH" ]] && RESOLVE_OPTS+=(--vae-path "$VAE_PATH")
+while IFS= read -r config_override; do
+  [[ -n "$config_override" ]] || continue
+  RESOLVE_OPTS+=(--config-override "$config_override")
+done <<< "${QUANT_RL_CONFIG_OVERRIDES:-}"
 
 resolver() {
   PYTHONPATH="$REPO" "$PYTHON" -m training.configuration.variant_resolution "$@"

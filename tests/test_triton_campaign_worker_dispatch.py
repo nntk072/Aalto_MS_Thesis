@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from compute.slurm.worker_dispatch import _host_key, _parse_srun
+from compute.slurm.worker_dispatch import _gpu_device_for_request, _host_key, _parse_srun
 
 DISPATCHER = Path(__file__).resolve().parents[1] / "compute" / "slurm" / "worker_dispatch.py"
 
@@ -54,7 +54,15 @@ def test_parse_campaign_worker_command() -> None:
         ],
         "cpu_ids": [5, 6],
         "gpu_count": 1,
+        "gpu_id": 0,
     }
+
+
+def test_gpu_worker_binding_selects_the_requested_visible_device() -> None:
+    request = {"gpu_count": 1, "gpu_id": 1}
+    assert _gpu_device_for_request(request, ["2", "4"]) == "4"
+    with pytest.raises(RuntimeError, match="allocation exposes 1 visible GPU"):
+        _gpu_device_for_request(request, ["2"])
 
 
 def test_parse_campaign_resource_sampler_without_gpu() -> None:
@@ -120,7 +128,7 @@ def test_persistent_manager_dispatches_worker_with_affinity_and_gpu_binding(
         CAMPAIGN_OUT_DIR=str(campaign),
         SLURM_JOB_ID=job_id,
         SLURMD_NODENAME=node,
-        CUDA_VISIBLE_DEVICES="2",
+        CUDA_VISIBLE_DEVICES="2,4",
     )
     manager_log_path = tmp_path / "manager.log"
     with manager_log_path.open("wb") as manager_log:
@@ -156,7 +164,7 @@ def test_persistent_manager_dispatches_worker_with_affinity_and_gpu_binding(
                         f"--nodelist={node}",
                         "--cpus-per-task=1",
                         "--gpus=gh200:1",
-                        "--gpu-bind=map_gpu:0",
+                        "--gpu-bind=map_gpu:1",
                         f"--cpu-bind=mask_cpu:0x{1 << cpu_id:x}",
                         "--chdir",
                         str(tmp_path),
@@ -164,7 +172,8 @@ def test_persistent_manager_dispatches_worker_with_affinity_and_gpu_binding(
                         sys.executable,
                         "-c",
                         "import os; print(sorted(os.sched_getaffinity(0))); "
-                        "print(os.environ['CUDA_VISIBLE_DEVICES'])",
+                        "print(os.environ['CUDA_VISIBLE_DEVICES']); "
+                        "print(os.environ['GPU_ID'])",
                     ],
                     env=manager_env,
                     stdout=output,
@@ -173,7 +182,7 @@ def test_persistent_manager_dispatches_worker_with_affinity_and_gpu_binding(
                     timeout=5,
                 )
             assert shim.returncode == 0
-            assert worker_log.read_text().splitlines() == [f"[{cpu_id}]", "2"]
+            assert worker_log.read_text().splitlines() == [f"[{cpu_id}]", "4", "4"]
         finally:
             (campaign / "allocation_controller.exit").touch()
             assert manager.wait(timeout=5) == 0

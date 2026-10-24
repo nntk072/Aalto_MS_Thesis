@@ -95,13 +95,13 @@ class StepInfoRuntimeMixin(RuntimeMixinBase):
             )
         constraint_ratios = {
             "daily": (
-                self.account.canonical_daily_loss() / self.guardrails.daily_loss_limit
-                if self.guardrails.daily_loss_limit > 0.0
+                self.account.canonical_daily_loss() / self.guardrails.daily_limit_for(self.account)
+                if self.guardrails.daily_limit_for(self.account) > 0.0
                 else 0.0
             ),
             "max_loss": (
-                self.account.loss_from_initial() / self.guardrails.max_loss_limit
-                if self.guardrails.max_loss_limit > 0.0
+                self.account.loss_from_initial() / self.guardrails.max_loss_limit_for(self.account)
+                if self.guardrails.max_loss_limit_for(self.account) > 0.0
                 else 0.0
             ),
             "trailing": (

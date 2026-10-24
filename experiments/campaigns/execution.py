@@ -158,6 +158,37 @@ STOP = False
 _CACHE_FILE_HASHES: dict[tuple[str, int, int, int], str] = {}
 
 
+def normalize_campaign_config_overrides(value: Any) -> dict[str, bool | int | float]:
+    """Validate simple scalar config overrides declared by a campaign spec."""
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("campaign config_overrides must be a mapping")
+    normalized: dict[str, bool | int | float] = {}
+    for raw_key, raw_value in value.items():
+        key = str(raw_key).strip()
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*", key):
+            raise ValueError(f"invalid campaign config override key: {raw_key!r}")
+        if isinstance(raw_value, bool):
+            normalized[key] = raw_value
+        elif isinstance(raw_value, int):
+            normalized[key] = raw_value
+        elif isinstance(raw_value, float) and math.isfinite(raw_value):
+            normalized[key] = raw_value
+        else:
+            raise ValueError(f"campaign config override {key!r} must be a finite number or boolean")
+    return dict(sorted(normalized.items()))
+
+
+def campaign_config_override_lines(values: dict[str, bool | int | float]) -> str:
+    """Serialize validated scalar overrides for the isolated trainer process."""
+    lines = []
+    for key, value in values.items():
+        rendered = str(value).lower() if isinstance(value, bool) else str(value)
+        lines.append(f"{key}={rendered}")
+    return "\n".join(lines)
+
+
 def signal_stop(_sig: int, _frame: object) -> None:
     global STOP
     STOP = True
@@ -205,6 +236,7 @@ def main() -> int:
     import yaml
 
     evaluation: dict[str, Any] = {"locked_oos_role": "unspecified", "deterministic": False}
+    config_overrides: dict[str, bool | int | float] = {}
     if args.campaign_spec:
         if any(
             value is not None
@@ -239,6 +271,7 @@ def main() -> int:
         if listed != [str(name) for name in spec_variants]:
             raise ValueError("campaign spec variants do not match its authoritative variant file")
         evaluation = validate_campaign_evaluation(spec.get("evaluation", {}))
+        config_overrides = normalize_campaign_config_overrides(spec.get("config_overrides", {}))
         default_config = yaml.safe_load(
             (ROOT / "config" / "base" / "default.yaml").read_text(encoding="utf-8")
         )
@@ -307,6 +340,7 @@ def main() -> int:
                     "worker_gpu_type": args.worker_gpu_type if worker_nodes else None,
                     "worker_gpus_per_node": (args.worker_gpus_per_node if worker_nodes else None),
                     "data_source": args.data_source,
+                    "config_overrides": config_overrides,
                     "fast_reports": args.fast_reports,
                     "initial_checkpoints": len(initial_checkpoints),
                     "keys": [j["key"] for j in jobs],
@@ -397,6 +431,7 @@ def main() -> int:
         },
         "fast_reports": args.fast_reports,
         "evaluation": evaluation,
+        "config_overrides": config_overrides,
         "runtime_compatibility": {
             "python": runtime["python"],
             "machine": runtime["machine"],
@@ -796,6 +831,7 @@ def main() -> int:
             QUANT_RL_EVALUATION_DETERMINISTIC=(
                 "true" if evaluation.get("deterministic", False) else "false"
             ),
+            QUANT_RL_CONFIG_OVERRIDES=campaign_config_override_lines(config_overrides),
             GPU_ID="0",
             PYTHONUNBUFFERED="1",
         )

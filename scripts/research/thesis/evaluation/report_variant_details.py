@@ -785,21 +785,21 @@ def _training_report(run_dir: Path, resolved: dict[str, Any] | None) -> dict[str
 def _validate_training_gate_policy(
     gate: dict[str, Any] | None, configured_limit: float, run_dir: Path
 ) -> str:
-    """Ensure the final in-sample gate reflects the same configured DD policy."""
+    """Ensure saved training metrics reflect the configured peak-DD policy."""
     if gate is None:
         raise FileNotFoundError(
-            f"training survival gate is missing: {run_dir / 'train_equity_gate.json'}"
+            f"training policy-fit record is missing: {run_dir / 'train_equity_gate.json'}"
         )
     observed = _number(gate.get("max_peak_trailing_dd"))
     gate_ok = gate.get("ok")
     if observed is None or not isinstance(gate_ok, bool):
-        raise ValueError(f"training survival gate lacks policy evidence: {run_dir}")
+        raise ValueError(f"training policy-fit record lacks evidence: {run_dir}")
     breached = bool(gate.get("breached", False))
     drawdown_failed = configured_limit > 0.0 and observed > configured_limit
     expected_ok = not breached and not drawdown_failed
     if gate_ok != expected_ok:
         raise ValueError(
-            "training survival gate outcome conflicts with the saved drawdown policy: "
+            "training gate outcome conflicts with the saved policy and hard-risk metrics: "
             f"config={configured_limit:.6f}, observed={observed:.6f}, gate_ok={gate_ok}, run={run_dir}"
         )
     recorded_limit = _number(gate.get("peak_trailing_dd_limit"))
@@ -811,9 +811,56 @@ def _validate_training_gate_policy(
             )
         return "The saved training gate records the same limit as the training environment."
 
-    # Older gate artifacts omitted the limit field. Reconcile their pass/fail
-    # result against the saved limit and observed drawdown before reporting them.
-    return "The saved training gate outcome was reconciled with its configured limit and observed drawdown."
+    # Older records omitted the configured limit. Reconcile the saved status
+    # against the run config and measured drawdown before reporting them.
+    return (
+        "The saved training record was reconciled with its configured limit and observed drawdown."
+    )
+
+
+def _peak_dd_policy_fit_text(gate: dict[str, Any], configured_limit: float | None = None) -> str:
+    limit = _number(gate.get("peak_trailing_dd_limit"))
+    if limit is None:
+        limit = configured_limit
+    if limit is None:
+        return "Not recorded"
+    if limit <= 0.0:
+        return "DISABLED"
+    observed = _number(gate.get("max_peak_trailing_dd"))
+    if observed is None:
+        return "Not recorded"
+    if observed > limit:
+        return f"MISS ({(observed - limit) * 100:.4f} percentage points over)"
+    return "PASS"
+
+
+def _hard_risk_status_text(gate: dict[str, Any]) -> str:
+    if isinstance(gate.get("hard_risk_ok"), bool):
+        return "PASS" if gate["hard_risk_ok"] else "FAIL"
+    if isinstance(gate.get("breached"), bool):
+        return "FAIL" if gate["breached"] else "PASS"
+    reasons = {part.strip() for part in str(gate.get("reason", "")).split(",") if part.strip()}
+    if "max_loss_stopped_trading" in reasons:
+        return "FAIL"
+    if gate.get("ok") is True or "peak_trailing_dd" in reasons:
+        return "PASS"
+    return "Not recorded"
+
+
+def _optimizer_execution_status(variant: dict[str, Any]) -> str:
+    training = variant.get("training", {})
+    run_summary = training.get("run_summary", {}) if isinstance(training, dict) else {}
+    parameters = training.get("agent_parameters", {}) if isinstance(training, dict) else {}
+    if (not isinstance(run_summary, dict) or not run_summary) and isinstance(parameters, dict):
+        run_summary = parameters.get("run_summary", {})
+    ppo = parameters.get("ppo", {}) if isinstance(parameters, dict) else {}
+    requested = _number(ppo.get("total_timesteps")) if isinstance(ppo, dict) else None
+    completed = (
+        _number(run_summary.get("timesteps_completed")) if isinstance(run_summary, dict) else None
+    )
+    if requested is None or completed is None:
+        return "Not recorded"
+    return "COMPLETED" if completed >= requested else "INCOMPLETE"
 
 
 def _metric(detail: dict[str, Any] | None, name: str) -> Any:
@@ -982,8 +1029,8 @@ def _markdown_config_results(
             "",
             "## Training results",
             "",
-            "| Variant | Return | Net PnL | Max drawdown / limit | Trades | Win rate | Profit factor | Average trade | Gate | Last entry | Peak-DD close |",
-            "|---|---:|---:|---:|---:|---:|---:|---:|---|---|---|",
+            "| Variant | Optimizer | Return | Net PnL | Max drawdown / limit | Trades | Win rate | Profit factor | Average trade | Peak-DD fit | Hard risk | Last entry | Peak-DD close |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|---|---|---|---|",
         ]
     )
     for variant in variants:
@@ -994,15 +1041,8 @@ def _markdown_config_results(
         limit = _number(gate.get("peak_trailing_dd_limit"))
         if limit is None:
             limit = _number(training.get("peak_trailing_dd_limit"))
-        observed = _number(gate.get("max_peak_trailing_dd"))
-        excess = observed - limit if observed is not None and limit is not None else None
-        gate_text = (
-            f"FAIL ({excess * 100:.4f} percentage points over)"
-            if gate.get("ok") is False and excess is not None
-            else "PASS"
-            if gate.get("ok") is True
-            else "Not recorded"
-        )
+        policy_fit_text = _peak_dd_policy_fit_text(gate, limit)
+        hard_risk_text = _hard_risk_status_text(gate)
         run_artifact_dir = variant.get("run_artifact_dir")
         trade_rows = (
             _rows(campaign_dir / run_artifact_dir / "training" / "trades.csv")
@@ -1042,21 +1082,28 @@ def _markdown_config_results(
             if peak_close_index is not None
             else "Not recorded"
         )
+        training_row = [
+            variant.get("variant", "Not recorded"),
+            _optimizer_execution_status(variant),
+            _report_value(metrics.get("total_return_pct"), "total_return_pct"),
+            _display(metrics.get("total_pnl")),
+            _report_value(metrics.get("max_drawdown"), "max_drawdown"),
+            _report_value(limit, "peak_trailing_dd_limit"),
+            _display(metrics.get("n_trades")),
+            _report_value(metrics.get("win_rate"), "win_rate"),
+            _display(metrics.get("profit_factor")),
+            _display(metrics.get("avg_trade")),
+            policy_fit_text,
+            hard_risk_text,
+            last_open_date,
+            peak_close_date,
+        ]
         lines.append(
-            "| {} | {} | {} | {} / {} | {} | {} | {} | {} | {} | {} | {} |".format(
-                variant.get("variant", "Not recorded"),
-                _report_value(metrics.get("total_return_pct"), "total_return_pct"),
-                _display(metrics.get("total_pnl")),
-                _report_value(metrics.get("max_drawdown"), "max_drawdown"),
-                _report_value(limit, "peak_trailing_dd_limit"),
-                _display(metrics.get("n_trades")),
-                _report_value(metrics.get("win_rate"), "win_rate"),
-                _display(metrics.get("profit_factor")),
-                _display(metrics.get("avg_trade")),
-                gate_text,
-                last_open_date,
-                peak_close_date,
-            )
+            "| "
+            + " | ".join(str(value) for value in training_row[:4])
+            + f" | {training_row[4]} / {training_row[5]} | "
+            + " | ".join(str(value) for value in training_row[6:])
+            + " |"
         )
 
     lines.extend(
@@ -1109,28 +1156,96 @@ def _markdown_config_results(
             f"`{variant.get('variant')}` last opened a trade on {entry_date}; its peak-DD guard "
             f"closed the final position on {close_date}, with no later training entries."
         )
+    optimizer_completed_count = sum(
+        _optimizer_execution_status(item) == "COMPLETED" for item in variants
+    )
+    policy_fit_statuses = [
+        _peak_dd_policy_fit_text(
+            item.get("training", {}).get("training_equity_gate", {}),
+            _number(item.get("training", {}).get("peak_trailing_dd_limit")),
+        )
+        for item in variants
+    ]
+    policy_miss_count = sum(status.startswith("MISS") for status in policy_fit_statuses)
+    positive_train_count = sum(
+        (
+            _number(item.get("splits", {}).get("training", {}).get("metrics", {}).get("total_pnl"))
+            or 0.0
+        )
+        > 0.0
+        for item in variants
+    )
+    hard_risk_statuses = [
+        _hard_risk_status_text(item.get("training", {}).get("training_equity_gate", {}))
+        for item in variants
+    ]
+    active_policy_count = sum(
+        status not in {"DISABLED", "Not recorded"} for status in policy_fit_statuses
+    )
+    all_policy_disabled = bool(policy_fit_statuses) and all(
+        status == "DISABLED" for status in policy_fit_statuses
+    )
+    policy_evidence_missing = any(status == "Not recorded" for status in policy_fit_statuses)
+    if policy_miss_count:
+        policy_fit_summary = (
+            f"{policy_miss_count} of {len(variants)} saved training paths missed the configured "
+            "peak-DD policy-fit target. This is separate from optimizer completion and hard-risk status."
+        )
+    elif all_policy_disabled:
+        policy_fit_summary = (
+            "Peak-DD policy enforcement was disabled; drawdown is reported as a metric only."
+        )
+    elif policy_evidence_missing:
+        policy_fit_summary = "Peak-DD policy-fit evidence is incomplete for one or more variants."
+    else:
+        policy_fit_summary = "All available active peak-DD policy-fit checks passed."
+    hard_risk_summary = (
+        "No separate hard-risk breach was recorded."
+        if all(status == "PASS" for status in hard_risk_statuses)
+        else "Hard-risk status is listed separately for each variant above."
+    )
+    training_policy_explanation = (
+        "The configured peak-drawdown guard closes an open trade at its ceiling and refuses new "
+        "entries while drawdown remains there. That guard explains the saved activity cutoff; the "
+        "optimizer itself still completed its requested steps. The available logs do not explain "
+        "why the policy entered the losing move."
+        if active_policy_count
+        else "No peak-drawdown guard was active, so drawdown did not block training entries or close "
+        "positions. The account floor and per-trade risk ceiling remain separate hard limits."
+        if all_policy_disabled
+        else "No peak-drawdown guard was active, so drawdown did not block training entries or close "
+        "positions; the saved gate does not establish whether its policy was disabled."
+    )
     lines.extend(
         [
             "",
-            "## Why the training runs failed the year-survival gate",
+            "## Training completion, peak-DD policy fit, and activity",
             "",
-            "Both simulations consumed the full training data through 2025-12-31 and ended profitable, "
-            "but the policies did not remain active for the full year:",
+            f"{optimizer_completed_count} of {len(variants)} optimizer runs reached their requested timestep count. "
+            f"{positive_train_count} of {len(variants)} saved training replays ended with positive net PnL.",
+            "",
+            "The 10% peak-drawdown setting is an optional training environment policy. "
+            "A policy-fit miss is reported after the completed optimizer run; it does not stop PPO.",
+            "",
+            policy_fit_summary,
+            "",
+            (
+                "Observed trading activity after the configured peak-DD guard:"
+                if active_policy_count
+                else "Observed training activity:"
+            ),
             *(
                 [f"- {detail}" for detail in activity_details]
-                or ["- Last-entry dates were not recorded."]
+                or [
+                    "- No peak-DD guard activity was recorded."
+                    if all_policy_disabled
+                    else "- Last-entry dates were not recorded."
+                ]
             ),
             "",
-            "The survival gate failed because each saved equity path exceeded the configured 10% "
-            "peak-to-trough limit. This is a training drawdown-gate failure, not a missing year or "
-            "trainer crash. The gate records no separate hard-loss breach.",
+            hard_risk_summary,
             "",
-            "The configured guard closes an open trade at the drawdown ceiling and refuses new entries "
-            "while the account remains at that ceiling. The final tick-quote fills left measured "
-            "drawdown slightly above 10%; with equity below its previous high-water mark, trading "
-            "did not resume. The controller continued through the remaining bars, which is why a "
-            "full-year simulation exists even though active trading ended in April. The logs identify "
-            "this failure path, but do not establish why the policy entered the losing move.",
+            training_policy_explanation,
             "",
             "The later test results are negative for both variants. Since this is one seed, a 2M-step "
             "pilot, and a previously inspected holdout, it does not establish a confirmatory ranking "
@@ -1185,8 +1300,8 @@ def _markdown(report: dict[str, Any], campaign_dir: Path, be_tolerance: float) -
         [
             "## Variant summary",
             "",
-            "| Variant | Seed | Run status | Peak-DD policy used in training | Train return | Train max DD | Train trades | Train gate | Test return | Test max DD | Test trades |",
-            "|---|---:|---|---|---:|---:|---:|---|---:|---:|---:|",
+            "| Variant | Seed | Optimizer | Controller | Peak-DD policy | Peak-DD fit | Hard risk | Train return | Train max DD | Train trades | Test return | Test max DD | Test trades |",
+            "|---|---:|---|---|---|---|---|---:|---:|---:|---:|---:|---:|",
         ]
     )
     for variant in report["variants"]:
@@ -1198,19 +1313,20 @@ def _markdown(report: dict[str, Any], campaign_dir: Path, be_tolerance: float) -
         if not isinstance(gate, dict):
             gate = {}
         lines.append(
-            "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
+            "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
                 _display(variant.get("variant")),
                 _display(variant.get("seed")),
+                _optimizer_execution_status(variant),
                 _display(variant.get("controller_status")),
                 _display(training.get("peak_drawdown_policy")),
+                _peak_dd_policy_fit_text(
+                    gate,
+                    _number(training.get("peak_trailing_dd_limit")),
+                ),
+                _hard_risk_status_text(gate),
                 _markdown_metric(train, "total_return_pct"),
                 _markdown_metric(train, "max_drawdown"),
                 _display(_metric(train, "n_trades")),
-                "PASS"
-                if gate.get("ok") is True
-                else "FAIL"
-                if gate.get("ok") is False
-                else "Not recorded",
                 _markdown_metric(test, "total_return_pct"),
                 _markdown_metric(test, "max_drawdown"),
                 _display(_metric(test, "n_trades")),
@@ -1228,7 +1344,8 @@ def _markdown(report: dict[str, Any], campaign_dir: Path, be_tolerance: float) -
             ]
         )
         summary = {
-            "Controller status": variant.get("controller_status"),
+            "Optimizer execution": _optimizer_execution_status(variant),
+            "Campaign controller status": variant.get("controller_status"),
             "Seed": variant.get("seed"),
             "Attempt": variant.get("attempt"),
             "Completed timesteps": variant.get("training", {})
@@ -1237,7 +1354,8 @@ def _markdown(report: dict[str, Any], campaign_dir: Path, be_tolerance: float) -
             "Training peak-drawdown policy": variant.get("training", {}).get(
                 "peak_drawdown_policy"
             ),
-            "Training survival result": variant.get("training", {}).get("training_equity_gate"),
+            "Peak-drawdown policy fit": variant.get("training", {}).get("peak_dd_policy_fit"),
+            "Hard account-risk result": variant.get("training", {}).get("hard_risk_status"),
             "Training activity result": variant.get("training", {}).get("training_activity_gate"),
             "Drawdown policy evidence": variant.get("training", {}).get(
                 "peak_drawdown_policy_evidence"
@@ -1495,6 +1613,14 @@ def build_report(
             {Path(rel).stem: os.path.relpath(run_dir / rel, report_dir) for rel in training_figures}
             if run_dir is not None
             else {}
+        )
+        training["optimizer_execution_status"] = _optimizer_execution_status({"training": training})
+        training["peak_dd_policy_fit"] = _peak_dd_policy_fit_text(
+            training.get("training_equity_gate") or {},
+            _number(training.get("peak_trailing_dd_limit")),
+        )
+        training["hard_risk_status"] = _hard_risk_status_text(
+            training.get("training_equity_gate") or {}
         )
         variants.append(
             {

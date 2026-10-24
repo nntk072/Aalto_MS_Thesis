@@ -22,6 +22,7 @@ from training.configuration.variant_resolution import (
     resolve_variant,
     train_args,
 )
+from training.configuration.variant_risk_policy import load_variant_ftmo_config
 
 LAUNCHER = PROJECT_ROOT / "scripts" / "research" / "frozen-launches" / "train_one_variant.sh"
 
@@ -55,6 +56,13 @@ def test_every_variant_resolves_and_declares_reward_mode() -> None:
         assert resolved["reward_mode"] in ("dsr", "pnl", "rr")
         assert resolved["steps"] == 100_000
         assert resolved["seeds"] == [42, 43, 44, 45, 46]
+        policy_path = PROJECT_ROOT / "config" / "variants" / f"{name}.yaml"
+        assert policy_path.is_file(), f"missing per-variant policy YAML: {policy_path}"
+        policy = load_variant_ftmo_config(name)
+        assert policy["limit_value_mode"] == "fixed_usd"
+        assert policy["risk_per_trade_limit_pct"] == pytest.approx(0.01)
+        assert policy["daily_loss_limit_pct"] == pytest.approx(0.05)
+        assert policy["max_loss_limit_initial_pct"] == pytest.approx(0.10)
 
 
 def test_all_18_thesis_variants_build_features_from_the_active_split() -> None:
@@ -148,7 +156,7 @@ def test_overrides_come_after_strategy_and_have_no_duplicates() -> None:
     keys = _overrides_by_key(resolved)  # asserts uniqueness
     assert keys["env.reward_mode"] == "pnl"
     assert keys["features.include_pd_context"] == "true"
-    assert "ftmo.trailing_dd_limit" not in keys  # was a no-op at default 0.07
+    assert keys["ftmo.trailing_dd_limit"] == "0.0"
 
 
 def test_selected_entry_fsm_pair_disables_peak_drawdown_behavior() -> None:
@@ -294,6 +302,28 @@ def test_manifest_cli_writes_resolved_config() -> None:
     assert manifest["seed"] == 43
     assert manifest["strategy"] == "distribution"
     assert "--seed" in manifest["train_args"] and "43" in manifest["train_args"]
+
+
+def test_campaign_config_overrides_are_last_in_resolved_training_args() -> None:
+    resolved = resolve_variant(
+        "ladder_a4b_entry_fsm_qgrid025",
+        steps=2_000_000,
+        seeds=[50],
+        config_overrides=[
+            "ftmo.risk_sizing_limit_usd=900.0",
+            "ftmo.trailing_dd_limit=0.0",
+        ],
+    )
+
+    assert resolved["overrides"][-2:] == [
+        "ftmo.risk_sizing_limit_usd=900.0",
+        "ftmo.trailing_dd_limit=0.0",
+    ]
+    args = train_args(resolved, 50)
+    assert args[-3:-1] == [
+        "ftmo.risk_sizing_limit_usd=900.0",
+        "ftmo.trailing_dd_limit=0.0",
+    ]
 
 
 if __name__ == "__main__":

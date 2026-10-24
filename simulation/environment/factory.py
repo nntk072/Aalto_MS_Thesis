@@ -44,18 +44,16 @@ def strategy_risk_ranges(cfg: Any) -> tuple[tuple[float, float], tuple[float, fl
 
 
 def max_loss_per_trade(cfg: Any) -> float:
-    """Per-trade USD cap used by legacy sizing; repeated-payout caps dynamically."""
+    """Static sizing ceiling; current-equity percentages are enforced at runtime."""
     policy = resolve_trading_policy(cfg)
     if policy.repeated_payout:
         return policy.operating_balance * policy.max_agent_risk_frac
-    if bool(cfg.env.get("strategy_actions", False)):
-        hard_limit = float(cfg.ftmo.risk_per_trade_limit)
-        sizing_limit = float(cfg.ftmo.get("risk_sizing_limit_usd", hard_limit))
-        return min(hard_limit, sizing_limit)
-    return float(cfg.backtest.validation.max_loss_per_trade_usd)
+    hard_limit = float(cfg.ftmo.risk_per_trade_limit)
+    sizing_limit = float(cfg.ftmo.get("risk_sizing_limit_usd", hard_limit))
+    return min(hard_limit, sizing_limit)
 
 
-def guardrail_kwargs(cfg: Any) -> dict[str, float]:
+def guardrail_kwargs(cfg: Any) -> dict[str, Any]:
     """Resolve policy-specific hard/soft guardrails."""
     policy = resolve_trading_policy(cfg)
     if policy.repeated_payout:
@@ -67,15 +65,29 @@ def guardrail_kwargs(cfg: Any) -> dict[str, float]:
             "soft_max_loss_limit": 0.0,
             "trailing_dd_limit": 0.0,
             "soft_trailing_dd_limit": 0.0,
+            "limit_value_mode": "fixed_usd",
+            "risk_per_trade_limit_pct": 0.0,
+            "daily_loss_limit_pct": 0.0,
+            "soft_daily_loss_limit_pct": 0.0,
+            "max_loss_limit_initial_pct": 0.0,
+            "soft_max_loss_limit_initial_pct": 0.0,
         }
     return {
+        "limit_value_mode": str(cfg.ftmo.get("limit_value_mode", "fixed_usd")),
         "daily_loss_limit": float(cfg.ftmo.daily_loss_limit),
         "max_loss_limit": float(cfg.ftmo.max_loss_limit),
         "risk_per_trade_limit": float(cfg.ftmo.risk_per_trade_limit),
-        "soft_daily_loss_limit": float(cfg.ftmo.get("soft_daily_loss_limit", 2000.0)),
-        "soft_max_loss_limit": float(cfg.ftmo.get("soft_max_loss_limit", 5000.0)),
-        "trailing_dd_limit": float(cfg.ftmo.get("trailing_dd_limit", 0.07)),
+        "soft_daily_loss_limit": float(cfg.ftmo.get("soft_daily_loss_limit", 5000.0)),
+        "soft_max_loss_limit": float(cfg.ftmo.get("soft_max_loss_limit", 10000.0)),
+        "trailing_dd_limit": float(cfg.ftmo.get("trailing_dd_limit", 0.0)),
         "soft_trailing_dd_limit": float(cfg.ftmo.get("soft_trailing_dd_limit", 0.0)),
+        "risk_per_trade_limit_pct": float(cfg.ftmo.get("risk_per_trade_limit_pct", 0.01)),
+        "daily_loss_limit_pct": float(cfg.ftmo.get("daily_loss_limit_pct", 0.05)),
+        "soft_daily_loss_limit_pct": float(cfg.ftmo.get("soft_daily_loss_limit_pct", 0.05)),
+        "max_loss_limit_initial_pct": float(cfg.ftmo.get("max_loss_limit_initial_pct", 0.10)),
+        "soft_max_loss_limit_initial_pct": float(
+            cfg.ftmo.get("soft_max_loss_limit_initial_pct", 0.10)
+        ),
     }
 
 

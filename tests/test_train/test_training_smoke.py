@@ -254,8 +254,17 @@ def test_default_config_exposes_max_episode_steps() -> None:
     cfg = load_config([])
     assert cfg.env.max_episode_steps is None
     assert int(cfg.ppo.total_timesteps) >= 20_000_000
-    assert float(cfg.ftmo.soft_max_loss_limit) == 5000.0
-    assert float(cfg.ftmo.trailing_dd_limit) == 0.07
+    assert float(cfg.ftmo.daily_loss_limit) == 5000.0
+    assert float(cfg.ftmo.soft_daily_loss_limit) == 5000.0
+    assert float(cfg.ftmo.max_loss_limit) == 10_000.0
+    assert float(cfg.ftmo.soft_max_loss_limit) == 10_000.0
+    assert float(cfg.ftmo.risk_per_trade_limit) == 1_000.0
+    assert float(cfg.ftmo.risk_sizing_limit_usd) == 900.0
+    assert str(cfg.ftmo.limit_value_mode) == "fixed_usd"
+    assert float(cfg.ftmo.risk_per_trade_limit_pct) == 0.01
+    assert float(cfg.ftmo.daily_loss_limit_pct) == 0.05
+    assert float(cfg.ftmo.max_loss_limit_initial_pct) == 0.10
+    assert float(cfg.ftmo.trailing_dd_limit) == 0.0
     assert float(cfg.ftmo.soft_trailing_dd_limit) == 0.0
     assert float(cfg.ppo.ent_coef_continuous) == 0.001
     assert float(cfg.ppo.log_std_min) == -0.7
@@ -274,7 +283,7 @@ def test_default_config_exposes_max_episode_steps() -> None:
     assert float(cfg.env.entry_intensity_threshold) == 0.0
     train_g = guardrail_kwargs(cfg)
     eval_g = eval_guardrail_kwargs(cfg)
-    assert train_g["trailing_dd_limit"] == 0.07
+    assert train_g["trailing_dd_limit"] == 0.0
     assert eval_g["trailing_dd_limit"] == 0.0
     assert eval_g["max_loss_limit"] == 10_000.0
     assert eval_g["daily_loss_limit"] == 5_000.0

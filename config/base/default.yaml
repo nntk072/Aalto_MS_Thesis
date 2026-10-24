@@ -165,19 +165,25 @@ trading_policy:
     repeated_eval: true
 
 ftmo:
+  # Fixed-dollar limits are the default. Percent mode uses current equity for
+  # per-trade and daily limits, and initial equity for max loss.
+  limit_value_mode: fixed_usd        # "fixed_usd" | "percent_equity"
   # Hard daily loss (5% of $100k): force-close + block the rest of that session.
   daily_loss_limit: 5000.0
-  # Soft brick (2% of $100k): no new entries + reward pressure; not a hard fail.
-  soft_daily_loss_limit: 2000.0
-  # Soft year-loss shaping: reward pressure from this floor toward max_loss_limit.
-  soft_max_loss_limit: 5000.0
+  # Match soft thresholds to hard limits: no earlier soft band or penalty.
+  soft_daily_loss_limit: 5000.0
+  soft_max_loss_limit: 10000.0
   max_loss_limit: 10000.0              # FTMO max loss from initial (eval train/test)
-  # PPO-only year-fail: $7k from peak (7% of $100k). Eval does not use this —
-  # reported training/ and testing/ follow FTMO $10k from initial + $5k daily.
-  trailing_dd_limit: 0.07
+  # Peak-to-trough trailing drawdown is disabled; max loss is fixed from initial.
+  trailing_dd_limit: 0.0
   soft_trailing_dd_limit: 0.0
   risk_per_trade_limit: 1000.0         # hard per-trade sizing ceiling
-  risk_sizing_limit_usd: 900.0         # stop risk plus modeled execution reserve for strategy-action sizing
+  risk_sizing_limit_usd: 900.0         # stop risk plus modeled execution reserve
+  risk_per_trade_limit_pct: 0.01       # current equity in percent mode
+  daily_loss_limit_pct: 0.05           # current equity in percent mode
+  soft_daily_loss_limit_pct: 0.05      # equals hard daily threshold
+  max_loss_limit_initial_pct: 0.10     # initial equity in percent mode
+  soft_max_loss_limit_initial_pct: 0.10 # equals hard max-loss threshold
   profit_target: 10000.0               # not enforced in env, only reported
 
 # LIVE/paper execution risk for integrations.mt5's RiskManager (used by
@@ -434,7 +440,7 @@ output:
 
 backtest:
   validation:
-    max_loss_per_trade_usd: 100.0      # safety cap in USD; structure SL is primary
+    max_loss_per_trade_usd: 900.0      # legacy compatibility ceiling; FTMO policy is canonical
     take_profit_per_trade_usd: null    # per-trade structure TP replaces global USD TP
     include_costs_in_trade_risk: true
     validation_mode: false             # set true to relax global FTMO limits for viz testing

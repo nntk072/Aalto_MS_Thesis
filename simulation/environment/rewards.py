@@ -100,13 +100,13 @@ class DSRReward:
         *,
         daily_loss: float = 0.0,
         daily_loss_limit: float = 5_000.0,
-        soft_daily_loss_limit: float | None = 2_000.0,
+        soft_daily_loss_limit: float | None = 5_000.0,
         loss_from_initial: float = 0.0,
-        soft_max_loss_limit: float | None = 5_000.0,
+        soft_max_loss_limit: float | None = 10_000.0,
         max_loss_limit: float = 10_000.0,
         trailing_dd: float = 0.0,
-        soft_trailing_dd_limit: float | None = 0.04,
-        trailing_dd_limit: float = 0.07,
+        soft_trailing_dd_limit: float | None = 0.0,
+        trailing_dd_limit: float = 0.0,
         initial_balance: float = 100_000.0,
         breach: bool = False,
         realized_close_pnl: float | None = None,  # noqa: ARG002
@@ -124,7 +124,7 @@ class DSRReward:
         loss_from_initial, soft_max_loss_limit, max_loss_limit:
             Soft year-loss shaping from soft floor toward absolute max loss.
         trailing_dd, soft_trailing_dd_limit, trailing_dd_limit:
-            Soft trailing (peak-to-trough) drawdown band toward the 7% hard cap.
+            Optional soft trailing band and peak drawdown limit (both disabled by default).
         initial_balance:
             For normalisation.
         breach:
@@ -218,13 +218,13 @@ class PnLReward:
         *,
         daily_loss: float = 0.0,
         daily_loss_limit: float = 5_000.0,
-        soft_daily_loss_limit: float | None = 2_000.0,
+        soft_daily_loss_limit: float | None = 5_000.0,
         loss_from_initial: float = 0.0,
-        soft_max_loss_limit: float | None = 5_000.0,
+        soft_max_loss_limit: float | None = 10_000.0,
         max_loss_limit: float = 10_000.0,
         trailing_dd: float = 0.0,
-        soft_trailing_dd_limit: float | None = 0.04,
-        trailing_dd_limit: float = 0.07,
+        soft_trailing_dd_limit: float | None = 0.0,
+        trailing_dd_limit: float = 0.0,
         initial_balance: float = 100_000.0,
         breach: bool = False,
         realized_close_pnl: float | None = None,
@@ -329,13 +329,13 @@ class RMultipleReward:
         *,
         daily_loss: float = 0.0,
         daily_loss_limit: float = 5_000.0,
-        soft_daily_loss_limit: float | None = 2_000.0,
+        soft_daily_loss_limit: float | None = 5_000.0,
         loss_from_initial: float = 0.0,
-        soft_max_loss_limit: float | None = 5_000.0,
+        soft_max_loss_limit: float | None = 10_000.0,
         max_loss_limit: float = 10_000.0,
         trailing_dd: float = 0.0,
-        soft_trailing_dd_limit: float | None = 0.04,
-        trailing_dd_limit: float = 0.07,
+        soft_trailing_dd_limit: float | None = 0.0,
+        trailing_dd_limit: float = 0.0,
         initial_balance: float = 100_000.0,
         breach: bool = False,
         realized_close_pnl: float | None = None,

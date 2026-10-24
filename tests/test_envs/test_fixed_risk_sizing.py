@@ -13,14 +13,16 @@ import numpy as np
 import pytest
 
 from trading.execution.costs import CostModel
+from trading.risk.guardrails import FTMOGuardrails
 from trading.risk.sizing import compute_lots
 
 
 class _Account:
     """Minimal account stand-in for the sizing helpers."""
 
-    def __init__(self, equity: float) -> None:
+    def __init__(self, equity: float, initial_balance: float = 100_000.0) -> None:
         self.equity = equity
+        self.initial_balance = initial_balance
 
 
 class _Position:
@@ -40,11 +42,15 @@ def _env_stub(risk_mode: str, fixed_risk_usd: float, equity: float, **kw: object
     stub = type("_SizingStub", (), {})()
     stub.risk_mode = risk_mode
     stub.fixed_risk_usd = fixed_risk_usd
-    stub.account = _Account(equity)
+    initial_balance = kw.get("initial_balance", 100_000.0)
+    if not isinstance(initial_balance, (int, float)):
+        raise TypeError("initial_balance must be numeric")
+    stub.account = _Account(equity, float(initial_balance))
     stub.contract_size = kw.get("contract_size", 1.0)
     stub.min_lot = kw.get("min_lot", 0.01)
     stub.max_lot = kw.get("max_lot", 100.0)
-    stub.max_loss_per_trade_usd = kw.get("max_loss_per_trade_usd", 100.0)
+    stub.max_loss_per_trade_usd = kw.get("max_loss_per_trade_usd", 900.0)
+    stub.guardrails = kw.get("guardrails", FTMOGuardrails())
     stub.cost_model = kw.get("cost_model", CostModel())
     for name in (
         "_sizing_equity",
@@ -114,7 +120,7 @@ def test_legacy_fractional_path_unchanged() -> None:
 @pytest.mark.parametrize("stop_distance", [20.2, 82.34, 91.8, 1098.0])
 def test_fixed_mode_risks_exactly_fixed_risk_at_every_stop_width(stop_distance: float) -> None:
     """1R == $500 regardless of how wide or tight the agent's stop is."""
-    env = _env_stub("fixed", 500.0, equity=100_000.0, max_loss_per_trade_usd=100.0)
+    env = _env_stub("fixed", 500.0, equity=100_000.0, max_loss_per_trade_usd=900.0)
     entry = 25_454.2
     # risk_frac deliberately spans 0.0 and 0.02: fixed mode must ignore both.
     for risk_frac in (0.0, 0.01, 0.02):
@@ -141,6 +147,25 @@ def test_dynamic_mode_still_available() -> None:
     assert env._compute_lots_for(0.01, entry, entry - stop) * stop == pytest.approx(100.0)
     # Below the cap: 0.05% of 100k is $50.
     assert env._compute_lots_for(0.0005, entry, entry - stop) * stop == pytest.approx(50.0)
+
+
+def test_dynamic_percentage_limit_uses_current_equity_and_the_900_ceiling() -> None:
+    percent_policy = FTMOGuardrails(
+        limit_value_mode="percent_equity",
+        risk_per_trade_limit_pct=0.01,
+    )
+    env = _env_stub(
+        "dynamic",
+        0.0,
+        equity=40_000.0,
+        initial_balance=100_000.0,
+        max_loss_per_trade_usd=900.0,
+        guardrails=percent_policy,
+    )
+    assert env._compute_lots_for(0.02, 100.0, 90.0) * 10.0 == pytest.approx(400.0)
+
+    env.account.equity = 120_000.0
+    assert env._compute_lots_for(0.02, 100.0, 90.0) * 10.0 == pytest.approx(900.0)
 
 
 def test_dynamic_risk_includes_execution_reserve_under_sizing_cap() -> None:
@@ -184,6 +209,27 @@ def test_sizing_limit_stays_below_hard_per_trade_guardrail() -> None:
 
     assert max_loss_per_trade(cfg) == pytest.approx(900.0)
     assert guardrail_kwargs(cfg)["risk_per_trade_limit"] == pytest.approx(1_000.0)
+
+
+def test_legacy_variants_share_the_policy_sizing_ceiling() -> None:
+    from omegaconf import OmegaConf
+
+    from simulation.environment.factory import max_loss_per_trade
+
+    cfg = OmegaConf.create(
+        {
+            "trading_policy": {"mode": "legacy"},
+            "account": {"initial_balance": 100_000.0},
+            "env": {"strategy_actions": False},
+            "ftmo": {
+                "risk_per_trade_limit": 1_000.0,
+                "risk_sizing_limit_usd": 900.0,
+            },
+            "backtest": {"validation": {"max_loss_per_trade_usd": 100.0}},
+        }
+    )
+
+    assert max_loss_per_trade(cfg) == pytest.approx(900.0)
 
 
 def test_risk_budget_reports_mode() -> None:
@@ -314,7 +360,11 @@ def test_end_to_end_fixed_risk_trade_realizes_minus_one_r_and_500() -> None:
     ``fixed_risk_usd``, ``risk_cash`` reports that same number, and the stop
     realizes both -1.0R and -$500 in one event.
     """
-    env = _eod_env(risk_mode="fixed", fixed_risk_usd=500.0)
+    env = _eod_env(
+        risk_mode="fixed",
+        fixed_risk_usd=500.0,
+        max_loss_per_trade_usd=900.0,
+    )
     env.reset()
 
     # Drive until a long actually fills.

@@ -30,6 +30,7 @@ ENV_KEYS = (
     "QUANT_RL_DATA_SOURCE",
     "QUANT_RL_FAST_REPORTS",
     "QUANT_RL_ALLOW_OOS_SELECTION",
+    "QUANT_RL_CONFIG_OVERRIDES",
     "CAMPAIGN_WORKER_PID_FILE",
     "RESUME_CHECKPOINT",
     "PYTHONUNBUFFERED",
@@ -51,6 +52,7 @@ def _parse_srun(argv: list[str]) -> dict[str, Any]:
     node: str | None = None
     cwd: str | None = None
     gpu_count = 0
+    gpu_id = 0
     cpu_mask: int | None = None
     node_count: int | None = None
     task_count: int | None = None
@@ -67,7 +69,14 @@ def _parse_srun(argv: list[str]) -> dict[str, Any]:
         elif arg.startswith("--gpus="):
             gpu_count = int(arg.rsplit(":", 1)[1])
         elif arg.startswith("--gpu-bind="):
-            if arg != "--gpu-bind=map_gpu:0":
+            binding = arg.removeprefix("--gpu-bind=map_gpu:")
+            if binding == arg.removeprefix("--gpu-bind="):
+                raise ValueError(f"unsupported campaign GPU binding: {arg}")
+            try:
+                gpu_id = int(binding)
+            except ValueError as exc:
+                raise ValueError(f"unsupported campaign GPU binding: {arg}") from exc
+            if gpu_id < 0:
                 raise ValueError(f"unsupported campaign GPU binding: {arg}")
         elif arg.startswith("--cpu-bind=mask_cpu:"):
             cpu_mask = int(arg.split(":", 1)[1], 0)
@@ -114,6 +123,7 @@ def _parse_srun(argv: list[str]) -> dict[str, Any]:
         "argv": command,
         "cpu_ids": cpus,
         "gpu_count": gpu_count,
+        "gpu_id": gpu_id,
     }
 
 
@@ -193,6 +203,18 @@ def _write_result(results: Path, request_id: str, returncode: int) -> None:
     os.replace(temporary, result_path)
 
 
+def _gpu_device_for_request(payload: dict[str, Any], allocated_devices: list[str]) -> str | None:
+    if not payload["gpu_count"]:
+        return None
+    gpu_id = int(payload["gpu_id"])
+    if gpu_id >= len(allocated_devices):
+        raise RuntimeError(
+            f"worker requested GPU binding {gpu_id}, but allocation exposes "
+            f"{len(allocated_devices)} visible GPU(s)"
+        )
+    return allocated_devices[gpu_id]
+
+
 def _launch(payload: dict[str, Any], results: Path) -> subprocess.Popen[bytes]:
     env = dict(os.environ)
     env.pop("RESUME_CHECKPOINT", None)
@@ -200,10 +222,20 @@ def _launch(payload: dict[str, Any], results: Path) -> subprocess.Popen[bytes]:
     env.update(payload["env"])
     env["SLURM_JOB_ID"] = str(payload.get("job_id", ""))
     if payload["gpu_count"]:
-        allocated_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
+        allocated_devices = [
+            item.strip()
+            for item in os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",")
+            if item.strip()
+        ]
         if not allocated_devices:
             raise RuntimeError("GPU worker manager has no Slurm CUDA_VISIBLE_DEVICES binding")
-        env["CUDA_VISIBLE_DEVICES"] = allocated_devices
+        selected_device = _gpu_device_for_request(payload, allocated_devices)
+        if selected_device is None:
+            raise RuntimeError("GPU worker request resolved without a visible GPU")
+        env["CUDA_VISIBLE_DEVICES"] = selected_device
+        # The child sees the selected physical device as logical CUDA device zero.
+        # train_one_variant.sh re-exports GPU_ID, so pass the same Slurm-visible token.
+        env["GPU_ID"] = selected_device
     else:
         env.pop("CUDA_VISIBLE_DEVICES", None)
     cpu_ids = {int(value) for value in payload["cpu_ids"]}
@@ -289,6 +321,7 @@ def _manager() -> int:
             print(
                 f"CAMPAIGN_NODE_DISPATCH request={request_id}"
                 f" cpus={payload['cpu_ids']} gpu={bool(payload['gpu_count'])}"
+                f" gpu_id={payload['gpu_id']}"
                 f" argv={shlex.join(payload['argv'])}",
                 flush=True,
             )

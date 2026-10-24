@@ -239,10 +239,9 @@ class RiskRuntimeMixin(RuntimeMixinBase):
     def _compute_lots_for(self, risk_frac: float, entry_price: float, sl_price: float) -> float:
         """Lot size for one trade under the active sizing mode.
 
-        Fixed mode passes an explicit dollar budget and drops ``max_loss_cap``:
-        that cap is a fraction-of-equity safety rail, and leaving it on silently
-        overrode the requested risk (a $500 request was clamped to the $100
-        default, so no stop width could ever risk $500).
+        Both sizing modes honor the resolved per-trade policy and the configured
+        $900 sizing ceiling. The percentage limit is recalculated from current
+        equity for each decision; no minimum trade-risk threshold is imposed.
         """
         if bool(getattr(self, "repeated_payout_policy", False)):
             approved_total_risk = self._risk_budget_usd(risk_frac)
@@ -256,6 +255,14 @@ class RiskRuntimeMixin(RuntimeMixinBase):
                 self.trading_policy.execution_reserve_usd
             ) + self._modeled_execution_reserve_usd(lots)
             return lots
+        requested_total_risk = self._risk_budget_usd(risk_frac)
+        per_trade_limit = min(
+            requested_total_risk,
+            max(0.0, float(self.max_loss_per_trade_usd)),
+            self.guardrails.risk_per_trade_limit_for(self.account),
+        )
+        approved_total_risk = per_trade_limit
+        self._last_approved_risk_usd = approved_total_risk
         if self.risk_mode == "fixed":
             return compute_lots(
                 self._sizing_equity(),
@@ -266,14 +273,8 @@ class RiskRuntimeMixin(RuntimeMixinBase):
                 min_lot=self.min_lot,
                 max_lot=self.max_lot,
                 max_loss_cap=None,
-                risk_usd=self._risk_budget_usd(risk_frac),
+                risk_usd=approved_total_risk,
             )
-        requested_total_risk = self._risk_budget_usd(risk_frac)
-        approved_total_risk = min(
-            requested_total_risk,
-            max(0.0, float(self.max_loss_per_trade_usd)),
-        )
-        self._last_approved_risk_usd = approved_total_risk
         lots = self._lots_with_execution_reserve(
             approved_total_risk,
             risk_frac,

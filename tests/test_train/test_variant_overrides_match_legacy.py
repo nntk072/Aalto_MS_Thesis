@@ -19,8 +19,8 @@ from training.configuration.variant_resolution import (  # noqa: E402
 from training.configuration.variants import load_variant_config, merge_variant_cfg  # noqa: E402
 
 STEPS = 100_000
-# Launcher overrides the old script applied for full-PO3 variants. The selected
-# P6 pair now declares its peak drawdown behavior in experiments.yaml.
+# Launcher overrides the old script applied for full-PO3 variants. The shared
+# policy now disables peak drawdown for every variant.
 LEGACY_FULL_PO3 = [
     "features.include_session_ohlc=true",
     "features.liquidity.enabled=true",
@@ -28,7 +28,7 @@ LEGACY_FULL_PO3 = [
     "features.ifvg_mtf.enabled=true",
     "features.include_strategy_state=true",
     "env.open_manipulation_bars=0",
-    "ftmo.trailing_dd_limit=0.07",
+    "ftmo.trailing_dd_limit=0.0",
 ]
 STRAT_YAML = {
     "po3_ifvg": "config/2_po3_ifvg.yaml",
