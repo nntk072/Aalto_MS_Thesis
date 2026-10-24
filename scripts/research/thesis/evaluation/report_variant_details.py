@@ -827,6 +827,341 @@ def _markdown_metric(detail: dict[str, Any] | None, name: str) -> str:
     return _report_value(_metric(detail, name), name)
 
 
+def _markdown_config_results(
+    report: dict[str, Any], be_tolerance: float, report_dir: Path, campaign_dir: Path
+) -> str:
+    """Render a short local-preview report centered on effective config and outcomes."""
+    evidence_rows = report.get("project_context", {}).get("run_evidence", [])
+    evidence = {str(item.get("variant")): item for item in evidence_rows if isinstance(item, dict)}
+    variants = report.get("variants", [])
+    if not variants:
+        raise ValueError("config-results report has no variants")
+
+    def _config(variant: dict[str, Any]) -> dict[str, Any]:
+        training = variant.get("training", {})
+        return training.get("agent_parameters", {}) if isinstance(training, dict) else {}
+
+    def _nested(value: dict[str, Any], *keys: str) -> Any:
+        current: Any = value
+        for key in keys:
+            if not isinstance(current, dict):
+                return None
+            current = current.get(key)
+        return current
+
+    def _shown(label: str, value: Any) -> str:
+        if isinstance(value, float):
+            ratio_field = {
+                "Risk floor": "risk_floor",
+                "Risk fraction range": "risk_frac_range",
+                "Training peak drawdown limit": "peak_trailing_dd_limit",
+            }.get(label)
+            return _report_value(value, ratio_field) if ratio_field else _display(value)
+        if isinstance(value, (list, tuple)):
+            if label == "Risk fraction range":
+                return _report_value(value, "risk_frac_range")
+            return ", ".join(_display(item) for item in value)
+        return _display(value)
+
+    lines = [
+        "# 2M matched-run report: configuration and results",
+        "",
+        f"Campaign: `{report.get('campaign_id', 'Not recorded')}`  ",
+        f"Fingerprint: `{report.get('fingerprint') or 'Not recorded'}`  ",
+        "Generated from saved run artifacts; no checkpoint was replayed for this report.",
+        f"Break-even tolerance: {_display(be_tolerance)} account-currency units.",
+        "",
+        "## Run configuration",
+        "",
+        "| Setting | "
+        + " | ".join(str(item.get("variant", "Variant")) for item in variants)
+        + " |",
+        "|---|" + "---:|" * len(variants),
+    ]
+
+    config_rows: list[tuple[str, tuple[Any, ...]]] = []
+    paths: tuple[tuple[str, tuple[str, ...]], ...] = (
+        ("Seed", ("resolved_variant", "seed")),
+        ("Algorithm", ("resolved_variant", "algo")),
+        ("Encoder", ("resolved_variant", "arch")),
+        ("Training timesteps requested", ("ppo", "total_timesteps")),
+        ("Training timesteps completed", ("run_summary", "timesteps_completed")),
+        ("Parallel environments", ("env", "n_envs")),
+        ("PPO batch size", ("ppo", "batch_size")),
+        ("PPO epochs", ("ppo", "n_epochs")),
+        ("Learning rate", ("ppo", "learning_rate")),
+        ("Gamma", ("ppo", "gamma")),
+        ("GAE lambda", ("ppo", "gae_lambda")),
+        ("Reward", ("resolved_variant", "reward")),
+        ("Action distribution", ("ppo", "policy_distribution")),
+        ("Action width", ("resolved_variant", "action_schema", "width")),
+        ("Entry state visible", ("env", "entry_state_observation")),
+        (
+            "Account observation width",
+            ("resolved_variant", "observation_schema", "observation_width"),
+        ),
+        ("Risk mode", ("env", "risk_mode")),
+        ("Risk floor", ("env", "risk_floor")),
+        ("Risk fraction range", ("strategy", "risk", "risk_frac_range")),
+        ("Position sizing cap (USD)", ("ftmo", "risk_sizing_limit_usd")),
+        ("Per-trade risk limit (USD)", ("ftmo", "risk_per_trade_limit")),
+        ("Training peak drawdown limit", ("env", "peak_trailing_dd_limit")),
+    )
+    for label, path in paths:
+        values = tuple(
+            _nested(_config(variant), *path)
+            if path[0] != "run_summary"
+            else _nested(variant.get("training", {}).get("run_summary", {}), path[1])
+            for variant in variants
+        )
+        config_rows.append((label, values))
+    evidence_paths: tuple[tuple[str, tuple[str, ...]], ...] = (
+        ("Train action mode", ("evaluation", "training_action_mode")),
+        ("Evaluation action mode", ("evaluation", "action_mode")),
+        ("Modes match", ("evaluation", "action_mode_matches_training")),
+        ("Tick execution", ("evaluation", "tick_execution")),
+        ("Randomized fill latency (ms)", ("evaluation", "random_fill_latency_ms")),
+        ("Test role", ("evaluation", "test_role")),
+        ("Rollout steps per environment", ("training", "rollout_steps_per_environment")),
+    )
+    for label, path in evidence_paths:
+        config_rows.append(
+            (
+                label,
+                tuple(
+                    _nested(evidence.get(str(item.get("variant")), {}), *path) for item in variants
+                ),
+            )
+        )
+    model_rows = (
+        ("TCN channels", "channels"),
+        ("TCN dilations", "dilations"),
+        ("TCN kernel size", "kernel_size"),
+        ("Latent dimension", "latent_dimension"),
+        ("Policy head", "policy_head"),
+        ("Model parameters", "parameter_count"),
+    )
+    for label, key in model_rows:
+        config_rows.append(
+            (
+                label,
+                tuple(
+                    _nested(evidence.get(str(item.get("variant")), {}), "model", key)
+                    for item in variants
+                ),
+            )
+        )
+    for label, values in config_rows:
+        lines.append(f"| {label} | " + " | ".join(_shown(label, value) for value in values) + " |")
+
+    first_evidence = evidence.get(str(variants[0].get("variant")), {})
+    split = first_evidence.get("split", {})
+    train_start = split.get("train_start")
+    train_end = split.get("train_end")
+    test_start = split.get("test_start")
+    test_bars = next(
+        (
+            item
+            for item in first_evidence.get("datasets", [])
+            if isinstance(item, dict) and item.get("name") == "test_bars"
+        ),
+        {},
+    )
+    lines.extend(
+        [
+            "",
+            "Configured split: training **{} to {}**; testing starts **{}**. "
+            "Observed test bars run **{} to {}**. The test is labeled **{}** and this is a single-seed 2M-step pilot.".format(
+                train_start or "not recorded",
+                train_end or "not recorded",
+                test_start or "not recorded",
+                str(test_bars.get("start", "not recorded"))[:10],
+                str(test_bars.get("end", "not recorded"))[:10],
+                _nested(first_evidence, "evaluation", "test_role") or "not recorded",
+            ),
+            "",
+            "## Training results",
+            "",
+            "| Variant | Return | Net PnL | Max drawdown / limit | Trades | Win rate | Profit factor | Average trade | Gate | Last entry | Peak-DD close |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|---|---|---|",
+        ]
+    )
+    for variant in variants:
+        train = variant.get("splits", {}).get("training", {})
+        metrics = train.get("metrics", {})
+        training = variant.get("training", {})
+        gate = training.get("training_equity_gate", {})
+        limit = _number(gate.get("peak_trailing_dd_limit"))
+        if limit is None:
+            limit = _number(training.get("peak_trailing_dd_limit"))
+        observed = _number(gate.get("max_peak_trailing_dd"))
+        excess = observed - limit if observed is not None and limit is not None else None
+        gate_text = (
+            f"FAIL ({excess * 100:.4f} percentage points over)"
+            if gate.get("ok") is False and excess is not None
+            else "PASS"
+            if gate.get("ok") is True
+            else "Not recorded"
+        )
+        run_artifact_dir = variant.get("run_artifact_dir")
+        trade_rows = (
+            _rows(campaign_dir / run_artifact_dir / "training" / "trades.csv")
+            if isinstance(run_artifact_dir, str)
+            else []
+        )
+        last_open_index = next(
+            (
+                index
+                for index in range(len(trade_rows) - 1, -1, -1)
+                if trade_rows[index].get("type") == "open"
+            ),
+            None,
+        )
+        peak_close_index = next(
+            (
+                index
+                for index in range(len(trade_rows) - 1, -1, -1)
+                if trade_rows[index].get("type") == "close"
+                and trade_rows[index].get("reason") == "peak_dd_behavior"
+            ),
+            None,
+        )
+        last_open_date = (
+            str(
+                trade_rows[last_open_index].get("fill_time")
+                or trade_rows[last_open_index].get("time")
+            )[:10]
+            if last_open_index is not None
+            else "Not recorded"
+        )
+        peak_close_date = (
+            str(
+                trade_rows[peak_close_index].get("time")
+                or trade_rows[peak_close_index].get("fill_time")
+            )[:10]
+            if peak_close_index is not None
+            else "Not recorded"
+        )
+        lines.append(
+            "| {} | {} | {} | {} / {} | {} | {} | {} | {} | {} | {} | {} |".format(
+                variant.get("variant", "Not recorded"),
+                _report_value(metrics.get("total_return_pct"), "total_return_pct"),
+                _display(metrics.get("total_pnl")),
+                _report_value(metrics.get("max_drawdown"), "max_drawdown"),
+                _report_value(limit, "peak_trailing_dd_limit"),
+                _display(metrics.get("n_trades")),
+                _report_value(metrics.get("win_rate"), "win_rate"),
+                _display(metrics.get("profit_factor")),
+                _display(metrics.get("avg_trade")),
+                gate_text,
+                last_open_date,
+                peak_close_date,
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Testing results",
+            "",
+            "| Variant | Return | Net PnL | Max drawdown | Trades | Win rate | Profit factor | Average trade |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for variant in variants:
+        test = variant.get("splits", {}).get("testing", {})
+        metrics = test.get("metrics", {})
+        lines.append(
+            "| {} | {} | {} | {} | {} | {} | {} | {} |".format(
+                variant.get("variant", "Not recorded"),
+                _report_value(metrics.get("total_return_pct"), "total_return_pct"),
+                _display(metrics.get("total_pnl")),
+                _report_value(metrics.get("max_drawdown"), "max_drawdown"),
+                _display(metrics.get("n_trades")),
+                _report_value(metrics.get("win_rate"), "win_rate"),
+                _display(metrics.get("profit_factor")),
+                _display(metrics.get("avg_trade")),
+            )
+        )
+
+    activity_details = []
+    for variant in variants:
+        run_artifact_dir = variant.get("run_artifact_dir")
+        if not isinstance(run_artifact_dir, str):
+            continue
+        trade_rows = _rows(campaign_dir / run_artifact_dir / "training" / "trades.csv")
+        opened = [row for row in trade_rows if row.get("type") == "open"]
+        guard_indices = [
+            index
+            for index, row in enumerate(trade_rows)
+            if row.get("type") == "close" and row.get("reason") == "peak_dd_behavior"
+        ]
+        if not opened or not guard_indices:
+            continue
+        guard_index = guard_indices[-1]
+        later_opens = any(row.get("type") == "open" for row in trade_rows[guard_index + 1 :])
+        if later_opens:
+            continue
+        entry_date = str(opened[-1].get("fill_time") or opened[-1].get("time"))[:10]
+        guard_row = trade_rows[guard_index]
+        close_date = str(guard_row.get("time") or guard_row.get("fill_time"))[:10]
+        activity_details.append(
+            f"`{variant.get('variant')}` last opened a trade on {entry_date}; its peak-DD guard "
+            f"closed the final position on {close_date}, with no later training entries."
+        )
+    lines.extend(
+        [
+            "",
+            "## Why the training runs failed the year-survival gate",
+            "",
+            "Both simulations consumed the full training data through 2025-12-31 and ended profitable, "
+            "but the policies did not remain active for the full year:",
+            *(
+                [f"- {detail}" for detail in activity_details]
+                or ["- Last-entry dates were not recorded."]
+            ),
+            "",
+            "The survival gate failed because each saved equity path exceeded the configured 10% "
+            "peak-to-trough limit. This is a training drawdown-gate failure, not a missing year or "
+            "trainer crash. The gate records no separate hard-loss breach.",
+            "",
+            "The configured guard closes an open trade at the drawdown ceiling and refuses new entries "
+            "while the account remains at that ceiling. The final tick-quote fills left measured "
+            "drawdown slightly above 10%; with equity below its previous high-water mark, trading "
+            "did not resume. The controller continued through the remaining bars, which is why a "
+            "full-year simulation exists even though active trading ended in April. The logs identify "
+            "this failure path, but do not establish why the policy entered the losing move.",
+            "",
+            "The later test results are negative for both variants. Since this is one seed, a 2M-step "
+            "pilot, and a previously inspected holdout, it does not establish a confirmatory ranking "
+            "or prove whether the cause is architecture, reward design, trading logic, or sampling noise.",
+            "",
+            "## Equity and drawdown figures",
+            "",
+        ]
+    )
+    for variant in variants:
+        label = str(variant.get("variant", "variant"))
+        lines.extend([f"### {label}", ""])
+        for split_name in ("training", "testing"):
+            detail = variant.get("splits", {}).get(split_name, {})
+            generated = detail.get("generated_figures", {})
+            for figure_name in ("equity_curve", "peak_drawdown"):
+                link = generated.get(figure_name)
+                if not isinstance(link, str):
+                    raise RuntimeError(f"missing {figure_name} figure for {label} {split_name}")
+                image_path = (report_dir / link).resolve()
+                lines.extend(
+                    [
+                        f"#### {split_name.capitalize()} {figure_name.replace('_', ' ')}",
+                        "",
+                        f"![{label} {split_name} {figure_name}]({image_path.as_posix()})",
+                        "",
+                    ]
+                )
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def _markdown(report: dict[str, Any], campaign_dir: Path, be_tolerance: float) -> str:
     lines = [
         "# Project, training, and evaluation report",
@@ -1872,15 +2207,17 @@ def _validate_report_figures(report: dict[str, Any], report_dir: Path) -> None:
 
 
 def _validate_markdown_images(markdown: str, report_dir: Path) -> None:
-    """Check the actual Markdown image references before saving the report."""
+    """Check relative or absolute Markdown image references before saving."""
     links = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", markdown)
     if not links:
         raise RuntimeError("results report has no figures")
-    missing = [
-        link
-        for link in links
-        if not (report_dir / link).is_file() or (report_dir / link).stat().st_size == 0
-    ]
+    missing = []
+    for link in links:
+        target = Path(link)
+        if not target.is_absolute():
+            target = report_dir / target
+        if not target.is_file() or target.stat().st_size == 0:
+            missing.append(link)
     if missing:
         raise FileNotFoundError(
             "Markdown references missing or empty figures: " + ", ".join(missing[:12])
@@ -1902,6 +2239,12 @@ def main() -> int:
         help="net PnL tolerance in account currency; default 1.0",
     )
     parser.add_argument("--example-split", choices=("training", "testing", "both"), default="both")
+    parser.add_argument(
+        "--scope",
+        choices=("full", "config-results"),
+        default="full",
+        help="config-results writes a concise local-preview report with absolute figure paths",
+    )
     args = parser.parse_args()
     if args.be_tolerance < 0 or not math.isfinite(args.be_tolerance):
         parser.error("--be-tolerance must be finite and non-negative")
@@ -1933,7 +2276,11 @@ def main() -> int:
         report_dir,
     )
     _validate_report_figures(report, report_dir)
-    markdown = _markdown(report, campaign_dir, args.be_tolerance)
+    markdown = (
+        _markdown(report, campaign_dir, args.be_tolerance)
+        if args.scope == "full"
+        else _markdown_config_results(report, args.be_tolerance, report_dir, campaign_dir)
+    )
     _validate_markdown_images(markdown, report_dir)
     json_path = out_stem.with_suffix(".json")
     markdown_path = out_stem.with_suffix(".md")

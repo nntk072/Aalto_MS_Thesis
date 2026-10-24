@@ -7,6 +7,7 @@ import pytest
 from scripts.research.thesis.evaluation.report_variant_details import (
     _annotate_trade_outcome,
     _flatten_markdown_rows,
+    _markdown_config_results,
     _report_value,
     _trade_outcome_caption,
     _validate_markdown_images,
@@ -87,6 +88,151 @@ def test_trade_outcome_caption_is_explicit(
 def test_markdown_image_validation_rejects_missing_plot(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="missing or empty figures"):
         _validate_markdown_images("![required plot](figures/missing.png)", tmp_path)
+
+
+def test_markdown_image_validation_accepts_absolute_plot(tmp_path: Path) -> None:
+    image = tmp_path / "equity.png"
+    image.write_bytes(b"png")
+
+    _validate_markdown_images(f"![required plot]({image})", tmp_path)
+
+
+def test_config_results_report_is_concise_and_uses_absolute_figure_links(tmp_path: Path) -> None:
+    report = {
+        "campaign_id": "pilot",
+        "fingerprint": "abc123",
+        "project_context": {
+            "run_evidence": [
+                {
+                    "variant": "ladder_a4a",
+                    "split": {
+                        "train_start": "2024-12-30",
+                        "train_end": "2025-12-31",
+                        "test_start": "2026-01-01",
+                    },
+                    "datasets": [
+                        {
+                            "name": "test_bars",
+                            "start": "2026-01-02 01:05:00+03:00",
+                            "end": "2026-10-16 23:49:00+03:00",
+                        }
+                    ],
+                    "evaluation": {
+                        "training_action_mode": "stochastic",
+                        "action_mode": "stochastic",
+                        "action_mode_matches_training": True,
+                        "tick_execution": True,
+                        "random_fill_latency_ms": 30,
+                        "test_role": "previously_inspected_holdout",
+                    },
+                    "model": {"algorithm": "PPO", "encoder": "TCN", "parameter_count": 12},
+                },
+                {
+                    "variant": "ladder_a4b",
+                    "split": {
+                        "train_start": "2024-12-30",
+                        "train_end": "2025-12-31",
+                        "test_start": "2026-01-01",
+                    },
+                    "datasets": [],
+                    "evaluation": {},
+                    "model": {},
+                },
+            ]
+        },
+        "variants": [
+            {
+                "variant": "ladder_a4a",
+                "training": {
+                    "agent_parameters": {
+                        "resolved_variant": {
+                            "seed": 50,
+                            "algo": "ppo",
+                            "arch": "tcn",
+                            "reward": "dsr",
+                            "action_schema": {"width": 12},
+                            "observation_schema": {"observation_width": 6},
+                        },
+                        "run_summary": {"timesteps_completed": 100},
+                        "ppo": {
+                            "total_timesteps": 100,
+                            "n_steps": 4,
+                            "batch_size": 8,
+                            "n_epochs": 2,
+                        },
+                        "env": {
+                            "n_envs": 2,
+                            "entry_state_observation": False,
+                            "risk_mode": "dynamic",
+                            "risk_floor": 0.0005,
+                            "peak_trailing_dd_limit": 0.1,
+                        },
+                    },
+                    "training_equity_gate": {
+                        "ok": False,
+                        "max_peak_trailing_dd": 0.101,
+                    },
+                    "peak_trailing_dd_limit": 0.1,
+                },
+                "splits": {
+                    "training": {
+                        "metrics": {
+                            "total_return_pct": 1.0,
+                            "total_pnl": 1000,
+                            "max_drawdown": 0.101,
+                            "n_trades": 5,
+                            "win_rate": 0.6,
+                            "profit_factor": 1.2,
+                            "avg_trade": 200,
+                        },
+                        "generated_figures": {
+                            "equity_curve": "figures/train_equity.png",
+                            "peak_drawdown": "figures/train_drawdown.png",
+                        },
+                    },
+                    "testing": {
+                        "metrics": {},
+                        "generated_figures": {
+                            "equity_curve": "figures/test_equity.png",
+                            "peak_drawdown": "figures/test_drawdown.png",
+                        },
+                    },
+                },
+            },
+            {
+                "variant": "ladder_a4b",
+                "training": {"agent_parameters": {}, "training_equity_gate": {"ok": True}},
+                "splits": {
+                    "training": {
+                        "metrics": {},
+                        "generated_figures": {
+                            "equity_curve": "figures/b_train_equity.png",
+                            "peak_drawdown": "figures/b_train_drawdown.png",
+                        },
+                    },
+                    "testing": {
+                        "metrics": {},
+                        "generated_figures": {
+                            "equity_curve": "figures/b_test_equity.png",
+                            "peak_drawdown": "figures/b_test_drawdown.png",
+                        },
+                    },
+                },
+            },
+        ],
+    }
+
+    markdown = _markdown_config_results(report, 1.0, tmp_path, tmp_path)
+
+    assert "# 2M matched-run report: configuration and results" in markdown
+    assert "| Entry state visible | No | Not recorded" in markdown
+    assert "FAIL (0.1000 percentage points over)" in markdown
+    assert "10.10% / 10.00%" in markdown
+    assert "previously_inspected_holdout" in markdown
+    assert (
+        f"![ladder_a4a training equity_curve]({tmp_path / 'figures/train_equity.png'})" in markdown
+    )
+    assert "Typical winning trades" not in markdown
 
 
 def test_report_figure_contract_rejects_missing_required_plots(tmp_path: Path) -> None:
