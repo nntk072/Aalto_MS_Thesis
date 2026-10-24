@@ -24,7 +24,7 @@ def test_pipeline_diagram_covers_the_saved_results_path() -> None:
     assert "Metrics, trade records, and plots" in PIPELINE_DIAGRAM
 
 
-def test_report_context_explains_data_model_source_and_missing_evaluation_mode(
+def test_report_context_explains_data_model_source_and_evaluation_action_modes(
     tmp_path: Path,
 ) -> None:
     repo = tmp_path / "repo"
@@ -37,7 +37,17 @@ def test_report_context_explains_data_model_source_and_missing_evaluation_mode(
     raw_file.parent.mkdir(parents=True)
     raw_file.write_text("fixture", encoding="utf-8")
     run_dir.mkdir(parents=True)
+    evaluation_dir = run_dir / "evaluations"
+    evaluation_dir.mkdir()
     (run_dir / "config.yaml").write_text("encoder:\n  arch: tcn\n", encoding="utf-8")
+    _write_json(
+        evaluation_dir / "train_in_sample.json",
+        {"policy_action_mode": "stochastic", "action_rng_seed": 7},
+    )
+    _write_json(
+        evaluation_dir / "test_report_only.json",
+        {"policy_action_mode": "stochastic", "action_rng_seed": 7},
+    )
     _write_json(
         run_dir / "run_manifest.json",
         {
@@ -134,7 +144,10 @@ def test_report_context_explains_data_model_source_and_missing_evaluation_mode(
     assert run["training"]["completed_steps"] == 1024
     assert run["config_identity"]["sha256"] == "config-hash"
     assert run["checkpoint"]["sha256"] == "checkpoint-hash"
-    assert run["evaluation"]["action_mode"] is None
+    assert run["evaluation"]["training_action_mode"] == "stochastic"
+    assert run["evaluation"]["action_mode"] == "stochastic"
+    assert run["evaluation"]["action_mode_matches_training"] is True
+    assert run["evaluation"]["action_seed"] == 7
     assert context["raw_inputs"][0]["present_at_report_time"] is True
     assert context["cache_summary"]["cache_files"] == 2
     assert context["campaign_source_snapshot"]["present_at_report_time"] is True
@@ -148,6 +161,8 @@ def test_report_context_explains_data_model_source_and_missing_evaluation_mode(
     assert "train_mask_only" in markdown
     assert "raw-hash" in markdown
     assert "Training dates" in markdown
+    assert "| Modes match |" in markdown
+    assert "stochastic" in markdown
 
     repeated_variants = [variants[0], {**variants[0], "variant": "ladder_a1"}]
     repeated_context = build_project_context(

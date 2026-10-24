@@ -207,13 +207,33 @@ def _variant_evidence(
     ppo = _dict(protocol.get("ppo"))
     config = _read_yaml(run_dir / "config.yaml")
     schedule = _dict(execution.get("policy_market_context"))
+    train_evaluation_path = run_dir / "evaluations" / "train_in_sample.json"
+    test_evaluation_path = run_dir / "evaluations" / "test_report_only.json"
+    train_evaluation = _read_json(train_evaluation_path) or {}
+    test_evaluation = _read_json(test_evaluation_path) or {}
     action_mode = next(
         (
             metrics_protocol[key]
             for key in ("action_mode", "policy_action_mode", "inference_action_mode")
             if key in metrics_protocol
         ),
-        None,
+        test_evaluation.get("policy_action_mode"),
+    )
+    training_action_mode = next(
+        (
+            protocol[key]
+            for key in ("action_mode", "policy_action_mode", "inference_action_mode")
+            if key in protocol
+        ),
+        train_evaluation.get("policy_action_mode"),
+    )
+    action_seed = metrics_protocol.get("execution_seed")
+    if action_seed is None:
+        action_seed = test_evaluation.get("action_rng_seed")
+    action_mode_matches_training = (
+        training_action_mode == action_mode
+        if training_action_mode is not None and action_mode is not None
+        else None
     )
     required = ("split", "datasets", "feature_cache", "training_architecture")
     return {
@@ -264,8 +284,24 @@ def _variant_evidence(
         },
         "evaluation": {
             "test_role": metrics_protocol.get("historical_test_role"),
+            "training_action_mode": training_action_mode,
             "action_mode": action_mode,
-            "action_seed": metrics_protocol.get("execution_seed"),
+            "action_mode_matches_training": action_mode_matches_training,
+            "training_action_mode_source": (
+                "evaluations/train_in_sample.json"
+                if train_evaluation.get("policy_action_mode") is not None
+                else "run_manifest.training_protocol"
+                if training_action_mode is not None
+                else None
+            ),
+            "action_mode_source": (
+                "evaluations/test_report_only.json"
+                if test_evaluation.get("policy_action_mode") is not None
+                else "run_manifest.metrics_protocol"
+                if action_mode is not None
+                else None
+            ),
+            "action_seed": action_seed,
             "tick_execution": execution.get("tick_data_configured"),
             "random_fill_latency_ms": _dict(execution.get("execution")).get(
                 "randomized_fill_latency_ms"

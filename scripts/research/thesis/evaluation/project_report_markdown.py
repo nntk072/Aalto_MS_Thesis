@@ -236,14 +236,14 @@ def render_project_context(context: dict[str, Any]) -> str:
             "Each variant section below contains saved training/testing metrics, trade exit, stop, target, and risk tables, learner diagnostics, and generated figures.",
             "A test period labeled previously inspected is historical evidence; it is not an untouched final holdout.",
             "",
-            "| Variant | Test period role | Evaluation action mode | Tick execution | Random fill latency | Evaluation seed |",
-            "|---|---|---|---|---:|---:|",
+            "| Variant | Test period role | Training action mode | Evaluation action mode | Modes match | Tick execution | Random fill latency | Evaluation seed |",
+            "|---|---|---|---|---|---|---:|---:|",
         ]
     )
     for run in context.get("run_evidence", []):
         evaluation = _dict(run.get("evaluation"))
         lines.append(
-            f"| {run.get('variant', 'unknown')} | {evaluation.get('test_role') or 'not recorded'} | {evaluation.get('action_mode') or 'not recorded'} | {'Yes' if evaluation.get('tick_execution') else 'No or not recorded'} | {_plain(evaluation.get('random_fill_latency_ms'))} ms | {_plain(evaluation.get('action_seed'))} |"
+            f"| {run.get('variant', 'unknown')} | {evaluation.get('test_role') or 'not recorded'} | {evaluation.get('training_action_mode') or 'not recorded'} | {evaluation.get('action_mode') or 'not recorded'} | {_plain(evaluation.get('action_mode_matches_training'))} | {'Yes' if evaluation.get('tick_execution') else 'No or not recorded'} | {_plain(evaluation.get('random_fill_latency_ms'))} ms | {_plain(evaluation.get('action_seed'))} |"
         )
         market_context = _dict(evaluation.get("policy_context"))
         if market_context.get("features"):
