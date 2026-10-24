@@ -25,12 +25,15 @@ def assess_equity_snapshot(
     slope: float,
     max_peak_trailing_dd: float,
     breached: bool,
+    peak_trailing_dd_limit: float = 0.0,
 ) -> dict[str, Any]:
-    """Evaluate risk survival from scalars; profit and slope remain metrics."""
+    """Evaluate configured survival limits and retain all equity diagnostics."""
     end = float(end_equity)
     start = float(initial)
+    drawdown = float(max_peak_trailing_dd)
+    drawdown_limit = float(peak_trailing_dd_limit)
     reasons: list[str] = []
-    if float(max_peak_trailing_dd) > 0.10:
+    if drawdown_limit > 0.0 and drawdown > drawdown_limit:
         reasons.append("peak_trailing_dd")
     if breached:
         reasons.append("max_loss_stopped_trading")
@@ -39,7 +42,8 @@ def assess_equity_snapshot(
         "end_equity": end,
         "equity_delta": end - start,
         "slope": float(slope),
-        "max_peak_trailing_dd": float(max_peak_trailing_dd),
+        "max_peak_trailing_dd": drawdown,
+        "peak_trailing_dd_limit": drawdown_limit,
         "breached": bool(breached),
         "reason": "ok" if not reasons else ",".join(reasons),
     }
@@ -50,11 +54,13 @@ def assess_train_equity(
     *,
     initial: float,
     breached: bool,
+    peak_trailing_dd_limit: float = 0.0,
 ) -> dict[str, Any]:
-    """Return the train-year risk-survival gate plus PnL/slope metrics.
+    """Return the hard loss-cap survival gate plus PnL/drawdown metrics.
 
-    ``ok`` depends only on the 10% peak trailing drawdown cap and loss-cap
-    breach. End equity and slope are included in the result for reporting.
+    ``peak_trailing_dd_limit`` activates the same drawdown policy used by the
+    environment. With a zero limit, measured drawdown is report-only. An actual
+    hard loss-cap breach always fails this survival check.
     """
     if equity is None or len(equity) == 0:
         return {
@@ -63,6 +69,7 @@ def assess_train_equity(
             "equity_delta": 0.0,
             "slope": 0.0,
             "max_peak_trailing_dd": 0.0,
+            "peak_trailing_dd_limit": float(peak_trailing_dd_limit),
             "breached": bool(breached),
             "reason": "empty_equity",
         }
@@ -72,6 +79,7 @@ def assess_train_equity(
         initial=float(initial),
         slope=equity_slope(equity),
         max_peak_trailing_dd=_max_peak_trailing_dd(equity),
+        peak_trailing_dd_limit=float(peak_trailing_dd_limit),
         breached=bool(breached),
     )
 

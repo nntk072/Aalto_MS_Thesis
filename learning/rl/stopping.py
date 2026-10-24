@@ -45,6 +45,7 @@ def _episode_gate(ep: dict[str, Any]) -> dict[str, Any]:
         initial=float(ep.get("start_equity", 0.0)),
         slope=float(ep.get("slope", 0.0)),
         max_peak_trailing_dd=float(ep.get("max_peak_trailing_dd", 0.0)),
+        peak_trailing_dd_limit=float(ep.get("peak_trailing_dd_limit", 0.0)),
         breached=bool(ep.get("breach_reason") or ep.get("breached")),
     )
 

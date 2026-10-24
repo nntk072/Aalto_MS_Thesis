@@ -37,9 +37,34 @@ def test_net_loss_and_negative_slope_are_metrics_not_gate_failures() -> None:
 
 
 @pytest.mark.unit
+def test_peak_drawdown_over_ten_percent_is_reported_but_not_a_gate() -> None:
+    eq = pd.Series([100_000.0, 120_000.0, 100_000.0])
+    result = assess_train_equity(eq, initial=100_000.0, breached=False)
+    assert result["ok"] is True
+    assert result["reason"] == "ok"
+    assert result["max_peak_trailing_dd"] == pytest.approx(1 / 6)
+    assert result["peak_trailing_dd_limit"] == 0.0
+
+
+@pytest.mark.unit
+def test_configured_peak_drawdown_limit_is_a_training_gate() -> None:
+    eq = pd.Series([100_000.0, 120_000.0, 107_500.0])
+    result = assess_train_equity(
+        eq,
+        initial=100_000.0,
+        breached=False,
+        peak_trailing_dd_limit=0.10,
+    )
+    assert result["ok"] is False
+    assert result["reason"] == "peak_trailing_dd"
+    assert result["max_peak_trailing_dd"] == pytest.approx(0.10416666666666667)
+    assert result["peak_trailing_dd_limit"] == 0.10
+
+
+@pytest.mark.unit
 def test_gate_fails_when_the_account_dies_on_the_cap() -> None:
     eq = pd.Series([100_000.0, 101_800.0, 89_845.0, 89_845.0])
-    result = assess_train_equity(eq, initial=100_000.0, breached=True)
+    result = assess_train_equity(eq, initial=100_000.0, breached=True, peak_trailing_dd_limit=0.10)
     assert result["ok"] is False
     assert "max_loss_stopped_trading" in result["reason"]
     assert "peak_trailing_dd" in result["reason"]
@@ -64,6 +89,7 @@ def test_episode_equity_recorded_when_the_episode_ends() -> None:
     assert ep["episode_steps"] == 1
     assert ep["completed_data_split"] is False
     assert ep["episode_end_reason"] == "max_episode_steps"
+    assert ep["peak_trailing_dd_limit"] == pytest.approx(env.peak_trailing_dd_limit)
     assert "reward_sum" in ep
     assert np.isfinite(ep["reward_sum"])
     assert np.isfinite(ep["slope"])
@@ -196,6 +222,57 @@ def test_early_abort_stops_when_the_window_fails_survival_gate() -> None:
     )
     assert reason is not None
     assert reason.startswith("equity_gate:")
+
+
+@pytest.mark.unit
+def test_early_abort_does_not_stop_for_peak_drawdown_alone() -> None:
+    episodes = [
+        {
+            "end_equity": 100_000.0,
+            "start_equity": 100_000.0,
+            "slope": 0.0,
+            "max_peak_trailing_dd": 0.20,
+            "peak_trailing_dd_limit": 0.0,
+            "n_trades": 2,
+            "breach_reason": "",
+        }
+        for _ in range(4)
+    ]
+    assert (
+        decide_early_abort(
+            episodes,
+            num_timesteps=5_000_000,
+            min_timesteps=5_000_000,
+            window=4,
+            nonfinite=False,
+        )
+        is None
+    )
+
+
+@pytest.mark.unit
+def test_early_abort_uses_configured_peak_drawdown_limit() -> None:
+    episodes = [
+        {
+            "end_equity": 100_000.0,
+            "start_equity": 100_000.0,
+            "slope": 0.0,
+            "max_peak_trailing_dd": 0.20,
+            "peak_trailing_dd_limit": 0.10,
+            "n_trades": 2,
+            "breach_reason": "",
+        }
+        for _ in range(4)
+    ]
+    reason = decide_early_abort(
+        episodes,
+        num_timesteps=5_000_000,
+        min_timesteps=5_000_000,
+        window=4,
+        nonfinite=False,
+    )
+    assert reason is not None
+    assert reason.startswith("equity_gate:peak_trailing_dd")
 
 
 @pytest.mark.unit

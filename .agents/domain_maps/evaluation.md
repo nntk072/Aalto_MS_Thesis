@@ -18,6 +18,7 @@ Purged walk-forward split construction lives in `market_data/splits/walkforward.
 | `evaluation/rollout/model.py` | Evaluates backend-neutral decision providers through TradingEnv |
 | `evaluation/rollout/provider.py` | Adapts a backend-neutral decision provider for environment rollouts |
 | `evaluation/reporting/export.py` | Run artifact saving |
+| `scripts/research/thesis/evaluation/report_variant_details.py` | Standardized artifact-driven Markdown/JSON report, required diagnostics, outcome-labeled trade figures, and missing-figure validation |
 | `evaluation/reporting/box_table.py` | Shared evaluation/training report table renderer |
 | `evaluation/reporting/diversity_artifacts.py` | Persist decoded decision-diversity reports |
 | `evaluation/reporting/diversity_table.py` | Render typed diversity reports as terminal tables |
@@ -44,6 +45,11 @@ Purged walk-forward split construction lives in `market_data/splits/walkforward.
 | `evaluation/plotting/po3_plots.py` | PO3-specific plots |
 
 ## Key Symbols
+
+For a reusable thesis campaign report, run
+`uv run python scripts/research/thesis/evaluation/report_variant_details.py --campaign-dir <campaign>`
+on a suitable compute node. It writes `reports/variant_details.md` and JSON beside it,
+renders readable parameter tables, and fails if required figures or image links are unavailable.
 
 | Symbol | File | Purpose |
 |--------|------|---------|

@@ -93,6 +93,7 @@ class StepEndRuntimeMixin(RuntimeMixinBase):
                 pd.Series(self.equity_curve, dtype=float),
                 initial=float(self._ep_start_equity),
                 breached=bool(self.breach_log),
+                peak_trailing_dd_limit=float(self.peak_trailing_dd_limit),
             )
             completed_data_split = self._ny_pos >= len(self._ny_indices)
             if done:
@@ -119,6 +120,7 @@ class StepEndRuntimeMixin(RuntimeMixinBase):
                 "breach_reason": str(self.breach_log[-1]) if self.breach_log else "",
                 "slope": float(gate["slope"]),
                 "max_peak_trailing_dd": float(gate["max_peak_trailing_dd"]),
+                "peak_trailing_dd_limit": float(self.peak_trailing_dd_limit),
             }
 
         return obs, float(reward), done, truncated, info

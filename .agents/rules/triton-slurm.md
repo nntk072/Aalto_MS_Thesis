@@ -499,10 +499,13 @@ with `experiments/campaigns/status.py` instead of composing its tables
 from memory. For example:
 
 ```bash
-python3 experiments/campaigns/status.py \
+PYTHONPATH=. .venv-x86/bin/python experiments/campaigns/status.py \
   outputs/gpu_campaigns/<campaign-id> --job-id <slurm-job-id> \
   --supervisor <persistent-tmux-session>
 ```
+
+Use `.venv/bin/python` instead on `aarch64` GPU nodes; keep the status query
+on the login node as it starts no computation or Slurm step.
 
 The `--job-id` and `--supervisor` options may be omitted when automatic
 discovery identifies one allocation and tmux session. If allocation discovery
@@ -545,6 +548,88 @@ steps and never queries a GPU by starting a diagnostic allocation. Keep any
 unavailable field visible in the generated report; do not silently infer it.
 The report keeps variants in ladder order even when worker placement or
 completion order differs.
+
+### Campaign results reporting
+
+Use one reporting path for live progress and another for terminal results:
+
+1. **Live or evaluating campaign:** generate and include the `status.py`
+   report above. State plainly whether each variant is training, evaluating,
+   or complete. Reaching the timestep target or finding a checkpoint does not
+   mean evaluation finished or results are final.
+2. **Terminal campaign:** use the generated
+   `reports/campaign_results_summary.md` and adjacent `.json` from
+   `experiments/campaigns/reporting.py`. The controller creates these after
+   workers finish. If they are absent after the campaign is terminal, generate
+   them once with:
+
+   ```bash
+   PYTHONPATH=. .venv/bin/python experiments/campaigns/reporting.py \
+     --campaign-dir outputs/gpu_campaigns/<campaign-id>
+   ```
+
+   Use the architecture-matched project venv. Run this report-only fallback in
+   the existing GPU-node session; it summarizes saved artifacts and does not
+   train or re-evaluate models. Link both files in the user update.
+3. Start each results update with this compact header, filling unavailable
+   fields as `unavailable` rather than guessing:
+
+   ```text
+   Campaign: <id> | fingerprint <fingerprint> | <steps>/variant | seed(s) <...>
+   Protocol: action mode <...> | action seed(s) <...> | execution seed(s) <...>
+   Data: train <start–end> | test <start–end> | evidence role <...>
+   State: training <...> | evaluation <...> | disposition <pilot/final/report-only/...>
+   ```
+
+   Then link the generated result Markdown and JSON. Use the generated
+   per-variant table for returns, PnL, trade count, drawdown, Sharpe, profit
+   factor, survival, gate status, and evidence links. Preserve every variant
+   and failure row in ladder order; do not rank or silently omit zero-trade,
+   failed, incomplete, or low-activity outcomes.
+4. Label training metrics as in-sample and test metrics by their declared
+   report/evidence role. Keep reported checkpoint names distinct from verified
+   checkpoint hashes and successful evaluations. A pilot or partial timestep
+   budget must be called a pilot, not a full result.
+5. For stochastic equity exports, state replay count and common seed set,
+   show individual paths with the pointwise median and 25th–75th percentile
+   band, and link the equity, drawdown, and per-seed outcome figures. Describe
+   the median as a summary curve, not an actual replay. Report outcome spread
+   across seeds; do not use one seed or the median curve alone to imply
+   generalization.
+
+6. When the user asks for per-variant trade detail, generate the artifact-backed
+   detail pack with `scripts/research/thesis/evaluation/report_variant_details.py`
+   from the completed campaign directory. It writes `reports/variant_details.md`,
+   `.json`, and `reports/variant_details_figures/`, with each variant's resolved setup, training parameters and
+   learning-curve summaries, figure links, train/test entry setup, exits by
+   outcome, SL/TP/risk breakdowns, and up to five representative winning,
+   losing, and breakeven trades. It generates per-variant/split figures for
+   entry-level outcomes, setup mix, exits by winning/losing/BE outcome, SL and
+   TP reference use, and stop/target/risk distributions. A typical-trade
+   contact sheet shows the selected trade records, with links to saved
+   per-trade market charts when those were exported. The contact sheet is not
+   itself a candlestick chart. Default trade examples come from testing;
+   `--example-split both` includes both splits. BE uses an explicit BE exit
+   reason or net PnL within the stated `--be-tolerance` (default one account-
+   currency unit). “Typical” means closest to that outcome group's median net
+   PnL, not cherry-picked extremes. The script reads saved files only; missing
+   columns/artifacts remain unavailable, and it does not load a checkpoint or
+   perform another evaluation. Link the generated files and state only a compact
+   interpretation in chat; do not reproduce the report's tables manually.
+
+   ```bash
+   PYTHONPATH=. .venv/bin/python \
+     scripts/research/thesis/evaluation/report_variant_details.py \
+     --campaign-dir outputs/gpu_campaigns/<campaign-id>
+   ```
+
+   Use the architecture-matched project venv and an existing GPU-node session
+   for this campaign report command, consistent with the artifact inspection
+   rules above.
+
+Do not recreate the generated metrics table by hand. Add only a short plain-
+language interpretation and the distinctions the generated artifacts cannot
+encode; keep unavailable protocol or evidence fields explicit.
 
 ### Node architecture, environments and storage
 

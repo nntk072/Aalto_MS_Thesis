@@ -797,6 +797,7 @@ if _SB3_AVAILABLE:
                 "start_equity",
                 "slope",
                 "max_peak_trailing_dd",
+                "peak_trailing_dd_limit",
                 "reward_sum",
             ):
                 if key not in ep:

@@ -66,7 +66,7 @@ variants:
     allow_multi_tp: true
     entry_state_machine: true
     entry_state_observation: true
-    peak_trailing_dd_limit: 0.10
+    peak_trailing_dd_limit: 0.0
     risk_floor: 0.0005
 
   - name: ladder_a4a_entry_fsm_hidden
@@ -79,7 +79,7 @@ variants:
     allow_multi_tp: true
     entry_state_machine: true
     entry_state_observation: false
-    peak_trailing_dd_limit: 0.10
+    peak_trailing_dd_limit: 0.0
     risk_floor: 0.0005
 
   # Matched quarter-point dataset retry of the selected P6 pair. Keep all
@@ -94,7 +94,7 @@ variants:
     allow_multi_tp: true
     entry_state_machine: true
     entry_state_observation: true
-    peak_trailing_dd_limit: 0.10
+    peak_trailing_dd_limit: 0.0
     risk_floor: 0.0005
     price_grid_increment: 0.25
     price_grid_cache_dir: "cache/train_test_2025_2026_qgrid025_v1"
@@ -109,7 +109,7 @@ variants:
     allow_multi_tp: true
     entry_state_machine: true
     entry_state_observation: false
-    peak_trailing_dd_limit: 0.10
+    peak_trailing_dd_limit: 0.0
     risk_floor: 0.0005
     price_grid_increment: 0.25
     price_grid_cache_dir: "cache/train_test_2025_2026_qgrid025_v1"

@@ -58,6 +58,8 @@ def test_every_variant_resolves_and_declares_reward_mode() -> None:
 
 
 def test_all_18_thesis_variants_build_features_from_the_active_split() -> None:
+    base_config = yaml.safe_load((PROJECT_ROOT / "config" / "base" / "default.yaml").read_text())
+    assert base_config["env"]["peak_trailing_dd_limit"] == 0.0
     campaign_names = [
         line.strip()
         for line in (PROJECT_ROOT / "config" / "campaigns" / "variant_list.txt")
@@ -73,6 +75,7 @@ def test_all_18_thesis_variants_build_features_from_the_active_split() -> None:
             override.startswith("data.prebuilt_feature_cache=")
             for override in resolved["overrides"]
         )
+        assert _overrides_by_key(resolved).get("env.peak_trailing_dd_limit", "0.0") == "0.0"
 
 
 def test_baseline_ladder_rungs_pin_baseline_strategy_name() -> None:
@@ -148,12 +151,12 @@ def test_overrides_come_after_strategy_and_have_no_duplicates() -> None:
     assert "ftmo.trailing_dd_limit" not in keys  # was a no-op at default 0.07
 
 
-def test_selected_entry_fsm_pair_shares_peak_drawdown_behavior() -> None:
+def test_selected_entry_fsm_pair_disables_peak_drawdown_behavior() -> None:
     control = _overrides_by_key(resolve_variant("ladder_a4b_entry_fsm"))
     treatment = _overrides_by_key(resolve_variant("ladder_a4a_entry_fsm_hidden"))
 
-    assert control["env.peak_trailing_dd_limit"] == "0.1"
-    assert treatment["env.peak_trailing_dd_limit"] == "0.1"
+    assert control["env.peak_trailing_dd_limit"] == "0.0"
+    assert treatment["env.peak_trailing_dd_limit"] == "0.0"
     assert control["env.risk_floor"] == "0.0005"
     assert treatment["env.risk_floor"] == "0.0005"
     assert control["env.entry_state_observation"] == "true"

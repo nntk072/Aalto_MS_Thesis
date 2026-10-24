@@ -117,7 +117,7 @@ def test_evaluation_artifacts_separate_train_and_report_only_test(tmp_path: Path
         },
         train_metrics=train_metrics,
         test_metrics=test_metrics,
-        train_gate={"ok": False, "reason": "peak_trailing_dd"},
+        train_gate={"ok": False, "reason": "max_loss_stopped_trading"},
         train_activity_gate=assess_train_activity(train_metrics.n_trades),
         account_currency="USD",
     )

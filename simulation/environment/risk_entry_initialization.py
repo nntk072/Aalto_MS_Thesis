@@ -73,12 +73,11 @@ class RiskEntryInitializationMixin(RuntimeMixinBase):
         self.reward_mode = str(reward_mode or "dsr").lower()
         # 0 = intensity never holds; entry follows context_direction.
         self.entry_intensity_threshold = float(entry_intensity_threshold)
-        # Training behavior, not an FTMO kill-switch. 0 disables it.
-        # At this fraction of peak equity, flatten the open position at the
-        # market quote and refuse new risk. Stops and targets are not rewritten.
-        self.peak_trailing_dd_limit = (
-            0.0 if self.repeated_payout_policy else float(peak_trailing_dd_limit)
-        )
+        # Explicit training behavior, independent of the account policy. 0
+        # disables it. At the configured fraction of peak equity, flatten the
+        # open position at the market quote and refuse new risk. Stops and
+        # targets are not rewritten.
+        self.peak_trailing_dd_limit = float(peak_trailing_dd_limit)
         self._peak_dd_fired = False
         # Opt-in agent direction control (see agent_implementation_plan.md).
         # False keeps the 5-D overlay layout where the strategy owns the side.

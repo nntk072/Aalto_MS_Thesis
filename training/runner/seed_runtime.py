@@ -737,6 +737,7 @@ class SeedRunner:
             train_result["equity"],
             initial=float(cfg.account.initial_balance),
             breached=not bool(train_result.get("survived_full_year", False)),
+            peak_trailing_dd_limit=float(cfg.env.get("peak_trailing_dd_limit", 0.0)),
         )
         train_activity_gate = assess_train_activity(int(train_m.n_trades))
         (seed_dir / "train_equity_gate.json").write_text(json.dumps(train_gate, indent=2))

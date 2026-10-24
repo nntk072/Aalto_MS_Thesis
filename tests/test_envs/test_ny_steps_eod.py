@@ -66,6 +66,17 @@ def _make_env(**kwargs: Any) -> TradingEnv:
 
 
 @pytest.mark.unit
+def test_explicit_peak_dd_policy_remains_active_with_repeated_payout() -> None:
+    env = _make_env(
+        peak_trailing_dd_limit=0.10,
+        trading_policy={"mode": "repeated_payout"},
+        continuous_actions=True,
+    )
+    assert env.repeated_payout_policy is True
+    assert env.peak_trailing_dd_limit == pytest.approx(0.10)
+
+
+@pytest.mark.unit
 def test_env_steps_only_ny_bars() -> None:
     env = _make_env()
     env.reset()
